@@ -63,9 +63,9 @@ module.exports = {
         if(this.util.isNull(held)) held = '0';
         let postSend = this.util.bcadd(held, send['AMOUNT'], 18);
 
-        // Rule 4: a pack is REQUIRED when it is unconditional (no
-        // threshold at all) or the post-send balance reaches its
-        // threshold. Rule 5: the MESSAGE is required iff ANY pack is.
+        // "A pack requires the handoff" when it is unconditional (no threshold
+        // at all) or the post-send balance reaches its threshold, and "the
+        // MESSAGE is required if at least one pack requires it".
         let required = false;
         for(let pack of packs){
             if(pack.threshold === null){ required = true; break; }

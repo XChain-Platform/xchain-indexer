@@ -24,7 +24,7 @@ const { createMockIndexer } = require('../../../../fixtures/mocks');
 
 const Send = require('../../../../../src/actions/send/index.js');
 const {
-    SOURCE, DESTINATION, makeActionsCtx, makeData, makeToken, makeBalances,
+    SOURCE, DESTINATION, DEST2, makeActionsCtx, makeData, makeToken, makeBalances,
 } = require('./helpers/send_harness.js');
 
 /*********************************************************************
@@ -131,7 +131,7 @@ describe('Send handler: conditional gated handoff (PC-29) @regression @tier1', f
 describe('Send handler: conditional gated handoff (PC-29) @regression @tier1', function () {
     useThresholdHarness();
 
-    // ── Rule 3's three pinned vectors ───────────────────────────────────────
+    // ── Post-send balance: the three pinned vectors ─────────────────────────
     it('vector 1, MULTI-LEG same destination: legs are totalled, not judged alone', async function () {
         // 60 + 60 against a threshold of 100. Judged per leg, neither reaches it and
         // the recipient gets 120 with no key handoff: the split bypass. Legs are
@@ -196,5 +196,29 @@ describe('Send handler: conditional gated handoff (PC-29) @regression @tier1', f
         await statusFor(single(10), { packs: [{ publisher: PUB, keyHash: HASH, threshold: '100' }] });
         const addressesRead = indexer.indexerDb.getAddressBalances.getCalls().map(c => c.args[0]);
         assert.ok(addressesRead.includes(DESTINATION), 'the threshold cannot be evaluated without it');
+    });
+});
+
+// Record each leg's DESTINATION and STATUS as createSend sees it (every leg passes the
+// same mutated data object, so reading the stub's call args afterwards shows only the last)
+function captureLegs() {
+    const legs = [];
+    indexer.indexerDb.createSend.callsFake(async (s) => { legs.push({ dest: s.DESTINATION, status: s.STATUS }); });
+    return legs;
+}
+
+describe('Send handler: a missing handoff rejects only its own leg @regression @tier1', function () {
+    useThresholdHarness();
+
+    it('a multi-send with a handoff to one recipient settles that leg and rejects the other', async function () {
+        withDestBalance(0);
+        indexer.indexerDb.getGatedPackThresholds.resolves([{ publisher: PUB, keyHash: HASH, threshold: null }]);
+        const legs = captureLegs();
+        const data = makeData({ SOURCE, FORMAT: 1, SIBLING_ACTIONS: [handoffTo(DESTINATION)] });
+        await handler.parse(['1', 'TEST', '50', DESTINATION, '30', DEST2, ''], data, null);
+        assert.deepStrictEqual(legs, [
+            { dest: DESTINATION, status: 'valid' },
+            { dest: DEST2,       status: NEEDS_HANDOFF },
+        ], 'the handoff is judged per (DESTINATION, TICK) leg, not for the whole SEND');
     });
 });

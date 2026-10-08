@@ -59,13 +59,16 @@ function splitTopLevel(text){
 
 const unquote = (id) => id.replace(/^`|`$/g, '');
 
+// Replace each block comment outside a quoted literal with a space, so a comment can neither
+// hide a MODIFY nor stand in for a restated attribute. Executable `/*!` and `/*M!` comments
+// stay: the server runs them, and the destructive-DDL scan already refuses them.
 function stripBlockComments(text){
     let out = '', quote = null;
     for(let i = 0; i < text.length; i++){
         const ch = text[i];
         if(quote){
             out += ch;
-            if(ch === '\\') out += text[++i] || '';
+            if(ch === '\\'){ out += text[++i] || ''; }
             else if(ch === quote) quote = null;
             continue;
         }
