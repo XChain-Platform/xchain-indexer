@@ -132,23 +132,15 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             '. Edit xchain-documentation/protocol/action-manifest.json + re-vendor, or edit ACTION_ALIASES in src/actions/index.js.');
     });
 
-    describe('canonical manifest transition', function () {
+    describe('byte-identity to canonical manifest', function () {
         const DOCS = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '..', '..', '..', '..', 'xchain-documentation');
         const CANON = path.join(DOCS, 'protocol', 'action-manifest.json');
         // Refuses an absent docs checkout and a lane symlink into a live main checkout alike.
         const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
-        before(function () { const docs = siblingCheckout(__dirname, CANON); if (!docs.usable) skipOrFail(this, docs, 'the canonical action-manifest.json guard'); });
-        it('vendored fixture is canonical or its exact settlement-anchor successor', function () {
-            const vendoredRaw = fs.readFileSync(VENDORED, 'utf8');
-            const canonicalRaw = fs.readFileSync(CANON, 'utf8');
-            if (vendoredRaw === canonicalRaw) return;
-
-            const predecessor = JSON.parse(vendoredRaw);
-            delete predecessor.categories['settlement-anchor'];
-            delete predecessor.actions.LIST_SHARE;
-            delete predecessor.actions.XPOLICY;
-            assert.deepStrictEqual(JSON.parse(canonicalRaw), predecessor,
-                'vendored action-manifest.json drifted beyond the staged settlement-anchor additions; edit ' +
+        before(function () { const docs = siblingCheckout(__dirname, CANON); if (!docs.usable) skipOrFail(this, docs, 'the canonical action-manifest.json byte-identity guard'); });
+        it('vendored test/fixtures/action-manifest.json is byte-identical to canonical', function () {
+            assert.strictEqual(fs.readFileSync(VENDORED, 'utf8'), fs.readFileSync(CANON, 'utf8'),
+                'vendored action-manifest.json drifted from canonical; edit ' +
                 'xchain-documentation/protocol/action-manifest.json and re-vendor all copies.');
         });
     });
