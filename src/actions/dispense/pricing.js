@@ -39,7 +39,7 @@ module.exports = {
             let error = false;
 
             // Get full dispenser info including GIVE_REMAINING
-            let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], action_index, data['BLOCK_TIME']);
+            let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], action_index, data['BLOCK_TIME'], data['BLOCK_INDEX']);
 
             // Unknown dispenser: no dispenserInfo entry exists to settle against, so
             // skip this action_index entirely rather than pushing a dispense record
