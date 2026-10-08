@@ -405,6 +405,52 @@ describe('retention: reorg-safe floor on the root window', () => {
     });
 });
 
+// Read the decoder's own reorg-safe depth instead of trusting the literals above, so a
+// decoder depth raise reddens this suite until the indexer floor is raised to match.
+describe('retention: floor conforms to the decoder reorg-safe depth (sibling read)', function(){
+    const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+    const path = require('path');
+    const DECODER_CONSTANTS = process.env.XCHAIN_DECODER_DIR
+        ? path.join(process.env.XCHAIN_DECODER_DIR, 'src', 'XChainDecoder', 'constants.js')
+        : path.join(__dirname, '..', '..', '..', '..', 'xchain-decoder', 'src', 'XChainDecoder', 'constants.js');
+    const COINS = ['BTC', 'LTC', 'DOGE', 'ltc', 'Ltc'];
+    const NETWORKS = ['mainnet', 'testnet', 'regtest', 'TESTNET', 'Testnet'];
+    let decoder = null;
+
+    // Skip without the decoder checkout, or fail when the run declared siblings supplied.
+    before(function(){
+        const verdict = siblingCheckout(__dirname, DECODER_CONSTANTS);
+        if(!skipOrFail(this, verdict, 'the retention floor conformance to the decoder depth')) return;
+        delete require.cache[require.resolve(DECODER_CONSTANTS)];
+        decoder = require(DECODER_CONSTANTS);
+    });
+
+    it('finds the decoder depth resolver and standard depth by name', () => {
+        assert.strictEqual(typeof decoder.resolveDispenserExpireSafeDepth, 'function',
+            'xchain-decoder constants.js must export resolveDispenserExpireSafeDepth');
+        assert.strictEqual(typeof decoder.DISPENSER_EXPIRE_SAFE_DEPTH, 'number',
+            'xchain-decoder constants.js must export DISPENSER_EXPIRE_SAFE_DEPTH');
+        assert.ok(R.ROOT_RETENTION_REORG_FLOOR >= decoder.DISPENSER_EXPIRE_SAFE_DEPTH);
+    });
+
+    it('keeps every chain floor at or above the decoder depth for that chain', () => {
+        for(const coin of COINS) for(const net of NETWORKS){
+            const floor = R.resolveRootRetentionFloor(coin, net);
+            const depth = decoder.resolveDispenserExpireSafeDepth(coin, net);
+            assert.ok(floor >= depth, `${coin}/${net}: indexer floor ${floor} is below the decoder depth ${depth}; raise the indexer floor`);
+        }
+    });
+
+    it('raises a one-block window to at least the decoder depth for every chain', () => {
+        const tiny = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '1' });
+        for(const coin of COINS) for(const net of NETWORKS){
+            const kept = R.applyReorgSafeFloor(tiny, coin, net).rootKeepBlocks;
+            const depth = decoder.resolveDispenserExpireSafeDepth(coin, net);
+            assert.ok(kept >= depth, `${coin}/${net}: applied window ${kept} is below the decoder depth ${depth}`);
+        }
+    });
+});
+
 describe('retention: startStateRetention arms the bounded config', () => {
     const jobs = require('../../../src/XChainIndexer/background_jobs.js');
     const { getLogger } = require('../../../src/observability/index.js');

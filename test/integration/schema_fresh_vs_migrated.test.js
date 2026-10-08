@@ -92,7 +92,9 @@ function agedColumnSpec(table, column) {
         })));
     }
     const currentSpec = CURRENT_COLUMN_SPECS.get(table).get(column.name.toLowerCase());
-    assert.ok(currentSpec, table + '.' + column.name + ' must still exist in the current definition');
+    // Keep a retired column in the aged DB as the anchor froze it: the replay below must
+    // then carry its dated DROP, or the fresh-vs-migrated comparison fails on the leftover.
+    if (!currentSpec) return column.spec;
     const currentLiterals = new Map(
         (currentSpec.match(/'(?:''|\\\\.|[^'])*'/g) || []).map(literal => [literal.toUpperCase(), literal]));
     return column.spec.replace(/'(?:''|\\\\.|[^'])*'/g,
