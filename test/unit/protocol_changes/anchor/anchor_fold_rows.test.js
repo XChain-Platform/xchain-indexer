@@ -14,11 +14,11 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-const ProtocolChanges = require('../../../src/protocol_changes.js');
-const { REGISTRY_ONLY_STEMS } = require('../../helpers/gate_modules.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
+const { REGISTRY_ONLY_STEMS } = require('../../../helpers/gate_modules.js');
 
 const ENV = 'XC_ANCHOR_FOLD_REGTEST_ACTIVATION';
-const PARTS = path.join(__dirname, '..', '..', '..', 'src', 'protocol_changes');
+const PARTS = path.join(__dirname, '..', '..', '..', '..', 'src', 'protocol_changes');
 const KEYS = [
     'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION',
     'archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION',
