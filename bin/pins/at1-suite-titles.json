@@ -439,6 +439,19 @@
       "src/db.js ORDER BY determinism (consensus hotspot invariant) @regression @tier1 negative control: flags a tiebreaker-free ORDER BY",
       "src/db.js ORDER BY determinism (consensus hotspot invariant) @regression @tier1 parses a non-trivial population of ORDER BY clauses from db.js"
     ],
+    "0a60abb0b8acbed0": [
+      "bin/ci_shard: options and runs fails the run when any shard fails or dies on a signal, and prints every shard",
+      "bin/ci_shard: options and runs passes the run only when every shard passed",
+      "bin/ci_shard: options and runs reads an unsharded run with no exit status as red",
+      "bin/ci_shard: options and runs reads quoted globs as single words",
+      "bin/ci_shard: options and runs repeats the options the step ran with, and drops mocha defaults",
+      "bin/ci_shard: options and runs takes CI_SHARDS when it is sane and half the cores, at most four, otherwise",
+      "bin/ci_shard: the chain and its files collects every tracked file the main step globs name, once each",
+      "bin/ci_shard: the chain and its files deals an exact partition of the collected files at every shard count",
+      "bin/ci_shard: the chain and its files finds exactly one main mocha step in the ci chain and keeps every other step in order",
+      "bin/ci_shard: the chain and its files names a dropped, doubled or stray file",
+      "bin/ci_shard: the chain and its files refuses a chain with no mocha step or with two"
+    ],
     "0a6476923a9fd355": [
       "list share ticker apply pass halts when ticker qualification is unarmed",
       "list share ticker apply pass stores full and delta ticker membership exactly as signed"
@@ -14598,6 +14611,24 @@
       "Deploy (DEPLOY) @regression @tier2 constructor state changes and rollback constructor state write failure rolls back savepoint and marks deploy failed (lines 341-348)",
       "Deploy (DEPLOY) @regression @tier2 constructor state changes and rollback constructor with stateChanges calls createContractState for each change (lines 322-330)",
       "Deploy (DEPLOY) @regression @tier2 constructor state changes and rollback constructor with stateDeletes calls createContractState with null value (lines 332-339)"
+    ],
+    "e223a521f0484068": [
+      "Order action handler @regression @tier2 Format 0 – Create Order GIVE_COIN unsupported coin returns invalid (unknown COINS list)",
+      "Order action handler @regression @tier2 Format 0 – Create Order MEMO with pipe character returns invalid",
+      "Order action handler @regression @tier2 Format 0 – Create Order SOURCE sleeping returns invalid",
+      "Order action handler @regression @tier2 Format 0 – Create Order TICK sleeping returns invalid",
+      "Order action handler @regression @tier2 Format 0 – Create Order admits a GET_ADDRESS allowed for GET_TICK but blocked for GIVE_TICK after payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 – Create Order cross-chain order is exempt from the local positive-GET_AMOUNT check",
+      "Order action handler @regression @tier2 Format 0 – Create Order defaults GET_ADDRESS to SOURCE when COIN networks match and GET_ADDRESS not provided",
+      "Order action handler @regression @tier2 Format 0 – Create Order empty GET_AMOUNT returns invalid (must be positive)",
+      "Order action handler @regression @tier2 Format 0 – Create Order keeps the GET_TICK refusal for the reverse split below payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 – Create Order native-coin GET side still requires a positive GET_AMOUNT",
+      "Order action handler @regression @tier2 Format 0 – Create Order pre-existing error short-circuits validation",
+      "Order action handler @regression @tier2 Format 0 – Create Order preserves legacy admission below the maker policy gate",
+      "Order action handler @regression @tier2 Format 0 – Create Order refuses a GET_ADDRESS allowed for GIVE_TICK but blocked for GET_TICK after payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 – Create Order refuses the same policy split below payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 – Create Order registers maker policy admission at the required network heights",
+      "Order action handler @regression @tier2 Format 0 – Create Order zero GET_AMOUNT returns invalid (must be positive)"
     ],
     "e224c1f6ab921a72": [
       "01 Baseline Throughput empty blocks (0 txs/block)",
