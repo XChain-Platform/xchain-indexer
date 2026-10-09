@@ -49,6 +49,8 @@ const SKIPPED = {
         'ruleset unit: resolveRuleSet(height, network) returns a version and activeAt() throws unsupported unit; W4 needs a ruleSetAt() reader',
     'anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION':
         'registry-only row read through activeAt() at the parse call site, no predicate module',
+    'vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION':
+        'registry-only row read through activeAt() in the deploy lint flags, no predicate module',
     // Each mirror row's value is held to its gate row by activations/activation_constants_parity.test/mirror_rows.test.js.
     'protocol/constants.STAKE_WEIGHTED_QUORUM_ACTIVATION': 'documentation mirror row, no predicate in that file',
     'protocol/constants.EQUIV_HEADER_ACTIVATION': 'documentation mirror row, no predicate in that file',
@@ -91,7 +93,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
         assert.strictEqual(REPLACED.size, 38, 'the W4 census of 25 predicate-only shims plus the 13 predicate-only twins of W5');
-        assert.strictEqual(REGISTRY_ONLY.size, 42, 'the registry-only gate census moved');
+        assert.strictEqual(REGISTRY_ONLY.size, 44, 'the registry-only gate census moved');
         for (const key of [...REPLACED, ...REGISTRY_ONLY]) {
             assert.ok(['height', 'time', 'constant'].includes(ProtocolChanges.registry.unitOf(key)),
                 key + ' is a height, time or constant row');
