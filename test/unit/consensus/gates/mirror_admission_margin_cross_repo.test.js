@@ -21,17 +21,21 @@
 
 const assert = require('assert');
 const fs     = require('fs');
+const os     = require('os');
 const path   = require('path');
+const { execFileSync } = require('child_process');
 const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checkout.js');
 
 const INDEXER_GATE = '../../../../src/consensus/gates/mirror_admission_margin_gate.js';
 const INDEXER_ROWS = '../../../../src/protocol_changes/shared_rows_5.js';
-const HUB_GATE     = '../../../../../xchain-hub/src/consensus/gates/mirror_admission_margin_gate.js';
-const HUB_ROWS     = '../../../../../xchain-hub/src/consensus/gate_registry/shared_rows_5.js';
-const HUB_ADMIT    = '../../../../../xchain-hub/src/lib/admission_height.js';
+const HUB_FROM     = path.resolve(__dirname, '..');
+const HUB_GATE     = '../../../../xchain-hub/src/consensus/gates/mirror_admission_margin_gate.js';
+const HUB_ROWS     = '../../../../xchain-hub/src/consensus/gate_registry/shared_rows_5.js';
+const HUB_ADMIT    = '../../../../xchain-hub/src/lib/admission_height.js';
 const ACTIVATION_KEY = 'mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION';
 
 let loaded = null;
+let temporaryHub = null;
 
 function replaceActivationGet(registry) {
     const original = registry.get;
@@ -50,19 +54,48 @@ function restoreCache(saved) {
     }
 }
 
-function loadCopies(ctx) {
-    for(const rel of [HUB_GATE, HUB_ROWS, HUB_ADMIT]) {
-        const verdict = siblingCheckout(__dirname, rel);
+function hubFiles(root) {
+    if(root) return [
+        path.join(root, 'src/consensus/gates/mirror_admission_margin_gate.js'),
+        path.join(root, 'src/consensus/gate_registry/shared_rows_5.js'),
+        path.join(root, 'src/lib/admission_height.js'),
+    ];
+    return [HUB_GATE, HUB_ROWS, HUB_ADMIT].map(rel => path.resolve(HUB_FROM, rel));
+}
+
+function usableHub(ctx) {
+    let files = hubFiles(process.env.XCHAIN_HUB_DIR);
+    const verdicts = files.map(file => siblingCheckout(__dirname, file));
+    const refused = verdicts.find(verdict => !verdict.usable);
+    if(!refused) return files;
+    if(process.env.XCHAIN_REQUIRE_SIBLINGS !== '1' || !/symlink into the live main checkout/.test(refused.reason)) {
+        skipOrFail(ctx, refused, 'mirror-admission margin cross-repo parity');
+        return null;
+    }
+    temporaryHub = fs.mkdtempSync(path.join(os.tmpdir(), 'margin-parity-hub-'));
+    const checkout = path.join(temporaryHub, 'xchain-hub');
+    const source = path.resolve(HUB_FROM, '../../../../xchain-hub');
+    execFileSync('git', ['clone', '-q', '--shared', source, checkout], { stdio: 'pipe' });
+    files = hubFiles(checkout);
+    for(const file of files) {
+        const verdict = siblingCheckout(__dirname, file);
         if(!verdict.usable) { skipOrFail(ctx, verdict, 'mirror-admission margin cross-repo parity'); return null; }
     }
+    return files;
+}
+
+function loadCopies(ctx) {
+    const hub = usableHub(ctx);
+    if(!hub) return null;
+    const [hubGateFile, hubRowsFile, hubAdmitFile] = hub;
     const indexerPath = require.resolve(INDEXER_GATE);
-    const hubGatePath = require.resolve(HUB_GATE);
-    const hubAdmitPath = require.resolve(HUB_ADMIT);
+    const hubGatePath = require.resolve(hubGateFile);
+    const hubAdmitPath = require.resolve(hubAdmitFile);
     const normalIndexer = require(indexerPath);
     const normalHub = require(hubAdmitPath);
     const saved = [indexerPath, hubGatePath, hubAdmitPath].map(p => [p, require.cache[p]]);
     const indexerRegistry = require('../../../../src/consensus/gate_registry.js');
-    const hubRegistry = require('../../../../../xchain-hub/src/consensus/gate_registry');
+    const hubRegistry = require(path.resolve(path.dirname(hubGateFile), '..', 'gate_registry'));
     const indexerGet = replaceActivationGet(indexerRegistry);
     const hubGet = replaceActivationGet(hubRegistry);
     let boundaryIndexer;
@@ -78,7 +111,8 @@ function loadCopies(ctx) {
         indexerRegistry.get = indexerGet;
         hubRegistry.get = hubGet;
     }
-    return { normalIndexer, normalHub, boundaryIndexer, boundaryHub, saved };
+    return { normalIndexer, normalHub, boundaryIndexer, boundaryHub, saved,
+        hubGateFile, hubRowsFile };
 }
 
 function tables(gate) {
@@ -87,13 +121,18 @@ function tables(gate) {
 
 describe('mirror-admission margin cross-repo parity', function() {
     before(function() { loaded = loadCopies(this); });
-    after(function() { if(loaded) restoreCache(loaded.saved); loaded = null; });
+    after(function() {
+        if(loaded) restoreCache(loaded.saved);
+        if(temporaryHub) fs.rmSync(temporaryHub, { recursive: true, force: true });
+        loaded = null;
+        temporaryHub = null;
+    });
 
     it('hub and indexer copies of the margin gate and shared_rows_5 are byte-identical', function() {
         assert.deepStrictEqual(fs.readFileSync(path.resolve(__dirname, INDEXER_GATE)),
-            fs.readFileSync(path.resolve(__dirname, HUB_GATE)));
+            fs.readFileSync(loaded.hubGateFile));
         assert.deepStrictEqual(fs.readFileSync(path.resolve(__dirname, INDEXER_ROWS)),
-            fs.readFileSync(path.resolve(__dirname, HUB_ROWS)));
+            fs.readFileSync(loaded.hubRowsFile));
     });
 
     it('hub admitBlocks stamps the indexer row margin and the consumer target certifies the opening tip on regtest', function() {
