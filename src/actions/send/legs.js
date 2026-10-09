@@ -98,6 +98,11 @@ module.exports = {
     // DESTINATION chosen to spell a held-out leg's key cannot collide with one. Prefixing every
     // key uniformly leaves insertion order (and so the emitted record order) unchanged.
     consolidateSendLegs(sends, ticks, data){
+        // Preserve the action-wide totals before literal TICK spellings are consolidated.
+        // Below the activation boundary, avoid even introducing the new arithmetic.
+        let totalTickIdRule = gateRegistry.activeAt('send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
+        this._gatedActionTotals = totalTickIdRule ? this.gatedTotalsByTickId(sends, ticks) : null;
+
         let legAmountRule = gateRegistry.activeAt('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
         let keys = {};
         for(let idx in sends){
