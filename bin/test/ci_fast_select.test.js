@@ -39,7 +39,7 @@ function gitLines(args, options) {
 }
 
 const dependencies = {
-  listTests: () => gitLines(['ls-files', 'test/**']),
+  listTests: () => gitLines(['ls-files', 'test/**', 'bin/test/**']),
   findRequirers: findTrackedRequirers,
   findSupportUsers: findTrackedSupportUsers
 };
@@ -107,6 +107,17 @@ describe('ci fast selector', function () {
     const plan = select(['README.md']);
     assert.strictEqual(plan.consensus, false);
     assert.deepStrictEqual(plan.tests, []);
+  });
+
+  it('maps CI helper changes to the selector test without widening', function () {
+    for (const file of ['bin/ci-full.sh', 'bin/ci_fast_select.js', 'bin/vendor-vm.sh']) {
+      const plan = select([file]);
+      assert.strictEqual(plan.consensus, false, file);
+      assert.deepStrictEqual(plan.tests, [{
+        group: 'main',
+        file: 'bin/test/ci_fast_select.test.js'
+      }], file);
+    }
   });
 
   it('widens package manifest changes', function () {
