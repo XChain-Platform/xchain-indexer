@@ -225,6 +225,8 @@ module.exports = {
     // Create, verify and migrate the indexer database, run the startup probes, and start
     // the hub mirror once every table it writes exists.
     async verifyIndexerDatabase(){
+        this.schemaReady = false;
+
         // Verify the Indexer database exists
         let indexerDbStatus   = await this.indexerDb.createDatabase();
         let indexerDbVerified = await this.indexerDb.verifyDatabase();
@@ -241,6 +243,7 @@ module.exports = {
             // gated for an explicit operator run (`node src/db/migration/migrate.js`). Recorded in the
             // schema_migrations ledger, so this is a no-op once applied.
             await this.indexerDb.runMigrations();
+            this.schemaReady = true;
 
             // Invariant probe (a precondition for arming the dense-id rules): the deterministic
             // address/ticker id counter (getNextAddressId = MAX(id)+1) and every wire ^<id>

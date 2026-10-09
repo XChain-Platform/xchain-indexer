@@ -338,6 +338,11 @@
       "ROLLCALL epoch close (§3.4) the eviction effect stamps every delegation of the source, or the DELEGATE branch keeps it in",
       "ROLLCALL epoch close (§3.4) the eviction effect stamps the stake SOURCE-SCOPED and sweeps pending rows"
     ],
+    "084b3b36044d643d": [
+      "/status schemaReady always emits a boolean and reports true only for completed startup",
+      "/status schemaReady stays false through table verification and flips after migrations finish",
+      "/status schemaReady stays false when migrations fail"
+    ],
     "087297546f0ad980": [
       "ISSUE settlement owner history adds no extra address when the source keeps ownership",
       "ISSUE settlement owner history lists the owner named at creation in the addresses refreshed for the tick"
@@ -17021,6 +17026,7 @@
         "test/unit/api/rpc/token_policy_list_ref.test.js": "0d061e71ba86eff6",
         "test/unit/api/rpc/token_policy_resolve_refs.test.js": "64c039d7b0a6d648",
         "test/unit/api/stake_source.test.js": "bed4c39786728d9f",
+        "test/unit/api/status_schema_ready.test.js": "084b3b36044d643d",
         "test/unit/api/tip_block_time.test.js": "5fd61225b4760c51",
         "test/unit/attestation/attest_broadcast_fee_activation.test.js": "4dff9efe8fe9df01",
         "test/unit/attestation/attest_mirror_era_parity.test.js": "998149c6ec308465",
