@@ -68,6 +68,14 @@ function childEnv() {
 }
 
 describe('consensus identity GATES field and pin comparison', function () {
+    it('pins the BigInt surface-strip row in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
     it('matches the hub pinned GATES field hash', function () {
         const hubRoot = process.env.XCHAIN_HUB_DIR || path.resolve(REPO, '..', 'xchain-hub');
         const candidate = path.join(hubRoot, 'bin', 'pins', 'at1-consensus-identity.json');

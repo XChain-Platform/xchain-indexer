@@ -287,6 +287,25 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
     });
 
+    it('the bundled VM BIGINT_SURFACE_STRIP_ACTIVATION matches the indexer height row', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        if(!vm || !full){
+            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present') + (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+            this.skip(); return;
+        }
+        const gate = vm.BIGINT_SURFACE_STRIP_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export BIGINT_SURFACE_STRIP_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION');
+        for(const coinKey of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet']){
+            const vmHeight = gate[coinKey];
+            assert.strictEqual(row[coinKey], vmHeight === null ? pc.UNARMED : vmHeight, coinKey);
+        }
+        assert.strictEqual(row.regtest, 0, 'regtest');
+    });
+
     it('the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp', function(){
         // Deterministic (time-gated) price_snapshots selection for native-coin fee
         // validation on non-reference chains flips at this flag-day. It is an indexer-internal

@@ -2775,6 +2775,17 @@
       "08 Fast Chain (DOGE cadence, 10 blocks/s) processes the fast chain without errors",
       "08 Fast Chain (DOGE cadence, 10 blocks/s) still holds the 10 blocks/s per-block budget at the end of the run"
     ],
+    "30a7182b1a9db8b9": [
+      "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
+      "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM BIGINT_SURFACE_STRIP_ACTIVATION matches the indexer height row",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
+      "consensus parameters are frozen (track 8 guard) @regression the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp",
+      "consensus parameters are frozen (track 8 guard) @regression vmFailureStatus maps every VM error into the frozen closed token set"
+    ],
     "30f105c9afedac86": [
       "snapshot-age caller inventory @regression @tier1 pins every source file that refers to snapshot age",
       "snapshot-age caller inventory @regression @tier1 pins the current snapshot age to a block-count difference"
@@ -4513,6 +4524,13 @@
       "HubDbSync mirror network scope @regression @tier2 starts at 0 on an empty local table",
       "HubDbSync mirror network scope @regression @tier2 treats an advertised ceiling of ZERO as authoritative, not as missing information",
       "HubDbSync mirror network scope @regression @tier2 uses the wire position for ready-message catch-up"
+    ],
+    "4d952349cc7e96e7": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings"
     ],
     "4d95352bdf288616": [
       "Utility.getDustThresholdCoin() fails closed - @regression @tier1 does not cache a failed lookup",
@@ -6360,6 +6378,11 @@
       "protocol_changes consensus-bound indexer rows @regression @tier1 keeps gates_1.js at or under 400 lines",
       "protocol_changes consensus-bound indexer rows @regression @tier1 pins the BROADCAST FEE length flag day",
       "protocol_changes consensus-bound indexer rows @regression @tier1 pins the archive MATCH_COUNT activation map"
+    ],
+    "6d6fd94f70afa237": [
+      "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 keeps the final registry part within the structure limit",
+      "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 registers a frozen per-chain height map that is unarmed on launched networks",
+      "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 stays inactive below the sentinel and is active from regtest genesis"
     ],
     "6d955dc4007ee59e": [
       "contract_state_root: strict reads @regression a faulting touched-key read THROWS rather than threading the block forward unchanged",
@@ -9032,12 +9055,6 @@
       "getPendingAttestationRequests() LIMIT hardening @regression @tier1 floors a fractional limit to an integer (would otherwise be a `LIMIT 100.5` syntax error)",
       "getPendingAttestationRequests() LIMIT hardening @regression @tier1 hard-caps the limit at 500 regardless of caller",
       "getPendingAttestationRequests() LIMIT hardening @regression @tier1 still appends the provider_id + cursor args ahead of the bound limit"
-    ],
-    "947ca6e1a2e3eb48": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash"
     ],
     "94aa70da9570d3da": [
       "ROLLCALL epoch close (\u00a73.4) leader election parity carries its own domain tag, so the anchor election and this one are independent",
@@ -11919,6 +11936,11 @@
       "Database getTickerId lookup order @unit @regression keeps canonical caret lookups on the id query",
       "Database getTickerId lookup order @unit @regression orders a case-insensitive name lookup by ascending id and returns the first row",
       "Database getTickerId lookup order @unit @regression returns null when a name lookup misses"
+    ],
+    "c0fdcdd88b5f92b2": [
+      "consensus/bigint_surface_strip_matches_vm: activation parity @regression @tier1 keeps the indexer regtest activation at genesis",
+      "consensus/bigint_surface_strip_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
+      "consensus/bigint_surface_strip_matches_vm: activation parity @regression @tier1 passes the same network, coin and height inputs to both activation predicates"
     ],
     "c1156153bb6a807f": [
       "Execute (EXECUTE) @regression @tier2 cross-contract calls a callee run uses VM_GAS_LIMIT as its VM ceiling and reports its unused subtree gas",
@@ -15532,16 +15554,6 @@
       "db/list_share_mirrors SQL contract reads one finalized sequence from the MIRROR database",
       "db/list_share_mirrors SQL contract writes the LOCAL mirror mapping with its rollback keys"
     ],
-    "f7136f6f0dee94e5": [
-      "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
-      "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
-      "consensus parameters are frozen (track 8 guard) @regression the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp",
-      "consensus parameters are frozen (track 8 guard) @regression vmFailureStatus maps every VM error into the frozen closed token set"
-    ],
     "f722342a7f6bc67a": [
       "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 activation-module predicate mainnet is ARMED AT GENESIS by the 2026-09-09 ruling, off the reference chain",
       "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 activation-module predicate regtest and testnet are genesis-active off the reference chain",
@@ -16099,8 +16111,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1191,
-      "titleCount": 12537,
+      "fileCount": 1193,
+      "titleCount": 12545,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16688,13 +16700,14 @@
         "test/unit/consensus/armed_map/fingerprint.test.js": "fd59b42becdb62ff",
         "test/unit/consensus/armed_map/manifest.test.js": "fae9f1170dbee6bb",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
+        "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "c0fdcdd88b5f92b2",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "f7136f6f0dee94e5",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "30a7182b1a9db8b9",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "f8556c2d47a9cb0a",
         "test/unit/consensus/consensus_rules_digest_twin_bytes.test.js": "c8d4c432d417022a",
         "test/unit/consensus/doge_peer_clients/rollcall_proof_client/reply_decision.test.js": "8fcf19004337f429",
@@ -17139,6 +17152,7 @@
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
+        "test/unit/protocol_changes/bigint_surface_strip_row.test.js": "6d6fd94f70afa237",
         "test/unit/protocol_changes/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/consensus_bound_shared_rows.test.js": "9a95e2d9852292f0",
@@ -17178,7 +17192,7 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "947ca6e1a2e3eb48",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "4d952349cc7e96e7",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
@@ -17655,8 +17669,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 906,
-      "titleCount": 9930,
+      "fileCount": 908,
+      "titleCount": 9937,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -18138,10 +18152,11 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/config/touch_guards_env.test.js": "8f02c7885f4b9349",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
+        "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "c0fdcdd88b5f92b2",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "f7136f6f0dee94e5",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "30a7182b1a9db8b9",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "f8556c2d47a9cb0a",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
@@ -18452,6 +18467,7 @@
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
+        "test/unit/protocol_changes/bigint_surface_strip_row.test.js": "6d6fd94f70afa237",
         "test/unit/protocol_changes/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
@@ -18567,8 +18583,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 395,
-      "titleCount": 4912,
+      "fileCount": 397,
+      "titleCount": 4918,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
@@ -18699,6 +18715,7 @@
         "test/unit/chain/utxo_tracker_unavailable.test.js": "90ad908fbf1ec561",
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
+        "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "c0fdcdd88b5f92b2",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
@@ -18911,6 +18928,7 @@
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
+        "test/unit/protocol_changes/bigint_surface_strip_row.test.js": "6d6fd94f70afa237",
         "test/unit/protocol_changes/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
@@ -18968,8 +18986,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 906,
-      "titleCount": 9930,
+      "fileCount": 908,
+      "titleCount": 9937,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19451,10 +19469,11 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/config/touch_guards_env.test.js": "8f02c7885f4b9349",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
+        "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "c0fdcdd88b5f92b2",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "f7136f6f0dee94e5",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "30a7182b1a9db8b9",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "f8556c2d47a9cb0a",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
@@ -19765,6 +19784,7 @@
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
+        "test/unit/protocol_changes/bigint_surface_strip_row.test.js": "6d6fd94f70afa237",
         "test/unit/protocol_changes/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
