@@ -27,10 +27,6 @@
     "00d7e3417ecc95fb": [
       "HubDbSync oracle_prices generation convergence @regression @tier1 re-pages two mirrors from zero and converges both to the newer generation in one pass"
     ],
-    "01ac87a503367b41": [
-      "protocol_changes/ITER_SET_METER row @regression @tier1 is the first row in part 5 and has the registry shape",
-      "protocol_changes/ITER_SET_METER row @regression @tier1 is unarmed on production networks and active from regtest genesis"
-    ],
     "018402ee475c49ef": [
       "activation ladder fork-avoiding constraints (the bridge train cut) C3: comparison logic falsified on a local fixture (never the shipped maps) goes red, naming both heights, when the fixture is perturbed so the train boundary lands ABOVE the bridge height",
       "activation ladder fork-avoiding constraints (the bridge train cut) C3: comparison logic falsified on a local fixture (never the shipped maps) goes red, naming both heights, when the fixture is perturbed so the train boundary lands AT the bridge height",
@@ -45,6 +41,10 @@
       "activation ladder fork-avoiding constraints (the bridge train cut) C4: destination bridge height at or before the BTC origin's, same network (against the shipped maps) testnet: each destination arms no later in wall clock than the BTC origin, from the shipped heights and the cut record",
       "activation ladder fork-avoiding constraints (the bridge train cut) C4: wall-clock inequality proven directly in hours (the form raw heights cannot express across chains) goes red, naming both hour figures, at the measured breaking band (destination slowed past 3x)",
       "activation ladder fork-avoiding constraints (the bridge train cut) C4: wall-clock inequality proven directly in hours (the form raw heights cannot express across chains) holds on a worked ladder (LTC 3.1h and DOGE 3.0h, both at or before BTC 9.0h)"
+    ],
+    "01ac87a503367b41": [
+      "protocol_changes/ITER_SET_METER row @regression @tier1 is the first row in part 5 and has the registry shape",
+      "protocol_changes/ITER_SET_METER row @regression @tier1 is unarmed on production networks and active from regtest genesis"
     ],
     "0249295e69b670ed": [
       "Anchor canonical vectors byte-identity to xchain-documentation @regression fixture is byte-identical to xchain-documentation/protocol/test-vectors/anchor_canonical.json",
