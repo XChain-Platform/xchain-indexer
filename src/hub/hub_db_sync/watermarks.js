@@ -25,11 +25,11 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
-// The mirror-admission family's consumer gate and its per-table margins. A FOURTH
-// CLIENT_FILES entry alongside price_batching_floor_activation.js and, like it,
-// dependency-free: the alternative threads an activation verdict through eleven predicate
-// signatures, their waiters and every one of their call sites.
-const { admitMarginBlocks, isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirror_admission_gate.js');
+// The mirror-admission consumer gate and chain-specific consumer target are vendored with
+// this client. Keeping the lookups here avoids threading their verdicts through every
+// barrier predicate, waiter, and call site.
+const { isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirror_admission_gate.js');
+const { consumerTargetHeight } = require('../../consensus/gates/mirror_admission_margin_gate.js');
 const { WATERMARK_STALL_CHECK_MS, watermarkStallVerdict, sanitizeHeights,
         heightsAdvanced } = require('./watermark_config.js');
 
@@ -167,10 +167,10 @@ module.exports = {
         return true;
     },
 
-    // The family's barrier comparison, identical for every member: heights[table][C] >= B -
-    // ADMIT_MARGIN_BLOCKS[table]. Nothing here reads t(B), which is the point of the whole
-    // design: heights do not move with a miner's stamp, so a block stamped 7200 s ahead is
-    // height B like any other.
+    // The family's barrier comparison, identical for every member: heights[table][C] must
+    // reach the consumer target selected for (table, chain, network, B). Nothing here reads
+    // t(B), which is the point of the whole design: heights do not move with a miner's stamp,
+    // so a block stamped 7200 s ahead is height B like any other.
     //
     // A shortfall is RECORDED rather than merely returned, because the mirror's own stall
     // detector has no other way to see a heights map that froze while `ts` kept ticking.
@@ -178,7 +178,7 @@ module.exports = {
         const chain = this.admissionChain();
         const b = Number(blockHeight);
         if (chain === null || !Number.isFinite(b)) return false;
-        const target = b - admitMarginBlocks(table);
+        const target = consumerTargetHeight(table, chain, this.network, b);
         const key = table + '|' + chain;
         const h = this.publishedHeight(table, chain);
         if (h === null || h < target) {
@@ -212,7 +212,7 @@ module.exports = {
         const h = (chain === null) ? null : this.publishedHeight(table, chain);
         return ' (admission height ' + table + '.' + (chain === null ? 'unknown' : chain) +
                ' at ' + (h === null ? 'none' : h) +
-               ', needs ' + (Number(blockHeight) - admitMarginBlocks(table)) + ')';
+               ', needs ' + consumerTargetHeight(table, chain, this.network, Number(blockHeight)) + ')';
     },
 
     // Sample the stall condition once and act on the verdict. Split from the timer so a

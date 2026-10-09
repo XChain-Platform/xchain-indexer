@@ -12,7 +12,7 @@
 # Vendored set: the client entry (hub_db_sync.js), its parts directory
 # (hub_db_sync/, every .js under it, subdirectories included), the hub-list
 # modules it requires (hub_client/hub_list.js and hub_client/hub_list_refresh.js),
-# the schema-version lockstep constant (hub_schema_version.js), the two activation
+# the schema-version lockstep constant (hub_schema_version.js), the three activation
 # gate modules the client requires by relative path (DEP_FILES below, under
 # src/consensus/gates/ since W5; a consumer without them fails at require on
 # boot), and the mirror-table SQL twins the
@@ -26,7 +26,7 @@
 # and the row part files under src/consensus/gate_registry/ are byte twins of the
 # indexer's src/protocol_changes/ parts kept in step by the platform's twin
 # reconcile script, not by this one. This script therefore
-# vendors the two gate modules only and REFUSES a consumer with no registry
+# vendors the three gate modules only and REFUSES a consumer with no registry
 # entry, in both modes, rather than boarding a module that cannot load there.
 #
 # The parts directory is synced as a SET, not file by file: --check compares
@@ -57,8 +57,8 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 
 HUB_FILES="hub_db_sync.js hub_schema_version.js hub_client/hub_list.js hub_client/hub_list_refresh.js"
 HUB_DIRS="hub_db_sync"
-DEP_FILES="consensus/gates/price_batching_floor_gate.js consensus/gates/mirror_admission_gate.js"
-# What DEP_FILES require, relative to the consumer's src/: present or the pair
+DEP_FILES="consensus/gates/price_batching_floor_gate.js consensus/gates/mirror_admission_gate.js consensus/gates/mirror_admission_margin_gate.js"
+# What DEP_FILES require, relative to the consumer's src/: present or the modules
 # cannot load (see the header).
 REGISTRY_ENTRY="consensus/gate_registry.js"
 SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql bridge_transfers.sql policy_snapshots.sql list_snapshots.sql"
@@ -115,11 +115,11 @@ for svc in $SERVICES; do
             done)
         fi
     done
-    # The pair's registry: the consumer's own file, never copied from here. A
-    # consumer without it would take the two modules and fail at require on boot,
+    # The modules' registry: the consumer's own file, never copied from here. A
+    # consumer without it would take the modules and fail at require on boot,
     # so both modes stop on it and name the script that supplies the parts.
     if [ ! -f "$dest/$REGISTRY_ENTRY" ]; then
-        echo "DRIFT: $svc/src/$REGISTRY_ENTRY is missing; DEP_FILES require it (the consumer's own registry entry, with its parts kept in step by the platform twin reconcile script), so the pair cannot be vendored there"
+        echo "DRIFT: $svc/src/$REGISTRY_ENTRY is missing; DEP_FILES require it (the consumer's own registry entry, with its parts kept in step by the platform twin reconcile script), so the modules cannot be vendored there"
         drift=1
         continue
     fi
