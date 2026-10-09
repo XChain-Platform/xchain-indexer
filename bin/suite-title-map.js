@@ -44,7 +44,9 @@
  *   node bin/suite-title-map.js                    human summary
  *   node bin/suite-title-map.js --json             the full map on stdout
  *   node bin/suite-title-map.js --out <file>       write the map as JSON
- *   node bin/suite-title-map.js --script test      one script only
+ *   node bin/suite-title-map.js --script test      one script only; with --out,
+ *                                                  refresh that script in an
+ *                                                  existing full map
  *   node bin/suite-title-map.js --compare <pin>    diff the tree against a pin,
  *                                                  exit 1 on any difference
  *   node bin/suite-title-map.js --compare <pin> --rename-map <file>
@@ -225,6 +227,38 @@ function expand(map, scriptName) {
     return out;
 }
 
+/** Replace one collected script without discarding the rest of an existing map. */
+function mergeScriptMap(existing, fresh, scriptName) {
+    if (!existing || !existing.scripts || !existing.titleSets) {
+        throw new Error('the existing output is not a suite-title map');
+    }
+    if (!fresh || !fresh.scripts || !Object.prototype.hasOwnProperty.call(fresh.scripts, scriptName)) {
+        throw new Error(`the fresh map does not contain ${scriptName}`);
+    }
+
+    const scripts = {};
+    for (const name of Array.from(new Set(Object.keys(existing.scripts).concat([scriptName]))).sort()) {
+        scripts[name] = name === scriptName ? fresh.scripts[name] : existing.scripts[name];
+    }
+
+    const titleSets = {};
+    const referenced = new Set();
+    for (const entry of Object.values(scripts)) {
+        for (const key of Object.values(entry.files || {})) referenced.add(key);
+    }
+    for (const key of Array.from(referenced).sort()) {
+        const oldTitles = existing.titleSets[key];
+        const newTitles = fresh.titleSets[key];
+        if (oldTitles && newTitles && JSON.stringify(oldTitles) !== JSON.stringify(newTitles)) {
+            throw new Error(`title-set key collision at ${key}`);
+        }
+        const titles = newTitles || oldTitles;
+        if (!titles) throw new Error(`missing title set ${key}`);
+        titleSets[key] = titles;
+    }
+    return { titleSets, scripts };
+}
+
 /**
  * Pin against tree, script by script. `renames` is the moving commit's declared
  * {oldPath: newPath}; a pin entry is compared under its new name so a pure move
@@ -281,7 +315,7 @@ function main() {
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         return;
     }
-    const map = buildMap(opts.script);
+    let map = buildMap(opts.script);
 
     if (opts.compare) {
         const pin = JSON.parse(fs.readFileSync(opts.compare, 'utf8'));
@@ -301,6 +335,21 @@ function main() {
         if (differences.length > 200) console.log(`  ... and ${differences.length - 200} more`);
         process.exitCode = 1;
         return;
+    }
+
+    if (opts.out && opts.script) {
+        if (!fs.existsSync(opts.out)) {
+            console.error('--script with --out requires an existing full suite-title map');
+            process.exitCode = 1;
+            return;
+        }
+        try {
+            map = mergeScriptMap(JSON.parse(fs.readFileSync(opts.out, 'utf8')), map, opts.script);
+        } catch (e) {
+            console.error(`cannot refresh ${opts.script} in ${path.relative(REPO_ROOT, opts.out)}: ${e.message}`);
+            process.exitCode = 1;
+            return;
+        }
     }
 
     // Escaped to pure ASCII on the way out. The titles are captured verbatim and
@@ -332,4 +381,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { buildMap, collect, mochaArgsFor, splitCommand, compare, expand };
+module.exports = { buildMap, collect, mochaArgsFor, splitCommand, compare, expand, mergeScriptMap };
