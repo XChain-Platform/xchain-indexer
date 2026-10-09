@@ -39,3 +39,41 @@ describe('protocol_changes time-table parts spell the unarmed sentinel by name @
             'use UNARMED from src/protocol_changes/core.js instead of the bare literal in: ' + offenders.join(', '));
     });
 });
+
+// Rows the arming and release tools still read by their literal text; each leaves this list when it is spelled UNARMED.
+const LITERAL_ROWS = {
+    'gates_3.js': ['tick_namespace_activation.TICK_NAMESPACE_ACTIVATION'],
+    'shared_rows_4.js': ['token_bridge_activation.TOKEN_BRIDGE_ACTIVATION'],
+    'shared_rows_5.js': ['token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION', 'train_activation.TRAIN_ACTIVATION'],
+};
+const DEFINITION = 'const UNARMED = 9999999999;';
+// Eight or more nines also catches a sentinel with a digit dropped, which would arm at a reachable height.
+const NINES_RUN = /9{8,}/;
+
+// Blank out one addGate block, keeping its line count so offender line numbers stay true.
+function blankGate(source, key) {
+    const start = source.indexOf("addGate('" + key + "'");
+    assert.notStrictEqual(start, -1, 'missing literal-text row ' + key);
+    const end = source.indexOf('\n});', start);
+    assert.notStrictEqual(end, -1, 'unterminated literal-text row ' + key);
+    return source.slice(0, start) + source.slice(start, end + 4).replace(/[^\n]/g, ' ') + source.slice(end + 4);
+}
+
+describe('protocol_changes gate and registry parts spell the unarmed sentinel by name @regression @tier1', function () {
+    it('writes no run of eight or more nines outside the rows the tools read by literal text', function () {
+        const offenders = [];
+        for (const file of fs.readdirSync(PARTS_DIR).filter((name) => name.endsWith('.js')).sort()) {
+            let code = fs.readFileSync(path.join(PARTS_DIR, file), 'utf8')
+                .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
+                .replace(/\/\/[^\n]*/g, '');
+            for (const key of LITERAL_ROWS[file] || []) code = blankGate(code, key);
+            code.split('\n').forEach((line, index) => {
+                if (NINES_RUN.test(line) && !(file === 'core.js' && line.trim() === DEFINITION)) {
+                    offenders.push(file + ':' + (index + 1) + ' ' + line.trim());
+                }
+            });
+        }
+        assert.deepStrictEqual(offenders, [],
+            'use UNARMED from src/protocol_changes/core.js instead of a run of nines in: ' + offenders.join(', '));
+    });
+});

@@ -14,7 +14,7 @@
     "validator": "validator-broadcast on-chain action: decoded + indexed but NOT user-encodable (ANCHOR/ATTEST/NODEPROOF/ROLLCALL/SLASH)",
     "mirror-injected": "indexer-injected from the hub mirror, NOT chain-decoded (XCALL/XEXEC/CROSS_SETTLE)",
     "lifecycle": "system-generated sub-action, never a decoded wire tx (matches/expiries/dispense)",
-    "explorer-legacy-render": "render-only in the explorer (legacy order/dispenser cancel+edit views); no decoder/indexer twin",
+    "explorer-legacy-render": "live sub-action name the indexer writes by renaming its parent's actions row (ORDER/SWAP/DISPENSER format 1 -> <PARENT>_CANCEL, format 2 -> <PARENT>_EDIT, via updateActionIndex in xchain-indexer src/actions/{order,swap,dispenser}/settle.js), rendered by the explorer and keyed by the indexer's escrow attribution (src/consensus/escrow_journal_writer/attribution.js); the wire tx decodes and dispatches as its parent, so the name is never wireDecoded or indexerHandled. The category key predates this definition: the formats are live, not legacy",
     "settlement-anchor": "indexer-minted anchor row for a bridge-policy or shared-list settlement record (XPOLICY/LIST_SHARE); never a decoded wire tx and never dispatched, only rendered by the explorer"
   },
   "notes": [

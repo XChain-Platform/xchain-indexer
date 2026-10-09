@@ -79,7 +79,7 @@ function installIndexerMetrics(observability, indexer){
 function registerReorgMetrics(registry, indexer){
     const reorgsProcessed = registry.counter({
         name: 'xchain_indexer_reorgs_processed_total',
-        help: 'Decoder reorgs this indexer process has recorded as processed since it started'
+        help: 'Decoder reorg events (one per orphaned block, not one per reorg) this indexer process has recorded as processed since it started'
     });
     const rollbackInProgress = registry.gauge({
         name: 'xchain_indexer_rollback_in_progress',
