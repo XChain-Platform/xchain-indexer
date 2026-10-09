@@ -35,6 +35,18 @@ function bindMixin(responses){
 
 describe('db/list_share_mirrors SQL contract', function () {
 
+    it('reads the deterministic finalized head for one remote token', async function () {
+        const row = { snapshot_id: 'b'.repeat(64), coin: 'DOGE', tick: 'FUFU' };
+        const { db, calls } = bindMixin([[row], []]);
+        assert.strictEqual(await db.getPinnedRemoteToken('regtest', 'doge', 'FUFU'), row);
+        assert.strictEqual(await db.getPinnedRemoteToken('regtest', 'LTC', 'MISSING'), null);
+        const expected = "SELECT * FROM remote_token_snapshots WHERE status = 'finalized' AND network = ? AND coin = ? AND tick = ? ORDER BY snapshot_block DESC, source_action_index DESC, snapshot_id DESC LIMIT 1";
+        assert.deepStrictEqual(calls, [
+            { sql: expected, args: ['regtest', 'DOGE', 'FUFU'] },
+            { sql: expected, args: ['regtest', 'LTC', 'MISSING'] }
+        ]);
+    });
+
     it('reads foreign finalized snapshot heads from the MIRROR database', async function () {
         const rows = [{ home_chain: 'DOGE', home_list_index: 41, max_seq: 3 }];
         const { db, calls } = bindMixin([rows]);
@@ -126,11 +138,13 @@ describe('db/list_share_mirrors SQL contract', function () {
         await db.getListSnapshotHeads('regtest', 'BTC');
         await db.getListSnapshotsAfter('regtest', 'DOGE', 41, 0);
         await db.getListSnapshotAtSeq('regtest', 'DOGE', 41, 1);
+        await db.getPinnedRemoteToken('regtest', 'DOGE', 'FUFU');
         for(const call of calls){
             assert.doesNotMatch(call.sql, /ORDER BY\s+(?:[^,]+,\s*)?id\b/i);
         }
         assert.match(calls[1].sql, /ORDER BY seq ASC$/);
-        assert.strictEqual(calls.filter(call => /ORDER BY/.test(call.sql)).length, 1);
+        assert.match(calls[3].sql, /ORDER BY snapshot_block DESC, source_action_index DESC, snapshot_id DESC LIMIT 1$/);
+        assert.strictEqual(calls.filter(call => /ORDER BY/.test(call.sql)).length, 2);
     });
 
 });
