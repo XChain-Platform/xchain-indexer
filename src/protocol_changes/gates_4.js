@@ -372,10 +372,6 @@ addGate('cross_chain_offer_list_export_activation.CROSS_CHAIN_OFFER_LIST_EXPORT'
     regtest: 0,
 });
 
-// bigint_surface_strip_heights
-// Per-chain height at which the VM removes the BigInt typed-array and DataView
-// surfaces. The launched-network values mirror xchain-vm exactly; null there is
-// represented by UNARMED here. Regtest runs the hardened surface from genesis.
 addGate('bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
