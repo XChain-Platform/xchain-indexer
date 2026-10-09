@@ -8538,12 +8538,6 @@
       "roll-call unwind schema-gap guard @regression still unwinds absences and verdicts when rollcall_gates is missing (errno 1146)",
       "roll-call unwind schema-gap guard @regression still unwinds verdicts when rollcall_absences lacks the close_block column (errno 1054)"
     ],
-    "947ca6e1a2e3eb48": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash"
-    ],
     "94aa70da9570d3da": [
       "ROLLCALL epoch close (\u00a73.4) leader election parity carries its own domain tag, so the anchor election and this one are independent",
       "ROLLCALL epoch close (\u00a73.4) leader election parity orders by sha256(key || pubkey) ascending, the hub's own ordering",
@@ -15268,17 +15262,37 @@
       "four unarmed flag days registered on 2026-10-07 price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is a frozen height row with explicit network defaults",
       "four unarmed flag days registered on 2026-10-07 price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is inactive on launched networks and active from regtest genesis"
     ],
+    "6d6fd94f70afa237": [
+      "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 keeps the final registry part within the structure limit",
+      "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 registers a frozen per-chain height map that is unarmed on launched networks",
+      "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 stays inactive below the sentinel and is active from regtest genesis"
+    ],
+    "4d952349cc7e96e7": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings"
+    ],
     "bccbc26b36f075a9": [
       "remote_token_snapshots mirror contract declares hub re-mirroring as its recovery policy",
       "remote_token_snapshots mirror contract declares the signed token facts and rollback fence",
       "remote_token_snapshots mirror contract is bootstrapped, globally watermarked, locally keyed, and retractable by its source action",
       "remote_token_snapshots mirror contract round trips a finalized fixture and removes it on a source-chain retraction"
+    ],
+    "7b32a9ad80041229": [
+      "STAKE_SNAPSHOT_DECIMAL_STRINGS EXECUTE wiring @regression @tier1 passes the activation verdict false into the snapshot handed to the VM",
+      "STAKE_SNAPSHOT_DECIMAL_STRINGS EXECUTE wiring @regression @tier1 passes the activation verdict true into the snapshot handed to the VM"
+    ],
+    "af56bad14283ad0f": [
+      "getContractStakeDataForVM decimal strings @regression @tier1 preserves legacy BigNumber amounts before activation",
+      "getContractStakeDataForVM decimal strings @regression @tier1 returns only canonical plain-decimal amount strings once active"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 1233,
-      "titleCount": 12788,
+      "fileCount": 1234,
+      "titleCount": 12792,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16393,7 +16407,7 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "947ca6e1a2e3eb48",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "4d952349cc7e96e7",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
@@ -16513,7 +16527,10 @@
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
-        "test/unit/db/remote_token_snapshots.test.js": "bccbc26b36f075a9"
+        "test/unit/protocol_changes/bigint_surface_strip_row.test.js": "6d6fd94f70afa237",
+        "test/unit/db/remote_token_snapshots.test.js": "bccbc26b36f075a9",
+        "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/contracts/vm_stake_snapshot_decimal_strings.test.js": "af56bad14283ad0f"
       }
     }
   }
