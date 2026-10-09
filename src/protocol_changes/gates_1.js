@@ -52,9 +52,9 @@ addGate('amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS', 'constan
 // archive fold) parses only once ANCHOR_FOLD_ACTIVATION is also active, and every other version
 // byte is 'invalid: VERSION (unknown)'. Keyed on the action's OWN DOGE block_index
 // (data['BLOCK_INDEX'] at parse time, anchor_actions.block_index_doge), never on SNAPSHOT_BLOCK or
-// the checkpointed height: the row being judged is the anchor itself. Mainnet 6360000 sits ABOVE
-// the chain tip on purpose: the restarted wire set has NOT activated on mainnet yet, and the height
-// is a flag day the operator arms deliberately rather than one that silently already passed.
+// the checkpointed height: the row being judged is the anchor itself. Mainnet 6360000 is live:
+// the chain tip is past it, so the restarted wire set is active on mainnet and the height is
+// a flag day that has already passed.
 // Testnet 67858600 is 24 blocks above its last pre-restart anchor (67858576) and is already past.
 // Neither is 0, because both carry pre-restart history (mainnet 56 rows, testnet 11, measured
 // 2026-08-30): at 0 the gate can never fire, so the retired wires fall through to the restarted

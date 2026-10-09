@@ -19,9 +19,9 @@
 
 const assert = require('assert');
 
-const registry = require('../../../src/protocol_changes.js');
-const { REGTEST_ARMING } = require('../../../src/protocol_changes/shared_rows.js');
-const { createRegistry } = require('../../../src/protocol_changes/core.js');
+const registry = require('../../../../src/protocol_changes.js');
+const { REGTEST_ARMING } = require('../../../../src/protocol_changes/shared_rows.js');
+const { createRegistry } = require('../../../../src/protocol_changes/core.js');
 
 const KEY = 'rollcall_activation.ROLLCALL_ACTIVATION';
 const ENV = 'XC_ROLLCALL_REGTEST_ACTIVATION';

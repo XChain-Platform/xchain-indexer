@@ -46,7 +46,8 @@ async function loadVmSnapshot(ctx){
 
     // Load contract state from DB. BLOCK_INDEX drives the state_key collation
     // flag-day (binary-collation reload at/after activation, so case-colliding
-    // keys survive; see state_key_collation_activation.js).
+    // keys survive; see the state_key_collation_activation registry row in
+    // src/protocol_changes/shared_rows_4.js).
     snapshot.contractState = await this.indexerDb.getContractState(data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX']);
 
     // Load read-only data for gateway (price data lives in local hub DB when configured)

@@ -62,4 +62,13 @@ async function hubFields(indexer, now){
     };
 }
 
-module.exports = { hubFields };
+function hubConsensusHashFields(indexer){
+    return {
+        hubConsensusHashMismatch: (typeof indexer.hubConsensusHashMismatch === 'boolean')
+                                      ? indexer.hubConsensusHashMismatch : null,
+        hubConsensusHashMismatchDetail: Array.isArray(indexer.hubConsensusHashMismatchDetail)
+                                          ? indexer.hubConsensusHashMismatchDetail : []
+    };
+}
+
+module.exports = { hubFields, hubConsensusHashFields };

@@ -11,7 +11,7 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const registry = require('../../../src/consensus/gate_registry.js');
+const registry = require('../../../../src/consensus/gate_registry.js');
 
 const KEY = 'vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION';
 const UNARMED = 9999999999;

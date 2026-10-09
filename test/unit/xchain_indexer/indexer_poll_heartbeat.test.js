@@ -174,13 +174,19 @@ describe('GET /status reports loop liveness for the fleet watcher, without gatin
             verdict: statusVerdict(XChainIndexer, indexer), hubMirror: { configured: false } });
     }
 
-    it('carries pollSilent and lastPollAt as the last keys, after every key monitors already read', function () {
+    it('keeps pollSilent and lastPollAt after every older key monitors already read', function () {
         const indexer = new XChainIndexer();
         indexer.lastPollAt = Date.now() - (indexer.pollSilentMs + 1000);
         const res = body(indexer);
         assert.strictEqual(res.pollSilent, true);
         assert.strictEqual(res.lastPollAt, indexer.lastPollAt);
-        assert.deepStrictEqual(Object.keys(res).slice(-3), ['hubMirror', 'pollSilent', 'lastPollAt']);
+        assert.deepStrictEqual(Object.keys(res).slice(-5), [
+            'hubMirror',
+            'pollSilent',
+            'lastPollAt',
+            'hubConsensusHashMismatch',
+            'hubConsensusHashMismatchDetail'
+        ]);
     });
 
     it('reads a booting indexer as not silent, with no stamp yet', function () {

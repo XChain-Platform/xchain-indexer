@@ -76,7 +76,7 @@ const ANCHOR_REWARD_DERIVE_ACTIVATION = copy('anchor_reward_activation.ANCHOR_RE
 
 // Whether anchor/archive reward derivation has RELOCATED to the BTC indexer for a reward tuple
 // whose BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the threshold (or an
-// inert null / unknown network) -> off (no indexer mints it; the DOGE-side handlers only log the skip).
+// inert null / unknown network) -> off (no indexer mints it; DOGE-side handlers credit nothing).
 function isAnchorRewardDeriveActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
     if(!Number.isFinite(sb)) return false;

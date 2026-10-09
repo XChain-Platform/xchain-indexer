@@ -163,7 +163,8 @@ addGate('state_subtree_activation.RESERVED_SUBTREES', 'constant', ['ownership_ro
 // The ordering rule is satisfied at 0: a slot must never arm below its chain's
 // state_key_collation_activation height, or the SMT is built over a
 // collation-FOLDED key set and forks. All three testnets are genesis-active
-// there too (see state_key_collation_activation.js), so nothing precedes it.
+// there too (see the state_key_collation_activation row above), so nothing
+// precedes it.
 //
 // Everything else is still inert, on every chain and network. MAINNET IS UNARMED
 // for every slot.

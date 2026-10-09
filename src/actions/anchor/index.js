@@ -72,7 +72,6 @@ const archiveHead  = require('./archive/archive_head.js');
 const bundle       = require('./bundle.js');
 const archiveChunk = require('./archive/archive_chunk.js');
 const quorum       = require('./quorum.js');
-const settle       = require('./settle.js');
 const reassembly   = require('./reassembly.js');
 const { splitV3Wire } = require('./v3/v3_wire.js');
 const { walkFoldSections } = require('./v3/v3_sections.js');
@@ -122,7 +121,6 @@ class Anchor {
         this.indexerDb = action.indexerDb;
         this.util      = action.util;
         this.mapper    = action.mapper;
-        settle.installLegacyRewardCredits(this);
 
         // The whole ANCHOR wire set. Membership here is what makes a version byte
         // parseable at all (the unknown-version check in parse() reads this object), so
@@ -322,11 +320,6 @@ class Anchor {
         let verdict = await quorum.verifySections(this, data, sections, oracleSetFor, error);
         for(let section of sections) delete section.FOLD_ARCHIVE;
         error = verdict.error;
-
-        if(!error && sections.length > 0 && verdict.bundleSet && verdict.bundleSet.oracleN > 0){
-            let met = quorum.bundleAttestationMet(this, data, verdict.bundleSet, publisherSigs);
-            await settle.creditBundleReward(this, data, met, verdict.bundleSet);
-        }
 
         await recordFoldAction(this, data, sections, archive, publisherSigs, error);
         if(archive !== null){

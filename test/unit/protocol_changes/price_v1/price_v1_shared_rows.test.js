@@ -4,16 +4,16 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const ProtocolChanges = require('../../../src/protocol_changes.js');
-const priceScale = require('../../../src/consensus/gates/price_scale_gate.js');
-const { priceV1Caps } = require('../actions/price/helpers/price_v1_caps.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
+const priceScale = require('../../../../src/consensus/gates/price_scale_gate.js');
+const { priceV1Caps } = require('../../actions/price/helpers/price_v1_caps.js');
 const {
     isCanonicalV1ValueText,
     isCanonicalV1FeeText,
-} = require('../actions/price/helpers/price_v1_canonical_oracle.js');
-const { expectedPriceV1Rows } = require('./helpers/price_v1_expected_rows.js');
+} = require('../../actions/price/helpers/price_v1_canonical_oracle.js');
+const { expectedPriceV1Rows } = require('../helpers/price_v1_expected_rows.js');
 
-const FIXTURE = path.join(__dirname, '..', '..', 'fixtures', 'price_v1_length_measurement.json');
+const FIXTURE = path.join(__dirname, '..', '..', '..', 'fixtures', 'price_v1_length_measurement.json');
 const KEYS = [
     'price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION',
     'price_scale_activation.PRICE_V1_FEE_RE_CANONICAL',

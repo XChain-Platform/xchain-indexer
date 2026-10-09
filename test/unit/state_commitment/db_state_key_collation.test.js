@@ -12,7 +12,8 @@
  * test/unit/state_commitment/db_state_key_collation.test.js
  *
  * Contract-state `state_key` binary-collation flag-day (see
- * src/state_key_collation_activation.js). contract_state is utf8_general_ci
+ * the state_key_collation_activation registry row in
+ * src/protocol_changes/shared_rows_4.js). contract_state is utf8_general_ci
  * (case/accent-folding), so the legacy GROUP BY/ORDER BY on state_key treat
  * distinct keys ("Key" vs "key") as EQUAL: the consensus contract_hash
  * preimage silently drops one key's value, and getContractState() drops one
