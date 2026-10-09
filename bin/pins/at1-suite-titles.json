@@ -6545,6 +6545,26 @@
       "createAnchorAction publisher tail v6: passes a pre-serialized PUBLISHER_ATTESTATIONS string through unchanged",
       "createAnchorAction publisher tail v7: persists PUBLISHER and the pre-serialized PUBLISHER_ATTESTATIONS JSON string"
     ],
+    "6c8830c1a590c64a": [
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order GIVE_COIN unsupported coin returns invalid (unknown COINS list)",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order MEMO with pipe character returns invalid",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order SOURCE sleeping returns invalid",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order TICK sleeping returns invalid",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order admits a GET_ADDRESS allowed for GET_TICK but blocked for GIVE_TICK after payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order cross-chain order is exempt from the local positive-GET_AMOUNT check",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order cross-chain order with a pinned GET token is not rejected for the remote token",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order cross-chain order with an unpinned non-native GET token is invalid once the remote token gate is active",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order defaults GET_ADDRESS to SOURCE when COIN networks match and GET_ADDRESS not provided",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order empty GET_AMOUNT returns invalid (must be positive)",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order keeps the GET_TICK refusal for the reverse split below payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order native-coin GET side still requires a positive GET_AMOUNT",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order pre-existing error short-circuits validation",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order preserves legacy admission below the maker policy gate",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order refuses a GET_ADDRESS allowed for GIVE_TICK but blocked for GET_TICK after payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order refuses the same policy split below payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order registers maker policy admission at the required network heights",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order zero GET_AMOUNT returns invalid (must be positive)"
+    ],
     "6cba856a202a9d6f": [
       "policy apply by shared-list reference carries an unresolved mirror reference with nothing applied",
       "policy apply by shared-list reference carries refs below the gate and removes their tail before the due-set cap",
@@ -13050,6 +13070,21 @@
       "Controller: WITHDRAW gated by CONTROLLER_CUSTODY_GUARD (real DB + real VM) @phaseE does not grandfather an earlier custody balance against a later token denial",
       "Controller: WITHDRAW gated by CONTROLLER_CUSTODY_GUARD (real DB + real VM) @phaseE lets a second contract owner bind its address and deny a plain-tick withdrawal"
     ],
+    "cd1e44eb5d10c034": [
+      "Cross-chain remote token accept check @regression @tier2 ORDER validateGeneral keeps an earlier verdict",
+      "Cross-chain remote token accept check @regression @tier2 ORDER validateGeneral marks the create invalid with no pinned row",
+      "Cross-chain remote token accept check @regression @tier2 ORDER validateGeneral passes with a pinned row",
+      "Cross-chain remote token accept check @regression @tier2 SWAP validateGeneral keeps an earlier verdict",
+      "Cross-chain remote token accept check @regression @tier2 SWAP validateGeneral marks the create invalid with no pinned row",
+      "Cross-chain remote token accept check @regression @tier2 SWAP validateGeneral passes with a pinned row",
+      "Cross-chain remote token accept check @regression @tier2 accepts when a pinned row exists",
+      "Cross-chain remote token accept check @regression @tier2 does not look anything up while the gate is inactive",
+      "Cross-chain remote token accept check @regression @tier2 preserves pre-gate behavior when the registry row is absent",
+      "Cross-chain remote token accept check @regression @tier2 rejects a non-native cross-chain GET token with no pinned row once the gate is active",
+      "Cross-chain remote token accept check @regression @tier2 rejects when the mirror database is unavailable",
+      "Cross-chain remote token accept check @regression @tier2 rejects when the mirror reader is not installed",
+      "Cross-chain remote token accept check @regression @tier2 skips native GET, local GET and non-create formats"
+    ],
     "cd23b989ff73f7d3": [
       "dropRefRowsFromFirst drops the whole group when the ref is at the lowest seq",
       "dropRefRowsFromFirst keeps seq 1 and drops seqs 2 and 3 when seq 2 carries a ref",
@@ -16604,8 +16639,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1217,
-      "titleCount": 12681,
+      "fileCount": 1218,
+      "titleCount": 12696,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16758,6 +16793,7 @@
         "test/unit/actions/contract/message.test.js": "d7dd66c300ddeafd",
         "test/unit/actions/contract/xcall_action_format_invariant.test.js": "4dc6ca50454deae6",
         "test/unit/actions/contract/xexec.test.js": "59b7b8fc88f1b6e2",
+        "test/unit/actions/cross_chain_remote_token_accept.test.js": "cd1e44eb5d10c034",
         "test/unit/actions/deploy/wire_params.test.js": "0276c82b670c2f09",
         "test/unit/actions/execute.test.js": "7a6b77bff3698035",
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
@@ -16806,7 +16842,7 @@
         "test/unit/actions/market/list_edit_remove.test.js": "c60ea6810870541d",
         "test/unit/actions/market/order.test.js": "b3eea5de6160a08f",
         "test/unit/actions/market/order.test/cancel.test.js": "4b307ffce89c1cdf",
-        "test/unit/actions/market/order.test/create_rules.test.js": "e223a521f0484068",
+        "test/unit/actions/market/order.test/create_rules.test.js": "6c8830c1a590c64a",
         "test/unit/actions/market/order.test/edit.test.js": "10bc85b221caeab0",
         "test/unit/actions/market/order.test/fields_and_fees.test.js": "7a776f7e267ba1d7",
         "test/unit/actions/market/order_expire.test.js": "0c6acb7244ce57e5",
@@ -18188,8 +18224,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 907,
-      "titleCount": 9933,
+      "fileCount": 908,
+      "titleCount": 9948,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -18362,6 +18398,7 @@
         "test/unit/actions/contract/list.test/unarmed_no_rematch.test.js": "6c0d603662abddb2",
         "test/unit/actions/contract/message.test.js": "d7dd66c300ddeafd",
         "test/unit/actions/contract/xexec.test.js": "59b7b8fc88f1b6e2",
+        "test/unit/actions/cross_chain_remote_token_accept.test.js": "cd1e44eb5d10c034",
         "test/unit/actions/execute.test.js": "7a6b77bff3698035",
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
@@ -18401,7 +18438,7 @@
         "test/unit/actions/market/list_edit_remove.test.js": "c60ea6810870541d",
         "test/unit/actions/market/order.test.js": "b3eea5de6160a08f",
         "test/unit/actions/market/order.test/cancel.test.js": "4b307ffce89c1cdf",
-        "test/unit/actions/market/order.test/create_rules.test.js": "e223a521f0484068",
+        "test/unit/actions/market/order.test/create_rules.test.js": "6c8830c1a590c64a",
         "test/unit/actions/market/order.test/edit.test.js": "10bc85b221caeab0",
         "test/unit/actions/market/order.test/fields_and_fees.test.js": "7a776f7e267ba1d7",
         "test/unit/actions/market/order_expire.test.js": "0c6acb7244ce57e5",
@@ -19504,8 +19541,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 907,
-      "titleCount": 9933,
+      "fileCount": 908,
+      "titleCount": 9948,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19678,6 +19715,7 @@
         "test/unit/actions/contract/list.test/unarmed_no_rematch.test.js": "6c0d603662abddb2",
         "test/unit/actions/contract/message.test.js": "d7dd66c300ddeafd",
         "test/unit/actions/contract/xexec.test.js": "59b7b8fc88f1b6e2",
+        "test/unit/actions/cross_chain_remote_token_accept.test.js": "cd1e44eb5d10c034",
         "test/unit/actions/execute.test.js": "7a6b77bff3698035",
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
@@ -19717,7 +19755,7 @@
         "test/unit/actions/market/list_edit_remove.test.js": "c60ea6810870541d",
         "test/unit/actions/market/order.test.js": "b3eea5de6160a08f",
         "test/unit/actions/market/order.test/cancel.test.js": "4b307ffce89c1cdf",
-        "test/unit/actions/market/order.test/create_rules.test.js": "e223a521f0484068",
+        "test/unit/actions/market/order.test/create_rules.test.js": "6c8830c1a590c64a",
         "test/unit/actions/market/order.test/edit.test.js": "10bc85b221caeab0",
         "test/unit/actions/market/order.test/fields_and_fees.test.js": "7a776f7e267ba1d7",
         "test/unit/actions/market/order_expire.test.js": "0c6acb7244ce57e5",
