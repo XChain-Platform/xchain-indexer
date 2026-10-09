@@ -29,6 +29,7 @@ const V2_PATH = path.join(REPO, 'src', 'consensus', 'armed_map', 'fingerprint.js
 const v2 = require('../../../../src/consensus/armed_map/fingerprint.js');
 const manifest = require('../../../../src/consensus/armed_map/manifest.js');
 const { fingerprint } = require('../../../../src/consensus/armed_map/canonical.js');
+const processBaseline = v2.computeArmedMapFingerprintV2();
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -105,7 +106,7 @@ describe('armed_map/fingerprint: the published surfaces (W3, alias dropped at W5
             { cwd: REPO, encoding: 'utf8' });
         assert.strictEqual(res.status, 0, res.stderr);
         const identity = JSON.parse(res.stdout);
-        assert.strictEqual(identity.armed_map_fingerprint, v2.computeArmedMapFingerprintV2().hex);
+        assert.strictEqual(identity.armed_map_fingerprint, processBaseline.hex);
         assert.strictEqual(identity.armed_map_fingerprint_version, 2);
         assert.ok(!Object.prototype.hasOwnProperty.call(identity, 'armed_map_fingerprint_v2'), 'the _v2 alias must not be printed');
         // row 6: armed_map_rows is the per-key hash map (so a mismatch names the row) and the count sits beside it
