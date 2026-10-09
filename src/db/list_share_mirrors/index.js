@@ -24,6 +24,17 @@
 
 module.exports = {
 
+    // MIRROR (db.mirrorDb()). Latest finalized federation snapshot for one remote token.
+    async getPinnedRemoteToken(network, coin, tick){
+        const rows = await this.doQueryStrict(
+            `SELECT * FROM remote_token_snapshots
+             WHERE status = 'finalized' AND network = ? AND coin = ? AND tick = ?
+             ORDER BY snapshot_block DESC, source_action_index DESC, snapshot_id DESC
+             LIMIT 1`,
+            [String(network), String(coin).toUpperCase(), String(tick)]);
+        return rows.length > 0 ? rows[0] : null;
+    },
+
     // MIRROR (db.mirrorDb()). Latest finalized sequence for every foreign shared list in
     // this network. The grouped content key is quorum-agreed; the per-hub id is not read.
     async getListSnapshotHeads(network, coin){

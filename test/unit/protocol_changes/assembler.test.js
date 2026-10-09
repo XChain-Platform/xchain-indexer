@@ -41,6 +41,7 @@ const EXPORTS_BEFORE_SPLIT = [
     'OWNER_WITHDRAW_OPT_IN_MAINNET_TIME', 'OWNER_WITHDRAW_OPT_IN_TESTNET_TIME',
     'READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME', 'READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME',
     'APPLY_LENGTH_METER_MAINNET_TIME', 'APPLY_LENGTH_METER_TESTNET_TIME',
+    'GAS_CEILING_SUCCESS_MAINNET_TIME', 'GAS_CEILING_SUCCESS_TESTNET_TIME',
     'STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME', 'STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME',
     'ITER_SET_METER_MAINNET_TIME', 'ITER_SET_METER_TESTNET_TIME',
     'DISPENSER_REFILL_MAINNET_TIME', 'DISPENSER_REFILL_TESTNET_TIME',
@@ -110,6 +111,35 @@ describe('protocol_changes/assembler: the public export shape @regression @tier1
             const n = lines(fs.readFileSync(path.join(PARTS, f), 'utf8'));
             assert.ok(n <= 400, f + ' is ' + n + ' lines');
         }
+    });
+});
+
+describe('protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1', function () {
+    const ProtocolChanges = require(ENTRY);
+    const key = 'protocol_changes.changes.GAS_CEILING_SUCCESS';
+
+    it('is present in the class table and registry in the same shape', function () {
+        const table = new ProtocolChanges({ config: {}, util: {} }).changes;
+        assert.ok(Object.prototype.hasOwnProperty.call(table, 'GAS_CEILING_SUCCESS'));
+        assert.deepStrictEqual(table.GAS_CEILING_SUCCESS, ProtocolChanges.get(key));
+    });
+
+    it('is unarmed on production networks and active from regtest genesis', function () {
+        assert.strictEqual(ProtocolChanges.GAS_CEILING_SUCCESS_MAINNET_TIME, ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.GAS_CEILING_SUCCESS_TESTNET_TIME, ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.get('protocol_changes.GAS_CEILING_SUCCESS_MAINNET_TIME'), ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.get('protocol_changes.GAS_CEILING_SUCCESS_TESTNET_TIME'), ProtocolChanges.UNARMED);
+        assert.deepStrictEqual(ProtocolChanges.get(key), {
+            version_major: 0,
+            version_minor: 2,
+            version_revision: 0,
+            mainnet_time: ProtocolChanges.UNARMED,
+            testnet_time: ProtocolChanges.UNARMED,
+            regtest_time: 0,
+            mainnet_block: 0,
+            testnet_block: 0,
+            regtest_block: 0,
+        });
     });
 });
 

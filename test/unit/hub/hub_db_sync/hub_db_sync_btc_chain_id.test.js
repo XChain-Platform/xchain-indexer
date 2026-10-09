@@ -99,11 +99,13 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
             'the fence refuses only on positive evidence, never on ignorance of this chain');
     });
 
-    it('fences only the cross-chain tables', async function () {
+    it('fences only settlement cross-chain tables, not globally watermarked remote tokens', async function () {
         const { sync, seen } = makeSync({ columns: ['id', 'network', 'btc_chain_id'] });
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'local');
         await sync.applyRow('state_checkpoints', { id: 1, network: 'regtest', btc_chain_id: CHAIN_OLD });
-        assert.strictEqual(inserts(seen).length, 1, 'no other mirrored table carries this identity');
+        await sync.applyRow('remote_token_snapshots', { id: 2, network: 'regtest', btc_chain_id: CHAIN_OLD });
+        assert.strictEqual(inserts(seen).length, 2,
+            'hub-state rows stay outside the settlement-table fence even when they carry chain provenance');
     });
 
     it('refuses relics through the drain, counts them in one line and still completes the page', async function () {

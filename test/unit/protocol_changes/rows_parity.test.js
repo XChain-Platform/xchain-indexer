@@ -11,7 +11,7 @@
 // contact legal@dankest.llc.
 
 // Keep registry time-table rows aligned with the transitional manifest's
-// 109 keys and canonical values.
+// keys and canonical values.
 
 const assert = require('assert');
 const { canonicalValue } = require('../../../src/consensus/armed_map/canonical.js');

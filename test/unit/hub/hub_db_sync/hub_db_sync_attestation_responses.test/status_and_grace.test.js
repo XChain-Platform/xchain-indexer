@@ -48,7 +48,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
 
     it('exports HUB_STATE_TABLES as a frozen copy a caller cannot use to corrupt the class', function () {
         assert.deepStrictEqual(HubDbSync.HUB_STATE_TABLES,
-            ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses']);
+            ['remote_token_snapshots', 'state_checkpoints', 'anchor_reward_attestations', 'attestation_responses']);
         assert.ok(Object.isFrozen(HubDbSync.HUB_STATE_TABLES), 'the export must be read-only');
         assert.throws(() => { HubDbSync.HUB_STATE_TABLES.push('rogue_table'); },
             'a caller mutating the returned array must not be able to reach the module\'s own membership');

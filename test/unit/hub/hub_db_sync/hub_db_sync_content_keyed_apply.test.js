@@ -10,6 +10,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
+const { AUTO_INCREMENT_ID_TABLES } = require('../../../../src/hub/hub_db_sync/mirror_tables.js');
 
 const CASES = {
     price_snapshots: {
@@ -46,6 +47,11 @@ const CASES = {
     list_snapshots: {
         key: ['network', 'home_chain', 'home_list_index', 'seq'],
         row: { network: 'regtest', home_chain: 'BTC', home_list_index: 2, seq: 2, snapshot_id: 'list-b' }
+    },
+    remote_token_snapshots: {
+        key: ['snapshot_id'],
+        row: { snapshot_id: 'd'.repeat(64), network: 'regtest', coin: 'DOGE', tick: 'TICK-B',
+               snapshot_block: 2, source_action_index: 3, status: 'finalized' }
     },
     state_checkpoints: {
         key: ['chain', 'network', 'checkpoint_seq'],
@@ -144,6 +150,6 @@ describe('HubDbSync content-keyed apply @regression @tier1', function () {
         }) };
         const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test' });
         await assert.rejects(() => sync.assertAutoIncrementMirrorIds(), /policy_snapshots/);
-        assert.strictEqual(seen.length, 9);
+        assert.strictEqual(seen.length, AUTO_INCREMENT_ID_TABLES.length);
     });
 });
