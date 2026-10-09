@@ -145,9 +145,14 @@ const hubConfigMethods = {
         }
         let coin = this.config.COIN, network = this.config.NETWORK;
         let hubHash = coinConsensusHashes[network] && coinConsensusHashes[network][coin];
-        let localHash = hubHash ? coins.consensusHash(coin, network) : null;
+        if(!hubHash){
+            this.hubConsensusHashMismatch = null;
+            this.hubConsensusHashMismatchDetail = [];
+            return;
+        }
+        let localHash = coins.consensusHash(coin, network);
         let mismatches = [];
-        if(hubHash && hubHash !== localHash)
+        if(hubHash !== localHash)
             mismatches.push(coin + '/' + network + ': hub ' + hubHash + ' vs bundled ' + localHash);
 
         this.hubConsensusHashMismatch = mismatches.length > 0;

@@ -86,6 +86,24 @@ describe('hub consensus-hash mismatch health and status reporting', function () 
         }
     });
 
+    it('reports unknown when the supplied hash map lacks this network or coin', async function () {
+        for(const suppliedHashes of [{}, { [NETWORK]: {} }, { mainnet: { [COIN]: 'a'.repeat(64) } }]){
+            const indexer = makeIndexer();
+            check(indexer, hashes('b'.repeat(64)));
+
+            check(indexer, suppliedHashes);
+
+            assert.strictEqual(indexer.hubConsensusHashMismatch, null);
+            assert.deepStrictEqual(indexer.hubConsensusHashMismatchDetail, []);
+            const healthBody = await health(indexer);
+            const statusResponse = status(indexer);
+            for(const body of [healthBody, statusResponse]){
+                assert.strictEqual(body.hubConsensusHashMismatch, null);
+                assert.deepStrictEqual(body.hubConsensusHashMismatchDetail, []);
+            }
+        }
+    });
+
     it('records and publishes a mismatch without changing health or status behavior', async function () {
         const indexer = makeIndexer();
         const hubHash = 'a'.repeat(64);
