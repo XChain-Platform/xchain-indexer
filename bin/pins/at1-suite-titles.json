@@ -5545,8 +5545,8 @@
       "_smtTouched: the touched key is canonical on BOTH axes @regression an ordinary canonical address is unchanged (no regression on the common path)",
       "_smtTouched: the touched key is canonical on BOTH axes @regression an unresolvable address records NOTHING rather than a raw fallback"
     ],
-    "5c4091c903dddb3e": [
-      "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 is the first row in part 5 with mainnet unarmed and testnet armed at the v0.21.3 instant",
+    "b2eaaa7288f724de": [
+      "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 is present in part 5 with mainnet unarmed and testnet armed at the v0.21.3 instant",
       "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 reads the regtest-only drill override when a fresh table is built",
       "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 registers the row and both network constants"
     ],
@@ -12627,13 +12627,13 @@
       "execContext (injected-execution TX_HASH seam) @regression @tier2 vote finalize callback (previously-broken site 2) pre-flag-day the legacy hashless context is preserved byte-identically",
       "execContext (injected-execution TX_HASH seam) @regression @tier2 xcall result callback (live-consensus byte parity) the builder-produced TX_HASH is byte-identical to the pre- inline XCALLCB synthesis"
     ],
-    "c534b61701eb9518": [
+    "47f788937f1f1de5": [
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 every shared_rows_N.js carries the two markers once each, in order, with no require between them, and nothing but rows outside them",
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 no part file matches the carrier declaration scans (D38)",
-      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 the time-table parts hold exactly the 108 rows, in registration order, and nothing but rows",
+      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 the time-table parts hold exactly the registered rows, in registration order, and nothing but rows",
       "protocol_changes/assembler: the public export shape @regression @tier1 exports every own property it exported before the split, each constant equal to its part file, and only the registry API besides",
       "protocol_changes/assembler: the public export shape @regression @tier1 registry, UNARMED and UNPINNED are present but non-enumerable, so the manifest sees no new data export",
-      "protocol_changes/assembler: the public export shape @regression @tier1 still constructs under the manifest stub with 108 prototype-free changes, equal to the registry rows",
+      "protocol_changes/assembler: the public export shape @regression @tier1 still constructs under the manifest stub with prototype-free changes, equal to the registry rows",
       "protocol_changes/assembler: the public export shape @regression @tier1 the entry ends no larger than HEAD and every part file fits the readability limits"
     ],
     "c562c3c3096c665e": [
@@ -13355,12 +13355,12 @@
       "ProviderRegistry @regression @tier2 getMinStake (block-anchored provider stake floor) ships the spec floors: http_get 10000, llm 25000",
       "ProviderRegistry @regression @tier2 getMinStake (block-anchored provider stake floor) the llm floor is strictly above the http_get one (it is a per-provider bar, not a copy of the capability one)"
     ],
-    "d2c5f4fbb6b63014": [
+    "486cd0d049a716bb": [
       "contract_meta/declaresOwnerWithdraw @regression @tier1 does not read an inherited ownerWithdraw",
       "contract_meta/declaresOwnerWithdraw @regression @tier1 is true only for a plain-object meta whose ownerWithdraw is the boolean true",
+      "protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1 is present in part 5, mainnet inert and testnet armed",
       "protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1 reads the regtest-only override when a fresh table is built",
-      "protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1 registers the row and both network constants",
-      "protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1 sits after CONTROLLER_CUSTODY_GUARD in part 5, mainnet inert and testnet armed"
+      "protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1 registers the row and both network constants"
     ],
     "d2d34246f342ca3f": [
       "train activation: resolution @regression lets reached train activations supersede the launch floor",
@@ -14581,9 +14581,9 @@
       "HubClient pushPriceRound() propagates rejection from _call (not swallowed)",
       "HubClient pushPriceRound() returns immediately without calling _call when not enabled"
     ],
-    "df2e8799cf3685dc": [
+    "5d5483ae3700b4b1": [
       "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 a registry row is a frozen plain object with the nine parsed fields",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the 108 time-table keys the manifest lists",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the time-table keys the manifest lists",
       "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value a fresh class build under the stub carries",
       "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value the manifest resolves for that key"
     ],
@@ -16272,8 +16272,8 @@
       "ANCHOR v3 section walk refuses a header snapshot above the section maximum",
       "ANCHOR v3 section walk walks fixture sections in wire order"
     ],
-    "fae9f1170dbee6bb": [
-      "armed_map/manifest: collectRows appends the fourteen VM mirror rows with the VM values",
+    "a6eafe1f3dc227d4": [
+      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
       "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
       "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
       "armed_map/manifest: collectRows carries the three row families the design names",
@@ -16286,7 +16286,7 @@
       "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
       "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
       "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
-      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the fourteen VM mirror rows",
+      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
       "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "faf6839dab970518": [
@@ -17235,7 +17235,7 @@
         "test/unit/consensus/anchor_reward_derive/reward_groups.test.js": "67c89e84e7aba170",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "fd59b42becdb62ff",
-        "test/unit/consensus/armed_map/manifest.test.js": "fae9f1170dbee6bb",
+        "test/unit/consensus/armed_map/manifest.test.js": "a6eafe1f3dc227d4",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
@@ -17698,15 +17698,15 @@
         "test/unit/protocol_changes/anchor/anchor_bundle_order_row.test.js": "332212f43d474164",
         "test/unit/protocol_changes/anchor/anchor_fold_rows.test.js": "2d944feb25011092",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "47f788937f1f1de5",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/consensus_bound_shared_rows.test.js": "9a95e2d9852292f0",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
-        "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
+        "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
-        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
+        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
@@ -17714,7 +17714,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/send_gated/send_gated_total_tick_id_row.test.js": "9cb0cc0fc24db1ca",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_lint/vm_lint_banned_with_row.test.js": "783b89448d7f13a0",
@@ -19022,13 +19022,13 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "89da9b102e2aa560",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "47f788937f1f1de5",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
-        "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
+        "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
-        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
+        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
@@ -19036,7 +19036,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
@@ -19482,13 +19482,13 @@
         "test/unit/protocol/price_time_gate.test.js": "3ba5b094789a13b1",
         "test/unit/protocol/protocol_change_registry_prototype.test.js": "9227d0e83b5535c1",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "47f788937f1f1de5",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
-        "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
+        "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
-        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
+        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
@@ -19496,7 +19496,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
@@ -20339,13 +20339,13 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "89da9b102e2aa560",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "47f788937f1f1de5",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
-        "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
+        "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
-        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
+        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
@@ -20353,7 +20353,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
