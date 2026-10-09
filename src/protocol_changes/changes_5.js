@@ -41,6 +41,11 @@ const {
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
 
+require('./changes_4.js').push(
+    ['ITER_SET_METER','0.2.0', ITER_SET_METER_MAINNET_TIME,
+        ITER_SET_METER_TESTNET_TIME, 0, 0, 0, 0],
+);
+
 const CHANGES = [
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
@@ -84,8 +89,6 @@ const CHANGES = [
         READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME, 0, 0, 0, 0],
     ['APPLY_LENGTH_METER', '0.2.0', APPLY_LENGTH_METER_MAINNET_TIME,
         APPLY_LENGTH_METER_TESTNET_TIME, 0, 0, 0, 0],
-    ['ITER_SET_METER','0.2.0', ITER_SET_METER_MAINNET_TIME,
-        ITER_SET_METER_TESTNET_TIME, 0, 0, 0, 0],
     // DISPENSER_REFILL: a refill that adds escrow consults the token's trade controller.
     // Unarmed on mainnet and testnet; regtest is genesis-active unless a venue sets
     // DISPENSER_REFILL_REGTEST_TIME.
