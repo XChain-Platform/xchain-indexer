@@ -412,6 +412,8 @@
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
     "armed_map_row_count": 393,
+    "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
+    "carrier_logic_digest": "05234c626f4ee118b4d7bf069b32de04d18f73f95a0519b65b2121c2118452f8",
     "consensus_rules_digest": "ceb49c010893f8a5d8bb632536b0b3873ae4e6cc6d16b3557134c6d503c4840d",
     "gate_key_count": 45,
     "consensus_rules_gates": {
@@ -460,14 +462,12 @@
       "list_meta_activation.LIST_META_ACTIVATION": "{\"BTC:testnet\":155001,\"DOGE:testnet\":67962387,\"LTC:testnet\":4906040,\"mainnet\":9999999999,\"regtest\":0,\"testnet\":9999999999}",
       "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION": "{\"DOGE:mainnet\":null,\"DOGE:testnet\":9999999999,\"mainnet\":null,\"regtest\":0}",
       "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS": "{\"DOGE\":{\"bridge_transfers\":14,\"cross_chain_calls\":14,\"cross_chain_matches\":14,\"list_snapshots\":14,\"policy_snapshots\":14,\"price_snapshots\":16}}"
-    },
-    "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
-    "carrier_logic_digest": "05234c626f4ee118b4d7bf069b32de04d18f73f95a0519b65b2121c2118452f8"
+    }
   },
   "armed_regtest_venue": {
     "env": {
-      "XC_ROLLCALL_GATES_REGTEST_ACTIVATION": "armed",
-      "XC_ROLLCALL_REGTEST_ACTIVATION": "armed"
+      "XC_ROLLCALL_REGTEST_ACTIVATION": "armed",
+      "XC_ROLLCALL_GATES_REGTEST_ACTIVATION": "armed"
     },
     "network": "regtest",
     "coin_registry_consensus_hash": "450c7a63c4a7beae85531426c903f1923c7cba754d06d9c8946ffca123ed5ba5",
@@ -874,6 +874,8 @@
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
     "armed_map_row_count": 393,
+    "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
+    "carrier_logic_digest": "05234c626f4ee118b4d7bf069b32de04d18f73f95a0519b65b2121c2118452f8",
     "consensus_rules_digest": "78f5ae7915c1a79c1da0ed59e454266a60c0e632d28d63ae6d5b358a6304decd",
     "gate_key_count": 45,
     "consensus_rules_gates": {
@@ -922,9 +924,7 @@
       "list_meta_activation.LIST_META_ACTIVATION": "{\"BTC:testnet\":155001,\"DOGE:testnet\":67962387,\"LTC:testnet\":4906040,\"mainnet\":9999999999,\"regtest\":0,\"testnet\":9999999999}",
       "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION": "{\"DOGE:mainnet\":null,\"DOGE:testnet\":9999999999,\"mainnet\":null,\"regtest\":0}",
       "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS": "{\"DOGE\":{\"bridge_transfers\":14,\"cross_chain_calls\":14,\"cross_chain_matches\":14,\"list_snapshots\":14,\"policy_snapshots\":14,\"price_snapshots\":16}}"
-    },
-    "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
-    "carrier_logic_digest": "05234c626f4ee118b4d7bf069b32de04d18f73f95a0519b65b2121c2118452f8"
+    }
   },
   "v0190_level_note": "Re-pinned when develop was levelled with master after the v0.19.0 cut (kit step 5h), on the merged tree by the same two invocations (bare, and with the armed env above). Both blocks read master's re-cut values for every consensus field (armed-map fingerprint, rules digest, gates map, GATES field, coin registry) and develop's W5 values for the rest: the armed_map_fingerprint_v2 alias stays retired (row 22, D103) and carrier_logic_digest reads the W5 carrier logic pin (row 21b, D102), whose per-id hashes did not move. Nothing else changed.",
   "v0200_token_arm_note": "Re-pinned by master row 17 (the v0.20.0 token bridge and policy testnet arming), 2026-09-17, in a detached worktree at indexer fdcdf273 (the held v0.20.0 barrier-family tip) plus the row 17 edits, by the same two invocations (bare, and with the armed env). xchain-vm was resolved from the sibling checkout through NODE_PATH, because bin/vendor-vm.sh refuses to vendor on Darwin; the row it feeds is read from VM source, so the value is the one a vendored copy gives. Row 17 moved exactly the two token rows in armed_map_rows (TOKEN_BRIDGE_ACTIVATION and TOKEN_POLICY_INHERITANCE_ACTIVATION, re-keyed per chain with sized testnet heights, ef92238c to d0fe6a43) and with them armed_map_fingerprint (bare 3cc47271 to 545aab4b, armed 79b298e5 to 9e44e705). Neither row is in the consensus_rules_digest gate set, so that digest read the same before and after the row (bare 9976904c, armed 538cd22f, 33 gates, 0 absent). The digest, ANCHOR_ATTEST_BARRIER_ACTIVATION and the two MIRROR_ADMISSION rows were already stale against this base (the barrier-family cut) and are re-pinned from the same read. Every other value re-read byte-identical and was left alone. Seam pass (row 17b, 2026-09-17): TICK_NAMESPACE_ACTIVATION re-keyed per chain at the token bridge testnet heights in gates_3.js moved tick_namespace_activation.TICK_NAMESPACE_ACTIVATION ef92238c to 340f8ff9 in both blocks and the fingerprint bare 545aab4b to 2c15faf0 and armed 9e44e705 to 26d9b325; consensus_rules_digest and gates_field_hash unchanged (the tick row is not in the 33-gate set).",
