@@ -278,6 +278,10 @@
       "price_batch_compression: the bomb is refused before the buffer grows @regression zlib raises the BOUNDED-OUTPUT error, so the memory is never allocated",
       "price_batch_compression: vendored-twin byte identity @regression xchain-hub/src/price_batch_compression.js is byte-identical to this repo's copy"
     ],
+    "06ffa42905e141f0": [
+      "protocol_changes VM lint nesting-depth row is active on regtest at genesis and unarmed on public networks",
+      "protocol_changes VM lint nesting-depth row registers the per-chain height map"
+    ],
     "079fb83998032d1b": [
       "HubDbSync ready frame harness certifies an older-hub ready frame after a full drain without retrying",
       "HubDbSync ready frame harness leaves an older-hub ready frame uncertified after a partial drain and retries once",
@@ -11948,8 +11952,12 @@
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 isGuardGasReserved is true on BTC and false on the chains the bridge mints XCHAIN on",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 isGuardGasReserved reads the chain, never the presence of a gas row",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController allows on BTC when the source covers the ceiling exactly",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController bills nothing off BTC when the gas row is absent or the balance is negative",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController bills the full guard gas off BTC when the source holds enough",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController caps the guard gas at the held balance off BTC so no balance goes negative",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController does not refuse on DOGE once the XCHAIN row exists and the source holds none",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController leaves every other refusal in the shared tail alone on both chains",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController leaves the BTC bill untouched by the clamp even when the balance is below the fee",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController refuses on BTC when the source cannot cover the guard gas ceiling",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController still refuses on BTC when the source holds less than the ceiling but more than zero"
     ],
@@ -16534,8 +16542,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1209,
-      "titleCount": 12658,
+      "fileCount": 1210,
+      "titleCount": 12660,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17604,6 +17612,7 @@
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/rows_parity.test.js": "b9dd4be9490dbf4e",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
+        "test/unit/protocol_changes/vm_lint/vm_lint_nesting_depth_row.test.js": "06ffa42905e141f0",
         "test/unit/protocol_changes/vm_lint/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
         "test/unit/protocol_changes/vm_twin/json_stringify_hook_row.test.js": "f959c69addce7dd8",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
