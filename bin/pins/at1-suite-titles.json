@@ -2575,6 +2575,12 @@
       "MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1 UNCAPPED_MAX_SUPPLY_ZERO registration mainnet: inert at every plausible block time (the loosening cannot fire early)",
       "MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1 UNCAPPED_MAX_SUPPLY_ZERO registration regtest: enabled from genesis"
     ],
+    "2d2977d7cebb17c1": [
+      "hub consensus-hash mismatch health and status reporting records a checked match as false and clears mismatch detail",
+      "hub consensus-hash mismatch health and status reporting records and publishes a mismatch without changing health or status behavior",
+      "hub consensus-hash mismatch health and status reporting reports unknown when the supplied hash map lacks this network or coin",
+      "hub consensus-hash mismatch health and status reporting reports unknown with no detail before a hub supplies a hash map"
+    ],
     "2d67bec5f227c817": [
       "Order_Match action handler @regression @tier2 NFT (0-decimal) partial fill settles an integer amount, never a fractional artifact",
       "Order_Match action handler @regression @tier2 fractional running remaining survives a fill exactly (no integer rounding)",
@@ -3156,6 +3162,21 @@
       "preload bound is a monotone key in the admission era @regression @tier1 rounds with a signed height are selected by height alone",
       "preload bound is a monotone key in the admission era @regression @tier1 the legacy time bound is not monotone across the same blocks",
       "preload bound is a monotone key in the admission era @regression @tier1 the readable set only grows as the height rises, stamps notwithstanding"
+    ],
+    "3654541f666286e0": [
+      "GET /status reports loop liveness for the fleet watcher, without gating on it keeps pollSilent and lastPollAt after every older key monitors already read",
+      "GET /status reports loop liveness for the fleet watcher, without gating on it leaves the 503 inputs untouched: a silent loop alone is not wedged",
+      "GET /status reports loop liveness for the fleet watcher, without gating on it reads a booting indexer as not silent, with no stamp yet",
+      "XChainIndexer#isPollSilent() is false at the window edge and true past it",
+      "XChainIndexer#isPollSilent() is false before the loop has iterated once, so a booting indexer is never dead",
+      "XChainIndexer#isPollSilent() is false while the loop is iterating",
+      "XChainIndexer#isPollSilent() is stamped by BOTH loops, since a catch-up stays inside the inner one for hours",
+      "XChainIndexer#isPollSilent() sizes the window well above one barrier-timeout cycle",
+      "health payload carries loop liveness as its own axis does not fold loop liveness into status, which drives container restarts",
+      "health payload carries loop liveness as its own axis publishes pollSilent and the last iteration stamp",
+      "health payload carries loop liveness as its own axis reads not-silent from an indexer double that predates the accessor",
+      "health payload carries loop liveness as its own axis reports a hung loop that every other field renders as healthy",
+      "health payload carries loop liveness as its own axis reports not-silent on a quiet chain whose last commit is ancient"
     ],
     "367a4c78df954f22": [
       "Deploy (DEPLOY) @regression @tier2 CODE_ENCODING activation gate a base64 field below the gate (read as hex) does not yield the base64-era contract",
@@ -8619,21 +8640,6 @@
       "policy apply: token-policy inheritance onto a bridged copy the membership hash is FROZEN: these digests are what the hub signed and cannot move",
       "policy apply: token-policy inheritance onto a bridged copy the membership hash is the canonical text, with \"-\" for an ABSENT list and \"0\" for an EMPTY one",
       "policy apply: token-policy inheritance onto a bridged copy the signed canonical is the spec field order, wrapped by the EQUIV header under the POLICY tag"
-    ],
-    "8c80af2e77bc435a": [
-      "GET /status reports loop liveness for the fleet watcher, without gating on it carries pollSilent and lastPollAt as the last keys, after every key monitors already read",
-      "GET /status reports loop liveness for the fleet watcher, without gating on it leaves the 503 inputs untouched: a silent loop alone is not wedged",
-      "GET /status reports loop liveness for the fleet watcher, without gating on it reads a booting indexer as not silent, with no stamp yet",
-      "XChainIndexer#isPollSilent() is false at the window edge and true past it",
-      "XChainIndexer#isPollSilent() is false before the loop has iterated once, so a booting indexer is never dead",
-      "XChainIndexer#isPollSilent() is false while the loop is iterating",
-      "XChainIndexer#isPollSilent() is stamped by BOTH loops, since a catch-up stays inside the inner one for hours",
-      "XChainIndexer#isPollSilent() sizes the window well above one barrier-timeout cycle",
-      "health payload carries loop liveness as its own axis does not fold loop liveness into status, which drives container restarts",
-      "health payload carries loop liveness as its own axis publishes pollSilent and the last iteration stamp",
-      "health payload carries loop liveness as its own axis reads not-silent from an indexer double that predates the accessor",
-      "health payload carries loop liveness as its own axis reports a hung loop that every other field renders as healthy",
-      "health payload carries loop liveness as its own axis reports not-silent on a quiet chain whose last commit is ancient"
     ],
     "8c9c2189fe754abc": [
       "rollcall signature parsing lowercases valid pairs and skips malformed pairs independently",
@@ -16542,8 +16548,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1211,
-      "titleCount": 12661,
+      "fileCount": 1213,
+      "titleCount": 12668,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16983,6 +16989,7 @@
         "test/unit/api/health/health.test.js": "1a13d9ca8f1d3598",
         "test/unit/api/health/health_committed_height.test.js": "f742ecb1d380895a",
         "test/unit/api/health/health_train_activation.test.js": "bce604b98b5b940c",
+        "test/unit/api/health/hub_consensus_hash_mismatch.test.js": "2d2977d7cebb17c1",
         "test/unit/api/health/indexer_metrics.test.js": "fabee4ab4b425a8a",
         "test/unit/api/health/reorg_health_stats_null.test.js": "5caf6af9f6bed1d6",
         "test/unit/api/health/shutdown.test.js": "9f1e3a4773262edd",
@@ -17745,7 +17752,7 @@
         "test/unit/xchain_indexer/apply_pending_reorgs.test.js": "1c8358d37961f103",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
-        "test/unit/xchain_indexer/indexer_poll_heartbeat.test.js": "8c80af2e77bc435a",
+        "test/unit/xchain_indexer/indexer_poll_heartbeat.test.js": "3654541f666286e0",
         "test/unit/xchain_indexer/mirror_admission_legacy_progress.test.js": "4ee376dc5f1c5cb0",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
         "test/unit/xchain_indexer/parse_exception_wedge.test.js": "4056956385f780ce",
