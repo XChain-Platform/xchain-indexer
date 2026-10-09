@@ -47,6 +47,7 @@ function stubGate(active) {
         key === REMOTE_TOKEN_KEY ? active : activeAt(key, ...args));
 }
 
+// Simulate a registry with no remote token row.
 function stubGateRowAbsent() {
     const activeAt = gateRegistry.activeAt;
     sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...args) => {

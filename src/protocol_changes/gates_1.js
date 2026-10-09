@@ -245,6 +245,7 @@ addGate('caret_ref_strict_activation.CARET_REF_STRICT_ACTIVATION', 'height', {
     'DOGE:testnet': 0,
     regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the reject end to end
 });
+
 // consolidation_leg_amount_activation
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']).
