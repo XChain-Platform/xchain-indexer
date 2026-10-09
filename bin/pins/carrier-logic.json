@@ -176,7 +176,7 @@
     },
     "stateHash": {
       "path": "src/consensus/state_hash.js",
-      "hash": "3b5cb6a37f58cb40b0020e2c0440d34e21810b9b316c3e71a5b0c2861a18eb21",
+      "hash": "5ac03b6746c93bc0615d0a4d857f5eb4861c44aa5890ee60e922794ed29bc785",
       "twins": [
         "xchain-sync"
       ]
@@ -2012,6 +2012,13 @@
       "from": "ebb3851ccbf61b5b3571fe83a95b191eb7ecdfa4ea6f1dfb3bc68c07699dde07",
       "to": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
       "reason": "add APPLY_LENGTH_METER registry row and VM-aligned flag times",
+      "date": "2026-10-07"
+    },
+    {
+      "id": "stateHash",
+      "from": "3b5cb6a37f58cb40b0020e2c0440d34e21810b9b316c3e71a5b0c2861a18eb21",
+      "to": "5ac03b6746c93bc0615d0a4d857f5eb4861c44aa5890ee60e922794ed29bc785",
+      "reason": "state_hash attest_batch_head class behind its own flag day",
       "date": "2026-10-07"
     }
   ]

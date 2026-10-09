@@ -117,5 +117,25 @@ module.exports = {
         for(let key in keys)
             sends.push(keys[key]);
         return sends;
+    },
+
+    // Total resolved ticks by recipient without changing the legs or prefetched token map.
+    gatedTotalsByTickId(sends, ticks){
+        let totals = {};
+        if(!Array.isArray(sends))
+            return totals;
+
+        for(const [tick, amount, destination] of sends){
+            let tokenInfo = ticks && ticks[tick];
+            if(!tokenInfo || tokenInfo['TICK_ID'] === null || tokenInfo['TICK_ID'] === undefined)
+                continue;
+
+            let tickId = tokenInfo['TICK_ID'];
+            if(!totals[destination])
+                totals[destination] = {};
+            let prior = totals[destination][tickId] || 0;
+            totals[destination][tickId] = this.util.bcadd(prior, amount, tokenInfo['DECIMALS']);
+        }
+        return totals;
     }
 };

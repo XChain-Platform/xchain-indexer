@@ -50,10 +50,10 @@ module.exports = {
     // restores above where prev_amount can differ across repeated slashes of one row).
     //
     // Runs UNCONDITIONALLY, OUTSIDE the firstActionIndex guard above (RB-ANCHOR-NULL).
-    // The reconcile has two callers and only one of them mints an actions row: the DOGE
-    // ANCHOR handler (actions/anchor.js) passes its own action_index, but the BTC-side
-    // derive (anchor_reward_derive.js) passes NULL because the attested rows arrive over
-    // the mirror, not as a wire action. So a BTC reorg over a range whose only reward
+    // The reconcile's one caller mints no actions row: the BTC-side derive
+    // (anchor_reward_derive.js) passes a NULL action_index because the attested rows arrive
+    // over the mirror, not as a wire action (the DOGE ANCHOR handler no longer credits or
+    // reconciles anything). So a BTC reorg over a range whose only reward
     // work was a derive-side reconcile leaves firstActionIndex null, while the generic
     // blockTables loop below still drops anchor_reward_reconcile_log and the
     // derive_block_index delete below still drops the replacement winner: gated here,

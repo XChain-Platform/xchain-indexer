@@ -14,16 +14,16 @@
  *
  * The SHARED block, part 3 of 5: rollcall_activation to stateHash
  *
- * One SHARED block part. The region between the two marker lines is
- * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
- * and xchain-sdk: each consumer keeps the same bytes and replaces only the
- * require line below with its own queue module. What may live between the
- * markers: `addGate(key, unit, table)` calls with LITERAL values (a table, a
- * number, a string or literals joined by +, a RegExp, an array), one call per
- * row, at column zero, and comments. No require, no computed value, nothing
- * from outside the block but addGate, UNARMED and UNPINNED. A regtest entry a
- * venue arms from its environment is written UNPINNED here and armed by the
- * wrapper at registration (shared_rows.js), so the block stays data.
+ * This file is a whole-file byte twin copied unchanged into five consumers:
+ * xchain-indexer, xchain-sync, xchain-hub, xchain-explorer and xchain-sdk.
+ * The identical bytes include the header, queue require, markers and rows.
+ * Between the markers may live `addGate(key, unit, table)` calls with LITERAL
+ * values (a table, a number, a string or literals joined by +, a RegExp, an
+ * array), one call per row, at column zero, and comments. No require, no
+ * computed value, nothing from outside the block but addGate, UNARMED and
+ * UNPINNED. A regtest entry a venue arms from its environment is written
+ * UNPINNED here and armed by the wrapper at registration (shared_rows.js), so
+ * the marker-delimited body stays data.
  *
  * Rows are grouped by module stem in alphabetical order; a stem's rows keep
  * the order the module declared them. Keys never change (I4).
@@ -351,8 +351,8 @@ addGate('stateHash.BET_STATUS_STATE_HASH_ACTIVATION', 'height', {
 // use this set: the invalid_archive stamp, its reorg reset, the forward
 // updated_rows class and the state-hash class below all target the same rows.
 // SINGLE SOURCE OF TRUTH for xchain-indexer rollback.js + this file's class 6,
-// and (via the byte-identical xchain-sync twin) ClientRollback.js +
-// updatedRows.js. db.js/recovery.js carry matching predicates.
+// and (via the byte-identical xchain-sync twin) src/client/rollback.js +
+// src/server/updated_rows.js. db.js/recovery.js carry matching predicates.
 addGate('stateHash.ARCHIVE_HEAD_VERSIONS', 'constant', [1]);
 
 // SQL fragment form, spliced as `p.version ` + ARCHIVE_HEAD_VERSIONS_SQL.

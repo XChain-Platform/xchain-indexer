@@ -16,16 +16,16 @@
  * xchain_bridge_activation, then anchor_fold_activation and
  * archive_section_verdict_activation
  *
- * One SHARED block part. The region between the two marker lines is
- * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
- * and xchain-sdk: each consumer keeps the same bytes and replaces only the
- * require line below with its own queue module. What may live between the
- * markers: `addGate(key, unit, table)` calls with LITERAL values (a table, a
- * number, a string or literals joined by +, a RegExp, an array), one call per
- * row, at column zero, and comments. No require, no computed value, nothing
- * from outside the block but addGate, UNARMED and UNPINNED. A regtest entry a
- * venue arms from its environment is written UNPINNED here and armed by the
- * wrapper at registration (shared_rows.js), so the block stays data.
+ * This file is a whole-file byte twin copied unchanged into five consumers:
+ * xchain-indexer, xchain-sync, xchain-hub, xchain-explorer and xchain-sdk.
+ * The identical bytes include the header, queue require, markers and rows.
+ * Between the markers may live `addGate(key, unit, table)` calls with LITERAL
+ * values (a table, a number, a string or literals joined by +, a RegExp, an
+ * array), one call per row, at column zero, and comments. No require, no
+ * computed value, nothing from outside the block but addGate, UNARMED and
+ * UNPINNED. A regtest entry a venue arms from its environment is written
+ * UNPINNED here and armed by the wrapper at registration (shared_rows.js), so
+ * the marker-delimited body stays data.
  *
  * Rows are grouped by module stem in alphabetical order; a stem's rows keep
  * the order the module declared them. Keys never change (I4).
@@ -160,14 +160,14 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
 // action. Regtest is 0 and stays bare, because one regtest number fits every chain and the
 // e2e rail exercises the armed rule from genesis.
 addGate('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION', 'height', {
-    'BTC:mainnet':  9999999999,
-    'LTC:mainnet':  9999999999,
-    'DOGE:mainnet': 9999999999,
-    mainnet:        9999999999,   // fallback for a coin with no entry above
+    'BTC:mainnet':  UNARMED,
+    'LTC:mainnet':  UNARMED,
+    'DOGE:mainnet': UNARMED,
+    mainnet:        UNARMED,   // fallback for a coin with no entry above
     'BTC:testnet':  152929,       // SIZED 2026-09-16, re-cut 16:33Z: chain_tip 152,716 + 213 (30 h at 508.8 s/blk), about 30.1 h, the origin, last
     'LTC:testnet':  4887898,      // SIZED 2026-09-16, re-cut 16:33Z: chain_tip 4,887,644 + 254 (10 h at 141.8 s/blk), about 10.0 h
     'DOGE:testnet': 67902062,     // SIZED 2026-09-16, re-cut 16:33Z: chain_tip 67,900,748 + 1314 (10 h at 27.4 s/blk), about 10.0 h
-    testnet:        9999999999,   // fallback: a testnet coin with no entry above stays dark
+    testnet:        UNARMED,   // fallback: a testnet coin with no entry above stays dark
     regtest:        0,            // genesis-active so the e2e rail exercises the armed rule
 });
 // Part 5 holds these earlier rows because parts 1 to 4 are near their line limit and have concurrent additions.
@@ -177,14 +177,14 @@ addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UN
 addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
 // list_share_producer_activation: the hub snapshot plane begins producing shared-list versions.
 addGate('list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION', 'height', {
-    mainnet: 9999999999,
+    mainnet: UNARMED,
     testnet: 154777,
     regtest: 0,
 });
 // list_share_consumer_activation: each chain begins applying shared-list versions and references.
 addGate('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION', 'height', {
-    mainnet: 9999999999,
-    testnet: 9999999999,
+    mainnet: UNARMED,
+    testnet: UNARMED,
     'BTC:testnet': 154777,
     'LTC:testnet': 4905004,
     'DOGE:testnet': 67956922,
@@ -192,8 +192,8 @@ addGate('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION', 'height
 });
 // list_meta_activation: the hub reads it with coin BTC at snapshot_block.
 addGate('list_meta_activation.LIST_META_ACTIVATION', 'height', {
-    mainnet: 9999999999,
-    testnet: 9999999999,
+    mainnet: UNARMED,
+    testnet: UNARMED,
     'BTC:testnet': 155001,
     'LTC:testnet': 4906040,
     'DOGE:testnet': 67962387,
@@ -224,6 +224,13 @@ addGate('oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION', 'height', {
     'BTC:testnet': 155158,
     'LTC:testnet': 4907593,
     'DOGE:testnet': 67966647,
+    regtest: 0,
+});
+// stateHash: the state_hash class for the batch-completion stamp on a surviving v5 attest head.
+// Inert on mainnet and testnet until a flag day is sized; regtest is armed from genesis.
+addGate('stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
     regtest: 0,
 });
 // SHARED-GATES END

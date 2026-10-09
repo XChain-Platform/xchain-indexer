@@ -16,7 +16,7 @@
  * process never calls it: the value it applies is the registry row, which the
  * read overlay arms through regtest_env.regtestHeight. The exported resolver is
  * a second copy of that grammar, so it is pinned input for input against
- * regtestHeight here, the way rollcall_activation.test.js pins the base rail's.
+ * regtestHeight here, the way rollcall_regtest_parity.test.js pins the base rail's.
  *
  ********************************************************************/
 const assert = require('assert');

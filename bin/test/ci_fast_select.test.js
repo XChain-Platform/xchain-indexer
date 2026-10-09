@@ -39,7 +39,7 @@ function gitLines(args, options) {
 }
 
 const dependencies = {
-  listTests: () => gitLines(['ls-files', 'test/**']),
+  listTests: () => gitLines(['ls-files', 'test/**', 'bin/test/**']),
   findRequirers: findTrackedRequirers,
   findSupportUsers: findTrackedSupportUsers
 };
@@ -109,10 +109,28 @@ describe('ci fast selector', function () {
     assert.deepStrictEqual(plan.tests, []);
   });
 
+  it('maps CI helper changes to the selector test without widening', function () {
+    for (const file of ['bin/ci-full.sh', 'bin/ci_fast_select.js', 'bin/vendor-vm.sh']) {
+      const plan = select([file]);
+      assert.strictEqual(plan.consensus, false, file);
+      assert.deepStrictEqual(plan.tests, [{
+        group: 'main',
+        file: 'bin/test/ci_fast_select.test.js'
+      }], file);
+    }
+  });
+
   it('widens package manifest changes', function () {
     const plan = select(['package.json']);
     assert.strictEqual(plan.consensus, true);
     assert(plan.reasons.some((reason) => reason.includes('package.json')));
+  });
+
+  it('leaves the suite title pin to its dedicated CI tier', function () {
+    const plan = select(['bin/pins/at1-suite-titles.json']);
+    assert.strictEqual(plan.consensus, false);
+    assert.deepStrictEqual(plan.tests, []);
+    assert.strictEqual(select(['bin/pins/carrier-logic.json']).consensus, true);
   });
 
   it('defers a changed integration test', function () {
@@ -195,6 +213,38 @@ describe('ci fast selector', function () {
     assert(script.includes('ci_fast_select.js --plan'));
     assert(script.includes('CI_TIER'));
     assert(script.includes('run_tier "integration (test:integration:ci)"'));
+    assert(script.includes('run_tier "suite title pin (test)"'));
+    assert(script.includes('--script test --compare bin/pins/at1-suite-titles.json'));
+    assert(script.includes('need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub xchain-documentation'));
+    assert(script.includes('git -C "$SIB/xchain-documentation" archive HEAD'));
+    assert(script.includes('XCHAIN_DOCS_DIR="$docs_snapshot"'));
+  });
+
+  it('runs source-only VM staging in Linux fast mode', function () {
+    const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-fast-linux-'));
+    try {
+      writeScratchFile(fakeBin, 'uname', '#!/bin/sh\nprintf "Linux\\n"\n');
+      writeScratchFile(fakeBin, 'npm', '#!/bin/sh\nprintf "npm-args:%s\\n" "$*"\nexit 23\n');
+      fs.chmodSync(path.join(fakeBin, 'uname'), 0o755);
+      fs.chmodSync(path.join(fakeBin, 'npm'), 0o755);
+
+      const result = spawnSync('bash', ['bin/ci-full.sh'], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CI_TIER: 'fast',
+          PATH: `${fakeBin}:${process.env.PATH}`
+        }
+      });
+
+      assert.strictEqual(result.status, 1, result.stderr);
+      const invocation = result.stdout.match(/^npm-args:(.*)$/m);
+      assert(invocation, result.stdout);
+      assert.strictEqual(invocation[1], 'run vendor:vm -- stage');
+      assert(result.stdout.includes('vendor:vm (stage sources from ../xchain-vm)'));
+    } finally {
+      fs.rmSync(fakeBin, { recursive: true, force: true });
+    }
   });
 
   it('replays develop history, compares narrowing, and checks required selections', function () {

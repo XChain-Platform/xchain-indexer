@@ -27,6 +27,8 @@
 
 'use strict';
 
+const { hubConsensusHashFields } = require('./health/hub_fields');
+
 // The decoder's current tip, read fresh from the decoder DB; the indexer's
 // in-memory snapshot when that DB is unreachable.
 async function readDecoderBlock(indexer){
@@ -137,11 +139,13 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         lastHubConfigFetchAt: lastHubConfigFetchAt,
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hubConfigStale:       hubConfigStale,
+        schemaReady:          indexer.schemaReady === true,
         hubMirror:            hubMirror,
-        // Block-poll loop liveness, appended last so no key a monitor reads moves. Reported for the fleet
+        // Block-poll loop liveness, appended after hubMirror so no earlier key a monitor reads moves. Reported for the fleet
         // watcher to page on, never folded into the 503 above (see health/advance_fields.js).
         pollSilent:           (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false,
-        lastPollAt:           indexer.lastPollAt || null
+        lastPollAt:           indexer.lastPollAt || null,
+        ...hubConsensusHashFields(indexer)
     };
 }
 

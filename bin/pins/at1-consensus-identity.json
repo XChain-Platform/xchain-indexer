@@ -15,7 +15,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "15b6d4c08b6814e39aaa9208d4c412052fb8146de1b173e356c58bb6a38224d4",
+    "armed_map_fingerprint": "3fc661efd04ca88231e8ef9422e463f995e7c670dba6f5708a7e49e6666d7438",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
@@ -335,6 +335,7 @@
       "rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ARMED_HEIGHT": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ENV": "657334d609d5d5e981a3b6f631d9c3095c0bbf2f9be742d000990f24144b834d",
       "send_caret_pack_key_activation.SEND_CARET_PACK_KEY_ACTIVATION": "aad1e92fb904e4c45e5a5fa8beb83a215e87bef0e3ac1b6d7a98e33896838ea0",
+      "send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION": "95e34322344784c66ed84f586b7088d141fb9fb3167c5ce20771018edc8208c2",
       "slash_grid_activation.SLASH_DEDUCTION_PRECISION": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a",
       "slash_grid_activation.SLASH_GRID_ACTIVATION": "7bc2f002584168c30d6b893e7bb5a94f712502ec2f881813a9783db6da3abf72",
       "slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVATION": "7bc2f002584168c30d6b893e7bb5a94f712502ec2f881813a9783db6da3abf72",
@@ -351,6 +352,7 @@
       "stateHash.ARCHIVE_HEAD_VERSIONS_SQL": "7efd9392082cb24c1ea46ff5fde1b373a4655db2fc638b7e0a462199ab6a342c",
       "stateHash.ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION": "98689bd20044b78aeda9b349cfbeeb22520bb0d0eff99cf9f4d39e35ff70b600",
       "stateHash.ARCHIVE_INVALID_STATE_HASH_ACTIVATION": "d4ed30b31061492fbb243c364c1d427555bd62d39cc884789151a9424730601e",
+      "stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION": "ef92238ca39f95442381fa7ecd0bacacafd42f06b45ebe961d7e9391d80daf7c",
       "stateHash.BET_STATUS_STATE_HASH_ACTIVATION": "7bf25fc0105a5383368fd76a02d88b7483843de2bf7a9cf35b5fa449f7944503",
       "stateHash.COOLDOWN_TABLES": "b10e8cc6df5a6ca50fbc831d90fc5a5c0e75cb9f458ad88f26b180122870ee55",
       "stateHash.DEACTIVATION_TABLES": "481c4af051363d168feb5093e3bee56117815b4760e61151a73e18b59443b5f9",
@@ -379,7 +381,9 @@
       "train_activation.TRAIN_ACTIVATION": "1f7b8f196149e0bf068bfc430c6355a65788333e1eb2952c52462f0aa3526a6e",
       "vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION": "fb8f989f24dd5fda0b50767684e33d4e0c5a41adb8d0cfb7130fc93bf3a46207",
       "vm_exec_lint_activation.VM_EXEC_LINT_ACTIVATION": "46466292b4ed9eb2b75e3b11e95f336f40874b20d9ad80f0ecaa7a5e3aea4d25",
+      "vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION": "9887f0812153696f7b1f3bbdbe1ab1a56d1a3339f210e4cfe984aab869bcedb9",
       "vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION": "46466292b4ed9eb2b75e3b11e95f336f40874b20d9ad80f0ecaa7a5e3aea4d25",
+      "vm_lint_nesting_depth_activation.VM_LINT_NESTING_DEPTH_ACTIVATION": "9887f0812153696f7b1f3bbdbe1ab1a56d1a3339f210e4cfe984aab869bcedb9",
       "vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION": "5cf3bb5dc5224ac40c44261c88cc44ee8bd9f064c208d2b917d2498103f1764e",
       "vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD": "de491f1800ecbafef8565ee3faa8b87707092505a441c8a970593c9025d9923d",
       "xchain-vm.ACCESSOR_OWN_KEY_ACTIVATION": "aad1e92fb904e4c45e5a5fa8beb83a215e87bef0e3ac1b6d7a98e33896838ea0",
@@ -398,9 +402,9 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 379,
+    "armed_map_row_count": 383,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "4aacac709acc96a9f4d98cc68e5c1dfc4afab0c3305e38c410e749553068f062",
+    "carrier_logic_digest": "f357151d02c6374c7ff541a785511ae9e895c81a0025e2b4cda699b2b49f89e7",
     "consensus_rules_digest": "227f96529070d083038a3695fb863c4ab08611864b9dfcc1b619f75ec67c91d8",
     "gate_key_count": 43,
     "consensus_rules_gates": {
@@ -461,7 +465,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "ecd4e8c7e1422ec750bacf67aabef4ee4071d924af4b98d7020526ec5c2192b6",
+    "armed_map_fingerprint": "78b05f6664141b5dbad5fbcc8644332637cd0d408ada8150fb99b52d7bcbc54d",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
@@ -781,6 +785,7 @@
       "rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ARMED_HEIGHT": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ENV": "657334d609d5d5e981a3b6f631d9c3095c0bbf2f9be742d000990f24144b834d",
       "send_caret_pack_key_activation.SEND_CARET_PACK_KEY_ACTIVATION": "aad1e92fb904e4c45e5a5fa8beb83a215e87bef0e3ac1b6d7a98e33896838ea0",
+      "send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION": "95e34322344784c66ed84f586b7088d141fb9fb3167c5ce20771018edc8208c2",
       "slash_grid_activation.SLASH_DEDUCTION_PRECISION": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a",
       "slash_grid_activation.SLASH_GRID_ACTIVATION": "7bc2f002584168c30d6b893e7bb5a94f712502ec2f881813a9783db6da3abf72",
       "slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVATION": "7bc2f002584168c30d6b893e7bb5a94f712502ec2f881813a9783db6da3abf72",
@@ -797,6 +802,7 @@
       "stateHash.ARCHIVE_HEAD_VERSIONS_SQL": "7efd9392082cb24c1ea46ff5fde1b373a4655db2fc638b7e0a462199ab6a342c",
       "stateHash.ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION": "98689bd20044b78aeda9b349cfbeeb22520bb0d0eff99cf9f4d39e35ff70b600",
       "stateHash.ARCHIVE_INVALID_STATE_HASH_ACTIVATION": "d4ed30b31061492fbb243c364c1d427555bd62d39cc884789151a9424730601e",
+      "stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION": "ef92238ca39f95442381fa7ecd0bacacafd42f06b45ebe961d7e9391d80daf7c",
       "stateHash.BET_STATUS_STATE_HASH_ACTIVATION": "7bf25fc0105a5383368fd76a02d88b7483843de2bf7a9cf35b5fa449f7944503",
       "stateHash.COOLDOWN_TABLES": "b10e8cc6df5a6ca50fbc831d90fc5a5c0e75cb9f458ad88f26b180122870ee55",
       "stateHash.DEACTIVATION_TABLES": "481c4af051363d168feb5093e3bee56117815b4760e61151a73e18b59443b5f9",
@@ -825,7 +831,9 @@
       "train_activation.TRAIN_ACTIVATION": "1f7b8f196149e0bf068bfc430c6355a65788333e1eb2952c52462f0aa3526a6e",
       "vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION": "fb8f989f24dd5fda0b50767684e33d4e0c5a41adb8d0cfb7130fc93bf3a46207",
       "vm_exec_lint_activation.VM_EXEC_LINT_ACTIVATION": "46466292b4ed9eb2b75e3b11e95f336f40874b20d9ad80f0ecaa7a5e3aea4d25",
+      "vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION": "9887f0812153696f7b1f3bbdbe1ab1a56d1a3339f210e4cfe984aab869bcedb9",
       "vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION": "46466292b4ed9eb2b75e3b11e95f336f40874b20d9ad80f0ecaa7a5e3aea4d25",
+      "vm_lint_nesting_depth_activation.VM_LINT_NESTING_DEPTH_ACTIVATION": "9887f0812153696f7b1f3bbdbe1ab1a56d1a3339f210e4cfe984aab869bcedb9",
       "vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION": "5cf3bb5dc5224ac40c44261c88cc44ee8bd9f064c208d2b917d2498103f1764e",
       "vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD": "de491f1800ecbafef8565ee3faa8b87707092505a441c8a970593c9025d9923d",
       "xchain-vm.ACCESSOR_OWN_KEY_ACTIVATION": "aad1e92fb904e4c45e5a5fa8beb83a215e87bef0e3ac1b6d7a98e33896838ea0",
@@ -844,9 +852,9 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 379,
+    "armed_map_row_count": 383,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "4aacac709acc96a9f4d98cc68e5c1dfc4afab0c3305e38c410e749553068f062",
+    "carrier_logic_digest": "f357151d02c6374c7ff541a785511ae9e895c81a0025e2b4cda699b2b49f89e7",
     "consensus_rules_digest": "8568e6221e83de9d7f3a43281368257c78d88caa6ed55b1c3c371aa4d4e6ccae",
     "gate_key_count": 43,
     "consensus_rules_gates": {
@@ -923,10 +931,13 @@
   "unarmed_flag_days_2026_10_07_note": "Re-pinned after three indexer-only height rows joined the registry for the dispenser delay clock, policy refusal records and price wire trailing-byte refusal. Both readings gained the same three UNARMED mainnet and testnet rows with regtest active from genesis; only armed_map_fingerprint, armed_map_rows and armed_map_row_count (366 to 369) moved.",
   "train_rule_set_resolution_note": "Re-pinned after train rule-set resolution began selecting the reached activation with the greatest height: only carrier_logic_digest moved, through the train_activation entry of bin/pins/carrier-logic.json; every other stored field re-read byte-identical in both the bare and armed blocks.",
   "apply_length_meter_note": "2026-10-07: both code readings were regenerated after adding the APPLY_LENGTH_METER protocol row, its two flag-time constants, and the xchain-vm activation mirror. The armed map grows from 369 to 373 rows; its fingerprint and the protocol_changes carrier digest move, while the coin registry, rules digest, and GATES field remain unchanged.",
+  "attest_batch_head_gate_note": "Re-pinned after stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION joined the registry, UNARMED on mainnet and testnet with regtest active from genesis. Retaining develop's ATTEST_RELAY_FEE_ACTIVATION, preactivation status and oracle snapshot age rows makes both readings 380 rows; armed_map_fingerprint moved, and the stateHash carrier entry of bin/pins/carrier-logic.json moved carrier_logic_digest; every other stored field re-read byte-identical in the bare and armed blocks.",
   "oracle_snapshot_age_seconds_note": "Re-pinned after the UNPINNED seconds-basis snapshot age row joined the merged registry. Both readings gained the same null-valued row on every network; retaining develop's activation rows makes both readings 379 rows, and only armed_map_fingerprint, armed_map_rows and armed_map_row_count moved.",
   "anchor_archive_fold_term_note": "2026-10-07: both code readings were regenerated after adding the indexer-only ANCHOR_ARCHIVE_FOLD_TERM height row, unarmed on mainnet and every testnet chain with regtest active from genesis. Together with the CROSS_CHAIN_OFFER_LIST_EXPORT and BET_FEED_LIST_EDIT_ACTIVATION rows retained by the merge, the armed map grows from 373 to 376 rows; only its row map, row count, and fingerprint move.",
   "bet_feed_list_edit_note": "2026-10-07: both code readings were regenerated after adding the registry-only BET_FEED_LIST_EDIT_ACTIVATION height row. Together with the CROSS_CHAIN_OFFER_LIST_EXPORT row merged from develop, the armed map grows from 373 to 375 rows; its fingerprint and row map move, while the coin registry, rules digest, GATES field and carrier logic digest remain unchanged.",
   "cross_chain_offer_list_export_note": "2026-10-07: both code readings were regenerated after adding the registry-only CROSS_CHAIN_OFFER_LIST_EXPORT height row. Together with the BET_FEED_LIST_EDIT_ACTIVATION row retained by the merge, the armed map grows from 373 to 375 rows; only its row map, row count, and fingerprint move.",
   "attest_relay_fee_row_note": "Re-pinned after the indexer-only ATTEST_RELAY_FEE_ACTIVATION height row joined the registry. Both readings gained the same UNARMED mainnet and testnet row with regtest active from genesis; after the apply-length-meter, cross-chain offer list export, bet feed list edit and anchor archive fold term rows from trunk, only armed_map_fingerprint, armed_map_rows and armed_map_row_count (377 to 378) moved.",
-  "preactivation_status_gate_note": "Re-pinned after the indexer-only anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION row joined the registry, UNARMED on mainnet and testnet and active from genesis on regtest. ANCHOR_ACTIVATION returns to its canonical three-network shape. Retaining develop's ANCHOR_ARCHIVE_FOLD_TERM row makes both readings 378 rows alongside the ATTEST_RELAY_FEE_ACTIVATION row."
+  "preactivation_status_gate_note": "Re-pinned after the indexer-only anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION row joined the registry, UNARMED on mainnet and testnet and active from genesis on regtest. ANCHOR_ACTIVATION returns to its canonical three-network shape. Retaining develop's ANCHOR_ARCHIVE_FOLD_TERM row makes both readings 378 rows alongside the ATTEST_RELAY_FEE_ACTIVATION row.",
+  "vm_lint_nesting_depth_note": "Re-pinned after the registry-only VM_LINT_NESTING_DEPTH_ACTIVATION height row joined the registry, unarmed on mainnet and every testnet chain and active from genesis on regtest. Both readings gained the same row; only armed_map_fingerprint, armed_map_rows and armed_map_row_count (380 to 381) moved.",
+  "combined_gate_rows_2026_10_09_note": "2026-10-09 integration of two reviewed indexer lanes that each re-pinned from their own base (the VM lint banned-with height row and the unarmed send gated total tick id time row): both readings regenerated once with bin/consensus-identity.js --json, bare and with the armed regtest env, on the merged tree."
 }
