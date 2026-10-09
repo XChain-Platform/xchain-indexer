@@ -2376,14 +2376,6 @@
     "2a48ae7712d6f6d1": [
       "ANCHOR DOGE attestation pass removal @regression @tier3 keeps reward settlement and publisher-attestation quorum code absent"
     ],
-    "2a9082bb86e3b777": [
-      "three unarmed flag days registered on 2026-10-07 bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION is a frozen height row with explicit network defaults",
-      "three unarmed flag days registered on 2026-10-07 bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION is inactive on launched networks and active from regtest genesis",
-      "three unarmed flag days registered on 2026-10-07 dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION is a frozen height row with explicit network defaults",
-      "three unarmed flag days registered on 2026-10-07 dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION is inactive on launched networks and active from regtest genesis",
-      "three unarmed flag days registered on 2026-10-07 price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is a frozen height row with explicit network defaults",
-      "three unarmed flag days registered on 2026-10-07 price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is inactive on launched networks and active from regtest genesis"
-    ],
     "2ad1561ef8e230b9": [
       "list snapshot archive rows @regression @tier1 accepts valid full and delta rows",
       "list snapshot archive rows @regression @tier1 counts archive rows and treats an absent list_snapshots key as empty",
@@ -3625,24 +3617,6 @@
       "db misc mixin: table-parameterized identifiers @regression refuses a hostile COLUMN name too, not just the table",
       "db misc mixin: table-parameterized identifiers @regression refuses a hostile TABLE name before issuing anything",
       "db misc mixin: table-parameterized identifiers @regression refuses a non-string identifier rather than stringifying it"
-    ],
-    "43228de36969a03d": [
-      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
-      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
-      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
-      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
-      "armed_map/manifest: collectRows carries the three row families the design names",
-      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
-      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
-      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
-      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
-      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
-      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
-      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
-      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
-      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
-      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
-      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "432f2275f96736af": [
       "Withdraw custody guard helper gas accounting @regression @tier1 refuses a BTC owner without GAS before entering either guard",
@@ -15073,22 +15047,6 @@
       "Token state machine boundary tests @regression @tier2 TOK-05: DECIMALS are immutable after supply is issued ISSUE with DECIMALS=8 on token with DECIMALS=0 and SUPPLY=500 \u2192 invalid (locked)",
       "Token state machine boundary tests @regression @tier2 TOK-06: MAX_SUPPLY cannot be set below current SUPPLY ISSUE with MAX_SUPPLY=499 on token with SUPPLY=500 \u2192 invalid (MAX_SUPPLY < SUPPLY)"
     ],
-    "fd59b42becdb62ff": [
-      "armed_map/fingerprint: temp-tree falsification of armed values (design section 7, P4) a committed height change moves v2",
-      "armed_map/fingerprint: temp-tree falsification of armed values (design section 7, P4) a pinned testnet height reverting to null (not yet pinned) moves v2",
-      "armed_map/fingerprint: temp-tree falsification of armed values (design section 7, P4) an unmodified copy reads the same v2 as this process (the harness measures what it claims)",
-      "armed_map/fingerprint: temp-tree falsification of layout and the completeness guard (design section 7, P4) a comment, a whitespace reformat in a part file and a shim rename-and-move with requirers repointed leave v2 unchanged",
-      "armed_map/fingerprint: temp-tree falsification of layout and the completeness guard (design section 7, P4) deleting a constant row from a part file turns the completeness guard red and the shim throws at boot",
-      "armed_map/fingerprint: temp-tree falsification of layout and the completeness guard (design section 7, P4) deleting a gate row from a part file turns the completeness guard red and the shim throws at boot",
-      "armed_map/fingerprint: temp-tree falsification of layout and the completeness guard (design section 7, P4) without node_modules v2 reads UNREADABLE or the process fails, never a plausible hex",
-      "armed_map/fingerprint: the published surfaces (W3, alias dropped at W5) carries the UNREADABLE reason through consensus-identity and fails the run",
-      "armed_map/fingerprint: the published surfaces (W3, alias dropped at W5) is published by consensus-identity --json as the legacy field, version 2, the row map and count, and the logic digest",
-      "armed_map/fingerprint: the published surfaces (W3, alias dropped at W5) is published on the health payload as the legacy field and version 2 with the logic digest, and no _v2 alias (W5)",
-      "armed_map/fingerprint: the published surfaces (W3, alias dropped at W5) reads the health logic digest as UNREADABLE when the pin is absent, never a hex",
-      "armed_map/fingerprint: the running process is memoized per process",
-      "armed_map/fingerprint: the running process is the canonical fingerprint of the manifest rows",
-      "armed_map/fingerprint: the running process publishes UNREADABLE with the reason when a row cannot be collected"
-    ],
     "fda26087725f5fb7": [
       "BTC price barrier covers time as well as height @regression @tier1 all price barriers defer the block rather than processing it",
       "BTC price barrier covers time as well as height @regression @tier1 height satisfaction does not imply time satisfaction",
@@ -15223,12 +15181,63 @@
       "Hash coverage guard @regression content-parity coverage declaration the mutable exclusion class is derived from the state_hash declarations, not hand-listed",
       "Hash coverage guard @regression content-parity coverage declaration the operator carve-outs are exactly markets (indexer) and dispensers (decoder)",
       "Hash coverage guard @regression content-parity coverage declaration the two reorg-scoped lookups bound by block; the inert ones bound by id"
+    ],
+    "2e08800d4f2fd009": [
+      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
+      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
+      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
+      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
+      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
+      "armed_map/manifest: collectRows carries the three row families the design names",
+      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
+      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
+      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
+      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
+      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
+      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
+      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
+      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
+      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
+      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
+      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
+    ],
+    "41fd87b6ede40aa8": [
+      "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is a frozen height row with explicit defaults for every launched key",
+      "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is active from regtest genesis without an environment arming lever",
+      "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION stays unarmed on mainnet and every testnet chain"
+    ],
+    "9bf929008cd88b66": [
+      "armed_map/fingerprint: temp-tree falsification of armed values (design section 7, P4) a committed height change moves v2",
+      "armed_map/fingerprint: temp-tree falsification of armed values (design section 7, P4) a pinned testnet height reverting to null (not yet pinned) moves v2",
+      "armed_map/fingerprint: temp-tree falsification of armed values (design section 7, P4) an unmodified copy reads the same v2 as this process (the harness measures what it claims)",
+      "armed_map/fingerprint: temp-tree falsification of armed values (design section 7, P4) arming the cross-chain remote-token gate moves v2",
+      "armed_map/fingerprint: temp-tree falsification of layout and the completeness guard (design section 7, P4) a comment, a whitespace reformat in a part file and a shim rename-and-move with requirers repointed leave v2 unchanged",
+      "armed_map/fingerprint: temp-tree falsification of layout and the completeness guard (design section 7, P4) deleting a constant row from a part file turns the completeness guard red and the shim throws at boot",
+      "armed_map/fingerprint: temp-tree falsification of layout and the completeness guard (design section 7, P4) deleting a gate row from a part file turns the completeness guard red and the shim throws at boot",
+      "armed_map/fingerprint: temp-tree falsification of layout and the completeness guard (design section 7, P4) without node_modules v2 reads UNREADABLE or the process fails, never a plausible hex",
+      "armed_map/fingerprint: the published surfaces (W3, alias dropped at W5) carries the UNREADABLE reason through consensus-identity and fails the run",
+      "armed_map/fingerprint: the published surfaces (W3, alias dropped at W5) is published by consensus-identity --json as the legacy field, version 2, the row map and count, and the logic digest",
+      "armed_map/fingerprint: the published surfaces (W3, alias dropped at W5) is published on the health payload as the legacy field and version 2 with the logic digest, and no _v2 alias (W5)",
+      "armed_map/fingerprint: the published surfaces (W3, alias dropped at W5) reads the health logic digest as UNREADABLE when the pin is absent, never a hex",
+      "armed_map/fingerprint: the running process is memoized per process",
+      "armed_map/fingerprint: the running process is the canonical fingerprint of the manifest rows",
+      "armed_map/fingerprint: the running process publishes UNREADABLE with the reason when a row cannot be collected"
+    ],
+    "fc29d05a79dee0de": [
+      "four unarmed flag days registered on 2026-10-07 bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION is a frozen height row with explicit network defaults",
+      "four unarmed flag days registered on 2026-10-07 bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION is inactive on launched networks and active from regtest genesis",
+      "four unarmed flag days registered on 2026-10-07 cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is a frozen height row with explicit network defaults",
+      "four unarmed flag days registered on 2026-10-07 cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is inactive on launched networks and active from regtest genesis",
+      "four unarmed flag days registered on 2026-10-07 dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION is a frozen height row with explicit network defaults",
+      "four unarmed flag days registered on 2026-10-07 dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION is inactive on launched networks and active from regtest genesis",
+      "four unarmed flag days registered on 2026-10-07 price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is a frozen height row with explicit network defaults",
+      "four unarmed flag days registered on 2026-10-07 price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is inactive on launched networks and active from regtest genesis"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 1228,
-      "titleCount": 12768,
+      "fileCount": 1229,
+      "titleCount": 12775,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15593,6 +15602,7 @@
         "test/unit/activations/anchor_reward_null_threshold.test.js": "86e3b95c0a42a9c6",
         "test/unit/activations/attest_relay_fee_activation.test.js": "981dc6a195e515a0",
         "test/unit/activations/capability_min_stake_history.test.js": "a1bc8adce48d1864",
+        "test/unit/activations/cross_chain_remote_token_gate.test.js": "41fd87b6ede40aa8",
         "test/unit/activations/dispenser_oracle_price_activation.test.js": "bbf4d90405bf6e71",
         "test/unit/activations/dispenser_settlement_price_activation.test.js": "91fb11e60f21efba",
         "test/unit/activations/list/empty_allow_list_denies_activation.test.js": "97183ecc8d1ea3cb",
@@ -15621,7 +15631,7 @@
         "test/unit/activations/testnet_arm/dispenser_collation_arm.test.js": "0bf881f235cb766f",
         "test/unit/activations/tick_coin_prefix.test/rule.test.js": "6012f94711b5b5f9",
         "test/unit/activations/train_gate_verdict_characterization.test.js": "3fc3ca95409f973e",
-        "test/unit/activations/unarmed_flag_days_2026_10_07.test.js": "2a9082bb86e3b777",
+        "test/unit/activations/unarmed_flag_days_2026_10_07.test.js": "fc29d05a79dee0de",
         "test/unit/activations/x_chain_indexer_train_activation.test.js": "d2d34246f342ca3f",
         "test/unit/anchor/anchor_action_query.test.js": "bbc1475cf6fea867",
         "test/unit/anchor/anchor_action_query.test/anchor_action_query_getanchorconfirmations.test.js": "fb363eb621927a61",
@@ -15824,8 +15834,8 @@
         "test/unit/consensus/anchor_reward_derive/archive_fold_term.test.js": "7b26338ac8262f8c",
         "test/unit/consensus/anchor_reward_derive/reward_groups.test.js": "67c89e84e7aba170",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
-        "test/unit/consensus/armed_map/fingerprint.test.js": "fd59b42becdb62ff",
-        "test/unit/consensus/armed_map/manifest.test.js": "43228de36969a03d",
+        "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
+        "test/unit/consensus/armed_map/manifest.test.js": "2e08800d4f2fd009",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",

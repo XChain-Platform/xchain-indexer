@@ -18,6 +18,7 @@ const assert = require('assert');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 
 const KEYS = [
+    'cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION',
     'dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION',
     'bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION',
     'price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION',
@@ -32,7 +33,7 @@ const EXPECTED = {
     regtest: 0,
 };
 
-describe('three unarmed flag days registered on 2026-10-07', function () {
+describe('four unarmed flag days registered on 2026-10-07', function () {
     for (const key of KEYS) {
         it(key + ' is a frozen height row with explicit network defaults', function () {
             assert.strictEqual(ProtocolChanges.registry.unitOf(key), 'height');
