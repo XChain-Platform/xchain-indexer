@@ -245,6 +245,8 @@ const READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME = 0;
 // Mirrors the VM table; production networks remain inert and regtest is set on the row.
 const APPLY_LENGTH_METER_MAINNET_TIME = UNARMED;
 const APPLY_LENGTH_METER_TESTNET_TIME = UNARMED;
+const ITER_SET_METER_MAINNET_TIME = UNARMED;
+const ITER_SET_METER_TESTNET_TIME = UNARMED;
 // DISPENSER_REFILL: a refill that adds escrow to a dispenser consults the token's trade
 // controller (actions/dispenser/controller_guard.js). Inert on every network until a
 // release cut arms it; mainnet in particular stays null until the operator arms it.
@@ -273,6 +275,8 @@ module.exports = {
     READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME,
     APPLY_LENGTH_METER_MAINNET_TIME,
     APPLY_LENGTH_METER_TESTNET_TIME,
+    ITER_SET_METER_MAINNET_TIME,
+    ITER_SET_METER_TESTNET_TIME,
     DISPENSER_REFILL_MAINNET_TIME,
     DISPENSER_REFILL_TESTNET_TIME,
 };
