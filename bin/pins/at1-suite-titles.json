@@ -862,14 +862,6 @@
       "Callback @regression @tier3 holder allow/block list filtering excludes holders on the CALLBACK_TICK BLOCK_LIST",
       "Callback @regression @tier3 holder allow/block list filtering rejects a callback that would debit a holder without compensation"
     ],
-    "12d6432fb99f1e8a": [
-      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is present in the class table and registry in the same shape",
-      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is unarmed on production networks and active from regtest genesis",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 a registry row is a frozen plain object with the nine parsed fields",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the time-table keys the manifest lists",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value a fresh class build under the stub carries",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value the manifest resolves for that key"
-    ],
     "12da3a56447a42df": [
       "Database.sanityCheck() is blind to NULL tick_id ledger rows (NULL-tick halt question) @regression @tier1 does no aggregate work and does NOT throw when the block's only ledger row has a NULL tick_id",
       "Database.sanityCheck() is blind to NULL tick_id ledger rows (NULL-tick halt question) @regression @tier1 joins the touched-tick set to tokens AND index_tickers with NULL-eliminating INNER JOINs",
@@ -5656,6 +5648,12 @@
       "Execute._processSlashEmission multi-slash ledger conservation @regression @tier1 LEGACY (inert gate): two spellings of one token still lose the first write",
       "Execute._processSlashEmission multi-slash ledger conservation @regression @tier1 a caller that passes no ledger keeps the legacy per-emission write",
       "Execute._processSlashEmission multi-slash ledger conservation @regression @tier1 gate is armed on regtest and on mainnet at genesis by the 2026-09-09 ruling, and on testnet at the v0.21.3 heights"
+    ],
+    "5d5483ae3700b4b1": [
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 a registry row is a frozen plain object with the nine parsed fields",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the time-table keys the manifest lists",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value a fresh class build under the stub carries",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value the manifest resolves for that key"
     ],
     "5d74745d3f8f8f5a": [
       "HubDbSync bootstrap fail-closed on partial drain / holes @regression @tier1 a clean full drain still arms the barrier (no regression)",
@@ -11391,6 +11389,10 @@
       "Actions.processAction() @regression @tier3 does not call any other handler when dispatching SEND",
       "Actions.processAction() @regression @tier3 passes params, data, and error through to the handler"
     ],
+    "b45d06aa483d7379": [
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is unarmed on production networks and active from regtest genesis",
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 registers the 0.2.0 row and both network constants"
+    ],
     "b4a3dee34b8a056b": [
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT creates credit, updates balance, and increments token supply",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT exceeding MAX_MINT is marked invalid",
@@ -16332,7 +16334,7 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1224,
+      "fileCount": 1225,
       "titleCount": 12706,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -17402,6 +17404,7 @@
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
+        "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
@@ -17410,7 +17413,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "12d6432fb99f1e8a",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/send_gated/send_gated_total_tick_id_row.test.js": "9cb0cc0fc24db1ca",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_lint/vm_lint_banned_with_row.test.js": "783b89448d7f13a0",
@@ -17921,7 +17924,7 @@
       }
     },
     "test:regression": {
-      "fileCount": 928,
+      "fileCount": 929,
       "titleCount": 10044,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
@@ -18738,6 +18741,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
+        "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
@@ -18746,7 +18750,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "12d6432fb99f1e8a",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
@@ -18855,7 +18859,7 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 411,
+      "fileCount": 412,
       "titleCount": 4978,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19214,6 +19218,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
+        "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
@@ -19222,7 +19227,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "12d6432fb99f1e8a",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
@@ -19272,7 +19277,7 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 928,
+      "fileCount": 929,
       "titleCount": 10044,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
@@ -20089,6 +20094,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
+        "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
@@ -20097,7 +20103,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "12d6432fb99f1e8a",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",

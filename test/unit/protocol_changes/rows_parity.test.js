@@ -19,7 +19,6 @@ const manifest = require('../../../src/consensus/armed_map/manifest.js');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 
 const PREFIX = 'protocol_changes.changes.';
-const STAKE_SNAPSHOT_KEY = PREFIX + 'STAKE_SNAPSHOT_DECIMAL_STRINGS';
 
 function registryChangeRows() {
     return new Map(ProtocolChanges.rows().filter(([k]) => k.startsWith(PREFIX)).map(([k, v]) => [k, canonicalValue(v)]));
@@ -58,26 +57,5 @@ describe('protocol_changes/rows_parity: rows() equals the transitional manifest 
             'version_major', 'version_minor', 'version_revision',
         ]);
         assert.strictEqual(row.testnet_time, ProtocolChanges.CONTRACT_META_REQUIRED_TESTNET_TIME);
-    });
-});
-
-describe('protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1', function () {
-    it('is unarmed on production networks and active from regtest genesis', function () {
-        const row = ProtocolChanges.get(STAKE_SNAPSHOT_KEY);
-        assert.strictEqual(row.mainnet_time, ProtocolChanges.UNARMED);
-        assert.strictEqual(row.testnet_time, ProtocolChanges.UNARMED);
-        assert.strictEqual(row.regtest_time, 0);
-        assert.strictEqual(ProtocolChanges.STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME, ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME, ProtocolChanges.UNARMED);
-    });
-
-    it('is present in the class table and registry in the same shape', function () {
-        const table = new ProtocolChanges({ config: {}, util: {} }).changes;
-        assert.ok(Object.prototype.hasOwnProperty.call(table, 'STAKE_SNAPSHOT_DECIMAL_STRINGS'));
-        assert.deepStrictEqual(table.STAKE_SNAPSHOT_DECIMAL_STRINGS, ProtocolChanges.get(STAKE_SNAPSHOT_KEY));
-        assert.strictEqual(ProtocolChanges.get('protocol_changes.STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME'),
-            ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.get('protocol_changes.STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME'),
-            ProtocolChanges.UNARMED);
     });
 });
