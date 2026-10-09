@@ -291,10 +291,11 @@ const EMPTY_CONSTANTS = (function(){
 })();
 
 // ---- Orphan-node observability (read-only; SPV spec §4.3) -------------------
-// TWIN PAIR: xchain-indexer/src/stateCommitment.js and xchain-sync/src/
-// stateCommitment.js each carry this comment + function; keep the whole block
-// BYTE-IDENTICAL, comments included (drift-guarded in both repos by
-// test/unit/blockhash-conformance-twin.test.js).
+// TWIN PAIR: xchain-indexer/src/state_commitment/persistent_smt.js and
+// xchain-sync/src/state_commitment/index.js each carry this comment + function;
+// keep the whole block BYTE-IDENTICAL, comments included (drift-guarded in both
+// repos by blockhash_conformance_twin.test.js, under test/unit/ in xchain-sync
+// and test/unit/consensus/ in xchain-indexer).
 //
 // Reports total vs reachable internal nodes in the content-addressed COW
 // state_tree_nodes store so unbounded growth (reorg orphans + per-block stake-

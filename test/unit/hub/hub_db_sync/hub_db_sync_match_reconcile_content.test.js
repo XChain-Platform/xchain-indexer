@@ -10,6 +10,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
 
 function match(id, matchId, effectiveTime) {
     return { id: id, match_id: matchId, effective_time: effectiveTime, status: 'finalized' };
@@ -52,7 +53,7 @@ function serve(sync, pages, beforeFetch) {
         if (beforeFetch) beforeFetch(call);
         let page = pages[Math.min(call, pages.length - 1)];
         call++;
-        return { rows: page.rows.map(r => Object.assign({}, r)), watermark: page.watermark };
+        return { schema_version: HUB_SCHEMA_VERSION, rows: page.rows.map(r => Object.assign({}, r)), watermark: page.watermark };
     });
 }
 
@@ -61,7 +62,7 @@ describe('HubDbSync match retraction content reconciliation @regression @tier1',
 
     it('uses match content when local and hub ids are unrelated', async function () {
         const { sync, rows } = makeSync([match(9001, 'GONE', 40)]);
-        serve(sync, [{ rows: [match(3, 'KEPT', 30)], watermark: 100 }]);
+        serve(sync, [{ schema_version: HUB_SCHEMA_VERSION, rows: [match(3, 'KEPT', 30)], watermark: 100 }]);
 
         await sync.bootstrapTable('cross_chain_matches');
         await sync.bootstrapTable('cross_chain_matches');
@@ -71,7 +72,7 @@ describe('HubDbSync match retraction content reconciliation @regression @tier1',
 
     it('marks a pre-drain finalized match the hub did not serve', async function () {
         const { sync, rows, updates } = makeSync([match(17, 'GONE', 40)]);
-        serve(sync, [{ rows: [], watermark: 100 }]);
+        serve(sync, [{ schema_version: HUB_SCHEMA_VERSION, rows: [], watermark: 100 }]);
 
         await sync.bootstrapTable('cross_chain_matches');
         await sync.bootstrapTable('cross_chain_matches');
@@ -82,7 +83,7 @@ describe('HubDbSync match retraction content reconciliation @regression @tier1',
 
     it('does not mark a match the complete drain served', async function () {
         const { sync, rows, updates } = makeSync([match(17, 'KEPT', 40)]);
-        serve(sync, [{ rows: [match(2, 'KEPT', 40)], watermark: 100 }]);
+        serve(sync, [{ schema_version: HUB_SCHEMA_VERSION, rows: [match(2, 'KEPT', 40)], watermark: 100 }]);
 
         await sync.bootstrapTable('cross_chain_matches');
         await sync.bootstrapTable('cross_chain_matches');
@@ -93,7 +94,7 @@ describe('HubDbSync match retraction content reconciliation @regression @tier1',
 
     it('does not mark a finalized match that arrives after the drain snapshot', async function () {
         const { sync, rows, updates } = makeSync([]);
-        serve(sync, [{ rows: [], watermark: 100 }], call => {
+        serve(sync, [{ schema_version: HUB_SCHEMA_VERSION, rows: [], watermark: 100 }], call => {
             if (call === 1) rows.push(match(500, 'MID-DRAIN', 40));
         });
 
@@ -106,7 +107,7 @@ describe('HubDbSync match retraction content reconciliation @regression @tier1',
 
     it('does not mark on the first certified drain after the hub address moves', async function () {
         const { sync, rows, updates } = makeSync([match(17, 'GONE', 40)]);
-        serve(sync, [{ rows: [], watermark: 100 }]);
+        serve(sync, [{ schema_version: HUB_SCHEMA_VERSION, rows: [], watermark: 100 }]);
 
         await sync.bootstrapTable('cross_chain_matches');
         sync.hubUrl = 'http://hub-b.test';
@@ -121,7 +122,7 @@ describe('HubDbSync match retraction content reconciliation @regression @tier1',
 
     it('does not mark a match beyond the drain certified watermark', async function () {
         const { sync, rows, updates } = makeSync([match(17, 'TOO-NEW', 101)]);
-        serve(sync, [{ rows: [], watermark: 100 }]);
+        serve(sync, [{ schema_version: HUB_SCHEMA_VERSION, rows: [], watermark: 100 }]);
 
         await sync.bootstrapTable('cross_chain_matches');
         await sync.bootstrapTable('cross_chain_matches');
@@ -132,7 +133,7 @@ describe('HubDbSync match retraction content reconciliation @regression @tier1',
 
     it('does not mark anything after an incomplete drain', async function () {
         const { sync, rows, updates } = makeSync([match(17, 'GONE', 40)]);
-        serve(sync, [{ rows: [match(2, 'KEPT', 30)], watermark: 100 }]);
+        serve(sync, [{ schema_version: HUB_SCHEMA_VERSION, rows: [match(2, 'KEPT', 30)], watermark: 100 }]);
         await sync.bootstrapTable('cross_chain_matches');
         sync.applyRow.restore();
         sinon.stub(sync, 'applyRow').rejects(new Error('write failed'));

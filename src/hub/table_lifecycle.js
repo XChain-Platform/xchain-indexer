@@ -162,8 +162,9 @@ const ORPHAN_SWEEPS = [
 //
 // This block is the coverage contract. The guards bind it to the code:
 // xchain-sync test/unit/table_content_parity.test.js (every replicated table is
-// committed by something) and this repo's test/unit/hub/hash_coverage.test.js (the
-// carve-outs stay pinned to the operator ruling).
+// in the window or in one of the exclusions below) and this repo's
+// test/unit/hub/hash_coverage.test.js (the carve-outs stay pinned to the
+// operator ruling).
 //
 // There are exactly TWO exclusion classes, and a table outside both is covered:
 //
@@ -180,11 +181,15 @@ const ORPHAN_SWEEPS = [
 //      later block M, so "the content of blocks [a..b]" is not a stable
 //      quantity: a source one block ahead of the follower legitimately carries
 //      the later edit inside the same window and would read as a divergence.
-//      They are excluded here because they are ALREADY committed, by the
-//      enforced (halting) state_hash fourth hash that exists for precisely this
-//      mutation class. So the exclusion narrows coverage by nothing: every
-//      replicated table is committed by one mechanism or the other, except the
-//      single in-place COLUMNS listed in CONTENT_PARITY_IN_PLACE_COLUMNS below.
+//      The whole table leaves the window, but the halting state_hash fourth hash
+//      commits only the columns its section reads (tokens: tick and supply;
+//      attests: the v0 request_status and the gated v5 batch-head status), so
+//      window parity no longer checks the rest of these rows. The tokens columns
+//      ISSUE re-derives in place (token_refold.FOLD_COLUMNS: owner, locks,
+//      callback, lists, mint window, bridge) are in no consensus hash; only the
+//      opt-in, never-halting TOKEN_FOLD_PARITY_CHECK digest in xchain-sync
+//      watches them. Outside these two classes, only the in-place COLUMNS in
+//      CONTENT_PARITY_IN_PLACE_COLUMNS below leave the window.
 const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
     Object.freeze({ table: 'markets', dbType: 'indexer',
         reason: 'Derived full-snapshot OHLCV aggregate with no clean block bound (operator ruling 2026-08-11); converges through the snapshot upsert.' }),
@@ -355,9 +360,10 @@ function contentParityCarveOut(table, dbType){
 }
 
 // Tables the source mutates in place after the block that wrote them, which is
-// the same set that declares the state_hash class (that hash exists to commit
-// exactly these mutations). Derived, never hand-listed, so a new mutation class
-// joins both the hash and this exclusion in one registry edit.
+// the same set that declares the state_hash class (that hash commits these
+// mutations, but only the columns each section reads). Derived, never
+// hand-listed, so a new mutation class joins both the hash and this exclusion
+// in one registry edit.
 function contentParityMutableTables(){
     return hashClassTables('state_hash');
 }

@@ -69,16 +69,16 @@ const RETRACTION_CHAIN_COLUMNS = {
 // immutable history and never retracted.
 //
 // bridge_transfers, policy_snapshots and list_snapshots join the list because membership
-// buys exactly the two things a federation-signed mirrored table needs and nothing else:
-// refuseForeignChainRow fences their btc_chain_id (all three DDLs carry the column, and a
-// regtest venue that re-genesises
-// its Bitcoin chain otherwise keeps serving dead-chain transfers to every fresh indexer), and
-// applyRetraction treats a deletion naming them as quorum-class, so it demands the
-// push_generation fence and the 2f+1 co-signature set instead of accepting a bare wire event.
-// Membership also puts them in the bootstrap concat loop below, ahead of the one heavy table.
-// bridge_transfers additionally gets the RETRACTION_COLUMNS pair above; policy_snapshots and
+// buys refuseForeignChainRow's btc_chain_id fence (all three DDLs carry the column, and a
+// regtest venue that re-genesises its Bitcoin chain otherwise keeps serving dead-chain
+// transfers to every fresh indexer) and a place in the bootstrap concat loop below, ahead of
+// the one heavy table. Membership does NOT make a table quorum-class: that is the hard-coded
+// quorumClass list in applyRetraction (retractions.js), which demands the push_generation
+// fence and the 2f+1 co-signature set and, of these three, names only bridge_transfers.
+// bridge_transfers also gets the RETRACTION_COLUMNS pair above; policy_snapshots and
 // list_snapshots are never retracted, so deletion events naming them are skipped rather
-// than applied.
+// than applied. Giving either one a RETRACTION_COLUMNS entry also requires adding it to
+// quorumClass, or its deletions are accepted with no fence or signatures required.
 const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
                             'bridge_transfers', 'policy_snapshots', 'list_snapshots'];
 

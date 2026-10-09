@@ -15,7 +15,7 @@
 
 const assert = require('assert');
 
-const ProtocolChanges = require('../../../src/protocol_changes.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
 const { JSON_STRINGIFY_HOOK_ACTIVATION } = require('xchain-vm');
 
 describe('protocol_changes/json_stringify_hook_row: the JSON_STRINGIFY_HOOK row matches the sibling VM gate', function () {

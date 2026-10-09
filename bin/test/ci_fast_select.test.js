@@ -39,7 +39,7 @@ function gitLines(args, options) {
 }
 
 const dependencies = {
-  listTests: () => gitLines(['ls-files', 'test/**']),
+  listTests: () => gitLines(['ls-files', 'test/**', 'bin/test/**']),
   findRequirers: findTrackedRequirers,
   findSupportUsers: findTrackedSupportUsers
 };
@@ -107,6 +107,17 @@ describe('ci fast selector', function () {
     const plan = select(['README.md']);
     assert.strictEqual(plan.consensus, false);
     assert.deepStrictEqual(plan.tests, []);
+  });
+
+  it('maps CI helper changes to the selector test without widening', function () {
+    for (const file of ['bin/ci-full.sh', 'bin/ci_fast_select.js', 'bin/vendor-vm.sh']) {
+      const plan = select([file]);
+      assert.strictEqual(plan.consensus, false, file);
+      assert.deepStrictEqual(plan.tests, [{
+        group: 'main',
+        file: 'bin/test/ci_fast_select.test.js'
+      }], file);
+    }
   });
 
   it('widens package manifest changes', function () {
@@ -204,6 +215,9 @@ describe('ci fast selector', function () {
     assert(script.includes('run_tier "integration (test:integration:ci)"'));
     assert(script.includes('run_tier "suite title pin (test)"'));
     assert(script.includes('--script test --compare bin/pins/at1-suite-titles.json'));
+    assert(script.includes('need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub xchain-documentation'));
+    assert(script.includes('git -C "$SIB/xchain-documentation" archive HEAD'));
+    assert(script.includes('XCHAIN_DOCS_DIR="$docs_snapshot"'));
   });
 
   it('runs source-only VM staging in Linux fast mode', function () {
@@ -226,7 +240,7 @@ describe('ci fast selector', function () {
       assert.strictEqual(result.status, 1, result.stderr);
       const invocation = result.stdout.match(/^npm-args:(.*)$/m);
       assert(invocation, result.stdout);
-      assert.strictEqual(invocation[1], 'run vendor:vm -- check');
+      assert.strictEqual(invocation[1], 'run vendor:vm -- stage');
       assert(result.stdout.includes('vendor:vm (stage sources from ../xchain-vm)'));
     } finally {
       fs.rmSync(fakeBin, { recursive: true, force: true });

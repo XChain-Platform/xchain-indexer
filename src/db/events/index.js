@@ -247,7 +247,8 @@ module.exports = {
     },
 
     // Read-only reorg observability counters for the /health payload (#1813): the total
-    // number of processed reorgs, plus the block index and timestamp of the most recent
+    // number of processed REORG markers (one per orphaned block, so one depth-5 reorg
+    // counts 5), plus the block index and timestamp of the most recent
     // one. Sourced from the durable REORG markers in the events table (see createReorg).
     // Reads strictly but never throws: a field whose read fails stays null, because the
     // dashboard reads null as "not read this tick" and a 0 as a real count to rebaseline on.

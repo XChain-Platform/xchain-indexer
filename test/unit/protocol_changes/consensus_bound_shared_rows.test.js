@@ -37,8 +37,8 @@ describe('protocol_changes consensus-bound shared rows', function () {
         ]);
     });
 
-    it('keeps the oracle entries before the PRICE v1 canonical bounds at the shared digest tail', function () {
-        assert.deepStrictEqual(SHARED_GATES.slice(-6), [
+    it('keeps the oracle and chain-margin entries at the shared digest tail', function () {
+        assert.deepStrictEqual(SHARED_GATES.slice(-7), [
             ['oracle_price_age_hourly_activation', ['ORACLE_PRICE_AGE_HOURLY_ACTIVATION']],
             ['oracle_hourly_window_activation', ['ORACLE_HOURLY_WINDOW_FIRST_ROUND']],
             ['oracle_round_time_activation', ['ORACLE_ROUND_TIME_ACTIVATION']],
@@ -48,7 +48,30 @@ describe('protocol_changes consensus-bound shared rows', function () {
             ],
             ['list_share_producer_activation', ['LIST_SHARE_PRODUCER_ACTIVATION']],
             ['list_meta_activation', ['LIST_META_ACTIVATION']],
+            [
+                'mirror_admission_margin_activation',
+                ['ADMIT_CHAIN_MARGIN_ACTIVATION', 'ADMIT_CHAIN_MARGIN_BLOCKS'],
+            ],
         ]);
+    });
+
+    it('resolves both mirror-admission chain-margin rows through the gate registry', function () {
+        assert.deepStrictEqual(gateRegistry.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'), {
+            mainnet: null,
+            'DOGE:mainnet': null,
+            'DOGE:testnet': 9999999999,
+            regtest: 0,
+        });
+        assert.deepStrictEqual(gateRegistry.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS'), {
+            DOGE: {
+                bridge_transfers: 14,
+                cross_chain_calls: 14,
+                cross_chain_matches: 14,
+                list_snapshots: 14,
+                policy_snapshots: 14,
+                price_snapshots: 16,
+            },
+        });
     });
 
     it('resolves the existing price scale rows through the gate registry', function () {

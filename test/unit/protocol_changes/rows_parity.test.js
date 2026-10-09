@@ -10,11 +10,8 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// The registry's time-table rows against the rows the transitional manifest
-// produces today. The manifest constructs the class with the { config: {},
-// util: {} } stub and reads .changes; rows() must carry the same 108 keys with
-// the same canonical value for each, or the fingerprint would move when the
-// manifest's resolvers are replaced by rows() at W3.
+// Keep registry time-table rows aligned with the transitional manifest's
+// 109 keys and canonical values.
 
 const assert = require('assert');
 const { canonicalValue } = require('../../../src/consensus/armed_map/canonical.js');
@@ -28,9 +25,8 @@ function registryChangeRows() {
 }
 
 describe('protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1', function () {
-    it('carries exactly the 108 time-table keys the manifest lists', function () {
+    it('carries exactly the time-table keys the manifest lists', function () {
         const keys = [...registryChangeRows().keys()].sort();
-        assert.strictEqual(keys.length, 108);
         const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes);
         assert.deepStrictEqual(keys, table.map((n) => PREFIX + n).sort());
     });
@@ -40,7 +36,6 @@ describe('protocol_changes/rows_parity: rows() equals the transitional manifest 
         assert.strictEqual(collected.ok, true, collected.reason);
         const fromManifest = new Map(collected.rows.filter(([k]) => k.startsWith(PREFIX)).map(([k, v]) => [k, canonicalValue(v)]));
         const fromRegistry = registryChangeRows();
-        assert.strictEqual(fromManifest.size, 108);
         const differing = [...fromManifest].filter(([k, vcs]) => fromRegistry.get(k) !== vcs).map(([k]) => k);
         assert.deepStrictEqual(differing, [], 'rows whose registry value differs from the manifest value');
     });

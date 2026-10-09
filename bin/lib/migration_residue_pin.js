@@ -22,9 +22,11 @@
  *            passes only when a reviewed rebaseline heals the pinned hash to the
  *            current one, since that is the only case a deployed DB survives.
  *
- * A file the pin does not hold yet passes in the plain check, so a branch needs no fixture
- * edit mid-flight; `--add` pins it. The check also fails every file already committed at the
- * merge-base with develop (or `--base <ref>`) and still unpinned, so a migration that reached
+ * A file the pin does not hold yet passes in the plain check when its name sorts after the
+ * newest pinned file, so a branch needs no fixture edit mid-flight; `--add` pins it. An
+ * unpinned file that sorts before the newest pin fails even with no git, since only a missed
+ * `--add` (or a backdated migration) leaves one there. The check also fails every file
+ * already committed at the merge-base with develop (or `--base <ref>`) and still unpinned, so a migration that reached
  * develop cannot stay uncovered and the gate needs no manual `--add` to notice it. When no base
  * ref resolves (a shallow or detached checkout) the compare is skipped with a warning;
  * `--no-base` skips it on purpose. An existing entry moves only through `--accept <file>`,
@@ -68,6 +70,13 @@ function findViolations({ files, fixture, rebaselines, committed }){
     for(const file of [].concat(committed || []).filter((f) => !Object.hasOwn(fixture, f)).sort()){
         out.push({ file, kind: 'unpinned', message: file + ' is committed at the base but not pinned: run ' +
             'node bin/lib/migration_residue_pin.js --add and commit the fixture.' });
+    }
+    // Needs no git, so the tier1 test enforces completeness in a shallow CI checkout too.
+    const flagged = new Set(out.map((v) => v.file));
+    const newest  = Object.keys(fixture).sort().pop() || '';
+    for(const file of Object.keys(files).filter((f) => !Object.hasOwn(fixture, f) && !flagged.has(f) && f < newest).sort()){
+        out.push({ file, kind: 'unpinned', message: file + ' sorts before the newest pinned migration ' + newest +
+            ' but is not pinned: run node bin/lib/migration_residue_pin.js --add and commit the fixture.' });
     }
     for(const file of Object.keys(fixture).sort()){
         const pinned = fixture[file];

@@ -11,6 +11,7 @@ const {
     makeSelectorReadyFrameHarness
 } = require('./hub_db_sync_failover_triggers.test/helpers/selector_ready_frame_harness.js');
 const { makeStallHarness } = require('./hub_db_sync_failover_triggers.test/helpers/stall_harness.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
 
 const STALL_MS = 100;
 const EXIT_MS = 200;
@@ -213,6 +214,7 @@ describe('HubDbSync failover triggers', function () {
         const applyRow = sinon.stub(sync, 'applyRow').resolves();
         const refreshOracle = sinon.stub(sync, 'refreshOracleSyncTimestamp').resolves();
         await sync.handleRowEvent({
+            schema_version: HUB_SCHEMA_VERSION,
             type: 'row:inserted',
             table: 'oracle_prices',
             row: { id: 1, effective_at: 1000 }

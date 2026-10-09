@@ -35,7 +35,7 @@ const { carrierLogicDigest }          = require('./health/carrier_logic');
 const { syncFields }                  = require('./health/sync_fields');
 const { stallFields }                 = require('./health/stall_fields');
 const { advanceFields }               = require('./health/advance_fields');
-const { hubFields }                   = require('./health/hub_fields');
+const { hubFields, hubConsensusHashFields } = require('./health/hub_fields');
 const { actionCounters, reorgFields } = require('./health/counter_fields');
 
 // Committed-only view of a db handle, for any read that ADVERTISES A HEIGHT.
@@ -73,6 +73,7 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
     // payload is assembled, so every field below is taken from a single view of
     // the indexer rather than from either side of a yield.
     let hub = await hubFields(indexer, now);
+    let hubConsensusHash = hubConsensusHashFields(indexer);
 
     return {
         // Serving verdict, committed position and the two database circuit
@@ -114,14 +115,15 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         carrier_logic_digest: carrierLogicDigest(),
         // The CROSS-REPO half of the same question. armed_map_fingerprint hashes this
         // repo's own file bytes and so is only comparable against another indexer;
-        // this digest hashes the DECIDED HEIGHTS of the gates the hub evaluates too,
+        // this digest hashes the DECIDED VALUES of the gates the hub evaluates too,
         // so an operator (or a fleet sweep) can compare an indexer against the hub
         // federation it follows and see a flag-day disagreement BEFORE it has produced
         // divergent state rather than after.
         consensus_rules_digest: computeConsensusRulesDigest().digest,
         // Reorg/rollback observability, null when the API server did not read it.
         ...reorgFields(reorgStats),
-        error:            indexerError ? indexerError.message : null
+        error:            indexerError ? indexerError.message : null,
+        ...hubConsensusHash
     };
 }
 

@@ -52,9 +52,9 @@ addGate('amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS', 'constan
 // archive fold) parses only once ANCHOR_FOLD_ACTIVATION is also active, and every other version
 // byte is 'invalid: VERSION (unknown)'. Keyed on the action's OWN DOGE block_index
 // (data['BLOCK_INDEX'] at parse time, anchor_actions.block_index_doge), never on SNAPSHOT_BLOCK or
-// the checkpointed height: the row being judged is the anchor itself. Mainnet 6360000 sits ABOVE
-// the chain tip on purpose: the restarted wire set has NOT activated on mainnet yet, and the height
-// is a flag day the operator arms deliberately rather than one that silently already passed.
+// the checkpointed height: the row being judged is the anchor itself. Mainnet 6360000 is live:
+// the chain tip is past it, so the restarted wire set is active on mainnet and the height is
+// a flag day that has already passed.
 // Testnet 67858600 is 24 blocks above its last pre-restart anchor (67858576) and is already past.
 // Neither is 0, because both carry pre-restart history (mainnet 56 rows, testnet 11, measured
 // 2026-08-30): at 0 the gate can never fire, so the retired wires fall through to the restarted
@@ -247,14 +247,14 @@ addGate('caret_ref_strict_activation.CARET_REF_STRICT_ACTIVATION', 'height', {
 });
 
 // consolidation_leg_amount_activation
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
+// Per-network activation, interpreted against the block's consensus timestamp (data['BLOCK_TIME']).
 addGate('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION', 'time', {
     mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 SEND, 0 DESTROY, measured 2026-09-09)
     testnet: 0,
     regtest: 0,
 });
-
+addGate('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': UNARMED, 'LTC:testnet': UNARMED, 'DOGE:testnet': UNARMED, testnet: UNARMED, regtest: 0 });
+addGate('send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION', 'time', { mainnet: UNARMED, testnet: UNARMED, 'BTC:testnet': UNARMED, 'LTC:testnet': UNARMED, 'DOGE:testnet': UNARMED, regtest: 0 });
 // dispense_cancelling_match_activation
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']). Mainnet flips at the coordinated 2.0.0 contract-era
