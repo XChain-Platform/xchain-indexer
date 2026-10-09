@@ -14,6 +14,7 @@ const path = require('path');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../../src/hub/hub_db_sync.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../../src/hub/hub_schema_version');
 const { CROSS_CHAIN_TABLES, REFUSED_ROW_NAMES } =
     require('../../../../../src/hub/hub_db_sync/mirror_tables.js');
 
@@ -76,6 +77,7 @@ describe('list share mirror wiring @regression @tier1', function () {
         sinon.stub(sync, 'reportRefusedChainRows');
         sinon.stub(sync, 'reportRefusedNetworkRows');
         await sync.handleRowEvent({
+            schema_version: HUB_SCHEMA_VERSION,
             type: 'row:inserted', table: 'list_snapshots',
             row: { snapshot_id: 'shared-list-3', btc_chain_id: OUR_CHAIN }
         });

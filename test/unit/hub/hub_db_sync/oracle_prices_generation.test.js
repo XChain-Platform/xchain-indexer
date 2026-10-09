@@ -12,6 +12,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
 
 const COLUMNS = ['id', 'source_address', 'source_chain', 'coin', 'tick', 'fiat', 'value',
                  'fee', 'memo', 'block_time', 'effective_at', 'action_index',
@@ -63,7 +64,7 @@ function makeMirror(initialRow) {
     sinon.stub(sync, 'httpGet').callsFake(async path => {
         state.paths.push(path);
         const sinceId = Number(new URL(path, 'http://hub.test').searchParams.get('since_id'));
-        return { rows: HUB_ROW.id > sinceId ? [{ ...HUB_ROW }] : [], watermark: 1700086400 };
+        return { schema_version: HUB_SCHEMA_VERSION, rows: HUB_ROW.id > sinceId ? [{ ...HUB_ROW }] : [], watermark: 1700086400 };
     });
     return { sync, state };
 }
