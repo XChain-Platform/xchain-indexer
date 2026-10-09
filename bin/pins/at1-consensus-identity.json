@@ -419,7 +419,7 @@
     },
     "armed_map_row_count": 399,
     "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
-    "carrier_logic_digest": "0d98e230a04b7513c3484e3b1cd74e61415a9b36acef4460ec44d06de69cc3ba",
+    "carrier_logic_digest": "3e5ef12d48cb51c46d241621344160362a7c49c3b0f10f58f22647e17b786fa4",
     "consensus_rules_digest": "ceb49c010893f8a5d8bb632536b0b3873ae4e6cc6d16b3557134c6d503c4840d",
     "gate_key_count": 45,
     "consensus_rules_gates": {
@@ -887,7 +887,7 @@
     },
     "armed_map_row_count": 399,
     "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
-    "carrier_logic_digest": "0d98e230a04b7513c3484e3b1cd74e61415a9b36acef4460ec44d06de69cc3ba",
+    "carrier_logic_digest": "3e5ef12d48cb51c46d241621344160362a7c49c3b0f10f58f22647e17b786fa4",
     "consensus_rules_digest": "78f5ae7915c1a79c1da0ed59e454266a60c0e632d28d63ae6d5b358a6304decd",
     "gate_key_count": 45,
     "consensus_rules_gates": {
@@ -980,6 +980,6 @@
   "iter_set_meter_note": "2026-10-09: both code readings were updated after adding the ITER_SET_METER protocol row, its two flag-time constants, and the xchain-vm activation mirror. The armed map grows from 385 to 389 rows; its fingerprint and the protocol_changes carrier digest move, while the coin registry, rules digest, and GATES field remain unchanged.",
   "mirror_admission_margin_note": "Re-pinned after the shared chain-specific mirror-admission activation and margin rows joined the registry and rules digest. Both readings gained the same two rows, moved the armed-map fingerprint, rules digest, GATES field and carrier logic digest, and retained the merged activation rows.",
   "stake_snapshot_decimal_strings_note": "2026-10-09: both code readings were regenerated after adding the STAKE_SNAPSHOT_DECIMAL_STRINGS protocol row and its two production-network flag-time constants. The armed map grows from 390 to 393 rows; its fingerprint and the protocol_changes carrier digest move, while the coin registry, rules digest, and GATES field remain unchanged.",
-  "vm_lint_destructure_note": "2026-10-09: both code readings were regenerated after adding the registry-only VM_LINT_DESTRUCTURE_ACTIVATION height row, unarmed on mainnet and every testnet chain and active from genesis on regtest. The merge also retains BIGINT_SURFACE_STRIP_ACTIVATION from develop, so both readings contain 399 rows.",
+  "vm_lint_destructure_note": "2026-10-09: both code readings were regenerated after adding the registry-only VM_LINT_DESTRUCTURE_ACTIVATION height row, unarmed on mainnet and every testnet chain and active from genesis on regtest. The row now lives in gates_5.js because the earlier parts reached the 400-line limit. The merge also retains BIGINT_SURFACE_STRIP_ACTIVATION from develop, so both readings contain 399 rows; only carrier_logic_digest moved for the new protocol_changes require.",
   "bigint_surface_strip_note": "Re-pinned after the BIGINT_SURFACE_STRIP_ACTIVATION height row joined the registry with the launched-network map mirrored from xchain-vm and regtest active from genesis. The merge also retains VM_LINT_DESTRUCTURE_ACTIVATION from the lane, so both readings contain 399 rows."
 }
