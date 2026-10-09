@@ -37,7 +37,6 @@ function vmResult(success, contractIndex, emittedActions = []) {
         emittedActions,
         logs: [],
     };
-
 }
 
 function buildHandler(legActivation, verdicts) {
