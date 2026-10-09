@@ -67,13 +67,28 @@ function childEnv() {
     return env;
 }
 
+function committedSiblingFile(file, verdict) {
+    if (!verdict.reason || !verdict.reason.includes('resolves through a symlink into the live main checkout'))
+        return null;
+    const rootResult = spawnSync('git', ['-C', path.dirname(file), 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
+    if (rootResult.status !== 0) return null;
+    const root = rootResult.stdout.trim();
+    const revResult = spawnSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+    if (revResult.status !== 0) return null;
+    const rel = path.relative(root, fs.realpathSync(file)).split(path.sep).join('/');
+    const showResult = spawnSync('git', ['-C', root, 'show', revResult.stdout.trim() + ':' + rel], { encoding: 'utf8' });
+    return showResult.status === 0 ? showResult.stdout : null;
+}
+
 describe('consensus identity GATES field and pin comparison', function () {
     it('matches the hub pinned GATES field hash', function () {
         const hubRoot = process.env.XCHAIN_HUB_DIR || path.resolve(REPO, '..', 'xchain-hub');
         const candidate = path.join(hubRoot, 'bin', 'pins', 'at1-consensus-identity.json');
         const sibling = siblingCheckout(REPO, candidate, { ownRoot: REPO });
-        if (!sibling.usable) return skipOrFail(this, sibling, 'the hub GATES field hash guard');
-        const hubPin = JSON.parse(fs.readFileSync(sibling.path, 'utf8'));
+        const committed = sibling.usable ? null : committedSiblingFile(candidate, sibling);
+        if (!sibling.usable && committed === null)
+            return skipOrFail(this, sibling, 'the hub GATES field hash guard');
+        const hubPin = JSON.parse(committed === null ? fs.readFileSync(sibling.path, 'utf8') : committed);
         assert.strictEqual(codeIdentity('regtest').gates_field_hash, hubPin.gates_field_hash);
     });
 
