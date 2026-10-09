@@ -59,7 +59,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "260da1c6f73a0778d12d7c29c2922067be53559d28bd019e754a6fa2ee601080",
+      "hash": "2847f3f69ac4280baa67d70562c63f210cc6c3d27b1713bf92cbfb4601994c91",
       "twins": [
         "xchain-hub"
       ]
@@ -90,6 +90,13 @@
     "mirror_admission_activation": {
       "path": "src/consensus/gates/mirror_admission_gate.js",
       "hash": "d59a0c44b7d0dc1dbc5f1530d67e012a7dac33f1824960565a9788b75cff6a25",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
+    "mirror_admission_margin_activation": {
+      "path": "src/consensus/gates/mirror_admission_margin_gate.js",
+      "hash": "38facb6199e5cd9f0f2a1b30b2c4eeb1319db0a41dda191adaa3daca6a816fb9",
       "twins": [
         "xchain-hub"
       ]
@@ -2020,6 +2027,20 @@
       "to": "5ac03b6746c93bc0615d0a4d857f5eb4861c44aa5890ee60e922794ed29bc785",
       "reason": "state_hash attest_batch_head class behind its own flag day",
       "date": "2026-10-07"
+    },
+    {
+      "id": "mirror_admission_margin_activation",
+      "from": null,
+      "to": "38facb6199e5cd9f0f2a1b30b2c4eeb1319db0a41dda191adaa3daca6a816fb9",
+      "reason": "chain-specific mirror admission margin gate",
+      "date": "2026-10-08"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "260da1c6f73a0778d12d7c29c2922067be53559d28bd019e754a6fa2ee601080",
+      "to": "2847f3f69ac4280baa67d70562c63f210cc6c3d27b1713bf92cbfb4601994c91",
+      "reason": "add chain-specific mirror admission margin rows",
+      "date": "2026-10-08"
     },
     {
       "id": "protocol_changes",

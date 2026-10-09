@@ -136,7 +136,11 @@ const SHARED_GATES = [
     ['list_share_producer_activation',          ['LIST_SHARE_PRODUCER_ACTIVATION']],
     // The hub signs list snapshots in two shapes either side of this gate, so a build that
     // sizes it differently must report a rules mismatch.
-    ['list_meta_activation',                    ['LIST_META_ACTIVATION']]
+    ['list_meta_activation',                    ['LIST_META_ACTIVATION']],
+    // The per-chain admission margins decide which block a hub stamps and which watermark an
+    // indexer accepts. Both the activation and the selected margins therefore belong in the
+    // cross-process digest. Appended at the end to preserve every earlier preimage row.
+    ['mirror_admission_margin_activation',      ['ADMIT_CHAIN_MARGIN_ACTIVATION', 'ADMIT_CHAIN_MARGIN_BLOCKS']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an
