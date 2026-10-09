@@ -23,13 +23,13 @@
  * a genuinely large federation instead of at a key-spamming single source.
  *
  * Because the capped query changes WHICH rows feed `stakes_root`, this is a
- * hashed-consensus-root change, gated exactly like state_commitment_gate.js:
+ * hashed-consensus-root change, gated exactly like state_commitment_activation.js:
  * below the height the legacy uncapped key-LIMIT is used; at/after it the windowed
  * source-cap is used. For any federation under the caps the two produce the SAME
  * set, so the boundary is inert for honest data (the SMT keys on pubkey+capability,
  * so row order is irrelevant); it diverges only for the >cap case it exists to bound.
  *
- * Gate semantics MIRROR state_commitment_gate.js: keyed on the processing
+ * Gate semantics MIRROR state_commitment_activation.js: keyed on the processing
  * chain's OWN local `block_index` (capability staking + the stakes_root are
  * BTC-only, so only the BTC heights are load-bearing; the LTC/DOGE mainnet entries
  * are inert - those chains commit the EMPTY stakes_root - and are pinned only for
