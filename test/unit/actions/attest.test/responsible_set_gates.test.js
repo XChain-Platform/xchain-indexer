@@ -278,7 +278,7 @@ describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', fu
         // src/db/rollback/, so the pin reads the module as one text.
         const src = readRollbackSource();
         assert.match(src, /if\(this\.config\['COIN'\] === 'BTC'\)/,
-            'the reorg recompute must gate on COIN the way attest.js does, or ' +
+            'the reorg recompute must gate on COIN the way actions/attest/responsible_set.js does, or ' +
             'reorg-recomputed missed_count diverges from the live expiry path');
         assert.match(src, /#3233/, 'and say why, so it is not "simplified" back');
     });

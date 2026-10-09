@@ -36,6 +36,8 @@
 
 'use strict';
 
+const { stripBlockComments } = require('./migration_live_schema_guard.js');
+
 // A table identifier: backtick-quoted or bare, optionally schema-qualified. The capture
 // is the table part, so `XChain_Indexer`.`tokens` and tokens both yield tokens.
 const IDENT = '(?:`[^`]+`|[A-Za-z0-9_$]+)';
@@ -96,7 +98,8 @@ function statementTables(rawStmt){
     // statement that is nothing but a versioned comment strips to the empty string and
     // would otherwise read as touching nothing at all.
     if(/\/\*(?:!|M!)/.test(String(rawStmt))) return { tables: [], opaque: String(rawStmt).trim().slice(0, 120) };
-    const stmt = String(rawStmt).replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
+    // Quote-aware, so a '/*' literal and a later '*/' literal cannot hide a table between them.
+    const stmt = stripBlockComments(rawStmt).trim();
     if(!stmt) return { tables: [], opaque: null };
     // A session-variable SET (SET NAMES, SET sql_mode) touches no table. A user-variable
     // SET (SET @s = ...) stages dynamic SQL whose target cannot be read, so it falls

@@ -14,7 +14,7 @@
 //   utility.selectApplicableAttestationResponses  the BINDING RULE. Which mirrored
 //       responses bind at block B, and in what order. Pure, so the block a callback
 //       fires at is asserted directly rather than inferred from side effects.
-//   attest.js applyMirroredResponse               the EFFECTS. The synthesized v1
+//   attest/mirror_apply.js applyMirroredResponse  the EFFECTS. The synthesized v1
 //       action (NULL tx_index, deterministic hash), the response row, the terminal
 //       flip, the fee settle and the contract callback - and, on a verification
 //       failure, the absence of every one of them.

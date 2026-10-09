@@ -214,7 +214,7 @@ describe('price capability resolution off BTC @regression', function () {
             // signed BTC anchor. Without the redirect that quorum sums to zero stake on
             // every DOGE node, the identical shape PRICE batching already hit. It widens
             // only who is CAPABLE: the per-row responsible set is still resolved on BTC,
-            // because actions/attest.js returns [] off BTC before reading anything.
+            // because actions/attest/responsible_set.js computeResponsibleSet returns [] off BTC before reading anything.
             const { db, mirror } = dbFor('DOGE', 'regtest');
             const rows = await db.getValidatorsByCapability('attestation', SNAP_BLOCK);
             assert.strictEqual(rows.length, 4);
