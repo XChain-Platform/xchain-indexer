@@ -15274,6 +15274,14 @@
       "remote_token_snapshots mirror contract declares the signed token facts and rollback fence",
       "remote_token_snapshots mirror contract is bootstrapped, globally watermarked, locally keyed, and retractable by its source action",
       "remote_token_snapshots mirror contract round trips a finalized fixture and removes it on a source-chain retraction"
+    ],
+    "7b32a9ad80041229": [
+      "STAKE_SNAPSHOT_DECIMAL_STRINGS EXECUTE wiring @regression @tier1 passes the activation verdict false into the snapshot handed to the VM",
+      "STAKE_SNAPSHOT_DECIMAL_STRINGS EXECUTE wiring @regression @tier1 passes the activation verdict true into the snapshot handed to the VM"
+    ],
+    "af56bad14283ad0f": [
+      "getContractStakeDataForVM decimal strings @regression @tier1 preserves legacy BigNumber amounts before activation",
+      "getContractStakeDataForVM decimal strings @regression @tier1 returns only canonical plain-decimal amount strings once active"
     ]
   },
   "scripts": {
@@ -16514,7 +16522,9 @@
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
         "test/unit/protocol_changes/bigint_surface_strip_row.test.js": "6d6fd94f70afa237",
-        "test/unit/db/remote_token_snapshots.test.js": "bccbc26b36f075a9"
+        "test/unit/db/remote_token_snapshots.test.js": "bccbc26b36f075a9",
+        "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/contracts/vm_stake_snapshot_decimal_strings.test.js": "af56bad14283ad0f"
       }
     }
   }
