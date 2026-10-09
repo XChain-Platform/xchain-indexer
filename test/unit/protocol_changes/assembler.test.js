@@ -104,6 +104,9 @@ describe('protocol_changes/assembler: the public export shape @regression @tier1
         const lines = (t) => t.split('\n').length - (t.endsWith('\n') ? 1 : 0);
         const entryLines = lines(fs.readFileSync(ENTRY, 'utf8'));
         assert.ok(entryLines <= lines(headText), 'entry ' + entryLines + ' lines must not be above HEAD ' + lines(headText));
+        const directTests = fs.readdirSync(__dirname, { withFileTypes: true })
+            .filter((entry) => entry.isFile() && entry.name.endsWith('.js'));
+        assert.ok(directTests.length <= 20, directTests.length + ' direct protocol_changes test files');
         const files = fs.readdirSync(PARTS).filter((f) => f.endsWith('.js')).sort();
         assert.ok(files.length >= 8 && files.length <= 21, files.length + ' part files');
         for (const f of files) {
