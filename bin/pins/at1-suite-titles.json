@@ -338,6 +338,11 @@
       "ROLLCALL epoch close (§3.4) the eviction effect stamps every delegation of the source, or the DELEGATE branch keeps it in",
       "ROLLCALL epoch close (§3.4) the eviction effect stamps the stake SOURCE-SCOPED and sweeps pending rows"
     ],
+    "084b3b36044d643d": [
+      "/status schemaReady always emits a boolean and reports true only for completed startup",
+      "/status schemaReady stays false through table verification and flips after migrations finish",
+      "/status schemaReady stays false when migrations fail"
+    ],
     "087297546f0ad980": [
       "ISSUE settlement owner history adds no extra address when the source keeps ownership",
       "ISSUE settlement owner history lists the owner named at creation in the addresses refreshed for the tick"
@@ -447,6 +452,20 @@
     "0a6476923a9fd355": [
       "list share ticker apply pass halts when ticker qualification is unarmed",
       "list share ticker apply pass stores full and delta ticker membership exactly as signed"
+    ],
+    "0aa5897f5f625a79": [
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 isGuardGasReserved falls back to the action's own stamped COIN when the config carries none, as detectFeePaymentMode does",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 isGuardGasReserved is true on BTC and false on the chains the bridge mints XCHAIN on",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 isGuardGasReserved reads the chain, never the presence of a gas row",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController allows on BTC when the source covers the ceiling exactly",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController bills nothing off BTC when the gas row is absent or the balance is negative",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController bills the full guard gas off BTC when the source holds enough",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController caps the guard gas at the held balance off BTC so no balance goes negative",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController does not refuse on DOGE once the XCHAIN row exists and the source holds none",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController leaves every other refusal in the shared tail alone on both chains",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController leaves the BTC bill untouched by the clamp even when the balance is below the fee",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController refuses on BTC when the source cannot cover the guard gas ceiling",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController still refuses on BTC when the source holds less than the ceiling but more than zero"
     ],
     "0ab9e04fb9d1607d": [
       "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND a single 0.5 leg of a 0-decimals token is rejected (the rule that was being laundered)",
@@ -2174,6 +2193,14 @@
       "PRICE v1 canonical reference oracle @regression @tier3 matches the shipped PRICE_VALUE_RE_CANONICAL over every short candidate",
       "PRICE v1 canonical reference oracle @regression @tier3 refuses a non-string text",
       "PRICE v1 canonical reference oracle @regression @tier3 splits VALUE and FEE at the 8-versus-18 fraction-digit bound"
+    ],
+    "25c3d82b177fdf7c": [
+      "stale state activation module references src/actions/execute/run_vm.js names neither retired activation module",
+      "stale state activation module references src/consensus/gates/stake_weight_collation_gate.js names neither retired activation module",
+      "stale state activation module references src/db/actions.js names neither retired activation module",
+      "stale state activation module references src/db/contracts/index.js names neither retired activation module",
+      "stale state activation module references src/protocol_changes/shared_rows_4.js names neither retired activation module",
+      "stale state activation module references test/unit/state_commitment/db_state_key_collation.test.js names neither retired activation module"
     ],
     "25db2339c8df14dc": [
       "Withdraw handler @regression @tier2 CONTRACT_ACTION_INDEX validations caller is not contract owner → invalid",
@@ -4739,6 +4766,21 @@
       "getEffectiveUnprocessedCallResults separate hub mirror: empty mirror short-circuits with no callbacks lookup",
       "getEffectiveUnprocessedCallResults separate hub mirror: keeps the two-query JS filter, excluding processed then slicing"
     ],
+    "4ee2d96267d8e33b": [
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) LTC and DOGE flip ON at their own ratified heights",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) at the BTC mainnet height (961000): both flags ON",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) below the BTC mainnet height (960999): both flags OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) does NOT track the Pkg 3 gate (a separate epoch, resolved separately)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is per-coin: LTC and DOGE mainnet at the BTC height stay OFF",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) regtest is genesis-armed (both flags ON from height 0)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads enforceLintGlobalAlias as its own flag",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads the new flags ALONGSIDE the existing async / lint-hardening flags (no regression)",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) at the flag day: enforceBannedRest ON",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) below the flag day: enforceBannedRest OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads enforceBannedWith from its own height row",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads exactly the nine enforce* flags validateSyntax reads"
+    ],
     "4ee376dc5f1c5cb0": [
       "mirror admission compatibility: a mirrored admission map never stops the block loop ARMED consumer, the measured {BTC:280} row from cursor 277 commits 278, 279 and 280 with zero exceptions reaching the block applier",
       "mirror admission compatibility: a mirrored admission map never stops the block loop ARMED consumer, the measured {BTC:280} row from cursor 277 excludes the row through block 279 and admits and settles it at block 280",
@@ -5142,6 +5184,11 @@
       "protocol_changes: lists and market regtest overlay @regression @tier1 moves exactly the eleven height rows",
       "protocol_changes: lists and market regtest overlay @regression @tier1 moves exactly the three Unix instant rows",
       "protocol_changes: lists and market regtest overlay @regression @tier1 never changes mainnet or testnet entries"
+    ],
+    "55b7c4dec20ef0d8": [
+      "Send handler: resolved tick totals gate off @regression @tier1 keeps differently cased legs below the threshold",
+      "Send handler: resolved tick totals gate off @regression @tier1 requires a handoff after identical spellings consolidate",
+      "Send handler: resolved tick totals gate off @regression @tier1 resolves a lowercase spelling to the gated tick"
     ],
     "5601b6eaf56f2e74": [
       "Rollback @regression @tier3 bumps the push generation once at rollback start and threads the PRE-bump value (item 5308)",
@@ -7392,6 +7439,10 @@
       "Send handler @regression @tier1 format 0: single send valid send → processDispenserSends invoked",
       "Send handler @regression @tier1 format 0: single send valid send → updateBalances called",
       "Send handler @regression @tier1 format 0: single send valid single send → STATUS valid, createSend called"
+    ],
+    "783b89448d7f13a0": [
+      "protocol_changes VM lint banned-with row is active on regtest at genesis and unarmed on every mainnet and testnet chain",
+      "protocol_changes VM lint banned-with row registers the per-chain height map"
     ],
     "78528049da6173b3": [
       "HubDbSync close code harness a normal close reaches the client and retains positions for the same instance",
@@ -10156,6 +10207,10 @@
       "Attest (ATTEST) @regression @tier3 v1: response rejects a truncated payload (SIG_COUNT exceeds sigs present)",
       "Attest (ATTEST) @regression @tier3 v1: response resolves the capable set ONCE, never once per signer",
       "Attest (ATTEST) @regression @tier3 v1: response skips a signer lacking the attestation capability at the snapshot block"
+    ],
+    "9cb0cc0fc24db1ca": [
+      "protocol_changes SEND_GATED_TOTAL_TICK_ID row is active on regtest at genesis and inactive on every production network",
+      "protocol_changes SEND_GATED_TOTAL_TICK_ID row registers the per-network time map"
     ],
     "9cb414273879c7d9": [
       "NodeProof (NODEPROOF) @regression @tier3 is BTC-only : rejects on a non-BTC chain",
@@ -16208,6 +16263,10 @@
       "indexer reorg metrics on the scrape surface raises the rollback gauge only while stallReason names a reorg rollback",
       "indexer reorg metrics on the scrape surface renders the processed-reorg counter from 0 and follows the live field"
     ],
+    "fad22eb98adb5886": [
+      "consensus/vm_lint_banned_with_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
+      "consensus/vm_lint_banned_with_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
+    ],
     "fae8eeba338baf48": [
       "ANCHOR v3 section walk accepts an archive-only cycle with no checkpoint sections",
       "ANCHOR v3 section walk passes an incoming error through without walking sections",
@@ -16592,8 +16651,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1213,
-      "titleCount": 12671,
+      "fileCount": 1218,
+      "titleCount": 12686,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16717,7 +16776,7 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "d29b0b3fc27074b9",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "4ee2d96267d8e33b",
         "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "c0bf65d90cf86ae9",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/native_fee.test.js": "2ef587e9e97d807d",
@@ -16925,6 +16984,7 @@
         "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "c4841dfff6c76d0b",
         "test/unit/actions/token/send.test/caret_pack_key.test.js": "8c38e904bee40cde",
         "test/unit/actions/token/send.test/gated_handoff_threshold.test.js": "e0e089fe173d451a",
+        "test/unit/actions/token/send.test/gated_total_tick_id_gate_off.test.js": "55b7c4dec20ef0d8",
         "test/unit/actions/token/send.test/gated_totals_by_tick_id.test.js": "479c6eab99a84ee4",
         "test/unit/actions/token/send.test/sleeping_and_multi_send.test.js": "55813348732fc426",
         "test/unit/actions/token/send/send_action_allowed_memoization.test.js": "f683df13da87d47c",
@@ -17066,6 +17126,7 @@
         "test/unit/api/rpc/token_policy_list_ref.test.js": "0d061e71ba86eff6",
         "test/unit/api/rpc/token_policy_resolve_refs.test.js": "64c039d7b0a6d648",
         "test/unit/api/stake_source.test.js": "bed4c39786728d9f",
+        "test/unit/api/status_schema_ready.test.js": "084b3b36044d643d",
         "test/unit/api/tip_block_time.test.js": "5fd61225b4760c51",
         "test/unit/attestation/attest_broadcast_fee_activation.test.js": "4dff9efe8fe9df01",
         "test/unit/attestation/attest_mirror_era_parity.test.js": "998149c6ec308465",
@@ -17223,7 +17284,9 @@
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
+        "test/unit/consensus/stale_twin_module_refs.test.js": "25c3d82b177fdf7c",
         "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "4db50e18ffcab3aa",
+        "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
         "test/unit/consensus/vm_lint_rows_match_vm.test.js": "e0d21a7b4e18e9e2",
@@ -17417,7 +17480,7 @@
         "test/unit/fees/fee_quote_primary_verdict.test.js": "983e3e8b65387695",
         "test/unit/fees/fee_quote_tx_lock_budget.test.js": "ad8371ca0dd4fe40",
         "test/unit/fees/gas_mint_network_gate.test.js": "bd9b18d570905037",
-        "test/unit/fees/guard_gas_chain_gate.test.js": "bcb0b0195edbe5c6",
+        "test/unit/fees/guard_gas_chain_gate.test.js": "0aa5897f5f625a79",
         "test/unit/fees/native_coin_fee.test.js": "5941677267767505",
         "test/unit/fees/native_fee_batch_ledger.test.js": "dc574f4e0163899e",
         "test/unit/fees/native_fee_funding_vout.test.js": "003049300b4750c4",
@@ -17663,7 +17726,9 @@
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/send_gated/send_gated_total_tick_id_row.test.js": "9cb0cc0fc24db1ca",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
+        "test/unit/protocol_changes/vm_lint/vm_lint_banned_with_row.test.js": "783b89448d7f13a0",
         "test/unit/protocol_changes/vm_lint/vm_lint_nesting_depth_row.test.js": "06ffa42905e141f0",
         "test/unit/protocol_changes/vm_lint/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
         "test/unit/protocol_changes/vm_twin/json_stringify_hook_row.test.js": "f959c69addce7dd8",
