@@ -1490,6 +1490,12 @@
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-08-token-bridge-fields.sql: if tagged mode=auto, passes the destructive-DDL scan",
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-09-remote-token-snapshots.sql: if tagged mode=auto, passes the destructive-DDL scan"
     ],
+    "646cf7e6b3829f4e": [
+      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate applies the same row once the gate is active",
+      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate applyBridgeTransfer defers a row below the gate and writes nothing",
+      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate dueBridgeTransfers and the pass skip the row below the gate",
+      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate reads the gate on the destination coin at the block height"
+    ],
     "1c56af9b1dbd9f0c": [
       "late anchor reward derive counter does not log for an on-time or early derive",
       "late anchor reward derive counter logs one diagnostic with reward identity when the derive is late",
@@ -15895,6 +15901,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
+        "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "646cf7e6b3829f4e",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
