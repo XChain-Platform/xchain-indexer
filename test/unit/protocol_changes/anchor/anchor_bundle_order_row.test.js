@@ -14,10 +14,10 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const ProtocolChanges = require('../../../src/protocol_changes.js');
-const { SHARED_GATES } = require('../../../src/consensus_rules_digest.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
+const { SHARED_GATES } = require('../../../../src/consensus_rules_digest.js');
 
-const PARTS = path.join(__dirname, '..', '..', '..', 'src', 'protocol_changes');
+const PARTS = path.join(__dirname, '..', '..', '..', '..', 'src', 'protocol_changes');
 
 describe('protocol_changes anchor bundle order row', function () {
     it('pins the activation map', function () {
