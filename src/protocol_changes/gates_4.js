@@ -222,6 +222,20 @@ addGate('vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION', 'height', 
     regtest: 0,
 });
 
+// vm_lint_nesting_depth_activation
+// Height on the processing chain's own block_index. Public networks remain
+// unarmed until release heights are chosen.
+addGate('vm_lint_nesting_depth_activation.VM_LINT_NESTING_DEPTH_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
 // swap_edit_rematch_activation
 // At or above this height a SWAP edit looks for matches against the resting
 // swap it updates. Below it the lookup retains the edit action index.
