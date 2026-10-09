@@ -14,7 +14,8 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "a67825ae6077439176443e34e32a3fa0889a304b5982217e0e4fc8a65eb1fb8e",
+    "armed_map_fingerprint": "99ed6a14d2b93735999601ab066dbc0cc8a64fcbf67d183a309f9c629c775b6b",
+    "armed_map_fingerprint_unreadable_reason": null,
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
@@ -337,6 +338,7 @@
       "rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ARMED_HEIGHT": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ENV": "657334d609d5d5e981a3b6f631d9c3095c0bbf2f9be742d000990f24144b834d",
       "send_caret_pack_key_activation.SEND_CARET_PACK_KEY_ACTIVATION": "aad1e92fb904e4c45e5a5fa8beb83a215e87bef0e3ac1b6d7a98e33896838ea0",
+      "send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION": "95e34322344784c66ed84f586b7088d141fb9fb3167c5ce20771018edc8208c2",
       "slash_grid_activation.SLASH_DEDUCTION_PRECISION": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a",
       "slash_grid_activation.SLASH_GRID_ACTIVATION": "7bc2f002584168c30d6b893e7bb5a94f712502ec2f881813a9783db6da3abf72",
       "slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVATION": "7bc2f002584168c30d6b893e7bb5a94f712502ec2f881813a9783db6da3abf72",
@@ -382,9 +384,10 @@
       "train_activation.TRAIN_ACTIVATION": "1f7b8f196149e0bf068bfc430c6355a65788333e1eb2952c52462f0aa3526a6e",
       "vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION": "fb8f989f24dd5fda0b50767684e33d4e0c5a41adb8d0cfb7130fc93bf3a46207",
       "vm_exec_lint_activation.VM_EXEC_LINT_ACTIVATION": "46466292b4ed9eb2b75e3b11e95f336f40874b20d9ad80f0ecaa7a5e3aea4d25",
+      "vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION": "9887f0812153696f7b1f3bbdbe1ab1a56d1a3339f210e4cfe984aab869bcedb9",
       "vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION": "46466292b4ed9eb2b75e3b11e95f336f40874b20d9ad80f0ecaa7a5e3aea4d25",
-      "vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION": "5cf3bb5dc5224ac40c44261c88cc44ee8bd9f064c208d2b917d2498103f1764e",
       "vm_lint_nesting_depth_activation.VM_LINT_NESTING_DEPTH_ACTIVATION": "9887f0812153696f7b1f3bbdbe1ab1a56d1a3339f210e4cfe984aab869bcedb9",
+      "vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION": "5cf3bb5dc5224ac40c44261c88cc44ee8bd9f064c208d2b917d2498103f1764e",
       "vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD": "de491f1800ecbafef8565ee3faa8b87707092505a441c8a970593c9025d9923d",
       "xchain-vm.ACCESSOR_OWN_KEY_ACTIVATION": "aad1e92fb904e4c45e5a5fa8beb83a215e87bef0e3ac1b6d7a98e33896838ea0",
       "xchain-vm.APPLY_LENGTH_METER_ACTIVATION": "2f271814e1ca61b118bf15fc918e0150dd87ad2b7ac7a95f6571a10c2e390d1f",
@@ -403,11 +406,10 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 385,
-    "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "ff9103c072af3542f001c5e899472676e37c36cd1214cff0d310d096cb77aa94",
+    "armed_map_row_count": 387,
     "consensus_rules_digest": "227f96529070d083038a3695fb863c4ab08611864b9dfcc1b619f75ec67c91d8",
     "gate_key_count": 43,
+    "absent_gates": [],
     "consensus_rules_gates": {
       "anchor_reward_activation.ANCHOR_REWARD_ACTIVATION": "{\"mainnet\":961000,\"regtest\":0,\"testnet\":0}",
       "anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION": "{\"mainnet\":963000,\"regtest\":0,\"testnet\":0}",
@@ -452,13 +454,25 @@
       "price_scale_activation.PRICE_V1_FEE_MAX_LENGTH": "20",
       "list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION": "{\"mainnet\":9999999999,\"regtest\":0,\"testnet\":154777}",
       "list_meta_activation.LIST_META_ACTIVATION": "{\"BTC:testnet\":155001,\"DOGE:testnet\":67962387,\"LTC:testnet\":4906040,\"mainnet\":9999999999,\"regtest\":0,\"testnet\":9999999999}"
+    },
+    "gates_field": "anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION,anchor_reward_activation.ANCHOR_ATTEST_ARRIVAL_MARGIN_S,anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION,anchor_reward_activation.ANCHOR_REWARD_ACTIVATION,anchor_reward_activation.ANCHOR_REWARD_DERIVE_ACTIVATION,anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION,attest_relay_activation.ATTEST_RELAY_ACTIVATION,attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION,attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING,attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION,attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING_V2,attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION,checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION,cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION,equivocation_header.EQUIV_HEADER_ACTIVATION,list_meta_activation.LIST_META_ACTIVATION,list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION,mirror_admission_activation.ADMIT_MARGIN_BLOCKS,mirror_admission_activation.ADMIT_MAX_FUTURE_BLOCKS,mirror_admission_activation.ADMIT_MIN_FUTURE_BLOCKS,mirror_admission_activation.CANONICAL_HEIGHT_RE,mirror_admission_activation.CHAIN_CODE_RE,mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION,mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION,mirror_admission_activation.admissionCanonicalField,mirror_admission_activation.decodeAdmitBlocks,mirror_admission_activation.encodeAdmitBlocks,mirror_admission_activation.isAdmissionEra,oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND,oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION,oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION,price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION,price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION,price_scale_activation.PRICE_V1_FEE_MAX_LENGTH,price_scale_activation.PRICE_V1_VALUE_MAX_LENGTH,price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION,retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION,rollcall_activation.ROLLCALL_ACTIVATION,rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION,snapshot_reorg_buffer.SNAPSHOT_BURIAL_ACTIVATION,stake_weighted_quorum.STAKE_WEIGHTED_QUORUM_ACTIVATION,token_bridge_activation.TOKEN_BRIDGE_ACTIVATION,xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION",
+    "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
+    "carrier_logic_digest": "ff9103c072af3542f001c5e899472676e37c36cd1214cff0d310d096cb77aa94",
+    "env": {
+      "XC_AMOUNTS_PRICE_REGTEST_ACTIVATION": null,
+      "XC_AMOUNTS_PRICE_REGTEST_TIME": null,
+      "XC_ANCHOR_FOLD_REGTEST_ACTIVATION": null,
+      "XC_ANCHOR_SLASH_REGTEST_ACTIVATION": null,
+      "XC_ANCHOR_STAKE_REGTEST_ACTIVATION": null,
+      "XC_CONTRACTS_REGTEST_ACTIVATION": null,
+      "XC_LISTS_MARKET_REGTEST_ACTIVATION": null,
+      "XC_LISTS_MARKET_REGTEST_TIME": null,
+      "XC_MIRROR_ADMISSION_ACTIVATION": null,
+      "XC_ROLLCALL_GATES_REGTEST_ACTIVATION": null,
+      "XC_ROLLCALL_REGTEST_ACTIVATION": null
     }
   },
   "armed_regtest_venue": {
-    "env": {
-      "XC_ROLLCALL_REGTEST_ACTIVATION": "armed",
-      "XC_ROLLCALL_GATES_REGTEST_ACTIVATION": "armed"
-    },
     "network": "regtest",
     "coin_registry_consensus_hash": "450c7a63c4a7beae85531426c903f1923c7cba754d06d9c8946ffca123ed5ba5",
     "coin_registry_consensus_hashes": {
@@ -466,7 +480,8 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "caa29b3e08ceec0be44c332c38c2b027cfaa7aab589747ac76da0411e7aceea7",
+    "armed_map_fingerprint": "6ad0a7cf876a579c96365e3bf15079ade1b2169ebf842b9851a2d6452714c022",
+    "armed_map_fingerprint_unreadable_reason": null,
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
@@ -789,6 +804,7 @@
       "rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ARMED_HEIGHT": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ENV": "657334d609d5d5e981a3b6f631d9c3095c0bbf2f9be742d000990f24144b834d",
       "send_caret_pack_key_activation.SEND_CARET_PACK_KEY_ACTIVATION": "aad1e92fb904e4c45e5a5fa8beb83a215e87bef0e3ac1b6d7a98e33896838ea0",
+      "send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION": "95e34322344784c66ed84f586b7088d141fb9fb3167c5ce20771018edc8208c2",
       "slash_grid_activation.SLASH_DEDUCTION_PRECISION": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a",
       "slash_grid_activation.SLASH_GRID_ACTIVATION": "7bc2f002584168c30d6b893e7bb5a94f712502ec2f881813a9783db6da3abf72",
       "slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVATION": "7bc2f002584168c30d6b893e7bb5a94f712502ec2f881813a9783db6da3abf72",
@@ -834,9 +850,10 @@
       "train_activation.TRAIN_ACTIVATION": "1f7b8f196149e0bf068bfc430c6355a65788333e1eb2952c52462f0aa3526a6e",
       "vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION": "fb8f989f24dd5fda0b50767684e33d4e0c5a41adb8d0cfb7130fc93bf3a46207",
       "vm_exec_lint_activation.VM_EXEC_LINT_ACTIVATION": "46466292b4ed9eb2b75e3b11e95f336f40874b20d9ad80f0ecaa7a5e3aea4d25",
+      "vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION": "9887f0812153696f7b1f3bbdbe1ab1a56d1a3339f210e4cfe984aab869bcedb9",
       "vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION": "46466292b4ed9eb2b75e3b11e95f336f40874b20d9ad80f0ecaa7a5e3aea4d25",
-      "vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION": "5cf3bb5dc5224ac40c44261c88cc44ee8bd9f064c208d2b917d2498103f1764e",
       "vm_lint_nesting_depth_activation.VM_LINT_NESTING_DEPTH_ACTIVATION": "9887f0812153696f7b1f3bbdbe1ab1a56d1a3339f210e4cfe984aab869bcedb9",
+      "vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION": "5cf3bb5dc5224ac40c44261c88cc44ee8bd9f064c208d2b917d2498103f1764e",
       "vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD": "de491f1800ecbafef8565ee3faa8b87707092505a441c8a970593c9025d9923d",
       "xchain-vm.ACCESSOR_OWN_KEY_ACTIVATION": "aad1e92fb904e4c45e5a5fa8beb83a215e87bef0e3ac1b6d7a98e33896838ea0",
       "xchain-vm.APPLY_LENGTH_METER_ACTIVATION": "2f271814e1ca61b118bf15fc918e0150dd87ad2b7ac7a95f6571a10c2e390d1f",
@@ -855,11 +872,10 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 385,
-    "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "ff9103c072af3542f001c5e899472676e37c36cd1214cff0d310d096cb77aa94",
+    "armed_map_row_count": 387,
     "consensus_rules_digest": "8568e6221e83de9d7f3a43281368257c78d88caa6ed55b1c3c371aa4d4e6ccae",
     "gate_key_count": 43,
+    "absent_gates": [],
     "consensus_rules_gates": {
       "anchor_reward_activation.ANCHOR_REWARD_ACTIVATION": "{\"mainnet\":961000,\"regtest\":0,\"testnet\":0}",
       "anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION": "{\"mainnet\":963000,\"regtest\":0,\"testnet\":0}",
@@ -904,6 +920,22 @@
       "price_scale_activation.PRICE_V1_FEE_MAX_LENGTH": "20",
       "list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION": "{\"mainnet\":9999999999,\"regtest\":0,\"testnet\":154777}",
       "list_meta_activation.LIST_META_ACTIVATION": "{\"BTC:testnet\":155001,\"DOGE:testnet\":67962387,\"LTC:testnet\":4906040,\"mainnet\":9999999999,\"regtest\":0,\"testnet\":9999999999}"
+    },
+    "gates_field": "anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION,anchor_reward_activation.ANCHOR_ATTEST_ARRIVAL_MARGIN_S,anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION,anchor_reward_activation.ANCHOR_REWARD_ACTIVATION,anchor_reward_activation.ANCHOR_REWARD_DERIVE_ACTIVATION,anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION,attest_relay_activation.ATTEST_RELAY_ACTIVATION,attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION,attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING,attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION,attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING_V2,attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION,checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION,cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION,equivocation_header.EQUIV_HEADER_ACTIVATION,list_meta_activation.LIST_META_ACTIVATION,list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION,mirror_admission_activation.ADMIT_MARGIN_BLOCKS,mirror_admission_activation.ADMIT_MAX_FUTURE_BLOCKS,mirror_admission_activation.ADMIT_MIN_FUTURE_BLOCKS,mirror_admission_activation.CANONICAL_HEIGHT_RE,mirror_admission_activation.CHAIN_CODE_RE,mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION,mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION,mirror_admission_activation.admissionCanonicalField,mirror_admission_activation.decodeAdmitBlocks,mirror_admission_activation.encodeAdmitBlocks,mirror_admission_activation.isAdmissionEra,oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND,oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION,oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION,price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION,price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION,price_scale_activation.PRICE_V1_FEE_MAX_LENGTH,price_scale_activation.PRICE_V1_VALUE_MAX_LENGTH,price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION,retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION,rollcall_activation.ROLLCALL_ACTIVATION,rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION,snapshot_reorg_buffer.SNAPSHOT_BURIAL_ACTIVATION,stake_weighted_quorum.STAKE_WEIGHTED_QUORUM_ACTIVATION,token_bridge_activation.TOKEN_BRIDGE_ACTIVATION,xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION",
+    "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
+    "carrier_logic_digest": "ff9103c072af3542f001c5e899472676e37c36cd1214cff0d310d096cb77aa94",
+    "env": {
+      "XC_AMOUNTS_PRICE_REGTEST_ACTIVATION": null,
+      "XC_AMOUNTS_PRICE_REGTEST_TIME": null,
+      "XC_ANCHOR_FOLD_REGTEST_ACTIVATION": null,
+      "XC_ANCHOR_SLASH_REGTEST_ACTIVATION": null,
+      "XC_ANCHOR_STAKE_REGTEST_ACTIVATION": null,
+      "XC_CONTRACTS_REGTEST_ACTIVATION": null,
+      "XC_LISTS_MARKET_REGTEST_ACTIVATION": null,
+      "XC_LISTS_MARKET_REGTEST_TIME": null,
+      "XC_MIRROR_ADMISSION_ACTIVATION": null,
+      "XC_ROLLCALL_GATES_REGTEST_ACTIVATION": "armed",
+      "XC_ROLLCALL_REGTEST_ACTIVATION": "armed"
     }
   },
   "v0190_level_note": "Re-pinned when develop was levelled with master after the v0.19.0 cut (kit step 5h), on the merged tree by the same two invocations (bare, and with the armed env above). Both blocks read master's re-cut values for every consensus field (armed-map fingerprint, rules digest, gates map, GATES field, coin registry) and develop's W5 values for the rest: the armed_map_fingerprint_v2 alias stays retired (row 22, D103) and carrier_logic_digest reads the W5 carrier logic pin (row 21b, D102), whose per-id hashes did not move. Nothing else changed.",
@@ -941,6 +973,7 @@
   "cross_chain_offer_list_export_note": "2026-10-07: both code readings were regenerated after adding the registry-only CROSS_CHAIN_OFFER_LIST_EXPORT height row. Together with the BET_FEED_LIST_EDIT_ACTIVATION row retained by the merge, the armed map grows from 373 to 375 rows; only its row map, row count, and fingerprint move.",
   "attest_relay_fee_row_note": "Re-pinned after the indexer-only ATTEST_RELAY_FEE_ACTIVATION height row joined the registry. Both readings gained the same UNARMED mainnet and testnet row with regtest active from genesis; after the apply-length-meter, cross-chain offer list export, bet feed list edit and anchor archive fold term rows from trunk, only armed_map_fingerprint, armed_map_rows and armed_map_row_count (377 to 378) moved.",
   "preactivation_status_gate_note": "Re-pinned after the indexer-only anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION row joined the registry, UNARMED on mainnet and testnet and active from genesis on regtest. ANCHOR_ACTIVATION returns to its canonical three-network shape. Retaining develop's ANCHOR_ARCHIVE_FOLD_TERM row makes both readings 378 rows alongside the ATTEST_RELAY_FEE_ACTIVATION row.",
-  "iter_set_meter_note": "2026-10-08: both code readings were regenerated after adding the ITER_SET_METER protocol row, its two flag-time constants, and the xchain-vm activation mirror. The armed map grows from 380 to 384 rows; its fingerprint and the protocol_changes carrier digest move, while the coin registry, rules digest, and GATES field remain unchanged.",
-  "vm_lint_nesting_depth_note": "Re-pinned after the registry-only VM_LINT_NESTING_DEPTH_ACTIVATION height row joined the registry, unarmed on mainnet and every testnet chain and active from genesis on regtest. Both readings gained the same row; only armed_map_fingerprint, armed_map_rows and armed_map_row_count (380 to 381) moved."
+  "vm_lint_nesting_depth_note": "Re-pinned after the registry-only VM_LINT_NESTING_DEPTH_ACTIVATION height row joined the registry, unarmed on mainnet and every testnet chain and active from genesis on regtest. Both readings gained the same row; only armed_map_fingerprint, armed_map_rows and armed_map_row_count (380 to 381) moved.",
+  "combined_gate_rows_2026_10_09_note": "2026-10-09 integration of two reviewed indexer lanes that each re-pinned from their own base (the VM lint banned-with height row and the unarmed send gated total tick id time row): both readings regenerated once with bin/consensus-identity.js --json, bare and with the armed regtest env, on the merged tree.",
+  "iter_set_meter_note": "2026-10-09: both code readings were regenerated on the merged tree after adding the ITER_SET_METER protocol row, its two flag-time constants, and the xchain-vm activation mirror. The merged armed map has 387 rows; its fingerprint and the protocol_changes carrier digest move, while the coin registry, rules digest, and GATES field remain unchanged."
 }

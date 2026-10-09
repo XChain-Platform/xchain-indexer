@@ -9,17 +9,18 @@
 // General Public License v3.0 or later; see LICENSE.md.
 
 const assert = require('assert');
-const ProtocolChanges = require('../../../src/protocol_changes.js');
-const table = require('../../../src/protocol_changes/changes_5.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
+const table = require('../../../../src/protocol_changes/changes_5.js');
 
 const KEY = 'protocol_changes.changes.ITER_SET_METER';
 
 describe('protocol_changes/ITER_SET_METER row @regression @tier1', function () {
-    it('is the first row in part 5 and has the registry shape', function () {
+    it('is registered in part 5 and has the registry shape', function () {
         const changes = new ProtocolChanges({ config: {}, util: {} }).changes;
+        const entry = table.find((row) => row[0] === 'ITER_SET_METER');
         assert.ok(Object.prototype.hasOwnProperty.call(changes, 'ITER_SET_METER'));
         assert.deepStrictEqual(changes.ITER_SET_METER, ProtocolChanges.get(KEY));
-        assert.deepStrictEqual(table[0], [
+        assert.deepStrictEqual(entry, [
             'ITER_SET_METER', '0.2.0', ProtocolChanges.UNARMED,
             ProtocolChanges.UNARMED, 0, 0, 0, 0,
         ]);
