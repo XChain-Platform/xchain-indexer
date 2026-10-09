@@ -64,9 +64,18 @@ function registryKey(file, exportName) { return file.replace(/\.js$/, '') + '.' 
 // no module and its local value IS the registry row the callers read by key.
 function localExport(file, exportName) {
     if (NOT_A_ROW.has(file)) return require('../../../src/' + file)[exportName];
+    if (file === 'mirror_admission_margin_activation') return require('../../../src/consensus/gates/mirror_admission_margin_gate.js')[exportName];
     const modulePath = modulePathFor(file.replace(/\.js$/, ''));
     if (modulePath === null) return registry.get(registryKey(file, exportName));
     return require(modulePath)[exportName];
+}
+function assertByteTwin(context, localPath, siblingPath, label) {
+    const here = path.resolve(__dirname, localPath);
+    const twin = path.resolve(__dirname, siblingPath);
+    assert.ok(fs.existsSync(here), 'the local twin is missing at ' + here);
+    const verdict = siblingCheckout(__dirname, twin);
+    if (!verdict.usable) return skipOrFail(context, verdict, label);
+    assert.strictEqual(fs.readFileSync(twin, 'utf8'), fs.readFileSync(here, 'utf8'), label + ' has drifted');
 }
 // registry stem (the module filename in src/ for a twin; the bare stem for a
 // module W4 moved or retired) -> the named export it and constants.js share.
@@ -209,6 +218,8 @@ const GATES = [
     // which is precisely the split a drill exists to rehearse and must never be its default.
     ['mirror_admission_activation.js',     'MIRROR_ADMISSION_REGTEST_ENV'],
     ['mirror_admission_activation.js',     'MIRROR_ADMISSION_REGTEST_ARMED_HEIGHT'],
+    ['mirror_admission_margin_activation', 'ADMIT_CHAIN_MARGIN_ACTIVATION'],
+    ['mirror_admission_margin_activation', 'ADMIT_CHAIN_MARGIN_BLOCKS'],
     // The family's anchor-attest member. The
     // margin is a LEDGER-adjacent input in the same sense as ANCHOR_REWARD_MIRROR_MATURITY: it
     // decides the block at which the barrier opens, so two nodes applying different values
@@ -287,15 +298,8 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // following, and the header text is what tells an operator which. Value parity to the
     // canon is covered by the GATES case below; this is the twin half of it.
     it('holds xchain-sync/src/consensus/gates/train_gate.js byte-identical to this repo\'s copy', function () {
-        const here = path.resolve(__dirname, '../../../src/consensus/gates/train_gate.js');
-        const twin = path.resolve(__dirname, '../../../../xchain-sync/src/consensus/gates/train_gate.js');
-        assert.ok(fs.existsSync(here), 'the indexer train-activation gate is missing at ' + here);
-        const twinVerdict = siblingCheckout(__dirname, twin);
-        if (!twinVerdict.usable)
-            return skipOrFail(this, twinVerdict, 'the sync train-activation twin byte compare');
-        assert.strictEqual(fs.readFileSync(twin, 'utf8'), fs.readFileSync(here, 'utf8'),
-            'xchain-sync/src/consensus/gates/train_gate.js has drifted from the indexer copy; the two are ' +
-            'vendored twins and a one-sided edit forks the fleet at the train boundary.');
+        assertByteTwin(this, '../../../src/consensus/gates/train_gate.js',
+            '../../../../xchain-sync/src/consensus/gates/train_gate.js', 'the sync train-activation twin');
     });
 
     // mirror_admission_gate.js is the second module whose copies must be BYTE-identical
@@ -306,16 +310,13 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // both be callable, and disagree only on the bytes a quorum already signed. A byte compare is
     // the only check that sees an encoder edit landed on one side of the boundary.
     it('holds xchain-hub/src/consensus/gates/mirror_admission_gate.js byte-identical to this repo\'s copy', function () {
-        const here = path.resolve(__dirname, '../../../src/consensus/gates/mirror_admission_gate.js');
-        const twin = path.resolve(__dirname, '../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js');
-        assert.ok(fs.existsSync(here), 'the indexer admission activation module is missing at ' + here);
-        const twinVerdict = siblingCheckout(__dirname, twin);
-        if (!twinVerdict.usable)
-            return skipOrFail(this, twinVerdict, 'the hub mirror-admission twin byte compare');
-        assert.strictEqual(fs.readFileSync(twin, 'utf8'), fs.readFileSync(here, 'utf8'),
-            'xchain-hub/src/consensus/gates/mirror_admission_gate.js has drifted from the indexer copy; the two ' +
-            'are byte-identical twins carrying the admission heights AND the canonical encoder, so a ' +
-            'one-sided edit makes every signed admission field unverifiable on the other side.');
+        assertByteTwin(this, '../../../src/consensus/gates/mirror_admission_gate.js',
+            '../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js', 'the hub mirror-admission twin');
+    });
+
+    it('holds xchain-hub/src/consensus/gates/mirror_admission_margin_gate.js byte-identical to this repo\'s copy', function () {
+        assertByteTwin(this, '../../../src/consensus/gates/mirror_admission_margin_gate.js',
+            '../../../../xchain-hub/src/consensus/gates/mirror_admission_margin_gate.js', 'the hub margin twin');
     });
 
     // The exported surface of that module, asserted on the LOCAL copy so it runs without the
