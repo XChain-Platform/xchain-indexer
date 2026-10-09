@@ -60,9 +60,7 @@
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
       "hash": "2847f3f69ac4280baa67d70562c63f210cc6c3d27b1713bf92cbfb4601994c91",
-      "twins": [
-        "xchain-hub"
-      ]
+      "twins": []
     },
     "dispense_payment_tally_scale_activation": {
       "path": "src/actions/dispense/dispense_payment_tally_scale_gate.js",
@@ -97,9 +95,7 @@
     "mirror_admission_margin_activation": {
       "path": "src/consensus/gates/mirror_admission_margin_gate.js",
       "hash": "38facb6199e5cd9f0f2a1b30b2c4eeb1319db0a41dda191adaa3daca6a816fb9",
-      "twins": [
-        "xchain-hub"
-      ]
+      "twins": []
     },
     "oracle_preload_causality_activation": {
       "path": "src/db/prices/oracle_preload_causality_gate.js",
