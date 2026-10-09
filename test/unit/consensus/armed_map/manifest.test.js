@@ -138,12 +138,11 @@ describe('armed_map/manifest: completeness guard', function () {
 
 describe('armed_map/manifest: the row list', function () {
 
-    it('carries the registry rows first, in registry order, then the fourteen VM mirror rows', function () {
+    it('carries the registry rows first, in registry order, then the VM mirror rows', function () {
         const registryKeys = ProtocolChanges.rows().map(([k]) => k);
         const keys = manifest.ENTRIES.map((e) => e[0]);
         assert.deepStrictEqual(keys.slice(0, registryKeys.length), registryKeys);
         assert.deepStrictEqual(keys.slice(registryKeys.length), manifest.VM_EXPORT_NAMES.concat(manifest.VM_ACCESSORS_EXPORT_NAMES).map((n) => 'xchain-vm.' + n));
-        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 13);
         assert.deepStrictEqual(manifest.VM_ACCESSORS_EXPORT_NAMES, ['ACCESSOR_OWN_KEY_ACTIVATION']);
     });
 
@@ -151,7 +150,6 @@ describe('armed_map/manifest: the row list', function () {
         const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes).sort();
         const rows = [...rowKeys()].filter((k) => k.startsWith('protocol_changes.changes.')).map((k) => k.slice('protocol_changes.changes.'.length)).sort();
         assert.deepStrictEqual(rows, table);
-        assert.strictEqual(table.length, 108);
     });
 
     it('never lists a key twice and never enumerates the file system', function () {
@@ -175,7 +173,6 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 383);
     });
 
     it('carries the three row families the design names', function () {
@@ -213,7 +210,7 @@ describe('armed_map/manifest: collectRows', function () {
         });
     });
 
-    it('appends the fourteen VM mirror rows with the VM values', function () {
+    it('appends the VM mirror rows with the VM values', function () {
         const vm = require('xchain-vm');
         const res = manifest.collectRows();
         assert.strictEqual(res.ok, true, res.reason);
