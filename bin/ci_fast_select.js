@@ -37,8 +37,7 @@ const CONSENSUS = [
   'src/utility.js',
   'src/utility/',
   'bin/pins/',
-  'bin/lib/',
-  'bin/vendor-vm.sh'
+  'bin/lib/'
 ];
 const DEDICATED_GATES = new Set([
   'bin/pins/at1-suite-titles.json'
@@ -51,11 +50,18 @@ const DEDICATED_GATES = new Set([
 // what it can break.
 const SUPPORT_OUTSIDE = /^(?:src\/|bin\/(?!test\/)|package\.json$|\.mocharc)/;
 const ALWAYS = [];
+const CI_HELPER_TEST = 'bin/test/ci_fast_select.test.js';
+const CI_HELPERS = new Set([
+  'bin/ci-full.sh',
+  'bin/ci_fast_select.js',
+  'bin/vendor-vm.sh'
+]);
 const GROUPS = [
   {
     group: 'main',
     args: ['--timeout', '30000', '--recursive', '--exit'],
     patterns: [
+      /^bin\/test\/(?:.*\/)?[^/]+\.test\.js$/,
       /^test\/unit\/(?:.*\/)?[^/]+\.test\.js$/,
       /^test\/regression\/(?:.*\/)?[^/]+\.test\.js$/,
       /^test\/security\/(?:.*\/)?[^/]+\.test\.js$/
@@ -242,6 +248,7 @@ function selectFastTests(
     consensusPrefixes
   ) || supportWidens;
   for (const file of changed) {
+    if (CI_HELPERS.has(file) && existing.has(CI_HELPER_TEST)) selected.add(CI_HELPER_TEST);
     if (existing.has(file)) selected.add(file);
     else if (file.startsWith('test/') && isTestFile(file) && !matchingGroup(file)) {
       reasons.add(`deferred: ${file}`);
@@ -268,7 +275,7 @@ function gitLines(args, allowNoMatches = false) {
 }
 
 function listTrackedTests() {
-  return gitLines(['ls-files', 'test/**'])
+  return gitLines(['ls-files', 'test/**', 'bin/test/**'])
     .filter((file) => matchingGroup(file) && fs.existsSync(file));
 }
 
