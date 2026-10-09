@@ -91,13 +91,14 @@ const CHANGES = [
         DISPENSER_REFILL_TESTNET_TIME,
         regtestTimeOverride('DISPENSER_REFILL_REGTEST_TIME'), 0, 0, 0],
 
+    ['STAKE_DELEGATED_SIGNING_KEY','0.2.0', STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,
+        STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME, 0, 0, 0, 0],
+
     // Groups sibling guards on one native-action leg under an outer savepoint.
     // It follows the custody guard on testnet, stays inert on mainnet, and is
     // genesis-active on regtest so fresh test chains exercise the corrected rule.
     ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', UNARMED,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 0, 0, 0, 0],
-    ['STAKE_DELEGATED_SIGNING_KEY','0.2.0', STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,
-        STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;
