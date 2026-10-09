@@ -32,6 +32,7 @@ const HUB_FROM     = path.resolve(__dirname, '..');
 const HUB_GATE     = '../../../../xchain-hub/src/consensus/gates/mirror_admission_margin_gate.js';
 const HUB_ROWS     = '../../../../xchain-hub/src/consensus/gate_registry/shared_rows_5.js';
 const HUB_ADMIT    = '../../../../xchain-hub/src/lib/admission_height.js';
+const HUB_COMMIT   = '49906fe261ad96cf84447da2500f7fb6459904b2';
 const ACTIVATION_KEY = 'mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION';
 
 let loaded = null;
@@ -75,7 +76,8 @@ function usableHub(ctx) {
     temporaryHub = fs.mkdtempSync(path.join(os.tmpdir(), 'margin-parity-hub-'));
     const checkout = path.join(temporaryHub, 'xchain-hub');
     const source = path.resolve(HUB_FROM, '../../../../xchain-hub');
-    execFileSync('git', ['clone', '-q', '--shared', source, checkout], { stdio: 'pipe' });
+    execFileSync('git', ['clone', '-q', '--shared', '--no-checkout', source, checkout], { stdio: 'pipe' });
+    execFileSync('git', ['-C', checkout, 'checkout', '-q', '--detach', HUB_COMMIT], { stdio: 'pipe' });
     files = hubFiles(checkout);
     for(const file of files) {
         const verdict = siblingCheckout(__dirname, file);
