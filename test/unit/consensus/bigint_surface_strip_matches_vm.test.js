@@ -18,6 +18,8 @@ const assert = require('assert');
 const path = require('path');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
+const XChainVM = require('xchain-vm');
+const { runVmExecution } = require('../../../src/actions/execute/run_vm.js');
 
 const KEY = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
 const VM_MODULE = 'src/index/bigint_surface_strip_heights.js';
@@ -36,6 +38,60 @@ const verdict = siblingCheckout(__dirname, vmTarget);
 
 function indexerActivation() {
     return ProtocolChanges.copy(KEY);
+}
+
+const GAS_SCHEDULE = {
+    VM_COMPUTATION: 1,
+    VM_STATE_READ: 100,
+    VM_STATE_WRITE: 200,
+    VM_STATE_DELETE: 100,
+    VM_ORACLE_READ: 100,
+    VM_CROSSCHAIN_READ: 100,
+    VM_ATTEST_REQUEST: 5000,
+    VM_EMISSION: 500,
+    VM_XCALL_REQUEST: 2000,
+    VM_XCALL_CALLBACK: 20000,
+};
+
+function executionContext(network, vm) {
+    const indexerDb = {
+        getContractState: async () => ({}),
+        getOracleDataForVM: async () => ({}),
+        getCrossChainDataForVM: async () => ({}),
+        getPollResultsForVM: async () => ({}),
+        getContractStakeDataForVM: async () => ({}),
+        createSavepoint: async (name) => name,
+        releaseSavepoint: async () => {},
+    };
+    return {
+        config: { NETWORK: network, CHAIN: 'LTC', COIN: 'LTC' },
+        actions: {
+            vm,
+            protocolChanges: { isEnabled: async () => false },
+        },
+        indexerDb,
+        providerDeadlineWindows: null,
+    };
+}
+
+function executionProbe(height, actionIndex) {
+    return {
+        error: null,
+        gasCost: 0,
+        contractInfo: {
+            code: 'module.exports=function(){return typeof BigInt64Array;};',
+        },
+        data: {
+            METHOD: 'default',
+            SOURCE: 'bigint-surface-probe',
+            CONTRACT_ACTION_INDEX: 17,
+            ACTION_INDEX: actionIndex,
+            TX_HASH: 'bigint-surface-probe-' + actionIndex,
+            TX_VOUT: actionIndex,
+            BLOCK_INDEX: height,
+            BLOCK_TIME: 0,
+        },
+    };
 }
 
 describe('consensus/bigint_surface_strip_matches_vm: activation parity @regression @tier1', function () {
@@ -57,22 +113,42 @@ describe('consensus/bigint_surface_strip_matches_vm: activation parity @regressi
         }
     });
 
-    it('passes the same network, coin and height inputs to both activation predicates', function () {
-        if (!verdict.usable)
-            return skipOrFail(this, verdict, 'the BigInt surface-strip predicate parity witness');
-
-        const vmGate = require(verdict.path);
-        for (const [network, coin, height] of [
-            ['mainnet', 'BTC', 0],
-            ['testnet', 'LTC', ProtocolChanges.UNARMED - 1],
-            ['regtest', 'DOGE', 0],
-        ]) {
-            assert.strictEqual(
-                ProtocolChanges.activeAt(KEY, network, coin, height, null),
-                vmGate.isBigIntSurfaceStripActive(network, coin, height),
-                coin + ':' + network + '@' + height,
-            );
+    it('passes the production network, coin and height inputs into vm.execute()', async function () {
+        const forwarded = [];
+        const vm = new XChainVM({
+            execution: 'in-process',
+            gasSchedule: GAS_SCHEDULE,
+            gasCeiling: 1000000,
+        });
+        const executingVm = {
+            execute: async (opts) => {
+                forwarded.push(opts);
+                return vm.execute(opts);
+            },
+        };
+        const regtest = executionProbe(73, 1);
+        const mainnet = executionProbe(74, 2);
+        vm.beginBlock();
+        try {
+            await runVmExecution.call(executionContext('regtest', executingVm), regtest, { GAS_CEILING: 1000000 });
+            await runVmExecution.call(executionContext('mainnet', executingVm), mainnet, { GAS_CEILING: 1000000 });
+        } finally {
+            vm.endBlock();
+            await vm.shutdown();
         }
+
+        assert.deepStrictEqual(forwarded.map((opts) => [
+            opts.network,
+            opts.contractAddress.split(':')[1],
+            opts.blockContext.height,
+        ]), [
+            ['regtest', 'LTC', 73],
+            ['mainnet', 'LTC', 74],
+        ]);
+        assert.strictEqual(regtest.vmError, null);
+        assert.strictEqual(regtest.vmReturnValue, '"undefined"');
+        assert.strictEqual(mainnet.vmError, null);
+        assert.strictEqual(mainnet.vmReturnValue, '"function"');
     });
 
     it('keeps the indexer regtest activation at genesis', function () {
