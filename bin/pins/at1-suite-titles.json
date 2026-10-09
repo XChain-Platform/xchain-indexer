@@ -289,6 +289,11 @@
       "protocol_changes VM lint nesting-depth row is active on regtest at genesis and unarmed on public networks",
       "protocol_changes VM lint nesting-depth row registers the per-chain height map"
     ],
+    "077fed969308f497": [
+      "mirror-admission margin cross-repo parity hub admitBlocks stamps the indexer row margin and the consumer target certifies the opening tip on regtest",
+      "mirror-admission margin cross-repo parity hub and indexer agree on both sides of a stubbed DOGE testnet boundary",
+      "mirror-admission margin cross-repo parity hub and indexer copies of the margin gate and shared_rows_5 are byte-identical"
+    ],
     "079fb83998032d1b": [
       "HubDbSync ready frame harness certifies an older-hub ready frame after a full drain without retrying",
       "HubDbSync ready frame harness leaves an older-hub ready frame uncertified after a partial drain and retries once",
@@ -16537,8 +16542,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1223,
-      "titleCount": 12726,
+      "fileCount": 1224,
+      "titleCount": 12729,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17152,6 +17157,7 @@
         "test/unit/consensus/equivocation/equiv_xcall_canonical.test.js": "93b9e527a571fc32",
         "test/unit/consensus/equivocation/equivocation_header.test.js": "3ad67665f530b06c",
         "test/unit/consensus/gates/mirror_admission_margin_boundary.test.js": "5ad6c4b0c28cb058",
+        "test/unit/consensus/gates/mirror_admission_margin_cross_repo.test.js": "077fed969308f497",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
         "test/unit/consensus/list_rematch/plan.test.js": "15d8cc2e94c0564c",
         "test/unit/consensus/list_share/list_meta_hash.test.js": "50ed779f04dda399",
