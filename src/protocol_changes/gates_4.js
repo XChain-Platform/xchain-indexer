@@ -206,11 +206,8 @@ addGate('vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION', 'hei
     regtest: 0,
 });
 
-// vm_lint_banned_with_heights
-// Per-chain height on the processing chain's own block_index. At or after it
-// the deploy lint refuses a `with` statement (banned-with). Mainnet and testnet
-// stay unarmed until a measured height is armed. MUST equal xchain-vm
-// LINT_BANNED_WITH_ACTIVATION, whose null is this row's UNARMED.
+// Per-chain deploy-lint `with` ban, unarmed on public networks.
+// MUST equal xchain-vm LINT_BANNED_WITH_ACTIVATION; VM null is UNARMED here.
 addGate('vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
