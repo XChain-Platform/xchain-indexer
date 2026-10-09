@@ -35,5 +35,14 @@ describe('protocol_changes/ITER_SET_METER row @regression @tier1', function () {
         assert.strictEqual(row.mainnet_time, ProtocolChanges.UNARMED);
         assert.strictEqual(row.testnet_time, ProtocolChanges.UNARMED);
         assert.strictEqual(row.regtest_time, 0);
+
+        const vm = require('xchain-vm');
+        const gate = vm.ITER_SET_METER_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export ITER_SET_METER_ACTIVATION');
+        const asRow = (time) => (time === null ? ProtocolChanges.UNARMED : time);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'VM mainnet activation');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'VM testnet activation');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'VM regtest activation');
     });
 });
