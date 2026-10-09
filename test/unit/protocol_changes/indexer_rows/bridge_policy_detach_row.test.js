@@ -14,12 +14,12 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-const ProtocolChanges = require('../../../src/protocol_changes.js');
-const { REGISTRY_ONLY_STEMS } = require('../../helpers/gate_modules.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
+const { REGISTRY_ONLY_STEMS } = require('../../../helpers/gate_modules.js');
 
 const KEY = 'bridge_policy_detach_activation.BRIDGE_POLICY_DETACH';
 const ISSUE_KEY = 'issue_policy_list_detach.ISSUE_POLICY_LIST_DETACH';
-const PART = path.join(__dirname, '..', '..', '..', 'src', 'protocol_changes', 'gates_4.js');
+const PART = path.join(__dirname, '..', '..', '..', '..', 'src', 'protocol_changes', 'gates_4.js');
 
 describe('protocol_changes bridge policy detach row', function () {
     it('registers the destination-side height map', function () {
