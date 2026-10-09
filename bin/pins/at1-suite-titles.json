@@ -5033,6 +5033,11 @@
       "list share pure settle parts requires sequence 1 to carry no removed members",
       "list share pure settle parts returns normalized fields for a full snapshot and a delta"
     ],
+    "55b7c4dec20ef0d8": [
+      "Send handler: resolved tick totals gate off @regression @tier1 keeps differently cased legs below the threshold",
+      "Send handler: resolved tick totals gate off @regression @tier1 requires a handoff after identical spellings consolidate",
+      "Send handler: resolved tick totals gate off @regression @tier1 resolves a lowercase spelling to the gated tick"
+    ],
     "556816bc2512244b": [
       "Send handler - GAS guard-fee double-count regression @regression @tier1 GAS bound to a transfer controller: balance covering AMOUNT + guardFee together is accepted",
       "Send handler - GAS guard-fee double-count regression @regression @tier1 GAS bound to a transfer controller: sending exactly the GAS balance is rejected, not driven negative",
@@ -16536,8 +16541,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1210,
-      "titleCount": 12657,
+      "fileCount": 1211,
+      "titleCount": 12660,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16869,6 +16874,7 @@
         "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "c4841dfff6c76d0b",
         "test/unit/actions/token/send.test/caret_pack_key.test.js": "8c38e904bee40cde",
         "test/unit/actions/token/send.test/gated_handoff_threshold.test.js": "e0e089fe173d451a",
+        "test/unit/actions/token/send.test/gated_total_tick_id_gate_off.test.js": "55b7c4dec20ef0d8",
         "test/unit/actions/token/send.test/gated_totals_by_tick_id.test.js": "479c6eab99a84ee4",
         "test/unit/actions/token/send.test/sleeping_and_multi_send.test.js": "55813348732fc426",
         "test/unit/actions/token/send/send_action_allowed_memoization.test.js": "f683df13da87d47c",
