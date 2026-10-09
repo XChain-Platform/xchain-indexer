@@ -16,7 +16,7 @@
  *
  * MEMBERSHIP IS THE REGISTRY. Since the carriers became shims, every table
  * the process applies is a registry row, and the manifest is rows() plus the
- * fourteen VM mirror rows. What this guard has to catch is the one way a table
+ * fifteen VM mirror rows. What this guard has to catch is the one way a table
  * can escape that: a map literal declared somewhere under src/ instead of in
  * a registry part file. So the scan that used to check "declared, therefore
  * listed" now fails on ANY declaration outside src/protocol_changes/, and the
@@ -173,7 +173,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 385);
+        assert.strictEqual(res.rows.length, 389);
     });
 
     it('carries the three row families the design names', function () {
