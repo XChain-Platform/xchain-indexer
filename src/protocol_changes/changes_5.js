@@ -41,12 +41,9 @@ const {
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
 
-require('./changes_4.js').push(
+const CHANGES = [
     ['ITER_SET_METER','0.2.0', ITER_SET_METER_MAINNET_TIME,
         ITER_SET_METER_TESTNET_TIME, 0, 0, 0, 0],
-);
-
-const CHANGES = [
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
         regtestTimeOverride('CONTROLLER_CUSTODY_GUARD_REGTEST_TIME'), 0, 0, 0],
