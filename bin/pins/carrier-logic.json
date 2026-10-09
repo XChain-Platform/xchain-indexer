@@ -137,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "4bf3fd9ee0f13631ff8ba31ee0f55ece0ea97499d6092cb4eaa8c3a3ddcd6775",
+      "hash": "b382b3597c59a785e5bf4fdf6128e63e47014ad5c7b3bf4b3023ceba54664817",
       "twins": []
     },
     "rollcall_activation": {
@@ -2068,6 +2068,13 @@
       "from": "88b00386768cb815fc0c3749c087cd9e73576b9e37d692ea96fc5ea8b731f586",
       "to": "4bf3fd9ee0f13631ff8ba31ee0f55ece0ea97499d6092cb4eaa8c3a3ddcd6775",
       "reason": "merge gas ceiling success with current registry rows",
+      "date": "2026-10-09"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "4bf3fd9ee0f13631ff8ba31ee0f55ece0ea97499d6092cb4eaa8c3a3ddcd6775",
+      "to": "b382b3597c59a785e5bf4fdf6128e63e47014ad5c7b3bf4b3023ceba54664817",
+      "reason": "fail armed finite time gates closed on unusable block times",
       "date": "2026-10-09"
     }
   ]
