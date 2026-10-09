@@ -7009,12 +7009,14 @@
       "LIST metadata storage stores null fields for a valid format 5 with no current meta",
       "LIST metadata storage stores null fields for an invalid format 5 without reading"
     ],
-    "7b1632203120de68": [
+    "96ef5454f3c8b466": [
       "bin/suite-title-map pure helpers compare accepts an identical title set moved through the rename map",
       "bin/suite-title-map pure helpers compare reports dropped and added titles for an unrenamed file",
       "bin/suite-title-map pure helpers compare reports files that exist on only one side",
       "bin/suite-title-map pure helpers expand returns null for an uncollected script",
       "bin/suite-title-map pure helpers expand returns the flat file-to-titles view for a collected script",
+      "bin/suite-title-map pure helpers mergeScriptMap refreshes one script without dropping unrelated scripts or their title sets",
+      "bin/suite-title-map pure helpers mergeScriptMap refuses to create a misleading partial map from a missing script",
       "bin/suite-title-map pure helpers mochaArgsFor extracts leading environment assignments from mocha arguments",
       "bin/suite-title-map pure helpers mochaArgsFor extracts npm scripts from a composite command",
       "bin/suite-title-map pure helpers mochaArgsFor identifies a non-mocha command in the skip reason",
@@ -10606,6 +10608,10 @@
       "Actions.processAction() @regression @tier3 dispatches UNKNOWN to actionUnknown.parse",
       "Actions.processAction() @regression @tier3 does not call any other handler when dispatching SEND",
       "Actions.processAction() @regression @tier3 passes params, data, and error through to the handler"
+    ],
+    "b45d06aa483d7379": [
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is unarmed on production networks and active from regtest genesis",
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 registers the 0.2.0 row and both network constants"
     ],
     "b4b4e9e256db55d0": [
       "Database mapping null-id skip guard @regression @tier1 createActionMapping skips (no SELECT/INSERT) when an address ref resolves to null",
@@ -15224,8 +15230,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1231,
-      "titleCount": 12759,
+      "fileCount": 1232,
+      "titleCount": 12763,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15722,7 +15728,7 @@
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
-        "test/unit/bin/suite_title_map.test.js": "7b1632203120de68",
+        "test/unit/bin/suite_title_map.test.js": "96ef5454f3c8b466",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
         "test/unit/boundary/amounts/supply_limits.test.js": "a3ff598f6a613223",
@@ -16300,6 +16306,7 @@
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
+        "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
