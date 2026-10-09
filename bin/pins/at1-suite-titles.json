@@ -360,6 +360,9 @@
       "HubDbSync resync close re-pages @regression @tier1 resumes the stored position after a normal close",
       "HubDbSync resync close re-pages @regression @tier1 resumes the stored position after an abnormal close"
     ],
+    "08a84ab3f12a6cb8": [
+      "VM stake snapshot decimal-string gate off @regression @tier1 pins snapshot JSON and the real VM stake-read types and values"
+    ],
     "08e0fb31a08bbc02": [
       "cross_chain_call_rejections helpers (XDISP-1) getCrossChainCallRejectionById lowercases the id and returns the row or null",
       "cross_chain_call_rejections helpers (XDISP-1) recordCrossChainCallExecution clears the rejection row for the executed call",
@@ -5548,8 +5551,8 @@
       "_smtTouched: the touched key is canonical on BOTH axes @regression an ordinary canonical address is unchanged (no regression on the common path)",
       "_smtTouched: the touched key is canonical on BOTH axes @regression an unresolvable address records NOTHING rather than a raw fallback"
     ],
-    "5c4091c903dddb3e": [
-      "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 is the first row in part 5 with mainnet unarmed and testnet armed at the v0.21.3 instant",
+    "b2eaaa7288f724de": [
+      "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 is present in part 5 with mainnet unarmed and testnet armed at the v0.21.3 instant",
       "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 reads the regtest-only drill override when a fresh table is built",
       "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 registers the row and both network constants"
     ],
@@ -6547,6 +6550,26 @@
       "createAnchorAction publisher tail v1/v2: both publisher columns are NULL, and the row lands at section 0",
       "createAnchorAction publisher tail v6: passes a pre-serialized PUBLISHER_ATTESTATIONS string through unchanged",
       "createAnchorAction publisher tail v7: persists PUBLISHER and the pre-serialized PUBLISHER_ATTESTATIONS JSON string"
+    ],
+    "6c8830c1a590c64a": [
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order GIVE_COIN unsupported coin returns invalid (unknown COINS list)",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order MEMO with pipe character returns invalid",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order SOURCE sleeping returns invalid",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order TICK sleeping returns invalid",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order admits a GET_ADDRESS allowed for GET_TICK but blocked for GIVE_TICK after payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order cross-chain order is exempt from the local positive-GET_AMOUNT check",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order cross-chain order with a pinned GET token is not rejected for the remote token",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order cross-chain order with an unpinned non-native GET token is invalid once the remote token gate is active",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order defaults GET_ADDRESS to SOURCE when COIN networks match and GET_ADDRESS not provided",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order empty GET_AMOUNT returns invalid (must be positive)",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order keeps the GET_TICK refusal for the reverse split below payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order native-coin GET side still requires a positive GET_AMOUNT",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order pre-existing error short-circuits validation",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order preserves legacy admission below the maker policy gate",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order refuses a GET_ADDRESS allowed for GIVE_TICK but blocked for GET_TICK after payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order refuses the same policy split below payout-policy activation",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order registers maker policy admission at the required network heights",
+      "Order action handler @regression @tier2 Format 0 \u2013 Create Order zero GET_AMOUNT returns invalid (must be positive)"
     ],
     "6cba856a202a9d6f": [
       "policy apply by shared-list reference carries an unresolved mirror reference with nothing applied",
@@ -12424,13 +12447,13 @@
       "execContext (injected-execution TX_HASH seam) @regression @tier2 vote finalize callback (previously-broken site 2) pre-flag-day the legacy hashless context is preserved byte-identically",
       "execContext (injected-execution TX_HASH seam) @regression @tier2 xcall result callback (live-consensus byte parity) the builder-produced TX_HASH is byte-identical to the pre- inline XCALLCB synthesis"
     ],
-    "c534b61701eb9518": [
+    "47f788937f1f1de5": [
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 every shared_rows_N.js carries the two markers once each, in order, with no require between them, and nothing but rows outside them",
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 no part file matches the carrier declaration scans (D38)",
-      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 the time-table parts hold exactly the 108 rows, in registration order, and nothing but rows",
+      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 the time-table parts hold exactly the registered rows, in registration order, and nothing but rows",
       "protocol_changes/assembler: the public export shape @regression @tier1 exports every own property it exported before the split, each constant equal to its part file, and only the registry API besides",
       "protocol_changes/assembler: the public export shape @regression @tier1 registry, UNARMED and UNPINNED are present but non-enumerable, so the manifest sees no new data export",
-      "protocol_changes/assembler: the public export shape @regression @tier1 still constructs under the manifest stub with 108 prototype-free changes, equal to the registry rows",
+      "protocol_changes/assembler: the public export shape @regression @tier1 still constructs under the manifest stub with prototype-free changes, equal to the registry rows",
       "protocol_changes/assembler: the public export shape @regression @tier1 the entry ends no larger than HEAD and every part file fits the readability limits"
     ],
     "c562c3c3096c665e": [
@@ -12455,8 +12478,8 @@
       "price capability resolution off BTC @regression the truncation fallback still behaves the local BTC path still marks a capped read truncated",
       "price capability resolution off BTC @regression the truncation fallback still behaves the mirrored path never claims truncation"
     ],
-    "c5aeb99b1ca6e25e": [
-      "armed_map/manifest: collectRows appends the fourteen VM mirror rows with the VM values",
+    "43228de36969a03d": [
+      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
       "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
       "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
       "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
@@ -12470,7 +12493,7 @@
       "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
       "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
       "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
-      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the fourteen VM mirror rows",
+      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
       "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "c5c4b726fc0811ec": [
@@ -13032,6 +13055,21 @@
       "Controller: WITHDRAW gated by CONTROLLER_CUSTODY_GUARD (real DB + real VM) @phaseE does not grandfather an earlier custody balance against a later token denial",
       "Controller: WITHDRAW gated by CONTROLLER_CUSTODY_GUARD (real DB + real VM) @phaseE lets a second contract owner bind its address and deny a plain-tick withdrawal"
     ],
+    "cd1e44eb5d10c034": [
+      "Cross-chain remote token accept check @regression @tier2 ORDER validateGeneral keeps an earlier verdict",
+      "Cross-chain remote token accept check @regression @tier2 ORDER validateGeneral marks the create invalid with no pinned row",
+      "Cross-chain remote token accept check @regression @tier2 ORDER validateGeneral passes with a pinned row",
+      "Cross-chain remote token accept check @regression @tier2 SWAP validateGeneral keeps an earlier verdict",
+      "Cross-chain remote token accept check @regression @tier2 SWAP validateGeneral marks the create invalid with no pinned row",
+      "Cross-chain remote token accept check @regression @tier2 SWAP validateGeneral passes with a pinned row",
+      "Cross-chain remote token accept check @regression @tier2 accepts when a pinned row exists",
+      "Cross-chain remote token accept check @regression @tier2 does not look anything up while the gate is inactive",
+      "Cross-chain remote token accept check @regression @tier2 preserves pre-gate behavior when the registry row is absent",
+      "Cross-chain remote token accept check @regression @tier2 rejects a non-native cross-chain GET token with no pinned row once the gate is active",
+      "Cross-chain remote token accept check @regression @tier2 rejects when the mirror database is unavailable",
+      "Cross-chain remote token accept check @regression @tier2 rejects when the mirror reader is not installed",
+      "Cross-chain remote token accept check @regression @tier2 skips native GET, local GET and non-create formats"
+    ],
     "cd23b989ff73f7d3": [
       "dropRefRowsFromFirst drops the whole group when the ref is at the lowest seq",
       "dropRefRowsFromFirst keeps seq 1 and drops seqs 2 and 3 when seq 2 carries a ref",
@@ -13302,12 +13340,12 @@
       "ProviderRegistry @regression @tier2 getMinStake (block-anchored provider stake floor) ships the spec floors: http_get 10000, llm 25000",
       "ProviderRegistry @regression @tier2 getMinStake (block-anchored provider stake floor) the llm floor is strictly above the http_get one (it is a per-provider bar, not a copy of the capability one)"
     ],
-    "d2c5f4fbb6b63014": [
+    "486cd0d049a716bb": [
       "contract_meta/declaresOwnerWithdraw @regression @tier1 does not read an inherited ownerWithdraw",
       "contract_meta/declaresOwnerWithdraw @regression @tier1 is true only for a plain-object meta whose ownerWithdraw is the boolean true",
+      "protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1 is present in part 5, mainnet inert and testnet armed",
       "protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1 reads the regtest-only override when a fresh table is built",
-      "protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1 registers the row and both network constants",
-      "protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1 sits after CONTROLLER_CUSTODY_GUARD in part 5, mainnet inert and testnet armed"
+      "protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1 registers the row and both network constants"
     ],
     "d2d34246f342ca3f": [
       "train activation: resolution @regression lets reached train activations supersede the launch floor",
@@ -14528,9 +14566,9 @@
       "HubClient pushPriceRound() propagates rejection from _call (not swallowed)",
       "HubClient pushPriceRound() returns immediately without calling _call when not enabled"
     ],
-    "df2e8799cf3685dc": [
+    "5d5483ae3700b4b1": [
       "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 a registry row is a frozen plain object with the nine parsed fields",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the 108 time-table keys the manifest lists",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the time-table keys the manifest lists",
       "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value a fresh class build under the stub carries",
       "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value the manifest resolves for that key"
     ],
@@ -16569,8 +16607,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1219,
-      "titleCount": 12676,
+      "fileCount": 1221,
+      "titleCount": 12692,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16723,6 +16761,7 @@
         "test/unit/actions/contract/message.test.js": "d7dd66c300ddeafd",
         "test/unit/actions/contract/xcall_action_format_invariant.test.js": "4dc6ca50454deae6",
         "test/unit/actions/contract/xexec.test.js": "59b7b8fc88f1b6e2",
+        "test/unit/actions/cross_chain_remote_token_accept.test.js": "cd1e44eb5d10c034",
         "test/unit/actions/deploy/wire_params.test.js": "0276c82b670c2f09",
         "test/unit/actions/execute.test.js": "7a6b77bff3698035",
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
@@ -16771,7 +16810,7 @@
         "test/unit/actions/market/list_edit_remove.test.js": "c60ea6810870541d",
         "test/unit/actions/market/order.test.js": "b3eea5de6160a08f",
         "test/unit/actions/market/order.test/cancel.test.js": "4b307ffce89c1cdf",
-        "test/unit/actions/market/order.test/create_rules.test.js": "e223a521f0484068",
+        "test/unit/actions/market/order.test/create_rules.test.js": "6c8830c1a590c64a",
         "test/unit/actions/market/order.test/edit.test.js": "10bc85b221caeab0",
         "test/unit/actions/market/order.test/fields_and_fees.test.js": "7a776f7e267ba1d7",
         "test/unit/actions/market/order_expire.test.js": "0c6acb7244ce57e5",
@@ -17164,7 +17203,7 @@
         "test/unit/consensus/anchor_reward_derive/reward_groups.test.js": "67c89e84e7aba170",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "fd59b42becdb62ff",
-        "test/unit/consensus/armed_map/manifest.test.js": "c5aeb99b1ca6e25e",
+        "test/unit/consensus/armed_map/manifest.test.js": "43228de36969a03d",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
@@ -17236,6 +17275,7 @@
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/stake_snapshot_strings.test.js": "a0a533092c7a2e98",
+        "test/unit/contracts/vm_stake_snapshot_gate_off_types.test.js": "08a84ab3f12a6cb8",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
         "test/unit/cross_chain/cross_chain_call_id_case_insensitive.test.js": "9be5c1935b63e470",
@@ -17627,15 +17667,15 @@
         "test/unit/protocol_changes/anchor/anchor_bundle_order_row.test.js": "332212f43d474164",
         "test/unit/protocol_changes/anchor/anchor_fold_rows.test.js": "2d944feb25011092",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "47f788937f1f1de5",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/consensus_bound_shared_rows.test.js": "026d5bdba4ff140a",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
-        "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
+        "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
-        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
+        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
@@ -17643,7 +17683,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/send_gated/send_gated_total_tick_id_row.test.js": "9cb0cc0fc24db1ca",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_lint/vm_lint_banned_with_row.test.js": "783b89448d7f13a0",
@@ -18153,8 +18193,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 907,
-      "titleCount": 9933,
+      "fileCount": 908,
+      "titleCount": 9948,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -18327,6 +18367,7 @@
         "test/unit/actions/contract/list.test/unarmed_no_rematch.test.js": "6c0d603662abddb2",
         "test/unit/actions/contract/message.test.js": "d7dd66c300ddeafd",
         "test/unit/actions/contract/xexec.test.js": "59b7b8fc88f1b6e2",
+        "test/unit/actions/cross_chain_remote_token_accept.test.js": "cd1e44eb5d10c034",
         "test/unit/actions/execute.test.js": "7a6b77bff3698035",
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
@@ -18366,7 +18407,7 @@
         "test/unit/actions/market/list_edit_remove.test.js": "c60ea6810870541d",
         "test/unit/actions/market/order.test.js": "b3eea5de6160a08f",
         "test/unit/actions/market/order.test/cancel.test.js": "4b307ffce89c1cdf",
-        "test/unit/actions/market/order.test/create_rules.test.js": "e223a521f0484068",
+        "test/unit/actions/market/order.test/create_rules.test.js": "6c8830c1a590c64a",
         "test/unit/actions/market/order.test/edit.test.js": "10bc85b221caeab0",
         "test/unit/actions/market/order.test/fields_and_fees.test.js": "7a776f7e267ba1d7",
         "test/unit/actions/market/order_expire.test.js": "0c6acb7244ce57e5",
@@ -18674,6 +18715,7 @@
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
+        "test/unit/contracts/vm_stake_snapshot_gate_off_types.test.js": "08a84ab3f12a6cb8",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
         "test/unit/cross_chain/cross_chain_royalty_gate.test.js": "4c7c68762056502d",
@@ -18949,13 +18991,13 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "89da9b102e2aa560",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "47f788937f1f1de5",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
-        "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
+        "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
-        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
+        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
@@ -18963,7 +19005,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
@@ -19210,6 +19252,7 @@
         "test/unit/contracts/controller_guard_returnvalue.test.js": "34d715ef44d3072a",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
+        "test/unit/contracts/vm_stake_snapshot_gate_off_types.test.js": "08a84ab3f12a6cb8",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/cross_chain/cross_chain_royalty_gate.test.js": "4c7c68762056502d",
         "test/unit/cross_chain/cross_chain_settlement_cap_gate.test.js": "85a592dc86f8b36a",
@@ -19408,13 +19451,13 @@
         "test/unit/protocol/price_time_gate.test.js": "3ba5b094789a13b1",
         "test/unit/protocol/protocol_change_registry_prototype.test.js": "9227d0e83b5535c1",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "47f788937f1f1de5",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
-        "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
+        "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
-        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
+        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
@@ -19422,7 +19465,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
@@ -19467,8 +19510,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 907,
-      "titleCount": 9933,
+      "fileCount": 908,
+      "titleCount": 9948,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19641,6 +19684,7 @@
         "test/unit/actions/contract/list.test/unarmed_no_rematch.test.js": "6c0d603662abddb2",
         "test/unit/actions/contract/message.test.js": "d7dd66c300ddeafd",
         "test/unit/actions/contract/xexec.test.js": "59b7b8fc88f1b6e2",
+        "test/unit/actions/cross_chain_remote_token_accept.test.js": "cd1e44eb5d10c034",
         "test/unit/actions/execute.test.js": "7a6b77bff3698035",
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
@@ -19680,7 +19724,7 @@
         "test/unit/actions/market/list_edit_remove.test.js": "c60ea6810870541d",
         "test/unit/actions/market/order.test.js": "b3eea5de6160a08f",
         "test/unit/actions/market/order.test/cancel.test.js": "4b307ffce89c1cdf",
-        "test/unit/actions/market/order.test/create_rules.test.js": "e223a521f0484068",
+        "test/unit/actions/market/order.test/create_rules.test.js": "6c8830c1a590c64a",
         "test/unit/actions/market/order.test/edit.test.js": "10bc85b221caeab0",
         "test/unit/actions/market/order.test/fields_and_fees.test.js": "7a776f7e267ba1d7",
         "test/unit/actions/market/order_expire.test.js": "0c6acb7244ce57e5",
@@ -19988,6 +20032,7 @@
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
+        "test/unit/contracts/vm_stake_snapshot_gate_off_types.test.js": "08a84ab3f12a6cb8",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
         "test/unit/cross_chain/cross_chain_royalty_gate.test.js": "4c7c68762056502d",
@@ -20263,13 +20308,13 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "89da9b102e2aa560",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "47f788937f1f1de5",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
-        "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
+        "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
-        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
+        "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
@@ -20277,7 +20322,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
