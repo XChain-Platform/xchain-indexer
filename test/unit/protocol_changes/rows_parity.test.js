@@ -10,11 +10,8 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// The registry's time-table rows against the rows the transitional manifest
-// produces today. The manifest constructs the class with the { config: {},
-// util: {} } stub and reads .changes; rows() must carry the same 109 keys with
-// the same canonical value for each, or the fingerprint would move when the
-// manifest's resolvers are replaced by rows() at W3.
+// Keep registry time-table rows aligned with the transitional manifest's
+// 109 keys and canonical values.
 
 const assert = require('assert');
 const { canonicalValue } = require('../../../src/consensus/armed_map/canonical.js');
