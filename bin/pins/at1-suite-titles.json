@@ -2310,6 +2310,13 @@
       "bridge_checkpoint_check: D2 escrow cross-check the positive case, built from a real checkpoint fixture accepts roots spelled in upper case",
       "bridge_checkpoint_check: D2 escrow cross-check the positive case, built from a real checkpoint fixture accepts the compressed wire form of the same proof"
     ],
+    "23f34951579879b3": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings"
+    ],
     "2420626fd805ab93": [
       "bridgePolicyHash (policy spec section 5, D5, D7) @regression @tier1 \"-\" marks an ABSENT list, distinct from an empty one (D7)",
       "bridgePolicyHash (policy spec section 5, D5, D7) @regression @tier1 \"0\" marks an EXISTING but empty list (D7)",
@@ -4685,13 +4692,6 @@
       "HubDbSync mirror network scope @regression @tier2 starts at 0 on an empty local table",
       "HubDbSync mirror network scope @regression @tier2 treats an advertised ceiling of ZERO as authoritative, not as missing information",
       "HubDbSync mirror network scope @regression @tier2 uses the wire position for ready-message catch-up"
-    ],
-    "4d952349cc7e96e7": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash",
-      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings"
     ],
     "4d95352bdf288616": [
       "Utility.getDustThresholdCoin() fails closed - @regression @tier1 does not cache a failed lookup",
@@ -16391,7 +16391,7 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "4d952349cc7e96e7",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "23f34951579879b3",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
