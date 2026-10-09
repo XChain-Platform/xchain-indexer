@@ -21,6 +21,8 @@
  *
  ********************************************************************/
 
+const { stakeSnapshotStrings } = require('./stake_snapshot_strings.js');
+
 module.exports = {
 
     // Snapshot the contract's stake state at blockIndex into an in-memory accessor
@@ -43,7 +45,7 @@ module.exports = {
     // contract_delegations in HERE instead would hand the contract a key the SLASH path cannot
     // find, and the emitted punishment would silently no-op at the zero-slashed guard in
     // processSlashEmission (actions/execute/slash_emission.js).
-    async getContractStakeDataForVM(targetContractIndex, blockIndex, slashWindowActive){
+    async getContractStakeDataForVM(targetContractIndex, blockIndex, slashWindowActive, decimalStringsActive){
         let valid_id = await this.getStatusId('valid');
         let stakes = [];
         if(valid_id !== null){
@@ -89,7 +91,8 @@ module.exports = {
         // in a forked worker and the read-only data must cross the IPC boundary.
         // xchain-vm/src/readonly-accessors.js rebuilds the sync getStake/
         // getTotalStaked/getStakers accessors from this shape inside the worker.
-        return snapshotShape.serialize(util, perPubkeyTick, perTickStakers, tickDecimals);
+        let snapshot = snapshotShape.serialize(util, perPubkeyTick, perTickStakers, tickDecimals);
+        return decimalStringsActive === true ? stakeSnapshotStrings(util, snapshot) : snapshot;
     },
 
 };
