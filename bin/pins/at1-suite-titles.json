@@ -2171,6 +2171,14 @@
       "PRICE v1 canonical reference oracle @regression @tier3 refuses a non-string text",
       "PRICE v1 canonical reference oracle @regression @tier3 splits VALUE and FEE at the 8-versus-18 fraction-digit bound"
     ],
+    "25c3d82b177fdf7c": [
+      "stale state activation module references src/actions/execute/run_vm.js names neither retired activation module",
+      "stale state activation module references src/consensus/gates/stake_weight_collation_gate.js names neither retired activation module",
+      "stale state activation module references src/db/actions.js names neither retired activation module",
+      "stale state activation module references src/db/contracts/index.js names neither retired activation module",
+      "stale state activation module references src/protocol_changes/shared_rows_4.js names neither retired activation module",
+      "stale state activation module references test/unit/state_commitment/db_state_key_collation.test.js names neither retired activation module"
+    ],
     "25db2339c8df14dc": [
       "Withdraw handler @regression @tier2 CONTRACT_ACTION_INDEX validations caller is not contract owner → invalid",
       "Withdraw handler @regression @tier2 CONTRACT_ACTION_INDEX validations contract not found → invalid",
@@ -17158,6 +17166,7 @@
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
+        "test/unit/consensus/stale_twin_module_refs.test.js": "25c3d82b177fdf7c",
         "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "4db50e18ffcab3aa",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
