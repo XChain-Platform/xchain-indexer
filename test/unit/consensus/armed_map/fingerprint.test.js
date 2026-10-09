@@ -25,6 +25,7 @@ const { spawnSync } = require('child_process');
 
 const REPO = path.resolve(__dirname, '..', '..', '..', '..');
 const V2_PATH = path.join(REPO, 'src', 'consensus', 'armed_map', 'fingerprint.js');
+const processFingerprintEnv = Object.assign({}, process.env);
 
 const v2 = require('../../../../src/consensus/armed_map/fingerprint.js');
 const manifest = require('../../../../src/consensus/armed_map/manifest.js');
@@ -103,7 +104,7 @@ describe('armed_map/fingerprint: the published surfaces (W3, alias dropped at W5
 
     it('is published by consensus-identity --json as the legacy field, version 2, the row map and count, and the logic digest', function () {
         const res = spawnSync(process.execPath, [path.join(REPO, 'bin', 'consensus-identity.js'), '--json'],
-            { cwd: REPO, encoding: 'utf8' });
+            { cwd: REPO, encoding: 'utf8', env: childEnv() });
         assert.strictEqual(res.status, 0, res.stderr);
         const identity = JSON.parse(res.stdout);
         assert.strictEqual(identity.armed_map_fingerprint, processBaseline.hex);
@@ -174,7 +175,7 @@ const READ_SCRIPT = [
 ].join('\n');
 
 function childEnv() {
-    const env = Object.assign({}, process.env);
+    const env = Object.assign({}, processFingerprintEnv);
     delete env.NODE_PATH;
     return env;
 }
