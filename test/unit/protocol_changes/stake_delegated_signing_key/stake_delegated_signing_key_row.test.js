@@ -16,13 +16,13 @@ const ProtocolChanges = require('../../../../src/protocol_changes.js');
 const KEY = 'protocol_changes.changes.STAKE_DELEGATED_SIGNING_KEY';
 
 describe('protocol_changes/STAKE_DELEGATED_SIGNING_KEY row @regression @tier1', function () {
-    it('is unarmed on production networks and active from regtest genesis', function () {
+    it('is unarmed on mainnet, armed on testnet, and active from regtest genesis', function () {
         const row = ProtocolChanges.get(KEY);
         assert.strictEqual(row.mainnet_time, ProtocolChanges.UNARMED);
-        assert.strictEqual(row.testnet_time, ProtocolChanges.UNARMED);
+        assert.strictEqual(row.testnet_time, 1791061097);
         assert.strictEqual(row.regtest_time, 0);
         assert.strictEqual(ProtocolChanges.STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME, ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME, ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME, 1791061097);
     });
 
     it('is present in the class table and registry in the same shape', function () {
@@ -30,6 +30,6 @@ describe('protocol_changes/STAKE_DELEGATED_SIGNING_KEY row @regression @tier1', 
         assert.ok(Object.prototype.hasOwnProperty.call(table, 'STAKE_DELEGATED_SIGNING_KEY'));
         assert.deepStrictEqual(table.STAKE_DELEGATED_SIGNING_KEY, ProtocolChanges.get(KEY));
         assert.strictEqual(ProtocolChanges.get('protocol_changes.STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME'), ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.get('protocol_changes.STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME'), ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.get('protocol_changes.STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME'), 1791061097);
     });
 });
