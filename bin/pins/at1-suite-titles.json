@@ -5052,6 +5052,12 @@
       "VM oracle round window (getOracleDataForVM) @regression @tier1 the row ceiling drops the partial round rather than shipping it half-answered",
       "VM oracle round window (getOracleDataForVM) @regression @tier1 the row ceiling raises the floor above the oldest loaded round, which may be partial"
     ],
+    "54aac4df7c085606": [
+      "HubDbSync schema-version lockstep admits all three reader payloads when they carry the expected schema_version",
+      "HubDbSync schema-version lockstep refuses a catch-up page that carries no schema_version",
+      "HubDbSync schema-version lockstep refuses a live row event that carries no schema_version",
+      "HubDbSync schema-version lockstep refuses a snapshot page that carries no schema_version"
+    ],
     "54fd86289db48f29": [
       "VM oracle snapshot-age causality gate (getOracleDataForVM age query) @regression @tier1 gate: which age query is emitted mainnet AT/ABOVE its per-coin height caps the age query",
       "VM oracle snapshot-age causality gate (getOracleDataForVM age query) @regression @tier1 gate: which age query is emitted mainnet BELOW its per-coin height is INERT: age query stays uncapped (byte-identical replay)",
@@ -16639,8 +16645,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1218,
-      "titleCount": 12696,
+      "fileCount": 1219,
+      "titleCount": 12700,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17551,6 +17557,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_match_reconcile_content.test.js": "14fcea8ef0fb80d7",
         "test/unit/hub/hub_db_sync/hub_db_sync_mirror_network_scope.test.js": "4d2ba3a3a978c98f",
         "test/unit/hub/hub_db_sync/hub_db_sync_parts.test.js": "4c736f16e3ee95d8",
+        "test/unit/hub/hub_db_sync/hub_db_sync_schema_version_missing.test.js": "54aac4df7c085606",
         "test/unit/hub/hub_db_sync/hub_db_sync_pollmode_watermark.test.js": "79cbf784dc4c07c4",
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_batch_era_floor.test.js": "3df297a740e13cca",
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "5c88721f4a21ab7f",

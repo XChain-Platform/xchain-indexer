@@ -25,6 +25,7 @@
 
 const { getLogger } = require('../../observability/index.js');
 const { HUB_SCHEMA_VERSION } = require('../hub_schema_version');
+const { hasExpectedSchemaVersion, schemaVersionLabel } = require('./schema_version_check.js');
 const { CROSS_CHAIN_TABLES } = require('./mirror_tables.js');
 const { PENDING_PRICE_EVENT_CAP } = require('./mirror_bounds.js');
 const { applyMirrorWrite } = require('./mirror_write.js');
@@ -44,15 +45,14 @@ module.exports = {
     // height barrier over the hole), and only then does the normal
     // apply-and-refresh path run.
     async handleRowEvent(event) {
-        if (event.schema_version != null && event.schema_version !== HUB_SCHEMA_VERSION) {
+        if (!hasExpectedSchemaVersion(event.schema_version)) {
             // Schema-version mismatch: the hub is broadcasting a mirror row shape
             // this indexer was not built for, so applying it (or its retraction)
             // risks dropping a consensus-relevant column and forking the ledger.
             // Fail closed: do not apply, do not advance the watermark, so the
             // barrier stays shut and the block is deferred rather than settled
-            // against mismatched mirror data. The != null guard keeps older hubs
-            // that send no version working unchanged.
-            getLogger().error('HubDbSync: hub schema_version ' + event.schema_version +
+            // against mismatched mirror data.
+            getLogger().error('HubDbSync: hub schema_version ' + schemaVersionLabel(event.schema_version) +
                 ' != local ' + HUB_SCHEMA_VERSION + ' for ' + event.table +
                 '; refusing to apply row. Restart this indexer after upgrading the hub.');
             // Freeze the watermark gate until a clean re-bootstrap, so a
