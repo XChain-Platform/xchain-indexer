@@ -18,6 +18,9 @@
 
 'use strict';
 
+// Ordered member-root read shared with admission (memberRoots[0] sets the union's type).
+const { getUnionMemberRoots } = require('./membership');
+
 // Distinct items across every member, ascending by UTF-8 byte order (the order COLLATE
 // utf8_bin gives). A member that is not an array throws a TypeError so the caller decides
 // what an unreadable member means. Returns a new array and leaves the input untouched.
@@ -33,16 +36,6 @@ function mergeUnionMembers(lists) {
     .map((item) => ({ item, bytes: Buffer.from(item, 'utf8') }))
     .sort((a, b) => Buffer.compare(a.bytes, b.bytes))
     .map((entry) => entry.item);
-}
-
-async function getUnionMemberRoots(db, actionIndex) {
-  const rows = await db.doQuery(
-    `SELECT item_id AS action_index
-     FROM list_items
-     WHERE action_index=?`,
-    [actionIndex]
-  );
-  return rows.map((row) => row.action_index);
 }
 
 async function getUnionResolution(db, actionIndex, storedType, blockIndex) {

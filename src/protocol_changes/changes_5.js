@@ -92,7 +92,7 @@ const CHANGES = [
     // Groups sibling guards on one native-action leg under an outer savepoint.
     // It follows the custody guard on testnet, stays inert on mainnet, and is
     // genesis-active on regtest so fresh test chains exercise the corrected rule.
-    ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999,
+    ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', UNARMED,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 0, 0, 0, 0],
 ];
 

@@ -1124,16 +1124,6 @@
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the migration-created-table composition applies a later MODIFY",
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the parser finds migration-created tables (CREATE TABLE guard is not vacuous)"
     ],
-    "16b97d743a5e5c99": [
-      "BET decision-F fee arithmetic @regression @tier2 BET_FEED_PER_DAY defaults equal to EXPIRATION_PER_DAY, so the two families price alike today",
-      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) computes the worked-example payouts exactly",
-      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) floors (never rounds up) and conserves: sum of floored payouts <= pot",
-      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) returns 0 on a zero divisor (bcdiv convention)",
-      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) zero-floors a dust winning stake in the rake case",
-      "BET decision-F fee arithmetic @regression @tier2 day count rounds to nearest (the consensus trap): 90.4d free, 90.5d charges one day",
-      "BET decision-F fee arithmetic @regression @tier2 matches the spec section-10 value table",
-      "BET decision-F fee arithmetic @regression @tier2 shares the ORDER duration arithmetic exactly across the free-window boundary"
-    ],
     "16d0936e86678331": [
       "state_checkpoints split-brain fence parity (#3096) @regression @tier1 all present holders agree with one another, not merely with the constant",
       "state_checkpoints split-brain fence parity (#3096) @regression @tier1 explorer hub-mirror: block_index is NOT part of the fence",
@@ -4829,13 +4819,6 @@
       "stake_weighted_quorum fail-closed on truncation (SWQ-TRUNC-1) @regression @security meetsStakeThreshold returns false when the snapshot array is marked truncated",
       "stake_weighted_quorum fail-closed on truncation (SWQ-TRUNC-1) @regression @security totalStake throws on a truncated snapshot (its sum is meaningless)"
     ],
-    "533d6a868160af87": [
-      "anchor archive recovery registry coverage @regression @tier1 classifies every quorum-class hub mirror with a valid recovery policy",
-      "anchor archive recovery registry coverage @regression @tier1 derives the recovery run header from anchorRecoveryTables()",
-      "anchor archive recovery registry coverage @regression @tier1 exports the archive policy rows through anchorRecoveryTables()",
-      "anchor archive recovery registry coverage @regression @tier1 has an INSERT writer for every archive recovery table",
-      "anchor archive recovery registry coverage @regression @tier1 the xchain-sync registry copy declares the same recovery policies"
-    ],
     "534e6d3195bb81fd": [
       "list_metas holds a 4-byte character in name and description @regression createListMeta stores a 4-byte name and description against the strict server",
       "list_metas holds a 4-byte character in name and description @regression list_metas.sql declares name and description CHARACTER SET utf8mb4",
@@ -7544,6 +7527,24 @@
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch the canonical head is the earliest action, whatever order the two arrive in",
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch the delivery arm knows the attest_batch push type",
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch the head stores slot 0 and the window header a later chunk rebuilds it from"
+    ],
+    "7e205b6dfeef3596": [
+      "BET decision-F fee arithmetic @regression @tier2 BET_FEED_PER_DAY defaults equal to EXPIRATION_PER_DAY, so the two families price alike today",
+      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) computes the worked-example payouts exactly",
+      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) floors (never rounds up) and conserves: sum of floored payouts <= pot",
+      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) returns 0 on a zero divisor (bcdiv convention)",
+      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) zero-floors a dust winning stake in the rake case",
+      "BET decision-F fee arithmetic @regression @tier2 day count rounds to nearest (the consensus trap): 90.4d free, 90.5d charges one day",
+      "BET decision-F fee arithmetic @regression @tier2 keeps list edits free like cancel and resolve",
+      "BET decision-F fee arithmetic @regression @tier2 matches the spec section-10 value table",
+      "BET decision-F fee arithmetic @regression @tier2 shares the ORDER duration arithmetic exactly across the free-window boundary",
+      "BET format 4 parse and validation @regression @tier2 allows the owner to retain one list and replace the other on an open feed",
+      "BET format 4 parse and validation @regression @tier2 recognizes the wire format and rejects it below the activation gate",
+      "BET format 4 parse and validation @regression @tier2 rejects an edit with both list fields blank",
+      "BET format 4 parse and validation @regression @tier2 rejects equal effective allow and block list references",
+      "BET format 4 parse and validation @regression @tier2 rejects malformed, unknown, and unsupported list references",
+      "BET format 4 parse and validation @regression @tier2 requires an existing open feed owned by the source",
+      "BET format 4 parse and validation @regression @tier2 treats zero as detach without looking up a list"
     ],
     "7e33c00ff3453bbd": [
       "formatDropped formats every counter and the epoch canonical version",
@@ -14732,6 +14733,15 @@
       "ROLLCALL handler (\u00a73.3) - AT7 reason falsification v1 (GATES) keeps the DOGE-only guard and the first-seen semantics",
       "ROLLCALL handler (\u00a73.3) - AT7 reason falsification v1 (GATES) the handler advertises formats[1] with GATES between PUBLISHER and SIG_COUNT"
     ],
+    "e66b0c886d519c64": [
+      "anchor archive recovery registry coverage @regression @tier1 classifies every hub mirror with a valid recovery policy, hashed or not",
+      "anchor archive recovery registry coverage @regression @tier1 classifies every quorum-class hub mirror with a valid recovery policy",
+      "anchor archive recovery registry coverage @regression @tier1 derives the recovery run header from anchorRecoveryTables()",
+      "anchor archive recovery registry coverage @regression @tier1 exports the archive policy rows through anchorRecoveryTables()",
+      "anchor archive recovery registry coverage @regression @tier1 has an INSERT writer for every archive recovery table",
+      "anchor archive recovery registry coverage @regression @tier1 reports an unhashed hub mirror that declares no recovery policy",
+      "anchor archive recovery registry coverage @regression @tier1 the xchain-sync registry copy declares the same recovery policies"
+    ],
     "e6aed40fa235b3b4": [
       "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" is rejected as invalid: TICK (caret dot) when the flag is active",
       "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" reproduces the PRE-FLAG (defective) valid verdict when the flag is off",
@@ -16090,7 +16100,7 @@
   "scripts": {
     "test": {
       "fileCount": 1191,
-      "titleCount": 12529,
+      "titleCount": 12537,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16890,7 +16900,7 @@
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": "6f3bf3f9c5f1d95a",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
-        "test/unit/fees/bet_duration_fee.test.js": "16b97d743a5e5c99",
+        "test/unit/fees/bet_duration_fee.test.js": "7e205b6dfeef3596",
         "test/unit/fees/execution_fee.test.js": "929048c81769242e",
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
@@ -17124,8 +17134,8 @@
         "test/unit/protocol/protocol_changes.test.js": "dfed60b0be0a5889",
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "89da9b102e2aa560",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
-        "test/unit/protocol_changes/anchor_bundle_order_row.test.js": "332212f43d474164",
-        "test/unit/protocol_changes/anchor_fold_rows.test.js": "2d944feb25011092",
+        "test/unit/protocol_changes/anchor/anchor_bundle_order_row.test.js": "332212f43d474164",
+        "test/unit/protocol_changes/anchor/anchor_fold_rows.test.js": "2d944feb25011092",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
@@ -17147,7 +17157,7 @@
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
         "test/unit/protocol_changes/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
-        "test/unit/recovery/anchor_recovery_coverage.test.js": "533d6a868160af87",
+        "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -17646,7 +17656,7 @@
     },
     "test:regression": {
       "fileCount": 906,
-      "titleCount": 9922,
+      "titleCount": 9930,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -18283,7 +18293,7 @@
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": "6f3bf3f9c5f1d95a",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
-        "test/unit/fees/bet_duration_fee.test.js": "16b97d743a5e5c99",
+        "test/unit/fees/bet_duration_fee.test.js": "7e205b6dfeef3596",
         "test/unit/fees/execution_fee.test.js": "929048c81769242e",
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
@@ -18456,7 +18466,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
-        "test/unit/recovery/anchor_recovery_coverage.test.js": "533d6a868160af87",
+        "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -18915,7 +18925,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
-        "test/unit/recovery/anchor_recovery_coverage.test.js": "533d6a868160af87",
+        "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
@@ -18959,7 +18969,7 @@
     },
     "test:regression:full": {
       "fileCount": 906,
-      "titleCount": 9922,
+      "titleCount": 9930,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19596,7 +19606,7 @@
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": "6f3bf3f9c5f1d95a",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
-        "test/unit/fees/bet_duration_fee.test.js": "16b97d743a5e5c99",
+        "test/unit/fees/bet_duration_fee.test.js": "7e205b6dfeef3596",
         "test/unit/fees/execution_fee.test.js": "929048c81769242e",
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
@@ -19769,7 +19779,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
-        "test/unit/recovery/anchor_recovery_coverage.test.js": "533d6a868160af87",
+        "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",

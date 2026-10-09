@@ -27,7 +27,8 @@ function makeChain(xbridges) {
         if (/FROM\s+issues\s+i/i.test(sql))
             return [{ action_index: 1, tick: 'FUFU', owner: 'addr', decimals: 8, max_supply: '10', max_mint: '1', block_index: 1 }];
         if (/FROM xbridges x/i.test(sql))
-            return xbridges.filter(r => r.tick_id === args[0] && r.version === 3 && r.status === 'valid').map(() => ({ 1: 1 }));
+            return xbridges.filter(r => r.tick_id === args[0] && r.version === 3 && r.status === 'valid')
+                .filter(r => withinBounds(sql, args, r)).map(() => ({ 1: 1 }));
         if (/^DELETE FROM xbridges WHERE action_index >= \?/i.test(sql)) {
             for (let i = xbridges.length - 1; i >= 0; i--)
                 if (xbridges[i].action_index >= args[0]) xbridges.splice(i, 1);
@@ -38,7 +39,16 @@ function makeChain(xbridges) {
     return db;
 }
 
-const lock = (action_index, status = 'valid', version = 3) => ({ action_index, tick_id: TICK_ID, version, status });
+// Apply the optional as-of bounds the lock probe carries, in placeholder order after tick_id.
+function withinBounds(sql, args, row) {
+    let next = 1;
+    if (/x\.block_index <= \?/.test(sql) && !(row.block_index <= args[next++])) return false;
+    if (/x\.action_index < \?/.test(sql) && !(row.action_index < args[next++])) return false;
+    return true;
+}
+
+const lock = (action_index, status = 'valid', version = 3, block_index = 1) =>
+    ({ action_index, tick_id: TICK_ID, version, status, block_index });
 
 describe('tokens.bridged derives from applied xbridges rows @regression', function () {
     afterEach(() => sinon.restore());
@@ -67,5 +77,14 @@ describe('tokens.bridged derives from applied xbridges rows @regression', functi
     it('ignores refused locks and v4 burns', async function () {
         const db = makeChain([lock(10, 'invalid: TICK (not native here)'), lock(11, 'valid', 4)]);
         assert.strictEqual((await db.getTokenInfo('FUFU')).BRIDGED, 0);
+    });
+
+    it('reads BRIDGED as of the requested block and action, not the current tip', async function () {
+        const db = makeChain([lock(20, 'valid', 3, 5)]);
+        assert.strictEqual((await db.getTokenInfo('FUFU', 4)).BRIDGED, 0);
+        assert.strictEqual((await db.getTokenInfo('FUFU', 5)).BRIDGED, 1);
+        assert.strictEqual((await db.getTokenInfo('FUFU', 5, 20)).BRIDGED, 0);
+        assert.strictEqual((await db.getTokenInfo('FUFU', 5, 21)).BRIDGED, 1);
+        assert.strictEqual((await db.getTokenInfo('FUFU')).BRIDGED, 1);
     });
 });

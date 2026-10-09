@@ -96,7 +96,8 @@ const TABLES = [
     { table: 'order_cancels', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'order_edits',   owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'order_expires', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
-    { table: 'order_matches', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
+    { table: 'order_matches', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',
+      hashed: { classes: [], note: 'Written by ORDER_MATCH; status_id is then promoted in place (pending_coinpay -> valid) by the settling COINPAY, carried as updated-rows class 8 and re-derived on reorg. No hash commits status_id, so it is left out of content parity (CONTENT_PARITY_IN_PLACE_COLUMNS).' } },
     { table: 'order_statuses', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'sends',     owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     // XBRIDGE action record: one row per broadcast lock/burn (v0/v1/v3/v4), keyed by

@@ -60,7 +60,8 @@ module.exports = {
                 // rows, which a rollback purges by action_index and a replay rewrites, so the
                 // answer matches a fresh replay of the same chain. The tokens.bridged column
                 // is a write-time cache and is never read.
-                data['BRIDGED'] = (await issueReplay.hasAppliedLock(this, tick_id)) ? 1 : 0;
+                // Read the bit as of the same block_index / action_index point as the replay.
+                data['BRIDGED'] = (await issueReplay.hasAppliedLock(this, tick_id, block_index, action_index)) ? 1 : 0;
             }
         }
         // Get token supply at the given action_index
@@ -79,11 +80,24 @@ const issueReplay = {
 
     // True when an applied XBRIDGE v3 lock exists for the native tick. An orphaned first
     // lock takes its xbridges row with it, so the bit falls back to 0 on rollback.
-    async hasAppliedLock(db, tick_id){
+    // The optional bounds match the ISSUE replay's, so an as-of read sees only earlier locks.
+    async hasAppliedLock(db, tick_id, block_index, action_index){
+        let sql  = '',
+            args = [tick_id];
+        // Only count locks mined at or before the given block_index
+        if(!db.util.isNull(block_index) && db.util.isNumeric(block_index)){
+            sql += ' AND x.block_index <= ?';
+            args.push(parseInt(block_index));
+        }
+        // Only count locks recorded before the given action_index
+        if(!db.util.isNull(action_index) && db.util.isNumeric(action_index)){
+            sql += ' AND x.action_index < ?';
+            args.push(parseInt(action_index));
+        }
         let rows = await db.doQuery(`SELECT 1 FROM xbridges x
                         INNER JOIN index_statuses s ON (s.id=x.status_id)
-                    WHERE x.tick_id=? AND x.version=3 AND s.status='valid'
-                    LIMIT 1`, [tick_id]);
+                    WHERE x.tick_id=? AND x.version=3 AND s.status='valid'` + sql + `
+                    LIMIT 1`, args);
         return rows.length > 0;
     },
 

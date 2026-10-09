@@ -157,19 +157,17 @@ async function parseArchiveHead(handler, params, data, error, format){
     let q = await quorum.verifyHeadQuorum(handler, data, sigs, error);
     error = q.error;
 
-    // Verify the PUBLISHER-attestation quorum (a SECOND 2f+1 over the XANCPUB
-    // canonical) and DERIVE the archive reward from chain, retiring the trusted hub push.
+    // Check the PUBLISHER-attestation quorum (a SECOND 2f+1 over the XANCPUB canonical).
     // The attestation reuses the SAME oracle_publish set + weighting resolved for the root
-    // quorum. The reward is credited only when the root quorum passed (error still null,
-    // snapshot present), the attestation quorum is met, and PUBLISHER is in the snapshot
-    // set. A degraded or forged attestation NEVER fails the anchor: the checkpoint still
-    // records as 'valid'; only the reward is skipped, and every indexer reaches the same
-    // verdict deterministically. This is also the whole path a degraded ATTEST_SIG_COUNT 0
-    // tail takes: no attestation, no quorum, no reward, checkpoint intact. amount is the
-    // FROZEN consensus constant; reconcile keeps the smallest-pubkey winner on a failover
-    // double-publish, identical to the retired push path and its recovery, so the COLLECT
-    // rail stays single-winner fleet-wide. Reward type anchor_archive,
-    // round = MATCH_BATCH_SEQ.
+    // quorum. The DOGE side credits NOTHING from this verdict: it only feeds settle.js's
+    // skip log. The anchor_archive reward (round = MATCH_BATCH_SEQ, amount the FROZEN
+    // consensus constant) is derived on the BTC indexer by consensus/anchor_reward_derive.js
+    // from the mirrored attestation row, which re-verifies this same quorum and keeps the
+    // smallest-pubkey winner on a failover double-publish, so the COLLECT rail stays
+    // single-winner fleet-wide. A degraded or forged attestation NEVER fails the anchor:
+    // the checkpoint still records as 'valid' and every indexer reaches the same verdict
+    // deterministically. This is also the whole path a degraded ATTEST_SIG_COUNT 0 tail
+    // takes here: no attestation, no quorum, checkpoint intact.
     if(!error && format === 1 && q.snapPubkeys && q.oracleN > 0){
         let attQuorumMet = quorum.headAttestationMet(handler, data, publisherSigs, q);
         await settle.creditArchiveReward(handler, data, attQuorumMet, q.snapPubkeys, format);
