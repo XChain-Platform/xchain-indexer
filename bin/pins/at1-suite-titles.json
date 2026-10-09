@@ -285,6 +285,10 @@
       "price_batch_compression: the bomb is refused before the buffer grows @regression zlib raises the BOUNDED-OUTPUT error, so the memory is never allocated",
       "price_batch_compression: vendored-twin byte identity @regression xchain-hub/src/price_batch_compression.js is byte-identical to this repo's copy"
     ],
+    "06ffa42905e141f0": [
+      "protocol_changes VM lint nesting-depth row is active on regtest at genesis and unarmed on public networks",
+      "protocol_changes VM lint nesting-depth row registers the per-chain height map"
+    ],
     "079fb83998032d1b": [
       "HubDbSync ready frame harness certifies an older-hub ready frame after a full drain without retrying",
       "HubDbSync ready frame harness leaves an older-hub ready frame uncertified after a partial drain and retries once",
@@ -2457,6 +2461,9 @@
       "ATTEST v5 batch head: the reorg reset is scoped to the head's own encoding @regression against a real SQL engine a republished encoding that differs only in body CRC restores nothing",
       "ATTEST v5 batch head: the reorg reset is scoped to the head's own encoding @regression against a real SQL engine an orphaned chunk of a republished encoding leaves the stamped head stamped",
       "ATTEST v5 batch head: the reorg reset is scoped to the head's own encoding @regression against a real SQL engine an orphaned chunk of the head's own encoding still restores it beside a republish"
+    ],
+    "2a48ae7712d6f6d1": [
+      "ANCHOR DOGE attestation pass removal @regression @tier3 keeps reward settlement and publisher-attestation quorum code absent"
     ],
     "2a9082bb86e3b777": [
       "three unarmed flag days registered on 2026-10-07 bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION is a frozen height row with explicit network defaults",
@@ -4788,9 +4795,6 @@
       "Utility @regression @tier1 resetAddressesList() should clear the addresses object",
       "Utility @regression @tier1 resetLists() should clear both addresses and tickers",
       "Utility @regression @tier1 resetTickersList() should clear the tickers array"
-    ],
-    "4fd02b1351cd4e28": [
-      "ANCHOR DOGE-side reward branch removed @regression @tier3 the settlement entry points never touch the reward ledger with the derive gate off"
     ],
     "4ffeb0d1e41bc3d6": [
       "list share apply determinism reaches identical state in two fresh stores over the same blocks"
@@ -10324,12 +10328,6 @@
       "batch settlement value ledger: COINPAY @regression @tier1 the tally holds a decimal STRING at 8dp, never a JS number",
       "batch settlement value ledger: COINPAY @regression @tier1 with NO ledger settles every time, byte-identically, and invents nothing"
     ],
-    "a2d3d52f1391ccff": [
-      "ANCHOR archive reward settlement writes nothing warns and writes no reward with derive false and fold false",
-      "ANCHOR archive reward settlement writes nothing warns and writes no reward with derive false and fold true",
-      "ANCHOR archive reward settlement writes nothing warns and writes no reward with derive true and fold false",
-      "ANCHOR archive reward settlement writes nothing warns and writes no reward with derive true and fold true"
-    ],
     "a2e1d192caefa1ba": [
       "PRICE price-range flag day @regression @tier3 agreement with the hub bound matches the hub verdict on every case, both sides of both bounds",
       "PRICE price-range flag day @regression @tier3 agreement with the hub bound reads the same ceiling the hub reads",
@@ -11814,8 +11812,12 @@
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 isGuardGasReserved is true on BTC and false on the chains the bridge mints XCHAIN on",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 isGuardGasReserved reads the chain, never the presence of a gas row",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController allows on BTC when the source covers the ceiling exactly",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController bills nothing off BTC when the gas row is absent or the balance is negative",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController bills the full guard gas off BTC when the source holds enough",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController caps the guard gas at the held balance off BTC so no balance goes negative",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController does not refuse on DOGE once the XCHAIN row exists and the source holds none",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController leaves every other refusal in the shared tail alone on both chains",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController leaves the BTC bill untouched by the clamp even when the balance is below the fee",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController refuses on BTC when the source cannot cover the guard gas ceiling",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController still refuses on BTC when the source holds less than the ceiling but more than zero"
     ],
@@ -15975,11 +15977,6 @@
       "policy membership references refuses malformed transport and non-reference JSON strings",
       "policy membership references separates member arrays, refs and null transport values"
     ],
-    "f6d888083f9c6b7e": [
-      "ANCHOR DOGE-side reward callers removed @regression @tier3 v0 records a valid bundle without the reward-side pass",
-      "ANCHOR DOGE-side reward callers removed @regression @tier3 v1 records a valid archive head without the reward-side pass",
-      "ANCHOR DOGE-side reward callers removed @regression @tier3 v3 records a valid fold without the reward-side pass"
-    ],
     "f6e48f488c1c5cbd": [
       "db/list_share_mirrors SQL contract never orders mirror reads by the per-hub id",
       "db/list_share_mirrors SQL contract reads LOCAL applied counts from list settlements",
@@ -16548,7 +16545,7 @@
   "scripts": {
     "test": {
       "fileCount": 1210,
-      "titleCount": 12739,
+      "titleCount": 12647,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16575,13 +16572,12 @@
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "e80bd7614da629b4",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "afd595adc550c449",
-        "test/unit/actions/anchor/anchor.test/doge_reward_branch_removed.test.js": "f6d888083f9c6b7e",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "a04403a0cd08030c",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
-        "test/unit/actions/anchor/anchor_archive_reward_fold_retire.test.js": "a2d3d52f1391ccff",
+        "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "cd53417c159a33c6",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
@@ -17608,18 +17604,19 @@
         "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
-        "test/unit/protocol_changes/json_stringify_hook_row.test.js": "f959c69addce7dd8",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
-        "test/unit/protocol_changes/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/vm_lint/vm_lint_nesting_depth_row.test.js": "06ffa42905e141f0",
         "test/unit/protocol_changes/vm_lint/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
+        "test/unit/protocol_changes/vm_twin/json_stringify_hook_row.test.js": "f959c69addce7dd8",
+        "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
@@ -18192,7 +18189,7 @@
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "e80bd7614da629b4",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "afd595adc550c449",
-        "test/unit/actions/anchor/anchor.test/doge_reward_branch_removed.test.js": "4fd02b1351cd4e28",
+        "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "a04403a0cd08030c",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
@@ -18928,12 +18925,12 @@
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
-        "test/unit/protocol_changes/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
@@ -19388,12 +19385,12 @@
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
-        "test/unit/protocol_changes/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -19507,7 +19504,7 @@
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "e80bd7614da629b4",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "afd595adc550c449",
-        "test/unit/actions/anchor/anchor.test/doge_reward_branch_removed.test.js": "4fd02b1351cd4e28",
+        "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "a04403a0cd08030c",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
@@ -20243,12 +20240,12 @@
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
-        "test/unit/protocol_changes/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
