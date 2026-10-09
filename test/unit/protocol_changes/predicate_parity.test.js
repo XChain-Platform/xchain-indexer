@@ -10,18 +10,9 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// Predicate parity (activation-registry D69): at W3 every module keeps its own
-// predicate body and reads its table through the registry; W4 replaced the
-// predicate-only modules with the one generic activeAt(). This suite was the
-// proof that the replacement is behaviour-preserving, row by row, BEFORE it
-// happened, and it stays the proof for every predicate that survives: each one
-// against activeAt() at the neighbours of every committed threshold, at the
-// UNARMED sentinel, on a null (UNPINNED) entry and on an unknown network.
-//
-// A predicate that differs is a FINDING, not an edit: it says which predicate
-// has to stay a module. The findings are pinned below, so a new divergence and
-// a resolved one both surface here. The rows W4 replaced are listed too, and
-// the suite proves no module for them is left in src/ for a caller to reach.
+// Compare each surviving predicate with activeAt() at committed boundaries,
+// sentinels and unknown networks. Pinned divergences identify predicates that
+// cannot become generic activeAt() calls. Replaced rows must have no module.
 
 const assert = require('assert');
 const fs = require('fs');
