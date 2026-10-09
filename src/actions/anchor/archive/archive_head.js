@@ -15,15 +15,13 @@
  * ANCHOR v1, the archive head: the checkpoint wrapper carrying the match
  * archive segment plus the publisher-attestation tail. Reached through
  * Anchor.parseCheckpoint in index.js; the shape checks live in validate.js,
- * the quorums in quorum.js, the reward in settle.js and the chunked-batch CRC
- * gate in reassembly.js.
+ * the root quorum in quorum.js and the chunked-batch CRC gate in reassembly.js.
  *
  ********************************************************************/
 
 const diag       = require('../diagnostic_events.js');
 const validate   = require('../validate.js');
 const quorum     = require('../quorum.js');
-const settle     = require('../settle.js');
 const reassembly = require('../reassembly.js');
 const gateRegistry = require('../../../consensus/gate_registry');
 const { archiveReissueRefusal } = require('./archive_reissue_guard.js');
@@ -89,16 +87,10 @@ async function checkFoldArchiveReissue(handler, data, archive, error){
 // log line, the failure event and the anchor_actions row.
 async function recordHead(handler, data, sigs, publisherSigs, error, format){
     data['VALIDATOR_SIGNATURES'] = JSON.stringify(sigs);
-    // The publisher-attestation tail: persist the RAW wire publisher signature list
-    // (publisherSigs, hex-shape-checked only at parse time) so createAnchorAction can
-    // store it in anchor_actions.publisher_attestations.
-    // NOTE: this is UNVERIFIED transport, NOT the quorum-verified subset.
-    // The Ed25519/oracle_publish-snapshot verification above builds a separate
-    // attSigners array that is not persisted; the reward-skipped path still lands
-    // here, so the stored JSON can include sigs that failed verification, signers
-    // absent from the snapshot, or the tail of an anchor whose attestation quorum
-    // was not met. Any consumer MUST re-verify (as anchor_reward_derive.js does
-    // from anchor_reward_attestations) and never treat this column as pre-verified.
+    // Persist the RAW wire publisher signature list, hex-shape-checked only at parse
+    // time. This is UNVERIFIED transport: the DOGE handler does not evaluate the
+    // publisher quorum, and consumers such as anchor_reward_derive.js must re-verify
+    // it from anchor_reward_attestations before using it.
     // NULL on a degraded ATTEST_SIG_COUNT 0 tail, which carries no signatures at all.
     data['PUBLISHER_ATTESTATIONS'] = (publisherSigs.length > 0) ? JSON.stringify(publisherSigs) : null;
     if(!data['STATUS']) data['STATUS'] = (error) ? error : 'valid';
@@ -156,22 +148,6 @@ async function parseArchiveHead(handler, params, data, error, format){
 
     let q = await quorum.verifyHeadQuorum(handler, data, sigs, error);
     error = q.error;
-
-    // Check the PUBLISHER-attestation quorum (a SECOND 2f+1 over the XANCPUB canonical).
-    // The attestation reuses the SAME oracle_publish set + weighting resolved for the root
-    // quorum. The DOGE side credits NOTHING from this verdict: it only feeds settle.js's
-    // skip log. The anchor_archive reward (round = MATCH_BATCH_SEQ, amount the FROZEN
-    // consensus constant) is derived on the BTC indexer by consensus/anchor_reward_derive.js
-    // from the mirrored attestation row, which re-verifies this same quorum and keeps the
-    // smallest-pubkey winner on a failover double-publish, so the COLLECT rail stays
-    // single-winner fleet-wide. A degraded or forged attestation NEVER fails the anchor:
-    // the checkpoint still records as 'valid' and every indexer reaches the same verdict
-    // deterministically. This is also the whole path a degraded ATTEST_SIG_COUNT 0 tail
-    // takes here: no attestation, no quorum, checkpoint intact.
-    if(!error && format === 1 && q.snapPubkeys && q.oracleN > 0){
-        let attQuorumMet = quorum.headAttestationMet(handler, data, publisherSigs, q);
-        await settle.creditArchiveReward(handler, data, attQuorumMet, q.snapPubkeys, format);
-    }
 
     await recordHead(handler, data, sigs, publisherSigs, error, format);
     await reassembly.reassembleAtHead(handler, data, error, format);

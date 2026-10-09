@@ -115,6 +115,13 @@ describe('ci fast selector', function () {
     assert(plan.reasons.some((reason) => reason.includes('package.json')));
   });
 
+  it('leaves the suite title pin to its dedicated CI tier', function () {
+    const plan = select(['bin/pins/at1-suite-titles.json']);
+    assert.strictEqual(plan.consensus, false);
+    assert.deepStrictEqual(plan.tests, []);
+    assert.strictEqual(select(['bin/pins/carrier-logic.json']).consensus, true);
+  });
+
   it('defers a changed integration test', function () {
     const file = gitLines(['ls-files', 'test/integration/**/*.test.js', 'test/integration/*.test.js'])[0];
     assert(file);
@@ -195,6 +202,8 @@ describe('ci fast selector', function () {
     assert(script.includes('ci_fast_select.js --plan'));
     assert(script.includes('CI_TIER'));
     assert(script.includes('run_tier "integration (test:integration:ci)"'));
+    assert(script.includes('run_tier "suite title pin (test)"'));
+    assert(script.includes('--script test --compare bin/pins/at1-suite-titles.json'));
   });
 
   it('runs source-only VM staging in Linux fast mode', function () {
