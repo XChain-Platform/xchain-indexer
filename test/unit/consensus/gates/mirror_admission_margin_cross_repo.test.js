@@ -173,6 +173,7 @@ describe('mirror-admission margin cross-repo parity', function() {
         const table = 'cross_chain_matches';
         const start = 1_700_000_000_000;
         const trails = [];
+        const legacyDeficits = [];
         for(const cadenceMs of [60000, 50000, 40000]) {
             const watermark = withoutHubWindowEnv(() => new loaded.normalWatermark({
                 HUB_NETWORK: 'regtest',
@@ -188,13 +189,16 @@ describe('mirror-admission margin cross-repo parity', function() {
             const activatedMargin = loaded.normalIndexer.rowMarginBlocks(
                 table, 'DOGE', 'regtest', tip);
             trails.push(trail);
+            legacyDeficits.push(trail - legacyMargin);
             assert.strictEqual(legacyMargin, 4);
             assert.ok(trail - legacyMargin >= 5);
             assert.ok(claimed >= loaded.normalIndexer.consumerTargetHeight(
                 table, 'DOGE', 'regtest', tip));
+            assert.strictEqual(activatedMargin, 14);
             assert.ok(activatedMargin > trail);
         }
         assert.deepStrictEqual(trails, [9, 11, 13]);
+        assert.deepStrictEqual(legacyDeficits, [5, 7, 9]);
     });
 
     it('hub and indexer agree on both sides of a stubbed DOGE testnet boundary', function() {
