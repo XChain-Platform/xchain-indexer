@@ -11948,8 +11948,12 @@
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 isGuardGasReserved is true on BTC and false on the chains the bridge mints XCHAIN on",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 isGuardGasReserved reads the chain, never the presence of a gas row",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController allows on BTC when the source covers the ceiling exactly",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController bills nothing off BTC when the gas row is absent or the balance is negative",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController bills the full guard gas off BTC when the source holds enough",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController caps the guard gas at the held balance off BTC so no balance goes negative",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController does not refuse on DOGE once the XCHAIN row exists and the source holds none",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController leaves every other refusal in the shared tail alone on both chains",
+      "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController leaves the BTC bill untouched by the clamp even when the balance is below the fee",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController refuses on BTC when the source cannot cover the guard gas ceiling",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController still refuses on BTC when the source holds less than the ceiling but more than zero"
     ],
