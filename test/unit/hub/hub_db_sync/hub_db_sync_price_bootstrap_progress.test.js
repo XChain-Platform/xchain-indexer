@@ -15,6 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
 
 const COLS = ['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'block_timestamp', 'status'];
 
@@ -79,7 +80,7 @@ const COLS = ['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'bl
 function stubHub(sync, hubRows) {
     sinon.stub(sync, 'httpGet').callsFake(async (path) => {
         const since = Number(/since_id=(\d+)/.exec(path)[1]);
-        return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
+        return { schema_version: HUB_SCHEMA_VERSION, rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
     });
 }
 

@@ -24,6 +24,7 @@
 
 const assert = require('assert');
 const { stallWedged, waitingOnFutureBlock, stallClassOf, atProcessableTip } = require('../../../src/XChainIndexer');
+const { BRIDGE_PROOF_BARRIER } = require('../../../src/consensus/bridge_proof_client/stall.js');
 
 describe('stallWedged() healthcheck discriminator', function () {
     const GRACE = 120000; // 2 min
@@ -171,12 +172,25 @@ describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', functio
             assert.strictEqual(stallClassOf('anchor_attest_barrier', LONG_STALL, GRACE, NOW, NOW - 1), 'wedged');
         });
 
+        // Keyed on the reason the proof client actually raises, so a respelling on either
+        // side fails here instead of silently dropping proof waits into the wedge verdict.
+        it('a bridge proof wait classifies as bridge_proof_wait and never as wedged', function () {
+            for (const clearsAt of [null, NOW + 960000, NOW - 1]) {
+                for (const committedAt of [LONG_STALL, RECENT, null]) {
+                    assert.strictEqual(stallClassOf(BRIDGE_PROOF_BARRIER, committedAt, GRACE, NOW, clearsAt),
+                                       'bridge_proof_wait');
+                    assert.strictEqual(stallWedged(BRIDGE_PROOF_BARRIER, committedAt, GRACE, NOW, clearsAt), false);
+                }
+            }
+        });
+
         it('the class never contradicts stallWedged()', function () {
             const cases = [
                 ['anchor_attest_barrier', LONG_STALL, NOW + 960000],
                 ['anchor_attest_barrier', LONG_STALL, NOW - 1],
                 ['price_sync_barrier',    RECENT,     null],
                 ['vm_executor_unavailable', LONG_STALL, null],
+                [BRIDGE_PROOF_BARRIER,    LONG_STALL, null],
                 [null,                    LONG_STALL, null]
             ];
             for (const [reason, committedAt, clearsAt] of cases) {

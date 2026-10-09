@@ -31,13 +31,13 @@
  *     carries none) hashes every armed row its repo's registry carries, a far
  *     wider set than SHARED_GATES. It compares processes that share that
  *     registry, two indexers or an indexer and its sync replica, never a hub.
- *   - This digest hashes the DECIDED HEIGHTS of SHARED_GATES alone. It answers
+ *   - This digest hashes the DECIDED VALUES of SHARED_GATES alone. It answers
  *     "do you and I apply the same rules to the same chain", which is the
  *     question that actually predicts divergence, and it is comparable ACROSS
  *     repos: a hub and an indexer running the same flag days produce the same
  *     digest even though they share no source file.
  *
- * Neither moves on a comment reformat (prose cannot fork a chain, a height
+ * Neither moves on a comment reformat (prose cannot fork a chain, a value
  * can), and both move when a regtest venue arms a gate from its environment.
  *
  * SHARED_GATES is deliberately a hardcoded intersection rather than a
@@ -136,7 +136,11 @@ const SHARED_GATES = [
     ['list_share_producer_activation',          ['LIST_SHARE_PRODUCER_ACTIVATION']],
     // The hub signs list snapshots in two shapes either side of this gate, so a build that
     // sizes it differently must report a rules mismatch.
-    ['list_meta_activation',                    ['LIST_META_ACTIVATION']]
+    ['list_meta_activation',                    ['LIST_META_ACTIVATION']],
+    // The per-chain admission margins decide which block a hub stamps and which watermark an
+    // indexer accepts. Both the activation and the selected margins therefore belong in the
+    // cross-process digest. Appended at the end to preserve every earlier preimage row.
+    ['mirror_admission_margin_activation',      ['ADMIT_CHAIN_MARGIN_ACTIVATION', 'ADMIT_CHAIN_MARGIN_BLOCKS']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an
