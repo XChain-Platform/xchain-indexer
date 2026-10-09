@@ -173,6 +173,9 @@ else
   fast_defer "ci (siblings STRICT)"
 fi
 
+run_tier "suite title pin (test)" \
+  node bin/suite-title-map.js --script test --compare bin/pins/at1-suite-titles.json
+
 # --- job: integration ------------------------------------------------------
 if [ "${CI_TIER:-full}" = "fast" ]; then
   fast_defer "integration (test:integration:ci)"
