@@ -27,6 +27,10 @@
     "00d7e3417ecc95fb": [
       "HubDbSync oracle_prices generation convergence @regression @tier1 re-pages two mirrors from zero and converges both to the newer generation in one pass"
     ],
+    "01ac87a503367b41": [
+      "protocol_changes/ITER_SET_METER row @regression @tier1 is the first row in part 5 and has the registry shape",
+      "protocol_changes/ITER_SET_METER row @regression @tier1 is unarmed on production networks and active from regtest genesis"
+    ],
     "018402ee475c49ef": [
       "activation ladder fork-avoiding constraints (the bridge train cut) C3: comparison logic falsified on a local fixture (never the shipped maps) goes red, naming both heights, when the fixture is perturbed so the train boundary lands ABOVE the bridge height",
       "activation ladder fork-avoiding constraints (the bridge train cut) C3: comparison logic falsified on a local fixture (never the shipped maps) goes red, naming both heights, when the fixture is perturbed so the train boundary lands AT the bridge height",
@@ -5948,10 +5952,6 @@
     "64d0322eb7068e3a": [
       "ROLLCALL gates regtest resolver matches the running parser @regression @tier1 agrees with regtestHeight on every accepted, refused and garbage input",
       "ROLLCALL gates regtest resolver matches the running parser @regression @tier1 lands on the documented values, so agreement is not two copies of one mistake"
-    ],
-    "64d2482af65ca8c7": [
-      "protocol_changes/ITER_SET_METER row @regression @tier1 is present in the class table and registry in the same shape",
-      "protocol_changes/ITER_SET_METER row @regression @tier1 is unarmed on production networks and active from regtest genesis"
     ],
     "64d6bb99b4ed1031": [
       "XChainIndexer._deliverStagedHubPushes() dispatches oracle_price entries to pushOraclePrice",
@@ -17599,7 +17599,7 @@
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
-        "test/unit/protocol_changes/iter_set_meter_row.test.js": "64d2482af65ca8c7",
+        "test/unit/protocol_changes/iter_set_meter_row.test.js": "01ac87a503367b41",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
@@ -18919,7 +18919,7 @@
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
-        "test/unit/protocol_changes/iter_set_meter_row.test.js": "64d2482af65ca8c7",
+        "test/unit/protocol_changes/iter_set_meter_row.test.js": "01ac87a503367b41",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
@@ -19379,7 +19379,7 @@
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
-        "test/unit/protocol_changes/iter_set_meter_row.test.js": "64d2482af65ca8c7",
+        "test/unit/protocol_changes/iter_set_meter_row.test.js": "01ac87a503367b41",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
@@ -20235,7 +20235,7 @@
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "5c4091c903dddb3e",
-        "test/unit/protocol_changes/iter_set_meter_row.test.js": "64d2482af65ca8c7",
+        "test/unit/protocol_changes/iter_set_meter_row.test.js": "01ac87a503367b41",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "d2c5f4fbb6b63014",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
