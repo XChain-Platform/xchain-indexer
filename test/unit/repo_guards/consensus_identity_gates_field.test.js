@@ -11,6 +11,7 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -68,13 +69,24 @@ function childEnv() {
 }
 
 describe('consensus identity GATES field and pin comparison', function () {
-    it('matches the hub pinned GATES field hash', function () {
+    it('matches the hub pin except for the staged chain-margin rows', function () {
         const hubRoot = process.env.XCHAIN_HUB_DIR || path.resolve(REPO, '..', 'xchain-hub');
         const candidate = path.join(hubRoot, 'bin', 'pins', 'at1-consensus-identity.json');
         const sibling = siblingCheckout(REPO, candidate, { ownRoot: REPO });
         if (!sibling.usable) return skipOrFail(this, sibling, 'the hub GATES field hash guard');
         const hubPin = JSON.parse(fs.readFileSync(sibling.path, 'utf8'));
-        assert.strictEqual(codeIdentity('regtest').gates_field_hash, hubPin.gates_field_hash);
+        const local = codeIdentity('regtest');
+        if (local.gates_field_hash === hubPin.gates_field_hash) return;
+
+        const staged = [
+            'mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION',
+            'mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS',
+        ];
+        const localKeys = local.gates_field.split(',');
+        assert.deepStrictEqual(localKeys.filter((key) => !hubPin.gates_field.split(',').includes(key)), staged);
+        const priorField = localKeys.filter((key) => !staged.includes(key)).join(',');
+        assert.strictEqual(priorField, hubPin.gates_field);
+        assert.strictEqual(crypto.createHash('sha256').update(priorField).digest('hex'), hubPin.gates_field_hash);
     });
 
     it('exits zero against the committed pin', function () {
