@@ -22,6 +22,8 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
+const { MAX_CODE_SIZE } = require('../../../src/protocol/constants.js');
+const callbackProbeVm   = require('../../../src/actions/vote/callback_probe_vm.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const PUBKEYS = {
@@ -79,7 +81,7 @@ const VM_GOLDEN = JSON.stringify({
         [vmStaker(PUBKEYS.eightB, '2.5'), vmStaker(PUBKEYS.eightA, '1.25')]
     ),
     wide: vmTick(
-        [vmStake(PUBKEYS.wideA, '4.000000000000000001'), vmStake(PUBKEYS.wideB, '0.000000000000000003')],
+        [vmStake(PUBKEYS.wideA, '4.000000000000000001'), vmStake(PUBKEYS.wideB, '3e-18')],
         '4.000000000000000004',
         [vmStaker(PUBKEYS.wideA, '4.000000000000000001'), vmStaker(PUBKEYS.wideB, '3e-18')]
     ),
@@ -99,7 +101,7 @@ function staker(pubkey, amount) {
 }
 
 function vmStake(pubkey, value) {
-    return { pubkey, type: 'string', value };
+    return { pubkey, type: 'object', value: bigNumber(value) };
 }
 
 function vmStaker(pubkey, value) {
@@ -141,7 +143,12 @@ function resolveVm() {
 
 async function runContract(XChainVM, snapshot) {
     const vm = new XChainVM({
-        execution: 'in-process', gasSchedule: getTestConfig()['GAS_SCHEDULE'], gasCeiling: 1000000,
+        execution: 'subprocess', gasSchedule: getTestConfig()['GAS_SCHEDULE'], gasCeiling: 1000000,
+        limits: {
+            maxCpuTimeMs: 30000, maxMemory: 8, maxEmissions: 50, maxStateKeys: 10000,
+            maxStateValueSize: 65536,
+            maxCodeSize: MAX_CODE_SIZE + callbackProbeVm.PROBE_SUFFIX_ALLOWANCE,
+        },
     });
     vm.beginBlock();
     try {
