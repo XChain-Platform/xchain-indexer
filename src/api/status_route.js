@@ -137,13 +137,13 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         lastHubConfigFetchAt: lastHubConfigFetchAt,
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hubConfigStale:       hubConfigStale,
+        // True only after table verification and automatic migrations finish.
+        schemaReady:          indexer.schemaReady === true,
         hubMirror:            hubMirror,
         // Block-poll loop liveness. Reported for the fleet
         // watcher to page on, never folded into the 503 above (see health/advance_fields.js).
         pollSilent:           (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false,
-        lastPollAt:           indexer.lastPollAt || null,
-        // True only after table verification and automatic migrations finish.
-        schemaReady:          indexer.schemaReady === true
+        lastPollAt:           indexer.lastPollAt || null
     };
 }
 

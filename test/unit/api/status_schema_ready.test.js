@@ -75,9 +75,12 @@ function startupIndexer(runMigrations){
 
 describe('/status schemaReady', function(){
     it('always emits a boolean and reports true only for completed startup', function(){
-        assert.strictEqual(statusFor(undefined).schemaReady, false);
+        const bootingStatus = statusFor(undefined);
+        assert.strictEqual(bootingStatus.schemaReady, false);
         assert.strictEqual(statusFor(false).schemaReady, false);
         assert.strictEqual(statusFor(true).schemaReady, true);
+        assert.deepStrictEqual(Object.keys(bootingStatus).slice(-4),
+            ['schemaReady', 'hubMirror', 'pollSilent', 'lastPollAt']);
     });
 
     it('stays false through table verification and flips after migrations finish', async function(){
