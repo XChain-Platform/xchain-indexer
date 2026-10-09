@@ -17025,10 +17025,10 @@
       }
     },
     "test:integration": {
-      "error": "unparseable mocha json (exit 1): \n Exception during run: AssertionError [ERR_ASSERTION]: TEST_DB_PASS is required for the real MariaDB integration\n    at Object.<anonymous> (/Users/jdog/Sites/XChain-Platform/tmp/lanes/cx-xc-3898/xchain-indexer/test/integration/scenarios/controller_stake/27_controller_custody_guard.test.js:19:8)\n    at Module._compile (node:internal/modules/cjs/loader:1781:14)\n    at Object..js (node:internal/modu"
+      "error": "unparseable mocha json (exit 1): integration suite requires database credentials during dry-run"
     },
     "test:integration:ci": {
-      "error": "unparseable mocha json (exit 1): \n Exception during run: AssertionError [ERR_ASSERTION]: TEST_DB_PASS is required for the real MariaDB integration\n    at Object.<anonymous> (/Users/jdog/Sites/XChain-Platform/tmp/lanes/cx-xc-3898/xchain-indexer/test/integration/scenarios/controller_stake/27_controller_custody_guard.test.js:19:8)\n    at Module._compile (node:internal/modules/cjs/loader:1781:14)\n    at Object..js (node:internal/modu"
+      "error": "unparseable mocha json (exit 1): integration suite requires database credentials during dry-run"
     },
     "test:nodb": {
       "composite": [
@@ -17119,7 +17119,7 @@
       }
     },
     "test:regression": {
-      "error": "unparseable mocha json (exit 1): \n Exception during run: AssertionError [ERR_ASSERTION]: TEST_DB_PASS is required for the real MariaDB integration\n    at Object.<anonymous> (/Users/jdog/Sites/XChain-Platform/tmp/lanes/cx-xc-3898/xchain-indexer/test/integration/scenarios/controller_stake/27_controller_custody_guard.test.js:19:8)\n    at Module._compile (node:internal/modules/cjs/loader:1781:14)\n    at Object..js (node:internal/modu"
+      "error": "unparseable mocha json (exit 1): integration suite requires database credentials during dry-run"
     },
     "test:regression:fast": {
       "fileCount": 405,
@@ -17533,7 +17533,7 @@
       }
     },
     "test:regression:full": {
-      "error": "unparseable mocha json (exit 1): \n Exception during run: AssertionError [ERR_ASSERTION]: TEST_DB_PASS is required for the real MariaDB integration\n    at Object.<anonymous> (/Users/jdog/Sites/XChain-Platform/tmp/lanes/cx-xc-3898/xchain-indexer/test/integration/scenarios/controller_stake/27_controller_custody_guard.test.js:19:8)\n    at Module._compile (node:internal/modules/cjs/loader:1781:14)\n    at Object..js (node:internal/modu"
+      "error": "unparseable mocha json (exit 1): integration suite requires database credentials during dry-run"
     },
     "test:security": {
       "fileCount": 11,
