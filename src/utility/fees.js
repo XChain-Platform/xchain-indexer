@@ -115,6 +115,17 @@ module.exports = {
         return coin === 'BTC';
     },
 
+    // Off the chains that reserve guard gas, the metered fee is billed without a reservation, so
+    // a source holding less GAS than the fee would be debited below zero. Cap the bill at what
+    // the source holds: the guard still runs and the action settles, and no balance goes negative.
+    // A missing gas row or an absent or negative balance caps the bill at zero.
+    clampGuardFeeToBalance(balances, tickId, fee){
+        if(!this.bcgt(fee, 0)) return fee;
+        let balance = (balances && tickId !== undefined && tickId !== null && Object.prototype.hasOwnProperty.call(balances, tickId) && !this.isNull(balances[tickId])) ? balances[tickId] : 0;
+        if(!this.bcgt(balance, 0)) return 0;
+        return this.bcgte(balance, fee) ? fee : balance;
+    },
+
     // Calculate Transaction fee using unified gas schedule (per-recipient)
     getUnifiedTransactionFee(recipients, gasType){
         let schedule  = this.config['GAS_SCHEDULE'];
