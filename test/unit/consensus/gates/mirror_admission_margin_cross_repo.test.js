@@ -10,6 +10,11 @@
  * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
  *
+ **********************************************************************
+ *
+ * Prove the hub stamp and indexer consumer use identical margin data and
+ * agree across both sides of a chain-specific activation boundary.
+ *
  ********************************************************************/
 
 'use strict';

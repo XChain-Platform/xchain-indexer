@@ -349,7 +349,8 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
             price_snapshots: 900, oracle_prices: 880, cross_chain_matches: 910,
             cross_chain_calls: 915, capability_snapshots: 905, state_checkpoints: 920,
             anchor_reward_attestations: 925, attestation_responses: 930,
-            bridge_transfers: 935, policy_snapshots: 940, list_snapshots: 945
+            bridge_transfers: 935, policy_snapshots: 940, list_snapshots: 945,
+            remote_token_snapshots: 950
         };
         sinon.stub(sync, 'bootstrapTable').callsFake(async (table) => marks[table]);
         await sync.bootstrapAll();
