@@ -199,12 +199,17 @@ describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regr
             assert.strictEqual(util.bcstr(util.clampGuardFeeToBalance({ 7: '-1' }, 7, '0.01')), '0');
         });
 
-        it('leaves the BTC bill untouched by the clamp', async function(){
+        it('leaves the BTC bill untouched by the clamp even when the balance is below the fee', async function(){
             const cfg  = configFor('BTC');
             const util = new Utility(cfg);
-            const res  = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
-                opts({ gasBalances: { 7: '5' } }), { actionClass: 'trade', subject: 'token TOK' });
-            assert.strictEqual(util.bcstr(res.guardFee), '0.01');
+            const guard = { allow: true, reason: null, gasBilled: Number(util.resolveGuardGasCeiling(cfg)), payoutLegs: null };
+            const fee = util.bcmul(guard.gasBilled, cfg['GAS_PRICE'], 8);
+            const balance = util.bcsub(fee, '0.00000001', 8);
+            util.hasBalance = () => true;
+            assert.strictEqual(util.bcstr(util.clampGuardFeeToBalance({ 7: balance }, 7, fee)), util.bcstr(balance));
+            const res = await util.invokeController(actionsStub(guard), dbFor(cfg), 5,
+                opts({ gasBalances: { 7: balance } }), { actionClass: 'trade', subject: 'token TOK' });
+            assert.strictEqual(util.bcstr(res.guardFee), util.bcstr(fee));
         });
     });
 
