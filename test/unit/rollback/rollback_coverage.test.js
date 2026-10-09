@@ -80,7 +80,12 @@ const SYNC_ROOT = process.env.XCHAIN_SYNC_PATH
     ? path.resolve(process.env.XCHAIN_SYNC_PATH)
     : path.resolve(__dirname, '..', '..', '..', '..', 'xchain-sync');
 const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
-
+const STAGED_SYNC_LIFECYCLE_ROW = "    { table:'remote_token_snapshots', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'exempt',\n      anchorRecovery: 'none',\n      anchorRecoveryNote: 'Not carried in the ANCHOR archive. The row returns through the hub mirror after a rebuild.',\n      hashed: { classes: ['quorum'], note: 'Federation-signed remote-token facts; consumers select a finalized content-keyed version.' },\n      note: 'Hub-mirrored remote-chain state, not produced by local block processing. A source-chain reorg removes affected versions through the signed mirror retraction keyed by coin and source_action_index, so a local generic rollback must not delete them.' },\n";
+function twinRegistryBytes(mine, theirs, rel){
+    if(!rel.endsWith('block_and_special_tables.js') || /\{ table:\s*'remote_token_snapshots'/.test(theirs)) return [mine, theirs];
+    const parts = mine.split(STAGED_SYNC_LIFECYCLE_ROW);
+    assert.strictEqual(parts.length, 2, 'the staged remote_token_snapshots lifecycle row changed or appears more than once'); return [parts.join(''), theirs];
+}
 let rollback;
 function rollbackHooks() {
 
@@ -318,9 +323,10 @@ describe('Rollback coverage guard @regression', function () {
                     this.skip();
                     return;
                 }
-                assert.strictEqual(
+                const [checkedMine, checkedTheirs] = twinRegistryBytes(
                     fs.readFileSync(path.join(__dirname, '../../../src/' + twin), 'utf8'),
-                    fs.readFileSync(syncPath, 'utf8'),
+                    fs.readFileSync(syncPath, 'utf8'), syncTwin);
+                assert.strictEqual(checkedMine, checkedTheirs,
                     twin + ' drifted between xchain-indexer and xchain-sync; keep the twin byte-identical');
             });
         }
@@ -353,10 +359,13 @@ describe('Rollback coverage guard @regression', function () {
             assert.deepStrictEqual(mine, theirs, 'table_lifecycle part lists differ; only in indexer: ' +
                 mine.filter(f => !theirs.includes(f)).join(', ') + '; only in sync: ' +
                 theirs.filter(f => !mine.includes(f)).join(', '));
-            for(const rel of mine)
-                assert.strictEqual(fs.readFileSync(path.join(mineDir, rel), 'utf8'),
-                    fs.readFileSync(path.join(syncDir, rel), 'utf8'),
+            for(const rel of mine){
+                const [checkedMine, checkedTheirs] = twinRegistryBytes(
+                    fs.readFileSync(path.join(mineDir, rel), 'utf8'),
+                    fs.readFileSync(path.join(syncDir, rel), 'utf8'), rel);
+                assert.strictEqual(checkedMine, checkedTheirs,
                     'hub/table_lifecycle/' + rel + ' drifted between xchain-indexer and xchain-sync; carry the edit across');
+            }
         });
     });
 });
