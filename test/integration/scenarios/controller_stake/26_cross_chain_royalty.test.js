@@ -143,6 +143,12 @@ async function setupRoyaltyRail() {
             { source: OWNER, data: `DEPLOY|0|${b64(SEGLEG)}|300000|` },
         ]);
         indexer = await initIndexer();
+        const realMirrorDb = indexer.indexerDb.mirrorDb.bind(indexer.indexerDb);
+        indexer.indexerDb.mirrorDb = () => Object.create(realMirrorDb(), {
+            // XC-3935 will replace this accessor stub with a seeded remote_token_snapshots
+            // row; this scenario tests royalty legs, not remote token pinning.
+            getPinnedRemoteToken: { value: async () => ({ decimals: 0 }) }
+        });
         // LTC is native-fee-only; this scenario is about royalty legs, not fee mode, so pin
         // the xchain-balance fee path (scenario 11's forceXchainFeeMode: a placeholder
         // FEE_DESTINATION short-circuits detectFeePaymentMode to 'xchain'; the config
