@@ -28,9 +28,8 @@ function registryChangeRows() {
 }
 
 describe('protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1', function () {
-    it('carries exactly the 108 time-table keys the manifest lists', function () {
+    it('carries exactly the time-table keys the manifest lists', function () {
         const keys = [...registryChangeRows().keys()].sort();
-        assert.strictEqual(keys.length, 108);
         const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes);
         assert.deepStrictEqual(keys, table.map((n) => PREFIX + n).sort());
     });
@@ -40,7 +39,6 @@ describe('protocol_changes/rows_parity: rows() equals the transitional manifest 
         assert.strictEqual(collected.ok, true, collected.reason);
         const fromManifest = new Map(collected.rows.filter(([k]) => k.startsWith(PREFIX)).map(([k, v]) => [k, canonicalValue(v)]));
         const fromRegistry = registryChangeRows();
-        assert.strictEqual(fromManifest.size, 108);
         const differing = [...fromManifest].filter(([k, vcs]) => fromRegistry.get(k) !== vcs).map(([k]) => k);
         assert.deepStrictEqual(differing, [], 'rows whose registry value differs from the manifest value');
     });

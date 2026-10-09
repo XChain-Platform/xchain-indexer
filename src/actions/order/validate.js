@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const gateRegistry = require('../../consensus/gate_registry');
+const { remoteTokenAcceptError } = require('../cross_chain_remote_token');
 
 const MAKER_POLICY_ADMISSION_KEY = 'order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION';
 const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
@@ -219,6 +220,10 @@ async function validateGeneral(handler, st){
     // Validate ORDER_ACTION_INDEX is valid ORDER with a status of open
     if(!error && (format==1 || format==2) && orderInfo['ORDER_STATUS']!='open')
         error = 'invalid: ORDER_ACTION_INDEX (order not open)';
+
+    // A cross-chain GET token needs a pinned remote token row once the gate is active
+    if(!error)
+        error = (await remoteTokenAcceptError(handler, st)) || error;
 
     // Validate that EXPIRATION is greater than current BLOCK_TIME
     if(!error && !handler.util.isNull(data['EXPIRATION']) && handler.util.bclte(data['EXPIRATION'], data['BLOCK_TIME']))
