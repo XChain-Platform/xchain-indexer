@@ -100,4 +100,13 @@ describe('Send handler: gated total by resolved tick ID @regression @tier1', fun
 
         assert.deepStrictEqual(legs.map((leg) => leg.STATUS), ['valid', 'valid']);
     });
+
+    it('ignores malformed placeholder legs from already-invalid actions', function () {
+        const totals = handler.gatedTotalsByTickId(
+            [['99', 'TEST', null]],
+            { 99: makeToken({ TICK_ID: 7 }) },
+        );
+
+        assert.deepStrictEqual(totals, {});
+    });
 });

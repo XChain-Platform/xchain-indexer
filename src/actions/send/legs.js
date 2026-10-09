@@ -101,7 +101,7 @@ module.exports = {
         // Preserve the action-wide totals before literal TICK spellings are consolidated.
         // Below the activation boundary, avoid even introducing the new arithmetic.
         let totalTickIdRule = gateRegistry.activeAt('send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
-        this._gatedActionTotals = totalTickIdRule ? this.gatedTotalsByTickId(sends, ticks) : null;
+        this._gatedActionTotals = totalTickIdRule ? this.gatedTotalsByTickId(sends, ticks, data) : null;
 
         let legAmountRule = gateRegistry.activeAt('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
         let keys = {};
@@ -125,7 +125,7 @@ module.exports = {
     },
 
     // Total resolved ticks by recipient without changing the legs or prefetched token map.
-    gatedTotalsByTickId(sends, ticks){
+    gatedTotalsByTickId(sends, ticks, data){
         let totals = {};
         if(!Array.isArray(sends))
             return totals;
@@ -133,6 +133,8 @@ module.exports = {
         for(const [tick, amount, destination] of sends){
             let tokenInfo = ticks && ticks[tick];
             if(!tokenInfo || tokenInfo['TICK_ID'] === null || tokenInfo['TICK_ID'] === undefined)
+                continue;
+            if(!this.util.isValidAmountFormat(tokenInfo['DECIMALS'], amount, data && data['BLOCK_TIME']))
                 continue;
 
             let tickId = tokenInfo['TICK_ID'];
