@@ -381,3 +381,18 @@ addGate('vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION', 'heig
     testnet: 0,
     regtest: 0,
 });
+
+// vm_lint_destructure_heights
+// Per-chain deploy-lint ObjectPattern refinement. Public networks remain
+// unarmed until release heights are chosen. MUST equal xchain-vm
+// LINT_DESTRUCTURE_ACTIVATION; VM null is UNARMED here.
+addGate('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
