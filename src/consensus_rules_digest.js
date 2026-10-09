@@ -150,6 +150,8 @@ const FAR_FUTURE_HEIGHT_SENTINEL = 9999999999;
 
 const ABSENT = '<absent>';
 
+const ACTIVE_GATES_UNIT_AWARE_ACTIVATION = Object.freeze(['height', 'time', 'epoch']);
+
 // Canonical JSON with object keys sorted, so two builds that spell the same map
 // with its networks in a different order still digest alike. JSON.stringify's
 // insertion order is not a property either repo should be forced to preserve.
@@ -282,13 +284,25 @@ function networkActivationHeight(map, network, coin){
     return declared ? map[network] : undefined;
 }
 
+function hasActivationUnit(key){
+    try {
+        registry.activeAt(key, '', null, 0, 0);
+        return true;
+    } catch (e) {
+        if (e && e.name === 'RegistryMissError') return false;
+        const match = e && /^activeAt: unsupported unit ([a-z]+) for /.exec(e.message);
+        if (match && !ACTIVE_GATES_UNIT_AWARE_ACTIVATION.includes(match[1])) return false;
+        throw e;
+    }
+}
+
 // The shared gates ACTIVE at `height` on `network`, '<module>.<EXPORT>', sorted: every
-// per-network activation MAP whose entry for the network is a finite height, below the
-// far-future sentinel, and <= height. Non-map exports (frozen ladder constants such as
-// ATTEST_RESPONSIBLE_WIDENING) are never active in this sense and are never listed; a
-// null entry is the unratified sentinel and reads as inactive. This is the comparand the
-// rules-aware capability set filters on: a validator whose last rolled call did not name
-// every key returned here is dropped for a request at this height.
+// registry row with an activation unit (height, time or epoch) whose entry for the network
+// is finite, below the far-future sentinel, and <= height. Constant and ruleset rows are
+// never active in this sense even when their value is a network-shaped object; a null entry
+// is the unratified sentinel and reads as inactive. This is the comparand the rules-aware
+// capability set filters on: a validator whose last rolled call did not name every key
+// returned here is dropped for a request at this height.
 //
 // `coin` is optional and only changes the answer for a coin-keyed gate: pass the chain
 // being judged to get that chain's own activation, omit it to get the network-wide answer
@@ -302,6 +316,7 @@ function activeGatesAt(height, network, coin){
     for (const key of Object.keys(values)) {
         const v = values[key];
         if (v === ABSENT || v === null || typeof v !== 'object' || Array.isArray(v)) continue;
+        if (!hasActivationUnit(key)) continue;
         const at = networkActivationHeight(v, network, coin);
         if (at === undefined) continue;
         if (!Number.isFinite(at) || at >= FAR_FUTURE_HEIGHT_SENTINEL) continue;

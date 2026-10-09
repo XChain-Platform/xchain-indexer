@@ -15262,12 +15262,18 @@
       "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 registers a frozen per-chain height map that is unarmed on launched networks",
       "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 stays inactive below the sentinel and is active from regtest genesis"
     ],
-    "4d952349cc7e96e7": [
+    "9e7884adfcd7f5be": [
       "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
       "consensus identity GATES field and pin comparison exits zero against the committed pin",
       "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
       "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
       "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings"
+    ],
+    "52a1b2f740156f80": [
+      "consensus rules digest activeGatesAt unit filtering excludes network-shaped constant rows from the responsible set",
+      "consensus rules digest activeGatesAt unit filtering keeps coin-qualified height resolution without a named coin",
+      "consensus rules digest activeGatesAt unit filtering keeps height, time and epoch activation rows eligible"
     ],
     "bccbc26b36f075a9": [
       "remote_token_snapshots mirror contract declares hub re-mirroring as its recovery policy",
@@ -15286,8 +15292,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1233,
-      "titleCount": 12789,
+      "fileCount": 1234,
+      "titleCount": 12793,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15876,6 +15882,7 @@
         "test/unit/config/message_limits.test.js": "8d38edb1fec12246",
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/config/touch_guards_env.test.js": "8f02c7885f4b9349",
+        "test/unit/consensus/active_gates_unit_aware.test.js": "52a1b2f740156f80",
         "test/unit/consensus/admission_binding.test.js": "989a461516486cec",
         "test/unit/consensus/admission_binding.test/attest_bind_predicate.test.js": "3d40ffcb0bc38a1d",
         "test/unit/consensus/admission_binding.test/attest_response_canonical.test.js": "daaa06423dba0a37",
@@ -16401,7 +16408,7 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "4d952349cc7e96e7",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "9e7884adfcd7f5be",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
