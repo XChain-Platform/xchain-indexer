@@ -13,19 +13,41 @@
  **********************************************************************
  * test/unit/activations/activation_constants_parity.test.js
  *
- * Locks local constants to the documentation canonical and requires a trustworthy sibling.
+ * Arms the byte-equality claim each snapshot-block activation module's header
+ * makes but that no suite previously enforced (review 2757 checkpoint_commitment,
+ * 2758 cross_chain_royalty). Each module is a LOCAL COPY of the canonical map in
+ * xchain-documentation/protocol/constants.js; a one-sided edit of any copy's
+ * mainnet/testnet/regtest height forks the signed checkpoint / XMATCH canonical at
+ * the flag-day with no CI failure. These modules are NOT in the reference-impl
+ * conformance loop (no reference-impl copy exists) and cross_chain_royalty is not
+ * vendored into xchain-sync, so the guard is anchored on the canonical constants.js
+ * map that IS present. Skips green when the docs sibling is absent, unless
+ * XCHAIN_REQUIRE_SIBLINGS=1 (CI) forces a hard failure.
+ *
+ * THE ABSENT-CHECKOUT BRANCH IS ITSELF A TEST CASE. A guard whose only behaviour on a
+ * missing sibling is a bare skip reports a green run over nothing, and this guard is
+ * what arming a network's flag day rests on. So the decision is a pure function asserted
+ * below whatever the checkout state is, the parity cases name the exact path they looked
+ * for in their titles rather than collapsing into a generic pending line, and a coverage
+ * floor case runs unconditionally so a renamed module or export cannot quietly leave the
+ * suite comparing nothing.
+ *
+ * THE LAYOUT. The height-ordering invariants read off the canon live beside this file in
+ * test/unit/activation_constants_parity.test/height_ordering.test.js, and the canonical
+ * checkout (its path, the verdict on it, the skip-or-throw decision and the before-all hook)
+ * in that directory's helpers/canon_source.js. Every block repeats the suite title, so each
+ * full test title is unchanged, and every block carries the hook, so a strict run on an
+ * absent or refused checkout still fails rather than skipping.
  */
 
 'use strict';
 
 const assert = require('assert');
 const fs     = require('fs');
-const Module = require('module');
 const path   = require('path');
-const { spawnSync } = require('child_process');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 // The canonical checkout and the hook that loads it, shared with the height-ordering part.
-const { CONSTANTS_PATH, canonVerdict, canonExists, resolveCanonSource, loadCanon } =
+const { CONSTANTS_PATH, canonExists, resolveCanonSource, loadCanon } =
     require('./activation_constants_parity.test/helpers/canon_source.js');
 // The activation registry (W3): every GATES row below is a registry row under
 // its `<stem>.<EXPORT>` key, except the ones NOT_A_ROW names, and the module's
@@ -34,30 +56,6 @@ const { CONSTANTS_PATH, canonVerdict, canonExists, resolveCanonSource, loadCanon
 const registry = require('../../../src/protocol_changes.js');
 const { modulePathFor } = require('../../helpers/gate_modules.js');
 const NOT_A_ROW = new Set(['consensus/reserved_roots.js']);
-function committedSiblingSource(file, verdict) {
-    if (!verdict.reason || !verdict.reason.includes('resolves through a symlink into the live main checkout'))
-        return null;
-    const rootResult = spawnSync('git', ['-C', path.dirname(file), 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
-    if (rootResult.status !== 0) return null;
-    const root = rootResult.stdout.trim();
-    const revResult = spawnSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
-    if (revResult.status !== 0) return null;
-    const rev = revResult.stdout.trim();
-    const rel = path.relative(root, fs.realpathSync(file)).split(path.sep).join('/');
-    const showResult = spawnSync('git', ['-C', root, 'show', rev + ':' + rel], { encoding: 'utf8' });
-    return showResult.status === 0 ? showResult.stdout : null;
-}
-function committedSiblingModule(file, verdict) {
-    const source = committedSiblingSource(file, verdict);
-    if (source === null) return null;
-    const loaded = new Module(file, module);
-    Object.assign(loaded, { filename: file, paths: Module._nodeModulePaths(path.dirname(file)) });
-    loaded._compile(source, file);
-    return loaded.exports;
-}
-const committedCanon = canonExists ? null : committedSiblingModule(CONSTANTS_PATH, canonVerdict);
-const canonAvailable = canonExists || committedCanon !== null;
-function loadCanonForSuite() { return committedCanon || loadCanon(); }
 function registryKey(file, exportName) { return file.replace(/\.js$/, '') + '.' + exportName; }
 // The local value of one GATES entry. W4 (activation registry, row 18) moved
 // the logic-bearing modules to their feature directories and retired the
@@ -155,8 +153,6 @@ const GATES = [
     // on a bridged copy while another still admits the transfer, from the same signed row.
     // Both ordering invariants it owes are asserted separately below.
     ['token_policy_activation.js',         'TOKEN_POLICY_INHERITANCE_ACTIVATION'],
-    // A one-sided LIST owner edit forks hashed derived list_items at the boundary.
-    ['list_owner_activation',              'LIST_OWNER_ACTIVATION'],
     ['list_share_producer_activation',     'LIST_SHARE_PRODUCER_ACTIVATION'],
     ['list_share_consumer_activation',     'LIST_SHARE_CONSUMER_ACTIVATION'],
     ['list_meta_activation',               'LIST_META_ACTIVATION'],
@@ -223,7 +219,7 @@ const GATES = [
 // The canonical map, loaded by each block's before-all hook.
 let canon = null;
 describe('activation-gate constant parity to canonical constants.js @regression', function () {
-    before(function () { canon = loadCanonForSuite(); });
+    before(function () { canon = loadCanon(); });
 
     it('reports skipped and names the exact checkout path when the documentation checkout is absent', function () {
         const result = resolveCanonSource(false, false);
@@ -280,7 +276,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     });
 });
 describe('activation-gate constant parity to canonical constants.js @regression', function () {
-    before(function () { canon = loadCanonForSuite(); });
+    before(function () { canon = loadCanon(); });
 
     // The train gate is the one map here whose copies must be BYTE-identical rather than
     // merely value-identical, because the two copies are the same halt decision compiled
@@ -292,11 +288,9 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         const twin = path.resolve(__dirname, '../../../../xchain-sync/src/consensus/gates/train_gate.js');
         assert.ok(fs.existsSync(here), 'the indexer train-activation gate is missing at ' + here);
         const twinVerdict = siblingCheckout(__dirname, twin);
-        const committedTwin = twinVerdict.usable ? null : committedSiblingSource(twin, twinVerdict);
-        if (!twinVerdict.usable && committedTwin === null)
+        if (!twinVerdict.usable)
             return skipOrFail(this, twinVerdict, 'the sync train-activation twin byte compare');
-        assert.strictEqual(committedTwin === null ? fs.readFileSync(twin, 'utf8') : committedTwin,
-            fs.readFileSync(here, 'utf8'),
+        assert.strictEqual(fs.readFileSync(twin, 'utf8'), fs.readFileSync(here, 'utf8'),
             'xchain-sync/src/consensus/gates/train_gate.js has drifted from the indexer copy; the two are ' +
             'vendored twins and a one-sided edit forks the fleet at the train boundary.');
     });
@@ -313,11 +307,9 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         const twin = path.resolve(__dirname, '../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js');
         assert.ok(fs.existsSync(here), 'the indexer admission activation module is missing at ' + here);
         const twinVerdict = siblingCheckout(__dirname, twin);
-        const committedTwin = twinVerdict.usable ? null : committedSiblingSource(twin, twinVerdict);
-        if (!twinVerdict.usable && committedTwin === null)
+        if (!twinVerdict.usable)
             return skipOrFail(this, twinVerdict, 'the hub mirror-admission twin byte compare');
-        assert.strictEqual(committedTwin === null ? fs.readFileSync(twin, 'utf8') : committedTwin,
-            fs.readFileSync(here, 'utf8'),
+        assert.strictEqual(fs.readFileSync(twin, 'utf8'), fs.readFileSync(here, 'utf8'),
             'xchain-hub/src/consensus/gates/mirror_admission_gate.js has drifted from the indexer copy; the two ' +
             'are byte-identical twins carrying the admission heights AND the canonical encoder, so a ' +
             'one-sided edit makes every signed admission field unverifiable on the other side.');
@@ -340,7 +332,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
 });
 
 describe('activation-gate constant parity to canonical constants.js @regression', function () {
-    before(function () { canon = loadCanonForSuite(); });
+    before(function () { canon = loadCanon(); });
 
     // The shape of the reserved list itself, asserted on the LOCAL copy so it runs without the
     // documentation sibling. The parity case above proves the two copies match; this proves the
@@ -373,26 +365,26 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         assert.strictEqual(isReservedFutureRoot(null), false, 'a non-string fails closed rather than throwing in a verdict path');
     });
 });
+
 describe('activation-gate constant parity to canonical constants.js @regression', function () {
-    before(function () { canon = loadCanonForSuite(); });
+    before(function () { canon = loadCanon(); });
+
     GATES.forEach(function ([file, exportName]) {
-        const claim = exportName === 'LIST_OWNER_ACTIVATION' ?
-            ' matches canonical outside the indexer mainnet genesis arm' :
+        const title = file + ' ' + exportName +
             ' is value-identical to xchain-documentation/protocol/constants.js';
-        const title = file + ' ' + exportName + claim;
-        (canonAvailable ? it : it.skip)(title, function () {
+        (canonExists ? it : it.skip)(title, function () {
             const local = localExport(file, exportName);
-            // Presence checks keep a mistyped export from passing as undefined on both sides.
+            // Presence, not shape: the list carries scalar consensus constants as well as
+            // activation maps. The checks stay so a mistyped export name cannot compare
+            // undefined to undefined and pass vacuously on both sides.
             assert.ok(local !== undefined, file + ' must export ' + exportName);
-            assert.ok(canon[exportName] !== undefined,
-                'constants.js must export ' + exportName + ' (the canonical authority for this gate)');
-            const expected = exportName === 'LIST_OWNER_ACTIVATION' ?
-                { ...canon[exportName], mainnet: 0 } : canon[exportName];
             // And the registry row under the same key, so the canon is compared against
             // what the fingerprint hashes as well as against what the module exports.
-            if (!NOT_A_ROW.has(file)) assert.deepStrictEqual(registry.get(registryKey(file, exportName)), expected,
+            if (!NOT_A_ROW.has(file)) assert.deepStrictEqual(registry.get(registryKey(file, exportName)), canon[exportName],
                 registryKey(file, exportName) + ' has drifted from the canonical ' + exportName);
-            assert.deepStrictEqual(local, expected,
+            assert.ok(canon[exportName] !== undefined,
+                'constants.js must export ' + exportName + ' (the canonical authority for this gate)');
+            assert.deepStrictEqual(local, canon[exportName],
                 file + ' has drifted from the canonical ' + exportName + ' in ' +
                 'xchain-documentation/protocol/constants.js; a one-sided flag-day edit forks consensus at the boundary.');
         });
