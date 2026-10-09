@@ -16,7 +16,7 @@
  *
  * MEMBERSHIP IS THE REGISTRY. Since the carriers became shims, every table
  * the process applies is a registry row, and the manifest is rows() plus the
- * fourteen VM mirror rows. What this guard has to catch is the one way a table
+ * fifteen VM mirror rows. What this guard has to catch is the one way a table
  * can escape that: a map literal declared somewhere under src/ instead of in
  * a registry part file. So the scan that used to check "declared, therefore
  * listed" now fails on ANY declaration outside src/protocol_changes/, and the
@@ -173,6 +173,19 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
+        assert.strictEqual(res.rows.length, 393);
+    });
+
+    it('carries the cross-chain remote-token gate heights', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        assert.deepStrictEqual(byKey.get('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'), {
+            mainnet: 9999999999,
+            'BTC:testnet': 9999999999,
+            'LTC:testnet': 9999999999,
+            'DOGE:testnet': 9999999999,
+            testnet: 9999999999,
+            regtest: 0,
+        });
     });
 
     it('carries the three row families the design names', function () {
@@ -184,6 +197,26 @@ describe('armed_map/manifest: collectRows', function () {
         assert.ok(keys.has('protocol_changes.changes.SEND'), 'a ProtocolChanges row');
         assert.ok(keys.has('protocol_changes.CONSENSUS_VERSION'), 'the registry\'s own constant');
         assert.ok(keys.has('mirror_admission_activation.CHAIN_CODE_RE'), 'a RegExp row');
+        assert.ok(keys.has('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'), 'the chain-margin activation');
+        assert.ok(keys.has('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS'), 'the chain-margin table');
+    });
+
+    it('carries the DOGE mirror-admission chain margins and activation', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        assert.deepStrictEqual(byKey.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'), {
+            mainnet: null,
+            'DOGE:mainnet': null,
+            'DOGE:testnet': 9999999999,
+            regtest: 0,
+        });
+        assert.deepStrictEqual(byKey.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS').DOGE, {
+            bridge_transfers: 14,
+            cross_chain_calls: 14,
+            cross_chain_matches: 14,
+            list_snapshots: 14,
+            policy_snapshots: 14,
+            price_snapshots: 16,
+        });
     });
 
     it('carries the anchor archive fold-term heights', function () {

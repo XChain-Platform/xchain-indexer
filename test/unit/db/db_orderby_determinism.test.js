@@ -64,16 +64,17 @@ function dbSource(){
 // tx_index, call_id, match_id, transfer_id) plus canonical/aggregation-unique keys
 // that the recurring determinism fixes settled on as the accepted tiebreakers.
 //
-// call_id, match_id and transfer_id are NOT the per-node AUTO_INCREMENT surrogates
+// call_id, match_id, transfer_id and snapshot_id are NOT per-node AUTO_INCREMENT surrogates
 // their `_id` suffix suggests: each is a deterministic content hash carrying its own
 // UNIQUE key (cross_chain_calls.call_phase, cross_chain_matches.uq_match_id,
-// bridge_transfers.uq_transfer_id), identical on every node that mirrors the row. The
+// bridge_transfers.uq_transfer_id, remote_token_snapshots.snapshot_id), identical on every
+// node that mirrors the row. The
 // surrogates the suffix DOES cover (address_id, source_id, tick_id) stay rejected, and
 // the final test in this file is what holds that line.
 const TIEBREAKERS = [
     'action_index', 'tx_index', 'call_id', 'match_id', 'transfer_id', 'option_index',
     'chunk_index', 'execution_index', 'position', 'round_number', 'pubkey',
-    'tick', 'source', 'state_key', 'address', 'epoch_height', 'vout',
+    'tick', 'source', 'state_key', 'address', 'epoch_height', 'vout', 'snapshot_id',
     'seq_in_index', 'index_name', 'name'
 ];
 

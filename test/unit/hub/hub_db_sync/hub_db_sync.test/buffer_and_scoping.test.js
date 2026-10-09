@@ -15,6 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../../src/hub/hub_db_sync.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../../src/hub/hub_schema_version');
 
 // Build a HubDbSync whose enabled flag is true (needs both a hub URL and a hub DB),
 // backed by a stubbed doQuery we drive per-test to simulate the local price mirror.
@@ -51,7 +52,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         const applyRow = sinon.stub(sync, 'applyRow').resolves();
         const refresh  = sinon.stub(sync, 'refreshPriceSyncHeight').resolves();
         assert.strictEqual(sync._priceDrained, false, 'price drain pending on a fresh connection');
-        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots',
+        await sync.handleRowEvent({ schema_version: HUB_SCHEMA_VERSION, type: 'row:inserted', table: 'price_snapshots',
             row: { id: 37032, reference_block: 900000, status: 'finalized' } });
         assert.ok(applyRow.notCalled, 'must not apply ahead of the still-draining bootstrap');
         assert.ok(refresh.notCalled, 'must not refresh (a MAX() read would adopt the holed height)');
@@ -64,7 +65,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
     it('a live price retraction mid-bootstrap buffers too (replay order vs its insert is consensus-relevant)', async function () {
         const { sync } = makeBufferSync();
         const retract = sinon.stub(sync, 'applyRetraction').resolves();
-        await sync.handleRowEvent({ type: 'row:deleted', table: 'price_snapshots',
+        await sync.handleRowEvent({ schema_version: HUB_SCHEMA_VERSION, type: 'row:deleted', table: 'price_snapshots',
             source_chain: 'BTC', from_action_index: 50 });
         assert.ok(retract.notCalled, 'deletion deferred behind any buffered insert it may retract');
         assert.strictEqual(sync._pendingPriceEvents.length, 1);
@@ -74,7 +75,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         const { sync } = makeBufferSync();
         const applyRow = sinon.stub(sync, 'applyRow').resolves();
         const refresh  = sinon.stub(sync, 'refreshOracleSyncTimestamp').resolves();
-        await sync.handleRowEvent({ type: 'row:inserted', table: 'oracle_prices', row: { id: 1 } });
+        await sync.handleRowEvent({ schema_version: HUB_SCHEMA_VERSION, type: 'row:inserted', table: 'oracle_prices', row: { id: 1 } });
         assert.ok(applyRow.calledOnce, 'non-price mirrors keep the live path');
         assert.ok(refresh.calledOnce);
         assert.strictEqual(sync._pendingPriceEvents.length, 0);
@@ -83,7 +84,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
     it('a schema-mismatched live price event is refused outright, never buffered for replay', async function () {
         const { sync } = makeBufferSync();
         const applyRow = sinon.stub(sync, 'applyRow').resolves();
-        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots',
+        await sync.handleRowEvent({ schema_version: HUB_SCHEMA_VERSION, type: 'row:inserted', table: 'price_snapshots',
             schema_version: 999999, row: { id: 1 } });
         assert.ok(applyRow.notCalled);
         assert.strictEqual(sync._pendingPriceEvents.length, 0, 'a bad-shape row must not survive to the flush');
@@ -96,15 +97,15 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         const doQuery = sinon.stub().resolves([{ max_id: null }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
         sinon.stub(sync, 'localColumns').resolves(new Set(['id', 'status']));
-        sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1 }, { id: 2 }], watermark: 55 });
+        sinon.stub(sync, 'httpGet').resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: 1 }, { id: 2 }], watermark: 55 });
         const seq = [];
         sinon.stub(sync, 'applyRow').callsFake(async (t, row) => { seq.push('insert:' + row.id); });
         sinon.stub(sync, 'applyRetraction').callsFake(async (e) => { seq.push('delete:' + e.from_action_index); });
         const refresh = sinon.stub(sync, 'refreshPriceSyncHeight').resolves();
 
         // Two live events land mid-drain: a fresh round, then its retraction.
-        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 9 } });
-        await sync.handleRowEvent({ type: 'row:deleted', table: 'price_snapshots', source_chain: 'BTC', from_action_index: 9 });
+        await sync.handleRowEvent({ schema_version: HUB_SCHEMA_VERSION, type: 'row:inserted', table: 'price_snapshots', row: { id: 9 } });
+        await sync.handleRowEvent({ schema_version: HUB_SCHEMA_VERSION, type: 'row:deleted', table: 'price_snapshots', source_chain: 'BTC', from_action_index: 9 });
         assert.deepStrictEqual(seq, [], 'nothing applied before the drain');
 
         const mark = await sync.bootstrapTable('price_snapshots');
@@ -116,7 +117,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         assert.ok(refresh.calledOnce, 'the barrier refresh runs once, after the replay');
 
         // Live path resumes: the next event applies immediately and refreshes.
-        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 10 } });
+        await sync.handleRowEvent({ schema_version: HUB_SCHEMA_VERSION, type: 'row:inserted', table: 'price_snapshots', row: { id: 10 } });
         assert.deepStrictEqual(seq.slice(-1), ['insert:10']);
         assert.ok(refresh.calledTwice, 'post-drain live rows refresh as before');
     });
@@ -125,13 +126,13 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         const doQuery = sinon.stub().resolves([{ max_id: null }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
         sinon.stub(sync, 'localColumns').resolves(new Set(['id']));
-        sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1 }], watermark: 55 });
+        sinon.stub(sync, 'httpGet').resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: 1 }], watermark: 55 });
         const applyRow = sinon.stub(sync, 'applyRow');
         applyRow.resolves();
         applyRow.withArgs('price_snapshots', sinon.match({ id: 9 })).rejects(new Error('ER_SOMETHING'));
         const refresh = sinon.stub(sync, 'refreshPriceSyncHeight').resolves();
-        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 9 } });
-        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 10 } });
+        await sync.handleRowEvent({ schema_version: HUB_SCHEMA_VERSION, type: 'row:inserted', table: 'price_snapshots', row: { id: 9 } });
+        await sync.handleRowEvent({ schema_version: HUB_SCHEMA_VERSION, type: 'row:inserted', table: 'price_snapshots', row: { id: 10 } });
 
         const mark = await sync.bootstrapTable('price_snapshots');
         assert.strictEqual(mark, null, 'flush failure must report not-drained so bootstrapAll retries');
@@ -178,7 +179,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         const doQuery = sinon.stub().resolves([{ max_id: null }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
         sinon.stub(sync, 'localColumns').resolves(new Set(['id']));
-        sinon.stub(sync, 'httpGet').resolves({ rows: [], watermark: 55 });
+        sinon.stub(sync, 'httpGet').resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [], watermark: 55 });
         const refresh = sinon.stub(sync, 'refreshPriceSyncHeight').resolves();
         // Simulate the socket closing while the flush is in flight (the close
         // handler bumps _wsEpoch and resets the per-connection drain state).

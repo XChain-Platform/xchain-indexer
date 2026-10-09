@@ -18,6 +18,7 @@ const {
     resolveBarrierHoldCeilingMs, nextBarrierHold, barrierHoldMs,
     barrierCeilingExceeded, isMirrorBarrierReason, NOW
 } = require('./barrier_hold_ceiling.test/helpers/barrier_hold_ceiling.js');
+const { BRIDGE_PROOF_BARRIER } = require('../../../src/consensus/bridge_proof_client/stall.js');
 
 // ── The named ceiling constant and its resolver ────────────────────────────────
 describe('mirror-barrier hold ceiling constant @regression @tier1', function () {
@@ -127,6 +128,15 @@ describe('nextBarrierHold / barrierHoldMs @regression @tier1', function () {
         const carried = nextBarrierHold({ block: 900, reason: 'x', since: NOW - 999999, notified: false },
                                         900, 'attest_response_sync_barrier', NOW + 7200000, NOW);
         assert.strictEqual(carried, null, 'an existing hold is dropped once the wait is a future-stamp wait');
+    });
+
+    // A proof wait clears on a quorum checkpoint or an origin endpoint, so a mirror
+    // resync cannot shorten it and the ceiling must never fire over it.
+    it('a bridge proof wait is NOT a hold and drops one already running', function () {
+        assert.strictEqual(nextBarrierHold(null, 900, BRIDGE_PROOF_BARRIER, null, NOW), null);
+        const first = nextBarrierHold(null, 900, 'attest_response_sync_barrier', null, NOW);
+        assert.ok(first, 'a mirror barrier on the same block is a real hold');
+        assert.strictEqual(nextBarrierHold(first, 900, BRIDGE_PROOF_BARRIER, null, NOW + 60000), null);
     });
 });
 

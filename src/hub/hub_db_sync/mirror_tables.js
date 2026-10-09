@@ -32,6 +32,7 @@
 const RETRACTION_COLUMNS = {
     price_snapshots: 'source_action_index',
     oracle_prices:   'action_index',
+    remote_token_snapshots: 'source_action_index',
     // bridge_transfers is ONE-SIDED: a transfer is retracted when the single source leg
     // (the v0 lock or the v1 burn named by src_chain/src_action_index) is reorged away, so
     // one column names the range. cross_chain_matches is two-sided and has its own branch
@@ -54,7 +55,8 @@ const RETRACTION_COLUMNS = {
 // mirrored forever. Kept local, like RETRACTION_COLUMNS, so no column name ever comes
 // from the wire. A table absent from this map keeps `source_chain`.
 const RETRACTION_CHAIN_COLUMNS = {
-    bridge_transfers: 'src_chain'
+    bridge_transfers:       'src_chain',
+    remote_token_snapshots: 'coin'
 };
 
 // Tables mirrored for the cross-chain DEX + cross-chain contract calls.
@@ -67,31 +69,34 @@ const RETRACTION_CHAIN_COLUMNS = {
 // immutable history and never retracted.
 //
 // bridge_transfers, policy_snapshots and list_snapshots join the list because membership
-// buys exactly the two things a federation-signed mirrored table needs and nothing else:
-// refuseForeignChainRow fences their btc_chain_id (all three DDLs carry the column, and a
-// regtest venue that re-genesises
-// its Bitcoin chain otherwise keeps serving dead-chain transfers to every fresh indexer), and
-// applyRetraction treats a deletion naming them as quorum-class, so it demands the
-// push_generation fence and the 2f+1 co-signature set instead of accepting a bare wire event.
-// Membership also puts them in the bootstrap concat loop below, ahead of the one heavy table.
-// bridge_transfers additionally gets the RETRACTION_COLUMNS pair above; policy_snapshots and
+// buys refuseForeignChainRow's btc_chain_id fence (all three DDLs carry the column, and a
+// regtest venue that re-genesises its Bitcoin chain otherwise keeps serving dead-chain
+// transfers to every fresh indexer) and a place in the bootstrap concat loop below, ahead of
+// the one heavy table. Membership does NOT make a table quorum-class: that is the hard-coded
+// quorumClass list in applyRetraction (retractions.js), which demands the push_generation
+// fence and the 2f+1 co-signature set and, of these three, names only bridge_transfers.
+// bridge_transfers also gets the RETRACTION_COLUMNS pair above; policy_snapshots and
 // list_snapshots are never retracted, so deletion events naming them are skipped rather
-// than applied.
+// than applied. Giving either one a RETRACTION_COLUMNS entry also requires adding it to
+// quorumClass, or its deletions are accepted with no fence or signatures required.
 const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
                             'bridge_transfers', 'policy_snapshots', 'list_snapshots'];
 
 const MIRRORED_TABLES = ['price_snapshots', 'oracle_prices', 'cross_chain_matches', 'cross_chain_calls',
                          'capability_snapshots', 'bridge_transfers', 'policy_snapshots', 'list_snapshots',
-                         'state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
+                         'remote_token_snapshots', 'state_checkpoints', 'anchor_reward_attestations',
+                         'attestation_responses'];
 
 // These tables historically copied the serving hub's id. Their existing local tables must
 // have AUTO_INCREMENT before id-less writes are enabled, or a deployment with an older
 // hand-built schema would fail every insert after startup.
 const AUTO_INCREMENT_ID_TABLES = ['price_snapshots', 'oracle_prices', 'cross_chain_matches', 'cross_chain_calls',
                                   'bridge_transfers', 'policy_snapshots', 'list_snapshots',
-                                  'state_checkpoints', 'anchor_reward_attestations'];
+                                  'remote_token_snapshots', 'state_checkpoints', 'anchor_reward_attestations'];
 
-// Hub federation state tables. state_checkpoints carries quorum-signed per-chain
+// Hub federation state tables. remote_token_snapshots has no dedicated block-loop
+// barrier, so it rides the global stream watermark while retaining its source-action
+// retraction mapping above. state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
 // never retracted. A reorged height is superseded by a new row with a higher
 // checkpoint_seq. Not on any settlement-critical path (no block-loop barrier).
@@ -121,7 +126,8 @@ const AUTO_INCREMENT_ID_TABLES = ['price_snapshots', 'oracle_prices', 'cross_cha
 // watermark (see mirrorStatus), which is only correct for tables no block-loop barrier gates
 // on. Each gates one: waitForBridgeSync and waitForPolicySync cache their own
 // MAX(effective_time), while waitForListShareSync uses the per-chain height watermark.
-const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
+const HUB_STATE_TABLES = ['remote_token_snapshots', 'state_checkpoints',
+                          'anchor_reward_attestations', 'attestation_responses'];
 
 // The column that names a mirrored row to an operator when a mirror fence refuses or purges
 // it, and the settlement family tag its refusal carries. A fence runs BEFORE the settlement

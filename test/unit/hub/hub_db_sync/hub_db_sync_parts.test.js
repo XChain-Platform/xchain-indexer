@@ -60,7 +60,7 @@ const METHOD_PARTS = [
 const HELPER_PARTS = [
     'ensure_tables.js', 'env.js', 'failover/move_policy.js', 'failover/move_reset.js', 'failover/triggers.js', 'hub_selector.js', 'instance_state.js',
     'mirror_bounds.js', 'mirror_tables.js', 'mirror_write.js', 'row_upserts.js', 'watermark_config.js',
-    'watermark_state.js',
+    'schema_version_check.js', 'watermark_state.js',
 ];
 function methodParts() {
     return METHOD_PARTS.map((rel) => {

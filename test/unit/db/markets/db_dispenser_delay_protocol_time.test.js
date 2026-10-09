@@ -107,6 +107,19 @@ describe('dispenser delay protocol-time gate @regression @tier1', function () {
         sinon.assert.calledOnceWithExactly(db.protocolTimeForStoredBlock, 8);
     });
 
+    it('getDispenserInfo hands its caller\'s height to the list-delay gate', async function () {
+        const db = dbFor([{ action_index: 1, give_amount: '1', allow_list: 0, block_list: 0 }], {
+            getDispenserEdits: sinon.stub().resolves({ expiration: false, allow_list: false, block_list: false }),
+            getDispenserAmountRemaining: sinon.stub().resolves('1'),
+        });
+
+        await dispensers.getDispenserInfo.call(db, 'BTC', 1, 700, 20);
+        sinon.assert.calledOnceWithExactly(db.getDispenserEdits, 1, 700, 20);
+
+        await dispensers.getDispenserInfo.call(db, 'BTC', 1, 700);
+        sinon.assert.calledWithExactly(db.getDispenserEdits.secondCall, 1, 700, undefined);
+    });
+
     it('leaves mainnet on raw timestamps while the height gate is unarmed', async function () {
         const db = dbFor([{ action_index: 9, block_time: 1000, block_index: 7 }]);
         db.config.NETWORK = 'mainnet';

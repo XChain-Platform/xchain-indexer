@@ -52,6 +52,7 @@ const GATE_MODULE_PATHS = Object.freeze({
     archive_rollback_author_scope_activation: 'consensus/gates/archive_rollback_author_scope_gate.js',
     attest_responsible_widening_activation: 'consensus/gates/attest_responsible_widening_gate.js',
     mirror_admission_activation: 'consensus/gates/mirror_admission_gate.js',
+    mirror_admission_margin_activation: 'consensus/gates/mirror_admission_margin_gate.js',
     price_batching_floor_activation: 'consensus/gates/price_batching_floor_gate.js',
     price_pair_activation: 'consensus/gates/price_pair_gate.js',
     price_scale_activation: 'consensus/gates/price_scale_gate.js',
@@ -160,6 +161,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'attest_relay_fee_activation',
     'bet_feed_list_edit_activation',
     'cross_chain_offer_list_export_activation',
+    'cross_chain_remote_token_activation',
     'send_gated_total_tick_id_activation',
 ]);
 
