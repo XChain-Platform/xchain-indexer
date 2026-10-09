@@ -1,5 +1,5 @@
-// Copyright © 2025–2026 Dankest, LLC
-// Based on XChain Platform by Dankest, LLC – https://dankest.llc
+// Copyright © 2025-2026 Dankest, LLC
+// Based on XChain Platform by Dankest, LLC - https://dankest.llc
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
@@ -8,39 +8,70 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// The DOGE side of ANCHOR never writes a validator reward: the reward is
-// derived on the BTC indexer, so even with the derive gate pinned off the
-// settlement entry points leave the ledger untouched and never read the gate.
+// The DOGE handlers validate checkpoint signatures and persist the raw
+// publisher tail. Reward attestation verification belongs to BTC derivation.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon = require('sinon');
-const arMod = require('../../../../../src/consensus/gates/anchor_reward_gate.js');
+const { createBaseData } = require('../../../../fixtures/mocks');
+const quorum = require('../../../../../src/actions/anchor/quorum.js');
 const settle = require('../../../../../src/actions/anchor/settle.js');
-const observability = require('../../../../../src/observability/index.js');
+const {
+    v0Params, v1Params, ARCHIVE_JSON, armAnchor, disarmAnchor
+} = require('./helpers/anchor_fixtures.js');
+const { v3Params } = require('./helpers/anchor_v3_fixtures.js');
 
-const BUNDLE_SKIP_WARNING = '\t ANCHOR v0 : no legacy reward path applies; reward skipped';
-const ARCHIVE_SKIP_WARNING = '\t ANCHOR v1 : no legacy reward path applies; reward skipped';
+describe('ANCHOR DOGE-side reward callers removed @regression @tier3', function () {
+    let indexer, handler, verifyStub, swqStub, deriveGateStub;
+    let headAttestation, bundleAttestation, legacyInstall;
 
-describe('ANCHOR DOGE-side reward branch removed @regression @tier3', function () {
     beforeEach(function () {
-        sinon.stub(arMod, 'isAnchorRewardDeriveActive').returns(false);
-        assert.strictEqual(arMod.isAnchorRewardDeriveActive(10, 'regtest'), false);
+        headAttestation = sinon.stub(quorum, 'headAttestationMet')
+            .throws(new Error('DOGE must not evaluate archive reward attestations'));
+        bundleAttestation = sinon.stub(quorum, 'bundleAttestationMet')
+            .throws(new Error('DOGE must not evaluate bundle reward attestations'));
+        legacyInstall = sinon.stub(settle, 'installLegacyRewardCredits')
+            .throws(new Error('DOGE must not install legacy reward credits'));
+        ({ indexer, handler, verifyStub, swqStub, deriveGateStub } = armAnchor());
     });
-    afterEach(function () { sinon.restore(); });
 
-    it('the settlement entry points never touch the reward ledger with the derive gate off', async function () {
-        let db = { createValidatorReward: sinon.stub().resolves(true), reconcileAnchorRewardWinner: sinon.stub().resolves() };
-        let handler = { indexerDb: db, config: { NETWORK: 'regtest', COIN: 'DOGE' } };
-        let data = { PUBLISHER: 'a'.repeat(64), SNAPSHOT_BLOCK: 10, BLOCK_INDEX: 20, ACTION_INDEX: 0, MATCH_BATCH_SEQ: 1, NETWORK: 'regtest' };
-        let warn = sinon.stub(observability.getLogger(), 'warn');
-        await settle.creditBundleReward(handler, data, true, { snapPubkeys: new Set([data.PUBLISHER]) });
-        await settle.creditArchiveReward(handler, data, true, new Set([data.PUBLISHER]), 1);
-        assert.ok(db.createValidatorReward.notCalled);
-        assert.ok(db.reconcileAnchorRewardWinner.notCalled);
-        assert.strictEqual(arMod.isAnchorRewardDeriveActive.callCount, 1);
-        assert.deepStrictEqual(warn.args, [[BUNDLE_SKIP_WARNING], [ARCHIVE_SKIP_WARNING]]);
+    afterEach(function () {
+        disarmAnchor({ verifyStub, swqStub, deriveGateStub });
+    });
+
+    it('v0 records a valid bundle without the reward-side pass', async function () {
+        const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
+
+        await handler.parse(v0Params(), data, null);
+
+        assert.strictEqual(data.STATUS, 'valid');
+        assert.ok(bundleAttestation.notCalled);
+        assert.ok(legacyInstall.notCalled);
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+    });
+
+    it('v1 records a valid archive head without the reward-side pass', async function () {
+        const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
+
+        await handler.parse(v1Params(ARCHIVE_JSON), data, null);
+
+        assert.strictEqual(data.STATUS, 'valid');
+        assert.ok(headAttestation.notCalled);
+        assert.ok(legacyInstall.notCalled);
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+    });
+
+    it('v3 records a valid fold without the reward-side pass', async function () {
+        const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
+
+        await handler.parseFold(v3Params({ archive: false }), data, null);
+
+        assert.strictEqual(data.STATUS, 'valid');
+        assert.ok(bundleAttestation.notCalled);
+        assert.ok(legacyInstall.notCalled);
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
     });
 });

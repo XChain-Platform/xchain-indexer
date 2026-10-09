@@ -14,7 +14,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-const ProtocolChanges = require('../../../src/protocol_changes.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
 
 describe('protocol_changes consensus-bound indexer rows @regression @tier1', function () {
     it('pins the archive MATCH_COUNT activation map', function () {
@@ -41,7 +41,7 @@ describe('protocol_changes consensus-bound indexer rows @regression @tier1', fun
     });
 
     it('keeps gates_1.js at or under 400 lines', function () {
-        const file = path.join(__dirname, '..', '..', '..', 'src', 'protocol_changes', 'gates_1.js');
+        const file = path.join(__dirname, '..', '..', '..', '..', 'src', 'protocol_changes', 'gates_1.js');
         const text = fs.readFileSync(file, 'utf8');
         const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
         assert.ok(lines <= 400, 'gates_1.js is ' + lines + ' lines');

@@ -18,7 +18,7 @@ const { execFileSync } = require('child_process');
 const path = require('path');
 
 const {
-    splitChain, words, shardCount, dealShards, partitionError, shardArgs, collectMain, runShards, exitOf,
+    splitChain, words, shardCount, shardJobs, dealShards, partitionError, shardArgs, collectMain, runShards, exitOf,
 } = require('../../../bin/ci_shard.js');
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
@@ -109,11 +109,22 @@ describe('bin/ci_shard: options and runs', function(){
         assert.deepStrictEqual(words("mocha --timeout 5 'test/a b/*.js' x"), ['mocha', '--timeout', '5', 'test/a b/*.js', 'x']);
     });
 
-    it('takes CI_SHARDS when it is sane and half the cores, at most four, otherwise', function(){
+    it('takes CI_SHARDS when sane and otherwise bounds shards by cores and file count', function(){
         assert.strictEqual(shardCount({ CI_SHARDS: '3' }, 32), 3);
         assert.strictEqual(shardCount({ CI_SHARDS: '0' }, 32), 4);
         assert.strictEqual(shardCount({ CI_SHARDS: 'lots' }, 2), 1);
         assert.strictEqual(shardCount({}, 6), 3);
+        assert.strictEqual(shardCount({}, 8, 1220), 13);
+        assert.strictEqual(shardCount({}, 8, 2000), 16);
+    });
+
+    it('caps concurrent shard jobs by available memory or an explicit override', function(){
+        const GiB = 1024 ** 3;
+        assert.strictEqual(shardJobs({}, 4, GiB / 2), 1);
+        assert.strictEqual(shardJobs({}, 4, 3 * GiB), 3);
+        assert.strictEqual(shardJobs({}, 8, 8 * GiB), 4);
+        assert.strictEqual(shardJobs({ CI_SHARD_JOBS: '2' }, 4, GiB / 2), 2);
+        assert.strictEqual(shardJobs({ CI_SHARD_JOBS: '8' }, 3, GiB / 2), 3);
     });
 
     it('fails the run when any shard fails or dies on a signal, and prints every shard', async function(){
@@ -128,6 +139,23 @@ describe('bin/ci_shard: options and runs', function(){
     it('passes the run only when every shard passed', async function(){
         const { value } = await captured(() => runShards([['a'], ['b']], [], {}, fakeSpawn([[0, null], [0, null]])));
         assert.strictEqual(value, true);
+    });
+
+    it('does not exceed the requested shard concurrency', async function(){
+        let active = 0;
+        let peak = 0;
+        const spawnShard = () => {
+            const child = new EventEmitter();
+            child.stdout = new EventEmitter();
+            child.stderr = new EventEmitter();
+            active += 1;
+            peak = Math.max(peak, active);
+            setImmediate(() => { active -= 1; child.emit('close', 0, null); });
+            return child;
+        };
+        const { value } = await captured(() => runShards([['a'], ['b'], ['c'], ['d']], [], {}, spawnShard, 2));
+        assert.strictEqual(value, true);
+        assert.strictEqual(peak, 2);
     });
 
     // Review finding (machine session 9): an npm that cannot start or dies on a
