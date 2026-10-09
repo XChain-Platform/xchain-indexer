@@ -138,14 +138,23 @@ const hubConfigMethods = {
     // (the pinned-verify-only class below), so this only logs, but it surfaces a hub
     // that is out of sync with this node's pinned bundle so an operator can upgrade.
     checkHubConsensusHash(coinConsensusHashes){
-        if(!coinConsensusHashes) return; // older hub: field absent, nothing to compare
+        if(!coinConsensusHashes || typeof coinConsensusHashes !== 'object'){
+            this.hubConsensusHashMismatch = null;
+            this.hubConsensusHashMismatchDetail = [];
+            return;
+        }
         let coin = this.config.COIN, network = this.config.NETWORK;
         let hubHash = coinConsensusHashes[network] && coinConsensusHashes[network][coin];
-        if(!hubHash) return;
-        let localHash = coins.consensusHash(coin, network);
+        let localHash = hubHash ? coins.consensusHash(coin, network) : null;
+        let mismatches = [];
+        if(hubHash && hubHash !== localHash)
+            mismatches.push(coin + '/' + network + ': hub ' + hubHash + ' vs bundled ' + localHash);
+
+        this.hubConsensusHashMismatch = mismatches.length > 0;
+        this.hubConsensusHashMismatchDetail = mismatches;
         // Log only when the mismatch changes, since this runs on every poll: a standing
         // divergence must not flood the log, and a match re-arms it for the next drift.
-        let key = (hubHash !== localHash) ? (coin + '/' + network + ': hub ' + hubHash + ' vs bundled ' + localHash) : '';
+        let key = mismatches.join('|');
         if(key === (this._lastConsensusMismatchKey || '')) return;
         this._lastConsensusMismatchKey = key;
         if(key)
