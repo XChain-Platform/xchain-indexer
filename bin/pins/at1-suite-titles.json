@@ -7016,20 +7016,6 @@
       "Order_Match LIST trigger @regression @tier2 does not book a counterparty absent from the resting order allow list",
       "Order_Match LIST trigger @regression @tier2 matches the indexed resting order using the LIST block context"
     ],
-    "721920d67a8e7076": [
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) LTC and DOGE flip ON at their own ratified heights",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) at the BTC mainnet height (961000): both flags ON",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) below the BTC mainnet height (960999): both flags OFF, contract still accepted",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) does NOT track the Pkg 3 gate (a separate epoch, resolved separately)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is per-coin: LTC and DOGE mainnet at the BTC height stay OFF",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) regtest is genesis-armed (both flags ON from height 0)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads enforceLintGlobalAlias as its own flag",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads the new flags ALONGSIDE the existing async / lint-hardening flags (no regression)",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) at the flag day: enforceBannedRest ON",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) below the flag day: enforceBannedRest OFF, contract still accepted",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads exactly the seven enforce* flags validateSyntax reads"
-    ],
     "72a0b56687489fbe": [
       "hourly price age flips VM execution at its action block gate",
       "hourly price age flips a controller guard verdict at its host action block gate",
@@ -12280,6 +12266,11 @@
       "Database getTickerId lookup order @unit @regression orders a case-insensitive name lookup by ascending id and returns the first row",
       "Database getTickerId lookup order @unit @regression returns null when a name lookup misses"
     ],
+    "c0bf65d90cf86ae9": [
+      "Deploy (DEPLOY) @regression @tier2 nesting-depth deploy-lint gate threading passes enforceLintNestingDepth false on mainnet below the unarmed gate",
+      "Deploy (DEPLOY) @regression @tier2 nesting-depth deploy-lint gate threading passes enforceLintNestingDepth false on testnet below the unarmed gate",
+      "Deploy (DEPLOY) @regression @tier2 nesting-depth deploy-lint gate threading passes enforceLintNestingDepth true on regtest from genesis"
+    ],
     "c1156153bb6a807f": [
       "Execute (EXECUTE) @regression @tier2 cross-contract calls a callee run uses VM_GAS_LIMIT as its VM ceiling and reports its unused subtree gas",
       "Execute (EXECUTE) @regression @tier2 cross-contract calls a failed callee rolls back the tree and forfeits all refunds",
@@ -13225,6 +13216,20 @@
     ],
     "d27e69ca0f3eb0d0": [
       "activation-gate constant parity to canonical constants.js @regression keeps each admission map inert for a sentinel coin while a sibling coin is armed"
+    ],
+    "d29b0b3fc27074b9": [
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) LTC and DOGE flip ON at their own ratified heights",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) at the BTC mainnet height (961000): both flags ON",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) below the BTC mainnet height (960999): both flags OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) does NOT track the Pkg 3 gate (a separate epoch, resolved separately)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is per-coin: LTC and DOGE mainnet at the BTC height stay OFF",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) regtest is genesis-armed (both flags ON from height 0)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads enforceLintGlobalAlias as its own flag",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads the new flags ALONGSIDE the existing async / lint-hardening flags (no regression)",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) at the flag day: enforceBannedRest ON",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) below the flag day: enforceBannedRest OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads exactly the eight enforce* flags validateSyntax reads"
     ],
     "d2b9349d772cf8e9": [
       "ISSUE v0/v1 parse is byte-identical to the pre-format-7 build @regression @consensus ISSUE brief v1: adds exactly the three format-7 names, each null",
@@ -16656,7 +16661,8 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "721920d67a8e7076",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "d29b0b3fc27074b9",
+        "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "c0bf65d90cf86ae9",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/native_fee.test.js": "2ef587e9e97d807d",
         "test/unit/actions/contract/deploy.test/staking_config.test.js": "750c96e2e1dcca8c",
@@ -18106,8 +18112,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 906,
-      "titleCount": 9930,
+      "fileCount": 907,
+      "titleCount": 9933,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -18252,7 +18258,8 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "721920d67a8e7076",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "d29b0b3fc27074b9",
+        "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "c0bf65d90cf86ae9",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/native_fee.test.js": "2ef587e9e97d807d",
         "test/unit/actions/contract/deploy.test/staking_config.test.js": "750c96e2e1dcca8c",
@@ -19419,8 +19426,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 906,
-      "titleCount": 9930,
+      "fileCount": 907,
+      "titleCount": 9933,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19565,7 +19572,8 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "721920d67a8e7076",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "d29b0b3fc27074b9",
+        "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "c0bf65d90cf86ae9",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/native_fee.test.js": "2ef587e9e97d807d",
         "test/unit/actions/contract/deploy.test/staking_config.test.js": "750c96e2e1dcca8c",
