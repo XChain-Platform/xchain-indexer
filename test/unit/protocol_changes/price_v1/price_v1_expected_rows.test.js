@@ -15,9 +15,9 @@
 // without either side drifting first.
 
 const assert = require('assert');
-const { UNARMED } = require('../../../src/protocol_changes/core.js');
-const ProtocolChanges = require('../../../src/protocol_changes.js');
-const { expectedPriceV1Rows } = require('./helpers/price_v1_expected_rows.js');
+const { UNARMED } = require('../../../../src/protocol_changes/core.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
+const { expectedPriceV1Rows } = require('../helpers/price_v1_expected_rows.js');
 
 const CAPS = { value: 19, fee: 20 };
 

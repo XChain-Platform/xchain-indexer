@@ -13,15 +13,14 @@
  **********************************************************************
  *
  * ANCHOR v0, the per-network checkpoint BUNDLE. Reached through
- * Anchor.parseBundle in index.js; the shape checks live in validate.js, the
- * section and attestation quorums in quorum.js and the reward in settle.js.
+ * Anchor.parseBundle in index.js; the shape checks live in validate.js and the
+ * section quorums in quorum.js.
  *
  ********************************************************************/
 
 const diag     = require('./diagnostic_events.js');
 const validate = require('./validate.js');
 const quorum   = require('./quorum.js');
-const settle   = require('./settle.js');
 const gateRegistry = require('../../consensus/gate_registry');
 
 const { getLogger } = require('../../observability/index.js');
@@ -141,8 +140,7 @@ async function recordBundle(handler, data, sections, publisherSigs, error){
 // Verdict is ALL-OR-NOTHING. The publisher signed for every section, and
 // the stale-seq guard is strictly-less, so the only stale section is a replay or a
 // forgery rather than an ordinary cadence gap. One bad section therefore invalidates
-// the whole action ('invalid: SECTION n <reason>') and writes NO reward; a partially
-// credited bundle would let a forger pick which chains a real publisher gets paid for.
+// the whole action ('invalid: SECTION n <reason>').
 //
 // Rows: one per section, section_index in WIRE order (0..SECTION_COUNT-1), each row
 // carrying its own chain/block_index/checkpoint_seq/roots/signatures plus the
@@ -174,17 +172,7 @@ async function parseBundleAction(handler, params, data, error){
 
     let oracleSetFor = quorum.makeOracleSetResolver(handler);
     let verdict = await quorum.verifySections(handler, data, sections, oracleSetFor, error);
-    let bundleSet = verdict.bundleSet;
     error = verdict.error;
-
-    // ONE publisher attestation for the whole bundle: reward type 'anchor_bundle',
-    // round_reference SNAPSHOT_BLOCK, qualifier 0, the FROZEN ANCHOR_REWARD_AMOUNT.
-    // A degraded or forged attestation never fails the anchor, exactly as on the
-    // archive leg: the sections still record 'valid', only the reward is skipped.
-    if(!error && bundleSet && bundleSet.oracleN > 0){
-        let attQuorumMet = quorum.bundleAttestationMet(handler, data, bundleSet, publisherSigs);
-        await settle.creditBundleReward(handler, data, attQuorumMet, bundleSet);
-    }
 
     await recordBundle(handler, data, sections, publisherSigs, error);
 
