@@ -3934,7 +3934,9 @@
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) below the flag-day the split is not applied (legacy full credit)",
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) fail-closed: a leg that does not re-encode yields NO split (full proceeds credit)"
     ],
-    "47f788937f1f1de5": [
+    "ee1365d37c917234": [
+      "protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1 is present in the class table and registry in the same shape",
+      "protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1 is unarmed on production networks and active from regtest genesis",
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 every shared_rows_N.js carries the two markers once each, in order, with no require between them, and nothing but rows outside them",
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 no part file matches the carrier declaration scans (D38)",
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 the time-table parts hold exactly the registered rows, in registration order, and nothing but rows",
@@ -16314,7 +16316,7 @@
         "test/unit/protocol_changes/anchor/anchor_bundle_order_row.test.js": "332212f43d474164",
         "test/unit/protocol_changes/anchor/anchor_fold_rows.test.js": "2d944feb25011092",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "47f788937f1f1de5",
+        "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/consensus_bound_shared_rows.test.js": "026d5bdba4ff140a",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
