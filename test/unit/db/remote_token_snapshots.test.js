@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const HubDbSync = require('../../../src/hub/hub_db_sync.js');
 const mirrorTables = require('../../../src/hub/hub_db_sync/mirror_tables.js');
+const lifecycle = require('../../../src/hub/table_lifecycle.js');
 const mixin = require('../../../src/db/list_share_mirrors/index.js');
 
 const SQL_PATH = path.join(__dirname, '..', '..', '..', 'src', 'sql', 'remote_token_snapshots.sql');
@@ -75,6 +76,14 @@ describe('remote_token_snapshots mirror contract', function () {
         assert.ok(mirrorTables.AUTO_INCREMENT_ID_TABLES.includes('remote_token_snapshots'));
         assert.strictEqual(mirrorTables.RETRACTION_COLUMNS.remote_token_snapshots, 'source_action_index');
         assert.strictEqual(mirrorTables.RETRACTION_CHAIN_COLUMNS.remote_token_snapshots, 'coin');
+    });
+
+    it('declares hub re-mirroring as its recovery policy', function () {
+        const entry = lifecycle.entry('remote_token_snapshots');
+        assert.strictEqual(entry.replication, 'hub-mirror');
+        assert.strictEqual(entry.anchorRecovery, 'none');
+        assert.ok(entry.anchorRecoveryNote.includes('hub mirror'));
+        assert.ok(!lifecycle.anchorRecoveryTables().includes('remote_token_snapshots'));
     });
 
     it('round trips a finalized fixture and removes it on a source-chain retraction', async function () {
