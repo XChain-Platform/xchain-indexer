@@ -128,8 +128,14 @@ module.exports = {
         return balances;
     },
 
-    // Handle getting token info (supply, price, etc) and updating the `tokens` table
-    async updateTokenInfo(tick){
+    // Handle getting token info (supply, price, etc) and updating the `tokens` table.
+    // Forward actions have already written token metadata through createToken and defer
+    // supply to the block refresh. Rollback still rebuilds the complete projection.
+    async updateTokenInfo(tick, refreshSupply=true){
+        if(!refreshSupply){
+            await this.createTicker(tick);
+            return;
+        }
         // createTicker and getTokenInfo are independent; run them concurrently.
         // tick_id is unused here - createToken calls createTicker internally.
         const [, data] = await Promise.all([this.createTicker(tick), this.getTokenInfo(tick)]);
