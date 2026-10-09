@@ -47,6 +47,16 @@ function stubGate(active) {
         key === REMOTE_TOKEN_KEY ? active : activeAt(key, ...args));
 }
 
+function stubGateRowAbsent() {
+    const activeAt = gateRegistry.activeAt;
+    sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...args) => {
+        if (key !== REMOTE_TOKEN_KEY) return activeAt(key, ...args);
+        const miss = new Error('registry row absent');
+        miss.name = 'RegistryMissError';
+        throw miss;
+    });
+}
+
 describe('Cross-chain remote token accept check @regression @tier2', function () {
     afterEach(() => sinon.restore());
 
@@ -72,6 +82,7 @@ describe('Cross-chain remote token accept check @regression @tier2', function ()
     });
 
     it('preserves pre-gate behavior when the registry row is absent', async function () {
+        stubGateRowAbsent();
         const { handler, getPinnedRemoteToken } = makeHandler(null);
         assert.strictEqual(await remoteTokenAcceptError(handler, makeState()), null);
         assert.ok(getPinnedRemoteToken.notCalled);

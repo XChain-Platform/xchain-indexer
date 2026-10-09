@@ -58,6 +58,7 @@ function makeActionsCtx(indexer, royaltyEnabled) {
 // stubbed to return `legs`, and return the parsed data object.
 async function runCreate(Handler, action, getCoin, legs, royaltyEnabled) {
     const indexer    = createMockIndexer();
+    indexer.indexerDb.mirrorDb = () => ({ getPinnedRemoteToken: sinon.stub().resolves({ decimals: 0 }) });
     const actionsCtx = makeActionsCtx(indexer, royaltyEnabled);
     const handler    = new Handler(actionsCtx);
 
