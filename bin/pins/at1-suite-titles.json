@@ -1369,7 +1369,7 @@
       "Mapper @regression @tier3 leaves a null ticker out of the batched call",
       "Mapper @regression @tier3 passes an empty list to createActionMappings when addresses list is empty"
     ],
-    "1c4928b3117b2669": [
+    "64280cb4d014da31": [
       "Database.backdatedFrontierViolation() @regression @tier1 accepts a Map keys() iterator, which is what the apply loop passes",
       "Database.backdatedFrontierViolation() @regression @tier1 compares against the MAXIMUM applied name, not the last one seen",
       "Database.backdatedFrontierViolation() @regression @tier1 every committed migration is clean against a ledger of all its predecessors",
@@ -1487,7 +1487,8 @@
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-06-resolved-block-idx.sql: if tagged mode=auto, passes the destructive-DDL scan",
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-07-ledger-covering-index.sql: if tagged mode=auto, passes the destructive-DDL scan",
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-08-state-tree-roots-block-index-idx.sql: if tagged mode=auto, passes the destructive-DDL scan",
-      "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-08-token-bridge-fields.sql: if tagged mode=auto, passes the destructive-DDL scan"
+      "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-08-token-bridge-fields.sql: if tagged mode=auto, passes the destructive-DDL scan",
+      "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-09-remote-token-snapshots.sql: if tagged mode=auto, passes the destructive-DDL scan"
     ],
     "1c56af9b1dbd9f0c": [
       "late anchor reward derive counter does not log for an on-time or early derive",
@@ -3295,7 +3296,7 @@
       "Database.updateBalances() @regression @tier1 handles boolean true, fetches all addresses then calls once per row",
       "Database.updateBalances() @regression @tier1 handles string address, calls updateAddressBalance once"
     ],
-    "3cfe6dfd7791c0ae": [
+    "fd58c31990531541": [
       "HubDbSync content-keyed apply @regression @tier1 anchor_reward_attestations ignores a colliding wire id and dedupes or upgrades on content",
       "HubDbSync content-keyed apply @regression @tier1 attestation_responses ignores a colliding wire id and dedupes or upgrades on content",
       "HubDbSync content-keyed apply @regression @tier1 bridge_transfers ignores a colliding wire id and dedupes or upgrades on content",
@@ -3307,6 +3308,7 @@
       "HubDbSync content-keyed apply @regression @tier1 policy_snapshots ignores a colliding wire id and dedupes or upgrades on content",
       "HubDbSync content-keyed apply @regression @tier1 price_snapshots ignores a colliding wire id and dedupes or upgrades on content",
       "HubDbSync content-keyed apply @regression @tier1 refuses startup when any legacy id column lacks AUTO_INCREMENT",
+      "HubDbSync content-keyed apply @regression @tier1 remote_token_snapshots ignores a colliding wire id and dedupes or upgrades on content",
       "HubDbSync content-keyed apply @regression @tier1 state_checkpoints ignores a colliding wire id and dedupes or upgrades on content",
       "HubDbSync content-keyed apply @regression @tier1 the price batch path also strips every wire id"
     ],
@@ -3939,7 +3941,9 @@
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) below the flag-day the split is not applied (legacy full credit)",
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) fail-closed: a leg that does not re-encode yields NO split (full proceeds credit)"
     ],
-    "47f788937f1f1de5": [
+    "ee1365d37c917234": [
+      "protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1 is present in the class table and registry in the same shape",
+      "protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1 is unarmed on production networks and active from regtest genesis",
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 every shared_rows_N.js carries the two markers once each, in order, with no require between them, and nothing but rows outside them",
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 no part file matches the carrier declaration scans (D38)",
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 the time-table parts hold exactly the registered rows, in registration order, and nothing but rows",
@@ -7462,11 +7466,12 @@
       "unlisted swaps vs EMPTY_ALLOW_LIST_DENIES unlisted swap pair matches, gate false",
       "unlisted swaps vs EMPTY_ALLOW_LIST_DENIES unlisted swap pair matches, gate true"
     ],
-    "82bf65744414fc76": [
+    "88e05bde94708bee": [
       "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
       "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
       "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
       "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM GAS_CEILING_SUCCESS_ACTIVATION matches the indexer GAS_CEILING_SUCCESS row per network",
       "consensus parameters are frozen (track 8 guard) @regression the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network",
       "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
       "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
@@ -8967,7 +8972,7 @@
     "9a956c93c1e1307c": [
       "HubDbSync failover move reset resets only hub-specific state to fresh pinned-mode values and is idempotent"
     ],
-    "9af03b163691b64a": [
+    "c0e02503f05a44f8": [
       "Database._migrationMode() @regression @tier1 defaults to manual when no tag is present (never auto-runs unknown DDL)",
       "Database._migrationMode() @regression @tier1 ignores a mode= tag below the first SQL statement (body prose cannot arm auto)",
       "Database._migrationMode() @regression @tier1 is case-insensitive and tolerant of spacing",
@@ -9169,6 +9174,8 @@
       "committed migrations declare intent @regression @tier1 2026-10-08-state-tree-roots-block-index-idx.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
       "committed migrations declare intent @regression @tier1 2026-10-08-token-bridge-fields.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
       "committed migrations declare intent @regression @tier1 2026-10-08-token-bridge-fields.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
+      "committed migrations declare intent @regression @tier1 2026-10-09-remote-token-snapshots.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
+      "committed migrations declare intent @regression @tier1 2026-10-09-remote-token-snapshots.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
       "committed migrations declare intent @regression @tier1 migrations directory is present",
       "fresh schema migration ledger @regression @tier1 records every committed migration with its checksum, mode and database timestamp",
       "fresh schema migration ledger @regression @tier1 refuses without writing a row when another process holds the lock",
@@ -11319,7 +11326,7 @@
       "sync health fields subtracts the indexed height from the decoder height for lag",
       "sync health fields uses the value returned by isSynced"
     ],
-    "c37f41bc4d4f28ce": [
+    "eecbdb20cb4ef592": [
       "mirror-twin BIGINT signedness conformance @regression anchor_reward_attestations: every shared BIGINT column matches the hub UNSIGNED declaration",
       "mirror-twin BIGINT signedness conformance @regression attestation_responses: every shared BIGINT column matches the hub UNSIGNED declaration",
       "mirror-twin BIGINT signedness conformance @regression bridge_transfers: every shared BIGINT column matches the hub UNSIGNED declaration",
@@ -11331,6 +11338,7 @@
       "mirror-twin BIGINT signedness conformance @regression oracle_prices: every shared BIGINT column matches the hub UNSIGNED declaration",
       "mirror-twin BIGINT signedness conformance @regression policy_snapshots: every shared BIGINT column matches the hub UNSIGNED declaration",
       "mirror-twin BIGINT signedness conformance @regression price_snapshots: every shared BIGINT column matches the hub UNSIGNED declaration",
+      "mirror-twin BIGINT signedness conformance @regression remote_token_snapshots: every shared BIGINT column matches the hub UNSIGNED declaration",
       "mirror-twin BIGINT signedness conformance @regression sanity: every declared twin exists on both sides (list is not vacuous)",
       "mirror-twin BIGINT signedness conformance @regression state_checkpoints: every shared BIGINT column matches the hub UNSIGNED declaration"
     ],
@@ -12205,7 +12213,7 @@
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 relay canonicals the response canonical is the pinned field order the hub must reproduce",
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 relay canonicals the two legs of one request_id never share an EQUIV round id"
     ],
-    "d3ef20b2ec25e067": [
+    "1eec0f699baafb9a": [
       "src/sql schema parse-coverage @regression @tier1 actions.sql every parsed column has a name and a definition",
       "src/sql schema parse-coverage @regression @tier1 actions.sql is parseable by the drift reconciler (non-null)",
       "src/sql schema parse-coverage @regression @tier1 actions.sql yields at least one column",
@@ -12534,6 +12542,9 @@
       "src/sql schema parse-coverage @regression @tier1 recovery_pending_rewards.sql every parsed column has a name and a definition",
       "src/sql schema parse-coverage @regression @tier1 recovery_pending_rewards.sql is parseable by the drift reconciler (non-null)",
       "src/sql schema parse-coverage @regression @tier1 recovery_pending_rewards.sql yields at least one column",
+      "src/sql schema parse-coverage @regression @tier1 remote_token_snapshots.sql every parsed column has a name and a definition",
+      "src/sql schema parse-coverage @regression @tier1 remote_token_snapshots.sql is parseable by the drift reconciler (non-null)",
+      "src/sql schema parse-coverage @regression @tier1 remote_token_snapshots.sql yields at least one column",
       "src/sql schema parse-coverage @regression @tier1 reward_claims.sql every parsed column has a name and a definition",
       "src/sql schema parse-coverage @regression @tier1 reward_claims.sql is parseable by the drift reconciler (non-null)",
       "src/sql schema parse-coverage @regression @tier1 reward_claims.sql yields at least one column",
@@ -13976,12 +13987,12 @@
       "recordCrossChainOrderFill fixed-notation amounts @regression @tier1 renders a clamped bignumber in fixed notation, never \"5e-8\"",
       "recordCrossChainOrderFill fixed-notation amounts @regression @tier1 renders an exponential hub string in fixed notation"
     ],
-    "e751b12322ad441f": [
+    "32fb5b061a7284b2": [
       "HubDbSync btc_chain_id chain fence @regression @tier2 adopts a new id for a live row when the hub now advertises it, then applies the row",
       "HubDbSync btc_chain_id chain fence @regression @tier2 answers null for a block the decoder does not hold, and for a failed read",
       "HubDbSync btc_chain_id chain fence @regression @tier2 applies every row while no expectation is known yet",
       "HubDbSync btc_chain_id chain fence @regression @tier2 does not re-purge when the same id is restated",
-      "HubDbSync btc_chain_id chain fence @regression @tier2 fences only the cross-chain tables",
+      "HubDbSync btc_chain_id chain fence @regression @tier2 fences only settlement cross-chain tables, not globally watermarked remote tokens",
       "HubDbSync btc_chain_id chain fence @regression @tier2 ignores a null or malformed id rather than dropping the fence",
       "HubDbSync btc_chain_id chain fence @regression @tier2 ignores an envelope id on a table that carries no chain identity",
       "HubDbSync btc_chain_id chain fence @regression @tier2 keeps every cross-chain table off the batch path, which has no per-row verdict",
@@ -14695,13 +14706,14 @@
       "policy membership references refuses malformed transport and non-reference JSON strings",
       "policy membership references separates member arrays, refs and null transport values"
     ],
-    "f6e48f488c1c5cbd": [
+    "785749f4a100001a": [
       "db/list_share_mirrors SQL contract never orders mirror reads by the per-hub id",
       "db/list_share_mirrors SQL contract reads LOCAL applied counts from list settlements",
       "db/list_share_mirrors SQL contract reads a foreign list tail in unique seq order from the MIRROR database",
       "db/list_share_mirrors SQL contract reads both LOCAL mirror mapping keys",
       "db/list_share_mirrors SQL contract reads foreign finalized snapshot heads from the MIRROR database",
       "db/list_share_mirrors SQL contract reads one finalized sequence from the MIRROR database",
+      "db/list_share_mirrors SQL contract reads the deterministic finalized head for one remote token",
       "db/list_share_mirrors SQL contract writes the LOCAL mirror mapping with its rollback keys"
     ],
     "f722342a7f6bc67a": [
@@ -15255,6 +15267,12 @@
       "four unarmed flag days registered on 2026-10-07 dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION is inactive on launched networks and active from regtest genesis",
       "four unarmed flag days registered on 2026-10-07 price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is a frozen height row with explicit network defaults",
       "four unarmed flag days registered on 2026-10-07 price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is inactive on launched networks and active from regtest genesis"
+    ],
+    "bccbc26b36f075a9": [
+      "remote_token_snapshots mirror contract declares hub re-mirroring as its recovery policy",
+      "remote_token_snapshots mirror contract declares the signed token facts and rollback fence",
+      "remote_token_snapshots mirror contract is bootstrapped, globally watermarked, locally keyed, and retractable by its source action",
+      "remote_token_snapshots mirror contract round trips a finalized fixture and removes it on a source-chain retraction"
     ]
   },
   "scripts": {
@@ -15866,7 +15884,7 @@
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "82bf65744414fc76",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "88e05bde94708bee",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/consensus_rules_digest_twin_bytes.test.js": "c8d4c432d417022a",
         "test/unit/consensus/doge_peer_clients/rollcall_proof_client/reply_decision.test.js": "8fcf19004337f429",
@@ -16042,7 +16060,7 @@
         "test/unit/db/markets/markets_native_coin_pairs.test.js": "7176d07530da2fe0",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_admission_schema.test.js": "1d3cfa8b4efea4a2",
-        "test/unit/db/mirror_twin_bigint_signedness.test.js": "c37f41bc4d4f28ce",
+        "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
         "test/unit/db/orders/cross_chain_offer_lists.test.js": "87976ddf94e91add",
         "test/unit/db/orders/cross_chain_offer_lists_fold.test.js": "e411489fced259a6",
         "test/unit/db/prices/landed_bound_clause.test.js": "d5f3085637164b79",
@@ -16156,11 +16174,11 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_bridge_mirror.test/refused_row_names.test.js": "da9426de9b374a24",
         "test/unit/hub/hub_db_sync/hub_db_sync_bridge_mirror.test/retractions_and_graces.test.js": "d2f92e7c1e0e3642",
         "test/unit/hub/hub_db_sync/hub_db_sync_bridge_mirror.test/schema_shapes.test.js": "2b4abedb79b40a38",
-        "test/unit/hub/hub_db_sync/hub_db_sync_btc_chain_id.test.js": "e751b12322ad441f",
+        "test/unit/hub/hub_db_sync/hub_db_sync_btc_chain_id.test.js": "32fb5b061a7284b2",
         "test/unit/hub/hub_db_sync/hub_db_sync_capability_snapshot_btc_rederive.test.js": "e292ba6ce5a70393",
         "test/unit/hub/hub_db_sync/hub_db_sync_capability_snapshot_repoint.test.js": "2f13529a5c36e37e",
         "test/unit/hub/hub_db_sync/hub_db_sync_capability_snapshot_testnet_corroboration.test.js": "45acd3764dc7d108",
-        "test/unit/hub/hub_db_sync/hub_db_sync_content_keyed_apply.test.js": "3cfe6dfd7791c0ae",
+        "test/unit/hub/hub_db_sync/hub_db_sync_content_keyed_apply.test.js": "fd58c31990531541",
         "test/unit/hub/hub_db_sync/hub_db_sync_drain_position.test.js": "71aeb96f5d0192d4",
         "test/unit/hub/hub_db_sync/hub_db_sync_failover_triggers.test.js": "75ed853984addf6f",
         "test/unit/hub/hub_db_sync/hub_db_sync_failover_triggers.test/all_hubs_not_caught_up.test.js": "e9c3f47b50704d38",
@@ -16211,7 +16229,7 @@
         "test/unit/list_share/apply/list_meta_apply.test.js": "910e33d9591666d2",
         "test/unit/list_share/apply/list_share_apply.test.js": "59f572f730d68db5",
         "test/unit/list_share/apply/list_share_apply_ticker.test.js": "0a6476923a9fd355",
-        "test/unit/list_share/db_list_share_mirrors.test.js": "f6e48f488c1c5cbd",
+        "test/unit/list_share/db_list_share_mirrors.test.js": "785749f4a100001a",
         "test/unit/list_share/list_share_barrier_wiring.test.js": "8562ce6a44c9ee2c",
         "test/unit/list_share/list_share_defer_sync.test.js": "c95e2eca75144083",
         "test/unit/list_share/list_share_determinism.test.js": "4ffeb0d1e41bc3d6",
@@ -16249,7 +16267,7 @@
         "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js": "ad9b4cab9e7d3566",
         "test/unit/migration/migration_precondition_oracle_tick.test.js": "3067b102d53b0b5f",
         "test/unit/migration/migration_preconditions.test.js": "10419775b050d37c",
-        "test/unit/migration/migration_runner.test.js": "9af03b163691b64a",
+        "test/unit/migration/migration_runner.test.js": "c0e02503f05a44f8",
         "test/unit/migration/migration_runner.test/backdated_rename.test.js": "596a4924f6807b64",
         "test/unit/migration/migration_runner.test/checksum_guards.test.js": "4972b9a44736eba0",
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "226ad08750f047f5",
@@ -16265,7 +16283,7 @@
         "test/unit/migration/migration_runner.test/reorder_divergence.test.js": "d6f0ae17462f20b4",
         "test/unit/migration/migration_runner.test/runner_guards.test.js": "af768b97a8636398",
         "test/unit/migration/migration_runner.test/schema_assertions.test.js": "59609cbe4c7bfed4",
-        "test/unit/migration/migration_runner.test/sql_split_and_frontier.test.js": "1c4928b3117b2669",
+        "test/unit/migration/migration_runner.test/sql_split_and_frontier.test.js": "64280cb4d014da31",
         "test/unit/migration/migration_runner.test/v017_renames.test.js": "bd472a94ee891986",
         "test/unit/migration/schema_drift_column_order.test.js": "7ea4c8c89c5481c5",
         "test/unit/migration/schema_retirements.test.js": "d815c99115a1d97e",
@@ -16276,7 +16294,7 @@
         "test/unit/migration/sql_schema_column_parity.test/table_bodies.test.js": "1660347f96656b41",
         "test/unit/migration/sql_schema_index_parity.test.js": "fb215bbb6b0bfed9",
         "test/unit/migration/sql_schema_index_parity.test/baseline.test.js": "1171c42ffe0e2dca",
-        "test/unit/migration/sql_schema_parse_coverage.test.js": "d3ef20b2ec25e067",
+        "test/unit/migration/sql_schema_parse_coverage.test.js": "1eec0f699baafb9a",
         "test/unit/observability/log_shipper_redaction.test.js": "dd5abc9af04e5cbd",
         "test/unit/observability/patch_console_and_env.test.js": "5b35d1c52a77c442",
         "test/unit/oracle_price_age.test.js": "72a0b56687489fbe",
@@ -16328,7 +16346,7 @@
         "test/unit/protocol_changes/anchor/anchor_bundle_order_row.test.js": "332212f43d474164",
         "test/unit/protocol_changes/anchor/anchor_fold_rows.test.js": "2d944feb25011092",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "47f788937f1f1de5",
+        "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/consensus_bound_shared_rows.test.js": "026d5bdba4ff140a",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
@@ -16494,7 +16512,8 @@
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
-        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
+        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
+        "test/unit/db/remote_token_snapshots.test.js": "bccbc26b36f075a9"
       }
     }
   }

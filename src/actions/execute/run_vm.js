@@ -69,10 +69,11 @@ async function loadVmSnapshot(ctx){
     // Pre-load contract-stake snapshot scoped to THIS contract. Backs the
     // xchain.contract.{getStake,getTotalStaked,getStakers,slash} APIs synchronously.
     // Implicit slash authorization: the accessor only knows this contract's stakes.
-    // The slash-window cap is decided here, on the decoder's time for this block.
+    // Both gates are decided here, on the decoder's time for this block.
     let slashWindowActive = await this.actions.protocolChanges.isEnabled('STAKE_SNAPSHOT_SLASH_WINDOW', data['BLOCK_INDEX']);
+    let decimalStringsActive = await this.actions.protocolChanges.isEnabled('STAKE_SNAPSHOT_DECIMAL_STRINGS', data['BLOCK_INDEX']);
     snapshot.contractStakeData = await this.indexerDb.getContractStakeDataForVM(
-        data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX'], slashWindowActive
+        data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX'], slashWindowActive, decimalStringsActive
     );
 
     // Balance + token-info snapshot backing xchain.getBalance / getTokenInfo.
