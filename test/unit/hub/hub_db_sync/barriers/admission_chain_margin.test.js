@@ -14,10 +14,6 @@
 
 'use strict';
 
-process.env.XC_MIRROR_ADMISSION_ACTIVATION = '0';
-process.env.INDEXER_COIN = 'DOGE';
-process.env.INDEXER_NETWORK = 'regtest';
-
 const assert = require('assert');
 const HubDbSync = require('../../../../../src/hub/hub_db_sync.js');
 const directCallPresence = require('../../../../../src/XChainIndexer/direct_call_presence.js');
