@@ -23,17 +23,14 @@
  ********************************************************************/
 
 const { HUB_SYNC_WATERMARK_GRACE_S } = require('../hub/hub_db_sync.js');
-// Only the margin table is read from the activation module. admitMarginBlocks is a pure
-// lookup over a frozen table, so holding it from require time carries no activation arm
-// (the admission suites purge and re-require the activation module to re-arm it).
-const { admitMarginBlocks } = require('../consensus/gates/mirror_admission_gate.js');
+const { consumerTargetHeight } = require('../consensus/gates/mirror_admission_margin_gate.js');
 const { getLogger } = require('../observability/index.js');
 
 // One probe of the height form (above the activation). Records the floor it read on
 // `probe` for the timeout diagnostic and returns whether the block is covered.
 async function probeAdmissionFloor(indexer, probe){
     // THE HEIGHT FORM. Covered when the persisted floor for (cross_chain_calls,
-    // this chain) has reached B - margin. No clock, no escape: the only thing
+    // this chain) has reached its consumer target. No clock, no escape: the only thing
     // that holds this is a watermark that has not advanced, which is mirror lag.
     let rows = await indexer.hubDb.getHubConfigParam(
         'xchain', String(indexer.config['NETWORK'] || ''), 'admission_watermark',
@@ -161,7 +158,8 @@ module.exports = {
     //   or the hub's own clock has passed block_time + the call grace.
     //
     //   ABOVE it, the family's height form: the hub's persisted cross_chain_calls height
-    //   watermark for this chain is at or above B - ADMIT_MARGIN_BLOCKS[cross_chain_calls],
+    //   watermark for this chain is at or above consumerTargetHeight(cross_chain_calls,
+    //   chain, network, B),
     //   and the hub-clock escape is RETIRED. Nothing in that predicate reads t(B), which is
     //   the point: a block stamped 7200 s ahead is height B like any other, and the only
     //   thing that can hold the barrier is a watermark trailing B - margin, which is genuine
@@ -202,7 +200,8 @@ module.exports = {
         // admission floor (height form) they record for the diagnostics below.
         let probe = {
             admission: admission, chain: chain, blockTime: blockTime, graceS: graceS,
-            target: admission ? (Number(blockHeight) - admitMarginBlocks('cross_chain_calls')) : null,
+            target: admission ? consumerTargetHeight('cross_chain_calls', chain,
+                this.config && this.config['NETWORK'], Number(blockHeight)) : null,
             lastTs: null, lastNow: null, lastFloor: null
         };
         // The height tail every log line below carries ABOVE the activation, in the shape
