@@ -172,33 +172,49 @@ describe('mirror-admission margin cross-repo parity', function() {
     it('the activated DOGE margin clears the 8-minute xdex watermark trail that the legacy margin cannot', function() {
         const table = 'cross_chain_matches';
         const start = 1_700_000_000_000;
-        const trails = [];
-        const legacyDeficits = [];
+        const trailsByCadence = [];
+        const legacyDeficitsByCadence = [];
         for(const cadenceMs of [60000, 50000, 40000]) {
             const watermark = withoutHubWindowEnv(() => new loaded.normalWatermark({
                 HUB_NETWORK: 'regtest',
             }));
             assert.strictEqual(watermark.roundTerminalMs(table), 8 * 60 * 1000);
-            const last = Math.ceil(watermark.roundTerminalMs(table) / cadenceMs) + 2;
-            for(let i = 0; i <= last; i++)
-                watermark.observeTip('DOGE', 1000 + i, start + i * cadenceMs);
-            const tip = 1000 + last;
-            const claimed = watermark.heights(start + last * cadenceMs)[table].DOGE;
-            const trail = tip - claimed;
-            const legacyMargin = loaded.normalIndexer.baseMarginBlocks(table);
-            const activatedMargin = loaded.normalIndexer.rowMarginBlocks(
-                table, 'DOGE', 'regtest', tip);
-            trails.push(trail);
-            legacyDeficits.push(trail - legacyMargin);
-            assert.strictEqual(legacyMargin, 4);
-            assert.ok(trail - legacyMargin >= 5);
-            assert.ok(claimed >= loaded.normalIndexer.consumerTargetHeight(
-                table, 'DOGE', 'regtest', tip));
-            assert.strictEqual(activatedMargin, 14);
-            assert.ok(activatedMargin > trail);
+            const steadyStart = Math.ceil(watermark.roundTerminalMs(table) / cadenceMs) + 2;
+            const last = steadyStart + 4;
+            const trails = [];
+            const legacyDeficits = [];
+            for(let i = 0; i <= last; i++) {
+                const tip = 1000 + i;
+                watermark.observeTip('DOGE', tip, start + i * cadenceMs);
+                if(i < steadyStart) continue;
+                const claimed = watermark.heights(start + i * cadenceMs)[table].DOGE;
+                const trail = tip - claimed;
+                const legacyMargin = loaded.normalIndexer.baseMarginBlocks(table);
+                const activatedMargin = loaded.normalIndexer.rowMarginBlocks(
+                    table, 'DOGE', 'regtest', tip);
+                trails.push(trail);
+                legacyDeficits.push(trail - legacyMargin);
+                assert.strictEqual(legacyMargin, 4);
+                assert.ok(claimed < tip - legacyMargin);
+                assert.ok(trail - legacyMargin >= 5);
+                assert.ok(claimed >= loaded.normalIndexer.consumerTargetHeight(
+                    table, 'DOGE', 'regtest', tip));
+                assert.strictEqual(activatedMargin, 14);
+                assert.ok(activatedMargin > trail);
+            }
+            trailsByCadence.push(trails);
+            legacyDeficitsByCadence.push(legacyDeficits);
         }
-        assert.deepStrictEqual(trails, [9, 11, 13]);
-        assert.deepStrictEqual(legacyDeficits, [5, 7, 9]);
+        assert.deepStrictEqual(trailsByCadence, [
+            [9, 9, 9, 9, 9],
+            [11, 11, 11, 11, 11],
+            [13, 13, 13, 13, 13],
+        ]);
+        assert.deepStrictEqual(legacyDeficitsByCadence, [
+            [5, 5, 5, 5, 5],
+            [7, 7, 7, 7, 7],
+            [9, 9, 9, 9, 9],
+        ]);
     });
 
     it('hub and indexer agree on both sides of a stubbed DOGE testnet boundary', function() {
