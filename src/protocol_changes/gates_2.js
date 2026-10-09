@@ -71,9 +71,8 @@ addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION',
 });
 
 // list_owner_activation
-// LIST format 1 edits must come from the list root's creator. Heights use the
-// chain containing the edit. Mainnet and regtest start at genesis; testnet uses
-// per-chain heights and leaves the coinless fallback unarmed.
+// LIST format 1 edits must come from the list root's creator. Mainnet and regtest
+// start at genesis; testnet uses per-chain heights and keeps the fallback unarmed.
 addGate('list_owner_activation.LIST_OWNER_ACTIVATION', 'height', {
     mainnet: 0,
     'BTC:testnet': 155001,
