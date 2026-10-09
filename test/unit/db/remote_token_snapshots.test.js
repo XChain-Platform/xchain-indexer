@@ -11,8 +11,8 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const HubDbSync = require('../../../src/hub/hub_db_sync.js');
 const mirrorTables = require('../../../src/hub/hub_db_sync/mirror_tables.js');
-const rowApply = require('../../../src/hub/hub_db_sync/row_apply.js');
 const mixin = require('../../../src/db/list_share_mirrors/index.js');
 
 const SQL_PATH = path.join(__dirname, '..', '..', '..', 'src', 'sql', 'remote_token_snapshots.sql');
@@ -53,14 +53,6 @@ function fixtureStore(){
     return { rows, calls, doQuery: run, doQueryStrict: run };
 }
 
-async function retractFixture(store, table, sourceChain, fromActionIndex){
-    const actionColumn = mirrorTables.RETRACTION_COLUMNS[table];
-    const chainColumn = mirrorTables.RETRACTION_CHAIN_COLUMNS[table] || 'source_chain';
-    return store.doQuery(
-        'DELETE FROM ' + table + ' WHERE ' + chainColumn + ' = ? AND ' + actionColumn + ' >= ?',
-        [sourceChain, fromActionIndex]);
-}
-
 describe('remote_token_snapshots mirror contract', function () {
     const sql = fs.readFileSync(SQL_PATH, 'utf8');
 
@@ -88,13 +80,11 @@ describe('remote_token_snapshots mirror contract', function () {
     it('round trips a finalized fixture and removes it on a source-chain retraction', async function () {
         const store = fixtureStore();
         const columns = declaredColumns(sql).filter(c => c !== 'id');
-        const sync = {
-            hubDb: store,
-            refuseForeignChainRow: () => false,
-            refuseForeignNetworkRow: async () => false,
-            localColumns: async () => new Set(columns),
-            cachedColumnType: () => ''
-        };
+        const sync = new HubDbSync(store, { hubUrl: 'http://hub.test' });
+        sync.refuseForeignChainRow = () => false;
+        sync.refuseForeignNetworkRow = async () => false;
+        sync.localColumns = async () => new Set(columns);
+        sync.cachedColumnType = () => '';
         const fixture = {
             id: 88,
             snapshot_id: 'a'.repeat(64),
@@ -112,7 +102,7 @@ describe('remote_token_snapshots mirror contract', function () {
             created_at: '2026-10-08 12:00:00'
         };
 
-        await rowApply.applyRow.call(sync, 'remote_token_snapshots', fixture);
+        await sync.applyRow('remote_token_snapshots', fixture);
         const reader = {
             doQueryStrict: store.doQueryStrict.bind(store),
             getPinnedRemoteToken: mixin.getPinnedRemoteToken
@@ -122,7 +112,11 @@ describe('remote_token_snapshots mirror contract', function () {
         delete expected.id;
         assert.deepStrictEqual(pinned, expected);
 
-        await retractFixture(store, 'remote_token_snapshots', 'DOGE', 91);
+        await sync.applyRetraction({
+            table: 'remote_token_snapshots',
+            source_chain: 'DOGE',
+            from_action_index: 91
+        });
         assert.strictEqual(await reader.getPinnedRemoteToken('regtest', 'DOGE', 'FUFU'), null);
         const deletion = store.calls.find(call => /^DELETE FROM remote_token_snapshots /.test(call.sql));
         assert.deepStrictEqual(deletion, {
