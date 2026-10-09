@@ -152,7 +152,7 @@ const TABLES = [
       anchorRecovery: 'archive',
       hashed: { classes: ['quorum'], note: 'Quorum-signed shared-list versions; consumers re-verify the signature set and bind the transport deltas through members_hash.' },
       note: 'Append-only and never retracted: a new version is a new row at seq plus one. The injected LIST legs roll back normally, and the bridge_settlements rows keyed kind=\'list\' go with them so replay re-applies the version.' },
-    { table: 'remote_token_snapshots', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'exempt',
+    { table:'remote_token_snapshots', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'exempt',
       anchorRecovery: 'none',
       anchorRecoveryNote: 'Not carried in the ANCHOR archive. The row returns through the hub mirror after a rebuild.',
       hashed: { classes: ['quorum'], note: 'Federation-signed remote-token facts; consumers select a finalized content-keyed version.' },
