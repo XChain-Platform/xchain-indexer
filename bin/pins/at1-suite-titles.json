@@ -10596,6 +10596,10 @@
       "Actions.processAction() @regression @tier3 does not call any other handler when dispatching SEND",
       "Actions.processAction() @regression @tier3 passes params, data, and error through to the handler"
     ],
+    "b45d06aa483d7379": [
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is unarmed on production networks and active from regtest genesis",
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 registers the 0.2.0 row and both network constants"
+    ],
     "b4b4e9e256db55d0": [
       "Database mapping null-id skip guard @regression @tier1 createActionMapping skips (no SELECT/INSERT) when an address ref resolves to null",
       "Database mapping null-id skip guard @regression @tier1 createActionMapping skips when a tick ref resolves to null",
@@ -15243,8 +15247,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1230,
-      "titleCount": 12780,
+      "fileCount": 1231,
+      "titleCount": 12782,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16318,6 +16322,7 @@
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
+        "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
