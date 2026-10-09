@@ -31,7 +31,7 @@ const Utility = require('../../../../src/utility');
 const {
     buildStateHashData, isIndexMapStateHashActive, INDEX_MAP_STATE_HASH_ACTIVATION,
     POLL_FINALIZE_STATE_HASH_ACTIVATION, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
-    BET_STATUS_STATE_HASH_ACTIVATION,
+    BET_STATUS_STATE_HASH_ACTIVATION, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
 } = require('../../../../src/consensus/state_hash');
 
 const util = new Utility();
@@ -61,6 +61,8 @@ async function withArmed(height, fn){
     try { return await fn(); } finally { INDEX_MAP_STATE_HASH_ACTIVATION.regtest = prev; }
 }
 
+let abhPrev;
+
 describe('state_hash index-map class (id-determinism P4) @regression', () => {
     let pollPrev, tokenPrev, indexPrev, betPrev;
     before(function(){
@@ -72,12 +74,14 @@ describe('state_hash index-map class (id-determinism P4) @regression', () => {
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = 999999999;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = 999999999;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = 999999999;
+    abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = tokenPrev;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = betPrev;
+    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('gate: every network armed at genesis (height 0, regtest via); at/above threshold activates', function(){
@@ -120,12 +124,14 @@ describe('state_hash index-map class (id-determinism P4) @regression', () => {
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = 999999999;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = 999999999;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = 999999999;
+    abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = tokenPrev;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = betPrev;
+    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('armed: the id map is folded in, and a divergent id->address pair HALTS (different hash)', async function(){

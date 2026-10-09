@@ -21,10 +21,10 @@
  * rollback_coverage.test.js closes for merkle.js and friends).
  *
  * xchain-sync/src/client/block_hasher.js computeBlockHashes() is a hand-ported twin of
- * xchain-indexer/src/db.js getBlockHashes(): same consensus SELECTs, same
+ * xchain-indexer/src/db/actions.js getBlockHashes(): same consensus SELECTs, same
  * special-address canonicalization, same chaining/version fold, hashed through
  * the same getDataHash/jsonStringify pair. The two live inside DIFFERENT host
- * structures (a db.js method vs a sync class), so whole-file byte-identity
+ * structures (a db/actions.js mixin method vs a sync class), so whole-file byte-identity
  * cannot apply. This test extracts the consensus-bearing pieces from BOTH
  * repos' sources and asserts them equal after stripping comments and
  * collapsing whitespace:
@@ -97,7 +97,7 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
         const vIndexer = pair.indexer.match(/const BLOCK_HASH_VERSION = (\d+)/);
         assert.ok(vSync && vIndexer, 'BLOCK_HASH_VERSION constant missing on one side');
         assert.strictEqual(vIndexer[1], vSync[1],
-            'BLOCK_HASH_VERSION drifted between xchain-indexer/src/db.js and ' +
+            'BLOCK_HASH_VERSION drifted between xchain-indexer/src/db/shared.js and ' +
             'xchain-sync/src/client/block_hasher.js; a version bump is a consensus break and MUST land on both sides');
     });
 

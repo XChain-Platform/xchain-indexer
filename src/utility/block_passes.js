@@ -204,7 +204,7 @@ module.exports = {
     // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
     // TODO: Revisit this code and handle calculating block time more elegantly
     async processCancellations(actions, db, block_index, block_time){
-        let cancels = await db.findCancelledDispensers(block_time);
+        let cancels = await db.findCancelledDispensers(block_time, block_index);
         for(let action_index of cancels){
             // Define basic ACTION transaction data object
             let action = 'DISPENSER_CLOSE';

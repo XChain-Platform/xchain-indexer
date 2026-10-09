@@ -89,7 +89,7 @@ module.exports = {
         // Get information on a dispenser given the COIN network and DISPENSER_ACTION_INDEX
         var dispenserInfo = false;
         if(format==1 || format==2)
-            dispenserInfo = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['DISPENSER_ACTION_INDEX'], data['BLOCK_TIME']);
+            dispenserInfo = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['DISPENSER_ACTION_INDEX'], data['BLOCK_TIME'], data['BLOCK_INDEX']);
 
         // Get information on the GIVE and GET tokens
         let info = (format==0) ? data : dispenserInfo;
@@ -130,4 +130,3 @@ module.exports = {
     ctx.dispenser = dispenser;
     },
 };
-

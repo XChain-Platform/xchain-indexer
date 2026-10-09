@@ -35,7 +35,7 @@ const Utility = require('../../../../src/utility');
 const {
     buildStateHashData, isPollFinalizeStateHashActive, POLL_FINALIZE_STATE_HASH_ACTIVATION,
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION, INDEX_MAP_STATE_HASH_ACTIVATION,
-    BET_STATUS_STATE_HASH_ACTIVATION,
+    BET_STATUS_STATE_HASH_ACTIVATION, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
 } = require('../../../../src/consensus/state_hash');
 
 const util = new Utility();
@@ -78,6 +78,8 @@ function flipRow(over){
     }, over || {});
 }
 
+let abhPrev;
+
 describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', () => {
     let tokenPrev;
     let indexPrev;
@@ -86,11 +88,13 @@ describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', ()
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest; TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = 999999999;
     indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;   BET_STATUS_STATE_HASH_ACTIVATION.regtest   = 999999999;
+    abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = tokenPrev;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest   = betPrev;
+    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('gate: regtest armed from genesis; mainnet/testnet armed per chain at real heights; coin-less lookup fail-inert', function(){
@@ -136,11 +140,13 @@ describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', ()
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest; TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = 999999999;
     indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;   BET_STATUS_STATE_HASH_ACTIVATION.regtest   = 999999999;
+    abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = tokenPrev;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest   = betPrev;
+    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('active: the flip is folded in, and a dropped/divergent finalization HALTS (different hash)', async function(){

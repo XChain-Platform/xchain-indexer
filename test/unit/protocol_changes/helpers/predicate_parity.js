@@ -67,6 +67,7 @@ const TABLE = [
     ['stake_weighted_quorum.STAKE_WEIGHTED_QUORUM_ACTIVATION', 'isStakeWeightedQuorumActive', ['height', 'network']],
     ['stateHash.ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION', 'isArchiveInvalidHeightKeyActive', ['height', 'network', 'coin']],
     ['stateHash.ARCHIVE_INVALID_STATE_HASH_ACTIVATION', 'isArchiveInvalidStateHashActive', ['height', 'network', 'coin']],
+    ['stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION', 'isAttestBatchHeadStateHashActive', ['height', 'network', 'coin']],
     ['stateHash.BET_STATUS_STATE_HASH_ACTIVATION', 'isBetStatusStateHashActive', ['height', 'network', 'coin']],
     ['stateHash.INDEX_MAP_STATE_HASH_ACTIVATION', 'isIndexMapStateHashActive', ['height', 'network']],
     ['stateHash.POLL_FINALIZE_STATE_HASH_ACTIVATION', 'isPollFinalizeStateHashActive', ['height', 'network', 'coin']],
