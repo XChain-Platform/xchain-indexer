@@ -31,6 +31,7 @@
 # Usage:
 #   bin/vendor-vm.sh           # refresh ./xchain-vm from the sibling, then verify
 #   bin/vendor-vm.sh fix       # same as above (explicit)
+#   bin/vendor-vm.sh stage     # refresh sources without installing dependencies
 #   bin/vendor-vm.sh check     # verify version + src/ content match; non-zero exit on drift
 #
 # `check` writes in exactly one case: no vendored SRC tree exists, which every
@@ -53,12 +54,20 @@ SRC="${XCHAIN_VM_SOURCE:-$INDEXER_ROOT/../xchain-vm}"
 DEST="$INDEXER_ROOT/xchain-vm"
 MODE="${1:-fix}"
 
+case "$MODE" in
+    fix|stage|check) ;;
+    *)
+        echo "vendor-vm: unknown mode '$MODE' (expected fix, stage, or check)" >&2
+        exit 2
+        ;;
+esac
+
 # Fail closed off-Linux: the npm install in the WRITE path compiles isolated-vm
 # for the HOST platform, so a Mac-side run poisons the vendored tree with Mach-O
 # binaries the Linux runtime cannot load. Run that on a Linux host instead.
 #
-# `check` is exempt, and the distinction matters more than it looks. It runs no
-# npm install and never loads isolated-vm: it greps CONSENSUS_VERSION out of the
+# Source-only modes are exempt. They run no npm install and never load
+# isolated-vm: they grep CONSENSUS_VERSION out of the
 # frozen export and sha1s src/**, so nothing host-specific can enter the tree even
 # on the one path where it stages an ABSENT copy (source files only, node_modules
 # excluded). The hashing helper below already falls back to
@@ -74,7 +83,7 @@ MODE="${1:-fix}"
 # TIME and whose real drift once shipped two missing consensus gates under an
 # identical version string. A guard that cries wolf on the primary dev machine
 # is a guard people learn to route around.
-if [ "$MODE" != "check" ] && [ "$(uname -s)" != "Linux" ]; then
+if [ "$MODE" = "fix" ] && [ "$(uname -s)" != "Linux" ]; then
     echo "vendor-vm: refusing to $MODE on $(uname -s): npm install would build a non-Linux isolated-vm into the vendored tree." >&2
     # The Linux host this points at can reach the SAME tree under a DIFFERENT
     # absolute path than this machine, so only the path relative to $HOME is
@@ -114,6 +123,16 @@ tree_manifest() {
     ( cd "$1" && { find src -type f; echo package.json; } | LC_ALL=C sort | xargs $SHA1 )
 }
 
+stage_sources() {
+    rsync -a --delete \
+        --exclude 'node_modules' \
+        --exclude '.git' \
+        --exclude 'test' \
+        --exclude 'bench' \
+        --exclude 'reports' \
+        "$SRC/" "$DEST/"
+}
+
 if [ ! -d "$SRC/src" ]; then
     # A drift-guard context (bin/ci-all.sh, the CI drift-guards job) checked out
     # the canonical sibling on purpose; a missing SRC there means the guard is
@@ -150,13 +169,7 @@ if [ "$MODE" = "check" ]; then
     # concealing exactly the drift the guard exists to name.
     if [ ! -d "$DEST/src" ]; then
         echo "vendor-vm: no vendored copy at $DEST; staging src from canonical sibling."
-        rsync -a \
-            --exclude 'node_modules' \
-            --exclude '.git' \
-            --exclude 'test' \
-            --exclude 'bench' \
-            --exclude 'reports' \
-            "$SRC/" "$DEST/"
+        stage_sources
         DEST_VER="$(vm_version "$DEST")"
     fi
     # A tree that is present but whose version cannot be read is DRIFT, not a
@@ -186,19 +199,25 @@ if [ "$MODE" = "check" ]; then
     exit 0
 fi
 
+if [ "$MODE" = "stage" ]; then
+    echo "vendor-vm: staging sources from $SRC (canonical CONSENSUS_VERSION=${SRC_VER:-<none>})"
+    stage_sources
+    DEST_VER="$(vm_version "$DEST")"
+    if [ "$DEST_VER" != "$SRC_VER" ] || [ "$(tree_manifest "$DEST")" != "$(tree_manifest "$SRC")" ]; then
+        echo "vendor-vm: ERROR - staged source does not match canonical" >&2
+        exit 1
+    fi
+    echo "vendor-vm: staged CONSENSUS_VERSION=$DEST_VER (src/ content verified)"
+    exit 0
+fi
+
 echo "vendor-vm: refreshing $DEST from $SRC (canonical CONSENSUS_VERSION=${SRC_VER:-<none>})"
 
 # Mirror the canonical source over the vendored copy. Exclude the same dirs xchain-node
 # strips when staging (node_modules/.git/test/bench/reports). node_modules is preserved
 # in DEST via the exclude so an already-built isolated-vm is reused when deps are
 # unchanged; the npm install below reconciles it if package.json moved.
-rsync -a --delete \
-    --exclude 'node_modules' \
-    --exclude '.git' \
-    --exclude 'test' \
-    --exclude 'bench' \
-    --exclude 'reports' \
-    "$SRC/" "$DEST/"
+stage_sources
 
 echo "vendor-vm: reconciling dependencies (rebuilds isolated-vm only if changed)..."
 ( cd "$DEST" && npm install --no-audit --no-fund )

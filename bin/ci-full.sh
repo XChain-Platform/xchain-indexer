@@ -137,7 +137,7 @@ need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub
 if [ "${CI_TIER:-full}" = "full" ] && [ "$(uname -s)" = "Linux" ]; then
   run_tier "vendor:vm (stage from ../xchain-vm)" npm run vendor:vm
 else
-  run_tier "vendor:vm (stage sources from ../xchain-vm)" npm run vendor:vm -- check
+  run_tier "vendor:vm (stage sources from ../xchain-vm)" npm run vendor:vm -- stage
 fi
 
 # --- job: ci (XChain-Platform/.github ci-reusable.yml -> npm run ci) -------

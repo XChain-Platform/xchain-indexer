@@ -217,7 +217,7 @@ describe('ci fast selector', function () {
       assert.strictEqual(result.status, 1, result.stderr);
       const invocation = result.stdout.match(/^npm-args:(.*)$/m);
       assert(invocation, result.stdout);
-      assert.strictEqual(invocation[1], 'run vendor:vm -- check');
+      assert.strictEqual(invocation[1], 'run vendor:vm -- stage');
       assert(result.stdout.includes('vendor:vm (stage sources from ../xchain-vm)'));
     } finally {
       fs.rmSync(fakeBin, { recursive: true, force: true });
