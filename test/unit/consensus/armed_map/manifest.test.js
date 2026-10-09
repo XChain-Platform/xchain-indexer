@@ -173,6 +173,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
+        assert.strictEqual(res.rows.length, 385);
     });
 
     it('carries the three row families the design names', function () {
@@ -184,6 +185,26 @@ describe('armed_map/manifest: collectRows', function () {
         assert.ok(keys.has('protocol_changes.changes.SEND'), 'a ProtocolChanges row');
         assert.ok(keys.has('protocol_changes.CONSENSUS_VERSION'), 'the registry\'s own constant');
         assert.ok(keys.has('mirror_admission_activation.CHAIN_CODE_RE'), 'a RegExp row');
+        assert.ok(keys.has('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'), 'the chain-margin activation');
+        assert.ok(keys.has('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS'), 'the chain-margin table');
+    });
+
+    it('carries the DOGE mirror-admission chain margins and activation', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        assert.deepStrictEqual(byKey.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'), {
+            mainnet: null,
+            'DOGE:mainnet': null,
+            'DOGE:testnet': 9999999999,
+            regtest: 0,
+        });
+        assert.deepStrictEqual(byKey.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS').DOGE, {
+            bridge_transfers: 14,
+            cross_chain_calls: 14,
+            cross_chain_matches: 14,
+            list_snapshots: 14,
+            policy_snapshots: 14,
+            price_snapshots: 16,
+        });
     });
 
     it('carries the anchor archive fold-term heights', function () {
