@@ -173,7 +173,19 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 389);
+        assert.strictEqual(res.rows.length, 390);
+    });
+
+    it('carries the cross-chain remote-token gate heights', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        assert.deepStrictEqual(byKey.get('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'), {
+            mainnet: 9999999999,
+            'BTC:testnet': 9999999999,
+            'LTC:testnet': 9999999999,
+            'DOGE:testnet': 9999999999,
+            testnet: 9999999999,
+            regtest: 0,
+        });
     });
 
     it('carries the three row families the design names', function () {
