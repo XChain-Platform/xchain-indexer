@@ -57,7 +57,7 @@ const NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = 1786060800;
 // carry (124,158 of BTC's 124,160 and all 43,934 of DOGE's, measured 2026-09-09), so a
 // genesis arm would reinterpret every one of them. The instant is T, the mainnet launch
 // instant, and only the operator names it.
-const UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = 9999999999;
+const UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = UNARMED;
 
 // Mainnet arm for CROSS_SETTLE_PER_BLOCK_CAP. ARMED AT GENESIS (0) by the operator's
 // 2026-09-09 ruling. The cap can only move a verdict where the CROSS_SETTLE pass has a
