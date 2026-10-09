@@ -1027,7 +1027,7 @@
     "xchain-websites"
   ],
   "platformToolingSwept": [
-    "claude/bin",
+    "platform-tooling/claude/bin",
     "claude/scripts"
   ],
   "distinctPathCount": 302,
