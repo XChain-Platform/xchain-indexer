@@ -8,7 +8,7 @@
 //
 // Part of test/unit/rollcall_gates_filter.test.js: the two call sites of the
 // rules-aware attestation capability filter, the v0 admission reason literal in
-// actions/attest.js and the getcapabilityvalidators RPC in api.js. The filter
+// actions/attest/request.js and the getcapabilityvalidators RPC in api.js. The filter
 // itself, and its arming, stay in the entry file.
 
 'use strict';
@@ -27,7 +27,7 @@ const PK_B = 'b'.repeat(64);
 const PK_C = 'c'.repeat(64);
 
 // ---------------------------------------------------------------------------
-// The v0 admission reason literal. The gate at actions/attest.js
+// The v0 admission reason literal. The gate at actions/attest/request.js
 // must fire the rules-aware literal whenever the filter dropped somebody, and the
 // generic one otherwise. Driven through the REAL handler with the module-instance
 // stub convention actions/attest.test.js uses; that suite is a separate file,
@@ -40,7 +40,7 @@ const swq             = require('../../../../src/consensus/stake_weighted_quorum
 const { stubActiveAt } = require('../../../helpers/gate_modules.js');
 const attestBcastFee  = require('../../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
-// The SAME module object actions/attest.js closed over at require time, which is
+// The SAME module object actions/attest/request.js closed over at require time, which is
 // what makes a sinon stub here reach inside the handler.
 const rgf             = require('../../../../src/actions/attest/gates/rollcall_gates_filter.js');
 

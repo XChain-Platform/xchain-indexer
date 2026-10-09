@@ -50,7 +50,8 @@
  * WHY A FLAG-DAY. It changes block-processing output (row amounts, ledger
  * rows, slash_events), so a from-genesis replay under the new rule diverges
  * from a chain indexed under the old one. It does NOT ride the VM's
- * BINARY_ALLOC gate (xchain-vm/src/index.js, 1786060800 = 2026-08-07): that
+ * BINARY_ALLOC gate (BINARY_ALLOC_GATE_BLOCK_TIME in
+ * xchain-vm/src/index/runtime/activations.js, 1786060800 = 2026-08-07): that
  * flag-day is already in the past, and arming against it would retroactively
  * change blocks the fleet has processed, the exact hazard
  * consensus/ledger_amount_precision_gate.js documents.
@@ -73,8 +74,8 @@
  * not reach it. The v0.21.3 cut pinned BTC 155001, LTC 4906040 and DOGE
  * 67962387 (the SLASH_GRID_ACTIVATION row in src/protocol_changes/gates_3.js).
  * Testnet blocks below those heights keep the legacy arithmetic. The VM's slash
- * amount precision gate (isSlashAmountPrecisionActive in xchain-vm/src/index.js)
- * is on for all of testnet from genesis, so a slash in those blocks can arrive
+ * amount precision gate (isSlashAmountPrecisionActive in
+ * xchain-vm/src/index/runtime/activations.js) is on for all of testnet from genesis, so a slash in those blocks can arrive
  * with up to 18 fractional digits and is rounded half-up at the tick's own
  * decimals. The two gates run on different clocks: this one on the
  * parsed chain's own block_index, the VM's on block time. regtest runs from

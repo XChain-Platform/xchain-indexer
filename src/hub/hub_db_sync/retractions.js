@@ -66,6 +66,12 @@ function verifyEd25519(payload, sigHex, pubkeyHex) {
 // The action-index range and generation fence one deletion event names. `bounded` is
 // the CLOSED range of a deferred retraction (to_action_index present); `fenced` is the
 // item-5308 push_generation fence. Null when from_action_index is not a number.
+// `fenced` comes from the event's retraction_generation alone, never from local columns, and a
+// fenced DELETE names a_/b_push_generation or push_generation unconditionally, so on a table
+// missing its fence column it fails with ER_BAD_FIELD_ERROR and the row stays mirrored: it never
+// degrades to an unfenced delete. The cure is the dated fence-column migrations (2026-07-17 and
+// 2026-07-19); the 2026-07-19 header is right, and the 2026-07-17 headers' "no-op" and
+// column-presence-guard wording is wrong.
 function parseRetractionRange(event) {
     let from = Number(event.from_action_index);
     if (!Number.isFinite(from)) return null;
@@ -106,8 +112,9 @@ module.exports = {
         // bridge_transfers joins the quorum class: its rows are federation-co-signed and a
         // deletion mints value out of existence on the destination chain the same way a
         // forged match would, so an unfenced or unsigned deletion must be refused rather
-        // than applied. policy_snapshots is absent because it is never retracted at all
-        // (no RETRACTION_COLUMNS entry, so the generic path below skips it).
+        // than applied. policy_snapshots and list_snapshots are absent because they are never
+        // retracted (no RETRACTION_COLUMNS entry, so the generic path below skips them); giving
+        // either one a RETRACTION_COLUMNS entry also requires adding it to this list.
         let quorumClass = (event.table === 'cross_chain_calls' || event.table === 'cross_chain_matches' ||
                            event.table === 'bridge_transfers');
         let ownChain = !!(this.coin && event.source_chain === this.coin && this.getOwnRollbackGeneration);
