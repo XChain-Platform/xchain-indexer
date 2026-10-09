@@ -40,6 +40,9 @@ const CONSENSUS = [
   'bin/lib/',
   'bin/vendor-vm.sh'
 ];
+const DEDICATED_GATES = new Set([
+  'bin/pins/at1-suite-titles.json'
+]);
 // A changed file under test/ that no runner owns (a helper, a fixture) cannot
 // change consensus code, so it is graded through the tests that use it rather
 // than by running the whole unit tier. It still widens when something outside
@@ -126,6 +129,7 @@ function matchesPrefix(file, prefix) {
 function addConsensusReasons(changedFiles, findRequirers, reasons, consensusPrefixes) {
   let consensus = false;
   for (const file of changedFiles) {
+    if (DEDICATED_GATES.has(file)) continue;
     const direct = consensusPrefixes.some((prefix) => matchesPrefix(file, prefix));
     if (direct || file === 'package.json') {
       reasons.add(`consensus: ${file}`);
