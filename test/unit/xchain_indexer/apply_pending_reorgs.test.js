@@ -50,9 +50,9 @@ describe('applyPendingReorgs logging and processed-reorg count', function () {
         const info = sinon.stub(getLogger(), 'info');
         await makeIndexer().applyPendingReorgs(makeView(), REORGS, 200);
 
-        const lines = warn.getCalls().map(c => String(c.args[0])).filter(l => l.includes('block reorganization'));
-        assert.deepStrictEqual(lines, ['Detected 2 block reorganization(s); deepest at block #101']);
-        assert.ok(!info.getCalls().some(c => String(c.args[0]).includes('block reorganization')),
+        const lines = warn.getCalls().map(c => String(c.args[0])).filter(l => l.includes('orphaned block'));
+        assert.deepStrictEqual(lines, ['Detected 2 orphaned block(s) from decoder reorg events; deepest at block #101']);
+        assert.ok(!info.getCalls().some(c => String(c.args[0]).includes('orphaned block')),
             'the detection must not also be logged at info');
     });
 

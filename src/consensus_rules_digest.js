@@ -31,13 +31,13 @@
  *     carries none) hashes every armed row its repo's registry carries, a far
  *     wider set than SHARED_GATES. It compares processes that share that
  *     registry, two indexers or an indexer and its sync replica, never a hub.
- *   - This digest hashes the DECIDED HEIGHTS of SHARED_GATES alone. It answers
+ *   - This digest hashes the DECIDED VALUES of SHARED_GATES alone. It answers
  *     "do you and I apply the same rules to the same chain", which is the
  *     question that actually predicts divergence, and it is comparable ACROSS
  *     repos: a hub and an indexer running the same flag days produce the same
  *     digest even though they share no source file.
  *
- * Neither moves on a comment reformat (prose cannot fork a chain, a height
+ * Neither moves on a comment reformat (prose cannot fork a chain, a value
  * can), and both move when a regtest venue arms a gate from its environment.
  *
  * SHARED_GATES is deliberately a hardcoded intersection rather than a

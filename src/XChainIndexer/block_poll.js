@@ -117,7 +117,8 @@ module.exports = {
             if(minReorgBlock === null || reorg.block_index < minReorgBlock)
                 minReorgBlock = reorg.block_index;
         }
-        getLogger().warn("Detected " + unprocessedReorgs.length + " block reorganization(s); deepest at block #" + minReorgBlock);
+        // The decoder writes one REORG event per orphaned block, so this is a block count, not a reorg count.
+        getLogger().warn("Detected " + unprocessedReorgs.length + " orphaned block(s) from decoder reorg events; deepest at block #" + minReorgBlock);
         if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= minReorgBlock){
             await this.rollback.rollback(minReorgBlock);
             // Re-read the resume cursor: rollback() deleted every block >=

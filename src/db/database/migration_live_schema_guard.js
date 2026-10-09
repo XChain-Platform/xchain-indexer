@@ -18,24 +18,36 @@
  * the live column carries silently strips it, and one that shrinks the type truncates or
  * rejects stored rows. The destructive-DDL scan cannot see either: it reads statement text,
  * not the column the statement lands on. This guard reads the live column from
- * information_schema for every MODIFY in an auto file and names each loss.
+ * information_schema for every MODIFY in an auto file and names each loss. A type change
+ * it has no widening rule for counts as a loss, and a text MODIFY that names no charset
+ * or collation is compared against the table default the server would fall back to.
  *
  ********************************************************************/
 
 'use strict';
+
+const { opensBackslashEscape } = require('../shared.js');
 
 const INT_RANK  = { tinyint: 1, smallint: 2, mediumint: 3, int: 4, integer: 4, bigint: 5 };
 const TEXT_RANK = { tinytext: 1, text: 2, mediumtext: 3, longtext: 4 };
 const BLOB_RANK = { tinyblob: 1, blob: 2, mediumblob: 3, longblob: 4 };
 const CHARSET_RANK = { ascii: 1, latin1: 1, utf8: 3, utf8mb3: 3, utf8mb4: 4 };
 const SIZED = new Set(['varchar', 'char', 'varbinary', 'binary']);
+// Decimal digits each integer type needs to hold its whole range, signed then unsigned.
+const INT_DIGITS = { tinyint: [3, 3], smallint: [5, 5], mediumint: [7, 8], int: [10, 10], integer: [10, 10], bigint: [19, 20] };
+// Spellings the server stores under another name (JSON is reported as longtext).
+const TYPE_ALIAS = { integer: 'int', numeric: 'decimal', dec: 'decimal', fixed: 'decimal', real: 'double',
+    bool: 'tinyint', boolean: 'tinyint', json: 'longtext' };
+const FSP_TYPES = new Set(['datetime', 'timestamp', 'time']);
+const TEXTUAL = new Set(['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'enum', 'set']);
 
 // Blank every quoted literal so a keyword inside a DEFAULT or COMMENT string never counts.
 function blankLiterals(text){
     return text.replace(/'(?:[^'\\]|\\.|'')*'|"(?:[^"\\]|\\.|"")*"|`[^`]*`/g, m => m[0] + m[0]);
 }
 
-// Split on commas outside parentheses and quotes.
+// Split on commas outside parentheses and quotes. The quote model is splitSqlStatements'
+// (doubled quotes, no backslash escape inside backticks), so both read the same spans.
 function splitTopLevel(text){
     const out = [];
     let depth = 0, quote = null, cur = '';
@@ -43,8 +55,11 @@ function splitTopLevel(text){
         const ch = text[i];
         if(quote){
             cur += ch;
-            if(ch === '\\'){ cur += text[++i] || ''; }
-            else if(ch === quote) quote = null;
+            if(opensBackslashEscape(text, i, quote)){ cur += text[++i]; }
+            else if(ch === quote){
+                if(text[i + 1] === quote){ cur += text[++i]; }
+                else { quote = null; }
+            }
             continue;
         }
         if(ch === "'" || ch === '"' || ch === '`'){ quote = ch; cur += ch; continue; }
@@ -60,22 +75,33 @@ function splitTopLevel(text){
 const unquote = (id) => id.replace(/^`|`$/g, '');
 
 // Replace each block comment outside a quoted literal with a space, so a comment can neither
-// hide a MODIFY nor stand in for a restated attribute. Executable `/*!` and `/*M!` comments
-// stay: the server runs them, and the destructive-DDL scan already refuses them.
+// hide a clause nor stand in for a restated attribute. The quote model is splitSqlStatements'
+// (a regex strip would delete real SQL between a '/*' literal and a later '*/' literal).
+// Executable `/*!` and `/*M!` comments stay: the server runs them, and the destructive-DDL
+// scan already refuses them. An unterminated `/*` is kept as written, as the splitter does.
 function stripBlockComments(text){
+    text = String(text);
     let out = '', quote = null;
     for(let i = 0; i < text.length; i++){
         const ch = text[i];
         if(quote){
             out += ch;
-            if(ch === '\\'){ out += text[++i] || ''; }
-            else if(ch === quote) quote = null;
+            if(opensBackslashEscape(text, i, quote)){ out += text[++i]; }
+            else if(ch === quote){
+                if(text[i + 1] === quote){ out += text[++i]; }
+                else { quote = null; }
+            }
             continue;
         }
         if(ch === "'" || ch === '"' || ch === '`'){ quote = ch; out += ch; continue; }
         const executable = /^(?:!|M!)/i.test(text.slice(i + 2, i + 4));
-        const end = ch === '/' && text[i + 1] === '*' && !executable ? text.indexOf('*/', i + 2) : -1;
-        if(end !== -1){ out += ' '; i = end + 1; continue; }
+        if(ch === '/' && text[i + 1] === '*' && !executable){
+            const end = text.indexOf('*/', i + 2);
+            if(end === -1){ out += text.slice(i); break; }
+            out += ' ';
+            i = end + 1;
+            continue;
+        }
         out += ch;
     }
     return out;
@@ -119,8 +145,56 @@ function declaredCharset(definition){
     return co ? co[1].toLowerCase().split('_')[0] : null;
 }
 
-function narrowedType(live, next){
-    if(!live || !next) return null;
+// The type under the name the server stores it as.
+const canonicalType = (t) => Object.assign({}, t, { name: TYPE_ALIAS[t.name] || t.name });
+
+// DECIMAL(p,s) with the server's defaults filled in: bare DECIMAL is (10,0), DECIMAL(p) is (p,0).
+function decimalArgs(args){
+    if(args == null) return [10, 0];
+    const [p, s = 0] = String(args).split(',').map(Number);
+    return [p, s];
+}
+
+// Fractional-second digits of a datetime, timestamp or time type; absent means 0.
+const fsp = (args) => (args == null ? 0 : Number(args));
+
+const shownType = (t) => t.name + (t.args == null ? '' : '(' + t.args + ')') + (t.unsigned ? ' unsigned' : '');
+
+// A change of type name the server applies without losing a stored value. Everything else
+// counts as a loss, so a type this table does not know fails closed instead of passing.
+function widensAcross(live, next){
+    if(live.name in INT_DIGITS && next.name === 'decimal'){
+        const [p, s] = decimalArgs(next.args);
+        return p - s >= INT_DIGITS[live.name][live.unsigned ? 1 : 0] && !(next.unsigned && !live.unsigned);
+    }
+    if(SIZED.has(live.name)) return TEXT_RANK[next.name] > 1 || BLOB_RANK[next.name] > 1;
+    if(live.name === 'timestamp' && next.name === 'datetime') return fsp(next.args) >= fsp(live.args);
+    if(live.name === 'date' && next.name === 'datetime') return true;
+    return live.name === 'float' && next.name === 'double' && next.args == null && !next.unsigned;
+}
+
+// The loss when a type keeps its name but its precision, fractional seconds or width shrink.
+function narrowedPrecision(live, next){
+    if(live.name === 'decimal'){
+        const [lp, ls] = decimalArgs(live.args), [np, ns] = decimalArgs(next.args);
+        const lost = np - ns < lp - ls || ns < ls || (next.unsigned && !live.unsigned);
+        return lost ? 'decimal(' + lp + ',' + ls + ') -> decimal(' + np + ',' + ns + ')' + (next.unsigned ? ' unsigned' : '') : null;
+    }
+    if(FSP_TYPES.has(live.name)) return fsp(next.args) < fsp(live.args) ? shownType(live) + ' -> ' + shownType(next) : null;
+    if(live.name === 'bit') return Number(next.args || 1) < Number(live.args || 1) ? shownType(live) + ' -> ' + shownType(next) : null;
+    if(live.name === 'float' || live.name === 'double'){
+        const sign = next.unsigned && !live.unsigned;
+        if(next.args == null) return sign ? shownType(live) + ' -> ' + shownType(next) : null;
+        if(live.args == null) return shownType(live) + ' -> ' + shownType(next);
+        const [lm, ld = 0] = String(live.args).split(',').map(Number), [nm, nd = 0] = String(next.args).split(',').map(Number);
+        return sign || nm - nd < lm - ld || nd < ld ? shownType(live) + ' -> ' + shownType(next) : null;
+    }
+    return null;
+}
+
+function narrowedType(rawLive, rawNext){
+    if(!rawLive || !rawNext) return null;
+    const live = canonicalType(rawLive), next = canonicalType(rawNext);
     if(live.name in INT_RANK && next.name in INT_RANK){
         const l = INT_RANK[live.name], n = INT_RANK[next.name];
         if(n < l) return live.name + ' -> ' + next.name;
@@ -133,24 +207,19 @@ function narrowedType(live, next){
         const l = Number(live.args), n = Number(next.args);
         return Number.isFinite(l) && Number.isFinite(n) && n < l ? live.name + '(' + l + ') -> ' + next.name + '(' + n + ')' : null;
     }
-    if(live.name === 'decimal' && next.name === live.name){
-        const [lp, ls = 0] = String(live.args).split(',').map(Number);
-        const [np, ns = 0] = String(next.args).split(',').map(Number);
-        return np - ns < lp - ls || ns < ls ? 'decimal(' + live.args + ') -> decimal(' + next.args + ')' : null;
-    }
     if((live.name === 'enum' || live.name === 'set') && next.name === live.name){
         const kept = new Set(enumValues(next.args));
         const lost = enumValues(live.args).filter(v => !kept.has(v));
         return lost.length ? live.name + ' drops ' + lost.join(',') : null;
     }
-    if(live.name !== next.name && (live.name in INT_RANK || live.name in TEXT_RANK || live.name in BLOB_RANK || SIZED.has(live.name))){
-        const widening = (live.name in INT_RANK && ['decimal', 'bigint'].includes(next.name)) ||
-                         (SIZED.has(live.name) && (next.name in TEXT_RANK || next.name in BLOB_RANK)) ||
-                         (live.name in TEXT_RANK && next.name === 'longtext');
-        return widening ? null : live.name + ' -> ' + next.name;
-    }
-    return null;
+    if(live.name === next.name) return narrowedPrecision(live, next);
+    if(widensAcross(live, next)) return null;
+    const familiar = live.name in INT_RANK || live.name in TEXT_RANK || live.name in BLOB_RANK || SIZED.has(live.name);
+    return familiar ? live.name + ' -> ' + next.name : shownType(live) + ' -> ' + shownType(next);
 }
+
+// A collation name as the server compares it: MariaDB 10.6+ reports utf8 as utf8mb3.
+const collationKey = (name) => (name == null || name === '' ? null : String(name).toLowerCase().replace(/^utf8_/, 'utf8mb3_'));
 
 // Every loss one MODIFY would cause against the live column row; empty when it is safe.
 function losses(live, definition){
@@ -175,6 +244,15 @@ function losses(live, definition){
         const l = CHARSET_RANK[liveSet], n = CHARSET_RANK[nextSet];
         if(l == null || n == null || n < l) out.push('changes the charset (' + liveSet + ' -> ' + nextSet + ')');
     }
+    // A text MODIFY naming neither CHARACTER SET nor COLLATE takes the table's default collation,
+    // so a column widened apart from its table (utf8mb4 in a utf8mb3 table) silently reverts.
+    const nextType = parseType(definition);
+    const liveCollation = collationKey(live.COLLATION_NAME), tableCollation = collationKey(live.TABLE_COLLATION);
+    if(liveSet && !nextSet && nextType && TEXTUAL.has(nextType.name) && liveCollation && tableCollation &&
+       liveCollation !== tableCollation){
+        const what = liveCollation.split('_')[0] === tableCollation.split('_')[0] ? 'omits COLLATE' : 'omits CHARACTER SET';
+        out.push(what + ' (' + liveCollation + ' -> table default ' + tableCollation + ')');
+    }
     return out;
 }
 
@@ -183,8 +261,10 @@ function losses(live, definition){
 async function assertNoLiveColumnLoss(conn, file, statements){
     for(const { table, column, definition } of modifyClauses(statements)){
         const rows = await conn.query(
-            'SELECT COLUMN_TYPE, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT, GENERATION_EXPRESSION, CHARACTER_SET_NAME ' +
-            'FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            'SELECT COLUMN_TYPE, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT, GENERATION_EXPRESSION, CHARACTER_SET_NAME, ' +
+            'COLLATION_NAME, TABLE_COLLATION FROM information_schema.COLUMNS c JOIN information_schema.TABLES t ' +
+            'ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME ' +
+            'WHERE c.TABLE_SCHEMA = DATABASE() AND t.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = ? AND c.COLUMN_NAME = ?',
             [table, column]
         );
         const live = Array.isArray(rows) ? rows.find(r => r && r.COLUMN_TYPE != null) : null;
@@ -198,4 +278,4 @@ async function assertNoLiveColumnLoss(conn, file, statements){
     }
 }
 
-module.exports = { assertNoLiveColumnLoss, modifyClauses, losses };
+module.exports = { assertNoLiveColumnLoss, modifyClauses, losses, stripBlockComments };
