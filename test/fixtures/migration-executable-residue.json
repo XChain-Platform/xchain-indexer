@@ -371,6 +371,14 @@
     "residue": "3497a1a8ddf21025b78e2eb4bcd7a7f4df479bda859485bed47eaa29deb94f8a",
     "sha256": "adb1242dcb10057486435e6331804a005d7ce008e19b6696c6000d6fab460eff"
   },
+  "2026-10-06-resolved-block-idx.sql": {
+    "residue": "74fc02605ccfb7ef35c0eae8481ab51976b6d68bde6adadbfc6ecc2df4a2f313",
+    "sha256": "92f86b203c4c68c8d43354d1cc47f0b68dad50539f4264b65a2843bc8d2009d9"
+  },
+  "2026-10-07-ledger-covering-index.sql": {
+    "residue": "164d350a7b5828eeb01316348f23eae9bed3c3da7f8b738200eac23e1e31475f",
+    "sha256": "f1d3b4bd39680f0ab63f5d48459de9e6392346738183b97b7021918678deb88d"
+  },
   "2026-10-08-state-tree-roots-block-index-idx.sql": {
     "residue": "cb5c930ccfc59040a01db825833db29ab447943a03911246da9e21b376a8cfac",
     "sha256": "12823f2f2c80bc6a864ab931367a615f9abf308bf2e0cfd6da0085f28c8fe22c"

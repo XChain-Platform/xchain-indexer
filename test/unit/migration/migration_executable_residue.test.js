@@ -79,6 +79,13 @@ describe('migration executable-residue pin: the guard bites @regression @tier1',
         const bad = pin.findViolations({ files, fixture, rebaselines: {}, committed: [FILE, NEW] });
         assert.deepStrictEqual(bad.map((v) => v.kind + ':' + v.file), ['unpinned:' + NEW]);
         assert.ok(/--add/.test(bad[0].message));
+        // One sorting before the newest pin is flagged with no base list (a shallow CI checkout), once.
+        const OLD = '2098-12-31-missed.sql';
+        const old = pin.findViolations({ files: { [FILE]: RAW, [OLD]: 'SELECT 1;' }, fixture, rebaselines: {} });
+        assert.deepStrictEqual(old.map((v) => v.kind + ':' + v.file), ['unpinned:' + OLD]);
+        assert.ok(/--add/.test(old[0].message));
+        const both = pin.findViolations({ files: { [FILE]: RAW, [OLD]: 'SELECT 1;' }, fixture, rebaselines: {}, committed: [OLD] });
+        assert.deepStrictEqual(both.map((v) => v.kind + ':' + v.file), ['unpinned:' + OLD]);
     });
 
     it('a committed file that is pinned, or an empty committed list, adds no violation', function () {

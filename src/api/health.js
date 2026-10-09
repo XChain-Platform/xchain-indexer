@@ -115,7 +115,7 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         carrier_logic_digest: carrierLogicDigest(),
         // The CROSS-REPO half of the same question. armed_map_fingerprint hashes this
         // repo's own file bytes and so is only comparable against another indexer;
-        // this digest hashes the DECIDED HEIGHTS of the gates the hub evaluates too,
+        // this digest hashes the DECIDED VALUES of the gates the hub evaluates too,
         // so an operator (or a fleet sweep) can compare an indexer against the hub
         // federation it follows and see a flag-day disagreement BEFORE it has produced
         // divergent state rather than after.
