@@ -137,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
+      "hash": "8366a1bd6c70b422f8d01976e8814b00389acd92f166912a19b29d95f71962d3",
       "twins": []
     },
     "rollcall_activation": {
@@ -2041,6 +2041,13 @@
       "to": "2847f3f69ac4280baa67d70562c63f210cc6c3d27b1713bf92cbfb4601994c91",
       "reason": "add chain-specific mirror admission margin rows",
       "date": "2026-10-08"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
+      "to": "8366a1bd6c70b422f8d01976e8814b00389acd92f166912a19b29d95f71962d3",
+      "reason": "register ITER_SET_METER twin",
+      "date": "2026-10-09"
     }
   ]
 }
