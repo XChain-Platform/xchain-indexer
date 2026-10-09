@@ -265,6 +265,9 @@ module.exports = {
         let guard = await actions.actionExecute.runControllerGuard(controllerGuardRequest(this, controllerIndex, opts, data));
         if(!guard.allow)
             return { error: guard.reason, guardFee: 0, payoutLegs: null };
-        return { error: null, guardFee: this.bcmul(guard.gasBilled, db.config['GAS_PRICE'], 8), payoutLegs: guard.payoutLegs || null };
+        let guardFee = this.bcmul(guard.gasBilled, db.config['GAS_PRICE'], 8);
+        if(!this.isGuardGasReserved(data))
+            guardFee = this.clampGuardFeeToBalance(opts.gasBalances, opts.gasInfo ? opts.gasInfo['TICK_ID'] : null, guardFee);
+        return { error: null, guardFee: guardFee, payoutLegs: guard.payoutLegs || null };
     }
 };

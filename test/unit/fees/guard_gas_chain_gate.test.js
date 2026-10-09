@@ -132,9 +132,8 @@ describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regr
             const util = new Utility(cfg);
             const res  = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5, opts(), { actionClass: 'trade', subject: 'token TOK' });
             assert.strictEqual(res.error, null, 'the reservation is BTC-only, so the DOGE guard still runs');
-            // 1000 gas billed at the regtest GAS_PRICE of 0.00001. guardFee is a
-            // bignumber (bcmul), so compare through the same arithmetic the handlers use.
-            assert.strictEqual(util.bcstr(res.guardFee), '0.01', 'guard gas is still billed off BTC');
+            // The bill is capped at the held GAS, and a source holding none owes none.
+            assert.strictEqual(util.bcstr(res.guardFee), '0', 'no GAS held, so nothing is billed');
         });
     });
 });
@@ -175,6 +174,38 @@ describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regr
             }
         });
 
+
+        it('bills the full guard gas off BTC when the source holds enough', async function(){
+            const cfg  = configFor('DOGE');
+            const util = new Utility(cfg);
+            const res  = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
+                opts({ gasBalances: { 7: '5' } }), { actionClass: 'trade', subject: 'token TOK' });
+            assert.strictEqual(util.bcstr(res.guardFee), '0.01');
+        });
+
+        it('caps the guard gas at the held balance off BTC so no balance goes negative', async function(){
+            const cfg  = configFor('DOGE');
+            const util = new Utility(cfg);
+            const res  = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
+                opts({ gasBalances: { 7: '0.004' } }), { actionClass: 'trade', subject: 'token TOK' });
+            assert.strictEqual(res.error, null);
+            assert.strictEqual(util.bcstr(res.guardFee), '0.004');
+        });
+
+        it('bills nothing off BTC when the gas row is absent or the balance is negative', async function(){
+            const cfg  = configFor('LTC');
+            const util = new Utility(cfg);
+            assert.strictEqual(util.bcstr(util.clampGuardFeeToBalance({}, null, '0.01')), '0');
+            assert.strictEqual(util.bcstr(util.clampGuardFeeToBalance({ 7: '-1' }, 7, '0.01')), '0');
+        });
+
+        it('leaves the BTC bill untouched by the clamp', async function(){
+            const cfg  = configFor('BTC');
+            const util = new Utility(cfg);
+            const res  = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
+                opts({ gasBalances: { 7: '5' } }), { actionClass: 'trade', subject: 'token TOK' });
+            assert.strictEqual(util.bcstr(res.guardFee), '0.01');
+        });
     });
 
 });
