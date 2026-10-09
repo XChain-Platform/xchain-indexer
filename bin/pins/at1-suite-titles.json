@@ -11334,10 +11334,6 @@
       "Actions.processAction() @regression @tier3 does not call any other handler when dispatching SEND",
       "Actions.processAction() @regression @tier3 passes params, data, and error through to the handler"
     ],
-    "b4a0f9e76d16b30f": [
-      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is present in the class table and registry in the same shape",
-      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is unarmed on production networks and active from regtest genesis"
-    ],
     "b4a3dee34b8a056b": [
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT creates credit, updates balance, and increments token supply",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT exceeding MAX_MINT is marked invalid",
@@ -11526,12 +11522,6 @@
       "resolveSlashTarget result returns the resolved target and defaults amount to zero",
       "resolveSlashTarget slash destination validation rejects a slash destination set to null",
       "resolveSlashTarget slash destination validation rejects a slash destination set to undefined"
-    ],
-    "b9dd4be9490dbf4e": [
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 a registry row is a frozen plain object with the nine parsed fields",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the 109 time-table keys the manifest lists",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value a fresh class build under the stub carries",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value the manifest resolves for that key"
     ],
     "ba14cf587a23de6d": [
       "resolveConfigEndpoint() disables the endpoint and gives notice for seeds alone",
@@ -14160,6 +14150,14 @@
       "weightless stake-weight rows fail closed @regression @tier1 getStakeWeightsByCapability throws below the source cap when a row weight is undefined",
       "weightless stake-weight rows fail closed @regression @tier1 the cap constants the gate reads are still the ones this test assumes source cap and per-source key cap are defined"
     ],
+    "dfbbb7f43643514c": [
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is present in the class table and registry in the same shape",
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is unarmed on production networks and active from regtest genesis",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 a registry row is a frozen plain object with the nine parsed fields",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the 109 time-table keys the manifest lists",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value a fresh class build under the stub carries",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value the manifest resolves for that key"
+    ],
     "dfd1f50036040ca0": [
       "SWEEP/CALLBACK unified-fee flag day @regression @tier1 registration is a time-keyed 0.2.0 change, genesis-active on regtest",
       "SWEEP/CALLBACK unified-fee flag day @regression @tier1 registration mainnet is ARMED AT GENESIS by the 2026-09-09 ruling",
@@ -16103,7 +16101,7 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1191,
+      "fileCount": 1190,
       "titleCount": 12537,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -17159,8 +17157,7 @@
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
-        "test/unit/protocol_changes/rows_parity.test.js": "b9dd4be9490dbf4e",
-        "test/unit/protocol_changes/stake_snapshot_decimal_strings_row.test.js": "b4a0f9e76d16b30f",
+        "test/unit/protocol_changes/rows_parity.test.js": "dfbbb7f43643514c",
         "test/unit/protocol_changes/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
@@ -17660,7 +17657,7 @@
       }
     },
     "test:regression": {
-      "fileCount": 906,
+      "fileCount": 905,
       "titleCount": 9930,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
@@ -18470,8 +18467,7 @@
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
-        "test/unit/protocol_changes/rows_parity.test.js": "b9dd4be9490dbf4e",
-        "test/unit/protocol_changes/stake_snapshot_decimal_strings_row.test.js": "b4a0f9e76d16b30f",
+        "test/unit/protocol_changes/rows_parity.test.js": "dfbbb7f43643514c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
@@ -18573,7 +18569,7 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 395,
+      "fileCount": 394,
       "titleCount": 4912,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18930,8 +18926,7 @@
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
-        "test/unit/protocol_changes/rows_parity.test.js": "b9dd4be9490dbf4e",
-        "test/unit/protocol_changes/stake_snapshot_decimal_strings_row.test.js": "b4a0f9e76d16b30f",
+        "test/unit/protocol_changes/rows_parity.test.js": "dfbbb7f43643514c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -18975,7 +18970,7 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 906,
+      "fileCount": 905,
       "titleCount": 9930,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
@@ -19785,8 +19780,7 @@
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
-        "test/unit/protocol_changes/rows_parity.test.js": "b9dd4be9490dbf4e",
-        "test/unit/protocol_changes/stake_snapshot_decimal_strings_row.test.js": "b4a0f9e76d16b30f",
+        "test/unit/protocol_changes/rows_parity.test.js": "dfbbb7f43643514c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
