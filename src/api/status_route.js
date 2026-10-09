@@ -139,7 +139,6 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         lastHubConfigFetchAt: lastHubConfigFetchAt,
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hubConfigStale:       hubConfigStale,
-        // True only after table verification and automatic migrations finish.
         schemaReady:          indexer.schemaReady === true,
         hubMirror:            hubMirror,
         // Block-poll loop liveness, appended after hubMirror so no earlier key a monitor reads moves. Reported for the fleet
