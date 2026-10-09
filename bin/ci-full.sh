@@ -128,6 +128,24 @@ export XCHAIN_SDK_PATH="${XCHAIN_SDK_PATH:-$SIB/xchain-sdk}"
 
 need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub xchain-documentation
 
+if [ -z "${XCHAIN_SIBLING_COMMITS:-}" ] && [ -f "$SELF/.git" ]; then
+  export XCHAIN_SIBLING_COMMITS="$(node - "$SIB" \
+    xchain-vm xchain-decoder xchain-sdk xchain-hub xchain-documentation xchain-sync xchain-explorer <<'NODE'
+const cp = require('child_process');
+const [root, ...repos] = process.argv.slice(2);
+const pins = {};
+for (const repo of repos) {
+  try {
+    pins[repo] = cp.execFileSync('git', ['-C', root + '/' + repo, 'rev-parse', 'HEAD'], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+    }).trim();
+  } catch (e) {}
+}
+process.stdout.write(JSON.stringify(pins));
+NODE
+)"
+fi
+
 # Stage the gitignored vendored VM from the canonical sibling before ANY tier
 # runs: the ci tier's own unit suite requires xchain-vm too (actions_class),
 # so staging it only ahead of integration left a from-scratch checkout's ci
