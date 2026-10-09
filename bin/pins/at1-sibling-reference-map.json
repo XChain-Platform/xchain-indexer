@@ -1028,7 +1028,7 @@
   ],
   "platformToolingSwept": [
     "platform-tooling/claude/bin",
-    "claude/scripts"
+    "platform-tooling/claude/scripts"
   ],
   "distinctPathCount": 302,
   "existingPathCount": 221,
