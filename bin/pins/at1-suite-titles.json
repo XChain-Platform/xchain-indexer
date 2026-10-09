@@ -7463,6 +7463,11 @@
     "7b64478cdfbc1bf7": [
       "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) the contract slash-restore SQL is identical across xchain-indexer and xchain-sync (cross-repo twin)"
     ],
+    "7bed9231bd01caf8": [
+      "protocol_changes unarmed rows use the named sentinel @regression @tier1 detects a stray all-nines value without treating prose as a value",
+      "protocol_changes unarmed rows use the named sentinel @regression @tier1 has no bare sentinel in the bridge, list, or archive rollback rows",
+      "protocol_changes unarmed rows use the named sentinel @regression @tier1 names the supply-zero mainnet time sentinel"
+    ],
     "7c6586e0777e9c99": [
       "BET bounded latch+expire pass @regression @tier2 a max-size feed always fits a full budget (no wedge), and zero-bet feeds are row-bounded",
       "BET bounded latch+expire pass @regression @tier2 expiry step: whole feeds in order, STOPS at the first feed past the credit budget",
@@ -16544,8 +16549,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1210,
-      "titleCount": 12647,
+      "fileCount": 1211,
+      "titleCount": 12650,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17613,6 +17618,7 @@
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_lint/vm_lint_nesting_depth_row.test.js": "06ffa42905e141f0",
         "test/unit/protocol_changes/vm_lint/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
         "test/unit/protocol_changes/vm_twin/json_stringify_hook_row.test.js": "f959c69addce7dd8",
