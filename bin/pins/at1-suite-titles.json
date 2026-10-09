@@ -7831,6 +7831,11 @@
       "migration-scoped query timeout cleanup @regression @tier1 restores the runtime timeout before unlocking after a migration error",
       "migration-scoped query timeout cleanup @regression @tier1 sets and restores max_statement_time before checking for pending migrations"
     ],
+    "7e9e0954be3bb895": [
+      "Database.materializeContractDelegations() held delegated key gate off @regression @tier1 rotates a cooldown row when another source contract stake already holds the delegated key",
+      "Database.materializeContractDelegations() held delegated key gate off @regression @tier1 rotates a stake when another live delegation already holds the delegated key",
+      "Database.materializeContractDelegations() held delegated key gate off @regression @tier1 rotates a stake when another source contract stake already holds the delegated key"
+    ],
     "7ea4c8c89c5481c5": [
       "alterTableForDrift(): column-order convergence @regression a source-leading column with nothing before it live is placed FIRST",
       "alterTableForDrift(): column-order convergence @regression does not touch a table whose columns are all present",
@@ -16593,8 +16598,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1217,
-      "titleCount": 12681,
+      "fileCount": 1218,
+      "titleCount": 12684,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17379,6 +17384,7 @@
         "test/unit/db/sql_datetime_not_null_columns.test.js": "3eff44edf9ce6f56",
         "test/unit/db/sql_no_timestamp_columns.test.js": "8e2cf44bb819cf2a",
         "test/unit/db/sql_quote_backslash_escapes.test.js": "c8655466e49bee5a",
+        "test/unit/db/stakes/db_contract_delegation_held_key_gate_off.test.js": "7e9e0954be3bb895",
         "test/unit/db/stakes/db_contract_delegation_materialize.test.js": "8e2845a99501f6fb",
         "test/unit/db/stakes/db_contract_stake_refund_precision.test.js": "ebee9ed4a6d4955f",
         "test/unit/db/stakes/db_get_poll_results_for_vm_tick.test.js": "d8b5e860c7d126cc",
@@ -18175,8 +18181,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 907,
-      "titleCount": 9933,
+      "fileCount": 908,
+      "titleCount": 9936,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -18789,6 +18795,7 @@
         "test/unit/db/sql_datetime_not_null_columns.test.js": "3eff44edf9ce6f56",
         "test/unit/db/sql_no_timestamp_columns.test.js": "8e2cf44bb819cf2a",
         "test/unit/db/sql_quote_backslash_escapes.test.js": "c8655466e49bee5a",
+        "test/unit/db/stakes/db_contract_delegation_held_key_gate_off.test.js": "7e9e0954be3bb895",
         "test/unit/db/stakes/db_contract_delegation_materialize.test.js": "8e2845a99501f6fb",
         "test/unit/db/stakes/db_contract_stake_refund_precision.test.js": "ebee9ed4a6d4955f",
         "test/unit/db/stakes/db_get_poll_results_for_vm_tick.test.js": "d8b5e860c7d126cc",
@@ -19088,8 +19095,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 395,
-      "titleCount": 4912,
+      "fileCount": 396,
+      "titleCount": 4915,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
@@ -19308,6 +19315,7 @@
         "test/unit/db/prices/landed_strict_same_chain.test.js": "e984d925c06ceb59",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
         "test/unit/db/sql_quote_backslash_escapes.test.js": "c8655466e49bee5a",
+        "test/unit/db/stakes/db_contract_delegation_held_key_gate_off.test.js": "7e9e0954be3bb895",
         "test/unit/db/stakes/db_contract_delegation_materialize.test.js": "8e2845a99501f6fb",
         "test/unit/db/stakes/db_contract_stake_refund_precision.test.js": "ebee9ed4a6d4955f",
         "test/unit/db/stakes/db_get_poll_results_for_vm_tick.test.js": "d8b5e860c7d126cc",
@@ -19489,8 +19497,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 907,
-      "titleCount": 9933,
+      "fileCount": 908,
+      "titleCount": 9936,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20103,6 +20111,7 @@
         "test/unit/db/sql_datetime_not_null_columns.test.js": "3eff44edf9ce6f56",
         "test/unit/db/sql_no_timestamp_columns.test.js": "8e2cf44bb819cf2a",
         "test/unit/db/sql_quote_backslash_escapes.test.js": "c8655466e49bee5a",
+        "test/unit/db/stakes/db_contract_delegation_held_key_gate_off.test.js": "7e9e0954be3bb895",
         "test/unit/db/stakes/db_contract_delegation_materialize.test.js": "8e2845a99501f6fb",
         "test/unit/db/stakes/db_contract_stake_refund_precision.test.js": "ebee9ed4a6d4955f",
         "test/unit/db/stakes/db_get_poll_results_for_vm_tick.test.js": "d8b5e860c7d126cc",
