@@ -22,7 +22,7 @@ const path = require('path');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 
 const KEY = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
-const PART = path.join(__dirname, '..', '..', '..', 'src', 'protocol_changes', 'gates_4.js');
+const PART = path.join(__dirname, '..', '..', '..', 'src', 'protocol_changes', 'gates_3.js');
 
 describe('protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1', function () {
     it('registers a frozen per-chain height map that is unarmed on launched networks', function () {
@@ -58,6 +58,6 @@ describe('protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier
     it('keeps the final registry part within the structure limit', function () {
         const text = fs.readFileSync(PART, 'utf8');
         const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-        assert.ok(lines <= 400, 'gates_4.js is ' + lines + ' lines');
+        assert.ok(lines <= 400, 'gates_3.js is ' + lines + ' lines');
     });
 });

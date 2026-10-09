@@ -380,3 +380,14 @@ addGate('vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION', 'heig
     testnet: 0,
     regtest: 0,
 });
+
+addGate('bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
