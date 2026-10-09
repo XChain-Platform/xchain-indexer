@@ -25,10 +25,12 @@ const { spawnSync } = require('child_process');
 
 const REPO = path.resolve(__dirname, '..', '..', '..', '..');
 const V2_PATH = path.join(REPO, 'src', 'consensus', 'armed_map', 'fingerprint.js');
+const processFingerprintEnv = Object.assign({}, process.env);
 
 const v2 = require('../../../../src/consensus/armed_map/fingerprint.js');
 const manifest = require('../../../../src/consensus/armed_map/manifest.js');
 const { fingerprint } = require('../../../../src/consensus/armed_map/canonical.js');
+const processBaseline = v2.computeArmedMapFingerprintV2();
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -104,10 +106,10 @@ describe('armed_map/fingerprint: the published surfaces (W3, alias dropped at W5
 
     it('is published by consensus-identity --json as the legacy field, version 2, the row map and count, and the logic digest', function () {
         const res = spawnSync(process.execPath, [path.join(REPO, 'bin', 'consensus-identity.js'), '--json'],
-            { cwd: REPO, encoding: 'utf8' });
+            { cwd: REPO, encoding: 'utf8', env: childEnv() });
         assert.strictEqual(res.status, 0, res.stderr);
         const identity = JSON.parse(res.stdout);
-        assert.strictEqual(identity.armed_map_fingerprint, v2.computeArmedMapFingerprintV2().hex);
+        assert.strictEqual(identity.armed_map_fingerprint, processBaseline.hex);
         assert.strictEqual(identity.armed_map_fingerprint_version, 2);
         assert.ok(!Object.prototype.hasOwnProperty.call(identity, 'armed_map_fingerprint_v2'), 'the _v2 alias must not be printed');
         // row 6: armed_map_rows is the per-key hash map (so a mismatch names the row) and the count sits beside it
@@ -175,7 +177,7 @@ const READ_SCRIPT = [
 ].join('\n');
 
 function childEnv() {
-    const env = Object.assign({}, process.env);
+    const env = Object.assign({}, processFingerprintEnv);
     delete env.NODE_PATH;
     return env;
 }
