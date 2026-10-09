@@ -353,6 +353,9 @@
       "HubDbSync resync close re-pages @regression @tier1 resumes the stored position after a normal close",
       "HubDbSync resync close re-pages @regression @tier1 resumes the stored position after an abnormal close"
     ],
+    "08a84ab3f12a6cb8": [
+      "VM stake snapshot decimal-string gate off @regression @tier1 pins snapshot JSON and the real VM stake-read types and values"
+    ],
     "08e0fb31a08bbc02": [
       "cross_chain_call_rejections helpers (XDISP-1) getCrossChainCallRejectionById lowercases the id and returns the row or null",
       "cross_chain_call_rejections helpers (XDISP-1) recordCrossChainCallExecution clears the rejection row for the executed call",
@@ -17267,6 +17270,7 @@
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/stake_snapshot_strings.test.js": "a0a533092c7a2e98",
+        "test/unit/contracts/vm_stake_snapshot_gate_off_types.test.js": "08a84ab3f12a6cb8",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
         "test/unit/cross_chain/cross_chain_call_id_case_insensitive.test.js": "9be5c1935b63e470",
@@ -18705,6 +18709,7 @@
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
+        "test/unit/contracts/vm_stake_snapshot_gate_off_types.test.js": "08a84ab3f12a6cb8",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
         "test/unit/cross_chain/cross_chain_royalty_gate.test.js": "4c7c68762056502d",
@@ -19241,6 +19246,7 @@
         "test/unit/contracts/controller_guard_returnvalue.test.js": "34d715ef44d3072a",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
+        "test/unit/contracts/vm_stake_snapshot_gate_off_types.test.js": "08a84ab3f12a6cb8",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/cross_chain/cross_chain_royalty_gate.test.js": "4c7c68762056502d",
         "test/unit/cross_chain/cross_chain_settlement_cap_gate.test.js": "85a592dc86f8b36a",
@@ -20019,6 +20025,7 @@
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
+        "test/unit/contracts/vm_stake_snapshot_gate_off_types.test.js": "08a84ab3f12a6cb8",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
         "test/unit/cross_chain/cross_chain_royalty_gate.test.js": "4c7c68762056502d",
