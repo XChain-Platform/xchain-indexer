@@ -31,6 +31,7 @@ const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 // asserts an event DID happen; a case asserting an event did NOT happen has
 // nothing to poll and keeps its fixed sleep() settle.
 const { sleep, waitUntil } = require('../../../helpers/wait.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
 
 let server, port, sync;
 
@@ -90,6 +91,7 @@ describe('HubDbSync anchor-stamp stream delivery @regression @tier2', function (
             { hubUrl: 'http://hub.test' });
 
         s.enqueueStreamFrame({
+            schema_version: HUB_SCHEMA_VERSION,
             type: 'row:anchor-stamped', table: 'cross_chain_matches',
             match_id: 'm-after-window', anchor_txid: 'dogetx_after_window'
         });
