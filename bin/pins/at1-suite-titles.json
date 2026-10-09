@@ -4666,6 +4666,13 @@
       "HubDbSync mirror network scope @regression @tier2 treats an advertised ceiling of ZERO as authoritative, not as missing information",
       "HubDbSync mirror network scope @regression @tier2 uses the wire position for ready-message catch-up"
     ],
+    "4d952349cc7e96e7": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings"
+    ],
     "4d95352bdf288616": [
       "Utility.getDustThresholdCoin() fails closed - @regression @tier1 does not cache a failed lookup",
       "Utility.getDustThresholdCoin() fails closed - @regression @tier1 throws instead of using a 0 floor when the bundle dustThreshold is 0",
@@ -6591,6 +6598,11 @@
       "protocol_changes consensus-bound indexer rows @regression @tier1 keeps gates_1.js at or under 400 lines",
       "protocol_changes consensus-bound indexer rows @regression @tier1 pins the BROADCAST FEE length flag day",
       "protocol_changes consensus-bound indexer rows @regression @tier1 pins the archive MATCH_COUNT activation map"
+    ],
+    "6d6fd94f70afa237": [
+      "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 keeps the final registry part within the structure limit",
+      "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 registers a frozen per-chain height map that is unarmed on launched networks",
+      "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 stays inactive below the sentinel and is active from regtest genesis"
     ],
     "6d955dc4007ee59e": [
       "contract_state_root: strict reads @regression a faulting touched-key read THROWS rather than threading the block forward unchanged",
@@ -8939,12 +8951,6 @@
       "roll-call unwind schema-gap guard @regression deletes gates, absences and verdicts in that order on a migrated database",
       "roll-call unwind schema-gap guard @regression still unwinds absences and verdicts when rollcall_gates is missing (errno 1146)",
       "roll-call unwind schema-gap guard @regression still unwinds verdicts when rollcall_absences lacks the close_block column (errno 1054)"
-    ],
-    "947ca6e1a2e3eb48": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash"
     ],
     "94aa70da9570d3da": [
       "ROLLCALL epoch close (\u00a73.4) leader election parity carries its own domain tag, so the anchor election and this one are independent",
@@ -15259,8 +15265,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1236,
-      "titleCount": 12784,
+      "fileCount": 1237,
+      "titleCount": 12788,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16332,6 +16338,7 @@
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
+        "test/unit/protocol_changes/bigint_surface_strip_row.test.js": "6d6fd94f70afa237",
         "test/unit/protocol_changes/consensus_bound_shared_rows.test.js": "026d5bdba4ff140a",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
@@ -16378,7 +16385,7 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "947ca6e1a2e3eb48",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "4d952349cc7e96e7",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",

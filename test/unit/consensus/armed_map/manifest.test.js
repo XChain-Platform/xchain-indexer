@@ -174,7 +174,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 400);
+        assert.strictEqual(res.rows.length, 401);
     });
 
     it('carries the cross-chain remote-token gate heights', function () {
