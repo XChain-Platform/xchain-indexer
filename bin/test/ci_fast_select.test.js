@@ -204,6 +204,9 @@ describe('ci fast selector', function () {
     assert(script.includes('run_tier "integration (test:integration:ci)"'));
     assert(script.includes('run_tier "suite title pin (test)"'));
     assert(script.includes('--script test --compare bin/pins/at1-suite-titles.json'));
+    assert(script.includes('need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub xchain-documentation'));
+    assert(script.includes('git -C "$SIB/xchain-documentation" archive HEAD'));
+    assert(script.includes('XCHAIN_DOCS_DIR="$docs_snapshot"'));
   });
 
   it('runs source-only VM staging in Linux fast mode', function () {
