@@ -4734,6 +4734,21 @@
       "getEffectiveUnprocessedCallResults separate hub mirror: empty mirror short-circuits with no callbacks lookup",
       "getEffectiveUnprocessedCallResults separate hub mirror: keeps the two-query JS filter, excluding processed then slicing"
     ],
+    "4ee2d96267d8e33b": [
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) LTC and DOGE flip ON at their own ratified heights",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) at the BTC mainnet height (961000): both flags ON",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) below the BTC mainnet height (960999): both flags OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) does NOT track the Pkg 3 gate (a separate epoch, resolved separately)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is per-coin: LTC and DOGE mainnet at the BTC height stay OFF",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) regtest is genesis-armed (both flags ON from height 0)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads enforceLintGlobalAlias as its own flag",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads the new flags ALONGSIDE the existing async / lint-hardening flags (no regression)",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) at the flag day: enforceBannedRest ON",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) below the flag day: enforceBannedRest OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads enforceBannedWith from its own height row",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads exactly the nine enforce* flags validateSyntax reads"
+    ],
     "4ee376dc5f1c5cb0": [
       "mirror admission compatibility: a mirrored admission map never stops the block loop ARMED consumer, the measured {BTC:280} row from cursor 277 commits 278, 279 and 280 with zero exceptions reaching the block applier",
       "mirror admission compatibility: a mirrored admission map never stops the block loop ARMED consumer, the measured {BTC:280} row from cursor 277 excludes the row through block 279 and admits and settles it at block 280",
@@ -7387,6 +7402,10 @@
       "Send handler @regression @tier1 format 0: single send valid send → processDispenserSends invoked",
       "Send handler @regression @tier1 format 0: single send valid send → updateBalances called",
       "Send handler @regression @tier1 format 0: single send valid single send → STATUS valid, createSend called"
+    ],
+    "783b89448d7f13a0": [
+      "protocol_changes VM lint banned-with row is active on regtest at genesis and unarmed on every mainnet and testnet chain",
+      "protocol_changes VM lint banned-with row registers the per-chain height map"
     ],
     "78528049da6173b3": [
       "HubDbSync close code harness a normal close reaches the client and retains positions for the same instance",
@@ -13223,20 +13242,6 @@
     "d27e69ca0f3eb0d0": [
       "activation-gate constant parity to canonical constants.js @regression keeps each admission map inert for a sentinel coin while a sibling coin is armed"
     ],
-    "d29b0b3fc27074b9": [
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) LTC and DOGE flip ON at their own ratified heights",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) at the BTC mainnet height (961000): both flags ON",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) below the BTC mainnet height (960999): both flags OFF, contract still accepted",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) does NOT track the Pkg 3 gate (a separate epoch, resolved separately)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is per-coin: LTC and DOGE mainnet at the BTC height stay OFF",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) regtest is genesis-armed (both flags ON from height 0)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads enforceLintGlobalAlias as its own flag",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads the new flags ALONGSIDE the existing async / lint-hardening flags (no regression)",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) at the flag day: enforceBannedRest ON",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) below the flag day: enforceBannedRest OFF, contract still accepted",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads exactly the eight enforce* flags validateSyntax reads"
-    ],
     "d2b9349d772cf8e9": [
       "ISSUE v0/v1 parse is byte-identical to the pre-format-7 build @regression @consensus ISSUE brief v1: adds exactly the three format-7 names, each null",
       "ISSUE v0/v1 parse is byte-identical to the pre-format-7 build @regression @consensus ISSUE brief v1: drops no field the pre-format-7 build produced",
@@ -16168,6 +16173,10 @@
       "indexer reorg metrics on the scrape surface raises the rollback gauge only while stallReason names a reorg rollback",
       "indexer reorg metrics on the scrape surface renders the processed-reorg counter from 0 and follows the live field"
     ],
+    "fad22eb98adb5886": [
+      "consensus/vm_lint_banned_with_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
+      "consensus/vm_lint_banned_with_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
+    ],
     "fae8eeba338baf48": [
       "ANCHOR v3 section walk accepts an archive-only cycle with no checkpoint sections",
       "ANCHOR v3 section walk passes an incoming error through without walking sections",
@@ -16542,8 +16551,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1212,
-      "titleCount": 12664,
+      "fileCount": 1214,
+      "titleCount": 12669,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16667,7 +16676,7 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "d29b0b3fc27074b9",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "4ee2d96267d8e33b",
         "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "c0bf65d90cf86ae9",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/native_fee.test.js": "2ef587e9e97d807d",
@@ -17173,6 +17182,7 @@
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
         "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "4db50e18ffcab3aa",
+        "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
         "test/unit/consensus/vm_lint_rows_match_vm.test.js": "e0d21a7b4e18e9e2",
@@ -17613,6 +17623,7 @@
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
+        "test/unit/protocol_changes/vm_lint/vm_lint_banned_with_row.test.js": "783b89448d7f13a0",
         "test/unit/protocol_changes/vm_lint/vm_lint_nesting_depth_row.test.js": "06ffa42905e141f0",
         "test/unit/protocol_changes/vm_lint/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
         "test/unit/protocol_changes/vm_twin/json_stringify_hook_row.test.js": "f959c69addce7dd8",
@@ -18119,8 +18130,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 907,
-      "titleCount": 9933,
+      "fileCount": 908,
+      "titleCount": 9936,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -18265,7 +18276,7 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "d29b0b3fc27074b9",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "4ee2d96267d8e33b",
         "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "c0bf65d90cf86ae9",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/native_fee.test.js": "2ef587e9e97d807d",
@@ -18612,6 +18623,7 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
+        "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
         "test/unit/consensus/vm_lint_rows_match_vm.test.js": "e0d21a7b4e18e9e2",
@@ -19032,8 +19044,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 395,
-      "titleCount": 4912,
+      "fileCount": 396,
+      "titleCount": 4914,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
@@ -19165,6 +19177,7 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
+        "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
         "test/unit/consensus/vm_lint_rows_match_vm.test.js": "e0d21a7b4e18e9e2",
@@ -19433,8 +19446,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 907,
-      "titleCount": 9933,
+      "fileCount": 908,
+      "titleCount": 9936,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19579,7 +19592,7 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "d29b0b3fc27074b9",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "4ee2d96267d8e33b",
         "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "c0bf65d90cf86ae9",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/native_fee.test.js": "2ef587e9e97d807d",
@@ -19926,6 +19939,7 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
+        "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
         "test/unit/consensus/vm_lint_rows_match_vm.test.js": "e0d21a7b4e18e9e2",
