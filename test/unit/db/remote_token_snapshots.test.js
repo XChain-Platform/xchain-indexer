@@ -76,14 +76,13 @@ describe('remote_token_snapshots mirror contract', function () {
         assert.match(sql, /KEY idx_source_ref \(coin, source_action_index\)/);
     });
 
-    it('is bootstrapped, identity-fenced, locally keyed, and retractable by its source action', function () {
-        assert.ok(mirrorTables.CROSS_CHAIN_TABLES.includes('remote_token_snapshots'));
+    it('is bootstrapped, globally watermarked, locally keyed, and retractable by its source action', function () {
+        assert.ok(!mirrorTables.CROSS_CHAIN_TABLES.includes('remote_token_snapshots'));
+        assert.ok(mirrorTables.HUB_STATE_TABLES.includes('remote_token_snapshots'));
         assert.ok(mirrorTables.MIRRORED_TABLES.includes('remote_token_snapshots'));
         assert.ok(mirrorTables.AUTO_INCREMENT_ID_TABLES.includes('remote_token_snapshots'));
         assert.strictEqual(mirrorTables.RETRACTION_COLUMNS.remote_token_snapshots, 'source_action_index');
         assert.strictEqual(mirrorTables.RETRACTION_CHAIN_COLUMNS.remote_token_snapshots, 'coin');
-        assert.deepStrictEqual(mirrorTables.REFUSED_ROW_NAMES.remote_token_snapshots,
-            { column: 'snapshot_id', tag: null });
     });
 
     it('round trips a finalized fixture and removes it on a source-chain retraction', async function () {

@@ -80,8 +80,7 @@ const RETRACTION_CHAIN_COLUMNS = {
 // list_snapshots are never retracted, so deletion events naming them are skipped rather
 // than applied.
 const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
-                            'bridge_transfers', 'policy_snapshots', 'list_snapshots',
-                            'remote_token_snapshots'];
+                            'bridge_transfers', 'policy_snapshots', 'list_snapshots'];
 
 const MIRRORED_TABLES = ['price_snapshots', 'oracle_prices', 'cross_chain_matches', 'cross_chain_calls',
                          'capability_snapshots', 'bridge_transfers', 'policy_snapshots', 'list_snapshots',
@@ -95,7 +94,9 @@ const AUTO_INCREMENT_ID_TABLES = ['price_snapshots', 'oracle_prices', 'cross_cha
                                   'bridge_transfers', 'policy_snapshots', 'list_snapshots',
                                   'remote_token_snapshots', 'state_checkpoints', 'anchor_reward_attestations'];
 
-// Hub federation state tables. state_checkpoints carries quorum-signed per-chain
+// Hub federation state tables. remote_token_snapshots has no dedicated block-loop
+// barrier, so it rides the global stream watermark while retaining its source-action
+// retraction mapping above. state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
 // never retracted. A reorged height is superseded by a new row with a higher
 // checkpoint_seq. Not on any settlement-critical path (no block-loop barrier).
@@ -125,7 +126,8 @@ const AUTO_INCREMENT_ID_TABLES = ['price_snapshots', 'oracle_prices', 'cross_cha
 // watermark (see mirrorStatus), which is only correct for tables no block-loop barrier gates
 // on. Each gates one: waitForBridgeSync and waitForPolicySync cache their own
 // MAX(effective_time), while waitForListShareSync uses the per-chain height watermark.
-const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
+const HUB_STATE_TABLES = ['remote_token_snapshots', 'state_checkpoints',
+                          'anchor_reward_attestations', 'attestation_responses'];
 
 // The column that names a mirrored row to an operator when a mirror fence refuses or purges
 // it, and the settlement family tag its refusal carries. A fence runs BEFORE the settlement
@@ -134,7 +136,6 @@ const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'at
 // or a rail drill that greps a family for an id finds the refusal wherever it happened. Each
 // column is that table's UNIQUE natural key; a table not listed is named by its hub id.
 const REFUSED_ROW_NAMES = Object.freeze({
-    remote_token_snapshots: Object.freeze({ column: 'snapshot_id', tag: null }),
     list_snapshots:        Object.freeze({ column: 'snapshot_id', tag: 'XLISTSHARE' }),
     policy_snapshots:      Object.freeze({ column: 'snapshot_id', tag: 'XPOLICY' }),
     bridge_transfers:      Object.freeze({ column: 'transfer_id', tag: 'XBRIDGE' }),
