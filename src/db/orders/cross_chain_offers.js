@@ -20,6 +20,8 @@
  *
  ********************************************************************/
 
+const { effectiveOfferLists } = require('./cross_chain_offer_lists.js');
+
 // The per-kind WHERE terms and their bound values, one list per UNION ALL branch, in the
 // order the branches bind them.
 function offerFilters(db, after_action_index, to_coin){
@@ -152,6 +154,24 @@ function offerFromRow(db, row){
 }
 
 module.exports = {
+
+    async applyEffectiveOpenCrossChainOfferLists(offers){
+        if(!Array.isArray(offers)) return offers;
+        for(let offer of offers){
+            let edit;
+            let kind = String(offer.kind).toLowerCase();
+            if(kind === 'order')
+                edit = await this.getOrderEdits(offer.action_index);
+            else if(kind === 'swap')
+                edit = await this.getSwapEdits(offer.action_index);
+            else
+                continue;
+            let effective = effectiveOfferLists(offer, [edit]);
+            offer.allow_list = effective.allow_list;
+            offer.block_list = effective.block_list;
+        }
+        return offers;
+    },
 
     // List this chain's OPEN cross-chain offers (SWAP + ORDER, give_coin != get_coin) for the
     // xchain-hub federation's unified matching view (XCC-2). SWAP and ORDER offers are drawn in a

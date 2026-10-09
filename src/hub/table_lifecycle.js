@@ -101,7 +101,7 @@
  *               needed (typically: a deterministic projection of hashed
  *               actions, where any divergence surfaces through the ledger/
  *               actions/contracts hashes of the affected blocks on replay).
- *   anchorRecovery  full-parse recovery policy for a quorum-class hub mirror:
+ *   anchorRecovery  full-parse recovery policy, required on every hub mirror:
  *                 'archive' rebuilt from the on-chain ANCHOR archive
  *                 'none'    intentionally not rebuilt by anchor recovery
  *   anchorRecoveryNote  required rationale when anchorRecovery is 'none'
@@ -183,7 +183,8 @@ const ORPHAN_SWEEPS = [
 //      They are excluded here because they are ALREADY committed, by the
 //      enforced (halting) state_hash fourth hash that exists for precisely this
 //      mutation class. So the exclusion narrows coverage by nothing: every
-//      replicated table is committed by one mechanism or the other.
+//      replicated table is committed by one mechanism or the other, except the
+//      single in-place COLUMNS listed in CONTENT_PARITY_IN_PLACE_COLUMNS below.
 const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
     Object.freeze({ table: 'markets', dbType: 'indexer',
         reason: 'Derived full-snapshot OHLCV aggregate with no clean block bound (operator ruling 2026-08-11); converges through the snapshot upsert.' }),
@@ -232,6 +233,20 @@ const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({
     contract_state:     Object.freeze(['state_key_bin']),
     sync_meta:          Object.freeze(['id', 'logged_at']),
     validator_rewards:  Object.freeze(['id']),
+});
+
+// Columns a LATER block edits in place on a table that is otherwise append-only.
+// They leave only the window preimage: a source one block ahead legitimately holds
+// the later value inside a window it already published. Unlike the map above, the
+// follower DOES converge on them, so they stay out of CONTENT_PARITY_EXCLUDED_COLUMNS,
+// which the end-to-end byte oracle also reads and must keep comparing at rest.
+// `order_matches.status_id` is promoted 'pending_coinpay' -> 'valid' by the COINPAY
+// that settles the match (every later-block UPDATE of order_matches sets status_id
+// alone; createOrderMatch only re-writes its own action's row), carried to followers
+// as updated-rows class 8 and re-derived on reorg. No hash commits it yet; a gated
+// state_hash term would, and would retire this entry.
+const CONTENT_PARITY_IN_PLACE_COLUMNS = Object.freeze({
+    order_matches: Object.freeze(['status_id']),
 });
 
 // ── Derivation helpers ──────────────────────────────────────────────────
@@ -347,9 +362,11 @@ function contentParityMutableTables(){
     return hashClassTables('state_hash');
 }
 
-// Columns excluded from the content-parity preimage for a table (empty for most).
+// Columns excluded from the content-parity preimage for a table (empty for most),
+// covering both the by-design differences and the in-place edited columns.
 function contentParityExcludedColumns(table){
-    return (CONTENT_PARITY_EXCLUDED_COLUMNS[table] || []).slice();
+    return (CONTENT_PARITY_EXCLUDED_COLUMNS[table] || [])
+        .concat(CONTENT_PARITY_IN_PLACE_COLUMNS[table] || []);
 }
 
 // How a stream:index lookup is bounded for content parity: 'block' for the two
@@ -366,6 +383,7 @@ function contentParityLookupBound(table, dbType){
 module.exports = {
     TABLES, ORPHAN_SWEEPS,
     CONTENT_PARITY_CARVE_OUTS, CONTENT_PARITY_EXCLUDED_COLUMNS,
+    CONTENT_PARITY_IN_PLACE_COLUMNS,
     allTables, entry, tablesWhere,
     rollbackTables, replicaRollbackTables, streamTopology, blockKey,
     rollbackBuckets, replicaRollbackBuckets, hashClassTables,

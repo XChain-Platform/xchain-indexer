@@ -39,8 +39,8 @@
  * The two cap constants live HERE (not in the per-coin config) because they are
  * this flag-day's parameters and must be identical in xchain-indexer + xchain-sync
  * or the stakes_root forks; the byte-identical twin lives in
- * xchain-sync/src/swq_source_cap_activation.js and the cross-repo twin guard
- * (test/unit/rollback-coverage.test.js) locks the two files equal.
+ * xchain-sync/src/consensus/gates/swq_source_cap_gate.js and the cross-repo twin
+ * guard (test/unit/rollback_coverage.test.js) locks the two files equal.
  *
  ********************************************************************/
 

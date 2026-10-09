@@ -58,8 +58,14 @@ module.exports = {
                         f.refund_window,
                         f.expire_at,
                         f.min_amount,
-                        f.allow_list,
-                        f.block_list,
+                        CASE
+                            WHEN ae.action_index IS NULL THEN f.allow_list
+                            ELSE NULLIF(ae.allow_list, 0)
+                        END as allow_list,
+                        CASE
+                            WHEN be.action_index IS NULL THEN f.block_list
+                            ELSE NULLIF(be.block_list, 0)
+                        END as block_list,
                         m1.memo,
                         s2.status as feed_status,
                         f.closed_block,
@@ -75,6 +81,28 @@ module.exports = {
                         LEFT  JOIN index_tickers   t1 ON (t1.id=f.tick_id)
                         LEFT  JOIN index_memos     m1 ON (m1.id=f.memo_id)
                         INNER JOIN index_statuses  s2 ON (s2.id=f.feed_status_id)
+                        LEFT  JOIN bet_edits ae ON (
+                            ae.action_index=(
+                                SELECT MAX(e.action_index)
+                                FROM bet_edits e
+                                INNER JOIN index_statuses es ON (es.id=e.status_id)
+                                WHERE
+                                    e.feed_action_index=f.action_index AND
+                                    es.status='valid' AND
+                                    e.allow_list IS NOT NULL
+                            )
+                        )
+                        LEFT  JOIN bet_edits be ON (
+                            be.action_index=(
+                                SELECT MAX(e.action_index)
+                                FROM bet_edits e
+                                INNER JOIN index_statuses es ON (es.id=e.status_id)
+                                WHERE
+                                    e.feed_action_index=f.action_index AND
+                                    es.status='valid' AND
+                                    e.block_list IS NOT NULL
+                            )
+                        )
                     WHERE
                         1=1` + sql + `
                     ORDER BY f.action_index ASC

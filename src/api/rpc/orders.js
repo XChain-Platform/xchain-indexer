@@ -23,6 +23,9 @@
 const { stampGiveDecimals } = require('../cross_chain_offer_decimals');
 const { tipBlockTime }   = require('../tip_block_time');            // expiry filter clock for the open book
 const { getLogger } = require('../../observability/index.js');
+const gateRegistry = require('../../protocol_changes.js');
+
+const OFFER_LIST_EXPORT_KEY = 'cross_chain_offer_list_export_activation.CROSS_CHAIN_OFFER_LIST_EXPORT';
 
 // Return this chain's OPEN cross-chain DEX offers (give_coin != get_coin) so the
 // xchain-hub federation can build the unified cross-chain order book. The "from"
@@ -71,6 +74,15 @@ function openCrossChainOrdersRpc({ indexer }){
                 // LIMIT + keyset cursor bounds the whole book. Each offer is tagged `kind`; the
                 // returned array carries .truncated + .next_cursor out-of-band.
                 let merged = await db.getOpenCrossChainOffers(max, after_action_index, to_coin, blockTime);
+                let exportOfferLists = gateRegistry.activeAt(
+                    OFFER_LIST_EXPORT_KEY,
+                    indexer.config['NETWORK'],
+                    indexer.config['COIN'],
+                    latest,
+                    null
+                );
+                if(exportOfferLists && typeof db.applyEffectiveOpenCrossChainOfferLists === 'function')
+                    await db.applyEffectiveOpenCrossChainOfferLists(merged);
                 let truncated = merged.truncated === true;
                 if(truncated)
                     getLogger().warn('getopencrosschainorders hit the cap of ' + max + ' at block ' + latest + ' - the open cross-chain book is truncated (newer offers dropped); the hub should page via next_cursor or raise its limit.');

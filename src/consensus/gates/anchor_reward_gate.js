@@ -12,17 +12,17 @@
  *
  * Anchor-reward re-derivation flag-day.
  *
- * Gates when the validator anchor reward stops being trusted from the hub's
- * `pushvalidatorrewards` JSON-RPC and is instead derived by every indexer from
- * on-chain ANCHOR bytes. At/above this height the hub emits a publisher-bearing
+ * Gates when the validator anchor reward stops being trusted from the hub over
+ * a key-authenticated JSON-RPC (since retired) and is instead derived by every
+ * indexer from on-chain ANCHOR bytes. At/above this height the hub emits a publisher-bearing
  * ANCHOR bundle (v0 since the version restart, root-bearing by construction;
  * the retired v4/v5 pair is what split rootless from root-bearing) carrying
  * the elected publisher pubkey
  * plus a 2f+1 `oracle_publish` attestation (XANCPUB) over the reward tuple; the
  * indexer verifies that quorum and credits the publisher with
  * ANCHOR_REWARD_AMOUNT, a frozen consensus constant never taken from the wire.
- * Below the threshold the old push path stands and a publisher-bearing bundle
- * is rejected.
+ * Below the threshold the legacy anchor wire applies and a publisher-bearing
+ * bundle is rejected.
  *
  * The credited reward is a COLLECT-spendable `validator_rewards` row, so this
  * is consensus-relevant and must deploy to the hub and every indexer
@@ -44,9 +44,9 @@ const ANCHOR_REWARD_ACTIVATION = copy('anchor_reward_activation.ANCHOR_REWARD_AC
 
 const ANCHOR_REWARD_AMOUNT = copy('anchor_reward_activation.ANCHOR_REWARD_AMOUNT');
 
-// Whether anchor rewards are DERIVED from chain (vs pushed) for an ANCHOR whose
-// BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the threshold ->
-// off (legacy push path; a publisher-bearing bundle rejected). An unpinned (null) or unknown
+// Whether anchor rewards are DERIVED from chain for an ANCHOR whose BTC-anchored
+// snapshot is at `snapshotBlock` on `network`. Below the threshold -> off (none
+// derived, and the hub push rail is retired; a publisher-bearing bundle rejected). An unpinned (null) or unknown
 // network -> off (safe); `sb >= null` would otherwise arm at height 0.
 function isAnchorRewardActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
@@ -60,9 +60,9 @@ const ARCHIVE_REWARD_ACTIVATION = copy('anchor_reward_activation.ARCHIVE_REWARD_
 
 const ARCHIVE_REWARD_AMOUNT = copy('anchor_reward_activation.ARCHIVE_REWARD_AMOUNT');
 
-// Whether the anchor_archive reward is DERIVED from chain (vs pushed) for an archive
-// anchor whose BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the
-// threshold -> off (legacy push path; a publisher-bearing archive head rejected).
+// Whether the anchor_archive reward is DERIVED from chain for an archive anchor
+// whose BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the threshold
+// -> off (none derived, and the hub push rail is retired; a publisher-bearing archive head rejected).
 // An unpinned (null) or unknown network -> off (safe).
 function isArchiveRewardActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
@@ -76,7 +76,7 @@ const ANCHOR_REWARD_DERIVE_ACTIVATION = copy('anchor_reward_activation.ANCHOR_RE
 
 // Whether anchor/archive reward derivation has RELOCATED to the BTC indexer for a reward tuple
 // whose BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the threshold (or an
-// inert null / unknown network) -> off (legacy DOGE-side silent-drop path stays byte-identical).
+// inert null / unknown network) -> off (no indexer mints it; the DOGE-side handlers only log the skip).
 function isAnchorRewardDeriveActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
     if(!Number.isFinite(sb)) return false;

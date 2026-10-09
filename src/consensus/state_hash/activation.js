@@ -125,6 +125,18 @@ function isArchiveInvalidHeightKeyActive(blockIndex, network, coin){
     return b >= threshold;
 }
 
+const ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION = copy('stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION');
+
+// Whether the attest batch-head completion-stamp class is folded into state_hash
+// at `blockIndex` on `network` for `coin`. Same fail-inert semantics as the gates above.
+function isAttestBatchHeadStateHashActive(blockIndex, network, coin){
+    let b = parseInt(blockIndex);
+    if(!Number.isFinite(b)) return false;
+    let threshold = _activationThreshold(ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION, network, coin);
+    if(threshold === undefined) return false;
+    return b >= threshold;
+}
+
 module.exports = { STATE_HASH_VERSION,
                    INDEX_MAP_STATE_HASH_ACTIVATION, isIndexMapStateHashActive,
                    POLL_FINALIZE_STATE_HASH_ACTIVATION, isPollFinalizeStateHashActive,
@@ -134,4 +146,5 @@ module.exports = { STATE_HASH_VERSION,
                    archiveHeadPredicate, checkpointSectionPredicate,
                    ARCHIVE_INVALID_STATE_HASH_ACTIVATION, isArchiveInvalidStateHashActive,
                    ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, isArchiveInvalidHeightKeyActive,
-                   ARCHIVE_CHUNK_HEIGHT_COL, ARCHIVE_CHUNK_HEIGHT_COL_LEGACY };
+                   ARCHIVE_CHUNK_HEIGHT_COL, ARCHIVE_CHUNK_HEIGHT_COL_LEGACY,
+                   ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION, isAttestBatchHeadStateHashActive };
