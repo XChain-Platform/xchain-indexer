@@ -145,8 +145,8 @@ async function setupRoyaltyRail() {
         indexer = await initIndexer();
         const realMirrorDb = indexer.indexerDb.mirrorDb.bind(indexer.indexerDb);
         indexer.indexerDb.mirrorDb = () => Object.create(realMirrorDb(), {
-            // XC-3935 will replace this accessor stub with a seeded remote_token_snapshots
-            // row; this scenario tests royalty legs, not remote token pinning.
+            // A seeded remote_token_snapshots row will replace this accessor stub;
+            // this scenario tests royalty legs, not remote token pinning.
             getPinnedRemoteToken: { value: async () => ({ decimals: 0 }) }
         });
         // LTC is native-fee-only; this scenario is about royalty legs, not fee mode, so pin
