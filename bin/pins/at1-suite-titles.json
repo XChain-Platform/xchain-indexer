@@ -11607,6 +11607,10 @@
       "Actions.processAction() @regression @tier3 does not call any other handler when dispatching SEND",
       "Actions.processAction() @regression @tier3 passes params, data, and error through to the handler"
     ],
+    "b4a0f9e76d16b30f": [
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is present in the class table and registry in the same shape",
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is unarmed on production networks and active from regtest genesis"
+    ],
     "b4a3dee34b8a056b": [
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT creates credit, updates balance, and increments token supply",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT exceeding MAX_MINT is marked invalid",
