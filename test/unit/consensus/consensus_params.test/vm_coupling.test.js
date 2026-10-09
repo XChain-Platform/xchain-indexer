@@ -53,9 +53,11 @@ const EXPECTED_VM_STRIPPED_GLOBAL_NAMES = [
 // `banned-rest` is the epoch-4 addition: the deploy validator refuses the four rest
 // positions with no source expression to wrap, which the allocator meter cannot
 // reach and which therefore copy O(n) elements for a flat 1 gas.
+// `nesting-depth` is the epoch-7 addition: delimiter nesting above 64 is refused before parsing.
 const EXPECTED_VM_CONSENSUS_RULES = [
     'banned-async', 'banned-generator', 'banned-literal', 'banned-math',
-    'banned-rest', 'banned-wasm', 'banned-with', 'invalid-type', 'reserved-identifier',
+    'banned-rest', 'banned-wasm', 'banned-with', 'invalid-type', 'nesting-depth',
+    'reserved-identifier',
     'unsupported-syntax'
 ];
 // The sandbox neuters more than the global strip set: prototype-method strips
@@ -281,6 +283,41 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             'xchain-vm did not export APPLY_LENGTH_METER_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
         const pc = require('../../../../src/protocol_changes.js');
         const row = pc.get('protocol_changes.changes.APPLY_LENGTH_METER');
+        const asRow = (t) => (t === null ? pc.UNARMED : t);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
+    });
+
+    it('the bundled VM GAS_CEILING_SUCCESS_ACTIVATION matches the indexer GAS_CEILING_SUCCESS row per network', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        if(!vm || !full){
+            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present') + (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+            this.skip(); return;
+        }
+        const gate = vm.GAS_CEILING_SUCCESS_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export GAS_CEILING_SUCCESS_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.GAS_CEILING_SUCCESS');
+        const asRow = (t) => (t === null ? pc.UNARMED : t);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
+    });
+
+    it('the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        assert.ok(vm && full,
+            'ITER_SET_METER coupling requires the full xchain-vm package surface: ' +
+            (pkgErr ? String(pkgErr.message) : 'package not present') +
+            (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+        const gate = vm.ITER_SET_METER_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export ITER_SET_METER_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.ITER_SET_METER');
         const asRow = (t) => (t === null ? pc.UNARMED : t);
         assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
         assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');

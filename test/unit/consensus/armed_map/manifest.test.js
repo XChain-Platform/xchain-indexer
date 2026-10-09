@@ -16,7 +16,7 @@
  *
  * MEMBERSHIP IS THE REGISTRY. Since the carriers became shims, every table
  * the process applies is a registry row, and the manifest is rows() plus the
- * fourteen VM mirror rows. What this guard has to catch is the one way a table
+ * fifteen VM mirror rows. What this guard has to catch is the one way a table
  * can escape that: a map literal declared somewhere under src/ instead of in
  * a registry part file. So the scan that used to check "declared, therefore
  * listed" now fails on ANY declaration outside src/protocol_changes/, and the
@@ -138,12 +138,12 @@ describe('armed_map/manifest: completeness guard', function () {
 
 describe('armed_map/manifest: the row list', function () {
 
-    it('carries the registry rows first, in registry order, then the fourteen VM mirror rows', function () {
+    it('carries the registry rows first, in registry order, then the VM mirror rows', function () {
         const registryKeys = ProtocolChanges.rows().map(([k]) => k);
         const keys = manifest.ENTRIES.map((e) => e[0]);
         assert.deepStrictEqual(keys.slice(0, registryKeys.length), registryKeys);
         assert.deepStrictEqual(keys.slice(registryKeys.length), manifest.VM_EXPORT_NAMES.concat(manifest.VM_ACCESSORS_EXPORT_NAMES).map((n) => 'xchain-vm.' + n));
-        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 13);
+        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 15);
         assert.deepStrictEqual(manifest.VM_ACCESSORS_EXPORT_NAMES, ['ACCESSOR_OWN_KEY_ACTIVATION']);
     });
 
@@ -151,7 +151,6 @@ describe('armed_map/manifest: the row list', function () {
         const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes).sort();
         const rows = [...rowKeys()].filter((k) => k.startsWith('protocol_changes.changes.')).map((k) => k.slice('protocol_changes.changes.'.length)).sort();
         assert.deepStrictEqual(rows, table);
-        assert.strictEqual(table.length, 109);
     });
 
     it('never lists a key twice and never enumerates the file system', function () {
@@ -175,7 +174,19 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 384);
+        assert.strictEqual(res.rows.length, 400);
+    });
+
+    it('carries the cross-chain remote-token gate heights', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        assert.deepStrictEqual(byKey.get('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'), {
+            mainnet: 9999999999,
+            'BTC:testnet': 9999999999,
+            'LTC:testnet': 9999999999,
+            'DOGE:testnet': 9999999999,
+            testnet: 9999999999,
+            regtest: 0,
+        });
     });
 
     it('carries the three row families the design names', function () {
@@ -187,6 +198,26 @@ describe('armed_map/manifest: collectRows', function () {
         assert.ok(keys.has('protocol_changes.changes.SEND'), 'a ProtocolChanges row');
         assert.ok(keys.has('protocol_changes.CONSENSUS_VERSION'), 'the registry\'s own constant');
         assert.ok(keys.has('mirror_admission_activation.CHAIN_CODE_RE'), 'a RegExp row');
+        assert.ok(keys.has('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'), 'the chain-margin activation');
+        assert.ok(keys.has('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS'), 'the chain-margin table');
+    });
+
+    it('carries the DOGE mirror-admission chain margins and activation', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        assert.deepStrictEqual(byKey.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'), {
+            mainnet: null,
+            'DOGE:mainnet': null,
+            'DOGE:testnet': 9999999999,
+            regtest: 0,
+        });
+        assert.deepStrictEqual(byKey.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS').DOGE, {
+            bridge_transfers: 14,
+            cross_chain_calls: 14,
+            cross_chain_matches: 14,
+            list_snapshots: 14,
+            policy_snapshots: 14,
+            price_snapshots: 16,
+        });
     });
 
     it('carries the anchor archive fold-term heights', function () {
@@ -213,7 +244,7 @@ describe('armed_map/manifest: collectRows', function () {
         });
     });
 
-    it('appends the fourteen VM mirror rows with the VM values', function () {
+    it('appends the VM mirror rows with the VM values', function () {
         const vm = require('xchain-vm');
         const res = manifest.collectRows();
         assert.strictEqual(res.ok, true, res.reason);

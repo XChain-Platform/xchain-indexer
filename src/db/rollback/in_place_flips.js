@@ -154,10 +154,15 @@ module.exports = {
         args = [Number(block_index) + activationDelay];
         await db.doQuery(query, args);
 
-        // contract_stakes ← orphaned contract_unstakes (contract staking, all chains)
+        // contract_stakes ← orphaned contract_unstakes (contract staking, all chains).
+        // Join on source_id, not the signing key: a DELEGATE v1 rotation can move the cooldown
+        // row to a new key while the deactivated stake row keeps the old one, so a key join
+        // misses and strands the stake. Exact because UNSTAKE v1 requires SOURCE to own the
+        // stake and stamps its rows at actionBlock + activationDelay (the only writer).
+        // INVARIANT: a new stamp writer, or anything that rewrites source_id, must revisit this.
         query = `UPDATE contract_stakes cs
                     JOIN contract_unstakes cu
-                      ON cu.signing_pubkey_id     = cs.signing_pubkey_id
+                      ON cu.source_id             = cs.source_id
                      AND cu.target_contract_index = cs.target_contract_index
                      AND cu.tick_id               = cs.tick_id
                     SET cs.deactivation_block = NULL

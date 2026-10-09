@@ -103,7 +103,7 @@ function initializeFixture() {
     // The deterministic snapshot the live expiry path consulted; for block 20 the
     // attestation set is just [pkA]. Stub BOTH the unweighted and stake-weighted
     // capability lookups (the recompute picks one per request block via
-    // isStakeWeightedQuorumActive, mirroring attest.js) so the responsible set is
+    // isStakeWeightedQuorumActive, mirroring actions/attest/responsible_set.js) so the responsible set is
     // [pkA] regardless of which branch the activation height selects.
     indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([{ pubkey: pkA }]);
     // Weight clears the http_get floor of 10000, so the weighted branch exercises
@@ -256,7 +256,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
     this.timeout(0);
     useFixture();
     // The fallback re-derive must resolve the capability set at the DECLARED height
-    // BURIED by CANONICAL_REORG_BUFFER, exactly as actions/attest.js
+    // BURIED by CANONICAL_REORG_BUFFER, exactly as actions/attest/responsible_set.js
     // computeResponsibleSet does, while the STAKE_WEIGHTED_QUORUM flag-day stays on
     // the raw declared height. Resolving the SET at the raw height selects a different
     // responsible set whenever a validator's capability stake activates or deactivates
