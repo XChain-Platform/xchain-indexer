@@ -117,7 +117,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.deepStrictEqual(Object.keys(opts).sort(), [
                 'enforceBannedAsync', 'enforceBannedGenerator', 'enforceBannedRest',
                 'enforceBannedWasm', 'enforceBannedWith', 'enforceLintGlobalAlias', 'enforceLintHardening',
-                'enforceLintOptionalChain',
+                'enforceLintNestingDepth', 'enforceLintOptionalChain',
             ], 'deploy lint-flag option set drifted; an omitted flag reads as enforced in validateSyntax');
         });
 
