@@ -67,11 +67,20 @@ module.exports = {
 
     // The three roll-call tables, deleted on close_block.
     async unwindRollcallEpochs(db, block_index){
+        // Gates before verdicts for the same reason absences are: a gates row is
+        // derived at the close it names. Each delete carries its own schema-gap guard
+        // because rollcall_gates ships in a later migration than the other two tables.
         try {
-            // Gates before verdicts for the same reason absences are: a gates row is
-            // derived at the close it names.
             await db.doQuery(`DELETE FROM rollcall_gates WHERE close_block >= ?`, [block_index]);
+        } catch(e){
+            if(!(e && (e.errno === 1054 || e.errno === 1146))) throw e;
+        }
+        try {
             await db.doQuery(`DELETE FROM rollcall_absences WHERE close_block >= ?`, [block_index]);
+        } catch(e){
+            if(!(e && (e.errno === 1054 || e.errno === 1146))) throw e;
+        }
+        try {
             await db.doQuery(`DELETE FROM rollcalls WHERE close_block >= ?`, [block_index]);
         } catch(e){
             if(!(e && (e.errno === 1054 || e.errno === 1146))) throw e;

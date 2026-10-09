@@ -108,8 +108,8 @@ module.exports = {
         if (event.table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
         if (event.table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
         // bridge_transfers refreshes inside applyRetraction (the only path that can
-        // delete one), so it is deliberately not repeated here; policy_snapshots is
-        // never retracted at all.
+        // delete one), so it is deliberately not repeated here; policy_snapshots and
+        // list_snapshots are never retracted at all.
         if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls')
             await this.releaseSnapshotWaiters();
     },

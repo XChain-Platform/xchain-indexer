@@ -146,10 +146,11 @@ module.exports = {
         // or v1 burn named by src_chain/src_action_index) is reorged away, so one column pair
         // names the range. The spelling is src_chain/src_action_index, not the older
         // source_chain/source_action_index, because that is what the DDL carries (direction is
-        // derived from src_chain and never stored); hub_db_sync.js _applyRetraction reads the
-        // same pair out of RETRACTION_CHAIN_COLUMNS / RETRACTION_COLUMNS, so the two predicates
-        // remove exactly the same rows apart from that path's bounded to_action_index clause
-        // and its mandatory push_generation fence, which the asymmetry note above explains.
+        // derived from src_chain and never stored); applyRetraction (src/hub/hub_db_sync/
+        // retractions.js) reads the same pair out of RETRACTION_CHAIN_COLUMNS / RETRACTION_COLUMNS,
+        // so the two predicates remove exactly the same rows apart from that path's bounded
+        // to_action_index clause and its mandatory push_generation fence, which the asymmetry
+        // note on purgeCrossChainMirrors in src/rollback/sweeps.js explains.
         // An APPLIED bridge leg is not unwound here: its bridge_settlements row is rollback
         // 'action' and drops with the orphaned block, so replay re-applies the transfer.
         query = `DELETE FROM bridge_transfers WHERE src_chain = ? AND src_action_index >= ?`;

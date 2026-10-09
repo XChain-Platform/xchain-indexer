@@ -30,6 +30,7 @@
 // and every mixin read the same instance of each.
 const { opensBackslashEscape } = require('../shared.js');
 const { retypeLedgerAppliedAt } = require('./ledger_retype.js');
+const { stripBlockComments } = require('./migration_live_schema_guard.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -282,8 +283,10 @@ module.exports = {
             // uses one, so treat any statement carrying one as non-auto-eligible.
             if(/\/\*(?:!|M!)/i.test(String(raw)))                return raw;
             // Belt-and-braces: strip /* */ block comments (line comments are already
-            // gone) so a keyword inside comment prose never triggers or hides a hit.
-            const stmt = String(raw).replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
+            // gone) so a keyword inside comment prose never triggers or hides a hit. The
+            // strip is quote-aware: a regex one deletes real clauses sitting between a
+            // '/*' literal and a later '*/' literal, which the server still runs.
+            const stmt = stripBlockComments(raw).trim();
             if(!stmt) continue;
             // Second layer behind stripSqlLineComments: MariaDB/MySQL honour `#` to
             // end-of-line as a comment, so `# note\nDROP TABLE balances` is a DROP every

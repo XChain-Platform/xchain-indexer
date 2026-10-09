@@ -36,7 +36,7 @@ function secondsBasisActive(db, blockIndex){
 async function readAgeSeconds(db, blockIndex, refTime, win){
     const { blockCap, timeBound, timeArgs } = win;
     const query = "SELECT MAX(block_timestamp) AS latest_time FROM price_snapshots"
-                + " WHERE status = 'finalized' AND block_timestamp IS NOT NULL AND reference_block <= ?"
+                + " WHERE status = 'finalized' AND reference_block <= ?"
                 + timeBound;
     const rows = await db.doQueryStrict(query, [blockCap, ...timeArgs]);
     const latest = (rows.length > 0 && rows[0].latest_time !== null) ? Number(rows[0].latest_time) : 0;
