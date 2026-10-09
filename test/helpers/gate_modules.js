@@ -158,6 +158,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'attest_relay_fee_activation',
     'bet_feed_list_edit_activation',
     'cross_chain_offer_list_export_activation',
+    'cross_chain_remote_token_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
