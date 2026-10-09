@@ -3941,7 +3941,9 @@
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) below the flag-day the split is not applied (legacy full credit)",
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) fail-closed: a leg that does not re-encode yields NO split (full proceeds credit)"
     ],
-    "47f788937f1f1de5": [
+    "ee1365d37c917234": [
+      "protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1 is present in the class table and registry in the same shape",
+      "protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1 is unarmed on production networks and active from regtest genesis",
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 every shared_rows_N.js carries the two markers once each, in order, with no require between them, and nothing but rows outside them",
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 no part file matches the carrier declaration scans (D38)",
       "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 the time-table parts hold exactly the registered rows, in registration order, and nothing but rows",
@@ -7459,11 +7461,12 @@
       "unlisted swaps vs EMPTY_ALLOW_LIST_DENIES unlisted swap pair matches, gate false",
       "unlisted swaps vs EMPTY_ALLOW_LIST_DENIES unlisted swap pair matches, gate true"
     ],
-    "82bf65744414fc76": [
+    "88e05bde94708bee": [
       "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
       "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
       "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
       "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM GAS_CEILING_SUCCESS_ACTIVATION matches the indexer GAS_CEILING_SUCCESS row per network",
       "consensus parameters are frozen (track 8 guard) @regression the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network",
       "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
       "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
@@ -15876,7 +15879,7 @@
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "82bf65744414fc76",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "88e05bde94708bee",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/consensus_rules_digest_twin_bytes.test.js": "c8d4c432d417022a",
         "test/unit/consensus/doge_peer_clients/rollcall_proof_client/reply_decision.test.js": "8fcf19004337f429",
@@ -16337,7 +16340,7 @@
         "test/unit/protocol_changes/anchor/anchor_bundle_order_row.test.js": "332212f43d474164",
         "test/unit/protocol_changes/anchor/anchor_fold_rows.test.js": "2d944feb25011092",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "47f788937f1f1de5",
+        "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/consensus_bound_shared_rows.test.js": "026d5bdba4ff140a",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
