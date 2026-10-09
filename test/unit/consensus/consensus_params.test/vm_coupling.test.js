@@ -53,9 +53,11 @@ const EXPECTED_VM_STRIPPED_GLOBAL_NAMES = [
 // `banned-rest` is the epoch-4 addition: the deploy validator refuses the four rest
 // positions with no source expression to wrap, which the allocator meter cannot
 // reach and which therefore copy O(n) elements for a flat 1 gas.
+// `nesting-depth` is the epoch-7 addition: delimiter nesting above 64 is refused before parsing.
 const EXPECTED_VM_CONSENSUS_RULES = [
     'banned-async', 'banned-generator', 'banned-literal', 'banned-math',
-    'banned-rest', 'banned-wasm', 'banned-with', 'invalid-type', 'reserved-identifier',
+    'banned-rest', 'banned-wasm', 'banned-with', 'invalid-type', 'nesting-depth',
+    'reserved-identifier',
     'unsupported-syntax'
 ];
 // The sandbox neuters more than the global strip set: prototype-method strips
