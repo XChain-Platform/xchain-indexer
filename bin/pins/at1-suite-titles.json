@@ -6602,6 +6602,13 @@
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) synthesizes an ATTEST v1 with NULL tx coordinates, BLOCK_TIME, and the row pair",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) synthesizes nothing at a block one second short of the effective_time"
     ],
+    "73d2a2e5a45a3b49": [
+      "HubDbSync schema-version lockstep admits all three reader payloads when they carry the expected schema_version",
+      "HubDbSync schema-version lockstep preserves relic-row refusal after a versioned snapshot passes the shared check",
+      "HubDbSync schema-version lockstep refuses a catch-up page that carries no schema_version",
+      "HubDbSync schema-version lockstep refuses a live row event that carries no schema_version",
+      "HubDbSync schema-version lockstep refuses a snapshot page that carries no schema_version"
+    ],
     "73fc5728c637c06b": [
       "Programmable policy layer: Phase D royalty/fee split @regression SECURITY: legs are FLOORED so a multi-leg half-fraction split never over-distributes (seller remainder \u2265 0)",
       "Programmable policy layer: Phase D royalty/fee split @regression a zero-bps leg is skipped (no dust credit)",
@@ -15241,8 +15248,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1230,
-      "titleCount": 12778,
+      "fileCount": 1231,
+      "titleCount": 12783,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16159,6 +16166,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_match_reconcile_content.test.js": "14fcea8ef0fb80d7",
         "test/unit/hub/hub_db_sync/hub_db_sync_mirror_network_scope.test.js": "4d2ba3a3a978c98f",
         "test/unit/hub/hub_db_sync/hub_db_sync_parts.test.js": "4c736f16e3ee95d8",
+        "test/unit/hub/hub_db_sync/hub_db_sync_schema_version_missing.test.js": "73d2a2e5a45a3b49",
         "test/unit/hub/hub_db_sync/hub_db_sync_pollmode_watermark.test.js": "79cbf784dc4c07c4",
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_batch_era_floor.test.js": "3df297a740e13cca",
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "5c88721f4a21ab7f",
