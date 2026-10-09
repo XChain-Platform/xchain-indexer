@@ -10129,6 +10129,10 @@
       "Attest (ATTEST) @regression @tier3 v1: response resolves the capable set ONCE, never once per signer",
       "Attest (ATTEST) @regression @tier3 v1: response skips a signer lacking the attestation capability at the snapshot block"
     ],
+    "9cb0cc0fc24db1ca": [
+      "protocol_changes SEND_GATED_TOTAL_TICK_ID row is active on regtest at genesis and inactive on every production network",
+      "protocol_changes SEND_GATED_TOTAL_TICK_ID row registers the per-network time map"
+    ],
     "9cb414273879c7d9": [
       "NodeProof (NODEPROOF) @regression @tier3 is BTC-only : rejects on a non-BTC chain",
       "NodeProof (NODEPROOF) @regression @tier3 records one row per PASS pubkey",
@@ -16536,8 +16540,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1210,
-      "titleCount": 12657,
+      "fileCount": 1211,
+      "titleCount": 12659,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17605,6 +17609,7 @@
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/send_gated/send_gated_total_tick_id_row.test.js": "9cb0cc0fc24db1ca",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_lint/vm_lint_nesting_depth_row.test.js": "06ffa42905e141f0",
         "test/unit/protocol_changes/vm_lint/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
