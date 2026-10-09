@@ -85,9 +85,7 @@ const FIXED = ['protocol/constants.js', 'attestation/providerMinStakeHistory.js'
 function shimModules() {
     const top = fs.readdirSync(SRC).filter((f) => f.endsWith('_activation.js')).sort()
         .map((rel) => [rel.replace(/\.js$/, ''), rel]);
-    const moved = Object.entries(GATE_MODULE_PATHS).concat([
-        ['mirror_admission_margin_activation', 'consensus/gates/mirror_admission_margin_gate.js'],
-    ]);
+    const moved = Object.entries(GATE_MODULE_PATHS);
     return top.concat(moved, FIXED.map((rel) => [rel.replace(/\.js$/, ''), rel]))
         .map(([stem, rel]) => [stem, require(path.join(SRC, rel))]);
 }

@@ -3949,6 +3949,18 @@
       "bridge_settle: the XBRIDGE settle pass the pass position and ordering clears ctx.proof when the pass ends, so no row inherits another row proof",
       "bridge_settle: the XBRIDGE settle pass the pass position and ordering runs policy snapshots at the HEAD, before any transfer leg"
     ],
+    "44fb2beced9ca1a1": [
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) appends the family at the END, leaving the pre-existing gate order untouched",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet (and again at the 16:33Z ladder re-cut, and again when LTC:testnet mirror admission shipped null under dq4 (a))",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a far-future sentinel height, however high the chain climbs",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a null (unratified) entry at any height",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes non-map exports (frozen ladder constants), never active in this sense",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes a gate exactly at its own activation height (<=, not <)",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes the gates this wave armed at genesis on mainnet, from block 0",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) is sorted, has 45 entries, and contains the gates the last trains append",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) resolves both admission maps by coin while a sibling slot stays on the sentinel",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) returns [] for a non-finite height"
+    ],
     "450cc14eea77d305": [
       "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression active: a real stamped parent folds into state_hash; a follower that drops it HALTS (different hash)",
       "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression height key ARMED: a completing chunk in ANOTHER block is out of scope (the class stays per-block)",
@@ -7831,18 +7843,6 @@
       "activation-gate constant parity to canonical constants.js @regression token_policy_activation.js TOKEN_POLICY_INHERITANCE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
       "activation-gate constant parity to canonical constants.js @regression train_activation.js TRAIN_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
       "activation-gate constant parity to canonical constants.js @regression xchain_bridge_activation.js XCHAIN_BRIDGE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js"
-    ],
-    "7f837d8e9e793661": [
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) appends the family at the END, leaving the pre-existing gate order untouched",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet (and again at the 16:33Z ladder re-cut, and again when LTC:testnet mirror admission shipped null under dq4 (a))",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a far-future sentinel height, however high the chain climbs",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a null (unratified) entry at any height",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes non-map exports (frozen ladder constants), never active in this sense",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes a gate exactly at its own activation height (<=, not <)",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes the gates this wave armed at genesis on mainnet, from block 0",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) is sorted, has 43 entries, and contains the gates the last trains append",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) resolves both admission maps by coin while a sibling slot stays on the sentinel",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) returns [] for a non-finite height"
     ],
     "7f853845613c9e6f": [
       "BET action handler @regression @tier2 a REJECTED cancel still stores its row, carrying the rejection reason",
@@ -17174,7 +17174,7 @@
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
         "test/unit/consensus/rollcall_close/signer_verify.test.js": "7e33c00ff3453bbd",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test.js": "7f39aa26f210b97a",
-        "test/unit/consensus/rules_digest/consensus_rules_digest.test/active_gates.test.js": "7f837d8e9e793661",
+        "test/unit/consensus/rules_digest/consensus_rules_digest.test/active_gates.test.js": "44fb2beced9ca1a1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
