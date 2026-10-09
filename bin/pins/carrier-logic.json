@@ -137,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "8366a1bd6c70b422f8d01976e8814b00389acd92f166912a19b29d95f71962d3",
+      "hash": "3e1fb88ee52bc053396c6a5d4c4d32cac366bbfae9a65aa3931bf5a89266ceb2",
       "twins": []
     },
     "rollcall_activation": {
@@ -2047,6 +2047,13 @@
       "from": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
       "to": "8366a1bd6c70b422f8d01976e8814b00389acd92f166912a19b29d95f71962d3",
       "reason": "register ITER_SET_METER twin",
+      "date": "2026-10-09"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "8366a1bd6c70b422f8d01976e8814b00389acd92f166912a19b29d95f71962d3",
+      "to": "3e1fb88ee52bc053396c6a5d4c4d32cac366bbfae9a65aa3931bf5a89266ceb2",
+      "reason": "add stake snapshot decimal strings registry row and flag times",
       "date": "2026-10-09"
     }
   ]
