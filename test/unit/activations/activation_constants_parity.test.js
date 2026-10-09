@@ -13,31 +13,8 @@
  **********************************************************************
  * test/unit/activations/activation_constants_parity.test.js
  *
- * Arms the byte-equality claim each snapshot-block activation module's header
- * makes but that no suite previously enforced (review 2757 checkpoint_commitment,
- * 2758 cross_chain_royalty). Each module is a LOCAL COPY of the canonical map in
- * xchain-documentation/protocol/constants.js; a one-sided edit of any copy's
- * mainnet/testnet/regtest height forks the signed checkpoint / XMATCH canonical at
- * the flag-day with no CI failure. These modules are NOT in the reference-impl
- * conformance loop (no reference-impl copy exists) and cross_chain_royalty is not
- * vendored into xchain-sync, so the guard is anchored on the canonical constants.js
- * map that IS present. Skips green when the docs sibling is absent, unless
- * XCHAIN_REQUIRE_SIBLINGS=1 (CI) forces a hard failure.
- *
- * THE ABSENT-CHECKOUT BRANCH IS ITSELF A TEST CASE. A guard whose only behaviour on a
- * missing sibling is a bare skip reports a green run over nothing, and this guard is
- * what arming a network's flag day rests on. So the decision is a pure function asserted
- * below whatever the checkout state is, the parity cases name the exact path they looked
- * for in their titles rather than collapsing into a generic pending line, and a coverage
- * floor case runs unconditionally so a renamed module or export cannot quietly leave the
- * suite comparing nothing.
- *
- * THE LAYOUT. The height-ordering invariants read off the canon live beside this file in
- * test/unit/activation_constants_parity.test/height_ordering.test.js, and the canonical
- * checkout (its path, the verdict on it, the skip-or-throw decision and the before-all hook)
- * in that directory's helpers/canon_source.js. Every block repeats the suite title, so each
- * full test title is unchanged, and every block carries the hook, so a strict run on an
- * absent or refused checkout still fails rather than skipping.
+ * Locks local constants to the documentation canonical and fails strict runs
+ * without a trustworthy sibling source.
  */
 
 'use strict';
@@ -72,21 +49,17 @@ function committedSiblingSource(file, verdict) {
     const showResult = spawnSync('git', ['-C', root, 'show', rev + ':' + rel], { encoding: 'utf8' });
     return showResult.status === 0 ? showResult.stdout : null;
 }
-
 function committedSiblingModule(file, verdict) {
     const source = committedSiblingSource(file, verdict);
     if (source === null) return null;
     const loaded = new Module(file, module);
-    loaded.filename = file;
-    loaded.paths = Module._nodeModulePaths(path.dirname(file));
+    Object.assign(loaded, { filename: file, paths: Module._nodeModulePaths(path.dirname(file)) });
     loaded._compile(source, file);
     return loaded.exports;
 }
-
 const committedCanon = canonExists ? null : committedSiblingModule(CONSTANTS_PATH, canonVerdict);
 const canonAvailable = canonExists || committedCanon !== null;
 function loadCanonForSuite() { return committedCanon || loadCanon(); }
-
 function registryKey(file, exportName) { return file.replace(/\.js$/, '') + '.' + exportName; }
 // The local value of one GATES entry. W4 (activation registry, row 18) moved
 // the logic-bearing modules to their feature directories and retired the

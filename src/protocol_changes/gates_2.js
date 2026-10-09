@@ -71,14 +71,9 @@ addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION',
 });
 
 // list_owner_activation
-// LIST_OWNER_ACTIVATION: the height (per network) on the chain being parsed at/above
-// which a LIST format 1 whose SOURCE is not the source of the list's root create is
-// 'invalid: LIST_ACTION_INDEX (not owner)'. Keyed on the chain's OWN block_index: the
-// action being judged is the edit mined here.
-//
-// Mainnet and regtest activate at genesis. Each testnet chain keeps its pinned
-// activation height, while the shared testnet key remains the sentinel fallback
-// for callers without a coin.
+// LIST format 1 edits must come from the list root's creator. Heights use the
+// chain containing the edit. Mainnet and regtest start at genesis; testnet uses
+// per-chain heights and leaves the coinless fallback unarmed.
 addGate('list_owner_activation.LIST_OWNER_ACTIVATION', 'height', {
     mainnet: 0,
     'BTC:testnet': 155001,
