@@ -482,6 +482,22 @@
       "HubClient getAllConfigs() sends getallconfigs to the CONFIG endpoint, not the feed endpoint",
       "HubClient getAllConfigs() still reaches the feed endpoint when no config endpoint is configured"
     ],
+    "0b9782a7fca562f7": [
+      "ACTION manifest conformance: indexer indexerHandled set @regression BATCH probe sub-action policy conformance @regression (f1) every dispatched action carries an explicit batch-probe decision",
+      "ACTION manifest conformance: indexer indexerHandled set @regression BATCH probe sub-action policy conformance @regression (f2) every dispatched action is classified exactly as expected",
+      "ACTION manifest conformance: indexer indexerHandled set @regression BATCH probe sub-action policy conformance @regression (f3) the policy map names no action the dispatch table dropped",
+      "ACTION manifest conformance: indexer indexerHandled set @regression BATCH probe sub-action policy conformance @regression (f4) the refusal is a SUPERSET of the fee-quote denylist",
+      "ACTION manifest conformance: indexer indexerHandled set @regression byte-identity to canonical manifest vendored test/fixtures/action-manifest.json is byte-identical to canonical",
+      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (a1) every dispatched action carries an explicit expected fee-quote class",
+      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (a2) every dispatched action classifies exactly as expected",
+      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (a3) the expected-class map names no action the dispatch table dropped",
+      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (b) denied and exempt sets are disjoint",
+      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (c) neither set contains a name absent from the dispatch table",
+      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (d) denied set equals exactly {DEPLOY, EXECUTE, XEXEC, BATCH}",
+      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (e) the static-quote set is a dispatched subset of the denied set",
+      "ACTION manifest conformance: indexer indexerHandled set @regression the action dispatch switch exactly equals the manifest indexerHandled slice",
+      "ACTION manifest conformance: indexer indexerHandled set @regression the indexer ACTION_ALIASES map exactly equals the manifest aliases map"
+    ],
     "0bf881f235cb766f": [
       "testnet arm: dispenser compare and stake-weight collation @regression @tier1 BTC:testnet both predicates flip exactly at the height",
       "testnet arm: dispenser compare and stake-weight collation @regression @tier1 BTC:testnet dispenser send compare keeps the legacy predicate one block below and diverges at the height",
@@ -596,23 +612,6 @@
       "list share metadata gate readers passes the exact hub and apply axes to the registry",
       "list share metadata gate readers returns false for a non-string network",
       "list share metadata gate readers stays inactive on mainnet below the sentinel and applies on every testnet chain armed by v0.21.3"
-    ],
-    "0d6a5c7e0ca3a674": [
-      "ACTION manifest conformance: indexer indexerHandled set @regression BATCH probe sub-action policy conformance @regression (f1) every dispatched action carries an explicit batch-probe decision",
-      "ACTION manifest conformance: indexer indexerHandled set @regression BATCH probe sub-action policy conformance @regression (f2) every dispatched action is classified exactly as expected",
-      "ACTION manifest conformance: indexer indexerHandled set @regression BATCH probe sub-action policy conformance @regression (f3) the policy map names no action the dispatch table dropped",
-      "ACTION manifest conformance: indexer indexerHandled set @regression BATCH probe sub-action policy conformance @regression (f4) the refusal is a SUPERSET of the fee-quote denylist",
-      "ACTION manifest conformance: indexer indexerHandled set @regression byte-identity to canonical manifest vendored test/fixtures/action-manifest.json is byte-identical to canonical",
-      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (a1) every dispatched action carries an explicit expected fee-quote class",
-      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (a2) every dispatched action classifies exactly as expected",
-      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (a3) the expected-class map names no action the dispatch table dropped",
-      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (b) denied and exempt sets are disjoint",
-      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (c) neither set contains a name absent from the dispatch table",
-      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (d) denied set equals exactly {DEPLOY, EXECUTE, XEXEC, BATCH}",
-      "ACTION manifest conformance: indexer indexerHandled set @regression fee-quote classification conformance @regression (e) the static-quote set is a dispatched subset of the denied set",
-      "ACTION manifest conformance: indexer indexerHandled set @regression settlement anchors are present and remain render-only",
-      "ACTION manifest conformance: indexer indexerHandled set @regression the action dispatch switch exactly equals the manifest indexerHandled slice",
-      "ACTION manifest conformance: indexer indexerHandled set @regression the indexer ACTION_ALIASES map exactly equals the manifest aliases map"
     ],
     "0d6d46561dd1ed75": [
       "List @regression @tier3 MEMO accepts a MEMO of exactly MAX_MEMO_LENGTH",
@@ -1054,23 +1053,6 @@
     "157dcfaa3a3b9d23": [
       "07 Grown-Database Regression block time does not regress beyond MAX_RATIO as the standing set grows"
     ],
-    "15886c85ba09d760": [
-      "armed_map/manifest: collectRows appends the fifteen VM mirror rows with the VM values",
-      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
-      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
-      "armed_map/manifest: collectRows carries the three row families the design names",
-      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
-      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
-      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
-      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
-      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
-      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
-      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
-      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
-      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
-      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the fifteen VM mirror rows",
-      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
-    ],
     "158fe8328bb55251": [
       "apiView() fallback is a test affordance @regression @tier1 XChainIndexer.js still names its fallback a test affordance, not a production path",
       "apiView() fallback is a test affordance @regression @tier1 api/health.js still names its fallback a test affordance, not a production path",
@@ -1171,25 +1153,6 @@
       "AnchorProofClient v3 fold binding @regression @tier2 version lists stay in step with the DOGE parse keeps the fold wire out of the archive family",
       "AnchorProofClient v3 fold binding @regression @tier2 version lists stay in step with the DOGE parse leaves every non-v3 row a bundle section candidate"
     ],
-    "1734825922f9caa5": [
-      "runControllerGuard: a contract-address payout leg is a bad leg everywhere @regression @tier1 DISPENSER_CREATE: a contract-address leg denies with controller (bad payout leg)",
-      "runControllerGuard: a contract-address payout leg is a bad leg everywhere @regression @tier1 ORDER_CREATE: a contract-address leg denies with controller (bad payout leg)",
-      "runControllerGuard: a contract-address payout leg is a bad leg everywhere @regression @tier1 SEND: a contract-address leg denies with controller (bad payout leg)",
-      "runControllerGuard: a contract-address payout leg is a bad leg everywhere @regression @tier1 SWAP_CREATE: a contract-address leg denies with controller (bad payout leg)",
-      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 a per-contract maxTakeBps cannot RELAX the global cap",
-      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 allows legs within a tighter per-contract maxTakeBps",
-      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 denies (fail-closed) on a malformed payout leg",
-      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 denies legs over a TIGHTER per-contract maxTakeBps (under the global cap)",
-      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 denies when the total take exceeds CONTROLLER_MAX_TAKE_BPS",
-      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 parses payoutLegs from a JSON-STRING returnValue (the real VM shape)",
-      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 returns null payoutLegs when the guard returns no legs",
-      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 DISPENSER_CREATE: a malformed leg denies with controller (bad payout leg)",
-      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 DISPENSER_CREATE: a well-formed in-cap leg is allowed",
-      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 DISPENSER_CREATE: an over-cap total denies with controller (payout exceeds cap)",
-      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 SEND: a malformed leg denies with controller (bad payout leg)",
-      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 SEND: a well-formed in-cap leg is allowed",
-      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 SEND: an over-cap total denies with controller (payout exceeds cap)"
-    ],
     "179f6c41132f5748": [
       "dispenser delay protocol-time gate @regression @tier1 does not mature a close delay when the gated stored block cannot be resolved",
       "dispenser delay protocol-time gate @regression @tier1 does not mature a list delay when the gated stored block cannot be resolved",
@@ -1228,14 +1191,6 @@
       "Dispenser action handler @regression @tier2 GET_ADDRESS different from SOURCE validation (freshness) legacy path (below the freshness flag-day: mainnet BTC < 961000) tracker-not-fresh GET_ADDRESS is not permitted",
       "Dispenser action handler @regression @tier2 legacy freshness path: tracker outage vs tracker answer tracker RPC error answer (untagged) still reads as not fresh",
       "Dispenser action handler @regression @tier2 legacy freshness path: tracker outage vs tracker answer tracker giving no answer (UTXO_TRACKER_UNAVAILABLE) halts the block instead of committing not permitted"
-    ],
-    "17c33ccc3e9829c6": [
-      "oracle snapshot age seconds query @regression @tier1 clamps a future-dated snapshot age to zero",
-      "oracle snapshot age seconds query @regression @tier1 propagates a strict-query rejection",
-      "oracle snapshot age seconds query @regression @tier1 returns the sentinel when the latest timestamp is null",
-      "oracle snapshot age seconds query @regression @tier1 returns the sentinel when the query returns no row",
-      "oracle snapshot age seconds query @regression @tier1 returns the sentinel without querying for a non-finite reference time",
-      "oracle snapshot age seconds query @regression @tier1 uses the exact finalized timestamp query and returns elapsed seconds"
     ],
     "180f72514f20efa8": [
       "Database savepoint methods @regression @tier1 createSavepoint runs SAVEPOINT statement via transactionConnection",
@@ -2153,11 +2108,6 @@
       "Attest (ATTEST) @regression @tier3 v1: response accepts a v1 signed by the deterministic responsible set",
       "Attest (ATTEST) @regression @tier3 v1: response rejects a v1 signed by a capable-but-not-responsible validator coalition"
     ],
-    "24ce1f53e2e2c1bf": [
-      "ACTION manifest conformance: indexer-written action names @regression every action name the indexer writes has a manifest entry",
-      "ACTION manifest conformance: indexer-written action names @regression every settlement-anchor manifest action is still written by the indexer",
-      "ACTION manifest conformance: indexer-written action names @regression the scan reaches the settlement anchors and a realistic share of written names"
-    ],
     "24ec309dd1a13c7d": [
       "DEPOSIT custody guard pre-activation bypass @regression @tier2 runs the denying token guard through the shared guard utility",
       "DEPOSIT custody guard pre-activation bypass @regression @tier2 settles past a denying transfer controller bound to SOURCE",
@@ -2290,15 +2240,6 @@
       "Anchor (ANCHOR) @regression @tier3 v1 with a valid publisher attestation is valid, stores the archive, and the DOGE side writes no archive reward",
       "Anchor (ANCHOR) @regression @tier3 v1 without any tail at all fails on PUBLISHER, not as a tail-less legacy shape",
       "Anchor (ANCHOR) @regression @tier3 v1 wrapper sigs verify over the archive canonical (batch-extended, EQUIV-wrapped)"
-    ],
-    "2756784aae940d5a": [
-      "Database._destructiveAutoStatement() storage engine @regression @tier1 flags a CREATE TABLE that names any engine other than InnoDB",
-      "Database._destructiveAutoStatement() storage engine @regression @tier1 flags every ALTER TABLE that names an ENGINE, InnoDB included",
-      "Database._destructiveAutoStatement() storage engine @regression @tier1 keeps InnoDB and engine-less CREATE TABLE and unrelated ALTERs auto-eligible"
-    ],
-    "275cd1720c6c0c1f": [
-      "EXECUTE host bounds match the bundled VM call limits @regression @tier1 the VM back-fills the same call limits the host re-checks",
-      "EXECUTE host bounds match the bundled VM call limits @regression @tier1 the host is never stricter than the VM, and depth and floor agree exactly"
     ],
     "27734cdd7a5bfa64": [
       "HubDbSync.ensureTables @regression @tier3 a semicolon inside a -- comment is not a statement terminator",
@@ -2508,12 +2449,6 @@
       "Swap action handler maker policy admission @regression @tier2 refuses a GET_ADDRESS allowed for GIVE_TICK but blocked for GET_TICK after payout-policy activation",
       "Swap action handler maker policy admission @regression @tier2 refuses the same policy split below payout-policy activation"
     ],
-    "2b9b1a4217e9148b": [
-      "tokens.bridged derives from applied xbridges rows @regression ignores refused locks and v4 burns",
-      "tokens.bridged derives from applied xbridges rows @regression reads BRIDGED as of the requested block and action, not the current tip",
-      "tokens.bridged derives from applied xbridges rows @regression rolled-back lock reads 0: is cleared when a rollback orphans the first applied lock, like a fresh replay",
-      "tokens.bridged derives from applied xbridges rows @regression stays set when only a later lock is orphaned"
-    ],
     "2ba6badbcc60323f": [
       "Issue handler @regression @tier1 DECIMALS validation DECIMALS = 0 \u2192 valid",
       "Issue handler @regression @tier1 DECIMALS validation DECIMALS = 18 (max) \u2192 valid",
@@ -2694,25 +2629,6 @@
     ],
     "2eb700fe5f2cbcf6": [
       "LIST rename does not become a membership head @regression @tier2 builds the edit after a rename on the preceding membership head"
-    ],
-    "2ecbbb8d214daa59": [
-      "token-bridge opt-in storage @regression @consensus createIssue (issues, raw wire strings) carries the three wire fields into the INSERT, in argument order",
-      "token-bridge opt-in storage @regression @consensus createIssue (issues, raw wire strings) stores an omitted field as SQL NULL, which is what \"unchanged\" means here",
-      "token-bridge opt-in storage @regression @consensus createToken (tokens, parsed state) folds the \"-\" sentinel to NULL so the column is the effective list",
-      "token-bridge opt-in storage @regression @consensus createToken (tokens, parsed state) never writes `bridged`: only an applied XBRIDGE v3 lock may set it",
-      "token-bridge opt-in storage @regression @consensus createToken (tokens, parsed state) parses the three fields into the INSERT, in argument order",
-      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold asks for the new columns in the query it actually runs",
-      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold derives BRIDGED from an applied lock, normalized to 0/1; a rolled-back lock reads 0",
-      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold inherits an empty field from the prior ISSUE, so empty means unchanged",
-      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold never lets LOCK_BRIDGE be unset once set, the shared LOCK_ rule",
-      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold replays the three fields off the issues rows",
-      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold takes the later explicit \"-\" sentinel, which is how a list is cleared",
-      "token-bridge opt-in storage @regression @consensus isAddressSleeping widening judges a foreign-format address at/above the flag",
-      "token-bridge opt-in storage @regression @consensus isAddressSleeping widening skips a foreign-format address below the flag (no query at all)",
-      "token-bridge opt-in storage @regression @consensus isAddressSleeping widening still judges a local address below the flag, so nothing historical moves",
-      "token-bridge opt-in storage @regression @consensus isAddressSleeping widening still rejects a string that is no coin address at all",
-      "token-bridge opt-in storage as-of reads @regression @consensus bounds the BRIDGED lock probe by the same block_index and action_index as the replay",
-      "token-bridge opt-in storage as-of reads @regression @consensus keeps the current-state BRIDGED lock probe when no bounds are given"
     ],
     "2ef587e9e97d807d": [
       "Deploy (DEPLOY) @regression @tier2 native coin fee payment invalid native coin fee returns error",
@@ -2917,6 +2833,9 @@
       "ANCHOR v3 archive equivocation canonical keeps the plain section round id free of a batch sequence",
       "ANCHOR v3 archive equivocation canonical matches the hub canonical exactly for an archive wrapper section"
     ],
+    "3166a60ac7c22eba": [
+      "state_hash attest batch head stamp known gap @regression omits the surviving v5 batch head stamp from SQL reads and the preimage"
+    ],
     "3223b1235b72dcb9": [
       "List @regression @tier3 SOURCE sleeping SOURCE sleeping \u2192 invalid",
       "List @regression @tier3 format 0: create LIST create address list: createList, createListItem called for each address",
@@ -3058,12 +2977,20 @@
       "contract_state_root: key derivation @regression is domain-separated from the balance and escrow key domains",
       "contract_state_root: key derivation @regression separates chain, network, contract and key (no field can be smeared into another)"
     ],
-    "34a24a8be0a149e4": [
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 an armed row returns block time minus the newest snapshot time",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 clamps a snapshot stamped after the block to 0",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 every network is unpinned: the legacy block-count query runs",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 reports MAX_SAFE_INTEGER when the block time is unknown",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 reports MAX_SAFE_INTEGER with no admitted snapshot"
+    "34d715ef44d3072a": [
+      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 a per-contract maxTakeBps cannot RELAX the global cap",
+      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 allows legs within a tighter per-contract maxTakeBps",
+      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 denies (fail-closed) on a malformed payout leg",
+      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 denies legs over a TIGHTER per-contract maxTakeBps (under the global cap)",
+      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 denies when the total take exceeds CONTROLLER_MAX_TAKE_BPS",
+      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 parses payoutLegs from a JSON-STRING returnValue (the real VM shape)",
+      "runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1 returns null payoutLegs when the guard returns no legs",
+      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 DISPENSER_CREATE: a malformed leg denies with controller (bad payout leg)",
+      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 DISPENSER_CREATE: a well-formed in-cap leg is allowed",
+      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 DISPENSER_CREATE: an over-cap total denies with controller (payout exceeds cap)",
+      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 SEND: a malformed leg denies with controller (bad payout leg)",
+      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 SEND: a well-formed in-cap leg is allowed",
+      "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 SEND: an over-cap total denies with controller (payout exceeds cap)"
     ],
     "34e85525857991c5": [
       "relay-identity lookup against a real MariaDB @tier3 THROWS on a query fault instead of silently admitting a duplicate",
@@ -3457,6 +3384,13 @@
       "finds open swaps whose effective lists resolve to the changed root",
       "rejects an unknown token-list market kind before querying"
     ],
+    "3c50f0d4dfee3daa": [
+      "Hash coverage guard @regression content-parity coverage declaration every streamed table is content-parity covered unless it is in one of the two declared classes",
+      "Hash coverage guard @regression content-parity coverage declaration excluded columns name real, deliberately-unreplicated values",
+      "Hash coverage guard @regression content-parity coverage declaration the mutable exclusion class is derived from the state_hash declarations, not hand-listed",
+      "Hash coverage guard @regression content-parity coverage declaration the operator carve-outs are exactly markets (indexer) and dispensers (decoder)",
+      "Hash coverage guard @regression content-parity coverage declaration the two reorg-scoped lookups bound by block; the inert ones bound by id"
+    ],
     "3c9c6d401385d0db": [
       "gettokenpolicy shared-list references answers a home-shared list and a pre-existing mirror by reference after activation",
       "gettokenpolicy shared-list references keeps an after-origin share and an unshared local list as full membership",
@@ -3680,10 +3614,6 @@
     "3fcd109353e0dc95": [
       "getanchorconfirmations anchor-by-txid pagination against a real MariaDB @tier3 never ends a page inside a bundle: a multi-section action at the boundary moves whole to the next page",
       "getanchorconfirmations anchor-by-txid pagination against a real MariaDB @tier3 partitions a set of ANCHOR_ROW_LIMIT * 2 + 3 rows across pages with no gap and no overlap"
-    ],
-    "4056956385f780ce": [
-      "repeated finalizeBlock exception status emits the exact wedged status fixture consumed by xchain-watch",
-      "repeated finalizeBlock exception status promotes the second consecutive finalizeBlock exception and keeps it latched"
     ],
     "40d8afc9cd271bab": [
       "MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1 ISSUE cross-checks against MAX_SUPPLY gate OFF: the same ISSUE keeps its legacy MINT_ADDRESS_MAX > MAX_SUPPLY rejection",
@@ -4102,10 +4032,6 @@
       "SQL indirect table site scanner ignores a bare name outside the passed table list",
       "SQL indirect table site scanner ignores placeholders outside table position and direct table SQL",
       "SQL indirect table site scanner throws a parse error that names the source file"
-    ],
-    "479c6eab99a84ee4": [
-      "Send handler: gated totals by resolved tick ID @regression @tier1 combines spellings per destination and drops unresolved ticks without mutation",
-      "Send handler: gated totals by resolved tick ID @regression @tier1 returns a fresh empty object for empty or non-array sends"
     ],
     "479d08f09ed6ee89": [
       "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple binds no chain on either live family",
@@ -5057,11 +4983,6 @@
       "indexer http-surface security: API-key gate on the real app with no key configured and no escape hatch (fail closed) rejects a gated exec method",
       "indexer http-surface security: API-key gate on the real app with no key configured and no escape hatch (fail closed) still serves public methods"
     ],
-    "558613a38e2b05ce": [
-      "createValidatorReward call-site census @regression @tier1 ignores call-like comments and strings",
-      "createValidatorReward call-site census @regression @tier1 matches the known set of call sites",
-      "createValidatorReward call-site census @regression @tier1 names rollcall_publish as a derive_block_index writer"
-    ],
     "559a559ec38fd5d6": [
       "Guard dependency: Tier 2: Balance & Ledger @tier2 AOR: getTokenSupply Formula AOR-200: bcsub\u2192bcadd in supply formula (credits+debits)",
       "Guard dependency: Tier 2: Balance & Ledger @tier2 AOR: getTokenSupply Formula AOR-201: bcadd\u2192bcsub in supply formula (subtract escrows)",
@@ -5377,22 +5298,6 @@
       "archive-head database readers uses the fold row predicate plus the exported version set for replay watermarks",
       "archive-head database readers uses the gated canonical pick for an unscoped batch lookup"
     ],
-    "5ad6c4b0c28cb058": [
-      "mirror-admission margin boundary changes the row margin at the admission boundary",
-      "mirror-admission margin boundary changes the stamp margin when the chain margin reaches the boundary",
-      "mirror-admission margin boundary never returns a target above the old-margin target",
-      "mirror-admission margin boundary selects the consumer target on both sides of the boundary",
-      "mirror-admission margin boundary uses the old margin when the boundary height is -Infinity",
-      "mirror-admission margin boundary uses the old margin when the boundary height is Infinity",
-      "mirror-admission margin boundary uses the old margin when the boundary height is NaN",
-      "mirror-admission margin boundary uses the old margin when the boundary height is null",
-      "mirror-admission margin boundary uses the old margin when the boundary height is undefined",
-      "mirror-admission margin boundary uses the old margin when the chain margin is -Infinity",
-      "mirror-admission margin boundary uses the old margin when the chain margin is Infinity",
-      "mirror-admission margin boundary uses the old margin when the chain margin is NaN",
-      "mirror-admission margin boundary uses the old margin when the chain margin is null",
-      "mirror-admission margin boundary uses the old margin when the chain margin is undefined"
-    ],
     "5b35d1c52a77c442": [
       "observability console patching and environment parsing defaults metrics off and enables HTTP metrics only with metrics",
       "observability console patching and environment parsing normalizes the metrics path and delegates log environment parsing unchanged",
@@ -5631,11 +5536,6 @@
       "hub selector refuses malformed and unsafe hub URLs",
       "hub selector stops paging a table when the selector changes during a request",
       "hub selector uses crypto.randomInt to avoid always following the first configured seed"
-    ],
-    "5f8cffffeaeb4b00": [
-      "Stake handler delegated signing key gate off @regression @tier2 accepts a new claim when the delegation claim gate is off",
-      "Stake handler delegated signing key gate off @regression @tier2 accepts a same-source top-up when the delegation claim gate is off",
-      "Stake handler delegated signing key gate off @regression @tier2 preserves the existing stake collision verdict when the gate is off"
     ],
     "5fd61225b4760c51": [
       "tipBlockTime() converts numeric-string block times to numbers",
@@ -5947,6 +5847,9 @@
       "capability-snapshot reorg burial @regression @tier1 party 3: archive recovery _verifyCompleteness accepts an honest archive that omits a source activating inside (N-6, N]",
       "capability-snapshot reorg burial @regression @tier1 party 3: archive recovery _verifyStakes accepts an honest archive whose signer deactivates inside (N-6, N]",
       "capability-snapshot reorg burial @regression @tier1 party 3: archive recovery still rejects a genuinely fabricated key (the existence guard is not weakened)"
+    ],
+    "64fed267e672fcf2": [
+      "repeated finalizeBlock exception status latches the repeated failure and reports it as a wedged status"
     ],
     "6578016e10366496": [
       "Multi-chain action processing @regression @tier1 ISSUE/MINT/SEND lifecycle produces identical ledger state on BTC, LTC and DOGE",
@@ -7360,10 +7263,6 @@
       "archive failure reporter stamps only the archive row status when section scoped",
       "archive failure reporter throws instead of falling back when the row status method is missing"
     ],
-    "7891fe7146b2d1e7": [
-      "protocol time caller order reads previous timestamps in height-descending order and preserves that order",
-      "protocol time caller order requests exactly the consensus width from the real protocol-time caller"
-    ],
     "78a1a7a1cdc81872": [
       "getNetBalance benchmark parses defaults and validates positive integer options",
       "getNetBalance benchmark selects hottest ledger keys with one strict read-only query",
@@ -7517,6 +7416,26 @@
       "public quote surfaces refuse piped action names @regression @security feequote never dry-runs a piped action name and never claims a verdict",
       "public quote surfaces refuse piped action names @regression @security preflight never dry-runs a piped action name and leaves it unjudged",
       "public quote surfaces refuse piped action names @regression @security the shared classifier denies a piped or empty name instead of calling it quotable"
+    ],
+    "7b40431f770d5c5b": [
+      "Rollback coverage guard @regression a table is never in both dataTables and blockTables",
+      "Rollback coverage guard @regression every ROLLBACK_EXEMPT entry names a real table (the exempt list cannot rot)",
+      "Rollback coverage guard @regression every indexer-owned registry entry names a real src/sql table (the registry cannot rot)",
+      "Rollback coverage guard @regression every orphan-sweep DELETE classified in SPECIAL_CASE actually exists in rollback.js",
+      "Rollback coverage guard @regression every registry entry declares all three lifecycle dimensions with valid values",
+      "Rollback coverage guard @regression every rollback.js table reference points at a real src/sql table (no stale/renamed names)",
+      "Rollback coverage guard @regression every src/sql table has a table-lifecycle registry entry",
+      "Rollback coverage guard @regression every table the indexer owns is covered by the rollback strategy",
+      "Rollback coverage guard @regression flags a generically rolled-back row with a non-default blockKey",
+      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) consensus/gates/state_commitment_gate.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
+      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) consensus/gates/swq_source_cap_gate.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
+      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) consensus/merkle.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
+      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) hub/table_lifecycle.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
+      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) hub/table_lifecycle/action_tables.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
+      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) hub/table_lifecycle/block_and_special_tables.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
+      "Rollback coverage guard @regression keeps every non-default blockKey out of the generic block and index rollback lists",
+      "Rollback coverage guard @regression registry lookup entries follow the index_ naming convention (inertness relies on it)",
+      "Rollback coverage guard @regression sanity: src/sql contains a meaningful number of tables"
     ],
     "7b64478cdfbc1bf7": [
       "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) the contract slash-restore SQL is identical across xchain-indexer and xchain-sync (cross-repo twin)"
@@ -7781,22 +7700,6 @@
       "Controller: DEPOSIT custody guard gas edges, above the override (real DB + real VM) @phaseE an unbound tick from an unbound address settles valid and leaves GAS unchanged",
       "Controller: DEPOSIT custody guard gas edges, above the override (real DB + real VM) @phaseE set up the bound/plain ticks, the guard and the distributions"
     ],
-    "7f741fb793c49b56": [
-      "Dispense action handler @regression @tier2 COIN_AMOUNT less than GET_AMOUNT returns invalid dispense",
-      "Dispense action handler @regression @tier2 SOURCE same as GET_ADDRESS returns invalid dispense",
-      "Dispense action handler @regression @tier2 a saturated FIAT unit count settles promptly instead of spinning",
-      "Dispense action handler @regression @tier2 clamp alone refuses a second ownership dispense (single-shot backstop)",
-      "Dispense action handler @regression @tier2 clamp: floors a fractional capacity",
-      "Dispense action handler @regression @tier2 clamp: lands exactly on capacity, not merely under it",
-      "Dispense action handler @regression @tier2 clamp: runs for an ownership dispenser and still settles the first fill",
-      "Dispense action handler @regression @tier2 clamp: skipped for a balance dispenser with no GIVE_AMOUNT",
-      "Dispense action handler @regression @tier2 give_amount calculated from multiplier (2x payment)",
-      "Dispense action handler @regression @tier2 loads dispenser state with the current block index",
-      "Dispense action handler @regression @tier2 multiplier capped so give_amount does not exceed GIVE_REMAINING",
-      "Dispense action handler @regression @tier2 multiplier of zero (insufficient funds after loop) returns invalid",
-      "Dispense action handler @regression @tier2 no matching dispensers: deleteActionIndex called, createDispense not called",
-      "Dispense action handler @regression @tier2 valid dispense: createDispense called with status valid"
-    ],
     "7f837d8e9e793661": [
       "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) appends the family at the END, leaving the pre-existing gate order untouched",
       "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet (and again at the 16:33Z ladder re-cut, and again when LTC:testnet mirror admission shipped null under dq4 (a))",
@@ -7927,17 +7830,6 @@
     "82b6765809dd4d66": [
       "unlisted swaps vs EMPTY_ALLOW_LIST_DENIES unlisted swap pair matches, gate false",
       "unlisted swaps vs EMPTY_ALLOW_LIST_DENIES unlisted swap pair matches, gate true"
-    ],
-    "82bf65744414fc76": [
-      "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
-      "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
-      "consensus parameters are frozen (track 8 guard) @regression the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp",
-      "consensus parameters are frozen (track 8 guard) @regression vmFailureStatus maps every VM error into the frozen closed token set"
     ],
     "82f0954fea12d994": [
       "list share sync barrier @regression @tier1 closes after the first mirror row arrives until its height is published",
@@ -8188,11 +8080,6 @@
       "Sweep @regression @tier3 BALANCES=1 zero-amount leg flag day testnet BTC above the height emits no credit/debit leg for the zero balance",
       "Sweep @regression @tier3 BALANCES=1 zero-amount leg flag day testnet BTC at the height emits no credit/debit leg for the zero balance",
       "Sweep @regression @tier3 BALANCES=1 zero-amount leg flag day testnet BTC one block below the height still writes the zero-amount legs"
-    ],
-    "87976ddf94e91add": [
-      "effective lists in open cross-chain orders exports edited list ids at and above the export gate",
-      "effective lists in open cross-chain orders leaves creation list ids unchanged below the export gate",
-      "effective lists in open cross-chain orders resolves edited allow and block lists for orders and swaps"
     ],
     "883ed5c19fe43878": [
       "HubPushQueue _isDue() caps backoff at maxBackoffMs",
@@ -9057,6 +8944,34 @@
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch registers v5 and v6, taking their layouts from the wire module",
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch takes the stake-weighted quorum at and above the SWQ anchor"
     ],
+    "92dde67ddb12e9ab": [
+      "protocol_time #isProtocolTimeMtpActive is on for testnet only, with mainnet and regtest left on the raw stamp",
+      "protocol_time #isProtocolTimeMtpActive reads false for an unknown network rather than switching consensus by accident",
+      "protocol_time #medianTimePast does not care what order the caller supplies",
+      "protocol_time #medianTimePast drops unusable entries but still medians the rest",
+      "protocol_time #medianTimePast medians a short window rather than refusing, so a fresh chain still advances",
+      "protocol_time #medianTimePast returns null when nothing usable is supplied, so callers fall back to the raw stamp",
+      "protocol_time #medianTimePast takes the median of the newest 11, not of everything handed over",
+      "protocol_time #protocolTime exposes Bitcoin's 11-block span as the constant callers window on",
+      "protocol_time #protocolTime falls back to the raw stamp when MTP cannot be computed",
+      "protocol_time #protocolTime never exceeds the raw stamp, even if the median somehow sits above it",
+      "protocol_time #protocolTime preserves the false sentinel for an unresolvable block_time",
+      "protocol_time #protocolTime returns MTP on a switched network",
+      "protocol_time #protocolTime returns the raw stamp untouched on an unswitched network",
+      "protocol_time #stampProtocolTime is a no-op in value terms on an unswitched network, where protocol time IS the raw stamp",
+      "protocol_time #stampProtocolTime leaves rows untouched for an unresolvable time rather than writing a sentinel",
+      "protocol_time #stampProtocolTime mutates in place rather than returning a copy, since fan-out collapse already ran",
+      "protocol_time #stampProtocolTime replaces the decoder raw stamp on every row so the action path reads protocol time",
+      "protocol_time #stampProtocolTime skips non-object rows instead of decorating them",
+      "protocol_time #stampProtocolTime tolerates an empty or absent block without throwing on the consensus path",
+      "protocol_time XChainIndexer wiring (ratchet) persists and publishes the RAW stamp, not protocol time",
+      "protocol_time XChainIndexer wiring (ratchet) re-stamps the decoder transaction rows with protocol time",
+      "protocol_time XChainIndexer wiring (ratchet) resolves both clocks from the decoder rather than inventing one",
+      "protocol_time median-time-past on real testnet4 data confirms the 1201s minimum-difficulty spacing the fixture depends on",
+      "protocol_time median-time-past on real testnet4 data lands well BEHIND the newest stamp, which is what lets a barrier clear",
+      "protocol_time median-time-past on real testnet4 data stays behind wall clock even when the block itself is stamped in the FUTURE",
+      "protocol_time span constant is Bitcoin's 11"
+    ],
     "93b9e527a571fc32": [
       "EQUIV XCALL canonical (WI-2 bump 2) dispatch and result of the same call carry DISTINCT keys (no false equivocation)",
       "EQUIV XCALL canonical (WI-2 bump 2) dispatch at/above the flag-day \u2192 header-wrapped (ROUND_ID folds in phase, VIEW=finalizing_view)",
@@ -9178,12 +9093,6 @@
       "EMISSION_ISSUANCE_LIMITS budget in issue.js @regression @tier1 a refused issuance never interns a ticker id for the name it did not register",
       "EMISSION_ISSUANCE_LIMITS budget in issue.js @regression @tier1 classification agrees with batch.js for every shape it has to decide",
       "EMISSION_ISSUANCE_LIMITS budget in issue.js @regression @tier1 the first top-level issuance in a budget is admitted and consumes the slot"
-    ],
-    "9596efc9b76f58af": [
-      "public BET reads expose effective list references folds the latest valid allow and block edits into a detail row",
-      "public BET reads expose effective list references folds the latest valid edits independently into every feed-list row",
-      "public BET reads expose effective list references rejects regressions that admit invalid edits or leak the zero sentinel",
-      "public BET reads expose effective list references returns effective references unchanged through detail and listing RPCs"
     ],
     "95e6be8c73046399": [
       "LIST meta part format specs defines create metadata format 4 with ITEM at field 5",
@@ -9868,15 +9777,6 @@
       "Compacted ^<id> address resolves and validates through the handler (fix regression guard) @adversarial @tier1 a MALFORMED caret id (^1.5 float) is rejected as invalid format (never reaches the FK)",
       "Compacted ^<id> address resolves and validates through the handler (fix regression guard) @adversarial @tier1 control: a full real destination address MINTs valid"
     ],
-    "9bac686d9ec20d8e": [
-      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 every shared_rows_N.js carries the two markers once each, in order, with no require between them, and nothing but rows outside them",
-      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 no part file matches the carrier declaration scans (D38)",
-      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 the time-table parts hold exactly the 109 rows, in registration order, and nothing but rows",
-      "protocol_changes/assembler: the public export shape @regression @tier1 exports every own property it exported before the split, each constant equal to its part file, and only the registry API besides",
-      "protocol_changes/assembler: the public export shape @regression @tier1 registry, UNARMED and UNPINNED are present but non-enumerable, so the manifest sees no new data export",
-      "protocol_changes/assembler: the public export shape @regression @tier1 still constructs under the manifest stub with 109 prototype-free changes, equal to the registry rows",
-      "protocol_changes/assembler: the public export shape @regression @tier1 the entry ends no larger than HEAD and every part file fits the readability limits"
-    ],
     "9bc7d8a011e583d1": [
       "consensus_rules_digest: the coin-keyed bridge gate as shipped carries the cut's testnet heights as shipped, mainnet and both bare fallbacks on the sentinel, regtest at genesis",
       "consensus_rules_digest: the coin-keyed bridge gate is a shared gate the ROLLCALL GATES field carries, and resolves to a value",
@@ -10342,9 +10242,6 @@
       "Order_Match action handler @regression @tier2 GIVE_OWNERSHIP=1 on orderInfo calls transferTokenOwnership for the give side",
       "Order_Match action handler @regression @tier2 ownership order: skipped when amounts are not exactly equal (single-fill enforcement)"
     ],
-    "a2ec1bc77812ee2a": [
-      "state_hash attest batch head stamp gap closed @regression reads the surviving v5 batch head stamp into the preimage once the class is armed"
-    ],
     "a2ef223856b71964": [
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 the widening step is evaluated at the RESPONSE block headroom at block 100 does not reach rank 3, 0/1",
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 the widening step is evaluated at the RESPONSE block headroom at block 100: the rank-2 validator is admitted before any ladder step, 1/1",
@@ -10610,6 +10507,15 @@
       "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getMirroredStateCheckpointCandidates rejects rather than resolving an empty consensus input",
       "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 isPubkeyInCapabilitySnapshot rejects rather than resolving an empty consensus input"
     ],
+    "a8fd529766242add": [
+      "database union list resolution @regression @tier1 bounds every member at the requested block",
+      "database union list resolution @regression @tier1 merges distinct address members in UTF-8 byte order",
+      "database union list resolution @regression @tier1 preserves the legacy answers for an invalid stored type-3 row",
+      "database union list resolution @regression @tier1 reads member roots from the union head",
+      "database union list resolution @regression @tier1 resolves a valid union without a block context",
+      "database union list resolution @regression @tier1 resolves tick unions to ticks",
+      "database union list resolution @regression @tier1 returns the member type and validates an address union as type 2"
+    ],
     "a90785fe5a2760e2": [
       "HubDbSync _applyRow cross_chain_calls generation fence @regression @tier1 assigns the fence LAST, so every gated column is judged against the ORIGINAL generation",
       "HubDbSync _applyRow cross_chain_calls generation fence @regression @tier1 gates content on the incoming generation too, so a stale finalized page cannot overwrite newer terms",
@@ -10669,6 +10575,23 @@
       "Price v2 (PRICE batch) @regression @tier3 structural checks (step 2) rejects a non-integer or negative window bound",
       "Price v2 (PRICE batch) @regression @tier3 structural checks (step 2) rejects a round outside the declared window",
       "Price v2 (PRICE batch) @regression @tier3 structural checks (step 2) rejects rounds that are not strictly ascending, including a duplicate"
+    ],
+    "a9872ec09574171d": [
+      "token-bridge opt-in storage @regression @consensus createIssue (issues, raw wire strings) carries the three wire fields into the INSERT, in argument order",
+      "token-bridge opt-in storage @regression @consensus createIssue (issues, raw wire strings) stores an omitted field as SQL NULL, which is what \"unchanged\" means here",
+      "token-bridge opt-in storage @regression @consensus createToken (tokens, parsed state) folds the \"-\" sentinel to NULL so the column is the effective list",
+      "token-bridge opt-in storage @regression @consensus createToken (tokens, parsed state) never writes `bridged`: only an applied XBRIDGE v3 lock may set it",
+      "token-bridge opt-in storage @regression @consensus createToken (tokens, parsed state) parses the three fields into the INSERT, in argument order",
+      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold asks for the new columns in the query it actually runs",
+      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold derives BRIDGED from an applied lock, normalized to 0/1; a rolled-back lock reads 0",
+      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold inherits an empty field from the prior ISSUE, so empty means unchanged",
+      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold never lets LOCK_BRIDGE be unset once set, the shared LOCK_ rule",
+      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold replays the three fields off the issues rows",
+      "token-bridge opt-in storage @regression @consensus getTokenInfo projection fold takes the later explicit \"-\" sentinel, which is how a list is cleared",
+      "token-bridge opt-in storage @regression @consensus isAddressSleeping widening judges a foreign-format address at/above the flag",
+      "token-bridge opt-in storage @regression @consensus isAddressSleeping widening skips a foreign-format address below the flag (no query at all)",
+      "token-bridge opt-in storage @regression @consensus isAddressSleeping widening still judges a local address below the flag, so nothing historical moves",
+      "token-bridge opt-in storage @regression @consensus isAddressSleeping widening still rejects a string that is no coin address at all"
     ],
     "a9a5188842f493a3": [
       "Unstake handler @regression @tier2 v1 : contract-targeted unstake contract has no cooldown_blocks \u2192 invalid (not stakeable)",
@@ -10908,10 +10831,6 @@
       "ATTEST fee settle: pay the verified signers above the zero-conf height @regression @tier3 terminal 'errored' above the height still refunds the payer and pays nobody",
       "ATTEST fee settle: pay the verified signers above the zero-conf height @regression @tier3 terminal 'expired' above the height still refunds the payer and pays nobody"
     ],
-    "ad70fe1e6bd73dda": [
-      "protocol_changes time-table parts spell the unarmed sentinel by name @regression @tier1 finds the time-table part files to scan",
-      "protocol_changes time-table parts spell the unarmed sentinel by name @regression @tier1 writes no bare 9999999999 in any changes_N.js row"
-    ],
     "ad8371ca0dd4fe40": [
       "fee-quote transaction-lock budget _acquireTxLock() bounded wait a release skips a timed-out waiter and grants the next live one",
       "fee-quote transaction-lock budget _acquireTxLock() bounded wait a release with only dead waiters leaves the lock FREE, not stranded",
@@ -10942,13 +10861,6 @@
       "runMigrations() precondition baseline branch, round_qualifier @regression @tier1 baselines when reward_unique already carries round_qualifier",
       "runMigrations() precondition baseline branch, round_qualifier @regression @tier1 leaves it PENDING on the trap shape: columns drift-healed, key still four-column",
       "runMigrations() precondition baseline branch, round_qualifier @regression @tier1 returns normally when the live key already carries the qualifier"
-    ],
-    "adb5316356f3bdf8": [
-      "Attest relay fee settlement @regression @tier3 credits the verified relay payee and sends only the remainder to REWARD",
-      "Attest relay fee settlement @regression @tier3 leaves the full escrow in REWARD below the relay fee gate",
-      "Attest relay fee settlement @regression @tier3 leaves the full escrow in REWARD when the payee has no snapshot source",
-      "Attest relay fee settlement @regression @tier3 refunds an expired relay without pricing or paying an allowance",
-      "Attest relay fee settlement @regression @tier3 uses only signers accepted by relay quorum to select the payee"
     ],
     "adebc0c0961d4826": [
       "db.isActionAllowed() token gate sleep scope @regression @tier1 does not read sleep state for an address-plus-token call",
@@ -11014,27 +10926,6 @@
       "list share leg injection rejects an upper-case snapshot id before injection",
       "list share leg injection rejects non-array legs before injection",
       "list share leg injection returns empty indexes without injecting an empty plan"
-    ],
-    "af0d4123dd5c7516": [
-      "Rollback coverage guard @regression a table is never in both dataTables and blockTables",
-      "Rollback coverage guard @regression every ROLLBACK_EXEMPT entry names a real table (the exempt list cannot rot)",
-      "Rollback coverage guard @regression every indexer-owned registry entry names a real src/sql table (the registry cannot rot)",
-      "Rollback coverage guard @regression every orphan-sweep DELETE classified in SPECIAL_CASE actually exists in rollback.js",
-      "Rollback coverage guard @regression every registry entry declares all three lifecycle dimensions with valid values",
-      "Rollback coverage guard @regression every rollback.js table reference points at a real src/sql table (no stale/renamed names)",
-      "Rollback coverage guard @regression every src/sql table has a table-lifecycle registry entry",
-      "Rollback coverage guard @regression every table the indexer owns is covered by the rollback strategy",
-      "Rollback coverage guard @regression flags a generically rolled-back row with a non-default blockKey",
-      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) consensus/gates/state_commitment_gate.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
-      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) consensus/gates/swq_source_cap_gate.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
-      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) consensus/merkle.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
-      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) hub/table_lifecycle.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
-      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) hub/table_lifecycle/action_tables.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
-      "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) hub/table_lifecycle/block_and_special_tables.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)",
-      "Rollback coverage guard @regression keeps every non-default blockKey out of the generic block and index rollback lists",
-      "Rollback coverage guard @regression names every validator_rewards derive_block_index writer in the registry note",
-      "Rollback coverage guard @regression registry lookup entries follow the index_ naming convention (inertness relies on it)",
-      "Rollback coverage guard @regression sanity: src/sql contains a meaningful number of tables"
     ],
     "af47dfc14d6003c2": [
       "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count 'Infinity' and 'NaN' keep their legacy insufficient-funds verdict",
@@ -11626,12 +11517,6 @@
       "resolveSlashTarget result returns the resolved target and defaults amount to zero",
       "resolveSlashTarget slash destination validation rejects a slash destination set to null",
       "resolveSlashTarget slash destination validation rejects a slash destination set to undefined"
-    ],
-    "b9dd4be9490dbf4e": [
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 a registry row is a frozen plain object with the nine parsed fields",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the 109 time-table keys the manifest lists",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value a fresh class build under the stub carries",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value the manifest resolves for that key"
     ],
     "ba14cf587a23de6d": [
       "resolveConfigEndpoint() disables the endpoint and gives notice for seeds alone",
@@ -12284,13 +12169,6 @@
       "Actions.processTransaction() @regression @tier3 routes SWAP to actionSwap.parse",
       "Actions.processTransaction() @regression @tier3 routes SWEEP to actionSweep.parse"
     ],
-    "c52b47b60b51b013": [
-      "state_hash attest_batch_head class @regression active: stamped heads fold in before block_index and a dropped stamp changes the hash",
-      "state_hash attest_batch_head class @regression below threshold: no attest_batch_head key and no extra query",
-      "state_hash attest_batch_head class @regression gate: regtest armed from genesis, mainnet and testnet inert, unknown network off",
-      "state_hash attest_batch_head class @regression literal twins equal the canonical wire constants",
-      "state_hash attest_batch_head class @regression selection: stamped v5 head keyed by the completing chunk block, resolved status, total order"
-    ],
     "c5325def56415d0d": [
       "execContext (injected-execution TX_HASH seam) @regression @tier2 attest expiry callback (previously-broken site 1) post-flag-day the injected context carries the ATTESTEXPCB synthetic TX_HASH",
       "execContext (injected-execution TX_HASH seam) @regression @tier2 attest expiry callback (previously-broken site 1) pre-flag-day the legacy hashless context is preserved byte-identically",
@@ -12310,6 +12188,15 @@
       "execContext (injected-execution TX_HASH seam) @regression @tier2 vote finalize callback (previously-broken site 2) post-flag-day the injected context carries the VOTECB synthetic TX_HASH",
       "execContext (injected-execution TX_HASH seam) @regression @tier2 vote finalize callback (previously-broken site 2) pre-flag-day the legacy hashless context is preserved byte-identically",
       "execContext (injected-execution TX_HASH seam) @regression @tier2 xcall result callback (live-consensus byte parity) the builder-produced TX_HASH is byte-identical to the pre- inline XCALLCB synthesis"
+    ],
+    "9bac686d9ec20d8e": [
+      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 every shared_rows_N.js carries the two markers once each, in order, with no require between them, and nothing but rows outside them",
+      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 no part file matches the carrier declaration scans (D38)",
+      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 the time-table parts hold exactly the 109 rows, in registration order, and nothing but rows",
+      "protocol_changes/assembler: the public export shape @regression @tier1 exports every own property it exported before the split, each constant equal to its part file, and only the registry API besides",
+      "protocol_changes/assembler: the public export shape @regression @tier1 registry, UNARMED and UNPINNED are present but non-enumerable, so the manifest sees no new data export",
+      "protocol_changes/assembler: the public export shape @regression @tier1 still constructs under the manifest stub with 109 prototype-free changes, equal to the registry rows",
+      "protocol_changes/assembler: the public export shape @regression @tier1 the entry ends no larger than HEAD and every part file fits the readability limits"
     ],
     "c562c3c3096c665e": [
       "price capability resolution off BTC @regression BTC is unaffected getActiveCapabilityCount on BTC mainnet stays on local stakes",
@@ -12643,6 +12530,21 @@
       "DEPOSIT custody guard bindings @regression @tier2 returns a strict no-op for an unbound tick and unbound SOURCE",
       "DEPOSIT custody guard bindings @regression @tier2 runs a SOURCE address guard bound only to the 'all' class",
       "DEPOSIT custody guard bindings @regression @tier2 runs a token guard bound only to the 'all' class"
+    ],
+    "cc578e414009a460": [
+      "Dispense action handler @regression @tier2 COIN_AMOUNT less than GET_AMOUNT returns invalid dispense",
+      "Dispense action handler @regression @tier2 SOURCE same as GET_ADDRESS returns invalid dispense",
+      "Dispense action handler @regression @tier2 a saturated FIAT unit count settles promptly instead of spinning",
+      "Dispense action handler @regression @tier2 clamp alone refuses a second ownership dispense (single-shot backstop)",
+      "Dispense action handler @regression @tier2 clamp: floors a fractional capacity",
+      "Dispense action handler @regression @tier2 clamp: lands exactly on capacity, not merely under it",
+      "Dispense action handler @regression @tier2 clamp: runs for an ownership dispenser and still settles the first fill",
+      "Dispense action handler @regression @tier2 clamp: skipped for a balance dispenser with no GIVE_AMOUNT",
+      "Dispense action handler @regression @tier2 give_amount calculated from multiplier (2x payment)",
+      "Dispense action handler @regression @tier2 multiplier capped so give_amount does not exceed GIVE_REMAINING",
+      "Dispense action handler @regression @tier2 multiplier of zero (insufficient funds after loop) returns invalid",
+      "Dispense action handler @regression @tier2 no matching dispensers: deleteActionIndex called, createDispense not called",
+      "Dispense action handler @regression @tier2 valid dispense: createDispense called with status valid"
     ],
     "cc57b93bcffa6440": [
       "status-table composite (status_id, action_index) index @regression a dated mode=auto migration adds the composite and drops the single-column status_id for all three tables",
@@ -14212,6 +14114,12 @@
       "HubClient pushPriceRound() propagates rejection from _call (not swallowed)",
       "HubClient pushPriceRound() returns immediately without calling _call when not enabled"
     ],
+    "b9dd4be9490dbf4e": [
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 a registry row is a frozen plain object with the nine parsed fields",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the 109 time-table keys the manifest lists",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value a fresh class build under the stub carries",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value the manifest resolves for that key"
+    ],
     "df674cd2b0f33ed5": [
       "consensus/vm_lint_optional_chain_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
       "consensus/vm_lint_optional_chain_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
@@ -14582,16 +14490,6 @@
       "state_hash poll-finalize class (VOTE flag-day, armed) @regression below threshold: state_hash is BLIND to the flip (the polls table is never even queried)",
       "state_hash poll-finalize class (VOTE flag-day, armed) @regression gate: regtest armed from genesis; mainnet/testnet armed per chain at real heights; coin-less lookup fail-inert",
       "state_hash poll-finalize class (VOTE flag-day, armed) @regression the poll and token activation maps carry identical heights (the two classes flip together)"
-    ],
-    "e411489fced259a6": [
-      "cross-chain offer list fold accepts a BigInt edit value",
-      "cross-chain offer list fold allows a non-zero edit after a zero edit",
-      "cross-chain offer list fold does not mutate the creation or edits",
-      "cross-chain offer list fold keeps creation lists when the offer is unedited",
-      "cross-chain offer list fold skips null, empty-string and non-numeric edit values",
-      "cross-chain offer list fold treats a non-array edit value as no edits",
-      "cross-chain offer list fold turns a zero edit into a detached null without falling back",
-      "cross-chain offer list fold uses the latest valid edit independently for each field"
     ],
     "e417dd810a751949": [
       "Database pubkey methods @regression @tier1 getOrCreatePubkeyId normalizes to lowercase and truncates to 64 chars",
@@ -15087,6 +14985,11 @@
       "output_fanout.isPerOutputSettlementRow() @regression @tier1 classifies empty / null / whitespace data as a settlement (DISPENSE) row",
       "output_fanout.isPerOutputSettlementRow() @regression @tier1 classifies other action data as NOT a settlement row"
     ],
+    "eb2291b08b12e74f": [
+      "tokens.bridged derives from applied xbridges rows @regression ignores refused locks and v4 burns",
+      "tokens.bridged derives from applied xbridges rows @regression rolled-back lock reads 0: is cleared when a rollback orphans the first applied lock, like a fresh replay",
+      "tokens.bridged derives from applied xbridges rows @regression stays set when only a later lock is orphaned"
+    ],
     "eb22a475c243774f": [
       "ATTEST batch federation reader @regression @tier1 executes the reader and rejects a failure-stamped head and an incomplete head",
       "ATTEST batch federation reader @regression @tier1 requires valid heads and complete publisher-scoped multi-wire batches",
@@ -15104,10 +15007,6 @@
       "stateCommitment.reportOrphanStats @regression @tier2 reports zero orphans when every node is reachable from the single retained root",
       "stateCommitment.reportOrphanStats @regression @tier2 returns all-zero for an empty store",
       "stateCommitment.reportOrphanStats @regression @tier2 stops the walk at maxNodes and flags the truncated figure as an estimate"
-    ],
-    "eb89e21438d117f3": [
-      "ROLLCALL base-rail regtest resolver matches the running parser @regression @tier1 agrees with regtestHeight on every accepted, refused and garbage input",
-      "ROLLCALL base-rail regtest resolver matches the running parser @regression @tier1 lands on the documented values, so agreement is not two copies of one mistake"
     ],
     "eb9942cb0a8ec157": [
       "bridged policy list leg planning creates a populated list when its pointer is null",
@@ -15456,11 +15355,6 @@
       "consensus/vm_lint_optional_chain_matches_vm: optional-chain activation parity @regression @tier1 keeps the indexer regtest activation at genesis",
       "consensus/vm_lint_optional_chain_matches_vm: optional-chain activation parity @regression @tier1 matches every VM mainnet and testnet activation"
     ],
-    "f30340cc58c06c7d": [
-      "Database._destructiveAutoStatement() DROP target @regression @tier1 flags a DROP of a backtick-quoted column named like a metadata keyword",
-      "Database._destructiveAutoStatement() DROP target @regression @tier1 flags a DROP whose target only starts with a keyword or cannot be read",
-      "Database._destructiveAutoStatement() DROP target @regression @tier1 keeps bare metadata-only DROP forms auto-eligible"
-    ],
     "f371a9f41529fe7a": [
       "Contract State Reorg: rollback of contract tables @regression @tier3 reorg below a DEPLOY clears contracts / stakes / deposits and restores balances"
     ],
@@ -15538,16 +15432,6 @@
       "Utility.computeOracleFee() - PRICE v1 oracle usage fee @regression returns a satoshi-precision result",
       "Utility.computeOracleFee() - PRICE v1 oracle usage fee @regression returns zero for a zero fee fraction",
       "Utility.computeOracleFee() - PRICE v1 oracle usage fee @regression returns zero for an empty escrow"
-    ],
-    "f425a62627f64fb8": [
-      "database union list resolution @regression @tier1 bounds every member at the requested block",
-      "database union list resolution @regression @tier1 merges distinct address members in UTF-8 byte order",
-      "database union list resolution @regression @tier1 preserves the legacy answers for an invalid stored type-3 row",
-      "database union list resolution @regression @tier1 reads member roots from the union head",
-      "database union list resolution @regression @tier1 resolves a valid union without a block context",
-      "database union list resolution @regression @tier1 resolves tick unions to ticks",
-      "database union list resolution @regression @tier1 returns the member type and validates an address union as type 2",
-      "database union list resolution @regression @tier1 takes the union member type from the lowest member root, whatever the row order"
     ],
     "f4d512605040b459": [
       "VM ledger-read loader: buildVmBalancesAndTokenInfo @regression @tier2 re-keys to nested symbol-keyed balances + loads tokenInfo, bounded by action_index"
@@ -15630,34 +15514,6 @@
       "hub mirror ready-frame ceilings for bridge_transfers and policy_snapshots @regression @tier1 policy_snapshots refuses the untrustworthy ceiling true (boolean)",
       "hub mirror ready-frame ceilings for bridge_transfers and policy_snapshots @regression @tier1 policy_snapshots refuses the untrustworthy ceiling {} (object)"
     ],
-    "f5f64f28d68dc118": [
-      "protocol_time #isProtocolTimeMtpActive is on for testnet only, with mainnet and regtest left on the raw stamp",
-      "protocol_time #isProtocolTimeMtpActive reads false for an unknown network rather than switching consensus by accident",
-      "protocol_time #medianTimePast does not replace an unusable entry inside the 11-block window with an older entry",
-      "protocol_time #medianTimePast drops unusable entries but still medians the rest",
-      "protocol_time #medianTimePast medians a short window rather than refusing, so a fresh chain still advances",
-      "protocol_time #medianTimePast returns null when nothing usable is supplied, so callers fall back to the raw stamp",
-      "protocol_time #medianTimePast takes the first 11 height-descending entries before sorting by timestamp",
-      "protocol_time #protocolTime exposes Bitcoin's 11-block span as the constant callers window on",
-      "protocol_time #protocolTime falls back to the raw stamp when MTP cannot be computed",
-      "protocol_time #protocolTime never exceeds the raw stamp, even if the median somehow sits above it",
-      "protocol_time #protocolTime preserves the false sentinel for an unresolvable block_time",
-      "protocol_time #protocolTime returns MTP on a switched network",
-      "protocol_time #protocolTime returns the raw stamp untouched on an unswitched network",
-      "protocol_time #stampProtocolTime is a no-op in value terms on an unswitched network, where protocol time IS the raw stamp",
-      "protocol_time #stampProtocolTime leaves rows untouched for an unresolvable time rather than writing a sentinel",
-      "protocol_time #stampProtocolTime mutates in place rather than returning a copy, since fan-out collapse already ran",
-      "protocol_time #stampProtocolTime replaces the decoder raw stamp on every row so the action path reads protocol time",
-      "protocol_time #stampProtocolTime skips non-object rows instead of decorating them",
-      "protocol_time #stampProtocolTime tolerates an empty or absent block without throwing on the consensus path",
-      "protocol_time XChainIndexer wiring (ratchet) persists and publishes the RAW stamp, not protocol time",
-      "protocol_time XChainIndexer wiring (ratchet) re-stamps the decoder transaction rows with protocol time",
-      "protocol_time XChainIndexer wiring (ratchet) resolves both clocks from the decoder rather than inventing one",
-      "protocol_time median-time-past on real testnet4 data confirms the 1201s minimum-difficulty spacing the fixture depends on",
-      "protocol_time median-time-past on real testnet4 data lands well BEHIND the newest stamp, which is what lets a barrier clear",
-      "protocol_time median-time-past on real testnet4 data stays behind wall clock even when the block itself is stamped in the FUTURE",
-      "protocol_time span constant is Bitcoin's 11"
-    ],
     "f683df13da87d47c": [
       "Send isActionAllowed memoization @regression multi-send same tick to two recipients: SOURCE check hoisted once, TICK check memoized once",
       "Send isActionAllowed memoization @regression sleeping SOURCE still rejects every leg (hoist did not drop the gate)",
@@ -15679,6 +15535,17 @@
       "db/list_share_mirrors SQL contract reads foreign finalized snapshot heads from the MIRROR database",
       "db/list_share_mirrors SQL contract reads one finalized sequence from the MIRROR database",
       "db/list_share_mirrors SQL contract writes the LOCAL mirror mapping with its rollback keys"
+    ],
+    "82bf65744414fc76": [
+      "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
+      "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
+      "consensus parameters are frozen (track 8 guard) @regression the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp",
+      "consensus parameters are frozen (track 8 guard) @regression vmFailureStatus maps every VM error into the frozen closed token set"
     ],
     "f722342a7f6bc67a": [
       "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 activation-module predicate mainnet is ARMED AT GENESIS by the 2026-09-09 ruling, off the reference chain",
@@ -15877,6 +15744,23 @@
       "ANCHOR v3 section walk refuses a duplicated chain at the later section",
       "ANCHOR v3 section walk refuses a header snapshot above the section maximum",
       "ANCHOR v3 section walk walks fixture sections in wire order"
+    ],
+    "15886c85ba09d760": [
+      "armed_map/manifest: collectRows appends the fifteen VM mirror rows with the VM values",
+      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
+      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
+      "armed_map/manifest: collectRows carries the three row families the design names",
+      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
+      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
+      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
+      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
+      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
+      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
+      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
+      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
+      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
+      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the fifteen VM mirror rows",
+      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "faf6839dab970518": [
       "bridge_settle: the XBRIDGE settle pass deterministic checkpoint selection admits a mirrored row only once its own quorum re-verifies",
@@ -16216,20 +16100,12 @@
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amount is a plain 8dp decimal STRING",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amounts sum to exactly what the pool was drained by",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the v0 FIAT path records its fill price too"
-    ],
-    "fffccbf23e9febd9": [
-      "Hash coverage guard @regression content-parity coverage declaration every streamed table is content-parity covered unless it is in one of the two declared classes",
-      "Hash coverage guard @regression content-parity coverage declaration excluded columns name real, deliberately-unreplicated values",
-      "Hash coverage guard @regression content-parity coverage declaration in-place parity columns stay declared apart and match every order_matches UPDATE",
-      "Hash coverage guard @regression content-parity coverage declaration the mutable exclusion class is derived from the state_hash declarations, not hand-listed",
-      "Hash coverage guard @regression content-parity coverage declaration the operator carve-outs are exactly markets (indexer) and dispensers (decoder)",
-      "Hash coverage guard @regression content-parity coverage declaration the two reorg-scoped lookups bound by block; the inert ones bound by id"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 1210,
-      "titleCount": 12630,
+      "fileCount": 1191,
+      "titleCount": 12537,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16239,8 +16115,7 @@
         "test/security/http_surface_security.test.js": "72ce3f8a125828f4",
         "test/unit/XChainIndexer/hub_config_poll.test.js": "3a74a7a67892c521",
         "test/unit/action_dispatch/action_formats.test.js": "66540a53e698b285",
-        "test/unit/action_dispatch/action_index_names_manifest.test.js": "24ce1f53e2e2c1bf",
-        "test/unit/action_dispatch/action_manifest_conformance.test.js": "0d6a5c7e0ca3a674",
+        "test/unit/action_dispatch/action_manifest_conformance.test.js": "0b9782a7fca562f7",
         "test/unit/action_dispatch/actions.test.js": "c527ede4c08c1c9d",
         "test/unit/action_dispatch/actions.test/process_action_dispatch.test.js": "b45c9bbea3117e41",
         "test/unit/action_dispatch/actions.test/process_transaction_parsing.test.js": "25fa87aa685ad332",
@@ -16302,7 +16177,6 @@
         "test/unit/actions/attest/attest_batch_wire.test.js": "22448e50f1c92d71",
         "test/unit/actions/attest/attest_batch_wire.test/batch_wire_integrity.test.js": "97bf913f9dd24731",
         "test/unit/actions/attest/attest_batch_wire_era.test.js": "e0d973ff4aec540d",
-        "test/unit/actions/attest/attest_relay_fee_settle.test.js": "adb5316356f3bdf8",
         "test/unit/actions/attest/attest_relay_reject_slot.test.js": "bc9ce02cba3248b5",
         "test/unit/actions/attest/attest_response_applier.test.js": "5774b46381706d23",
         "test/unit/actions/attest/attest_response_applier.test/applier_pass.test.js": "73755c9a0427e7f1",
@@ -16339,7 +16213,7 @@
         "test/unit/actions/bridge/cross_settle.test/settlement.test.js": "99544f0869d50cad",
         "test/unit/actions/bridge/escrow_negation_parity.test.js": "dac737186345882a",
         "test/unit/actions/bridge/xbridge.test.js": "76ca2669ee2fe4c3",
-        "test/unit/actions/bridge/xbridge.test/token_bridged_rollback_parity.test.js": "2b9b1a4217e9148b",
+        "test/unit/actions/bridge/xbridge.test/token_bridged_rollback_parity.test.js": "eb2291b08b12e74f",
         "test/unit/actions/bridge/xbridge.test/v0_lock.test.js": "4cb701666150c77a",
         "test/unit/actions/bridge/xbridge.test/v1_burn.test.js": "6aa241fa8a3bc6e6",
         "test/unit/actions/bridge/xbridge.test/v3_lock.test.js": "ab44c3cb98ffce39",
@@ -16404,7 +16278,7 @@
         "test/unit/actions/market/coinpay.test/order_finalisation.test.js": "f0b2b5a7508e3997",
         "test/unit/actions/market/coinpay.test/roles_and_ownership.test.js": "beeabd8d231e087a",
         "test/unit/actions/market/coinpay_expire.test.js": "e238e8b94beedf64",
-        "test/unit/actions/market/dispense.test.js": "7f741fb793c49b56",
+        "test/unit/actions/market/dispense.test.js": "cc578e414009a460",
         "test/unit/actions/market/dispense.test/auto_close.test.js": "76c3e449cb5ec5c3",
         "test/unit/actions/market/dispense.test/fiat_pricing.test.js": "b98784bb1fb6c832",
         "test/unit/actions/market/dispense.test/lists.test.js": "9bc7fc9f3666e48b",
@@ -16495,7 +16369,6 @@
         "test/unit/actions/stake/sleep.test.js": "65fda33d23415561",
         "test/unit/actions/stake/stake.test.js": "c2b86ae1598a2164",
         "test/unit/actions/stake/stake.test/contract_targeted.test.js": "a7c95d85ef28bbad",
-        "test/unit/actions/stake/stake.test/delegated_signing_key_claim_gate_off.test.js": "5f8cffffeaeb4b00",
         "test/unit/actions/stake/stake.test/signing_key_and_top_up.test.js": "19dda650aa2acc96",
         "test/unit/actions/stake/stake_key_reuse.test.js": "b503b05170e4a27a",
         "test/unit/actions/stake/unstake.test.js": "680f2af85c82fa8c",
@@ -16561,7 +16434,6 @@
         "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "c4841dfff6c76d0b",
         "test/unit/actions/token/send.test/caret_pack_key.test.js": "8c38e904bee40cde",
         "test/unit/actions/token/send.test/gated_handoff_threshold.test.js": "e0e089fe173d451a",
-        "test/unit/actions/token/send.test/gated_totals_by_tick_id.test.js": "479c6eab99a84ee4",
         "test/unit/actions/token/send.test/sleeping_and_multi_send.test.js": "55813348732fc426",
         "test/unit/actions/token/send/send_action_allowed_memoization.test.js": "f683df13da87d47c",
         "test/unit/actions/token/send/send_gas_guard_fee.test.js": "556816bc2512244b",
@@ -16682,7 +16554,6 @@
         "test/unit/api/rpc/api_time_memo_isolation.test.js": "0ff526efc3f322da",
         "test/unit/api/rpc/api_time_memo_rollback.test.js": "75f822b2b3557722",
         "test/unit/api/rpc/attest_batches.test.js": "eb22a475c243774f",
-        "test/unit/api/rpc/bets_effective_lists.test.js": "9596efc9b76f58af",
         "test/unit/api/rpc/body_parse_rejection.test.js": "2dfd0abb78786c1e",
         "test/unit/api/rpc/controller.test.js": "7f911e818403fce9",
         "test/unit/api/rpc/getsharedlist.test.js": "9b17e07ece10663a",
@@ -16759,7 +16630,7 @@
         "test/unit/bridge/escrow_journal_writer.test/attribution_vectors.test.js": "07c18b24eea8ba07",
         "test/unit/bridge/escrow_journal_writer.test/journal_totals.test.js": "059aa0899d712398",
         "test/unit/bridge/issue/destroy_bridge_closures.test.js": "236d4672f067c253",
-        "test/unit/bridge/issue/issue_bridge_storage.test.js": "2ecbbb8d214daa59",
+        "test/unit/bridge/issue/issue_bridge_storage.test.js": "a9872ec09574171d",
         "test/unit/bridge/issue/xchain_btc_only_issue.test.js": "6e5d5732aa0d0c44",
         "test/unit/bridge/issue_bridge_namespace.test.js": "46de38a2323753b3",
         "test/unit/bridge/issue_bridge_optin.test.js": "78f4d92179b7b8ca",
@@ -16837,7 +16708,6 @@
         "test/unit/consensus/equivocation/equiv_price_canonical.test.js": "a324b1eb4aa93061",
         "test/unit/consensus/equivocation/equiv_xcall_canonical.test.js": "93b9e527a571fc32",
         "test/unit/consensus/equivocation/equivocation_header.test.js": "3ad67665f530b06c",
-        "test/unit/consensus/gates/mirror_admission_margin_boundary.test.js": "5ad6c4b0c28cb058",
         "test/unit/consensus/list_rematch/plan.test.js": "15d8cc2e94c0564c",
         "test/unit/consensus/list_share/list_meta_hash.test.js": "50ed779f04dda399",
         "test/unit/consensus/list_share/list_share_engine_tag.test.js": "3eebd9d73e50d1ab",
@@ -16846,8 +16716,7 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/protocol_address_roles.test.js": "4419d7ba08b430c7",
-        "test/unit/consensus/protocol_time.test.js": "f5f64f28d68dc118",
-        "test/unit/consensus/protocol_time_caller_order.test.js": "7891fe7146b2d1e7",
+        "test/unit/consensus/protocol_time.test.js": "92dde67ddb12e9ab",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/rollcall_close/absence_streak.test.js": "98d8992dfae50cef",
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
@@ -16882,10 +16751,9 @@
         "test/unit/contracts/controller_guard_call_depth.test.js": "9e539754d3054c30",
         "test/unit/contracts/controller_guard_emission_hash.test.js": "b0ff748112af56ad",
         "test/unit/contracts/controller_guard_leg_savepoints.test.js": "bd2af3559cf5f2c6",
-        "test/unit/contracts/controller_guard_returnvalue.test.js": "1734825922f9caa5",
+        "test/unit/contracts/controller_guard_returnvalue.test.js": "34d715ef44d3072a",
         "test/unit/contracts/controller_policy_layer.test.js": "8fabcde2ac147e88",
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
-        "test/unit/contracts/emission_bounds_vm_parity.test.js": "275cd1720c6c0c1f",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/stake_snapshot_strings.test.js": "a0a533092c7a2e98",
@@ -16976,7 +16844,7 @@
         "test/unit/db/lists/list_sharing_reads.test.js": "bbecc628447a4958",
         "test/unit/db/lists/list_tick_coin_storage.test.js": "4f07be4570193dec",
         "test/unit/db/lists/list_union_merge.test.js": "4695d3e53dcc1836",
-        "test/unit/db/lists/list_union_resolution.test.js": "f425a62627f64fb8",
+        "test/unit/db/lists/list_union_resolution.test.js": "a8fd529766242add",
         "test/unit/db/markets/batch_settlement_value_ledger.test.js": "a2cbdae7c8a062e9",
         "test/unit/db/markets/batch_settlement_value_ledger.test/dispense.test.js": "cdabec58d0a50163",
         "test/unit/db/markets/batch_settlement_value_ledger.test/oracle_fees.test.js": "60ecaf4660902577",
@@ -17000,8 +16868,6 @@
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_admission_schema.test.js": "1d3cfa8b4efea4a2",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "c37f41bc4d4f28ce",
-        "test/unit/db/orders/cross_chain_offer_lists.test.js": "87976ddf94e91add",
-        "test/unit/db/orders/cross_chain_offer_lists_fold.test.js": "e411489fced259a6",
         "test/unit/db/prices/landed_bound_clause.test.js": "d5f3085637164b79",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "e984d925c06ceb59",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
@@ -17073,7 +16939,7 @@
         "test/unit/hub/client/hub_rate_limit.test.js": "4bb859f5accff2bb",
         "test/unit/hub/client/hub_selector.test.js": "5eda3afa01cb5509",
         "test/unit/hub/hash_coverage.test.js": "74513e474bce99e9",
-        "test/unit/hub/hash_coverage.test/content_parity.test.js": "fffccbf23e9febd9",
+        "test/unit/hub/hash_coverage.test/content_parity.test.js": "3c50f0d4dfee3daa",
         "test/unit/hub/hub_client.test.js": "0b3279bc0c8312d7",
         "test/unit/hub/hub_client.test/address_source.test.js": "517182bfca3b695a",
         "test/unit/hub/hub_client.test/call_http.test.js": "a50f10fa61307bbf",
@@ -17207,8 +17073,6 @@
         "test/unit/migration/migration_runner.test/backdated_rename.test.js": "596a4924f6807b64",
         "test/unit/migration/migration_runner.test/checksum_guards.test.js": "4972b9a44736eba0",
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "226ad08750f047f5",
-        "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
-        "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
         "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
@@ -17239,12 +17103,10 @@
         "test/unit/price/db_oracle_preload_monotone_key.test.js": "35e26beb860c4323",
         "test/unit/price/db_oracle_round_window.test.js": "547b276e75268fee",
         "test/unit/price/db_oracle_snapshot_age_causality.test.js": "54fd86289db48f29",
-        "test/unit/price/db_oracle_snapshot_age_seconds.test.js": "34a24a8be0a149e4",
         "test/unit/price/db_oracle_stale_round_visibility.test.js": "4549c1e4b7ebd824",
         "test/unit/price/db_oracle_strict_price_reads.test.js": "219281ee0bdd5eb8",
         "test/unit/price/db_price_capability_off_btc.test.js": "c562c3c3096c665e",
         "test/unit/price/get_latest_price_batch_landed.test.js": "05993a17e695dbea",
-        "test/unit/price/oracle_snapshot_age_seconds_query.test.js": "17c33ccc3e9829c6",
         "test/unit/price/price_admission_shipped_testnet_boundary.test.js": "70b517652d10a921",
         "test/unit/price/price_admission_wire_carrier.test.js": "1fa17ac9627ebc9d",
         "test/unit/price/price_admission_wire_carrier.test/additional_batch_guards.test.js": "90d17d67d210861e",
@@ -17326,11 +17188,9 @@
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
-        "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "ad70fe1e6bd73dda",
         "test/unit/repo_guards/sibling_checkout.test.js": "595bbb01e039e4ad",
         "test/unit/repo_guards/sibling_coverage.test.js": "d8d1e52267ea606f",
         "test/unit/repo_guards/vm_execute_network.test.js": "7413c1c4c27e27e9",
-        "test/unit/rewards/create_validator_reward_callsites.test.js": "558613a38e2b05ce",
         "test/unit/rollback/archive_reset_predicate.test.js": "dc2dd859a265cfae",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/db_is_reorg_halted.test.js": "f7df01ef630b4c84",
@@ -17348,7 +17208,7 @@
         "test/unit/rollback/rollback_attest_batch_retraction.test.js": "68011ffa60463425",
         "test/unit/rollback/rollback_attestation_stats.test.js": "14805a79dfc17ca6",
         "test/unit/rollback/rollback_collect_capture_race.test.js": "85fb363232b73584",
-        "test/unit/rollback/rollback_coverage.test.js": "af0d4123dd5c7516",
+        "test/unit/rollback/rollback_coverage.test.js": "7b40431f770d5c5b",
         "test/unit/rollback/rollback_coverage.test/slash_restore_twin.test.js": "7b64478cdfbc1bf7",
         "test/unit/rollback/rollback_delegation_deactivation.test.js": "bc7285313b3f26ce",
         "test/unit/rollback/rollback_dry_run_interleave.test.js": "c3a3d5692dd9f309",
@@ -17365,7 +17225,6 @@
         "test/unit/rollcall/rollcall_gates_filter.test/call_sites.test.js": "6bcd0a7ad37149c4",
         "test/unit/rollcall/rollcall_gates_regtest_parity.test.js": "64d0322eb7068e3a",
         "test/unit/rollcall/rollcall_proof_client.test.js": "f5240c5a6e5448af",
-        "test/unit/rollcall/rollcall_regtest_parity.test.js": "eb89e21438d117f3",
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
         "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
@@ -17396,8 +17255,7 @@
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/archive_match_count_class.test.js": "8a8d0afa6dccfafa",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
-        "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "c52b47b60b51b013",
-        "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
+        "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "3166a60ac7c22eba",
         "test/unit/state_commitment/state_hash/state_hash_bet_status.test.js": "e285cca529713787",
         "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "93c91f292d24175d",
         "test/unit/state_commitment/state_hash/state_hash_poll_finalize.test.js": "e3ed0f90fd114dfc",
@@ -17432,7 +17290,7 @@
         "test/unit/xchain_indexer/indexer_poll_heartbeat.test.js": "8c80af2e77bc435a",
         "test/unit/xchain_indexer/mirror_admission_legacy_progress.test.js": "4ee376dc5f1c5cb0",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
-        "test/unit/xchain_indexer/parse_exception_wedge.test.js": "4056956385f780ce",
+        "test/unit/xchain_indexer/parse_exception_wedge.test.js": "64fed267e672fcf2",
         "test/unit/xchain_indexer/poll_early_decide_watermark.test.js": "998eea1b7fd2bc86",
         "test/unit/xchain_indexer/resolve_btc_chain_id_midchain.test.js": "f8d27657ca37a414",
         "test/unit/xchain_indexer/stall_health.test.js": "b0a6e240199ff952",
@@ -17803,8 +17661,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 920,
-      "titleCount": 9991,
+      "fileCount": 906,
+      "titleCount": 9930,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -17857,8 +17715,7 @@
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
         "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
         "test/smoke/connected/lifecycle.test.js": "7c6d8b564e036d3e",
-        "test/unit/action_dispatch/action_index_names_manifest.test.js": "24ce1f53e2e2c1bf",
-        "test/unit/action_dispatch/action_manifest_conformance.test.js": "0d6a5c7e0ca3a674",
+        "test/unit/action_dispatch/action_manifest_conformance.test.js": "0b9782a7fca562f7",
         "test/unit/action_dispatch/actions.test.js": "c527ede4c08c1c9d",
         "test/unit/action_dispatch/actions.test/process_action_dispatch.test.js": "b45c9bbea3117e41",
         "test/unit/action_dispatch/actions.test/process_transaction_parsing.test.js": "25fa87aa685ad332",
@@ -17902,7 +17759,6 @@
         "test/unit/actions/attest/attest_batch_wire.test.js": "22448e50f1c92d71",
         "test/unit/actions/attest/attest_batch_wire.test/batch_wire_integrity.test.js": "97bf913f9dd24731",
         "test/unit/actions/attest/attest_batch_wire_era.test.js": "e0d973ff4aec540d",
-        "test/unit/actions/attest/attest_relay_fee_settle.test.js": "adb5316356f3bdf8",
         "test/unit/actions/attest/attest_relay_reject_slot.test.js": "bc9ce02cba3248b5",
         "test/unit/actions/attest/attest_response_applier.test.js": "5774b46381706d23",
         "test/unit/actions/attest/attest_response_applier.test/applier_pass.test.js": "73755c9a0427e7f1",
@@ -17936,7 +17792,7 @@
         "test/unit/actions/bridge/cross_settle.test/settlement.test.js": "99544f0869d50cad",
         "test/unit/actions/bridge/escrow_negation_parity.test.js": "dac737186345882a",
         "test/unit/actions/bridge/xbridge.test.js": "76ca2669ee2fe4c3",
-        "test/unit/actions/bridge/xbridge.test/token_bridged_rollback_parity.test.js": "2b9b1a4217e9148b",
+        "test/unit/actions/bridge/xbridge.test/token_bridged_rollback_parity.test.js": "eb2291b08b12e74f",
         "test/unit/actions/bridge/xbridge.test/v0_lock.test.js": "4cb701666150c77a",
         "test/unit/actions/bridge/xbridge.test/v1_burn.test.js": "6aa241fa8a3bc6e6",
         "test/unit/actions/bridge/xbridge.test/v3_lock.test.js": "ab44c3cb98ffce39",
@@ -17991,7 +17847,7 @@
         "test/unit/actions/market/coinpay.test/order_finalisation.test.js": "f0b2b5a7508e3997",
         "test/unit/actions/market/coinpay.test/roles_and_ownership.test.js": "beeabd8d231e087a",
         "test/unit/actions/market/coinpay_expire.test.js": "e238e8b94beedf64",
-        "test/unit/actions/market/dispense.test.js": "7f741fb793c49b56",
+        "test/unit/actions/market/dispense.test.js": "cc578e414009a460",
         "test/unit/actions/market/dispense.test/auto_close.test.js": "76c3e449cb5ec5c3",
         "test/unit/actions/market/dispense.test/fiat_pricing.test.js": "b98784bb1fb6c832",
         "test/unit/actions/market/dispense.test/lists.test.js": "9bc7fc9f3666e48b",
@@ -18074,7 +17930,6 @@
         "test/unit/actions/stake/sleep.test.js": "65fda33d23415561",
         "test/unit/actions/stake/stake.test.js": "c2b86ae1598a2164",
         "test/unit/actions/stake/stake.test/contract_targeted.test.js": "a7c95d85ef28bbad",
-        "test/unit/actions/stake/stake.test/delegated_signing_key_claim_gate_off.test.js": "5f8cffffeaeb4b00",
         "test/unit/actions/stake/stake.test/signing_key_and_top_up.test.js": "19dda650aa2acc96",
         "test/unit/actions/stake/stake_key_reuse.test.js": "b503b05170e4a27a",
         "test/unit/actions/stake/unstake.test.js": "680f2af85c82fa8c",
@@ -18139,7 +17994,6 @@
         "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "c4841dfff6c76d0b",
         "test/unit/actions/token/send.test/caret_pack_key.test.js": "8c38e904bee40cde",
         "test/unit/actions/token/send.test/gated_handoff_threshold.test.js": "e0e089fe173d451a",
-        "test/unit/actions/token/send.test/gated_totals_by_tick_id.test.js": "479c6eab99a84ee4",
         "test/unit/actions/token/send.test/sleeping_and_multi_send.test.js": "55813348732fc426",
         "test/unit/actions/token/send/send_action_allowed_memoization.test.js": "f683df13da87d47c",
         "test/unit/actions/token/send/send_gas_guard_fee.test.js": "556816bc2512244b",
@@ -18263,7 +18117,7 @@
         "test/unit/bridge/escrow_journal_writer.test/attribution_vectors.test.js": "07c18b24eea8ba07",
         "test/unit/bridge/escrow_journal_writer.test/journal_totals.test.js": "059aa0899d712398",
         "test/unit/bridge/issue/destroy_bridge_closures.test.js": "236d4672f067c253",
-        "test/unit/bridge/issue/issue_bridge_storage.test.js": "2ecbbb8d214daa59",
+        "test/unit/bridge/issue/issue_bridge_storage.test.js": "a9872ec09574171d",
         "test/unit/bridge/issue/xchain_btc_only_issue.test.js": "6e5d5732aa0d0c44",
         "test/unit/bridge/issue_bridge_namespace.test.js": "46de38a2323753b3",
         "test/unit/bridge/issue_bridge_optin.test.js": "78f4d92179b7b8ca",
@@ -18322,10 +18176,9 @@
         "test/unit/contracts/controller_guard_call_depth.test.js": "9e539754d3054c30",
         "test/unit/contracts/controller_guard_emission_hash.test.js": "b0ff748112af56ad",
         "test/unit/contracts/controller_guard_leg_savepoints.test.js": "bd2af3559cf5f2c6",
-        "test/unit/contracts/controller_guard_returnvalue.test.js": "1734825922f9caa5",
+        "test/unit/contracts/controller_guard_returnvalue.test.js": "34d715ef44d3072a",
         "test/unit/contracts/controller_policy_layer.test.js": "8fabcde2ac147e88",
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
-        "test/unit/contracts/emission_bounds_vm_parity.test.js": "275cd1720c6c0c1f",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
@@ -18392,7 +18245,7 @@
         "test/unit/db/ledger/token_gate_sleep_scope.test.js": "adebc0c0961d4826",
         "test/unit/db/lists/list_at_block_legacy_chain_bound.test.js": "ed9f6b845c9ad063",
         "test/unit/db/lists/list_tick_coin_storage.test.js": "4f07be4570193dec",
-        "test/unit/db/lists/list_union_resolution.test.js": "f425a62627f64fb8",
+        "test/unit/db/lists/list_union_resolution.test.js": "a8fd529766242add",
         "test/unit/db/markets/batch_settlement_value_ledger.test.js": "a2cbdae7c8a062e9",
         "test/unit/db/markets/batch_settlement_value_ledger.test/dispense.test.js": "cdabec58d0a50163",
         "test/unit/db/markets/batch_settlement_value_ledger.test/oracle_fees.test.js": "60ecaf4660902577",
@@ -18472,7 +18325,7 @@
         "test/unit/hub/barrier_hold_ceiling.test/indexer_reaction.test.js": "0c9639c1ae856a56",
         "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js": "e8f38215ae3e6079",
         "test/unit/hub/hash_coverage.test.js": "74513e474bce99e9",
-        "test/unit/hub/hash_coverage.test/content_parity.test.js": "fffccbf23e9febd9",
+        "test/unit/hub/hash_coverage.test/content_parity.test.js": "3c50f0d4dfee3daa",
         "test/unit/hub/hub_config_staleness.test.js": "e114e1b97d1caeb4",
         "test/unit/hub/hub_db_sync/barriers/attest_waiter_self_heal.test.js": "cc91537bca695659",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
@@ -18546,8 +18399,6 @@
         "test/unit/migration/migration_runner.test/backdated_rename.test.js": "596a4924f6807b64",
         "test/unit/migration/migration_runner.test/checksum_guards.test.js": "4972b9a44736eba0",
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "226ad08750f047f5",
-        "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
-        "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
         "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
@@ -18574,12 +18425,10 @@
         "test/unit/price/db_oracle_preload_monotone_key.test.js": "35e26beb860c4323",
         "test/unit/price/db_oracle_round_window.test.js": "547b276e75268fee",
         "test/unit/price/db_oracle_snapshot_age_causality.test.js": "54fd86289db48f29",
-        "test/unit/price/db_oracle_snapshot_age_seconds.test.js": "34a24a8be0a149e4",
         "test/unit/price/db_oracle_stale_round_visibility.test.js": "4549c1e4b7ebd824",
         "test/unit/price/db_oracle_strict_price_reads.test.js": "219281ee0bdd5eb8",
         "test/unit/price/db_price_capability_off_btc.test.js": "c562c3c3096c665e",
         "test/unit/price/get_latest_price_batch_landed.test.js": "05993a17e695dbea",
-        "test/unit/price/oracle_snapshot_age_seconds_query.test.js": "17c33ccc3e9829c6",
         "test/unit/price/price_admission_shipped_testnet_boundary.test.js": "70b517652d10a921",
         "test/unit/price/price_barrier_btc_time_coverage.test.js": "fda26087725f5fb7",
         "test/unit/price/price_barrier_fiat_decoupling.test.js": "af6ab63739fb0ecf",
@@ -18643,8 +18492,6 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
-        "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "ad70fe1e6bd73dda",
-        "test/unit/rewards/create_validator_reward_callsites.test.js": "558613a38e2b05ce",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/rollback.test.js": "147635c74f2bf70e",
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
@@ -18657,7 +18504,7 @@
         "test/unit/rollback/rollback_attest_batch_head_reset.test.js": "2a0df26fd3c8d653",
         "test/unit/rollback/rollback_attestation_stats.test.js": "14805a79dfc17ca6",
         "test/unit/rollback/rollback_collect_capture_race.test.js": "85fb363232b73584",
-        "test/unit/rollback/rollback_coverage.test.js": "af0d4123dd5c7516",
+        "test/unit/rollback/rollback_coverage.test.js": "7b40431f770d5c5b",
         "test/unit/rollback/rollback_coverage.test/slash_restore_twin.test.js": "7b64478cdfbc1bf7",
         "test/unit/rollback/rollback_delegation_deactivation.test.js": "bc7285313b3f26ce",
         "test/unit/rollback/rollback_dry_run_interleave.test.js": "c3a3d5692dd9f309",
@@ -18668,7 +18515,6 @@
         "test/unit/rollcall/rollcall_gates_filter.test.js": "caf86af59c565c3e",
         "test/unit/rollcall/rollcall_gates_filter.test/call_sites.test.js": "6bcd0a7ad37149c4",
         "test/unit/rollcall/rollcall_gates_regtest_parity.test.js": "64d0322eb7068e3a",
-        "test/unit/rollcall/rollcall_regtest_parity.test.js": "eb89e21438d117f3",
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
         "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
@@ -18695,8 +18541,7 @@
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
-        "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "c52b47b60b51b013",
-        "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
+        "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "3166a60ac7c22eba",
         "test/unit/state_commitment/state_hash/state_hash_bet_status.test.js": "e285cca529713787",
         "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "93c91f292d24175d",
         "test/unit/state_commitment/state_hash/state_hash_poll_finalize.test.js": "e3ed0f90fd114dfc",
@@ -18729,8 +18574,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 405,
-      "titleCount": 4949,
+      "fileCount": 395,
+      "titleCount": 4912,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
@@ -18804,7 +18649,6 @@
         "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "c4841dfff6c76d0b",
         "test/unit/actions/token/send.test/caret_pack_key.test.js": "8c38e904bee40cde",
         "test/unit/actions/token/send.test/gated_handoff_threshold.test.js": "e0e089fe173d451a",
-        "test/unit/actions/token/send.test/gated_totals_by_tick_id.test.js": "479c6eab99a84ee4",
         "test/unit/actions/token/send.test/sleeping_and_multi_send.test.js": "55813348732fc426",
         "test/unit/actions/token/send/send_gas_guard_fee.test.js": "556816bc2512244b",
         "test/unit/actions/token/uncapped_max_supply.test.js": "40d8afc9cd271bab",
@@ -18871,8 +18715,7 @@
         "test/unit/contracts/controller_guard_call_depth.test.js": "9e539754d3054c30",
         "test/unit/contracts/controller_guard_emission_hash.test.js": "b0ff748112af56ad",
         "test/unit/contracts/controller_guard_leg_savepoints.test.js": "bd2af3559cf5f2c6",
-        "test/unit/contracts/controller_guard_returnvalue.test.js": "1734825922f9caa5",
-        "test/unit/contracts/emission_bounds_vm_parity.test.js": "275cd1720c6c0c1f",
+        "test/unit/contracts/controller_guard_returnvalue.test.js": "34d715ef44d3072a",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
@@ -18928,7 +18771,7 @@
         "test/unit/db/ledger/lock_null_prior_unset.test.js": "6dcc6a046f0abfb6",
         "test/unit/db/ledger/token_gate_sleep_scope.test.js": "adebc0c0961d4826",
         "test/unit/db/lists/list_at_block_legacy_chain_bound.test.js": "ed9f6b845c9ad063",
-        "test/unit/db/lists/list_union_resolution.test.js": "f425a62627f64fb8",
+        "test/unit/db/lists/list_union_resolution.test.js": "a8fd529766242add",
         "test/unit/db/markets/batch_settlement_value_ledger.test.js": "a2cbdae7c8a062e9",
         "test/unit/db/markets/batch_settlement_value_ledger.test/dispense.test.js": "cdabec58d0a50163",
         "test/unit/db/markets/batch_settlement_value_ledger.test/oracle_fees.test.js": "60ecaf4660902577",
@@ -19040,8 +18883,6 @@
         "test/unit/migration/migration_runner.test/backdated_rename.test.js": "596a4924f6807b64",
         "test/unit/migration/migration_runner.test/checksum_guards.test.js": "4972b9a44736eba0",
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "226ad08750f047f5",
-        "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
-        "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
         "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
@@ -19060,11 +18901,9 @@
         "test/unit/price/db_oracle_preload_monotone_key.test.js": "35e26beb860c4323",
         "test/unit/price/db_oracle_round_window.test.js": "547b276e75268fee",
         "test/unit/price/db_oracle_snapshot_age_causality.test.js": "54fd86289db48f29",
-        "test/unit/price/db_oracle_snapshot_age_seconds.test.js": "34a24a8be0a149e4",
         "test/unit/price/db_oracle_stale_round_visibility.test.js": "4549c1e4b7ebd824",
         "test/unit/price/db_oracle_strict_price_reads.test.js": "219281ee0bdd5eb8",
         "test/unit/price/get_latest_price_batch_landed.test.js": "05993a17e695dbea",
-        "test/unit/price/oracle_snapshot_age_seconds_query.test.js": "17c33ccc3e9829c6",
         "test/unit/price/price_barrier_btc_time_coverage.test.js": "fda26087725f5fb7",
         "test/unit/price/price_barrier_fiat_decoupling.test.js": "af6ab63739fb0ecf",
         "test/unit/price/snapshot_age_caller_inventory.test.js": "30f105c9afedac86",
@@ -19102,15 +18941,12 @@
         "test/unit/recovery/recovery_reward_derive_block.test.js": "bd0736b33dc88530",
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
-        "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "ad70fe1e6bd73dda",
-        "test/unit/rewards/create_validator_reward_callsites.test.js": "558613a38e2b05ce",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollcall/db_rollcall_gates.test.js": "97eac3517509ca4d",
         "test/unit/rollcall/db_rollcalls_public_reads.test.js": "3efb8f783fe36f87",
         "test/unit/rollcall/rollcall_gates_filter.test.js": "caf86af59c565c3e",
         "test/unit/rollcall/rollcall_gates_filter.test/call_sites.test.js": "764b8f52f5db8736",
         "test/unit/rollcall/rollcall_gates_regtest_parity.test.js": "64d0322eb7068e3a",
-        "test/unit/rollcall/rollcall_regtest_parity.test.js": "eb89e21438d117f3",
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
         "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
@@ -19140,8 +18976,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 920,
-      "titleCount": 9991,
+      "fileCount": 906,
+      "titleCount": 9930,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19194,8 +19030,7 @@
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
         "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
         "test/smoke/connected/lifecycle.test.js": "7c6d8b564e036d3e",
-        "test/unit/action_dispatch/action_index_names_manifest.test.js": "24ce1f53e2e2c1bf",
-        "test/unit/action_dispatch/action_manifest_conformance.test.js": "0d6a5c7e0ca3a674",
+        "test/unit/action_dispatch/action_manifest_conformance.test.js": "0b9782a7fca562f7",
         "test/unit/action_dispatch/actions.test.js": "c527ede4c08c1c9d",
         "test/unit/action_dispatch/actions.test/process_action_dispatch.test.js": "b45c9bbea3117e41",
         "test/unit/action_dispatch/actions.test/process_transaction_parsing.test.js": "25fa87aa685ad332",
@@ -19239,7 +19074,6 @@
         "test/unit/actions/attest/attest_batch_wire.test.js": "22448e50f1c92d71",
         "test/unit/actions/attest/attest_batch_wire.test/batch_wire_integrity.test.js": "97bf913f9dd24731",
         "test/unit/actions/attest/attest_batch_wire_era.test.js": "e0d973ff4aec540d",
-        "test/unit/actions/attest/attest_relay_fee_settle.test.js": "adb5316356f3bdf8",
         "test/unit/actions/attest/attest_relay_reject_slot.test.js": "bc9ce02cba3248b5",
         "test/unit/actions/attest/attest_response_applier.test.js": "5774b46381706d23",
         "test/unit/actions/attest/attest_response_applier.test/applier_pass.test.js": "73755c9a0427e7f1",
@@ -19273,7 +19107,7 @@
         "test/unit/actions/bridge/cross_settle.test/settlement.test.js": "99544f0869d50cad",
         "test/unit/actions/bridge/escrow_negation_parity.test.js": "dac737186345882a",
         "test/unit/actions/bridge/xbridge.test.js": "76ca2669ee2fe4c3",
-        "test/unit/actions/bridge/xbridge.test/token_bridged_rollback_parity.test.js": "2b9b1a4217e9148b",
+        "test/unit/actions/bridge/xbridge.test/token_bridged_rollback_parity.test.js": "eb2291b08b12e74f",
         "test/unit/actions/bridge/xbridge.test/v0_lock.test.js": "4cb701666150c77a",
         "test/unit/actions/bridge/xbridge.test/v1_burn.test.js": "6aa241fa8a3bc6e6",
         "test/unit/actions/bridge/xbridge.test/v3_lock.test.js": "ab44c3cb98ffce39",
@@ -19328,7 +19162,7 @@
         "test/unit/actions/market/coinpay.test/order_finalisation.test.js": "f0b2b5a7508e3997",
         "test/unit/actions/market/coinpay.test/roles_and_ownership.test.js": "beeabd8d231e087a",
         "test/unit/actions/market/coinpay_expire.test.js": "e238e8b94beedf64",
-        "test/unit/actions/market/dispense.test.js": "7f741fb793c49b56",
+        "test/unit/actions/market/dispense.test.js": "cc578e414009a460",
         "test/unit/actions/market/dispense.test/auto_close.test.js": "76c3e449cb5ec5c3",
         "test/unit/actions/market/dispense.test/fiat_pricing.test.js": "b98784bb1fb6c832",
         "test/unit/actions/market/dispense.test/lists.test.js": "9bc7fc9f3666e48b",
@@ -19411,7 +19245,6 @@
         "test/unit/actions/stake/sleep.test.js": "65fda33d23415561",
         "test/unit/actions/stake/stake.test.js": "c2b86ae1598a2164",
         "test/unit/actions/stake/stake.test/contract_targeted.test.js": "a7c95d85ef28bbad",
-        "test/unit/actions/stake/stake.test/delegated_signing_key_claim_gate_off.test.js": "5f8cffffeaeb4b00",
         "test/unit/actions/stake/stake.test/signing_key_and_top_up.test.js": "19dda650aa2acc96",
         "test/unit/actions/stake/stake_key_reuse.test.js": "b503b05170e4a27a",
         "test/unit/actions/stake/unstake.test.js": "680f2af85c82fa8c",
@@ -19476,7 +19309,6 @@
         "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "c4841dfff6c76d0b",
         "test/unit/actions/token/send.test/caret_pack_key.test.js": "8c38e904bee40cde",
         "test/unit/actions/token/send.test/gated_handoff_threshold.test.js": "e0e089fe173d451a",
-        "test/unit/actions/token/send.test/gated_totals_by_tick_id.test.js": "479c6eab99a84ee4",
         "test/unit/actions/token/send.test/sleeping_and_multi_send.test.js": "55813348732fc426",
         "test/unit/actions/token/send/send_action_allowed_memoization.test.js": "f683df13da87d47c",
         "test/unit/actions/token/send/send_gas_guard_fee.test.js": "556816bc2512244b",
@@ -19600,7 +19432,7 @@
         "test/unit/bridge/escrow_journal_writer.test/attribution_vectors.test.js": "07c18b24eea8ba07",
         "test/unit/bridge/escrow_journal_writer.test/journal_totals.test.js": "059aa0899d712398",
         "test/unit/bridge/issue/destroy_bridge_closures.test.js": "236d4672f067c253",
-        "test/unit/bridge/issue/issue_bridge_storage.test.js": "2ecbbb8d214daa59",
+        "test/unit/bridge/issue/issue_bridge_storage.test.js": "a9872ec09574171d",
         "test/unit/bridge/issue/xchain_btc_only_issue.test.js": "6e5d5732aa0d0c44",
         "test/unit/bridge/issue_bridge_namespace.test.js": "46de38a2323753b3",
         "test/unit/bridge/issue_bridge_optin.test.js": "78f4d92179b7b8ca",
@@ -19659,10 +19491,9 @@
         "test/unit/contracts/controller_guard_call_depth.test.js": "9e539754d3054c30",
         "test/unit/contracts/controller_guard_emission_hash.test.js": "b0ff748112af56ad",
         "test/unit/contracts/controller_guard_leg_savepoints.test.js": "bd2af3559cf5f2c6",
-        "test/unit/contracts/controller_guard_returnvalue.test.js": "1734825922f9caa5",
+        "test/unit/contracts/controller_guard_returnvalue.test.js": "34d715ef44d3072a",
         "test/unit/contracts/controller_policy_layer.test.js": "8fabcde2ac147e88",
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
-        "test/unit/contracts/emission_bounds_vm_parity.test.js": "275cd1720c6c0c1f",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
@@ -19729,7 +19560,7 @@
         "test/unit/db/ledger/token_gate_sleep_scope.test.js": "adebc0c0961d4826",
         "test/unit/db/lists/list_at_block_legacy_chain_bound.test.js": "ed9f6b845c9ad063",
         "test/unit/db/lists/list_tick_coin_storage.test.js": "4f07be4570193dec",
-        "test/unit/db/lists/list_union_resolution.test.js": "f425a62627f64fb8",
+        "test/unit/db/lists/list_union_resolution.test.js": "a8fd529766242add",
         "test/unit/db/markets/batch_settlement_value_ledger.test.js": "a2cbdae7c8a062e9",
         "test/unit/db/markets/batch_settlement_value_ledger.test/dispense.test.js": "cdabec58d0a50163",
         "test/unit/db/markets/batch_settlement_value_ledger.test/oracle_fees.test.js": "60ecaf4660902577",
@@ -19809,7 +19640,7 @@
         "test/unit/hub/barrier_hold_ceiling.test/indexer_reaction.test.js": "0c9639c1ae856a56",
         "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js": "e8f38215ae3e6079",
         "test/unit/hub/hash_coverage.test.js": "74513e474bce99e9",
-        "test/unit/hub/hash_coverage.test/content_parity.test.js": "fffccbf23e9febd9",
+        "test/unit/hub/hash_coverage.test/content_parity.test.js": "3c50f0d4dfee3daa",
         "test/unit/hub/hub_config_staleness.test.js": "e114e1b97d1caeb4",
         "test/unit/hub/hub_db_sync/barriers/attest_waiter_self_heal.test.js": "cc91537bca695659",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
@@ -19883,8 +19714,6 @@
         "test/unit/migration/migration_runner.test/backdated_rename.test.js": "596a4924f6807b64",
         "test/unit/migration/migration_runner.test/checksum_guards.test.js": "4972b9a44736eba0",
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "226ad08750f047f5",
-        "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
-        "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
         "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
@@ -19911,12 +19740,10 @@
         "test/unit/price/db_oracle_preload_monotone_key.test.js": "35e26beb860c4323",
         "test/unit/price/db_oracle_round_window.test.js": "547b276e75268fee",
         "test/unit/price/db_oracle_snapshot_age_causality.test.js": "54fd86289db48f29",
-        "test/unit/price/db_oracle_snapshot_age_seconds.test.js": "34a24a8be0a149e4",
         "test/unit/price/db_oracle_stale_round_visibility.test.js": "4549c1e4b7ebd824",
         "test/unit/price/db_oracle_strict_price_reads.test.js": "219281ee0bdd5eb8",
         "test/unit/price/db_price_capability_off_btc.test.js": "c562c3c3096c665e",
         "test/unit/price/get_latest_price_batch_landed.test.js": "05993a17e695dbea",
-        "test/unit/price/oracle_snapshot_age_seconds_query.test.js": "17c33ccc3e9829c6",
         "test/unit/price/price_admission_shipped_testnet_boundary.test.js": "70b517652d10a921",
         "test/unit/price/price_barrier_btc_time_coverage.test.js": "fda26087725f5fb7",
         "test/unit/price/price_barrier_fiat_decoupling.test.js": "af6ab63739fb0ecf",
@@ -19980,8 +19807,6 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
-        "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "ad70fe1e6bd73dda",
-        "test/unit/rewards/create_validator_reward_callsites.test.js": "558613a38e2b05ce",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/rollback.test.js": "147635c74f2bf70e",
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
@@ -19994,7 +19819,7 @@
         "test/unit/rollback/rollback_attest_batch_head_reset.test.js": "2a0df26fd3c8d653",
         "test/unit/rollback/rollback_attestation_stats.test.js": "14805a79dfc17ca6",
         "test/unit/rollback/rollback_collect_capture_race.test.js": "85fb363232b73584",
-        "test/unit/rollback/rollback_coverage.test.js": "af0d4123dd5c7516",
+        "test/unit/rollback/rollback_coverage.test.js": "7b40431f770d5c5b",
         "test/unit/rollback/rollback_coverage.test/slash_restore_twin.test.js": "7b64478cdfbc1bf7",
         "test/unit/rollback/rollback_delegation_deactivation.test.js": "bc7285313b3f26ce",
         "test/unit/rollback/rollback_dry_run_interleave.test.js": "c3a3d5692dd9f309",
@@ -20005,7 +19830,6 @@
         "test/unit/rollcall/rollcall_gates_filter.test.js": "caf86af59c565c3e",
         "test/unit/rollcall/rollcall_gates_filter.test/call_sites.test.js": "6bcd0a7ad37149c4",
         "test/unit/rollcall/rollcall_gates_regtest_parity.test.js": "64d0322eb7068e3a",
-        "test/unit/rollcall/rollcall_regtest_parity.test.js": "eb89e21438d117f3",
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
         "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
@@ -20032,8 +19856,7 @@
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
-        "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "c52b47b60b51b013",
-        "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
+        "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "3166a60ac7c22eba",
         "test/unit/state_commitment/state_hash/state_hash_bet_status.test.js": "e285cca529713787",
         "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "93c91f292d24175d",
         "test/unit/state_commitment/state_hash/state_hash_poll_finalize.test.js": "e3ed0f90fd114dfc",
