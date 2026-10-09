@@ -59,7 +59,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "260da1c6f73a0778d12d7c29c2922067be53559d28bd019e754a6fa2ee601080",
+      "hash": "2847f3f69ac4280baa67d70562c63f210cc6c3d27b1713bf92cbfb4601994c91",
       "twins": [
         "xchain-hub"
       ]
@@ -90,6 +90,13 @@
     "mirror_admission_activation": {
       "path": "src/consensus/gates/mirror_admission_gate.js",
       "hash": "d59a0c44b7d0dc1dbc5f1530d67e012a7dac33f1824960565a9788b75cff6a25",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
+    "mirror_admission_margin_activation": {
+      "path": "src/consensus/gates/mirror_admission_margin_gate.js",
+      "hash": "38facb6199e5cd9f0f2a1b30b2c4eeb1319db0a41dda191adaa3daca6a816fb9",
       "twins": [
         "xchain-hub"
       ]
@@ -130,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "3c7f6e5384f75a7f6ad47c3b4bb62b00ac88ed0aefece0ec978dc5baaff4bb20",
+      "hash": "3e1fb88ee52bc053396c6a5d4c4d32cac366bbfae9a65aa3931bf5a89266ceb2",
       "twins": []
     },
     "rollcall_activation": {
@@ -2022,9 +2029,30 @@
       "date": "2026-10-07"
     },
     {
+      "id": "mirror_admission_margin_activation",
+      "from": null,
+      "to": "38facb6199e5cd9f0f2a1b30b2c4eeb1319db0a41dda191adaa3daca6a816fb9",
+      "reason": "chain-specific mirror admission margin gate",
+      "date": "2026-10-08"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "260da1c6f73a0778d12d7c29c2922067be53559d28bd019e754a6fa2ee601080",
+      "to": "2847f3f69ac4280baa67d70562c63f210cc6c3d27b1713bf92cbfb4601994c91",
+      "reason": "add chain-specific mirror admission margin rows",
+      "date": "2026-10-08"
+    },
+    {
       "id": "protocol_changes",
       "from": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
-      "to": "3c7f6e5384f75a7f6ad47c3b4bb62b00ac88ed0aefece0ec978dc5baaff4bb20",
+      "to": "8366a1bd6c70b422f8d01976e8814b00389acd92f166912a19b29d95f71962d3",
+      "reason": "register ITER_SET_METER twin",
+      "date": "2026-10-09"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "8366a1bd6c70b422f8d01976e8814b00389acd92f166912a19b29d95f71962d3",
+      "to": "3e1fb88ee52bc053396c6a5d4c4d32cac366bbfae9a65aa3931bf5a89266ceb2",
       "reason": "add stake snapshot decimal strings registry row and flag times",
       "date": "2026-10-09"
     }
