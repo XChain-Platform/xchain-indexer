@@ -112,12 +112,12 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
     // pattern that execute accepts. The gate table is stubbed here, so these pin the
     // WIRING (flag present, resolved from that change, for this block), not the instant.
     describe('REST_PATTERN_METER deploy-lint gate threading (banned-rest)', function () {
-        it('threads exactly the seven enforce* flags validateSyntax reads', async function () {
+        it('threads exactly the eight enforce* flags validateSyntax reads', async function () {
             const { opts } = await optsFor('regtest', 'BTC', 0);
             assert.deepStrictEqual(Object.keys(opts).sort(), [
                 'enforceBannedAsync', 'enforceBannedGenerator', 'enforceBannedRest',
                 'enforceBannedWasm', 'enforceLintGlobalAlias', 'enforceLintHardening',
-                'enforceLintOptionalChain',
+                'enforceLintNestingDepth', 'enforceLintOptionalChain',
             ], 'deploy lint-flag option set drifted; an omitted flag reads as enforced in validateSyntax');
         });
 
