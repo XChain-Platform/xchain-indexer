@@ -9773,6 +9773,15 @@
       "Compacted ^<id> address resolves and validates through the handler (fix regression guard) @adversarial @tier1 a MALFORMED caret id (^1.5 float) is rejected as invalid format (never reaches the FK)",
       "Compacted ^<id> address resolves and validates through the handler (fix regression guard) @adversarial @tier1 control: a full real destination address MINTs valid"
     ],
+    "9bac686d9ec20d8e": [
+      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 every shared_rows_N.js carries the two markers once each, in order, with no require between them, and nothing but rows outside them",
+      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 no part file matches the carrier declaration scans (D38)",
+      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 the time-table parts hold exactly the 109 rows, in registration order, and nothing but rows",
+      "protocol_changes/assembler: the public export shape @regression @tier1 exports every own property it exported before the split, each constant equal to its part file, and only the registry API besides",
+      "protocol_changes/assembler: the public export shape @regression @tier1 registry, UNARMED and UNPINNED are present but non-enumerable, so the manifest sees no new data export",
+      "protocol_changes/assembler: the public export shape @regression @tier1 still constructs under the manifest stub with 109 prototype-free changes, equal to the registry rows",
+      "protocol_changes/assembler: the public export shape @regression @tier1 the entry ends no larger than HEAD and every part file fits the readability limits"
+    ],
     "9bc7d8a011e583d1": [
       "consensus_rules_digest: the coin-keyed bridge gate as shipped carries the cut's testnet heights as shipped, mainnet and both bare fallbacks on the sentinel, regtest at genesis",
       "consensus_rules_digest: the coin-keyed bridge gate is a shared gate the ROLLCALL GATES field carries, and resolves to a value",
@@ -11325,6 +11334,10 @@
       "Actions.processAction() @regression @tier3 does not call any other handler when dispatching SEND",
       "Actions.processAction() @regression @tier3 passes params, data, and error through to the handler"
     ],
+    "b4a0f9e76d16b30f": [
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is present in the class table and registry in the same shape",
+      "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is unarmed on production networks and active from regtest genesis"
+    ],
     "b4a3dee34b8a056b": [
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT creates credit, updates balance, and increments token supply",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT exceeding MAX_MINT is marked invalid",
@@ -11513,6 +11526,12 @@
       "resolveSlashTarget result returns the resolved target and defaults amount to zero",
       "resolveSlashTarget slash destination validation rejects a slash destination set to null",
       "resolveSlashTarget slash destination validation rejects a slash destination set to undefined"
+    ],
+    "b9dd4be9490dbf4e": [
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 a registry row is a frozen plain object with the nine parsed fields",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the 109 time-table keys the manifest lists",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value a fresh class build under the stub carries",
+      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value the manifest resolves for that key"
     ],
     "ba14cf587a23de6d": [
       "resolveConfigEndpoint() disables the endpoint and gives notice for seeds alone",
@@ -12184,15 +12203,6 @@
       "execContext (injected-execution TX_HASH seam) @regression @tier2 vote finalize callback (previously-broken site 2) post-flag-day the injected context carries the VOTECB synthetic TX_HASH",
       "execContext (injected-execution TX_HASH seam) @regression @tier2 vote finalize callback (previously-broken site 2) pre-flag-day the legacy hashless context is preserved byte-identically",
       "execContext (injected-execution TX_HASH seam) @regression @tier2 xcall result callback (live-consensus byte parity) the builder-produced TX_HASH is byte-identical to the pre- inline XCALLCB synthesis"
-    ],
-    "c534b61701eb9518": [
-      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 every shared_rows_N.js carries the two markers once each, in order, with no require between them, and nothing but rows outside them",
-      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 no part file matches the carrier declaration scans (D38)",
-      "protocol_changes/assembler: the part files declare no carrier and the SHARED block is well formed @regression @tier1 the time-table parts hold exactly the 108 rows, in registration order, and nothing but rows",
-      "protocol_changes/assembler: the public export shape @regression @tier1 exports every own property it exported before the split, each constant equal to its part file, and only the registry API besides",
-      "protocol_changes/assembler: the public export shape @regression @tier1 registry, UNARMED and UNPINNED are present but non-enumerable, so the manifest sees no new data export",
-      "protocol_changes/assembler: the public export shape @regression @tier1 still constructs under the manifest stub with 108 prototype-free changes, equal to the registry rows",
-      "protocol_changes/assembler: the public export shape @regression @tier1 the entry ends no larger than HEAD and every part file fits the readability limits"
     ],
     "c562c3c3096c665e": [
       "price capability resolution off BTC @regression BTC is unaffected getActiveCapabilityCount on BTC mainnet stays on local stakes",
@@ -14109,12 +14119,6 @@
       "HubClient pushPriceRound() calls _call with pushpriceround and passes roundData",
       "HubClient pushPriceRound() propagates rejection from _call (not swallowed)",
       "HubClient pushPriceRound() returns immediately without calling _call when not enabled"
-    ],
-    "df2e8799cf3685dc": [
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 a registry row is a frozen plain object with the nine parsed fields",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 carries exactly the 108 time-table keys the manifest lists",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value a fresh class build under the stub carries",
-      "protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1 every row canonicalises to the value the manifest resolves for that key"
     ],
     "df674cd2b0f33ed5": [
       "consensus/vm_lint_optional_chain_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
@@ -17137,7 +17141,7 @@
         "test/unit/protocol_changes/anchor_bundle_order_row.test.js": "332212f43d474164",
         "test/unit/protocol_changes/anchor_fold_rows.test.js": "2d944feb25011092",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "9bac686d9ec20d8e",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
@@ -17155,7 +17159,8 @@
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "b9dd4be9490dbf4e",
+        "test/unit/protocol_changes/stake_snapshot_decimal_strings_row.test.js": "b4a0f9e76d16b30f",
         "test/unit/protocol_changes/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
@@ -18450,7 +18455,7 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "89da9b102e2aa560",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "9bac686d9ec20d8e",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
@@ -18465,7 +18470,8 @@
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "b9dd4be9490dbf4e",
+        "test/unit/protocol_changes/stake_snapshot_decimal_strings_row.test.js": "b4a0f9e76d16b30f",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
@@ -18909,7 +18915,7 @@
         "test/unit/protocol/price_time_gate.test.js": "3ba5b094789a13b1",
         "test/unit/protocol/protocol_change_registry_prototype.test.js": "9227d0e83b5535c1",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "9bac686d9ec20d8e",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
@@ -18924,7 +18930,8 @@
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "b9dd4be9490dbf4e",
+        "test/unit/protocol_changes/stake_snapshot_decimal_strings_row.test.js": "b4a0f9e76d16b30f",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -19763,7 +19770,7 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "89da9b102e2aa560",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
-        "test/unit/protocol_changes/assembler.test.js": "c534b61701eb9518",
+        "test/unit/protocol_changes/assembler.test.js": "9bac686d9ec20d8e",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
         "test/unit/protocol_changes/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
@@ -19778,7 +19785,8 @@
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
-        "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
+        "test/unit/protocol_changes/rows_parity.test.js": "b9dd4be9490dbf4e",
+        "test/unit/protocol_changes/stake_snapshot_decimal_strings_row.test.js": "b4a0f9e76d16b30f",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",

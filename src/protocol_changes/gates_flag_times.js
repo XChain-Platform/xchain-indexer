@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * The registry's own constants as rows: the 26 flag-day instants the
+ * The registry's own constants as rows: the 28 flag-day instants the
  * time-table parts share and the compiled consensus-version pin, under the
  * `protocol_changes.<NAME>` keys the entry has always exported them by. The
  * values stay declared in flag_times.js, flag_times_batch_fees.js and
@@ -48,6 +48,8 @@ const {
     READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME,
     APPLY_LENGTH_METER_MAINNET_TIME,
     APPLY_LENGTH_METER_TESTNET_TIME,
+    STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME,
+    STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME,
     DISPENSER_REFILL_MAINNET_TIME,
     DISPENSER_REFILL_TESTNET_TIME,
 } = require('./flag_times.js');
@@ -87,5 +89,7 @@ addGate('protocol_changes.READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME', 'constant', R
 addGate('protocol_changes.READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME', 'constant', READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME);
 addGate('protocol_changes.APPLY_LENGTH_METER_MAINNET_TIME', 'constant', APPLY_LENGTH_METER_MAINNET_TIME);
 addGate('protocol_changes.APPLY_LENGTH_METER_TESTNET_TIME', 'constant', APPLY_LENGTH_METER_TESTNET_TIME);
+addGate('protocol_changes.STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME', 'constant', STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME);
+addGate('protocol_changes.STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME', 'constant', STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME);
 addGate('protocol_changes.DISPENSER_REFILL_MAINNET_TIME', 'constant', DISPENSER_REFILL_MAINNET_TIME);
 addGate('protocol_changes.DISPENSER_REFILL_TESTNET_TIME', 'constant', DISPENSER_REFILL_TESTNET_TIME);

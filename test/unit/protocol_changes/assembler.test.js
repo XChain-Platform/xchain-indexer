@@ -41,6 +41,7 @@ const EXPORTS_BEFORE_SPLIT = [
     'OWNER_WITHDRAW_OPT_IN_MAINNET_TIME', 'OWNER_WITHDRAW_OPT_IN_TESTNET_TIME',
     'READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME', 'READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME',
     'APPLY_LENGTH_METER_MAINNET_TIME', 'APPLY_LENGTH_METER_TESTNET_TIME',
+    'STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME', 'STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME',
     'DISPENSER_REFILL_MAINNET_TIME', 'DISPENSER_REFILL_TESTNET_TIME',
 ];
 const API_HIDDEN = ['registry', 'UNARMED', 'UNPINNED'];
@@ -89,10 +90,10 @@ describe('protocol_changes/assembler: the public export shape @regression @tier1
         assert.strictEqual(now.get('protocol_changes.changes.SEND'), now.registry.get('protocol_changes.changes.SEND'));
     });
 
-    it('still constructs under the manifest stub with 108 prototype-free changes, equal to the registry rows', function () {
+    it('still constructs under the manifest stub with 109 prototype-free changes, equal to the registry rows', function () {
         const stub = () => ({ config: {}, util: {} });
         const table = new now(stub()).changes;
-        assert.strictEqual(Object.keys(table).length, 108);
+        assert.strictEqual(Object.keys(table).length, 109);
         assert.strictEqual(Object.getPrototypeOf(table), null);
         const rows = now.rows().filter(([k]) => k.startsWith('protocol_changes.changes.'));
         assert.deepStrictEqual(Object.keys(table), rows.map(([k]) => k.slice('protocol_changes.changes.'.length)), 'registration order changed');
@@ -147,7 +148,7 @@ describe('protocol_changes/assembler: the part files declare no carrier and the 
         }
     });
 
-    it('the time-table parts hold exactly the 108 rows, in registration order, and nothing but rows', function () {
+    it('the time-table parts hold exactly the 109 rows, in registration order, and nothing but rows', function () {
         const parts = fs.readdirSync(PARTS).filter((f) => /^changes_\d+\.js$/.test(f)).sort();
         assert.ok(parts.length >= 4, parts.join(','));
         const names = [];
@@ -159,7 +160,7 @@ describe('protocol_changes/assembler: the part files declare no carrier and the 
                 names.push(row[0]);
             }
         }
-        assert.strictEqual(names.length, 108);
+        assert.strictEqual(names.length, 109);
         assert.deepStrictEqual(names, Object.keys(new (require(ENTRY))({ config: {}, util: {} }).changes));
     });
 });
