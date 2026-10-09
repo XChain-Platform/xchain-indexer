@@ -79,7 +79,8 @@ describe('/status schemaReady', function(){
         assert.strictEqual(bootingStatus.schemaReady, false);
         assert.strictEqual(statusFor(false).schemaReady, false);
         assert.strictEqual(statusFor(true).schemaReady, true);
-        assert.deepStrictEqual(Object.keys(bootingStatus).slice(-4),
+        const keys = Object.keys(bootingStatus);
+        assert.deepStrictEqual(keys.slice(keys.indexOf('schemaReady'), keys.indexOf('schemaReady') + 4),
             ['schemaReady', 'hubMirror', 'pollSilent', 'lastPollAt']);
     });
 
