@@ -14,12 +14,6 @@ const { siblingCheckout } = require('../../helpers/sibling_checkout.js');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const VALID_POLICIES = new Set(['archive', 'none']);
-const STAGED_SYNC_POLICIES = Object.freeze({
-    remote_token_snapshots: Object.freeze({
-        anchorRecovery: 'none',
-        anchorRecoveryNote: 'Not carried in the ANCHOR archive. The row returns through the hub mirror after a rebuild.',
-    }),
-});
 
 function quorumHubMirrors(registry){
     return registry.allTables().filter(row =>
@@ -128,13 +122,6 @@ describe('anchor archive recovery registry coverage @regression @tier1', functio
         const syncLifecycle = require(syncRegistryPath);
         for(const row of hubMirrors(lifecycle)){
             const twin = syncLifecycle.entry(row.table);
-            if(!twin && STAGED_SYNC_POLICIES[row.table]){
-                assert.strictEqual(row.anchorRecovery, STAGED_SYNC_POLICIES[row.table].anchorRecovery,
-                    row.table + ' has a different staged anchorRecovery value');
-                assert.strictEqual(row.anchorRecoveryNote, STAGED_SYNC_POLICIES[row.table].anchorRecoveryNote,
-                    row.table + ' has a different staged anchorRecoveryNote value');
-                continue;
-            }
             assert.ok(twin, row.table + ' is absent from the xchain-sync lifecycle registry');
             assert.strictEqual(twin.anchorRecovery, row.anchorRecovery,
                 row.table + ' has different anchorRecovery values in xchain-indexer and xchain-sync');
