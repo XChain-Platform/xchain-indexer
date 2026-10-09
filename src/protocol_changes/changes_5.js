@@ -35,6 +35,8 @@ const {
     APPLY_LENGTH_METER_TESTNET_TIME,
     DISPENSER_REFILL_MAINNET_TIME,
     DISPENSER_REFILL_TESTNET_TIME,
+    STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,
+    STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -94,6 +96,8 @@ const CHANGES = [
     // genesis-active on regtest so fresh test chains exercise the corrected rule.
     ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', UNARMED,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 0, 0, 0, 0],
+    ['STAKE_DELEGATED_SIGNING_KEY', '0.2.0', STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,
+        STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;

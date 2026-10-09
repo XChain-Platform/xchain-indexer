@@ -130,7 +130,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
+      "hash": "61b5141ec3293be0fbaaf66ca2fef76d24179ac51d10569c4cce3ba89296de7b",
       "twins": []
     },
     "rollcall_activation": {
@@ -2020,6 +2020,13 @@
       "to": "5ac03b6746c93bc0615d0a4d857f5eb4861c44aa5890ee60e922794ed29bc785",
       "reason": "state_hash attest_batch_head class behind its own flag day",
       "date": "2026-10-07"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
+      "to": "61b5141ec3293be0fbaaf66ca2fef76d24179ac51d10569c4cce3ba89296de7b",
+      "reason": "add delegated signing key registry row and production flag times",
+      "date": "2026-10-09"
     }
   ]
 }
