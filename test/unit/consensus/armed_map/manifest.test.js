@@ -174,7 +174,18 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 398);
+        assert.strictEqual(res.rows.length, 399);
+    });
+
+    it('carries the relay-response deadline time gate', function () {
+        const key = 'attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION';
+        const byKey = new Map(manifest.collectRows().rows);
+        assert.deepStrictEqual(byKey.get(key), {
+            mainnet: 9999999999,
+            testnet: 9999999999,
+            regtest: 0,
+        });
+        assert.strictEqual(ProtocolChanges.registry.unitOf(key), 'time');
     });
 
     it('carries the cross-chain remote-token gate heights', function () {

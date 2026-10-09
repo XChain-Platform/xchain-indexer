@@ -175,6 +175,15 @@ addGate('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION', 'height', {
 addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
 // archive_section_verdict_activation
 addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
+// attest_relay_response_deadline_activation: relay responses landing on an origin
+// chain after the request's deadline are rejected. The flag day is the landing
+// block's consensus timestamp; the deadline comparison itself stays in that
+// chain's block-height plane.
+addGate('attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION', 'time', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
 // list_share_producer_activation: the hub snapshot plane begins producing shared-list versions.
 addGate('list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION', 'height', {
     mainnet: UNARMED,

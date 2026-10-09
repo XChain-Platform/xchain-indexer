@@ -76,6 +76,14 @@ describe('consensus identity GATES field and pin comparison', function () {
         }
     });
 
+    it('pins the relay-response deadline row in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION';
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
     it('matches the hub pinned GATES field hash', function () {
         const hubRoot = process.env.XCHAIN_HUB_DIR || path.resolve(REPO, '..', 'xchain-hub');
         const candidate = path.join(hubRoot, 'bin', 'pins', 'at1-consensus-identity.json');
