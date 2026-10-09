@@ -11,7 +11,7 @@
 // General Public License v3.0 or later; see LICENSE.md.
 
 const assert = require('assert');
-const ProtocolChanges = require('../../../src/protocol_changes.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
 
 const KEY = 'protocol_changes.changes.STAKE_DELEGATED_SIGNING_KEY';
 
