@@ -16607,7 +16607,7 @@
   "scripts": {
     "test": {
       "fileCount": 1218,
-      "titleCount": 12684,
+      "titleCount": 12592,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16701,7 +16701,7 @@
         "test/unit/actions/attest_relay.test/relay_canonicals.test.js": "d3c72ac176cde46a",
         "test/unit/actions/attest_relay.test/relay_request.test.js": "5e848392b2703195",
         "test/unit/actions/attest_relay.test/relay_response.test.js": "a3b18fb1d683293a",
-        "test/unit/actions/attest_responsible_set_vectors.test.js": "6ee9ec17dc5d367c",
+        "test/unit/actions/attest_responsible_set_vectors.test.js": "9d9fd510d00c95ca",
         "test/unit/actions/batch/mint_cap.test.js": "1e74889cf67f01b5",
         "test/unit/actions/batch_execute_attest.test.js": "56d2189dafc1f3bf",
         "test/unit/actions/batch_execute_attest.test/attest_acceptance.test.js": "7fa560403cb6fc95",
@@ -17210,7 +17210,7 @@
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "f7136f6f0dee94e5",
-        "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
+        "test/unit/consensus/consensus_primitive_conformance.test.js": "f8556c2d47a9cb0a",
         "test/unit/consensus/consensus_rules_digest_twin_bytes.test.js": "c8d4c432d417022a",
         "test/unit/consensus/doge_peer_clients/rollcall_proof_client/reply_decision.test.js": "8fcf19004337f429",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
