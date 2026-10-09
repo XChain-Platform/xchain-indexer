@@ -10,18 +10,18 @@
  *
  **********************************************************************
  *
- * ROLLCALL gates regtest resolver held equal to the parser that runs.
+ * ROLLCALL base-rail regtest resolver held equal to the parser that runs.
  *
- * rollcall_gates_gate.js exports resolveRegtestGatesActivation, but a running
- * process never calls it: the value it applies is the registry row, which the
- * read overlay arms through regtest_env.regtestHeight. The exported resolver is
- * a second copy of that grammar, so it is pinned input for input against
- * regtestHeight here, the way rollcall_regtest_parity.test.js pins the base rail's.
+ * rollcall_gate.js exports resolveRegtestActivation, but a running process never
+ * calls it: the value it applies is the registry row, which the read overlay arms
+ * through regtest_env.regtestHeight. The exported resolver is a second copy of
+ * that grammar, so it is pinned input for input against regtestHeight here, the
+ * same way rollcall_gates_regtest_parity.test.js pins the gates rail's.
  *
  ********************************************************************/
 const assert = require('assert');
 
-const rga = require('../../../src/consensus/gates/rollcall_gates_gate.js');
+const act = require('../../../src/consensus/gates/rollcall_gate.js');
 const { regtestHeight } = require('../../../src/protocol_changes/regtest_env.js');
 
 const OPT_IN  = ['armed', 'genesis', 'on', 'true', 'yes', 'ARMED', ' Genesis '];
@@ -43,13 +43,12 @@ function quietly(fn) {
 
 function both(raw) {
     return quietly(() => ({
-        exported: rga.resolveRegtestGatesActivation({ [rga.ROLLCALL_GATES_REGTEST_ENV]: raw }),
-        running:  regtestHeight(raw, rga.ROLLCALL_GATES_REGTEST_ARMED_HEIGHT, 'ROLLCALL gates',
-                                rga.ROLLCALL_GATES_REGTEST_ENV),
+        exported: act.resolveRegtestActivation({ [act.ROLLCALL_REGTEST_ENV]: raw }),
+        running:  regtestHeight(raw, act.ROLLCALL_REGTEST_ARMED_HEIGHT, 'ROLLCALL', act.ROLLCALL_REGTEST_ENV),
     }));
 }
 
-describe('ROLLCALL gates regtest resolver matches the running parser @regression @tier1', function () {
+describe('ROLLCALL base-rail regtest resolver matches the running parser @regression @tier1', function () {
     it('agrees with regtestHeight on every accepted, refused and garbage input', function () {
         for (const raw of [...OPT_IN, ...HEIGHTS, ...OFF, ...GARBAGE]) {
             const { exported, running } = both(raw);
@@ -60,7 +59,7 @@ describe('ROLLCALL gates regtest resolver matches the running parser @regression
 
     it('lands on the documented values, so agreement is not two copies of one mistake', function () {
         for (const raw of OPT_IN)
-            assert.strictEqual(both(raw).running, rga.ROLLCALL_GATES_REGTEST_ARMED_HEIGHT, JSON.stringify(raw));
+            assert.strictEqual(both(raw).running, act.ROLLCALL_REGTEST_ARMED_HEIGHT, JSON.stringify(raw));
         assert.strictEqual(both('30').running, 30);
         assert.strictEqual(both(' 600 ').running, 600);
         for (const raw of [...OFF, ...GARBAGE])

@@ -32,7 +32,7 @@ const Utility = require('../../../../src/utility');
 const {
     buildStateHashData, isTokenSupplyStateHashActive, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
     POLL_FINALIZE_STATE_HASH_ACTIVATION, INDEX_MAP_STATE_HASH_ACTIVATION,
-    BET_STATUS_STATE_HASH_ACTIVATION,
+    BET_STATUS_STATE_HASH_ACTIVATION, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
 } = require('../../../../src/consensus/state_hash');
 
 const util = new Utility();
@@ -63,6 +63,8 @@ async function withRegtestHeight(height, fn){
     try { return await fn(); } finally { TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = prev; }
 }
 
+let abhPrev;
+
 describe('state_hash token-supply class (F-1 closure, armed) @regression', function(){
 
     // Isolate this suite from the poll_finalize class (also armed on regtest):
@@ -73,11 +75,13 @@ describe('state_hash token-supply class (F-1 closure, armed) @regression', funct
         pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest; POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = 999999999;
         indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;     INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = 999999999;
         betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;    BET_STATUS_STATE_HASH_ACTIVATION.regtest   = 999999999;
+        abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
         POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
         INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
         BET_STATUS_STATE_HASH_ACTIVATION.regtest    = betPrev;
+        ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('gate: regtest armed from genesis; mainnet/testnet armed per chain; coin-less lookup fail-inert', function(){

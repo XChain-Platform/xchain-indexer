@@ -16,16 +16,16 @@
  * xchain_bridge_activation, then anchor_fold_activation and
  * archive_section_verdict_activation
  *
- * One SHARED block part. The region between the two marker lines is
- * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
- * and xchain-sdk: each consumer keeps the same bytes and replaces only the
- * require line below with its own queue module. What may live between the
- * markers: `addGate(key, unit, table)` calls with LITERAL values (a table, a
- * number, a string or literals joined by +, a RegExp, an array), one call per
- * row, at column zero, and comments. No require, no computed value, nothing
- * from outside the block but addGate, UNARMED and UNPINNED. A regtest entry a
- * venue arms from its environment is written UNPINNED here and armed by the
- * wrapper at registration (shared_rows.js), so the block stays data.
+ * This file is a whole-file byte twin copied unchanged into five consumers:
+ * xchain-indexer, xchain-sync, xchain-hub, xchain-explorer and xchain-sdk.
+ * The identical bytes include the header, queue require, markers and rows.
+ * Between the markers may live `addGate(key, unit, table)` calls with LITERAL
+ * values (a table, a number, a string or literals joined by +, a RegExp, an
+ * array), one call per row, at column zero, and comments. No require, no
+ * computed value, nothing from outside the block but addGate, UNARMED and
+ * UNPINNED. A regtest entry a venue arms from its environment is written
+ * UNPINNED here and armed by the wrapper at registration (shared_rows.js), so
+ * the marker-delimited body stays data.
  *
  * Rows are grouped by module stem in alphabetical order; a stem's rows keep
  * the order the module declared them. Keys never change (I4).
@@ -224,6 +224,13 @@ addGate('oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION', 'height', {
     'BTC:testnet': 155158,
     'LTC:testnet': 4907593,
     'DOGE:testnet': 67966647,
+    regtest: 0,
+});
+// stateHash: the state_hash class for the batch-completion stamp on a surviving v5 attest head.
+// Inert on mainnet and testnet until a flag day is sized; regtest is armed from genesis.
+addGate('stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
     regtest: 0,
 });
 // SHARED-GATES END

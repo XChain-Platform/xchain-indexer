@@ -177,3 +177,17 @@ describe('runControllerGuard: payoutLegs are validated outside ORDER/SWAP create
         });
     }
 });
+
+// Pins that a contract address is never a valid payout leg: it denies as a bad leg at every
+// invocation point, so a cross-chain listing never reaches the not-payable verdict with one.
+describe('runControllerGuard: a contract-address payout leg is a bad leg everywhere @regression @tier1', function () {
+    for (const actionType of ['ORDER_CREATE', 'SWAP_CREATE', 'DISPENSER_CREATE', 'SEND']) {
+        it(actionType + ': a contract-address leg denies with controller (bad payout leg)', async function () {
+            const legs = [{ to: ADDR, bps: 100 }, { to: 'C:BTC:5', bps: 100 }];
+            const handler = buildHandler(vmOk(JSON.stringify({ payoutLegs: legs })));
+            const res = await handler.runControllerGuard(Object.assign(opts(), { actionType }));
+            assert.strictEqual(res.allow, false, 'a contract-address leg denies the action');
+            assert.strictEqual(res.reason, 'controller (bad payout leg)');
+        });
+    }
+});

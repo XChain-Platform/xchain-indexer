@@ -30,8 +30,9 @@ async function creditArchiveReward(handler, data, attQuorumMet, snapPubkeys, for
     warnRewardSkipped(format);
 }
 
+// Log under the wire that carried the bundle (v0, or the v3 fold), never a fixed v0.
 async function creditBundleReward(handler, data, attQuorumMet, bundleSet){
-    warnRewardSkipped(0);
+    warnRewardSkipped(Number.isInteger(data && data['FORMAT']) ? data['FORMAT'] : 0);
 }
 
 module.exports = {

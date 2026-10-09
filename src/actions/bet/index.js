@@ -50,12 +50,14 @@ const { getLogger } = require('../../observability/index.js');
  * - 1 = Cancel Feed
  * - 2 = Place Bet
  * - 3 = Resolve Feed
+ * - 4 = Edit Feed Lists
  *
  ********************************************************************/
 
 // The handler's phases, grouped by concern and installed onto Bet.prototype below
 const createFeedPart = require('./create_feed.js');
 const validatePart   = require('./validate.js');
+const editListsPart  = require('./edit_lists_validate.js');
 const feesPart       = require('./fees.js');
 const settlePart     = require('./settle.js');
 
@@ -77,6 +79,7 @@ class Bet {
         this.formats[1] = 'VERSION|FEED_ACTION_INDEX|MEMO';
         this.formats[2] = 'VERSION|FEED_ACTION_INDEX|OUTCOME|AMOUNT|MEMO';
         this.formats[3] = 'VERSION|FEED_ACTION_INDEX|OUTCOME|MEMO';
+        this.formats[4] = 'VERSION|FEED_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|MEMO';
 
         // Supported list types for ALLOW_LIST/BLOCK_LIST: 2=Address only.
         this.listTypes = [2];
@@ -106,7 +109,11 @@ class Bet {
 
         error = await this.validateCreateFeed(data, format, tokenInfo, outcomeLabels, error);
 
+        error = await this.validateEditListsGate(data, format, error);
+
         error = await this.validateFeedState(data, format, feedInfo, error);
+
+        error = await this.validateEditLists(data, format, feedInfo, error);
 
         error = await this.validatePlaceBet(data, format, feedInfo, feedTokenInfo, error);
 
@@ -135,15 +142,15 @@ class Bet {
         if(format==0 && !this.util.isNull(data['TICK']))
             tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Get information on the feed by its action_index (cancel / place / resolve)
+        // Get information on the feed by its action_index (cancel / place / resolve / edit)
         let feedInfo = false;
-        if(format==1 || format==2 || format==3)
+        if(format==1 || format==2 || format==3 || format==4)
             feedInfo = await this.indexerDb.getBetFeedInfo(data['FEED_ACTION_INDEX']);
 
         // The feed's wager token info (place validates AMOUNT at its DECIMALS;
         // settlement floors at its DECIMALS)
         let feedTokenInfo = false;
-        if(feedInfo)
+        if(feedInfo && format!=4)
             feedTokenInfo = await this.indexerDb.getTokenInfo(feedInfo['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Get source address balances and preferences
@@ -223,7 +230,7 @@ class Bet {
 // from produced: parse() reaches them as this.<method>, suites can stub them through
 // Bet.prototype, and for-in over a handler stays empty. Same install as db/index.js uses
 // for its query mixins.
-for(const part of [createFeedPart, validatePart, feesPart, settlePart]){
+for(const part of [createFeedPart, validatePart, editListsPart, feesPart, settlePart]){
     const descriptors = Object.getOwnPropertyDescriptors(part);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
     Object.defineProperties(Bet.prototype, descriptors);

@@ -262,3 +262,29 @@ describe('token-bridge opt-in storage @regression @consensus', function(){
         });
     });
 });
+
+describe('token-bridge opt-in storage as-of reads @regression @consensus', function(){
+    afterEach(function(){ sinon.restore(); });
+
+    it('bounds the BRIDGED lock probe by the same block_index and action_index as the replay', async function(){
+        const db = makeDb();
+        db.doQuery.onFirstCall().resolves([issueRow()]);
+        db.doQuery.onSecondCall().resolves([]);
+        await db.getTokenInfo('FUFU', 100, 999);
+        const [sql, args] = db.doQuery.secondCall.args;
+        assert.ok(sql.includes('x.block_index <= ?'), 'lock probe must bound by block_index');
+        assert.ok(sql.includes('x.action_index < ?'), 'lock probe must bound by action_index');
+        assert.deepStrictEqual(args.slice(-2), [100, 999]);
+    });
+
+    it('keeps the current-state BRIDGED lock probe when no bounds are given', async function(){
+        const db = makeDb();
+        db.doQuery.onFirstCall().resolves([issueRow()]);
+        db.doQuery.onSecondCall().resolves([]);
+        await db.getTokenInfo('FUFU');
+        const [sql, args] = db.doQuery.secondCall.args;
+        assert.ok(!sql.includes('x.block_index') && !sql.includes('x.action_index <'),
+            'an unbounded read must keep the current-state probe');
+        assert.strictEqual(args.length, 1);
+    });
+});
