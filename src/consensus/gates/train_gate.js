@@ -62,7 +62,7 @@
  *
  * LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js,
  * kept value-equal by test/unit/activationConstantsParity.test.js. A byte-identical
- * twin lives at xchain-sync/src/train_activation.js. A one-sided edit of any copy
+ * twin lives at xchain-sync/src/consensus/gates/train_gate.js. A one-sided edit of any copy
  * forks the fleet at the train boundary, which is the whole class of failure this
  * file exists to prevent.
  *
