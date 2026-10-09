@@ -138,11 +138,13 @@ addGate('attest_broadcast_fee_activation.ATTEST_BROADCAST_FEE_ACTIVATION', 'heig
 
 // Per-provider broadcast-fee allowance, denominated in NATIVE coin (whole coins, not
 // satoshis), LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js.
+//
 // PROVIDERS holds the shipped per-provider default. DEFAULT covers a provider an
 // operator registered through an ATTESTATION.PROVIDERS overlay that this map does not
 // name. HARD_MAX is the ceiling every resolved value is clamped to, including one an
 // overlay supplied, which is what keeps the bound consensus-visible rather than
 // operator-controlled.
+//
 // SIZING. A BTC ATTEST v1 carrying a small response is a few hundred to a few thousand
 // satoshis of miner fee at ordinary congestion. 0.0001 BTC (10,000 sat) covers that with
 // room and still costs a fraction of a normal request fee, which is what "conservative"
@@ -252,10 +254,7 @@ addGate('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION
     testnet: 0,
     regtest: 0,
 });
-
-// Per-network activation instant (data['BLOCK_TIME']): the gated handoff total sums per resolved TICK_ID. Unarmed until the cut sets it from a replay check, to activate right after the release ships and the fleet rolls.
 addGate('send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION', 'time', { mainnet: UNARMED, testnet: UNARMED, 'BTC:testnet': UNARMED, 'LTC:testnet': UNARMED, 'DOGE:testnet': UNARMED, regtest: 0 });
-
 // dispense_cancelling_match_activation
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']). Mainnet flips at the coordinated 2.0.0 contract-era
@@ -365,6 +364,7 @@ addGate('dispenser_ownership_cancel_activation.DISPENSER_OWNERSHIP_CANCEL_ACTIVA
 
 // dispenser_send_amount_compare_activation
 // Scale the two amount operands are compared at once the rule is live.
+//
 // FROZEN. This is the emitted SQL of a consensus predicate: once any chain
 // arms a height, changing this number changes how blocks above that height
 // evaluate on a replay, which is a fork. It is deliberately a local constant
