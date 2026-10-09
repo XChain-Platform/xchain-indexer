@@ -153,6 +153,8 @@ const GATES = [
     // on a bridged copy while another still admits the transfer, from the same signed row.
     // Both ordering invariants it owes are asserted separately below.
     ['token_policy_activation.js',         'TOKEN_POLICY_INHERITANCE_ACTIVATION'],
+    // Mainnet overlays canon at genesis; every other network remains in canonical parity.
+    ['list_owner_activation',              'LIST_OWNER_ACTIVATION'],
     ['list_share_producer_activation',     'LIST_SHARE_PRODUCER_ACTIVATION'],
     ['list_share_consumer_activation',     'LIST_SHARE_CONSUMER_ACTIVATION'],
     ['list_meta_activation',               'LIST_META_ACTIVATION'],
@@ -371,20 +373,24 @@ describe('activation-gate constant parity to canonical constants.js @regression'
 
     GATES.forEach(function ([file, exportName]) {
         const title = file + ' ' + exportName +
-            ' is value-identical to xchain-documentation/protocol/constants.js';
+            (exportName === 'LIST_OWNER_ACTIVATION' ?
+                ' matches canonical outside the indexer mainnet genesis arm' :
+                ' is value-identical to xchain-documentation/protocol/constants.js');
         (canonExists ? it : it.skip)(title, function () {
             const local = localExport(file, exportName);
             // Presence, not shape: the list carries scalar consensus constants as well as
             // activation maps. The checks stay so a mistyped export name cannot compare
             // undefined to undefined and pass vacuously on both sides.
             assert.ok(local !== undefined, file + ' must export ' + exportName);
-            // And the registry row under the same key, so the canon is compared against
-            // what the fingerprint hashes as well as against what the module exports.
-            if (!NOT_A_ROW.has(file)) assert.deepStrictEqual(registry.get(registryKey(file, exportName)), canon[exportName],
-                registryKey(file, exportName) + ' has drifted from the canonical ' + exportName);
             assert.ok(canon[exportName] !== undefined,
                 'constants.js must export ' + exportName + ' (the canonical authority for this gate)');
-            assert.deepStrictEqual(local, canon[exportName],
+            const expected = exportName === 'LIST_OWNER_ACTIVATION' ?
+                { ...canon[exportName], mainnet: 0 } : canon[exportName];
+            // And the registry row under the same key, so the canon is compared against
+            // what the fingerprint hashes as well as against what the module exports.
+            if (!NOT_A_ROW.has(file)) assert.deepStrictEqual(registry.get(registryKey(file, exportName)), expected,
+                registryKey(file, exportName) + ' has drifted from the canonical ' + exportName);
+            assert.deepStrictEqual(local, expected,
                 file + ' has drifted from the canonical ' + exportName + ' in ' +
                 'xchain-documentation/protocol/constants.js; a one-sided flag-day edit forks consensus at the boundary.');
         });
