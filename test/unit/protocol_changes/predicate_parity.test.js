@@ -49,6 +49,8 @@ const SKIPPED = {
         'ruleset unit: resolveRuleSet(height, network) returns a version and activeAt() throws unsupported unit; W4 needs a ruleSetAt() reader',
     'anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION':
         'registry-only row read through activeAt() at the parse call site, no predicate module',
+    'vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION':
+        'registry-only row read through activeAt() in the deploy lint flags, no predicate module',
     // Each mirror row's value is held to its gate row by activations/activation_constants_parity.test/mirror_rows.test.js.
     'protocol/constants.STAKE_WEIGHTED_QUORUM_ACTIVATION': 'documentation mirror row, no predicate in that file',
     'protocol/constants.EQUIV_HEADER_ACTIVATION': 'documentation mirror row, no predicate in that file',
