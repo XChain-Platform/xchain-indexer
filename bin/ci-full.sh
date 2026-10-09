@@ -126,7 +126,7 @@ export TEST_DB_PASS="${TEST_DB_PASS:-${CI_DB_PASS:-xchain-fixture-throwaway}}"
 export XCHAIN_DECODER_SQL_PATH="${XCHAIN_DECODER_SQL_PATH:-$SIB/xchain-decoder/src/sql}"
 export XCHAIN_SDK_PATH="${XCHAIN_SDK_PATH:-$SIB/xchain-sdk}"
 
-need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub
+need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub xchain-documentation
 
 # Stage the gitignored vendored VM from the canonical sibling before ANY tier
 # runs: the ci tier's own unit suite requires xchain-vm too (actions_class),
@@ -137,7 +137,7 @@ need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub
 if [ "${CI_TIER:-full}" = "full" ] && [ "$(uname -s)" = "Linux" ]; then
   run_tier "vendor:vm (stage from ../xchain-vm)" npm run vendor:vm
 else
-  run_tier "vendor:vm (stage sources from ../xchain-vm)" npm run vendor:vm -- check
+  run_tier "vendor:vm (stage sources from ../xchain-vm)" npm run vendor:vm -- stage
 fi
 
 # --- job: ci (XChain-Platform/.github ci-reusable.yml -> npm run ci) -------
@@ -173,8 +173,21 @@ else
   fast_defer "ci (siblings STRICT)"
 fi
 
-run_tier "suite title pin (test)" \
-  node bin/suite-title-map.js --script test --compare bin/pins/at1-suite-titles.json
+suite_title_pin() {
+  local docs_snapshot status
+  mkdir -p "$SELF/tmp" || return 1
+  docs_snapshot="$(mktemp -d "$SELF/tmp/suite-title-docs.XXXXXX")" || return 1
+  if ! git -C "$SIB/xchain-documentation" archive HEAD | tar -x -C "$docs_snapshot"; then
+    rm -rf -- "$docs_snapshot"
+    return 1
+  fi
+  XCHAIN_DOCS_DIR="$docs_snapshot" \
+    node bin/suite-title-map.js --script test --compare bin/pins/at1-suite-titles.json
+  status=$?
+  rm -rf -- "$docs_snapshot"
+  return "$status"
+}
+run_tier "suite title pin (test)" suite_title_pin
 
 # --- job: integration ------------------------------------------------------
 if [ "${CI_TIER:-full}" = "fast" ]; then
