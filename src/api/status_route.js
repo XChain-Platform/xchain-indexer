@@ -94,10 +94,9 @@ function pollHeartbeatFields(indexer){
     };
 }
 
-// The /status JSON body, in the key order monitors have always read.
-function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict, hubMirror }){
-    let { now, stalled, wedged, futureWait, stallClass,
-          lastHubConfigFetchAt, hubConfigAgeSeconds, hubConfigStale } = verdict;
+// The sync and stall half of the /status body, in the key order monitors have always read.
+function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict }){
+    let { now, stalled, wedged, futureWait, stallClass } = verdict;
     return {
         indexerBlock: indexerBlock,
         inFlightBlock: inFlightBlock,
@@ -141,7 +140,15 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         // Single machine-readable verdict on the counter, so a probe does not have to
         // join stallReason/degraded/stallClearsAt: 'none' | 'future_block_wait' |
         // 'barrier_defer' | 'wedged'.
-        stallClass:   stallClass,
+        stallClass:   stallClass
+    };
+}
+
+// The /status JSON body, in the key order monitors have always read.
+function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict, hubMirror }){
+    let { lastHubConfigFetchAt, hubConfigAgeSeconds, hubConfigStale } = verdict;
+    return {
+        ...statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict }),
         // epoch-ms of the most recent successful block commit (null until the first),
         // so a probe can read advance-recency directly rather than infer it from lag.
         lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
