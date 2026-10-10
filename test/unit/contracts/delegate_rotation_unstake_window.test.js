@@ -106,7 +106,7 @@ describe('Utility.processContractDelegationMaterializations() in-window gate @re
 
         await util.processContractDelegationMaterializations({ protocolChanges: { isEnabled } }, db, 306);
 
-        assert.ok(db.materializeContractDelegations.calledOnceWithExactly(306, false));
+        assert.ok(db.materializeContractDelegations.calledOnceWithExactly(306, undefined, false));
     });
 });
 
@@ -115,7 +115,7 @@ describe('DELEGATE rotation during the UNSTAKE window @regression @tier1', funct
         const model = state();
         const db = makeDb(model);
 
-        await db.materializeContractDelegations(306, false);
+        await db.materializeContractDelegations(306, undefined, false);
         const snapshot = await db.getContractStakeDataForVM(42, 306, true);
 
         assert.strictEqual(model.stake.signing_pubkey_id, 11);
@@ -128,7 +128,7 @@ describe('DELEGATE rotation during the UNSTAKE window @regression @tier1', funct
         const model = state();
         const db = makeDb(model);
 
-        const applied = await db.materializeContractDelegations(306, true);
+        const applied = await db.materializeContractDelegations(306, undefined, true);
         const snapshot = await db.getContractStakeDataForVM(42, 306, true);
 
         assert.deepStrictEqual(applied.map(row => row.target_table), ['contract_stakes', 'contract_unstakes']);
@@ -143,7 +143,7 @@ describe('DELEGATE rotation during the UNSTAKE window @regression @tier1', funct
         model.stake.deactivation_block = 306;
         const db = makeDb(model);
 
-        await db.materializeContractDelegations(306, true);
+        await db.materializeContractDelegations(306, undefined, true);
 
         assert.strictEqual(model.stake.signing_pubkey_id, 11);
         assert.strictEqual(model.unstake.signing_pubkey_id, 77);
@@ -160,7 +160,7 @@ describe('DELEGATE rotation during the UNSTAKE window @regression @tier1', funct
         }];
         const db = makeDb(model);
 
-        await db.materializeContractDelegations(306, true);
+        await db.materializeContractDelegations(306, undefined, true);
 
         assert.strictEqual(model.stake.signing_pubkey_id, 11);
     });

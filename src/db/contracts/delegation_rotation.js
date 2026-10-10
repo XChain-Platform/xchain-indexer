@@ -71,7 +71,7 @@ module.exports = {
     // DETERMINISM. Every ordering key is replay-stable (block_index, activation_block,
     // action_index); the AUTO_INCREMENT journal id is never ordered on. Returns the applied
     // rotations (audit/tests); an empty array is the common case.
-    async materializeContractDelegations(currentBlock, rotateInWindow = false, rejectHeldKey){
+    async materializeContractDelegations(currentBlock, rejectHeldKey, rotateInWindow = false){
         let applied  = [];
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return applied;

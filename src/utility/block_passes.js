@@ -73,7 +73,7 @@ module.exports = {
         if(!(await actions.protocolChanges.isEnabled('CONTRACT_DELEGATION_MATERIALIZE', block_index)))
             return [];
         let rotateInWindow = await actions.protocolChanges.isEnabled('DELEGATION_ROTATE_IN_WINDOW', block_index);
-        return await db.materializeContractDelegations(block_index, rotateInWindow);
+        return await db.materializeContractDelegations(block_index, undefined, rotateInWindow);
     },
 
     // Process any orders, swaps, or dispensers which are past expiration
