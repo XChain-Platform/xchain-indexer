@@ -31,7 +31,7 @@ function fundFee(indexer, amount = '10'){
     indexer.indexerDb.getAddressBalances.resolves({ 1: amount });
 }
 
-describe('LIST shared-list fees @regression @tier3', function () {
+function registerFeeHooks(){
     beforeEach(function () {
         sinon.stub(gateRegistry, 'activeAt').returns(true);
     });
@@ -39,7 +39,9 @@ describe('LIST shared-list fees @regression @tier3', function () {
     afterEach(function () {
         sinon.restore();
     });
+}
 
+function registerGateAndErrorTests(){
     it('does not read or charge below LIST_SHARE_ACTIVATION', async function () {
         const { indexer, handler } = makeListContext();
         gateRegistry.activeAt.returns(false);
@@ -62,7 +64,9 @@ describe('LIST shared-list fees @regression @tier3', function () {
         sinon.assert.notCalled(indexer.indexerDb.doQuery);
         sinon.assert.notCalled(indexer.indexerDb.getAddressBalances);
     });
+}
 
+function registerPricingTests(){
     it('prices SHARE at 1.00000000 XCHAIN', async function () {
         const { indexer, handler } = makeListContext();
         fundFee(indexer);
@@ -114,7 +118,9 @@ describe('LIST shared-list fees @regression @tier3', function () {
         sinon.assert.notCalled(indexer.indexerDb.doQuery);
         sinon.assert.notCalled(indexer.indexerDb.getAddressBalances);
     });
+}
 
+function registerPreferenceTests(){
     for(const preference of [
         { value: 1, label: 'destroys' },
         { value: 0, label: 'donates' },
@@ -159,7 +165,9 @@ describe('LIST shared-list fees @regression @tier3', function () {
 
         assert.strictEqual(result.error, 'invalid: insufficient funds (FEE)');
     });
+}
 
+function registerNativeFeeTests(){
     for(const coin of ['LTC', 'DOGE']){
         it('accepts a ' + coin + ' native fee output', async function () {
             const { indexer, handler } = makeListContext();
@@ -205,7 +213,9 @@ describe('LIST shared-list fees @regression @tier3', function () {
             assert.strictEqual(result.error, 'invalid: native coin fee below minimum');
         });
     }
+}
 
+function registerGasBundleTests(){
     it('carries the shared-list gas keys in every vendored coin bundle', function () {
         for(const coin of ['BTC', 'LTC', 'DOGE']){
             const schedule = require('../../../../../src/coins/' + coin + '.js').GAS_SCHEDULE;
@@ -214,4 +224,13 @@ describe('LIST shared-list fees @regression @tier3', function () {
             assert.strictEqual(schedule.LIST_SHARED_EDIT_PER_ITEM, 100, coin);
         }
     });
+}
+
+describe('LIST shared-list fees @regression @tier3', function () {
+    registerFeeHooks();
+    registerGateAndErrorTests();
+    registerPricingTests();
+    registerPreferenceTests();
+    registerNativeFeeTests();
+    registerGasBundleTests();
 });
