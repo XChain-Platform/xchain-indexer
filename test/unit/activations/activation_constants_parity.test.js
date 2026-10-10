@@ -55,6 +55,8 @@ const { CONSTANTS_PATH, canonExists, resolveCanonSource, loadCanon } =
 // an equal copy when it exports a mutable one for its tests to patch).
 const registry = require('../../../src/protocol_changes.js');
 const { modulePathFor } = require('../../helpers/gate_modules.js');
+const HUB_DIR = path.resolve(process.env.XCHAIN_HUB_DIR || path.resolve(__dirname, '../../../../xchain-hub'));
+const SYNC_DIR = path.resolve(process.env.XCHAIN_SYNC_PATH || path.resolve(__dirname, '../../../../xchain-sync'));
 const NOT_A_ROW = new Set(['consensus/reserved_roots.js']);
 function registryKey(file, exportName) { return file.replace(/\.js$/, '') + '.' + exportName; }
 // The local value of one GATES entry. W4 (activation registry, row 18) moved
@@ -299,7 +301,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // canon is covered by the GATES case below; this is the twin half of it.
     it('holds xchain-sync/src/consensus/gates/train_gate.js byte-identical to this repo\'s copy', function () {
         assertByteTwin(this, '../../../src/consensus/gates/train_gate.js',
-            '../../../../xchain-sync/src/consensus/gates/train_gate.js', 'the sync train-activation twin');
+            path.join(SYNC_DIR, 'src', 'consensus', 'gates', 'train_gate.js'), 'the sync train-activation twin');
     });
 
     // mirror_admission_gate.js is the second module whose copies must be BYTE-identical
@@ -311,12 +313,12 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // the only check that sees an encoder edit landed on one side of the boundary.
     it('holds xchain-hub/src/consensus/gates/mirror_admission_gate.js byte-identical to this repo\'s copy', function () {
         assertByteTwin(this, '../../../src/consensus/gates/mirror_admission_gate.js',
-            '../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js', 'the hub mirror-admission twin');
+            path.join(HUB_DIR, 'src', 'consensus', 'gates', 'mirror_admission_gate.js'), 'the hub mirror-admission twin');
     });
 
     it('holds xchain-hub/src/consensus/gates/mirror_admission_margin_gate.js byte-identical to this repo\'s copy', function () {
         assertByteTwin(this, '../../../src/consensus/gates/mirror_admission_margin_gate.js',
-            '../../../../xchain-hub/src/consensus/gates/mirror_admission_margin_gate.js', 'the hub margin twin');
+            path.join(HUB_DIR, 'src', 'consensus', 'gates', 'mirror_admission_margin_gate.js'), 'the hub margin twin');
     });
 
     // The exported surface of that module, asserted on the LOCAL copy so it runs without the
