@@ -57,6 +57,9 @@ describe('protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier
 
     it('keeps the final registry part within the structure limit', function () {
         const text = fs.readFileSync(PART, 'utf8');
+        assert.match(text, /Per-chain height at which the VM removes BigInt typed arrays/);
+        assert.match(text, /Mirrors xchain-vm: its null launched-network slots are UNARMED here/);
+        assert.strictEqual(text.split("addGate('" + KEY + "'").length - 1, 1);
         const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
         assert.ok(lines <= 400, 'gates_3.js is ' + lines + ' lines');
     });

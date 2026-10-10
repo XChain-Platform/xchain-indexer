@@ -382,6 +382,9 @@ addGate('vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION', 'heig
     regtest: 0,
 });
 
+// bigint_surface_strip_heights
+// Per-chain height at which the VM removes BigInt typed arrays and BigInt DataView methods.
+// Mirrors xchain-vm: its null launched-network slots are UNARMED here; regtest is on at genesis.
 addGate('bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,

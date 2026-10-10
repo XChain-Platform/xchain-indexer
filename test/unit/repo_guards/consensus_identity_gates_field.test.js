@@ -73,6 +73,7 @@ describe('consensus identity GATES field and pin comparison', function () {
         const key = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
         const derived = codeIdentity('regtest').armed_map_rows[key];
         assert.match(derived, /^[0-9a-f]{64}$/);
+        assert.strictEqual(derived, '9887f0812153696f7b1f3bbdbe1ab1a56d1a3339f210e4cfe984aab869bcedb9');
         for (const block of ['bare_checkout', 'armed_regtest_venue']) {
             assert.strictEqual(pin[block].armed_map_rows[key], derived, block);
         }
