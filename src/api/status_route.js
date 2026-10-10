@@ -85,6 +85,15 @@ function statusVerdict(XChainIndexer, indexer){
              lastHubConfigFetchAt, hubConfigAgeSeconds, hubConfigStale };
 }
 
+// Block-poll loop liveness, reported for the fleet watcher to page on and never
+// folded into the 503 verdict (see health/advance_fields.js).
+function pollHeartbeatFields(indexer){
+    return {
+        pollSilent: (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false,
+        lastPollAt: indexer.lastPollAt || null
+    };
+}
+
 // The /status JSON body, in the key order monitors have always read.
 function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict, hubMirror }){
     let { now, stalled, wedged, futureWait, stallClass,
@@ -141,10 +150,7 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         hubConfigStale:       hubConfigStale,
         schemaReady:          indexer.schemaReady === true,
         hubMirror:            hubMirror,
-        // Block-poll loop liveness, appended after hubMirror so no earlier key a monitor reads moves. Reported for the fleet
-        // watcher to page on, never folded into the 503 above (see health/advance_fields.js).
-        pollSilent:           (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false,
-        lastPollAt:           indexer.lastPollAt || null,
+        ...pollHeartbeatFields(indexer),
         ...hubConsensusHashFields(indexer)
     };
 }
