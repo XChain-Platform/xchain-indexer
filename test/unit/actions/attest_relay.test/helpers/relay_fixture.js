@@ -26,6 +26,7 @@ const swq          = require('../../../../../src/consensus/stake_weighted_quorum
 // activeAt() by their keys.
 const { stubActiveAt, stubGate } = require('../../../../helpers/gate_modules.js');
 const RELAY_KEY = 'attest_relay_activation.ATTEST_RELAY_ACTIVATION';
+const RELAY_RESPONSE_DEADLINE_KEY = 'attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION';
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 const ed25519      = require('../../../../../src/consensus/ed25519.js');
 
@@ -97,7 +98,7 @@ function originRequestRow(overrides = {}) {
         request_id:           REQ_ID,
         provider_id:          'http_get',
         request_status:       'pending',
-        deadline_block:       500,
+        deadline_block:       3160100,
         block_index:          3160000,      // an LTC local height, deliberately huge
         action_index:         4242,
         redundancy:           1,
@@ -113,7 +114,7 @@ function originRequestRow(overrides = {}) {
 /**
  * The per-test handler every relay suite runs against, built fresh in each
  * beforeEach; the suite's afterEach restores the stubs with sinon.restore().
- * @returns {{indexer, actionsCtx, handler, executeStub, gateStub, protocolGates}}
+ * @returns {{indexer, actionsCtx, handler, executeStub, gateStub, deadlineGate, protocolGates}}
  */
 function setupRelay() {
     const indexer = createMockIndexer();
@@ -150,8 +151,9 @@ function setupRelay() {
     sinon.stub(ed25519, 'verify').returns(true);
     // Gate ON by default; the inertness describe drives it OFF explicitly.
     const gateStub = stubGate(sinon, RELAY_KEY, true);
+    const deadlineGate = stubGate(sinon, RELAY_RESPONSE_DEADLINE_KEY, true);
 
-    return { indexer, actionsCtx, handler, executeStub, gateStub, protocolGates };
+    return { indexer, actionsCtx, handler, executeStub, gateStub, deadlineGate, protocolGates };
 }
 
 module.exports = {

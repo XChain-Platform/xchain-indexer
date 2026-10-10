@@ -392,3 +392,7 @@ addGate('bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION', 'height'
     testnet: UNARMED,
     regtest: 0,
 });
+
+addGate('action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY', 'height', {
+    mainnet: UNARMED, testnet: UNARMED, regtest: 0,
+});

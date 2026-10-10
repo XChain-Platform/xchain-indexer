@@ -138,7 +138,8 @@
     "protocol_changes": {
       "path": "src/protocol_changes.js",
       "hash": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
-      "twins": []
+      "twins": [],
+      "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
     "rollcall_activation": {
       "path": "src/consensus/gates/rollcall_gate.js",

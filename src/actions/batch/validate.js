@@ -22,7 +22,12 @@
  *
  ********************************************************************/
 
-// The three flag-day verdicts a BATCH is judged under, each resolved ONCE per BATCH.
+const gateRegistry = require('../../consensus/gate_registry');
+const { DISPATCHED_ACTIONS } = require('../actions_class/dispatch.js');
+
+const ACTION_ADMISSION_GATE = 'action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY';
+
+// The flag-day verdicts a BATCH is judged under, each resolved ONCE per BATCH.
 async function resolveGates(data){
     // BATCH_SUBACTION_NORMALIZATION flag-day: when active, sub-actions get the same
     // alias rewrite + legacy VERSION 0 injection as top-level actions. Resolved once
@@ -41,7 +46,9 @@ async function resolveGates(data){
     // test/unit/batch_cost_weighting_gate.test.js), so wherever this is true the classification
     // and normalization the weight scan reads from are already in force.
     let weightsActive = await this.protocolChanges.isEnabled('BATCH_COST_WEIGHTING', data['BLOCK_INDEX']);
-    return { normalize, limitsActive, weightsActive };
+    let dispatchedOnly = gateRegistry.activeAt(ACTION_ADMISSION_GATE,
+        this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+    return { normalize, limitsActive, weightsActive, dispatchedOnly };
 }
 
 // Judge the BATCH as a whole. Returns its command list and the first error found, or the
@@ -55,7 +62,7 @@ async function checkBatch(data, error, gates){
     /*****************************************************************
      * General Validations
      ****************************************************************/
-    error = await activationError.call(this, commands, data, error, gates.normalize);
+    error = await activationError.call(this, commands, data, error, gates.normalize, gates.dispatchedOnly);
     error = await actionCapError.call(this, tally, error, gates.limitsActive);
 
     // Verify SOURCE is not sleeping
@@ -99,8 +106,8 @@ function readCommands(data, error){
 // first PINS error precedence: a batch that breaks this rule and others reports
 // the cap, never the rule a later loop would have found. Counting semantics are
 // consensus-pinned: the raw ';'-split list AFTER the BATCH|<version>| prefix
-// strip, EMPTY elements included (an empty element already whole-batch-rejects
-// via the activation scan, so charging it a slot is consistent). Over-limit
+// strip, EMPTY elements included (an empty element keeps its legacy no-op
+// dispatch, so charging it a slot is still consistent). Over-limit
 // takes the existing whole-batch shape: one invalid record, no sub-command runs.
 //
 // BATCH_COST_WEIGHTING replaces the count with a WEIGHT BUDGET in this same position,
@@ -172,14 +179,16 @@ function tallyActions(commands, gates){
 }
 
 // The activation scan: every sub-command's ACTION must be enabled at this block.
-async function activationError(commands, data, error, normalize){
+async function activationError(commands, data, error, normalize, dispatchedOnly){
     // Verify all ACTION commands are valid
     for(let command of commands){
         let action = String(command).split('|')[0];
         if(normalize)
             action = this.normalizeSubAction(action);
         // Verify this sub-command's action is currently enabled on the network
-        if(!error && await this.protocolChanges.isEnabled(action, data['BLOCK_INDEX']) == false)
+        if(!error && dispatchedOnly && action && !DISPATCHED_ACTIONS.has(action))
+            error = 'invalid: ACTION (unknown)';
+        else if(!error && await this.protocolChanges.isEnabled(action, data['BLOCK_INDEX']) == false)
             error = 'invalid: ACTION (unknown)';
     }
     return error;

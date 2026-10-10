@@ -2278,6 +2278,15 @@
       "bridge and policy barriers when the schema changes underneath @regression @tier1 reads the table anyway when the probe itself fails",
       "bridge and policy barriers when the schema changes underneath @regression @tier1 records the 1146 a stale positive memo earns, and skips the statement next time"
     ],
+    "2b62c6cd80d4f027": [
+      "dispatched-only ACTION admission @regression @tier1 defines the admission set as exactly the names in the dispatch table",
+      "dispatched-only ACTION admission @regression @tier1 invalidates a whole BATCH containing a registered but undispatched name once active",
+      "dispatched-only ACTION admission @regression @tier1 is unarmed on public networks and active from regtest genesis",
+      "dispatched-only ACTION admission @regression @tier1 preserves BATCH admission below the gate",
+      "dispatched-only ACTION admission @regression @tier1 preserves the legacy empty-action no-op in a BATCH once active",
+      "dispatched-only ACTION admission @regression @tier1 preserves top-level admission below the gate",
+      "dispatched-only ACTION admission @regression @tier1 routes a top-level registered feature flag to UNKNOWN once active"
+    ],
     "2b716c727c33a522": [
       "Swap action handler maker policy admission @regression @tier2 admits a GET_ADDRESS allowed for GET_TICK but blocked for GIVE_TICK after payout-policy activation",
       "Swap action handler maker policy admission @regression @tier2 keeps the GET_TICK refusal for the reverse split below payout-policy activation",
@@ -2376,6 +2385,12 @@
       "stallReason across a same-block retry does not restore a reason cleared by a commit",
       "stallReason across a same-block retry keeps the reason and deadline visible while the deferred block is retried"
     ],
+    "2d8ca061f5bcdfac": [
+      "ATTEST v4 relay response deadline @regression @tier1 accepts a response landing exactly at deadline_block",
+      "ATTEST v4 relay response deadline @regression @tier1 preserves the legacy acceptance of deadline+1 below activation",
+      "ATTEST v4 relay response deadline @regression @tier1 preserves today's pre-gate fulfilled status and callback at deadline+1",
+      "ATTEST v4 relay response deadline @regression @tier1 rejects a response landing at deadline+1 after activation"
+    ],
     "2d944feb25011092": [
       "protocol_changes anchor fold rows arms both regtest entries from the shared venue variable",
       "protocol_changes anchor fold rows classifies both stems as registry-only",
@@ -2425,25 +2440,6 @@
     "2dfd0abb78786c1e": [
       "api body parse rejection through installMiddleware answers a malformed JSON body with 400 and one warn line, no error log",
       "api body parse rejection through installMiddleware passes a well-formed body through"
-    ],
-    "2e08800d4f2fd009": [
-      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
-      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
-      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
-      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
-      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
-      "armed_map/manifest: collectRows carries the three row families the design names",
-      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
-      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
-      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
-      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
-      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
-      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
-      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
-      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
-      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
-      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
-      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "2e3850c1f7da931d": [
       "ANCHOR folded archive verdict post-arm coin thresholds activates both DOGE testnet gates exactly at the armed height",
@@ -3492,9 +3488,6 @@
       "cross-chain settlement per-block cap exports a cap alongside the XCALL and ATTEST siblings",
       "cross-chain settlement per-block cap getEffectiveUnsettledMatches returns at most the cap, as the ordered prefix",
       "cross-chain settlement per-block cap processCrossChainSettlements passes the protocol cap and carries the overflow forward"
-    ],
-    "4294555ce1d8a39a": [
-      "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 relay response deadline pre-gate today's pre-gate behaviour records valid, closes fulfilled, and fires the callback at deadline+1"
     ],
     "42ad51cf8687bdd1": [
       "HubPushQueue per-hub fan-out delivers one queued row to both selector candidates",
@@ -5444,12 +5437,6 @@
       "ANCHOR archive section verdict integration keeps consumed checkpoint sections valid after a late folded archive failure",
       "ANCHOR archive section verdict integration preserves the action-wide verdict before the section verdict activation"
     ],
-    "646cf7e6b3829f4e": [
-      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate applies the same row once the gate is active",
-      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate applyBridgeTransfer defers a row below the gate and writes nothing",
-      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate dueBridgeTransfers and the pass skip the row below the gate",
-      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate reads the gate on the destination coin at the block height"
-    ],
     "64b41c6b97257367": [
       "consensus parameters are frozen (track 8 guard) @regression GAS_SCHEDULE + GAS_PRICE equal the golden on every chain (identical across BTC/LTC/DOGE)",
       "consensus parameters are frozen (track 8 guard) @regression VALIDATOR_QUERY_LIMIT equals the golden on every chain (frozen node-local, not env-tunable)",
@@ -5486,6 +5473,26 @@
       "capability-snapshot reorg burial @regression @tier1 party 3: archive recovery _verifyCompleteness accepts an honest archive that omits a source activating inside (N-6, N]",
       "capability-snapshot reorg burial @regression @tier1 party 3: archive recovery _verifyStakes accepts an honest archive whose signer deactivates inside (N-6, N]",
       "capability-snapshot reorg burial @regression @tier1 party 3: archive recovery still rejects a genuinely fabricated key (the existence guard is not weakened)"
+    ],
+    "65019f130fd744f9": [
+      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
+      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
+      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
+      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
+      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
+      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
+      "armed_map/manifest: collectRows carries the three row families the design names",
+      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
+      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
+      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
+      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
+      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
+      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
+      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
+      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
+      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
+      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
+      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "65fda33d23415561": [
       "Sleep @regression @tier3 MEMO validations MEMO with pipe \u2192 invalid",
@@ -6433,6 +6440,14 @@
       "Order_Match LIST trigger @regression @tier2 books the same counterparty for an edit-shaped trigger",
       "Order_Match LIST trigger @regression @tier2 does not book a counterparty absent from the resting order allow list",
       "Order_Match LIST trigger @regression @tier2 matches the indexed resting order using the LIST block context"
+    ],
+    "721f08577076ca3e": [
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 does not rotate a stake row at its deactivation height",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 keeps the historical selection below the flag day",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 reverts an in-window row when its delegation is no longer governing",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 rotates the visible stake row and keeps getContractStakeDataForVM aligned with cooldown stake",
+      "DELEGATION_ROTATE_IN_WINDOW protocol row @regression @tier1 ships unarmed and supports the regtest drill override",
+      "Utility.processContractDelegationMaterializations() in-window gate @regression @tier1 passes the new flag decision to the database sweep"
     ],
     "72a0b56687489fbe": [
       "hourly price age flips VM execution at its action block gate",
@@ -8616,6 +8631,14 @@
       "recovery v3 fold wrapper section lookup picks the sibling chain section whose signatures equal the head",
       "recovery v3 fold wrapper section lookup rejects a head with no matching wrapper section"
     ],
+    "8eef9eb4827f4e83": [
+      "cooldown maturity escrow release reversal @regression @tier3 deletes each legacy refund credit together with its paired negative escrow release",
+      "cooldown maturity escrow release reversal @regression @tier3 keeps both escrow releases and still deletes the credits and resets the status when the delete is off",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback at an active height deletes both releases so the re-maturity writes the only one",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback on an unarmed network keeps the escrow releases and reverses everything else as before",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 the row is unarmed on mainnet and every testnet chain and active from regtest genesis",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 the switch is read at the rollback target block, for this network and coin"
+    ],
     "8f02c7885f4b9349": [
       "touch guards env routing @regression has no process.env read of its own; the config home does the read",
       "touch guards env routing @regression re-reads INDEXER_TOUCH_GUARD on every call, so a flip on a running node takes effect",
@@ -10101,6 +10124,86 @@
       "createHubListRefresher() resolves with an error outcome when merge throws",
       "createHubListRefresher() warns on every socket error"
     ],
+    "a017585e2e44657a": [
+      "activation-gate constant parity to canonical constants.js @regression anchor_activation ANCHOR_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression anchor_bundle_order_activation ANCHOR_BUNDLE_ORDER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_ATTEST_ARRIVAL_MARGIN_S is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_ATTEST_BARRIER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_REWARD_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_REWARD_AMOUNT is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_REWARD_DERIVE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_REWARD_MIRROR_MATURITY is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ARCHIVE_REWARD_AMOUNT is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression archive_match_count_activation ARCHIVE_MATCH_COUNT_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression attest_admission_activation ATTEST_ADMISSION_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression attest_broadcast_fee_activation ATTEST_BROADCAST_FEE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression attest_broadcast_fee_activation ATTEST_BROADCAST_FEE_CAP is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression attest_relay_activation.js ATTEST_RELAY_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression attest_request_cap_activation ATTEST_REQUEST_CAPS is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression attest_request_cap_activation ATTEST_REQUEST_CAP_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression attest_response_mirror_activation.js ATTEST_RESPONSE_MIRROR_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression attest_responsible_widening_activation.js ATTEST_RESPONSIBLE_WIDENING is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression attest_responsible_widening_activation.js ATTEST_RESPONSIBLE_WIDENING_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression attest_responsible_widening_activation.js ATTEST_RESPONSIBLE_WIDENING_V2 is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression attest_zero_conf_activation.js ATTEST_ZERO_CONF_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression checkpoint_commitment_activation.js CHECKPOINT_COMMITMENT_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression consensus/reserved_roots.js RESERVED_FUTURE_ROOTS is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression cross_chain_royalty_activation.js CROSS_CHAIN_ROYALTY_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression exports the admission canonical encoder and its era gate, callable and injective",
+      "activation-gate constant parity to canonical constants.js @regression holds RESERVED_FUTURE_ROOTS frozen, upper-case and duplicate-free at the surveyed width",
+      "activation-gate constant parity to canonical constants.js @regression holds xchain-hub/src/consensus/gates/mirror_admission_gate.js byte-identical to this repo's copy",
+      "activation-gate constant parity to canonical constants.js @regression holds xchain-hub/src/consensus/gates/mirror_admission_margin_gate.js byte-identical to this repo's copy",
+      "activation-gate constant parity to canonical constants.js @regression holds xchain-sync/src/consensus/gates/train_gate.js byte-identical to this repo's copy",
+      "activation-gate constant parity to canonical constants.js @regression list_address_ref_activation LIST_ADDRESS_REF_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression list_meta_activation LIST_META_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression list_owner_activation LIST_OWNER_ACTIVATION matches canonical outside the indexer mainnet genesis arm",
+      "activation-gate constant parity to canonical constants.js @regression list_share_activation LIST_SHARE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression list_share_consumer_activation LIST_SHARE_CONSUMER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression list_share_producer_activation LIST_SHARE_PRODUCER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression list_tick_coin_activation LIST_TICK_COIN_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression list_transfer_activation LIST_TRANSFER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression list_union_activation LIST_UNION_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js ADMIT_MARGIN_BLOCKS is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js ADMIT_MAX_FUTURE_BLOCKS is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js ADMIT_MIN_FUTURE_BLOCKS is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js MIRROR_ADMISSION_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js MIRROR_ADMISSION_CONSUMER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js MIRROR_ADMISSION_REGTEST_ARMED_HEIGHT is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js MIRROR_ADMISSION_REGTEST_ENV is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression mirror_admission_margin_activation ADMIT_CHAIN_MARGIN_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression mirror_admission_margin_activation ADMIT_CHAIN_MARGIN_BLOCKS is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression names the sibling refusal reason instead of an absent checkout when one is given",
+      "activation-gate constant parity to canonical constants.js @regression oracle_hourly_window_activation ORACLE_HOURLY_WINDOW_FIRST_ROUND is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression oracle_price_age_hourly_activation ORACLE_PRICE_AGE_HOURLY_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression oracle_round_time_activation ORACLE_ROUND_TIME_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression price_fee_batch_landed_activation PRICE_FEE_BATCH_LANDED_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression price_pair_activation.js PRICE_PAIR_TICKER_MAX_LEGACY is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression price_pair_activation.js PRICE_PAIR_TICKER_MAX_WIDE is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression price_pair_activation.js PRICE_PAIR_WIDEN_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression price_scale_activation PRICE_SCALE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression price_sig_tally_activation.js PRICE_SIG_TALLY_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js LIST_META_DESCRIPTION_MAX_BYTES is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js LIST_META_NAME_MAX_BYTES is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js LIST_SHARE_MAX_MEMBERS is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js LIST_UNION_MAX_MEMBERS is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js XBRIDGE_MAX_PER_BLOCK is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js XPOLICY_MAX_MEMBERS is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js XPOLICY_MAX_PER_BLOCK is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression refuses a listed root in any case and admits an unlisted one",
+      "activation-gate constant parity to canonical constants.js @regression reports skipped and names the exact checkout path when the documentation checkout is absent",
+      "activation-gate constant parity to canonical constants.js @regression resolves every gated constant by registry key, equal to the module export",
+      "activation-gate constant parity to canonical constants.js @regression resolves every gated constant from its local module, whatever the checkout state",
+      "activation-gate constant parity to canonical constants.js @regression snapshot_reorg_buffer.js CANONICAL_REORG_BUFFER is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression snapshot_reorg_buffer.js SNAPSHOT_BURIAL_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression stake_key_reuse_activation STAKE_KEY_REUSE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression sweep_zero_leg_activation SWEEP_ZERO_LEG_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression throws rather than skipping on an absent checkout when XCHAIN_REQUIRE_SIBLINGS=1",
+      "activation-gate constant parity to canonical constants.js @regression tick_namespace_activation TICK_NAMESPACE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression token_bridge_activation.js TOKEN_BRIDGE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression token_policy_activation.js TOKEN_POLICY_INHERITANCE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression train_activation.js TRAIN_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
+      "activation-gate constant parity to canonical constants.js @regression xchain_bridge_activation.js XCHAIN_BRIDGE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js"
+    ],
     "a04403a0cd08030c": [
       "Anchor pre-activation status gate @regression @tier3 changes nothing at or above ANCHOR_ACTIVATION",
       "Anchor pre-activation status gate @regression @tier3 fails closed on a junk height whatever the gate says",
@@ -10130,6 +10233,9 @@
       "native coin fee quote @regression @tier1 _priceFeeQuote() chain-time anchoring getFeeSchedule() discloses where it read the prices names the indexer's own database on a single-host node",
       "native coin fee quote @regression @tier1 _priceFeeQuote() chain-time anchoring getFeeSchedule() discloses where it read the prices withholds the database name on mainnet but still reports the boolean",
       "native coin fee quote @regression @tier1 _priceFeeQuote() chain-time anchoring getFeeSchedule() prices off the tip block time too, and reports it"
+    ],
+    "a148644af845b9ca": [
+      "LIST owner activation @regression @tier1 arms mainnet and regtest at genesis while preserving the per-chain testnet heights"
     ],
     "a1b64106c03d5856": [
       "genesis airdrop pass accepts a fully-pinned bucket set on mainnet",
@@ -10375,6 +10481,12 @@
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 vector: INTACT owner stake burns in full",
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 vector: PARTIALLY unstaked owner stake burns only what remains",
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 zero-amount rows are skipped rather than re-burned"
+    ],
+    "a7b0511aa619e3e1": [
+      "ANCHOR v3 empty fold rejection preserves the historical empty-fold verdict below activation",
+      "ANCHOR v3 empty fold rejection preserves today's pre-gate behaviour by accepting the unsigned empty fold",
+      "ANCHOR v3 empty fold rejection rejects an empty fold at activation using the ANCHOR mined height",
+      "ANCHOR v3 empty fold rejection ships the reject gate inert on live networks and active on regtest"
     ],
     "a7bf3b007262c77c": [
       "Attest (ATTEST) @regression @tier3 _injectCallbackExecute internal branches callback_params_json with invalid JSON \u2192 catch branch fires, callbackParams stays []",
@@ -11223,9 +11335,6 @@
       "push_generation stamping on hub-pinned federation reads (item 2367) @regression getpendingcrosschaincalls reads the generation BEFORE the rows (HUB-RETRACT-1 ordering)",
       "push_generation stamping on hub-pinned federation reads (item 2367) @regression getpendingcrosschaincalls reads the source-chain push generation"
     ],
-    "b7bafbd9ea645940": [
-      "cooldown maturity escrow release reversal @regression @tier3 deletes each legacy refund credit together with its paired negative escrow release"
-    ],
     "b803fe70b3727ead": [
       "AnchorRecovery (full-parse recovery) @regression @tier2 a junk ORPHAN chunk from an outsider never enters the reassembly (#3075)",
       "AnchorRecovery (full-parse recovery) @regression @tier2 a junk head reassembles only its own chunks, so it still fails",
@@ -11242,6 +11351,10 @@
       "AnchorRecovery (full-parse recovery) @regression @tier2 round-trips a chunked batch: matches + both capability sets rebuilt",
       "AnchorRecovery (full-parse recovery) @regression @tier2 skips anchor rows the chain parse recorded as invalid (status filter, not replayed)",
       "AnchorRecovery (full-parse recovery) @regression @tier2 the empty-archive log names exactly ARCHIVE_HEAD_VERSIONS, never a retired wire"
+    ],
+    "b85c12080a6c6211": [
+      "bridge_settle: row-fields refusals and the per-block cap preserves the legacy cap behavior before activation",
+      "bridge_settle: row-fields refusals and the per-block cap settles the good row behind 25 malformed rows after activation"
     ],
     "b8c9f15357e681d7": [
       "Deferred chunked DEPLOY assembly @regression @tier2 Gas parity: A + C sum to an inline deploy of the same source A's base gas_used plus C's constructor gas_used equals a single inline deploy's total",
@@ -12471,6 +12584,15 @@
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure a probe records the fee owed even with no oracle output to read",
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure records nothing when no fee is owed (belowDust / zero fee)"
     ],
+    "cee72069c1a9d3bd": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
+    ],
     "cf3bcc3e4ee7e191": [
       "performance ratio noise floor accepts the same baseline at the old 1ms floor",
       "performance ratio noise floor accepts values at or above the floor",
@@ -12778,6 +12900,15 @@
       "BATCH composition limit boundary tests @regression @tier3 BAT-05: Nested BATCH makes the whole batch invalid (BATCH limit = 0); processAction is never called",
       "BATCH composition limit boundary tests @regression @tier3 BAT-06: BATCH with 10 SENDs is valid and calls processAction 10 times",
       "BATCH composition limit boundary tests @regression @tier3 BAT-07: BATCH with empty action name followed by a valid SEND is handled gracefully"
+    ],
+    "d500ae1d3581f002": [
+      "bridge_settle: destination below its format-specific bridge sub-gate applies the same v2 row once the XCHAIN gate is active",
+      "bridge_settle: destination below its format-specific bridge sub-gate applyBridgeTransfer defers a v2 row below XCHAIN_BRIDGE_ACTIVATION and writes nothing",
+      "bridge_settle: destination below its format-specific bridge sub-gate defers a v5 row below TOKEN_BRIDGE_ACTIVATION while XCHAIN is active",
+      "bridge_settle: destination below its format-specific bridge sub-gate does not use TOKEN_BRIDGE_ACTIVATION for a v2 row",
+      "bridge_settle: destination below its format-specific bridge sub-gate does not use XCHAIN_BRIDGE_ACTIVATION for a v5 row",
+      "bridge_settle: destination below its format-specific bridge sub-gate dueBridgeTransfers and the pass skip a v2 row below XCHAIN_BRIDGE_ACTIVATION",
+      "bridge_settle: destination below its format-specific bridge sub-gate reads the XCHAIN gate on the destination coin at the block height"
     ],
     "d5091677642a6150": [
       "bridge reads are registered open (base spec D44) @regression @tier1 getbridgebalances is in none of WRITE_METHODS / GATED_EXEC_METHODS / FEDERATION_READ_METHODS",
@@ -13680,86 +13811,6 @@
       "BATCH cost-weighting flag day @regression @tier1 registration mainnet: ACTIVE from block 0 and at every instant above it",
       "BATCH cost-weighting flag day @regression @tier1 registration regtest: active from genesis, so drills and suites run the post-flag-day rules",
       "BATCH cost-weighting flag day @regression @tier1 registration testnet: active from genesis"
-    ],
-    "e376eff2cc4e3b3e": [
-      "activation-gate constant parity to canonical constants.js @regression anchor_activation ANCHOR_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression anchor_bundle_order_activation ANCHOR_BUNDLE_ORDER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_ATTEST_ARRIVAL_MARGIN_S is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_ATTEST_BARRIER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_REWARD_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_REWARD_AMOUNT is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_REWARD_DERIVE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ANCHOR_REWARD_MIRROR_MATURITY is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression anchor_reward_activation.js ARCHIVE_REWARD_AMOUNT is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression archive_match_count_activation ARCHIVE_MATCH_COUNT_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression attest_admission_activation ATTEST_ADMISSION_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression attest_broadcast_fee_activation ATTEST_BROADCAST_FEE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression attest_broadcast_fee_activation ATTEST_BROADCAST_FEE_CAP is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression attest_relay_activation.js ATTEST_RELAY_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression attest_request_cap_activation ATTEST_REQUEST_CAPS is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression attest_request_cap_activation ATTEST_REQUEST_CAP_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression attest_response_mirror_activation.js ATTEST_RESPONSE_MIRROR_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression attest_responsible_widening_activation.js ATTEST_RESPONSIBLE_WIDENING is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression attest_responsible_widening_activation.js ATTEST_RESPONSIBLE_WIDENING_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression attest_responsible_widening_activation.js ATTEST_RESPONSIBLE_WIDENING_V2 is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression attest_zero_conf_activation.js ATTEST_ZERO_CONF_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression checkpoint_commitment_activation.js CHECKPOINT_COMMITMENT_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression consensus/reserved_roots.js RESERVED_FUTURE_ROOTS is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression cross_chain_royalty_activation.js CROSS_CHAIN_ROYALTY_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression exports the admission canonical encoder and its era gate, callable and injective",
-      "activation-gate constant parity to canonical constants.js @regression holds RESERVED_FUTURE_ROOTS frozen, upper-case and duplicate-free at the surveyed width",
-      "activation-gate constant parity to canonical constants.js @regression holds xchain-hub/src/consensus/gates/mirror_admission_gate.js byte-identical to this repo's copy",
-      "activation-gate constant parity to canonical constants.js @regression holds xchain-hub/src/consensus/gates/mirror_admission_margin_gate.js byte-identical to this repo's copy",
-      "activation-gate constant parity to canonical constants.js @regression holds xchain-sync/src/consensus/gates/train_gate.js byte-identical to this repo's copy",
-      "activation-gate constant parity to canonical constants.js @regression list_address_ref_activation LIST_ADDRESS_REF_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression list_meta_activation LIST_META_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression list_owner_activation LIST_OWNER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression list_share_activation LIST_SHARE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression list_share_consumer_activation LIST_SHARE_CONSUMER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression list_share_producer_activation LIST_SHARE_PRODUCER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression list_tick_coin_activation LIST_TICK_COIN_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression list_transfer_activation LIST_TRANSFER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression list_union_activation LIST_UNION_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js ADMIT_MARGIN_BLOCKS is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js ADMIT_MAX_FUTURE_BLOCKS is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js ADMIT_MIN_FUTURE_BLOCKS is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js MIRROR_ADMISSION_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js MIRROR_ADMISSION_CONSUMER_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js MIRROR_ADMISSION_REGTEST_ARMED_HEIGHT is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression mirror_admission_activation.js MIRROR_ADMISSION_REGTEST_ENV is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression mirror_admission_margin_activation ADMIT_CHAIN_MARGIN_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression mirror_admission_margin_activation ADMIT_CHAIN_MARGIN_BLOCKS is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression names the sibling refusal reason instead of an absent checkout when one is given",
-      "activation-gate constant parity to canonical constants.js @regression oracle_hourly_window_activation ORACLE_HOURLY_WINDOW_FIRST_ROUND is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression oracle_price_age_hourly_activation ORACLE_PRICE_AGE_HOURLY_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression oracle_round_time_activation ORACLE_ROUND_TIME_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression price_fee_batch_landed_activation PRICE_FEE_BATCH_LANDED_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression price_pair_activation.js PRICE_PAIR_TICKER_MAX_LEGACY is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression price_pair_activation.js PRICE_PAIR_TICKER_MAX_WIDE is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression price_pair_activation.js PRICE_PAIR_WIDEN_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression price_scale_activation PRICE_SCALE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression price_sig_tally_activation.js PRICE_SIG_TALLY_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js LIST_META_DESCRIPTION_MAX_BYTES is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js LIST_META_NAME_MAX_BYTES is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js LIST_SHARE_MAX_MEMBERS is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js LIST_UNION_MAX_MEMBERS is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js XBRIDGE_MAX_PER_BLOCK is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js XPOLICY_MAX_MEMBERS is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression protocol/constants.js XPOLICY_MAX_PER_BLOCK is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression refuses a listed root in any case and admits an unlisted one",
-      "activation-gate constant parity to canonical constants.js @regression reports skipped and names the exact checkout path when the documentation checkout is absent",
-      "activation-gate constant parity to canonical constants.js @regression resolves every gated constant by registry key, equal to the module export",
-      "activation-gate constant parity to canonical constants.js @regression resolves every gated constant from its local module, whatever the checkout state",
-      "activation-gate constant parity to canonical constants.js @regression snapshot_reorg_buffer.js CANONICAL_REORG_BUFFER is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression snapshot_reorg_buffer.js SNAPSHOT_BURIAL_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression stake_key_reuse_activation STAKE_KEY_REUSE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression sweep_zero_leg_activation SWEEP_ZERO_LEG_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression throws rather than skipping on an absent checkout when XCHAIN_REQUIRE_SIBLINGS=1",
-      "activation-gate constant parity to canonical constants.js @regression tick_namespace_activation TICK_NAMESPACE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression token_bridge_activation.js TOKEN_BRIDGE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression token_policy_activation.js TOKEN_POLICY_INHERITANCE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression train_activation.js TRAIN_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
-      "activation-gate constant parity to canonical constants.js @regression xchain_bridge_activation.js XCHAIN_BRIDGE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js"
     ],
     "e3ac61fb28a09639": [
       "bridge_settle: proof acquisition after terminal guards refuses a non-quorate due in leg without fetching a proof",
@@ -14974,9 +15025,6 @@
       "attest_response_canonical: hub/indexer twin produces byte-identical canonicals to the hub copy across both eras",
       "attest_response_canonical: hub/indexer twin rejects the same spellings as the hub copy"
     ],
-    "fa331b6274442a21": [
-      "ANCHOR v3 empty fold rejection preserves today's pre-gate behaviour by accepting the unsigned empty fold"
-    ],
     "fa99b888f85b3500": [
       "Contract delegation signing key claim query @regression @tier2 reserves pending and live delegations but releases a key at its deactivation block",
       "Delegated signing key materialization slot @regression @tier2 does not rotate a governed stake when another slot holds the delegated key",
@@ -15364,8 +15412,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1248,
-      "titleCount": 12859,
+      "fileCount": 1252,
+      "titleCount": 12892,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15387,6 +15435,7 @@
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/preflight_memo.test.js": "fcceb01127354bd9",
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
+        "test/unit/actions/actions_class/dispatched_actions.test.js": "2b62c6cd80d4f027",
         "test/unit/actions/actions_class/install_methods.test.js": "13e1f9bf869b82b9",
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
@@ -15459,7 +15508,7 @@
         "test/unit/actions/attest_relay.test/relay_canonicals.test.js": "d3c72ac176cde46a",
         "test/unit/actions/attest_relay.test/relay_request.test.js": "5e848392b2703195",
         "test/unit/actions/attest_relay.test/relay_response.test.js": "a3b18fb1d683293a",
-        "test/unit/actions/attest_relay.test/relay_response_deadline.test.js": "4294555ce1d8a39a",
+        "test/unit/actions/attest_relay.test/relay_response_deadline.test.js": "2d8ca061f5bcdfac",
         "test/unit/actions/attest_responsible_set_vectors.test.js": "6ee9ec17dc5d367c",
         "test/unit/actions/batch/mint_cap.test.js": "1e74889cf67f01b5",
         "test/unit/actions/batch_execute_attest.test.js": "56d2189dafc1f3bf",
@@ -15724,7 +15773,7 @@
         "test/unit/actions/xcall.test/result_suppresses_expiry.test.js": "ecaebb857eb828c0",
         "test/unit/actions/xcall.test/v0_request_validation.test.js": "e620395aadaaeeea",
         "test/unit/actions/xcall.test/v2_expire.test.js": "095a443c3cec5cd4",
-        "test/unit/activations/activation_constants_parity.test.js": "e376eff2cc4e3b3e",
+        "test/unit/activations/activation_constants_parity.test.js": "a017585e2e44657a",
         "test/unit/activations/activation_constants_parity.test/activation_gate_list.test.js": "bfe23dfdcb39b50d",
         "test/unit/activations/activation_constants_parity.test/height_ordering.test.js": "2d6ea17f3323e9d8",
         "test/unit/activations/activation_constants_parity.test/mirror_rows.test.js": "39056727de844ed9",
@@ -15753,6 +15802,7 @@
         "test/unit/activations/list/list_union_activation.test.js": "de3ac83b630fe7d7",
         "test/unit/activations/list_change_rematch_activation.test.js": "6e46a49590c985ce",
         "test/unit/activations/list_change_rematch_token_level.test.js": "3cd15f47b0f9b91e",
+        "test/unit/activations/list_owner_activation_armed.test.js": "a148644af845b9ca",
         "test/unit/activations/market_list_source_activation.test.js": "1b49059dee906137",
         "test/unit/activations/mirror_admission_activation.test.js": "718b1a8900dc316c",
         "test/unit/activations/mirror_admission_replay_witness.test.js": "4675f3133a96b7c1",
@@ -15783,7 +15833,7 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "5278429cef8904ee",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_counter.test.js": "1c56af9b1dbd9f0c",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
-        "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "fa331b6274442a21",
+        "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "a7b0511aa619e3e1",
         "test/unit/anchor/anchor_v3_fold_parse.test.js": "6ea2607d7bbbc413",
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
@@ -15895,6 +15945,7 @@
         "test/unit/bridge/bridge_settle.test/refusals.test.js": "32ded3574ceb5f61",
         "test/unit/bridge/bridge_settle.test/refused_policy_due_window.test.js": "6e3424428b660c0b",
         "test/unit/bridge/bridge_settle.test/refused_transfers_cap_slot.test.js": "b98e631c246e04f9",
+        "test/unit/bridge/bridge_settle.test/row_fields_terminal_cap_slot.test.js": "b85c12080a6c6211",
         "test/unit/bridge/bridge_settle.test/slash_and_pass_order.test.js": "44760e88af686de8",
         "test/unit/bridge/bridge_settle.test/source_leg.test.js": "d4c7f1b0a6ee82ef",
         "test/unit/bridge/db_pending_bridge_transfers.test.js": "9923a571b138cf79",
@@ -15968,12 +16019,12 @@
         "test/unit/consensus/anchor_reward_derive/reward_groups.test.js": "67c89e84e7aba170",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
-        "test/unit/consensus/armed_map/manifest.test.js": "2e08800d4f2fd009",
+        "test/unit/consensus/armed_map/manifest.test.js": "65019f130fd744f9",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
-        "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "646cf7e6b3829f4e",
+        "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "d500ae1d3581f002",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
@@ -16038,6 +16089,7 @@
         "test/unit/contracts/controller_guard_returnvalue.test.js": "1734825922f9caa5",
         "test/unit/contracts/controller_policy_layer.test.js": "8fabcde2ac147e88",
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
+        "test/unit/contracts/delegate_rotation_unstake_window.test.js": "721f08577076ca3e",
         "test/unit/contracts/emission_bounds_vm_parity.test.js": "275cd1720c6c0c1f",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
@@ -16493,7 +16545,7 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "9e7884adfcd7f5be",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "81e8fdffad96b491",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
@@ -16512,7 +16564,7 @@
         "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "78664d20d86a7a0f",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
         "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
-        "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "b7bafbd9ea645940",
+        "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "8eef9eb4827f4e83",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
         "test/unit/rollback/rollback.test/transaction_and_rearm.test.js": "294f6ca3123cda7e",
         "test/unit/rollback/rollback_archive_author_scope.test.js": "d02af0af67a03e53",

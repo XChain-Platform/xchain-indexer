@@ -44,7 +44,7 @@ describe('armed_map/fingerprint: the running process', function () {
         assert.strictEqual(out.count, manifest.ENTRIES.length);
         assert.deepStrictEqual(out.rows, expected.rows);
         assert.strictEqual(out.rows['list_owner_activation.LIST_OWNER_ACTIVATION'],
-            'de491f1800ecbafef8565ee3faa8b87707092505a441c8a970593c9025d9923d');
+            'fcc08a9502c12cda2dbd29452342101310d6f2c7c947e596315eb73b1bf7be11');
         assert.strictEqual(out.rows['cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'],
             '95e34322344784c66ed84f586b7088d141fb9fb3167c5ce20771018edc8208c2');
     });

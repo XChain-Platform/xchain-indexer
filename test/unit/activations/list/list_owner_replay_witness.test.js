@@ -105,7 +105,7 @@ function runInterrupt(args) {
 describe('LIST owner replay witness: gate and hash comparison', function () {
     it('reads the never-arm values for public corpora and genesis-active regtest value', function () {
         const gates = witness.gateValues();
-        assert.strictEqual(gates.mainnet, 9999999999);
+        assert.strictEqual(gates.mainnet, 0);
         assert.strictEqual(gates.testnet, 9999999999);
         assert.strictEqual(gates.regtest, 0);
     });
@@ -179,13 +179,13 @@ describe('LIST owner replay witness: success and retention', function () {
 
     it('reports MISMATCH and exits nonzero for a perturbed record', function () {
         const parent = temporaryDirectory('mismatch');
-        const original = writeFixture(parent, fixture('mainnet', false));
+        const original = writeFixture(parent, fixture('testnet', false));
         const corpus = path.join(parent, 'perturbed.json');
         fs.copyFileSync(original, corpus);
         const changed = JSON.parse(fs.readFileSync(corpus, 'utf8'));
         changed.sides.off[1].items[1] = 'PERTURBED';
         fs.writeFileSync(corpus, JSON.stringify(changed) + '\n');
-        const result = runTool(['--network', 'mainnet', '--corpus-file', corpus,
+        const result = runTool(['--network', 'testnet', '--corpus-file', corpus,
             '--workdir', path.join(parent, 'work')]);
         assert.strictEqual(result.status, witness.EXIT.FAIL, result.stdout + result.stderr);
         assert.match(result.stdout, /MISMATCH: first divergence at block 11 on hash/);

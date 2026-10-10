@@ -119,6 +119,8 @@ const REPLACED_STEMS = Object.freeze([
 // Kept apart from REPLACED_STEMS so that list stays the W4 and W5 census.
 const REGISTRY_ONLY_STEMS = Object.freeze([
     'anchor_archive_fold_term_activation',
+    'anchor_empty_fold_reject_activation',
+    'cooldown_maturity_escrow_reversal_activation',
     'dispenser_settlement_price_activation',
     'dispenser_freshness_proven_use_activation',
     'empty_allow_list_denies_activation',
@@ -136,6 +138,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'anchor_fold_activation',
     'archive_section_verdict_activation',
     'bridge_policy_detach_activation',
+    'bridge_row_fields_terminal_activation',
     'vm_lint_optional_chain_heights',
     'bigint_surface_strip_heights',
     'vm_lint_banned_with_heights',
@@ -160,10 +163,12 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'price_wire_trailing_activation',
     'oracle_snapshot_age_seconds_activation',
     'attest_relay_fee_activation',
+    'attest_relay_response_deadline_activation',
     'bet_feed_list_edit_activation',
     'cross_chain_offer_list_export_activation',
     'cross_chain_remote_token_activation',
     'send_gated_total_tick_id_activation',
+    'action_admission_dispatched_only',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
