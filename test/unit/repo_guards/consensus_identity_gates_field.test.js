@@ -11,6 +11,7 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -23,6 +24,11 @@ const REPO = path.resolve(__dirname, '..', '..', '..');
 const BIN = path.join(REPO, 'bin', 'consensus-identity.js');
 const PIN = path.join(REPO, 'bin', 'pins', 'at1-consensus-identity.json');
 const SHARED_ROWS = path.join(REPO, 'src', 'protocol_changes', 'shared_rows_5.js');
+const HUB_SHARED_ROWS_SHA256 = '3627a95233fa76bed61ba4eec58b92d5397ea33e431438630dbd90359c4b38f1';
+
+function sha256(bytes) {
+    return crypto.createHash('sha256').update(bytes).digest('hex');
+}
 
 function run(args) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'consensus-identity-stdout-'));
@@ -83,6 +89,10 @@ describe('consensus identity GATES field and pin comparison', function () {
         for (const block of ['bare_checkout', 'armed_regtest_venue']) {
             assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
         }
+    });
+
+    it('pins shared rows 5 to the hub canonical bytes without a sibling checkout', function () {
+        assert.strictEqual(sha256(fs.readFileSync(SHARED_ROWS)), HUB_SHARED_ROWS_SHA256);
     });
 
     it('matches the hub pinned GATES field hash', function () {
