@@ -26,6 +26,7 @@ const crypto  = require('crypto');
 // BTC-anchored SNAPSHOT_BLOCK, never a local height.
 const gateRegistry = require('../../../consensus/gate_registry');
 const ATTEST_RELAY_KEY = 'attest_relay_activation.ATTEST_RELAY_ACTIVATION';
+const RELAY_RESPONSE_DEADLINE_KEY = 'attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION';
 const { rethrowIfInfraFault } = require('../../../consensus/fault_guard.js');
 const { getLogger } = require('../../../observability/index.js');
 const { HOME_CHAIN } = require('../constants.js');
@@ -55,7 +56,7 @@ module.exports = {
         let wire = this.relayResponseWireError(params, f, error);
         error    = wire.error;
 
-        let lookup  = await this.relayResponseRequestError(requestId, error);
+        let lookup  = await this.relayResponseRequestError(requestId, data, error);
         let request = lookup.request;
         error       = lookup.error;
 
@@ -135,7 +136,7 @@ module.exports = {
     },
 
     // The local request this leg closes, and every reason it cannot be closed by relay.
-    async relayResponseRequestError(requestId, error){
+    async relayResponseRequestError(requestId, data, error){
         // The local request must be one this chain admitted for relay and has not
         // already closed. A native (non-relay) request is NOT relay-closable: it never
         // left this chain, so a v4 naming it is either a mistake or an attempt to close
@@ -149,6 +150,10 @@ module.exports = {
                 error = 'invalid: REQUEST is not relay-eligible on this chain';
             else if(request.request_status !== 'pending')
                 error = 'invalid: REQUEST already ' + request.request_status;
+            else if(gateRegistry.activeAt(RELAY_RESPONSE_DEADLINE_KEY,
+                    this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
+                    parseInt(data['BLOCK_INDEX']) > parseInt(request.deadline_block))
+                error = 'invalid: REQUEST expired (deadline_block=' + request.deadline_block + ')';
         }
 
         return { request, error };
