@@ -1,7 +1,7 @@
 {
   "note": "AT1 consensus identity for the code-structure pass. The code values come from the source tree: read them with bin/consensus-identity.js --json, which prints what codeIdentity() returns, rather than from a count kept here. The tip state_hash is read against a regtest rail and is recorded by the AT run, not here. The digest is environment-sensitive on regtest: both readings are kept so a later milestone can compare against the one taken the same way.",
   "indexer_rev": "b3c0cd22263ee675ac3d46ec541d49132065eda4",
-  "hub_shared_rows_commit": "b74a55537b5bc12b420270ad99d57b7740af043d",
+  "hub_shared_rows_commit": "39c20d4942c2006682cb7f5b1729a4f239ce00b8",
   "armed_map_fingerprint_note": "armed_map_fingerprint carries fingerprint v2 (armed_map_fingerprint_version 2) since W3; the armed_map_fingerprint_v2 alias of the W1 to W4 window was dropped from this pin by activation-registry row 22 (W5) with every other field byte-unchanged. History: the alias and armed_map_rows were added by fingerprint v2 window W1, read 2026-09-14T15:57:13Z in a detached worktree at indexer cf776e32 plus the W1 files, node_modules linked, by the same two invocations as the rest of this pin (bare, and with the armed env below). Every older value in each block re-read byte-identical in that tree, so none was re-pinned. v2 hashes resolved values, so like the digest it differs between the bare and armed readings. The 11 xchain-vm mirror rows were added by row 3 on 2026-09-15, and the value moved once.",
   "v0190_cut_note": "Re-pinned at the v0.19.0 cut, 2026-09-16, on the release branch: both blocks were re-read by the same two invocations (bare, and with the armed env below) and only the values the cut moves changed, which are the armed-map fingerprint, the rules digest and the three rows the train arms or bumps (train_activation.TRAIN_ACTIVATION gains its 0.19.0 row, xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION gains its three testnet heights, protocol_changes.CONSENSUS_VERSION moves to 0.19.0 with the package). Every other value re-read byte-identical; the coin registry, the GATES field and the carrier logic digest did not move. The tip state hash below is the pre-cut reading and is re-read by the post-roll AT, not here.",
   "v0190_recut_note": "Re-pinned again at the v0.19.0 ladder re-cut, 2026-09-16 16:33Z, on the release branch: TBTC reached the first sizing's train boundary (152716) before the cut, so the four testnet heights were re-sized from the new tips (train 152787, BTC bridge 152929, LTC 4887898, DOGE 67902062) and both blocks were re-read by the same two invocations (bare, and with the armed env below). Only the values those heights move changed: the armed-map fingerprint, the rules digest, and the train_activation.TRAIN_ACTIVATION and xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION rows.",
@@ -431,7 +431,7 @@
     },
     "armed_map_row_count": 410,
     "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
-    "carrier_logic_digest": "e528673e682bf31d868b90c51a1a8afb8d50f426a3e08d763e0c5cc5c2bcc5bf",
+    "carrier_logic_digest": "2c11db581f76c3b1a68d6d430321a06f5f25ac97bae58b2d54589ea1405bf1bf",
     "consensus_rules_digest": "ceb49c010893f8a5d8bb632536b0b3873ae4e6cc6d16b3557134c6d503c4840d",
     "gate_key_count": 45,
     "consensus_rules_gates": {
@@ -910,7 +910,7 @@
     },
     "armed_map_row_count": 410,
     "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
-    "carrier_logic_digest": "e528673e682bf31d868b90c51a1a8afb8d50f426a3e08d763e0c5cc5c2bcc5bf",
+    "carrier_logic_digest": "2c11db581f76c3b1a68d6d430321a06f5f25ac97bae58b2d54589ea1405bf1bf",
     "consensus_rules_digest": "78f5ae7915c1a79c1da0ed59e454266a60c0e632d28d63ae6d5b358a6304decd",
     "gate_key_count": 45,
     "consensus_rules_gates": {
@@ -1009,6 +1009,6 @@
   "bridge_row_fields_terminal_note": "Re-pinned after the registry-only BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION height row joined the merged registry, unarmed on mainnet and every testnet chain and active from genesis on regtest. Both readings gained the same row; relative to the merged 402-row baseline, only armed_map_fingerprint, armed_map_rows and armed_map_row_count (402 to 403) moved.",
   "stake_delegated_signing_key_note": "Added the unarmed production STAKE_DELEGATED_SIGNING_KEY row with regtest active from genesis. The merged readings retain the BIGINT_SURFACE_STRIP_ACTIVATION row from develop and gain the delegated-signing change row plus its two flag-time rows, bringing the armed map to 401 rows.",
   "attest_relay_response_deadline_note": "Re-pinned after the registry-only ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION time row joined the registry, unarmed on mainnet and testnet and active from regtest genesis. The merged readings retain develop's activation rows and add this row.",
-  "vm_lint_destructure_note": "2026-10-09: both code readings were regenerated after adding the registry-only VM_LINT_DESTRUCTURE_ACTIVATION height row, unarmed on mainnet and every testnet chain and active from genesis on regtest. The row lives in gates_5.js because the earlier parts reached the 400-line limit.",
+  "vm_lint_destructure_note": "2026-10-09: both code readings were regenerated after adding the registry-only VM_LINT_DESTRUCTURE_ACTIVATION height row, unarmed on mainnet and every testnet chain and active from genesis on regtest. The row lives in gates_flag_times.js so the public protocol_changes entry remains byte-identical to develop.",
   "anchor_empty_fold_reject_note": "Re-pinned after the ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION shared height row joined the registry, unarmed on live networks and active from regtest genesis. Both readings gained the same row; only armed_map_fingerprint, armed_map_rows and armed_map_row_count (398 to 399) moved."
 }

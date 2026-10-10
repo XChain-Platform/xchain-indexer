@@ -24,7 +24,7 @@
 
 'use strict';
 
-const { addGate } = require('./shared_rows.js');
+const { addGate, UNARMED } = require('./shared_rows.js');
 const { CONSENSUS_VERSION } = require('./consensus_version.js');
 const {
     VM_BANNED_ASYNC_MAINNET_TIME,
@@ -105,3 +105,15 @@ addGate('protocol_changes.DISPENSER_REFILL_MAINNET_TIME', 'constant', DISPENSER_
 addGate('protocol_changes.DISPENSER_REFILL_TESTNET_TIME', 'constant', DISPENSER_REFILL_TESTNET_TIME);
 addGate('protocol_changes.STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME', 'constant', STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME);
 addGate('protocol_changes.STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME', 'constant', STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME);
+
+// vm_lint_destructure_heights
+addGate('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
