@@ -29,6 +29,7 @@
 const { getLogger } = require('../../../observability/index.js');
 const { HUB_SCHEMA_VERSION } = require('../../hub_schema_version');
 const { CROSS_CHAIN_TABLES } = require('../mirror_tables.js');
+const { hasExpectedSchemaVersion, schemaVersionLabel } = require('../schema_version_check.js');
 const { sanitizeHeights } = require('../watermark_config.js');
 
 const PAGE_LIMIT = 10000;
@@ -332,9 +333,8 @@ module.exports = {
         // consensus-relevant column and fork the ledger. Fail closed: return "not
         // drained" without applying, so bootstrapAll retries and the barrier stays
         // shut, deferring blocks rather than settling against mismatched mirror data.
-        // The != null guard keeps older hubs that send no version working unchanged.
-        if (result.schema_version != null && result.schema_version !== HUB_SCHEMA_VERSION) {
-            getLogger().error('HubDbSync: hub snapshot schema_version ' + result.schema_version +
+        if (!hasExpectedSchemaVersion(result.schema_version)) {
+            getLogger().error('HubDbSync: hub snapshot schema_version ' + schemaVersionLabel(result.schema_version) +
                 ' != local ' + HUB_SCHEMA_VERSION + ' for ' + table +
                 '; refusing to bootstrap. Restart this indexer after upgrading the hub.');
             return false;

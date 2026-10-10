@@ -78,10 +78,11 @@ module.exports = {
     // recycled action_index (new generation) survives. push_generations is NEVER a rollback
     // dataTable (monotonic).
     //
-    // The bump is issued INSIDE the rollback transaction (just before commit, below), NOT here,
-    // for two reasons (HUB-RETRACT-1): (a) fail-closed - a bump failure throws into the
-    // transaction's catch, rolling back every delete, so the reorg is retried idempotently rather
-    // than shipping an un-fenced rollback; (b) atomicity vs concurrent hub PULLs - the hub stamps
+    // The bump is issued INSIDE the rollback transaction, as this method's first statement, and
+    // runRollbackTransaction calls this method last (after sanityCheck, just before commit),
+    // never at the start of rollback(), for two reasons (HUB-RETRACT-1): (a) fail-closed - a bump
+    // failure throws into the transaction's catch, rolling back every delete, so the reorg is
+    // retried idempotently rather than shipping an un-fenced rollback; (b) atomicity vs concurrent hub PULLs - the hub stamps
     // getpendingcrosschaincalls / getopencrosschainorders results with the CURRENT generation at
     // serve time, so if the generation flipped to bumped while the orphaned rows were still
     // committed and visible, a pull would stamp an orphan with the NEW generation and it would
@@ -90,11 +91,9 @@ module.exports = {
     // covers, or (post-commit) new generation + rows already gone - never orphans + new generation.
     // Retraction rows written ahead inside the transaction (HUB-RETRACT-2); the post-commit block
     // attempts immediate live delivery and drops each on success, else leaves it for HubPushQueue.
-        // Bump the push-generation fence (HUB-RETRACT-1) and write-ahead the hub retractions
-        // (HUB-RETRACT-2), both INSIDE this transaction so they commit atomically with the
-        // deletes above. Placed last (after sanityCheck) so any earlier failure rolls the bump
-        // back and the reorg is retried cleanly. bumpPushGeneration routes through the open
-        // transaction connection (doQuery), so a failure throws into the catch below.
+    // Both the bump and the write-ahead commit atomically with the rollback's deletes, and
+    // bumpPushGeneration routes through the open transaction connection (doQuery), so a failure
+    // throws into runRollbackTransaction's catch and rolls every delete back.
     async stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches){
         let retractionGeneration = null;
         let stagedRetractions = [];

@@ -25,7 +25,11 @@
  * registry, row 18) retired those shims, so the rows are read here by their
  * registry keys, which is also what every caller now reads. Guarded: the
  * bundled VM needs isolated-vm (Node 22), so a standalone indexer checkout
- * skips rather than comparing against nothing.
+ * whose VM package cannot load skips rather than comparing against nothing,
+ * and fails instead under XCHAIN_REQUIRE_SIBLINGS=1. A VM that loads but no
+ * longer exports a map always fails: a renamed export must not turn the
+ * equality check into a silent pending. The VM maps live in
+ * xchain-vm/src/index/runtime/activation_heights.js.
  *
  ********************************************************************/
 
@@ -33,6 +37,7 @@
 
 const assert = require('assert');
 const registry = require('../../../src/consensus/gate_registry');
+const { skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const MAINNET_COINS = ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet'];
 
@@ -46,17 +51,25 @@ const PAIRS = [
         'one side blocks a deploy the other accepts'],
 ];
 
+// Tell an unloadable package (skippable) apart from a loaded one missing the export (a failure).
 function vmExport(name) {
     let vm;
-    try { vm = require('xchain-vm'); } catch (e) { return null; }
-    return vm && vm[name] ? vm[name] : null;
+    try { vm = require('xchain-vm'); } catch (e) { return { status: 'unloadable', err: e }; }
+    const map = vm ? vm[name] : undefined;
+    return map ? { status: 'ok', map } : { status: 'missing' };
 }
 
 describe('consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1', function () {
     for (const [key, vmName, drift] of PAIRS) {
         it(key + ' equals xchain-vm ' + vmName + ' at every mainnet coin key', function () {
-            const vmMap = vmExport(vmName);
-            if (!vmMap) return this.skip();
+            const got = vmExport(vmName);
+            if (got.status === 'unloadable') {
+                return skipOrFail(this, { usable: false, reason: 'xchain-vm did not load: ' + got.err.message },
+                    'the ' + vmName + ' gate-pair check');
+            }
+            assert.ok(got.status === 'ok', 'xchain-vm loaded but does not export ' + vmName + ' (renamed in xchain-vm,'
+                + ' or a stale vendored copy? run npm run vendor:vm); ' + key + ' is compared against nothing');
+            const vmMap = got.map;
             const row = registry.get(key);
             for (const coinKey of MAINNET_COINS) {
                 assert.strictEqual(row[coinKey], vmMap[coinKey],

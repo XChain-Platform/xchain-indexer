@@ -54,6 +54,7 @@ const MIRROR_TWINS = [
     'cross_chain_matches',
     'cross_chain_calls',
     'capability_snapshots',
+    'remote_token_snapshots',
     'state_checkpoints',
     'anchor_reward_attestations',
     'attestation_responses',

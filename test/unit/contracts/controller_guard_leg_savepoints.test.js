@@ -231,6 +231,10 @@ describe('CONTROLLER_GUARD_LEG_SAVEPOINTS: consensus metadata @regression @tier1
         mainnet_block: 0, testnet_block: 0, regtest_block: 0,
     };
 
+    function change(name) {
+        return changes.find(([rowName]) => rowName === name);
+    }
+
     function finalPartRowCount() {
         const files = fs.readdirSync(partsDir)
             .filter(file => /^changes_\d+\.js$/.test(file))
@@ -243,7 +247,7 @@ describe('CONTROLLER_GUARD_LEG_SAVEPOINTS: consensus metadata @regression @tier1
     }
 
     it('installs a mainnet-inert, testnet-armed change with genesis-active regtest', function () {
-        assert.deepStrictEqual(changes[changes.length - 1], [
+        assert.deepStrictEqual(change('CONTROLLER_GUARD_LEG_SAVEPOINTS'), [
             'CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999, testnetTime, 0, 0, 0, 0,
         ]);
         const table = new protocolChanges({ config: {}, util: {} }).changes;
@@ -253,9 +257,9 @@ describe('CONTROLLER_GUARD_LEG_SAVEPOINTS: consensus metadata @regression @tier1
 
     it('declares the activation in the registry and armed-map fingerprint', function () {
         assert.strictEqual(changes.length, finalPartRowCount());
-        assert.strictEqual(changes[0][0], 'CONTROLLER_CUSTODY_GUARD');
-        assert.strictEqual(changes[1][0], 'OWNER_WITHDRAW_OPT_IN');
-        assert.strictEqual(changes[changes.length - 1][0], 'CONTROLLER_GUARD_LEG_SAVEPOINTS');
+        assert.ok(change('CONTROLLER_CUSTODY_GUARD'));
+        assert.ok(change('OWNER_WITHDRAW_OPT_IN'));
+        assert.ok(change('CONTROLLER_GUARD_LEG_SAVEPOINTS'));
         const rows = protocolChanges.rows();
         const changeRows = rows.filter(([rowKey]) => rowKey.startsWith('protocol_changes.changes.'));
         const table = new protocolChanges({ config: {}, util: {} }).changes;

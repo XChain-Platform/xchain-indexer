@@ -43,9 +43,10 @@
  *                                  are never compared with it. Cross-repo
  *                                  agreement is held per shared id by test (c)
  *                                  of test/unit/repo_guards/carrier_logic_pin.test.js.
- *   consensus_rules_digest        sha256 over the DECIDED HEIGHTS of the gates
- *                                  the hub also evaluates. Comparable across
- *                                  repos, and it answers "same rules?".
+ *   consensus_rules_digest        sha256 over the DECIDED VALUES of every gate
+ *                                  in SHARED_GATES, the gates the hub also
+ *                                  evaluates. Comparable across repos, and it
+ *                                  answers "same rules?".
  *   gates_field_hash               sha256 of the GATES field the hub signs into a
  *   and gates_field                ROLLCALL v1 epoch, knownGateKeys().join(',').
  *                                  Built from the key list alone, so it reads the

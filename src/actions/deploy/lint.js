@@ -99,6 +99,7 @@ async function resolveLintFlags(deploy, data){
     // from block 0 and no already-accepted deploy is reinterpreted.
     let enforceLintGlobalAlias = gateRegistry.activeAt('vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION', deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
     let enforceLintOptionalChain = gateRegistry.activeAt('vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION', deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
+    let enforceBannedWith = gateRegistry.activeAt('vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION', deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
     let enforceLintNestingDepth = gateRegistry.activeAt('vm_lint_nesting_depth_activation.VM_LINT_NESTING_DEPTH_ACTIVATION', deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
     // banned-rest (unmeterable rest positions) is the deploy half of
     // REST_PATTERN_METER. Its VM twin wraps a top-level rest's source in the
@@ -109,7 +110,7 @@ async function resolveLintFlags(deploy, data){
     // the chain already accepted. Below the flag day the rule is dropped and the
     // historical verdict replays byte-identically.
     let enforceBannedRest = await deploy.actions.protocolChanges.isEnabled('REST_PATTERN_METER', data['BLOCK_INDEX']);
-    return { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias, enforceLintOptionalChain, enforceLintNestingDepth, enforceBannedRest };
+    return { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias, enforceLintOptionalChain, enforceBannedWith, enforceLintNestingDepth, enforceBannedRest };
 }
 
 /**

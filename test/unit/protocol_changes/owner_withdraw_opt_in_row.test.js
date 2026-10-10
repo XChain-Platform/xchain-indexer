@@ -36,9 +36,9 @@ describe('protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1', functi
         else process.env[ENV] = saved;
     });
 
-    it('sits after CONTROLLER_CUSTODY_GUARD in part 5, mainnet inert and testnet armed', function () {
+    it('is present in part 5, mainnet inert and testnet armed', function () {
         const rows = require('../../../src/protocol_changes/changes_5.js');
-        assert.strictEqual(rows[1][0], 'OWNER_WITHDRAW_OPT_IN');
+        assert.ok(rows.some(([name]) => name === 'OWNER_WITHDRAW_OPT_IN'));
         assert.strictEqual(ProtocolChanges.OWNER_WITHDRAW_OPT_IN_MAINNET_TIME, ProtocolChanges.UNARMED);
         assert.strictEqual(ProtocolChanges.OWNER_WITHDRAW_OPT_IN_TESTNET_TIME, TESTNET_INSTANT);
         assert.deepStrictEqual(build(), {

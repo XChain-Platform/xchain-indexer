@@ -10,6 +10,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
 
 function makeSync() {
     const queries = [];
@@ -32,7 +33,7 @@ describe('HubDbSync state_checkpoints resume after a hub id reset @regression @t
         const paths = [];
         const httpGet = sinon.stub(sync, 'httpGet').callsFake(async path => {
             paths.push(path);
-            return { rows: [{ id: 1, chain: 'BTC' }, { id: 2, chain: 'BTC' }, { id: 3, chain: 'BTC' }], watermark: 9 };
+            return { schema_version: HUB_SCHEMA_VERSION, rows: [{ id: 1, chain: 'BTC' }, { id: 2, chain: 'BTC' }, { id: 3, chain: 'BTC' }], watermark: 9 };
         });
 
         sync._drainPositions.state_checkpoints = 50;
@@ -49,7 +50,7 @@ describe('HubDbSync state_checkpoints resume after a hub id reset @regression @t
     it('keeps resuming from the cursor while the hub ceiling is still at or above it', async function () {
         const { sync } = makeSync();
         sinon.stub(sync, 'applyRow').resolves();
-        const httpGet = sinon.stub(sync, 'httpGet').resolves({ rows: [], watermark: 1 });
+        const httpGet = sinon.stub(sync, 'httpGet').resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [], watermark: 1 });
 
         sync._drainPositions.state_checkpoints = 50;
         sync._readyMaxIds = { state_checkpoints: 50 };

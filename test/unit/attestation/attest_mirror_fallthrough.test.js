@@ -28,7 +28,7 @@
 //   * an all-inert request writes nothing and is selected again, unchanged, next block.
 //
 // The handler itself is stubbed at actions.processAction. The bind signal it owns is
-// data['STATUS'] === 'valid' (attest.js:903, set only after the row verified), so the
+// data['STATUS'] === 'valid' (attest/mirror_apply.js applyMirroredResponse, set only after the row verified), so the
 // stub sets exactly that key and nothing else: a test that asserted on a log string
 // would pass against a loop that never read the verdict at all.
 

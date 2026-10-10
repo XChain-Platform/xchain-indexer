@@ -1130,7 +1130,7 @@ class AnchorRecovery {
             if(existing && existing.length > 0){
                 if(c.status === 'finalized'){
                     // Finalized-wins CONTENT upgrade, mirroring the live mirror path
-                    // hub_db_sync._applyRow's cross_chain_calls ODKU (hub_db_sync.js:861-869).
+                    // applyRow's cross_chain_calls ODKU (crossChainCallUpsertSql in src/hub/hub_db_sync/row_upserts.js).
                     // Unlike matches, a call's signed content is NOT immutable per key: the
                     // hub can re-finalize a retracted (call_id, phase) with NEW signed terms
                     // after a source-chain reorg (CrossChainCallEngine.writeFinalizedRow

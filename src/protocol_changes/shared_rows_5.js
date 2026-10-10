@@ -199,6 +199,24 @@ addGate('list_meta_activation.LIST_META_ACTIVATION', 'height', {
     'DOGE:testnet': 67962387,
     regtest: 0,
 });
+// mirror_admission_margin_activation: per-chain margins that replace a table's
+// legacy admission margin at the named chain height.
+addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS', 'constant', {
+    DOGE: {
+        bridge_transfers:    14,
+        cross_chain_calls:   14,
+        cross_chain_matches: 14,
+        list_snapshots:      14,
+        policy_snapshots:    14,
+        price_snapshots:     16,
+    },
+});
+addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION', 'height', {
+    mainnet:        UNPINNED,
+    'DOGE:mainnet': UNPINNED,
+    'DOGE:testnet': UNARMED,
+    regtest:        0,
+});
 // oracle_price_age_hourly_activation: gates the hourly price-snapshot age limit
 // for fee pricing, fee views, attest settlement and VM oracle data.
 addGate('oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION', 'height', {

@@ -135,9 +135,9 @@ describe('Send handler: conditional gated handoff (PC-29) @regression @tier1', f
     it('vector 1, MULTI-LEG same destination: legs are totalled, not judged alone', async function () {
         // 60 + 60 against a threshold of 100. Judged per leg, neither reaches it and
         // the recipient gets 120 with no key handoff: the split bypass. Legs are
-        // consolidated by (DESTINATION, TICK) before this check, so the total is what
-        // is compared. This vector exists so a future de-consolidation cannot silently
-        // reopen the hole.
+        // consolidated by literal (DESTINATION, TICK) before this check. The resolved
+        // TICK_ID vectors live in gated_total_tick_id.test.js; this one pins the
+        // same-spelling consolidation path.
         withDestBalance(0);
         // Format 1 is VERSION|TICK|AMOUNT|DESTINATION|AMOUNT|DESTINATION|MEMO:
         // one tick, then repeating (amount, destination) pairs.

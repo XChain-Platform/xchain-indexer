@@ -15,6 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../../src/hub/hub_db_sync.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../../src/hub/hub_schema_version');
 
 // Build a HubDbSync whose enabled flag is true (needs both a hub URL and a hub DB),
 // backed by a stubbed doQuery we drive per-test to simulate the local price mirror.
@@ -180,7 +181,7 @@ describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2',
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
         sinon.stub(sync, 'applyRow').resolves();
         sinon.stub(sync, 'refreshPriceSyncHeight').resolves();
-        sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1 }], watermark: 77 });
+        sinon.stub(sync, 'httpGet').resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: 1 }], watermark: 77 });
 
         assert.strictEqual(await sync.bootstrapTable('price_snapshots'), null,
             'round 1: table absent -> not-drained');
@@ -202,7 +203,7 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
         doQuery.withArgs(sinon.match(/MAX\(id\)/)).resolves([{ max_id: 0 }]);
         doQuery.resolves([]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1 }, { id: 2 }, { id: 3 }], watermark: 99 });
+        sinon.stub(sync, 'httpGet').resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: 1 }, { id: 2 }, { id: 3 }], watermark: 99 });
         const applied = [];
         sinon.stub(sync, 'applyRow').callsFake(async (t, row) => {
             if (row.id === 2) throw new Error('unappliable row');
@@ -225,7 +226,7 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
         doQuery.withArgs(sinon.match(/MAX\(id\)/)).resolves([{ max_id: 0 }]);
         doQuery.resolves([]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1 }], watermark: 77 });
+        sinon.stub(sync, 'httpGet').resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: 1 }], watermark: 77 });
         sinon.stub(sync, 'applyRow').resolves();
         const refresh = sinon.stub(sync, 'refreshPriceSyncHeight').resolves();
 
@@ -248,8 +249,8 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
         sync._readyMaxIds = { policy_snapshots: 100 };          // hub advertises rows past our local max
         const httpGet = sinon.stub(sync, 'httpGet');
-        httpGet.onFirstCall().resolves({ rows: [], watermark: 10 });          // main page: clean short drain
-        httpGet.onSecondCall().resolves({ rows: [{ id: 6 }], schema_version: 999999 });  // catch-up: mismatch
+        httpGet.onFirstCall().resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [], watermark: 10 });          // main page: clean short drain
+        httpGet.onSecondCall().resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: 6 }], schema_version: 999999 });  // catch-up: mismatch
         sinon.stub(sync, 'applyRow').resolves();
         const refresh = sinon.stub(sync, 'refreshPolicySyncTimestamp').resolves();
 

@@ -247,7 +247,7 @@ module.exports = {
     //
     // RB-ANCHOR: before the DELETE, pre-image each loser row into
     // anchor_reward_reconcile_log so a reorg that orphans THIS reconcile (the
-    // ANCHOR action's block) can restore the deleted losers. The losers sit in
+    // BTC block whose derive pass ran it) can restore the deleted losers. The losers sit in
     // EARLIER surviving blocks (block_index = the checkpoint's SNAPSHOT_BLOCK),
     // so the generic block delete never touches them and a from-genesis replay
     // to reorg_block-1 (where the orphaned ANCHOR never re-ran the reconcile)

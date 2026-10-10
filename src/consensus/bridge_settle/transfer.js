@@ -38,6 +38,17 @@ const { SETTLE_REASON, isNull, int } = require('./reasons.js');
 const { buildInLegEffects, buildOutLegEffects } = require('./leg_effects.js');
 const { isSettled, isSourceLegSettled, recordSettlement } = require('./settlements.js');
 
+const BEFORE_ACTIVATION_REASON = 'destination chain is below its own XCHAIN_BRIDGE_ACTIVATION height';
+const XCHAIN_BRIDGE_KEY = 'xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION';
+
+// The destination chain's own XCHAIN_BRIDGE_ACTIVATION sub-gate, read at the block being
+// settled. TOKEN_BRIDGE_ACTIVATION is pinned at or above it per chain, so this one height
+// bounds both the v2 and v5 legs. Below it no leg of any transfer may apply or consume a
+// cap slot: the row waits, unrecorded, and is retried every block.
+function belowBridgeActivation(ctx){
+    return !gateRegistry.activeAt(XCHAIN_BRIDGE_KEY, ctx.network, ctx.coin, ctx.blockIndex, null);
+}
+
 // Decide "is this the gas tick" case-folded, the rule origin.js and leg_effects.js use
 // (every ticker lookup is LOWER(tick), so a signed row may carry any casing of GAS).
 function isGasTick(tick, gasTick){
@@ -99,6 +110,11 @@ function screenRow(row, ctx){
     const blockTime = Number(ctx.blockTime);
     if(!Number.isFinite(blockTime) || Number(row.effective_time) > blockTime)
         return { reason: SETTLE_REASON.NOT_DUE };
+
+    // Sub-gate deferral: the destination is below its own bridge activation height, so the
+    // row is carried forward without a settlement record.
+    if(belowBridgeActivation(ctx))
+        return { reason: BEFORE_ACTIVATION_REASON };
 
     return { fields: { id, srcChain, destChain, tick, decimals, snapshot, srcIndex } };
 }
@@ -341,3 +357,4 @@ async function applyBridgeTransfer(deps, row, ctx){
 module.exports = function createTransfer(deps){
     return { applyBridgeTransfer: (row, ctx) => applyBridgeTransfer(deps, row, ctx) };
 };
+module.exports.belowBridgeActivation = belowBridgeActivation;

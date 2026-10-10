@@ -15,6 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
 
     // A HubDbSync over a fake hub DB that records network purges and treats any MAX(id)
     // query as observable legacy behavior.
@@ -48,7 +49,7 @@ function stubHub(sync, ids, watermark) {
     const rows = ids.map((id) => ({ id: id, network: 'testnet' }));
     return sinon.stub(sync, 'httpGet').callsFake(async (path) => {
         const since = Number(/since_id=(\d+)/.exec(path)[1]);
-        return { rows: rows.filter((r) => r.id > since), watermark: watermark };
+        return { schema_version: HUB_SCHEMA_VERSION, rows: rows.filter((r) => r.id > since), watermark: watermark };
     });
 }
 

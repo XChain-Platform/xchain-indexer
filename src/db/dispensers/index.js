@@ -97,8 +97,8 @@ const DISPENSER_INFO_SQL = `SELECT
 
 module.exports = {
 
-    // Return dispenser info for given action_index
-    async getDispenserInfo(coin, action_index, block_time){
+    // Return dispenser info for given action_index (block_index picks the list-delay gate).
+    async getDispenserInfo(coin, action_index, block_time, block_index){
         let dispenser = false;
         let query = DISPENSER_INFO_SQL;
         let args  = [coin, action_index];
@@ -121,7 +121,7 @@ module.exports = {
             // stays the create-time value, because refills are counted by
             // getDispenserAmountRemaining (64dp) and GIVE_REMAINING below is the number
             // any caller wanting post-refill escrow should read.
-            let edit = await this.getDispenserEdits(action_index, block_time);
+            let edit = await this.getDispenserEdits(action_index, block_time, block_index);
             if(edit.expiration)
                 dispenser['EXPIRATION'] = edit.expiration;
             // A list edit to 0 (the LIST_EDIT_REMOVE sentinel) removes the list: 0 is the value

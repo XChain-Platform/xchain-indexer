@@ -39,7 +39,7 @@
  *   6. reportOrphanStats (documented byte-identical twin; compared RAW, header
  *      comment included, unlike the normalized checks). The indexer keeps it in
  *      src/state_commitment/persistent_smt.js, the follower in its whole-file
- *      src/stateCommitment.js
+ *      src/state_commitment/index.js
  *   7. the state_key collation flag-day gate (the STATE_KEY_COLLATION_KEY
  *      value, the activeAt call shape, the ' COLLATE utf8_bin' splice value and
  *      where it is spliced), which item 2 cannot see; checked in
@@ -192,8 +192,8 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
         }
         assert.strictEqual(
             extractTwinBlock(pair.indexer, 'xchain-indexer/src/state_commitment/persistent_smt.js'),
-            extractTwinBlock(pair.sync, 'xchain-sync/src/stateCommitment.js'),
-            'reportOrphanStats block drifted between xchain-indexer persistent_smt.js and xchain-sync stateCommitment.js; ' +
+            extractTwinBlock(pair.sync, 'xchain-sync/' + followerRel),
+            'reportOrphanStats block drifted between xchain-indexer persistent_smt.js and xchain-sync ' + followerRel + '; ' +
             'the header comment declares it a keep-BYTE-IDENTICAL twin (comments included)');
     });
 });

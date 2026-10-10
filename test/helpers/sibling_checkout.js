@@ -41,6 +41,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const cp   = require('child_process');
 
 const OWN_ROOT = path.resolve(__dirname, '..', '..');
 
@@ -63,6 +64,26 @@ function checkoutRootOf(dir) {
     }
 }
 
+function pinnedMainCheckout(root, name, env) {
+    let pins;
+    try { pins = JSON.parse(env.XCHAIN_SIBLING_COMMITS || '{}'); }
+    catch (e) { return false; }
+    const expected = pins && pins[name];
+    if (typeof expected !== 'string' || !/^[0-9a-f]{40}$/.test(expected)) return false;
+
+    let actual;
+    try {
+        actual = cp.execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], {
+            encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+        }).trim();
+    } catch (e) { return false; }
+    if (actual !== expected) return false;
+
+    const clean = (args) => cp.spawnSync('git', ['-C', root, ...args], { stdio: 'ignore' }).status === 0;
+    return clean(['diff', '--quiet', '--ignore-submodules', '--'])
+        && clean(['diff', '--cached', '--quiet', '--ignore-submodules', '--']);
+}
+
 /**
  * Judge one sibling path.
  *
@@ -74,6 +95,7 @@ function checkoutRootOf(dir) {
  */
 function siblingCheckout(fromDir, target, opts = {}) {
     const ownRoot = opts.ownRoot || OWN_ROOT;
+    const env = opts.env || process.env;
     const abs = path.resolve(fromDir, target);
 
     if (!fs.existsSync(abs))
@@ -94,12 +116,15 @@ function siblingCheckout(fromDir, target, opts = {}) {
     const targetRoot = checkoutRootOf(real);
     const targetIsMain = targetRoot !== null
         && fs.lstatSync(path.join(targetRoot, '.git')).isDirectory();
-    if (targetIsMain)
+    if (targetIsMain) {
+        if (pinnedMainCheckout(targetRoot, path.basename(entry), env))
+            return { usable: true, path: abs, reason: null };
         return {
             usable: false, path: abs,
             reason: 'sibling ' + path.basename(entry) + ' resolves through a symlink into the live main checkout '
                 + targetRoot + ', which no commit pins; cut a real sibling worktree to test against it',
         };
+    }
     return { usable: true, path: abs, reason: null };
 }
 
@@ -120,4 +145,4 @@ function skipOrFail(ctx, verdict, what) {
     return false;
 }
 
-module.exports = { siblingCheckout, skipOrFail, siblingsRequired, isLinkedWorktree };
+module.exports = { siblingCheckout, skipOrFail, siblingsRequired, isLinkedWorktree, pinnedMainCheckout };

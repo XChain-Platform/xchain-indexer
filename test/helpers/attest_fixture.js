@@ -61,7 +61,7 @@ const GOLDEN_REQUEST_ID = {
     expected: 'b770a548716259f767c3eb6e9e1e5eb0e3878c9ec3d6bbd68a7e1ab8221fffb7'
 };
 
-// Extend the default mock DB with the attestation-specific methods attest.js calls.
+// Extend the default mock DB with the attestation-specific methods the actions/attest/ modules call.
 function addAttestationDbStubs(db) {
     db.getContract                       = sinon.stub().resolves({ contract_index: 5 });
     db.createAttestationRequest          = sinon.stub().resolves();

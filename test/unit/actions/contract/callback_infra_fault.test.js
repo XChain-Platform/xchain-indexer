@@ -20,7 +20,7 @@
 // peers apply them, forking contract_hash. These tests pin the faultGuard gate
 // (src/consensus/fault_guard.js) at every previously-swallowing catch:
 //   - xcall.js  v2 expiry callback + processResult callback
-//   - attest.js v1 response callback + v2 expiry callback + missed_count stats
+//   - attest/response.js v1 response callback, attest/expire.js v2 expiry callback + missed_count stats
 // Deterministic callback failures must STILL be swallowed (verdict stands).
 
 process.env.INDEXER_COIN = 'BTC';

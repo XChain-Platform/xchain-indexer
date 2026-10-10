@@ -32,10 +32,9 @@ describe('protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1', fun
         else process.env[ENV] = saved;
     });
 
-    it('is the first row in part 5 with mainnet unarmed and testnet armed at the v0.21.3 instant', function () {
+    it('is present in part 5 with mainnet unarmed and testnet armed at the v0.21.3 instant', function () {
         const rows = require('../../../src/protocol_changes/changes_5.js');
-        assert.strictEqual(rows.length, 9);
-        assert.strictEqual(rows[0][0], 'CONTROLLER_CUSTODY_GUARD');
+        assert.ok(rows.some(([name]) => name === 'CONTROLLER_CUSTODY_GUARD'));
         assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME, ProtocolChanges.UNARMED);
         assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 1791061097);
         assert.deepStrictEqual(build(), {

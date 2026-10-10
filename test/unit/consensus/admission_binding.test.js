@@ -156,10 +156,16 @@ const fs     = require('fs');
 const path   = require('path');
 const { siblingCheckout, siblingsRequired } = require('../../helpers/sibling_checkout.js');
 
+const HUB_ROOT = process.env.XCHAIN_HUB_DIR
+    ? path.resolve(process.env.XCHAIN_HUB_DIR)
+    : path.resolve(__dirname, '../../../../xchain-hub');
+const EXPLORER_ROOT = process.env.XCHAIN_EXPLORER_DIR
+    ? path.resolve(process.env.XCHAIN_EXPLORER_DIR)
+    : path.resolve(__dirname, '../../../../xchain-explorer');
 const GATE_COPIES = [
     ['xchain-indexer', path.resolve(__dirname, '../../../src/consensus/gates/mirror_admission_gate.js')],
-    ['xchain-hub',      path.resolve(__dirname, '../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js')],
-    ['xchain-explorer', path.resolve(__dirname, '../../../../xchain-explorer/src/consensus/gates/mirror_admission_gate.js')]
+    ['xchain-hub',      path.join(HUB_ROOT, 'src', 'consensus', 'gates', 'mirror_admission_gate.js')],
+    ['xchain-explorer', path.join(EXPLORER_ROOT, 'src', 'consensus', 'gates', 'mirror_admission_gate.js')]
 ];
 const MEASURED_MAP  = { BTC: 280 };
 const MEASURED_ERA  = 275;
@@ -169,17 +175,18 @@ const TABLE_ARMS    = [['INERT', null], ['ARMED', 0]];
 // purged: every copy reads its registry rows at require time, and the registry applies the
 // venue's regtest arming at the moment a row is read.
 function loadGateCopy(file, activation) {
-    const saved    = require.cache[file];
+    const resolved = require.resolve(file);
+    const saved    = require.cache[resolved];
     const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
-    delete require.cache[file];
+    delete require.cache[resolved];
     if (activation === null) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
     else process.env.XC_MIRROR_ADMISSION_ACTIVATION = String(activation);
-    const gate = require(file);
+    const gate = require(resolved);
     return {
         gate,
         restore() {
-            delete require.cache[file];
-            if (saved !== undefined) require.cache[file] = saved;
+            delete require.cache[resolved];
+            if (saved !== undefined) require.cache[resolved] = saved;
             if (savedEnv === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
             else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
         }

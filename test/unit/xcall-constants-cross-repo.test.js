@@ -13,13 +13,17 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Cross-repo VALUE-EQUALITY gate for the six XCALL/VM protocol
- * constants.
+ * Cross-repo VALUE-EQUALITY gate for the XCALL/VM protocol constants listed
+ * in GOLDEN below.
  *
- * MAX_CODE_SIZE, XCALL_MAX_GAS, XCALL_MAX_HOPS and XCALL_MIN_DEADLINE_BLOCKS
- * are enforced independently by three services: the VM (deploy size, emit-time
- * gas/hop/deadline bounds), the indexer (the consensus re-check on DEPLOY /
- * EXECUTE / XCALL) and the SDK (client-side pre-validation). Each repo carries
+ * They are enforced on more than one side of the VM/indexer seam. The VM
+ * checks the deploy size (MAX_CODE_SIZE) and, at emit time, the gas range
+ * (XCALL_MIN_GAS..XCALL_MAX_GAS), the hop count (XCALL_MAX_HOPS) and the
+ * deadline window (XCALL_MIN_DEADLINE_BLOCKS..XCALL_MAX_DEADLINE_BLOCKS). The
+ * indexer re-checks those on DEPLOY / EXECUTE / XCALL as consensus, and it
+ * alone applies the per-block caps (XCALL_MAX_CALLS_PER_BLOCK,
+ * ATTEST_MAX_EXPIRIES_PER_BLOCK) and the result-size cap
+ * (XCALL_MAX_RETURN_BYTES). The SDK pre-validates client-side. Each repo carries
  * its own src/protocol/constants.js copy, and each repo's in-repo suites pin
  * that copy against ITSELF only. A one-sided bump therefore passes every CI
  * lane while splitting the fleet: the VM accepts an XCALL the indexer rejects
@@ -60,14 +64,18 @@ const path   = require('path');
 
 // The gated set and its frozen values. Editing a value here without moving all
 // four constants files (and the consumers that enforce them) is the exact
-// mistake this guard exists to catch.
+// mistake this guard exists to catch. The it() titles below that count "six"
+// are pinned suite identity and predate the last three rows; GATED is the set.
 const GOLDEN = {
     MAX_CODE_SIZE:             65536,
     XCALL_MAX_GAS:             200000,
     XCALL_MAX_HOPS:            2,
     XCALL_MIN_DEADLINE_BLOCKS: 10,
     XCALL_MAX_CALLS_PER_BLOCK: 25,
-    ATTEST_MAX_EXPIRIES_PER_BLOCK: 25
+    ATTEST_MAX_EXPIRIES_PER_BLOCK: 25,
+    XCALL_MIN_GAS:             5000,
+    XCALL_MAX_DEADLINE_BLOCKS: 4000,
+    XCALL_MAX_RETURN_BYTES:    1024
 };
 const GATED = Object.keys(GOLDEN);
 

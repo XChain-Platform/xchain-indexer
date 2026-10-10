@@ -9,6 +9,7 @@
 // contact legal@dankest.llc.
 
 const { assert, sinon, HubDbSync } = require('./helpers/barrier_hold_ceiling.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
 
 const PAGE = 10000;
 const PAGE_LATENCY_MS = 400000;
@@ -45,7 +46,7 @@ function useFixedClock() {
 function slowPages(sync, pages) {
     const httpGet = sinon.stub(sync, 'httpGet');
     pages.forEach((rows, i) => httpGet.onCall(i).callsFake(() => new Promise(resolve =>
-        setTimeout(() => resolve({ rows: rows, watermark: 7000 + i }), PAGE_LATENCY_MS))));
+        setTimeout(() => resolve({ schema_version: HUB_SCHEMA_VERSION, rows: rows, watermark: 7000 + i }), PAGE_LATENCY_MS))));
     return httpGet;
 }
 
@@ -84,7 +85,7 @@ describe('hub mirror drain that stops applying rows @regression @tier1', functio
         const sync = makeDrainingSync();
         const httpGet = sinon.stub(sync, 'httpGet');
         httpGet.onCall(0).callsFake(() => new Promise(resolve =>
-            setTimeout(() => resolve({ rows: page(1, PAGE), watermark: 1 }), 1000)));
+            setTimeout(() => resolve({ schema_version: HUB_SCHEMA_VERSION, rows: page(1, PAGE), watermark: 1 }), 1000)));
         let release;
         httpGet.onCall(1).returns(new Promise(resolve => { release = resolve; }));
 
@@ -96,7 +97,7 @@ describe('hub mirror drain that stops applying rows @regression @tier1', functio
         assert.strictEqual(sync._wsEpoch, 1, 'the connection was replaced');
         assert.strictEqual(sync.forcedResyncCount, 1);
 
-        release({ rows: page(PAGE + 1, 5), watermark: 2 });
+        release({ schema_version: HUB_SCHEMA_VERSION, rows: page(PAGE + 1, 5), watermark: 2 });
         await clock.tickAsync(1);
         await boot;
         assert.strictEqual(sync._bootstrapDrained, false, 'the stale drain must not certify the new connection');

@@ -143,8 +143,8 @@ module.exports = {
     // earned deactivations. We instead match the EXACT value an orphaned action
     // wrote. For the two tables that still record a child action row
     // (stakes↔unstakes, contract_stakes↔contract_unstakes) we JOIN the surviving
-    // parent to its orphaned action row on the same keys the forward handler used
-    // and require deactivation_block = orphanBlock + activationDelay.
+    // parent to its orphaned action row (contract_stakes on source_id, which a key
+    // rotation never rewrites) and require deactivation_block = orphanBlock + activationDelay.
     // `delegations` and `contract_delegations` record NO child row (both revokes are
     // a pure in-place UPDATE), so both are keyed on the value threshold block_index +
     // activationDelay (equivalently precise, because any surviving revoke stamps a

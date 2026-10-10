@@ -15,6 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../../src/hub/hub_db_sync.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../../src/hub/hub_schema_version');
 const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES } =
     require('../../../../../src/hub/hub_db_sync/mirror_tables.js');
 
@@ -31,8 +32,8 @@ function makeSync(maxReferenceBlock) {
 function registerBootstrapPaginationGroup1(PAGE, makeBootstrapSync, fullPage) { it('paginates past a full page and drains with the last page watermark', async function () {
         const sync = makeBootstrapSync();
         const httpGet = sinon.stub(sync, 'httpGet');
-        httpGet.onCall(0).resolves({ rows: fullPage(1),        watermark: 111 });
-        httpGet.onCall(1).resolves({ rows: [{ id: PAGE + 1 }], watermark: 222 });
+        httpGet.onCall(0).resolves({ schema_version: HUB_SCHEMA_VERSION, rows: fullPage(1),        watermark: 111 });
+        httpGet.onCall(1).resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: PAGE + 1 }], watermark: 222 });
 
         const mark = await sync.bootstrapTable('price_snapshots');
         assert.strictEqual(mark, 222, 'must drain and return the LAST page watermark');
@@ -44,7 +45,7 @@ function registerBootstrapPaginationGroup1(PAGE, makeBootstrapSync, fullPage) { 
 
 function registerBootstrapPaginationGroup2(PAGE, makeBootstrapSync, fullPage) { it('a single short page still drains in one fetch', async function () {
         const sync = makeBootstrapSync();
-        sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1 }, { id: 2 }], watermark: 99 });
+        sinon.stub(sync, 'httpGet').resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: 1 }, { id: 2 }], watermark: 99 });
         assert.strictEqual(await sync.bootstrapTable('oracle_prices'), 99);
     }); }
 
@@ -52,7 +53,7 @@ function registerBootstrapPaginationGroup3(PAGE, makeBootstrapSync, fullPage) { 
         const sync = makeBootstrapSync();
         sinon.stub(sync, 'localColumns').resolves(new Set(['id', 'snapshot_block']));
         sync.hubDb.doQuery = sinon.stub().resolves([{ max_id: 500 }]);   // local rows exist
-        const httpGet = sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 3 }], watermark: 7 });
+        const httpGet = sinon.stub(sync, 'httpGet').resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: 3 }], watermark: 7 });
         assert.strictEqual(await sync.bootstrapTable('capability_snapshots'), 7);
         assert.ok(httpGet.firstCall.args[0].includes('since_id=0'),
             'must page from 0, not local MAX(id): ' + httpGet.firstCall.args[0]);
@@ -63,7 +64,7 @@ function registerBootstrapPaginationGroup4(PAGE, makeBootstrapSync, fullPage) { 
             const sync = makeBootstrapSync();
             sinon.stub(sync, 'localColumns').resolves(new Set(['id', 'status']));
             sync.hubDb.doQuery = sinon.stub().resolves([{ max_id: 500 }]);   // local rows already present
-            const httpGet = sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 3 }], watermark: 7 });
+            const httpGet = sinon.stub(sync, 'httpGet').resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: 3 }], watermark: 7 });
             await sync.bootstrapTable(table);
             assert.ok(httpGet.firstCall.args[0].includes('since_id=0'),
                 `${table} must page from 0, not local MAX(id): ` + httpGet.firstCall.args[0]);
@@ -88,8 +89,8 @@ function registerBootstrapPaginationGroup7(PAGE, makeBootstrapSync, fullPage) { 
         const sync = makeBootstrapSync();
         sync.applyRow.onFirstCall().rejects(new Error('ER_SOMETHING'));
         const httpGet = sinon.stub(sync, 'httpGet');
-        httpGet.onCall(0).resolves({ rows: fullPage(1),        watermark: 111 });
-        httpGet.onCall(1).resolves({ rows: [{ id: PAGE + 1 }], watermark: 222 });
+        httpGet.onCall(0).resolves({ schema_version: HUB_SCHEMA_VERSION, rows: fullPage(1),        watermark: 111 });
+        httpGet.onCall(1).resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: PAGE + 1 }], watermark: 222 });
         assert.strictEqual(await sync.bootstrapTable('price_snapshots'), null);
     }); }
 

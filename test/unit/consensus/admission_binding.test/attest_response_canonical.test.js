@@ -24,6 +24,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN || 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
+const path   = require('path');
 
 const eq = require('../../../../src/consensus/equivocation_header.js');
 const { NETWORK, load, ARMS } = require('./helpers/arms.js');
@@ -32,6 +33,10 @@ const { sha } = require('./helpers/rail_fixtures.js');
 const RID  = 'r'.repeat(64);
 const BODY = Buffer.from('the attested body', 'utf8');
 const BASE = { requestId: RID, providerId: 'http_get', responseHash: sha('the attested body'), status: 'ok', meta: 'status=200' };
+const HUB_CANONICAL = path.join(process.env.XCHAIN_HUB_DIR
+    ? path.resolve(process.env.XCHAIN_HUB_DIR)
+    : path.resolve(__dirname, '../../../../../xchain-hub'),
+    'src', 'attestation', 'attest_response_canonical.js');
 
 // The hub's builder on a stub carrying only what it reads; the era gate and the
 // round-pinned default come from the real prototype.
@@ -63,7 +68,7 @@ describe('admission binding: the attest-response canonical twin', function () {
                 const mirror = h.can.buildResponseCanonicalRaw(Object.assign({}, BASE, { effectiveTime: 1234 }));
                 assert.strictEqual(mirror, legacy + '|1234');
                 if (h.hub) {
-                    const hubTwin = require('../../../../../xchain-hub/src/attestation/attest_response_canonical.js');
+                    const hubTwin = require(HUB_CANONICAL);
                     assert.strictEqual(hubTwin.buildResponseCanonicalRaw(Object.assign({}, BASE, { effectiveTime: 1234 })), mirror);
                 }
             });

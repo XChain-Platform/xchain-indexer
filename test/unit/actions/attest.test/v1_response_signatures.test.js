@@ -40,7 +40,7 @@ function setUpHandler() {
 // v1: Response (validator broadcast). The security-critical path.
 //
 // NOTE on quorum: ATTEST v1 quorum is REDUNDANCY-based; a response is valid
-// when validSigs >= request.redundancy (attest.js parseResponse). The
+// when validSigs >= request.redundancy (actions/attest/response.js parseResponse). The
 // 2f+1 PBFT formula lives in PRICE v0, not here; see price.test.js.
 // ───────────────────────────────────────────────────────────────────────
 describe('Attest (ATTEST) @regression @tier3', function () {

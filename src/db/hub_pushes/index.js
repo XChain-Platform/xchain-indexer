@@ -67,8 +67,11 @@ module.exports = {
     },
 
     // Bump `coin`'s push generation by one (creating the row at 1 on first bump) and return the
-    // NEW value. Called once at the start of every rollback, BEFORE forward replay, so rows the
-    // replay re-publishes carry the bumped generation while the orphaned rows keep the prior one.
+    // NEW value. Called once per rollback from stageHubRetractions (src/rollback/commit.js), inside
+    // the rollback transaction after sanityCheck and just before commit; never move it earlier
+    // (HUB-RETRACT-1 there: a bump visible beside committed orphans lets a hub pull stamp an
+    // orphan with the new generation, and that orphan escapes the fence). Rows forward replay
+    // re-publishes carry the bumped generation while the orphaned rows keep the prior one.
     // The retraction carries the PRE-bump generation (newGen - 1), so the fence deletes the
     // orphans (gen <= pre) and the re-published rows (gen == new) survive. Monotonic: a skipped
     // value from a crashed-then-retried rollback is harmless since the fence only needs <=.

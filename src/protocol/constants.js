@@ -115,8 +115,7 @@ const GAS_TICK = copy('protocol/constants.GAS_TICK');
 // ── Oracle federation (xchain-hub) ───────────────────────────────────────────
 // Canonical source: xchain-hub/src/constants.js. UNLIKE XCALL_MAX_HOPS above, these
 // two are NOT in the GOLDEN/GATED set of this repo's
-// test/unit/xcall-constants-cross-repo.test.js, which pins only MAX_CODE_SIZE,
-// XCALL_MAX_GAS, XCALL_MAX_HOPS and XCALL_MIN_DEADLINE_BLOCKS; the guard that diffs
+// test/unit/xcall-constants-cross-repo.test.js; the guard that diffs
 // this copy against the canonical lives in xchain-hub/test/unit.
 // PRICE_MAX IS consensus-read here: src/actions/price/price_zero_validity_gate.js
 // takes it as the exclusive upper bound of the v0 and v1 price-range gate, so an

@@ -23,10 +23,9 @@
 
 'use strict';
 
-// The block loop's stall reason for a proof that cannot be obtained yet. The '_barrier'
-// suffix is load-bearing: health.js keys its mirror-barrier class on it (isMirrorBarrierReason
-// in XChainIndexer.js), so a proof stall reads as the mirror-lag stall it is rather than as a
-// wedged indexer.
+// The block loop's stall reason for a proof that cannot be obtained yet. It still ends in
+// '_barrier', but XChainIndexer/stall_health.js matches this exact value first: a proof wait
+// gets its own 'bridge_proof_wait' class, never reads as wedged, and builds no mirror hold.
 const BRIDGE_PROOF_BARRIER = 'bridge_proof_barrier';
 
 // Why a pass stalled. LOG reasons, not consensus verdict strings: no action's STATUS is built

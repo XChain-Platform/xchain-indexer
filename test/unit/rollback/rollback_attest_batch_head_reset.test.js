@@ -211,7 +211,7 @@ describe('ATTEST v5 batch head: the reorg reset for an orphaned completion stamp
             const copy   = source.match(/const ATTEST_BATCH_COMPLETION_STAMP = '([^']*)';/);
             assert.ok(copy, 'rollback.js must hold its own copy of the marker');
             assert.strictEqual(copy[1], ATTEST_BATCH_COMPLETION_STAMP,
-                'the rollback copy of the marker has drifted from the one attest.js stamps');
+                'the rollback copy of the marker has drifted from the one the attest handler stamps');
         });
     });
 });

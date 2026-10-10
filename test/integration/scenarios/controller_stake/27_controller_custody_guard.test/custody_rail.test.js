@@ -24,7 +24,10 @@ function restoreOriginalEnv(original) {
 
 function custodyGuardRegtestTime() {
     const rows = require(CHANGES_5_PATH);
-    return rows[0][4]();
+    // Read by name because new protocol-change rows are inserted at the top.
+    const row = rows.find(r => r[0] === 'CONTROLLER_CUSTODY_GUARD');
+    assert(row, 'CONTROLLER_CUSTODY_GUARD protocol-change row not found');
+    return row[4]();
 }
 
 describe('custody rail helpers', function () {

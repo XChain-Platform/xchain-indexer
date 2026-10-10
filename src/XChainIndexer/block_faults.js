@@ -99,8 +99,8 @@ module.exports = {
             // the row, so it must never read as ok:false - a node that is merely
             // behind would then decide, permanently, that a legitimate transfer is
             // forged, and mint nothing where its peers mint. Defer and retry, the
-            // way the sync barriers defer, with the barrier-shaped stall
-            // reason so /status classifies it as mirror lag rather than a wedge.
+            // way the sync barriers defer; /status classifies this reason as
+            // bridge_proof_wait, never as a wedge.
             getLogger().warn('BRIDGE ESCROW PROOF UNAVAILABLE at block ' + lastIndexerBlock + ': ' +
                 (error && error.message) + ' Deferring the block (not committing; an ' +
                 'unproven mint is exactly what D2 exists to stop). Retrying after ' +

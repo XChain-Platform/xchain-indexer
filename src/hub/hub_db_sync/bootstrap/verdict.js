@@ -31,6 +31,7 @@ const { HUB_SCHEMA_VERSION } = require('../../hub_schema_version');
 const { CROSS_CHAIN_TABLES } = require('../mirror_tables.js');
 const { PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS, PRICE_MIRROR_LOOKBACK_GROWTH,
         PRICE_MIRROR_LOOKBACK_MAX_S } = require('../mirror_bounds.js');
+const { hasExpectedSchemaVersion, schemaVersionLabel } = require('../schema_version_check.js');
 
 module.exports = {
 
@@ -62,8 +63,8 @@ module.exports = {
         // Same schema fail-closed as the page loop: a mismatched catch-up page
         // could drop a consensus-relevant column, so refuse it and mark the
         // table not-drained (CATCHUP-SCHEMA-BYPASS-1).
-        if (catchUp.schema_version != null && catchUp.schema_version !== HUB_SCHEMA_VERSION) {
-            getLogger().error('HubDbSync: catch-up schema_version ' + catchUp.schema_version +
+        if (!hasExpectedSchemaVersion(catchUp.schema_version)) {
+            getLogger().error('HubDbSync: catch-up schema_version ' + schemaVersionLabel(catchUp.schema_version) +
                 ' != local ' + HUB_SCHEMA_VERSION + ' for ' + table + '; skipping catch-up');
             drain.applyErrors++;
             return;

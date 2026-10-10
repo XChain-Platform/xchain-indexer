@@ -139,6 +139,7 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         lastHubConfigFetchAt: lastHubConfigFetchAt,
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hubConfigStale:       hubConfigStale,
+        schemaReady:          indexer.schemaReady === true,
         hubMirror:            hubMirror,
         // Block-poll loop liveness, appended after hubMirror so no earlier key a monitor reads moves. Reported for the fleet
         // watcher to page on, never folded into the 503 above (see health/advance_fields.js).

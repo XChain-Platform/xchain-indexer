@@ -95,7 +95,7 @@ async function main(){
     };
 
     // fulfilled_count: one per verified signature contributed to a STATUS='ok'
-    // response (attest.js parseResponse). Signatures ride in the
+    // response (attest/response.js parseResponse). Signatures ride in the
     // validator_signatures JSON column on the v1 response rows, so we aggregate
     // them in JS rather than joining a child table.
     let okResponses = await db.doQuery(
@@ -119,7 +119,7 @@ async function main(){
     }
 
     // missed_count: one per responsible-set validator each time a request expired
-    // (attest.js parseExpire). There is no per-validator expiry row to count, so we
+    // (attest/expire.js parseExpire). There is no per-validator expiry row to count, so we
     // reproduce the responsible set deterministically and bump each member, exactly
     // as the live path does. A request counts as expired iff (a) its expiry sweep
     // has actually happened (a request expires at deadline_block+1, so the sweep

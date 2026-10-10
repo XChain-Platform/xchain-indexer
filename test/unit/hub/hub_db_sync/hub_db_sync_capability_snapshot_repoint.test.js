@@ -15,6 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
 
     // A HubDbSync over a fake local mirror. `local` is the simulated table content;
     // applied rows land in it through the stubbed applyRow the same way the real apply
@@ -75,7 +76,7 @@ const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 function stubHub(sync, hubRows) {
     sinon.stub(sync, 'httpGet').callsFake(async (path) => {
         const since = Number(/since_id=(\d+)/.exec(path)[1]);
-        return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
+        return { schema_version: HUB_SCHEMA_VERSION, rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
     });
 }
 

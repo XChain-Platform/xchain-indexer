@@ -34,7 +34,7 @@
  * knows a different list verifies against nothing. The hash, not the list, is
  * what the canonical commits to; the list itself is what the close records.
  *
- * BYTE-TWIN of xchain-hub/src/rollcall/rollcall_canonical.js.
+ * Code twin of xchain-hub/src/rollcall/rollcall_canonical.js; the vector above guards both.
  *
  ********************************************************************/
 

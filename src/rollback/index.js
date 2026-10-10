@@ -95,9 +95,9 @@ class Rollback {
         // single unambiguous height to hand it: the rolled-back tip, the target block and the
         // block a restored row was earned in all differ. A handle here is therefore a footgun,
         // not a convenience, so it is left off the surface rather than left present-and-unread.
-        // Rollback's flag-day gating goes through the snapshot-anchored twin predicates instead
-        // (swq.isStakeWeightedQuorumActive above, keyed on the row's OWN snapshot block), which
-        // is the only reading a re-derivation can make without inventing a height.
+        // Rollback's flag-day gates instead take an explicit height at each call site: the attestation
+        // recompute (attestation_stats.js capabilitySnapshotForBlock) uses the request's DECLARED block,
+        // as responsible_set.js does; purge.js and db/rollback/batch_heads.js use the rollback's target block.
 
         this.initRollbackTableLists();
 
@@ -220,7 +220,7 @@ class Rollback {
 
             await this.refreshDerivedProjections(block_index, addresses, tickers, markets);
 
-                staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches);
+            staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches);
 
             await this.commitAndInvalidateCaches();
 

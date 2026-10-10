@@ -209,7 +209,8 @@ function assertConsensusRuntime(vmModule){
 // Epoch 4: REST_PATTERN_METER added the `banned-rest` deploy rule VM-side.
 // Epoch 5: JSON_STRINGIFY_HOOK closes the JSON.stringify value-hook depth bypass.
 // Epoch 6: the `banned-with` deploy rule rejects with-statements VM-side.
-const EXPECTED_VM_CONSENSUS_VERSION = '6';
+// Epoch 7: the pre-parse `nesting-depth` deploy rule (delimiter nesting above 64), replay-gated.
+const EXPECTED_VM_CONSENSUS_VERSION = '7';
 
 // VM epoch gate: refuse to run contracts on a VM whose consensus epoch is not this indexer's.
 //

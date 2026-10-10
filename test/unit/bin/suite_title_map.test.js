@@ -14,6 +14,7 @@ const {
     mochaArgsFor,
     compare,
     expand,
+    mergeScriptMap,
 } = require('../../../bin/suite-title-map.js');
 
 describe('bin/suite-title-map pure helpers', function(){
@@ -160,6 +161,45 @@ describe('bin/suite-title-map pure helpers', function(){
                 'test/a.test.js': ['first title'],
                 'test/z.test.js': ['second title', 'third title'],
             });
+        });
+    });
+
+    describe('mergeScriptMap', function(){
+
+        it('refreshes one script without dropping unrelated scripts or their title sets', function(){
+            const existing = {
+                titleSets: {
+                    oldTest: ['old test title'],
+                    security: ['security title'],
+                    unused: ['no script references this'],
+                },
+                scripts: {
+                    test: { files: { 'test/unit/example.test.js': 'oldTest' } },
+                    'test:security': { files: { 'test/security/example.test.js': 'security' } },
+                },
+            };
+            const fresh = {
+                titleSets: { newTest: ['new test title'] },
+                scripts: { test: { files: { 'test/unit/example.test.js': 'newTest' } } },
+            };
+
+            assert.deepStrictEqual(mergeScriptMap(existing, fresh, 'test'), {
+                titleSets: {
+                    newTest: ['new test title'],
+                    security: ['security title'],
+                },
+                scripts: {
+                    test: { files: { 'test/unit/example.test.js': 'newTest' } },
+                    'test:security': { files: { 'test/security/example.test.js': 'security' } },
+                },
+            });
+        });
+
+        it('refuses to create a misleading partial map from a missing script', function(){
+            assert.throws(
+                () => mergeScriptMap({ titleSets: {}, scripts: {} }, { titleSets: {}, scripts: {} }, 'test'),
+                /fresh map does not contain test/
+            );
         });
     });
 });

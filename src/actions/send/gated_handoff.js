@@ -34,7 +34,14 @@ module.exports = {
     async checkGatedHandoff(send, tokenInfo, data, ctx, error){
         if(!error){
             let packs = ctx.gatedPacks[send['TICK']] || [];
-            if(packs.length > 0 && this.gatedHandoffRequired(packs, send, tokenInfo, ctx)){
+            let gatedAmount = send['AMOUNT'];
+            if(this._gatedActionTotals){
+                let destinationTotals = this._gatedActionTotals[send['DESTINATION']] || {};
+                let resolvedTotal = destinationTotals[tokenInfo['TICK_ID']];
+                if(resolvedTotal !== undefined)
+                    gatedAmount = resolvedTotal;
+            }
+            if(packs.length > 0 && this.gatedHandoffRequired(packs, send, tokenInfo, ctx, gatedAmount)){
                 if(!(await this.findGatedHandoff(send, data)))
                     error = 'invalid: gated token transfer requires key handoff message';
             }
@@ -48,20 +55,18 @@ module.exports = {
     // POST-SEND balance (pre-send balance + everything this action sends them),
     // since a recipient who already holds enough crosses the threshold on any
     // transfer and one who holds nothing may not cross it even on a large one.
-    // The "everything this action sends them" half is already exact here, and it
-    // is worth saying why because it looks like a gap: legs were CONSOLIDATED by
-    // (DESTINATION, TICK) further up, so send['AMOUNT'] is the TOTAL for this
-    // pair, not one leg. That consolidation is what closes the
-    // split-120-into-two-60s bypass; it is structural rather than something this
-    // block re-derives, and a test vector pins it so a future de-consolidation
-    // cannot silently reopen it. Self-send is deliberately NOT special-cased:
+    // Above SEND_GATED_TOTAL_TICK_ID, gatedAmount is the action total per
+    // (DESTINATION, resolved TICK_ID), so alternate spellings of one token
+    // cannot split the threshold. Below it, gatedAmount remains the literal
+    // consolidated leg amount. Self-send is deliberately NOT special-cased:
     // the rule applies literally, the resulting overcount is accepted for
     // determinism, and a sender's self-addressed MESSAGE satisfies the requirement.
-    gatedHandoffRequired(packs, send, tokenInfo, ctx){
+    gatedHandoffRequired(packs, send, tokenInfo, ctx, gatedAmount){
+        if(gatedAmount === undefined) gatedAmount = send['AMOUNT'];
         let destBal = ctx.destBalances[send['DESTINATION']] || {};
         let held    = destBal[tokenInfo['TICK_ID']];
         if(this.util.isNull(held)) held = '0';
-        let postSend = this.util.bcadd(held, send['AMOUNT'], 18);
+        let postSend = this.util.bcadd(held, gatedAmount, 18);
 
         // "A pack requires the handoff" when it is unconditional (no threshold
         // at all) or the post-send balance reaches its threshold, and "the
