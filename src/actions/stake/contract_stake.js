@@ -203,6 +203,14 @@ async function validateStakeOwner(data, error){
         }
     }
 
+    if(!error && await this.actions.protocolChanges.isEnabled('STAKE_DELEGATED_SIGNING_KEY', data['BLOCK_INDEX'])){
+        let validId = await this.indexerDb.getStatusId('valid');
+        let pubkeyId = await this.indexerDb.getPubkeyId(String(data['SIGNING_PUBKEY']).toLowerCase());
+        if(pubkeyId !== null && await this.indexerDb.isSigningPubkeyUsedByContractDelegation(
+            pubkeyId, validId, data['BLOCK_INDEX']))
+            error = 'invalid: SIGNING_PUBKEY (already in use by contract delegation)';
+    }
+
     return error;
 }
 
