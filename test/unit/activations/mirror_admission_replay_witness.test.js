@@ -35,6 +35,26 @@ function withEnv(vars, fn) {
     }
 }
 
+function writeFakeMariaDbPreload(preload) {
+    fs.writeFileSync(preload, [
+        "'use strict';", "const fs = require('fs');", "const Module = require('module');",
+        "const originalLoad = Module._load;", "let creates = 0;",
+        "const record = (sql) => fs.appendFileSync(process.env.MA_WITNESS_SQL_EVENTS, JSON.stringify(sql) + '\\n');",
+        "Module._load = function (request) {",
+        "    if (request !== 'mariadb') return originalLoad.apply(this, arguments);",
+        "    return { createConnection: async () => ({",
+        "        query: async (sql) => {",
+        "            record(sql);",
+        "            if (/^SELECT SCHEMA_NAME/.test(sql)) return [];",
+        "            if (/^CREATE DATABASE/.test(sql) && ++creates === 2) throw new Error('forced schema creation failure');",
+        "            return [];",
+        "        },",
+        "        end: async () => undefined,",
+        "    }) };",
+        "};",
+    ].join('\n'));
+}
+
 describe('mirror-admission replay witness', function () {
     it('runs parameterized SQL through the indexer Database wrapper', async function () {
         const calls = [];
@@ -116,7 +136,9 @@ describe('mirror-admission replay witness: owned artifact cleanup', function () 
         assert.ok(lines.some((line) => line.includes(keptDir)), 'kept workdir path was not printed');
         fs.rmdirSync(keptDir);
     });
+});
 
+describe('mirror-admission replay witness: owned artifact cleanup', function () {
     it('applies workdir cleanup on a refusal before schemas are created', function () {
         const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-witness-unit-cli-'));
         const removedDir = path.join(parent, 'removed');
@@ -139,7 +161,9 @@ describe('mirror-admission replay witness: owned artifact cleanup', function () 
             if (fs.existsSync(parent)) fs.rmdirSync(parent);
         }
     });
+});
 
+describe('mirror-admission replay witness: owned artifact cleanup', function () {
     it('makes --keep control schema and workdir cleanup through the CLI', function () {
         this.timeout(120000);
         const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-witness-unit-cli-db-'));
@@ -147,26 +171,7 @@ describe('mirror-admission replay witness: owned artifact cleanup', function () 
         const events = path.join(parent, 'events.jsonl');
         const removedDir = path.join(parent, 'removed');
         const keptDir = path.join(parent, 'kept');
-        fs.writeFileSync(preload, [
-            "'use strict';",
-            "const fs = require('fs');",
-            "const Module = require('module');",
-            "const originalLoad = Module._load;",
-            "let creates = 0;",
-            "const record = (sql) => fs.appendFileSync(process.env.MA_WITNESS_SQL_EVENTS, JSON.stringify(sql) + '\\n');",
-            "Module._load = function (request) {",
-            "    if (request !== 'mariadb') return originalLoad.apply(this, arguments);",
-            "    return { createConnection: async () => ({",
-            "        query: async (sql) => {",
-            "            record(sql);",
-            "            if (/^SELECT SCHEMA_NAME/.test(sql)) return [];",
-            "            if (/^CREATE DATABASE/.test(sql) && ++creates === 2) throw new Error('forced schema creation failure');",
-            "            return [];",
-            "        },",
-            "        end: async () => undefined,",
-            "    }) };",
-            "};",
-        ].join('\n'));
+        writeFakeMariaDbPreload(preload);
 
         const baseArgs = (workdir, prefix) => [TOOL,
             '--coin', 'BTC', '--network', 'regtest', '--decoder-db', 'decoder', '--mirror-db', 'mirror',
