@@ -13474,6 +13474,13 @@
       "ProtocolChanges @regression @tier3 parseChanges() should set all activation blocks to 0",
       "ProtocolChanges @regression @tier3 parseChanges() should set all activation times to 0"
     ],
+    "dffaba7ca7ce4ca9": [
+      "exact integer wire fields @regression @tier1 accepts only lossless integer representations",
+      "exact integer wire fields @regression @tier1 gates BET create and existing-feed integer wire spellings",
+      "exact integer wire fields @regression @tier1 gates DISPENSER integer wire spellings",
+      "exact integer wire fields @regression @tier1 gates ORDER and SWAP integer wire spellings",
+      "exact integer wire fields @regression @tier1 registers the protocol change unarmed on every network"
+    ],
     "e0826acdcf60989c": [
       "subtree node store row batches inserts a one-node chunk and returns the query result",
       "subtree node store row batches inserts a three-node chunk in node order and returns the query result",
@@ -15299,8 +15306,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1243,
-      "titleCount": 12810,
+      "fileCount": 1244,
+      "titleCount": 12815,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16517,6 +16524,7 @@
         "test/unit/utility/amount_precision.test.js": "f8147b1f69e9d769",
         "test/unit/utility/controller_guard_custody.test.js": "49c6f8fe13359243",
         "test/unit/utility/controller_guard_inert_naming.test.js": "1bdf11fda7eec5f4",
+        "test/unit/utility/exact_integer_wire_fields.test.js": "dffaba7ca7ce4ca9",
         "test/unit/utility/fee_output.test.js": "b5fb412331972a99",
         "test/unit/utility/list_tick_airdrop_holders.test.js": "2987ec28ce152583",
         "test/unit/utility/price_age_at.test.js": "4b148378640ac7fa",
