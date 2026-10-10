@@ -11,23 +11,26 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 
 const { codeIdentity } = require('../../../bin/consensus-identity.js');
-const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+const { siblingCheckout } = require('../../helpers/sibling_checkout.js');
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
 const BIN = path.join(REPO, 'bin', 'consensus-identity.js');
 const PIN = path.join(REPO, 'bin', 'pins', 'at1-consensus-identity.json');
 const SHARED_ROWS = path.join(REPO, 'src', 'protocol_changes', 'shared_rows_5.js');
-const HUB_SHARED_ROWS_SHA256 = '3627a95233fa76bed61ba4eec58b92d5397ea33e431438630dbd90359c4b38f1';
+const HUB_SHARED_ROWS = 'src/consensus/gate_registry/shared_rows_5.js';
+const HUB_PIN = 'bin/pins/at1-consensus-identity.json';
 
-function sha256(bytes) {
-    return crypto.createHash('sha256').update(bytes).digest('hex');
+function hubFileAtCommit(hubRoot, commit, file) {
+    return execFileSync('git', ['-C', hubRoot, 'show', commit + ':' + file], {
+        encoding: file.endsWith('.json') ? 'utf8' : null,
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
 }
 
 function run(args) {
@@ -91,18 +94,18 @@ describe('consensus identity GATES field and pin comparison', function () {
         }
     });
 
-    it('pins shared rows 5 to the hub canonical bytes without a sibling checkout', function () {
-        assert.strictEqual(sha256(fs.readFileSync(SHARED_ROWS)), HUB_SHARED_ROWS_SHA256);
-    });
-
-    it('matches the hub pinned GATES field hash', function () {
+    it('matches the hub shared-row bytes and pinned GATES field hash', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
         const hubRoot = process.env.XCHAIN_HUB_DIR || path.resolve(REPO, '..', 'xchain-hub');
-        const candidate = path.join(hubRoot, 'bin', 'pins', 'at1-consensus-identity.json');
+        const candidate = path.join(hubRoot, HUB_PIN);
         const sibling = siblingCheckout(REPO, candidate, { ownRoot: REPO });
-        if (!sibling.usable) return skipOrFail(this, sibling, 'the hub GATES field hash guard');
-        const hubRows = path.join(hubRoot, 'src', 'consensus', 'gate_registry', 'shared_rows_5.js');
-        assert.deepStrictEqual(fs.readFileSync(SHARED_ROWS), fs.readFileSync(hubRows));
-        const hubPin = JSON.parse(fs.readFileSync(sibling.path, 'utf8'));
+        const hubRows = sibling.usable
+            ? fs.readFileSync(path.join(hubRoot, HUB_SHARED_ROWS))
+            : hubFileAtCommit(hubRoot, pin.hub_shared_rows_commit, HUB_SHARED_ROWS);
+        const hubPin = JSON.parse(sibling.usable
+            ? fs.readFileSync(sibling.path, 'utf8')
+            : hubFileAtCommit(hubRoot, pin.hub_shared_rows_commit, HUB_PIN));
+        assert.deepStrictEqual(fs.readFileSync(SHARED_ROWS), hubRows);
         assert.strictEqual(codeIdentity('regtest').gates_field_hash, hubPin.gates_field_hash);
     });
 
