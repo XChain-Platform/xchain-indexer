@@ -1168,13 +1168,15 @@
       "Database.releaseConnection() @regression @tier1 does nothing when no transactionConnection",
       "Database.releaseConnection() @regression @tier1 releases and clears transactionConnection when set"
     ],
-    "191127d9100c5732": [
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) an invalid signature leaves the request pending and writes NOTHING",
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) applies a verified row: response row, terminal flip, callback, fulfilled_count",
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) skips a body over the 8189-byte cap the batch could never carry",
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) skips a malformed signature list and a non-terminal status",
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) skips a row whose body does not reproduce its signed response_hash",
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) the synthetic action has NULL tx coordinates and the deterministic hash"
+    "185f2e8e30926ebe": [
+      "reconcileAnchorRewardWinner() @regression @tier1 does NOT log a pre-image when no reconcile block is given (legacy 2-arg callers unchanged)",
+      "reconcileAnchorRewardWinner() @regression @tier1 is a no-op for non-anchor reward types (issues no query)",
+      "reconcileAnchorRewardWinner() @regression @tier1 issues a single collapse DELETE for an anchor type with the right shape + params",
+      "reconcileAnchorRewardWinner() @regression @tier1 passes a null anchor_action_index through to the log when omitted",
+      "reconcileAnchorRewardWinner() @regression @tier1 pre-images the loser rows into anchor_reward_reconcile_log BEFORE the DELETE when a reconcile block is given (RB-ANCHOR)",
+      "reconcileAnchorRewardWinner() @regression @tier1 returns 0 when the DELETE affects nothing",
+      "reconcileAnchorRewardWinner() @regression @tier1 scopes the collapse to the round_qualifier it is given (archive leg)",
+      "reconcileAnchorRewardWinner() @regression @tier1 tolerates a driver result without affectedRows"
     ],
     "194efb88500e20fc": [
       "HubPushQueue selector retries clears old-hub backoff before fetching due rows after a move",
@@ -2267,14 +2269,6 @@
       "shared list params rejects every non-positive, non-integer, non-canonical, or unsafe list index",
       "shared list params rejects unsupported, lower-case, null, and non-object parameter values",
       "shared list params returns the exact record shape with a cloned utf8 byte-sorted member array"
-    ],
-    "2ae6e7bec4d6692d": [
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) an errored (expired-status) row flips the request to errored",
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) defers the callback to the relay leg for a relay-materialized request",
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) re-gates the mirror era and the pending state at apply time",
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) retires the broadcast-fee carve-out: no attest_bcast, whole escrow to the signers",
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) settles the request fee at the synthesized action, which carries BLOCK_TIME (D60)",
-      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest.js _applyMirroredResponse) the chain-path v1 dispatch is untouched by the mirror marker"
     ],
     "2b4abedb79b40a38": [
       "bridge and policy barriers on a schema without the mirror tables @regression @tier1 asks the schema once, not once per refresh",
@@ -3499,6 +3493,9 @@
       "cross-chain settlement per-block cap getEffectiveUnsettledMatches returns at most the cap, as the ordered prefix",
       "cross-chain settlement per-block cap processCrossChainSettlements passes the protocol cap and carries the overflow forward"
     ],
+    "4294555ce1d8a39a": [
+      "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 relay response deadline pre-gate today's pre-gate behaviour records valid, closes fulfilled, and fires the callback at deadline+1"
+    ],
     "42ad51cf8687bdd1": [
       "HubPushQueue per-hub fan-out delivers one queued row to both selector candidates",
       "HubPushQueue per-hub fan-out keeps only the down hub delivery pending after the other hub acknowledges",
@@ -4667,25 +4664,6 @@
       "Send handler: resolved tick totals gate off @regression @tier1 requires a handoff after identical spellings consolidate",
       "Send handler: resolved tick totals gate off @regression @tier1 resolves a lowercase spelling to the gated tick"
     ],
-    "5601b6eaf56f2e74": [
-      "Rollback @regression @tier3 bumps the push generation once at rollback start and threads the PRE-bump value (item 5308)",
-      "Rollback @regression @tier3 calls beginTransaction at the start of rollback",
-      "Rollback @regression @tier3 calls commitTransaction on success",
-      "Rollback @regression @tier3 does NOT call rollbackTransaction on success",
-      "Rollback @regression @tier3 does NOT signal the hub for DEX match retraction when the range is empty",
-      "Rollback @regression @tier3 does NOT signal the hub for XCALL retraction when the range is empty",
-      "Rollback @regression @tier3 does NOT signal the hub when there are no actions in the rolled-back range",
-      "Rollback @regression @tier3 does not throw when the hub DEX match retraction fails (best-effort); local rollback still commits",
-      "Rollback @regression @tier3 does not throw when the hub XCALL retraction fails (best-effort); local rollback still commits",
-      "Rollback @regression @tier3 does not throw when the hub retraction fails (best-effort)",
-      "Rollback @regression @tier3 keeps the LIVE retraction open-ended (no ceiling) so it never under-deletes the orphaned range",
-      "Rollback @regression @tier3 leaves the durable write-ahead price_retraction row when the live RPC fails (HUB-RETRACT-2)",
-      "Rollback @regression @tier3 quiesces the hub-push queue around the retraction block (pause before, resume after, even on throw)",
-      "Rollback @regression @tier3 signals the hub to retract cross-chain calls for the rolled-back range",
-      "Rollback @regression @tier3 signals the hub to retract cross-chain matches for the rolled-back range",
-      "Rollback @regression @tier3 signals the hub to retract prices for the rolled-back range",
-      "Rollback @regression @tier3 write-aheads the durable retraction with last_action_index = MAX of the rolled-back range (closed range)"
-    ],
     "56d2189dafc1f3bf": [
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 a BATCH does NOT bound EXECUTE, so two of them really do reach the handler",
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 batch.js stamps each subcommand its own 0-based BATCH_POSITION",
@@ -5825,6 +5803,14 @@
       "ANCHOR archive batch capture by a junk head @regression @tier1 the author-scoped chunk query keeps every filter the canonical-head one has",
       "ANCHOR archive batch capture by a junk head @regression @tier1 the real publisher's chunk survives a junk head that squats the batch seq"
     ],
+    "690190be91ce63e9": [
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) an errored (expired-status) row flips the request to errored",
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) defers the callback to the relay leg for a relay-materialized request",
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) re-gates the mirror era and the pending state at apply time",
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) retires the broadcast-fee carve-out: no attest_bcast, whole escrow to the signers",
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) settles the request fee at the synthesized action, which carries BLOCK_TIME (D60)",
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) the chain-path v1 dispatch is untouched by the mirror marker"
+    ],
     "694d08dca6dd0abb": [
       "reorg catch-up cursor refresh (XChainIndexer.start REORG-6 recheck) STILL selects a genuinely new reorg against the refreshed cursor (real reorgs never missed)",
       "reorg catch-up cursor refresh (XChainIndexer.start REORG-6 recheck) does NOT re-select just-processed reorgs once the cursor is refreshed (the fix)",
@@ -6219,6 +6205,22 @@
       "Collect (COLLECT) @regression @tier3 scopes the unclaimed-reward sum to the COLLECT's own block (replay determinism)",
       "Collect (COLLECT) @regression @tier3 valid collect debits the reward pool and credits the validator (no mint)",
       "Collect (COLLECT) @regression @tier3 valid collect \u2192 STATUS valid, reward recorded as AMOUNT"
+    ],
+    "6ed3bf6ac7b149b4": [
+      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest/response.js + attest/expire.js) v1 response: a DB driver fault (deadlock 1213) in the callback PROPAGATES",
+      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest/response.js + attest/expire.js) v1 response: a VM host fault in the callback PROPAGATES (block halts)",
+      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest/response.js + attest/expire.js) v1 response: a deterministic callback failure is still swallowed (response stands)",
+      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest/response.js + attest/expire.js) v2 expiry: a DB driver fault in the expiry callback PROPAGATES",
+      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest/response.js + attest/expire.js) v2 expiry: a DB driver fault updating missed_count PROPAGATES",
+      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest/response.js + attest/expire.js) v2 expiry: a VM host fault in the expiry callback PROPAGATES (block halts)",
+      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest/response.js + attest/expire.js) v2 expiry: a deterministic expiry-callback failure is still swallowed (expiry stands)",
+      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest/response.js + attest/expire.js) v2 expiry: an older-schema gap (errno 1146) in missed_count is still absorbed",
+      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) processResult: a DB driver fault (lock-wait 1205) in the callback PROPAGATES",
+      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) processResult: a VM host fault in the callback PROPAGATES (block halts)",
+      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) processResult: a deterministic callback failure is still swallowed (flip + idempotency stand)",
+      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) v2 expiry: a DB driver fault (deadlock 1213) in the callback PROPAGATES",
+      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) v2 expiry: a VM host fault in the callback PROPAGATES (block halts)",
+      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) v2 expiry: a deterministic callback failure is still swallowed (verdict stands)"
     ],
     "6ee9ec17dc5d367c": [
       "ATTEST responsible-set canonical-vector conformance @regression @tier1 headroom widen 1 slices redundancy+1",
@@ -8135,6 +8137,12 @@
       "HubDbSync price bootstrap throughput and progress @regression @tier2 reports a progress counter while a long drain is running",
       "HubDbSync price bootstrap throughput and progress @regression @tier2 stays silent on a drain that finishes inside the progress interval",
       "HubDbSync price bootstrap throughput and progress @regression @tier2 still stops the page at the first unappliable row"
+    ],
+    "850d161466315079": [
+      "smoke status stall-health parity keeps atProcessableTip identical across sync, reason, and clear boundaries",
+      "smoke status stall-health parity keeps stallClassOf identical across every classification boundary",
+      "smoke status stall-health parity keeps stallWedged identical across reason, grace, commit, and clear boundaries",
+      "smoke status stall-health parity keeps waitingOnFutureBlock identical across reason and clear boundaries"
     ],
     "854ebc44f7fae694": [
       "migration ledger applied_at type creates new ledgers with a DATETIME applied_at",
@@ -10637,9 +10645,6 @@
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: two MINTs of the SAME tick \u2192 invalid: MINT (limit)",
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: unresolvable ticks share ONE bucket, so two of them reject"
     ],
-    "ac5bf89bceed3327": [
-      "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 relay response deadline pre-gate records valid, closes fulfilled, and fires the callback at deadline+1"
-    ],
     "ac781e9d77a4b277": [
       "migration live-schema MODIFY guard @regression @tier1 does not read a keyword inside a string literal as an attribute",
       "migration live-schema MODIFY guard @regression @tier1 finds each MODIFY clause, ignoring FIRST/AFTER and other clauses",
@@ -11029,6 +11034,14 @@
       "HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2 still filters hub-only columns the local mirror does not carry",
       "HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2 the per-leg reorg fences only ever move UP (a lowered fence would invite a stale delete)",
       "HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2 uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for cross_chain_matches"
+    ],
+    "b3af3a3b9c2e54df": [
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) an invalid signature leaves the request pending and writes NOTHING",
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) applies a verified row: response row, terminal flip, callback, fulfilled_count",
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) skips a body over the 8189-byte cap the batch could never carry",
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) skips a malformed signature list and a non-terminal status",
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) skips a row whose body does not reproduce its signed response_hash",
+      "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) the synthetic action has NULL tx coordinates and the deterministic hash"
     ],
     "b3b18251c65df4cd": [
       "list meta storage reads bounds a historical read at the requested block",
@@ -12096,22 +12109,6 @@
       "STAKE_SNAPSHOT_SLASH_WINDOW reaches the VM stake snapshot through isEnabled @regression @tier1 the controller guard passes the isEnabled verdict (false) at the host block",
       "STAKE_SNAPSHOT_SLASH_WINDOW reaches the VM stake snapshot through isEnabled @regression @tier1 the controller guard passes the isEnabled verdict (true) at the host block"
     ],
-    "c6da12fbfe9617e3": [
-      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest.js) v1 response: a DB driver fault (deadlock 1213) in the callback PROPAGATES",
-      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest.js) v1 response: a VM host fault in the callback PROPAGATES (block halts)",
-      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest.js) v1 response: a deterministic callback failure is still swallowed (response stands)",
-      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest.js) v2 expiry: a DB driver fault in the expiry callback PROPAGATES",
-      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest.js) v2 expiry: a DB driver fault updating missed_count PROPAGATES",
-      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest.js) v2 expiry: a VM host fault in the expiry callback PROPAGATES (block halts)",
-      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest.js) v2 expiry: a deterministic expiry-callback failure is still swallowed (expiry stands)",
-      "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest.js) v2 expiry: an older-schema gap (errno 1146) in missed_count is still absorbed",
-      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) processResult: a DB driver fault (lock-wait 1205) in the callback PROPAGATES",
-      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) processResult: a VM host fault in the callback PROPAGATES (block halts)",
-      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) processResult: a deterministic callback failure is still swallowed (flip + idempotency stand)",
-      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) v2 expiry: a DB driver fault (deadlock 1213) in the callback PROPAGATES",
-      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) v2 expiry: a VM host fault in the callback PROPAGATES (block halts)",
-      "Callback injection infra-fault propagation @regression @tier2 XCALL (xcall.js) v2 expiry: a deterministic callback failure is still swallowed (verdict stands)"
-    ],
     "c8071ebba1ac2646": [
       "Anchor (ANCHOR) @regression @tier3 a v0 mined BELOW ANCHOR_ACTIVATION is invalid whatever it decodes to",
       "Anchor (ANCHOR) @regression @tier3 keeps v4 through v7 retired while v3 is fold-gated",
@@ -12646,6 +12643,25 @@
       "bridge-family watermark graces @regression @tier1 an off-regtest override is IGNORED: a per-node grace forks settlement",
       "bridge-family watermark graces @regression @tier1 each barrier resolves its OWN frozen constant, so no two share a knob",
       "bridge-family watermark graces @regression @tier1 the regtest bridge override moves ONLY the bridge barrier"
+    ],
+    "d31d4945ce62dc79": [
+      "Rollback @regression @tier3 bumps the push generation once at rollback start and threads the PRE-bump value",
+      "Rollback @regression @tier3 calls beginTransaction at the start of rollback",
+      "Rollback @regression @tier3 calls commitTransaction on success",
+      "Rollback @regression @tier3 does NOT call rollbackTransaction on success",
+      "Rollback @regression @tier3 does NOT signal the hub for DEX match retraction when the range is empty",
+      "Rollback @regression @tier3 does NOT signal the hub for XCALL retraction when the range is empty",
+      "Rollback @regression @tier3 does NOT signal the hub when there are no actions in the rolled-back range",
+      "Rollback @regression @tier3 does not throw when the hub DEX match retraction fails (best-effort); local rollback still commits",
+      "Rollback @regression @tier3 does not throw when the hub XCALL retraction fails (best-effort); local rollback still commits",
+      "Rollback @regression @tier3 does not throw when the hub retraction fails (best-effort)",
+      "Rollback @regression @tier3 keeps the LIVE retraction open-ended (no ceiling) so it never under-deletes the orphaned range",
+      "Rollback @regression @tier3 leaves the durable write-ahead price_retraction row when the live RPC fails (HUB-RETRACT-2)",
+      "Rollback @regression @tier3 quiesces the hub-push queue around the retraction block (pause before, resume after, even on throw)",
+      "Rollback @regression @tier3 signals the hub to retract cross-chain calls for the rolled-back range",
+      "Rollback @regression @tier3 signals the hub to retract cross-chain matches for the rolled-back range",
+      "Rollback @regression @tier3 signals the hub to retract prices for the rolled-back range",
+      "Rollback @regression @tier3 write-aheads the durable retraction with last_action_index = MAX of the rolled-back range (closed range)"
     ],
     "d3332bf4be722dbe": [
       "createContractPermission: permissions JSON integrity @regression @tier1 persists permissions as a JSON ARRAY string, not a comma-joined scalar",
@@ -13481,16 +13497,6 @@
       "Send handler: conditional gated handoff (PC-29) @regression @tier1 vector 1, MULTI-LEG same destination: legs are totalled, not judged alone",
       "Send handler: conditional gated handoff (PC-29) @regression @tier1 vector 2, TWO ACTIONS in one transaction: the snapshot base compounds",
       "Send handler: conditional gated handoff (PC-29) @regression @tier1 vector 3, SELF-SEND: applied literally, and the self-addressed MESSAGE satisfies it"
-    ],
-    "e0eb9215fdbe7759": [
-      "reconcileAnchorRewardWinner() @regression @tier1 does NOT log a pre-image when no reconcile block is given (legacy 2-arg callers unchanged)",
-      "reconcileAnchorRewardWinner() @regression @tier1 is a no-op for non-anchor reward types (issues no query)",
-      "reconcileAnchorRewardWinner() @regression @tier1 issues a single collapse DELETE for an anchor type with the right shape + params",
-      "reconcileAnchorRewardWinner() @regression @tier1 passes a null anchor_action_index through to the log when omitted (legacy RPC push path)",
-      "reconcileAnchorRewardWinner() @regression @tier1 pre-images the loser rows into anchor_reward_reconcile_log BEFORE the DELETE when a reconcile block is given (RB-ANCHOR)",
-      "reconcileAnchorRewardWinner() @regression @tier1 returns 0 when the DELETE affects nothing",
-      "reconcileAnchorRewardWinner() @regression @tier1 scopes the collapse to the round_qualifier it is given (archive leg)",
-      "reconcileAnchorRewardWinner() @regression @tier1 tolerates a driver result without affectedRows"
     ],
     "e114e1b97d1caeb4": [
       "hubConfigStaleness (#2607) @regression derives the staleness limit as 3 poll intervals",
@@ -14962,6 +14968,9 @@
       "attest_response_canonical: hub/indexer twin produces byte-identical canonicals to the hub copy across both eras",
       "attest_response_canonical: hub/indexer twin rejects the same spellings as the hub copy"
     ],
+    "fa331b6274442a21": [
+      "ANCHOR v3 empty fold rejection preserves today's pre-gate behaviour by accepting the unsigned empty fold"
+    ],
     "fa99b888f85b3500": [
       "Contract delegation signing key claim query @regression @tier2 reserves pending and live delegations but releases a key at its deactivation block",
       "Delegated signing key materialization slot @regression @tier2 does not rotate a governed stake when another slot holds the delegated key",
@@ -15349,8 +15358,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1246,
-      "titleCount": 12854,
+      "fileCount": 1248,
+      "titleCount": 12859,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15427,8 +15436,8 @@
         "test/unit/actions/attest/attest_response_applier.test.js": "5774b46381706d23",
         "test/unit/actions/attest/attest_response_applier.test/applier_pass.test.js": "73755c9a0427e7f1",
         "test/unit/actions/attest/attest_response_applier.test/bounded_read.test.js": "066e3e1a7354e46d",
-        "test/unit/actions/attest/attest_response_applier.test/effects_apply.test.js": "191127d9100c5732",
-        "test/unit/actions/attest/attest_response_applier.test/effects_regate_settle.test.js": "2ae6e7bec4d6692d",
+        "test/unit/actions/attest/attest_response_applier.test/effects_apply.test.js": "b3af3a3b9c2e54df",
+        "test/unit/actions/attest/attest_response_applier.test/effects_regate_settle.test.js": "690190be91ce63e9",
         "test/unit/actions/attest/attest_response_applier.test/per_block_cap.test.js": "9df80166549d3912",
         "test/unit/actions/attest/attest_response_verify_vectors.test.js": "695202d293f2583e",
         "test/unit/actions/attest/attest_response_verify_vectors.test/capability_read.test.js": "94ee2fc5a1183871",
@@ -15444,7 +15453,7 @@
         "test/unit/actions/attest_relay.test/relay_canonicals.test.js": "d3c72ac176cde46a",
         "test/unit/actions/attest_relay.test/relay_request.test.js": "5e848392b2703195",
         "test/unit/actions/attest_relay.test/relay_response.test.js": "a3b18fb1d683293a",
-        "test/unit/actions/attest_relay.test/relay_response_deadline.test.js": "ac5bf89bceed3327",
+        "test/unit/actions/attest_relay.test/relay_response_deadline.test.js": "4294555ce1d8a39a",
         "test/unit/actions/attest_responsible_set_vectors.test.js": "6ee9ec17dc5d367c",
         "test/unit/actions/batch/mint_cap.test.js": "1e74889cf67f01b5",
         "test/unit/actions/batch_execute_attest.test.js": "56d2189dafc1f3bf",
@@ -15469,7 +15478,7 @@
         "test/unit/actions/contract/callback.test/holder_list_filtering.test.js": "129faa36d0e69de4",
         "test/unit/actions/contract/callback.test/native_fee_payment.test.js": "6ba9ff528d557453",
         "test/unit/actions/contract/callback.test/validation_guards.test.js": "786e6c7441dcf294",
-        "test/unit/actions/contract/callback_infra_fault.test.js": "c6da12fbfe9617e3",
+        "test/unit/actions/contract/callback_infra_fault.test.js": "6ed3bf6ac7b149b4",
         "test/unit/actions/contract/consensus_runtime_gate.test.js": "689c2ce4b93e72e9",
         "test/unit/actions/contract/deploy.test.js": "0435d361ca5b35f4",
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
@@ -15768,6 +15777,7 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "5278429cef8904ee",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_counter.test.js": "1c56af9b1dbd9f0c",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
+        "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "fa331b6274442a21",
         "test/unit/anchor/anchor_v3_fold_parse.test.js": "6ea2607d7bbbc413",
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
@@ -15780,7 +15790,7 @@
         "test/unit/anchor/db_get_anchor_v1_by_batch_seq_tieorder.test.js": "b57e643add732c08",
         "test/unit/anchor/db_get_archive_replay_watermarks.test.js": "c40243db8bf9d81d",
         "test/unit/anchor/db_get_max_anchor_checkpoint_seq_versions.test.js": "03398c9a5b04e1c7",
-        "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "e0eb9215fdbe7759",
+        "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
         "test/unit/anchor/diagnostic_events.test.js": "3d9f64cbeacabe25",
         "test/unit/anchor/max_archive_batch_seq_by_author.test.js": "f8fbd67961145f14",
         "test/unit/anchor/reward_push_stake_floor.test.js": "428e1d955245f334",
@@ -16494,7 +16504,7 @@
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
         "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "78664d20d86a7a0f",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
-        "test/unit/rollback/rollback.test/hub_retractions.test.js": "5601b6eaf56f2e74",
+        "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
         "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "b7bafbd9ea645940",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
         "test/unit/rollback/rollback.test/transaction_and_rearm.test.js": "294f6ca3123cda7e",
@@ -16595,6 +16605,7 @@
         "test/unit/xchain_indexer/stall_health.test.js": "2537dd40819c57ff",
         "test/unit/xchain_indexer/stall_health.test/barrier_mapping.test.js": "26506740301590af",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
+        "test/unit/xchain_indexer/stall_health_smoke_parity.test.js": "850d161466315079",
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
