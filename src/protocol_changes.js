@@ -86,17 +86,6 @@ function isNativeFeePriceTimeGateActive(network, blockTime){
     return Number.isFinite(Number(blockTime)) && Number(blockTime) >= NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
 }
 
-const BIGINT_SURFACE_STRIP_KEY = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
-
-function isBigIntSurfaceStripActive(network, coin, blockHeight){
-    if(network === 'regtest') return true;
-    if(network !== 'testnet' && network !== 'mainnet') return false;
-    const height = Number(blockHeight);
-    if(!Number.isFinite(height) || coin == null) return false;
-    const threshold = registry.get(BIGINT_SURFACE_STRIP_KEY)[coin + ':' + network];
-    return threshold !== UNARMED && Number.isFinite(threshold) && height >= threshold;
-}
-
 // No-op proof for the consensus-version pin (spec §7 pre-window gate).
 //
 // Called at indexer boot. Asserts that pinning the consensus version changed
@@ -326,7 +315,6 @@ module.exports.VM_BANNED_ASYNC_MAINNET_TIME = VM_BANNED_ASYNC_MAINNET_TIME;
 // H-3 price-selection flag-day + its shared gate predicate (see registration).
 module.exports.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
 module.exports.isNativeFeePriceTimeGateActive = isNativeFeePriceTimeGateActive;
-module.exports.isBigIntSurfaceStripActive = isBigIntSurfaceStripActive;
 // Compiled consensus-version pin and its no-op proof. Exported for the
 // boot path (XChainIndexer) and for test/unit/protocol_changes.test.js, which
 // pins the constant against package.json so the two cannot drift.
