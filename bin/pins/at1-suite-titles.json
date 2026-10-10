@@ -10636,6 +10636,9 @@
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: two MINTs of the SAME tick \u2192 invalid: MINT (limit)",
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: unresolvable ticks share ONE bucket, so two of them reject"
     ],
+    "ac5bf89bceed3327": [
+      "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 relay response deadline pre-gate records valid, closes fulfilled, and fires the callback at deadline+1"
+    ],
     "ac781e9d77a4b277": [
       "migration live-schema MODIFY guard @regression @tier1 does not read a keyword inside a string literal as an attribute",
       "migration live-schema MODIFY guard @regression @tier1 finds each MODIFY clause, ignoring FIRST/AFTER and other clauses",
@@ -15346,8 +15349,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1245,
-      "titleCount": 12853,
+      "fileCount": 1246,
+      "titleCount": 12854,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15441,6 +15444,7 @@
         "test/unit/actions/attest_relay.test/relay_canonicals.test.js": "d3c72ac176cde46a",
         "test/unit/actions/attest_relay.test/relay_request.test.js": "5e848392b2703195",
         "test/unit/actions/attest_relay.test/relay_response.test.js": "a3b18fb1d683293a",
+        "test/unit/actions/attest_relay.test/relay_response_deadline.test.js": "ac5bf89bceed3327",
         "test/unit/actions/attest_responsible_set_vectors.test.js": "6ee9ec17dc5d367c",
         "test/unit/actions/batch/mint_cap.test.js": "1e74889cf67f01b5",
         "test/unit/actions/batch_execute_attest.test.js": "56d2189dafc1f3bf",
