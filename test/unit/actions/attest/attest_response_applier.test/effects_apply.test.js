@@ -38,7 +38,7 @@ const { applyData, setupEffects } = require('./helpers/effects_fixture.js');
 describe('ATTEST hub-mirror response applier @regression @tier3', function () {
     let indexer, handler, executeStub;
 
-    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+    describe('§4.4 effects (attest/mirror_apply.js applyMirroredResponse)', function () {
         beforeEach(function () { ({ indexer, handler, executeStub } = setupEffects()); });
 
         afterEach(function () { sinon.restore(); });
@@ -73,7 +73,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
 describe('ATTEST hub-mirror response applier @regression @tier3', function () {
     let indexer, handler, executeStub;
 
-    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+    describe('§4.4 effects (attest/mirror_apply.js applyMirroredResponse)', function () {
         beforeEach(function () { ({ indexer, handler, executeStub } = setupEffects()); });
 
         afterEach(function () { sinon.restore(); });
@@ -110,7 +110,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
 describe('ATTEST hub-mirror response applier @regression @tier3', function () {
     let indexer, handler, executeStub;
 
-    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+    describe('§4.4 effects (attest/mirror_apply.js applyMirroredResponse)', function () {
         beforeEach(function () { ({ indexer, handler, executeStub } = setupEffects()); });
 
         afterEach(function () { sinon.restore(); });
@@ -142,7 +142,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
 describe('ATTEST hub-mirror response applier @regression @tier3', function () {
     let indexer, handler, executeStub;
 
-    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+    describe('§4.4 effects (attest/mirror_apply.js applyMirroredResponse)', function () {
         beforeEach(function () { ({ indexer, handler, executeStub } = setupEffects()); });
 
         afterEach(function () { sinon.restore(); });
