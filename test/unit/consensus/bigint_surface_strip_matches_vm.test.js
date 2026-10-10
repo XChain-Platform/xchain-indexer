@@ -18,11 +18,13 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const acorn = require('acorn');
+const { codeIdentity } = require('../../../bin/consensus-identity.js');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 const XChainVM = require('xchain-vm');
 const { runVmExecution } = require('../../../src/actions/execute/run_vm.js');
 
 const KEY = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
+const IDENTITY_PIN = path.resolve(__dirname, '../../../bin/pins/at1-consensus-identity.json');
 const VM_MODULE = 'src/index/bigint_surface_strip_heights.js';
 const COIN_KEYS = [
     'BTC:mainnet',
@@ -177,6 +179,11 @@ describe('consensus/bigint_surface_strip_matches_vm: activation parity @regressi
         assert.strictEqual(indexerActivationAt('regtest', 'LTC', 0), true);
         assert.strictEqual(indexerActivationAt('unknown', 'LTC', 0), false);
         assert.strictEqual(vmActivationAt('unknown', 'LTC', 0), false);
+
+        const rowHash = codeIdentity('regtest').armed_map_rows[KEY];
+        const pin = JSON.parse(fs.readFileSync(IDENTITY_PIN, 'utf8'));
+        assert.strictEqual(pin.bare_checkout.armed_map_rows[KEY], rowHash);
+        assert.strictEqual(pin.armed_regtest_venue.armed_map_rows[KEY], rowHash);
     });
 
     it('passes the production network, coin and height inputs into vm.execute()', async function () {
