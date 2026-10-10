@@ -198,67 +198,71 @@ function registerCloseServerTests(){
     });
 }
 
+async function verifyIndexerDrainOrdering(){
+    const order   = [];
+    const indexer = makeIndexer(order);
+    const server  = makeServer(order);
+    let running   = true;
+
+    const drain = createIndexerDrain({
+        indexer,
+        server,
+        loopSettled: indexer.loop,
+        onDraining: () => { running = false; order.push('health-flag'); },
+        log: silentLog
+    });
+    await drain();
+
+    assert.strictEqual(running, false, '/status must stop reporting the indexer running');
+    assert.strictEqual(indexer.stopped, true);
+    assert.strictEqual(server.closed, true);
+    assert.strictEqual(indexer.actions.closed, true);
+
+    // The health flag must go down BEFORE stop(), because stop() only sets
+    // stopFlag and the block loop can take a whole block to notice it.
+    assert.ok(order.indexOf('health-flag') < order.indexOf('stop'),
+        'health flag must flip before stop(), not after');
+    // Pools close LAST: the HTTP drain and the block loop both still need them.
+    for(const name of ['indexerDb', 'decoderDb', 'hubDb']){
+        assert.ok(order.indexOf('close:' + name) > order.indexOf('server.close'),
+            name + ' must close after the server has drained');
+        assert.ok(order.indexOf('close:' + name) > order.indexOf('stop'),
+            name + ' must close after the block loop was told to stop');
+    }
+    assert.ok(order.indexOf('close:actions') > order.indexOf('server.close'));
+    assert.ok(order.indexOf('close:actions') < order.indexOf('close:indexerDb'));
+    assert.ok(indexer.indexerDb.closed && indexer.decoderDb.closed && indexer.hubDb.closed);
+}
+
+async function verifyIndexerDrainWaitsForLoop(){
+    const order   = [];
+    const indexer = makeIndexer(order);
+    const server  = makeServer(order);
+
+    let breakLoop;
+    const loop = new Promise((res) => { breakLoop = res; });
+    const drain = createIndexerDrain({ indexer, server, loopSettled: loop, log: silentLog });
+
+    let settled = false;
+    const running = drain().then(() => { settled = true; });
+
+    // The claim is that the drain does NOT progress while the loop promise is
+    // unresolved. Turning the event loop a bounded number of times gives the
+    // drain strictly more turns than it needs, with no wall clock in it.
+    await flushMacrotasks();
+    assert.strictEqual(settled, false, 'the drain must not finish while the block loop is mid-block');
+    assert.strictEqual(indexer.indexerDb.closed, false,
+        'closing a pool under an open block transaction is the exact abort this fix removes');
+
+    breakLoop();
+    await running;
+    assert.strictEqual(indexer.indexerDb.closed, true);
+}
+
 function registerIndexerDrainOrderingTests(){
     describe('createIndexerDrain', function(){
-        it('flips health, stops the indexer, drains the server and loop, then closes pools', async function(){
-            const order   = [];
-            const indexer = makeIndexer(order);
-            const server  = makeServer(order);
-            let running   = true;
-
-            const drain = createIndexerDrain({
-                indexer,
-                server,
-                loopSettled: indexer.loop,
-                onDraining: () => { running = false; order.push('health-flag'); },
-                log: silentLog
-            });
-            await drain();
-
-            assert.strictEqual(running, false, '/status must stop reporting the indexer running');
-            assert.strictEqual(indexer.stopped, true);
-            assert.strictEqual(server.closed, true);
-            assert.strictEqual(indexer.actions.closed, true);
-
-            // The health flag must go down BEFORE stop(), because stop() only sets
-            // stopFlag and the block loop can take a whole block to notice it.
-            assert.ok(order.indexOf('health-flag') < order.indexOf('stop'),
-                'health flag must flip before stop(), not after');
-            // Pools close LAST: the HTTP drain and the block loop both still need them.
-            for(const name of ['indexerDb', 'decoderDb', 'hubDb']){
-                assert.ok(order.indexOf('close:' + name) > order.indexOf('server.close'),
-                    name + ' must close after the server has drained');
-                assert.ok(order.indexOf('close:' + name) > order.indexOf('stop'),
-                    name + ' must close after the block loop was told to stop');
-            }
-            assert.ok(order.indexOf('close:actions') > order.indexOf('server.close'));
-            assert.ok(order.indexOf('close:actions') < order.indexOf('close:indexerDb'));
-            assert.ok(indexer.indexerDb.closed && indexer.decoderDb.closed && indexer.hubDb.closed);
-        });
-        it('waits for the block loop to break before closing pools', async function(){
-            const order   = [];
-            const indexer = makeIndexer(order);
-            const server  = makeServer(order);
-
-            let breakLoop;
-            const loop = new Promise((res) => { breakLoop = res; });
-            const drain = createIndexerDrain({ indexer, server, loopSettled: loop, log: silentLog });
-
-            let settled = false;
-            const running = drain().then(() => { settled = true; });
-
-            // The claim is that the drain does NOT progress while the loop promise is
-            // unresolved. Turning the event loop a bounded number of times gives the
-            // drain strictly more turns than it needs, with no wall clock in it.
-            await flushMacrotasks();
-            assert.strictEqual(settled, false, 'the drain must not finish while the block loop is mid-block');
-            assert.strictEqual(indexer.indexerDb.closed, false,
-                'closing a pool under an open block transaction is the exact abort this fix removes');
-
-            breakLoop();
-            await running;
-            assert.strictEqual(indexer.indexerDb.closed, true);
-        });
+        it('flips health, stops the indexer, drains the server and loop, then closes pools', verifyIndexerDrainOrdering);
+        it('waits for the block loop to break before closing pools', verifyIndexerDrainWaitsForLoop);
     });
 }
 
