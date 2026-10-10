@@ -56,9 +56,9 @@ describe('Rollback @regression @tier3', function () {
         assert.deepStrictEqual(conCreditDel.args[1], [1, 100, 100]);
 
         // The matching negative escrow releases use the same legacy action/address/tick keys.
-        const capEscrowDel = calls.find(c => /DELETE e FROM escrows e/.test(c.args[0]) &&
+        const capEscrowDel = calls.find(c => /DELETE e FROM escrows AS e/.test(c.args[0]) &&
             /JOIN unstakes u/.test(c.args[0]));
-        const conEscrowDel = calls.find(c => /DELETE e FROM escrows e/.test(c.args[0]) &&
+        const conEscrowDel = calls.find(c => /DELETE e FROM escrows AS e/.test(c.args[0]) &&
             /JOIN contract_unstakes cu/.test(c.args[0]));
         assert.ok(capEscrowDel, 'expected a capability maturity-escrow delete joined to unstakes');
         assert.ok(conEscrowDel, 'expected a contract maturity-escrow delete joined to contract_unstakes');
