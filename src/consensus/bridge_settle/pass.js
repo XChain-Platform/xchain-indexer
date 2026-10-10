@@ -36,6 +36,7 @@ const { XBRIDGE_MAX_PER_BLOCK, XPOLICY_MAX_PER_BLOCK } = require('../../protocol
 const { int, SETTLE_REASON } = require('./reasons.js');
 const { parseMembershipOrRef } = require('./policy_membership.js');
 const { dropRefRowsFromFirst } = require('./policy_ref_due.js');
+const { belowBridgeActivation } = require('./transfer.js');
 const { recordSettlement } = require('./settlements.js');
 const gateRegistry = require('../gate_registry');
 
@@ -173,6 +174,8 @@ async function dueBridgeTransfers(deps, ctx){
 }
 
 async function unsettledBridgeTransfers(deps, ctx){
+    // Sub-gate deferral: nothing is due on a destination below its own bridge activation.
+    if(belowBridgeActivation(ctx)) return [];
     const db  = ctx.indexerDb;
     // Bound by height in the admission era and by the clock below it (mirrorBindClause).
     const bind = deps.canonicals.mirrorBindClause(ctx);

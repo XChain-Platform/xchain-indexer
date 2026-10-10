@@ -46,16 +46,31 @@ module.exports = {
         return conAffected;
     },
 
-    // Delete the two refund credits and put both completed flips back to valid.
+    // Delete the two refund credits and their escrow releases, then put both completed
+    // flips back to valid.
     async reverseMaturedRefunds(db, gasTick, completedStatusId, validStatusId, block_index){
         let query;
-        // Capability maturity refund is paid in GAS, keyed by the unstake's action_index.
+        // Capability maturity refund and release are paid in GAS, keyed by the
+        // unstake's action_index.
+        query = `DELETE e FROM escrows e
+                    JOIN unstakes u ON u.action_index = e.action_index AND u.source_id = e.address_id
+                    JOIN index_tickers g ON g.id = e.tick_id AND g.tick = ?
+                    WHERE u.status_id = ? AND u.cooldown_end_block >= ? AND u.block_index < ?
+                      AND CAST(e.amount AS DECIMAL(60,18)) < 0`;
+        await db.doQuery(query, [gasTick, completedStatusId, block_index, block_index]);
         query = `DELETE c FROM credits c
                     JOIN unstakes u ON u.action_index = c.action_index AND u.source_id = c.address_id
                     JOIN index_tickers g ON g.id = c.tick_id AND g.tick = ?
                     WHERE u.status_id = ? AND u.cooldown_end_block >= ? AND u.block_index < ?`;
         await db.doQuery(query, [gasTick, completedStatusId, block_index, block_index]);
-        // Contract maturity refund is paid in the unstake's own tick.
+        // Contract maturity refund and release are paid in the unstake's own tick.
+        query = `DELETE e FROM escrows e
+                    JOIN contract_unstakes cu ON cu.action_index = e.action_index
+                                             AND cu.source_id   = e.address_id
+                                             AND cu.tick_id     = e.tick_id
+                    WHERE cu.status_id = ? AND cu.cooldown_end_block >= ? AND cu.block_index < ?
+                      AND CAST(e.amount AS DECIMAL(60,18)) < 0`;
+        await db.doQuery(query, [completedStatusId, block_index, block_index]);
         query = `DELETE c FROM credits c
                     JOIN contract_unstakes cu ON cu.action_index = c.action_index
                                              AND cu.source_id   = c.address_id
