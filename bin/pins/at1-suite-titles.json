@@ -2278,6 +2278,15 @@
       "bridge and policy barriers when the schema changes underneath @regression @tier1 reads the table anyway when the probe itself fails",
       "bridge and policy barriers when the schema changes underneath @regression @tier1 records the 1146 a stale positive memo earns, and skips the statement next time"
     ],
+    "2b62c6cd80d4f027": [
+      "dispatched-only ACTION admission @regression @tier1 defines the admission set as exactly the names in the dispatch table",
+      "dispatched-only ACTION admission @regression @tier1 invalidates a whole BATCH containing a registered but undispatched name once active",
+      "dispatched-only ACTION admission @regression @tier1 is unarmed on public networks and active from regtest genesis",
+      "dispatched-only ACTION admission @regression @tier1 preserves BATCH admission below the gate",
+      "dispatched-only ACTION admission @regression @tier1 preserves the legacy empty-action no-op in a BATCH once active",
+      "dispatched-only ACTION admission @regression @tier1 preserves top-level admission below the gate",
+      "dispatched-only ACTION admission @regression @tier1 routes a top-level registered feature flag to UNKNOWN once active"
+    ],
     "2b716c727c33a522": [
       "Swap action handler maker policy admission @regression @tier2 admits a GET_ADDRESS allowed for GET_TICK but blocked for GIVE_TICK after payout-policy activation",
       "Swap action handler maker policy admission @regression @tier2 keeps the GET_TICK refusal for the reverse split below payout-policy activation",
@@ -2376,6 +2385,12 @@
       "stallReason across a same-block retry does not restore a reason cleared by a commit",
       "stallReason across a same-block retry keeps the reason and deadline visible while the deferred block is retried"
     ],
+    "2d8ca061f5bcdfac": [
+      "ATTEST v4 relay response deadline @regression @tier1 accepts a response landing exactly at deadline_block",
+      "ATTEST v4 relay response deadline @regression @tier1 preserves the legacy acceptance of deadline+1 below activation",
+      "ATTEST v4 relay response deadline @regression @tier1 preserves today's pre-gate fulfilled status and callback at deadline+1",
+      "ATTEST v4 relay response deadline @regression @tier1 rejects a response landing at deadline+1 after activation"
+    ],
     "2d944feb25011092": [
       "protocol_changes anchor fold rows arms both regtest entries from the shared venue variable",
       "protocol_changes anchor fold rows classifies both stems as registry-only",
@@ -2425,25 +2440,6 @@
     "2dfd0abb78786c1e": [
       "api body parse rejection through installMiddleware answers a malformed JSON body with 400 and one warn line, no error log",
       "api body parse rejection through installMiddleware passes a well-formed body through"
-    ],
-    "2e08800d4f2fd009": [
-      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
-      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
-      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
-      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
-      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
-      "armed_map/manifest: collectRows carries the three row families the design names",
-      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
-      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
-      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
-      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
-      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
-      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
-      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
-      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
-      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
-      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
-      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "2e3850c1f7da931d": [
       "ANCHOR folded archive verdict post-arm coin thresholds activates both DOGE testnet gates exactly at the armed height",
@@ -3493,9 +3489,6 @@
       "cross-chain settlement per-block cap getEffectiveUnsettledMatches returns at most the cap, as the ordered prefix",
       "cross-chain settlement per-block cap processCrossChainSettlements passes the protocol cap and carries the overflow forward"
     ],
-    "4294555ce1d8a39a": [
-      "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 relay response deadline pre-gate today's pre-gate behaviour records valid, closes fulfilled, and fires the callback at deadline+1"
-    ],
     "42ad51cf8687bdd1": [
       "HubPushQueue per-hub fan-out delivers one queued row to both selector candidates",
       "HubPushQueue per-hub fan-out keeps only the down hub delivery pending after the other hub acknowledges",
@@ -4229,13 +4222,6 @@
       "HubDbSync mirror network scope @regression @tier2 starts at 0 on an empty local table",
       "HubDbSync mirror network scope @regression @tier2 treats an advertised ceiling of ZERO as authoritative, not as missing information",
       "HubDbSync mirror network scope @regression @tier2 uses the wire position for ready-message catch-up"
-    ],
-    "4d952349cc7e96e7": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash",
-      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings"
     ],
     "4d95352bdf288616": [
       "Utility.getDustThresholdCoin() fails closed - @regression @tier1 does not cache a failed lookup",
@@ -5488,6 +5474,26 @@
       "capability-snapshot reorg burial @regression @tier1 party 3: archive recovery _verifyCompleteness accepts an honest archive that omits a source activating inside (N-6, N]",
       "capability-snapshot reorg burial @regression @tier1 party 3: archive recovery _verifyStakes accepts an honest archive whose signer deactivates inside (N-6, N]",
       "capability-snapshot reorg burial @regression @tier1 party 3: archive recovery still rejects a genuinely fabricated key (the existence guard is not weakened)"
+    ],
+    "65019f130fd744f9": [
+      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
+      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
+      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
+      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
+      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
+      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
+      "armed_map/manifest: collectRows carries the three row families the design names",
+      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
+      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
+      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
+      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
+      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
+      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
+      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
+      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
+      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
+      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
+      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "65fda33d23415561": [
       "Sleep @regression @tier3 MEMO validations MEMO with pipe \u2192 invalid",
@@ -12552,6 +12558,15 @@
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure a probe records the fee owed even with no oracle output to read",
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure records nothing when no fee is owed (belowDust / zero fee)"
     ],
+    "cee72069c1a9d3bd": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
+    ],
     "cf3bcc3e4ee7e191": [
       "performance ratio noise floor accepts the same baseline at the old 1ms floor",
       "performance ratio noise floor accepts values at or above the floor",
@@ -15365,8 +15380,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1250,
-      "titleCount": 12862,
+      "fileCount": 1251,
+      "titleCount": 12875,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15388,6 +15403,7 @@
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/preflight_memo.test.js": "fcceb01127354bd9",
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
+        "test/unit/actions/actions_class/dispatched_actions.test.js": "2b62c6cd80d4f027",
         "test/unit/actions/actions_class/install_methods.test.js": "13e1f9bf869b82b9",
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
@@ -15460,7 +15476,7 @@
         "test/unit/actions/attest_relay.test/relay_canonicals.test.js": "d3c72ac176cde46a",
         "test/unit/actions/attest_relay.test/relay_request.test.js": "5e848392b2703195",
         "test/unit/actions/attest_relay.test/relay_response.test.js": "a3b18fb1d683293a",
-        "test/unit/actions/attest_relay.test/relay_response_deadline.test.js": "4294555ce1d8a39a",
+        "test/unit/actions/attest_relay.test/relay_response_deadline.test.js": "2d8ca061f5bcdfac",
         "test/unit/actions/attest_responsible_set_vectors.test.js": "6ee9ec17dc5d367c",
         "test/unit/actions/batch/mint_cap.test.js": "1e74889cf67f01b5",
         "test/unit/actions/batch_execute_attest.test.js": "56d2189dafc1f3bf",
@@ -15970,7 +15986,7 @@
         "test/unit/consensus/anchor_reward_derive/reward_groups.test.js": "67c89e84e7aba170",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
-        "test/unit/consensus/armed_map/manifest.test.js": "2e08800d4f2fd009",
+        "test/unit/consensus/armed_map/manifest.test.js": "65019f130fd744f9",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
@@ -16495,7 +16511,7 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "4d952349cc7e96e7",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "cee72069c1a9d3bd",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
