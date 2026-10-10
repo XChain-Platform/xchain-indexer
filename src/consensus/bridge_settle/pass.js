@@ -42,6 +42,8 @@ const gateRegistry = require('../gate_registry');
 
 const POLICY_REFUSAL_RECORD_KEY =
     'bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION';
+const ROW_FIELDS_TERMINAL_KEY =
+    'bridge_row_fields_terminal_activation.BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION';
 
 // Refusals that name a fact about the row no later block changes and that write no settlement
 // record. Such a row stays in the due set forever, so it must not count against the per-block
@@ -57,6 +59,13 @@ const TERMINAL_REFUSALS = new Set([
 function policyRefusalRecordActive(ctx){
     return gateRegistry.activeAt(POLICY_REFUSAL_RECORD_KEY,
                                  ctx.network, ctx.coin, ctx.blockIndex, null);
+}
+
+function transferRefusalIsTerminal(reason, ctx){
+    if(TERMINAL_REFUSALS.has(reason)) return true;
+    return reason === SETTLE_REASON.ROW_FIELDS &&
+        gateRegistry.activeAt(ROW_FIELDS_TERMINAL_KEY,
+                              ctx.network, ctx.coin, ctx.blockIndex, null);
 }
 
 async function recordPolicyRefusal(row, result, ctx){
@@ -151,7 +160,7 @@ async function processBridgeSettlePass(deps, ctx){
         try {
             const res = await applyBridgeTransfer(row, ctx);
             if(res.applied) applied.transfers.push(row.transfer_id);
-            if(res.applied || !TERMINAL_REFUSALS.has(res.reason)) slots++;
+            if(res.applied || !transferRefusalIsTerminal(res.reason, ctx)) slots++;
         } finally {
             delete ctx.proof;
             delete ctx.fetchProof;
