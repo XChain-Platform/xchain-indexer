@@ -14,10 +14,12 @@ process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const sinon = require('sinon');
+const sinon  = require('sinon');
 
 const { createBaseData } = require('../../../fixtures/mocks');
-const { REQ_ID, v4Params, originRequestRow, setupRelay } = require('./helpers/relay_fixture.js');
+const {
+    REQ_ID, v4Params, originRequestRow, setupRelay
+} = require('./helpers/relay_fixture.js');
 
 describe('ATTEST v4 relay response deadline @regression @tier1', function () {
     let indexer, handler, executeStub, deadlineGate;
