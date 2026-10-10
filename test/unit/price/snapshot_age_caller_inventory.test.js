@@ -31,9 +31,10 @@ function walkJavaScript(dir){
     return files;
 }
 
+// Mainnet, where the seconds basis is not armed: the age is still a block count.
 async function snapshotAgeFor(latestBlock){
     const db = {
-        config: { NETWORK: 'regtest', COIN: 'BTC' },
+        config: { NETWORK: 'mainnet', COIN: 'BTC' },
         assertPriceBarrierNotSkipped(){},
         async doQueryStrict(query){
             if(/MAX\(reference_block\)/i.test(query)) return [{ latest_block: latestBlock }];
