@@ -22,6 +22,7 @@ const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.
 const REPO = path.resolve(__dirname, '..', '..', '..');
 const BIN = path.join(REPO, 'bin', 'consensus-identity.js');
 const PIN = path.join(REPO, 'bin', 'pins', 'at1-consensus-identity.json');
+const SHARED_ROWS = path.join(REPO, 'src', 'protocol_changes', 'shared_rows_5.js');
 
 function run(args) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'consensus-identity-stdout-'));
@@ -89,6 +90,8 @@ describe('consensus identity GATES field and pin comparison', function () {
         const candidate = path.join(hubRoot, 'bin', 'pins', 'at1-consensus-identity.json');
         const sibling = siblingCheckout(REPO, candidate, { ownRoot: REPO });
         if (!sibling.usable) return skipOrFail(this, sibling, 'the hub GATES field hash guard');
+        const hubRows = path.join(hubRoot, 'src', 'consensus', 'gate_registry', 'shared_rows_5.js');
+        assert.deepStrictEqual(fs.readFileSync(SHARED_ROWS), fs.readFileSync(hubRows));
         const hubPin = JSON.parse(fs.readFileSync(sibling.path, 'utf8'));
         assert.strictEqual(codeIdentity('regtest').gates_field_hash, hubPin.gates_field_hash);
     });
