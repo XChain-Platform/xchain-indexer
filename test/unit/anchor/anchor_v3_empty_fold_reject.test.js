@@ -20,7 +20,7 @@ const swq = require('../../../src/consensus/stake_weighted_quorum.js');
 const ar = require('../../../src/consensus/gates/anchor_reward_gate.js');
 const { stubActiveAt } = require('../../helpers/gate_modules.js');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
-const { v3Params } = require('../actions/anchor/anchor.test/helpers/anchor_v3_fixtures.js');
+const { vectors, v3Params } = require('../actions/anchor/anchor.test/helpers/anchor_v3_fixtures.js');
 
 const FOLD_GATE = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const EMPTY_FOLD_GATE = 'anchor_empty_fold_reject_activation.ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION';
@@ -91,6 +91,35 @@ describe('ANCHOR v3 empty fold rejection', function(){
 
         assert.strictEqual(data.STATUS, 'valid');
         assert.strictEqual(indexer.indexerDb.createAnchorAction.callCount, 1);
+    });
+
+    // Guards the smallest non-empty fold.
+    it('keeps a one-section fold valid', async function(){
+        const { indexer, handler } = unsignedFixture();
+        ed25519.verify.returns(true);
+        const params = v3Params({ sections: [vectors.fixture.bundle_v3.sections[0]], archive: false });
+        const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
+
+        await handler.parse(params, data, null);
+
+        assert.strictEqual(data.STATUS, 'valid');
+        assert.strictEqual(indexer.indexerDb.createAnchorAction.callCount, 1);
+        assert.strictEqual(indexer.indexerDb.createAnchorAction.firstCall.args[0].STATUS, 'valid');
+        assert.strictEqual(indexer.indexerDb.createValidatorReward.callCount, 0);
+    });
+
+    // Guards the archive-only empty fold refusal across the gate.
+    it('refuses the archive-only empty fold', async function(){
+        const { indexer, handler } = unsignedFixture();
+        const params = v3Params({ sections: [] });
+        const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
+
+        await handler.parse(params, data, null);
+
+        assert.ok(data.STATUS.startsWith('invalid:'));
+        assert.strictEqual(indexer.indexerDb.createAnchorAction.callCount, 1);
+        assert.strictEqual(indexer.indexerDb.createAnchorAction.firstCall.args[0].STATUS, data.STATUS);
+        assert.strictEqual(indexer.indexerDb.createValidatorReward.callCount, 0);
     });
 
     it('preserves the historical empty-fold verdict below activation', async function(){

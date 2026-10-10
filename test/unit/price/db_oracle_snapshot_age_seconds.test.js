@@ -14,7 +14,8 @@
  *
  * Seconds-basis getSnapshotAge(): once the oracle_snapshot_age_seconds_activation
  * row is armed, db.getOracleDataForVM reports consensus seconds since the newest
- * admitted finalized snapshot; below it the legacy block-count query runs.
+ * admitted finalized snapshot; below it the legacy block-count query runs. The
+ * row is armed from genesis on regtest and unarmed on mainnet and every testnet.
  * Mock-based (doQueryStrict stubbed).
  *
  ********************************************************************/
@@ -33,7 +34,7 @@ const Database          = require('../../../src/db');
 const gateRegistry      = require('../../../src/consensus/gate_registry');
 const ageSeconds        = require('../../../src/db/prices/oracle_snapshot_age_seconds');
 
-function dbFor(network, latestRows, secondsActive = false) {
+function dbFor(network, latestRows, secondsActive = false, coin = 'BTC') {
     if(secondsActive){
         const activeAt = gateRegistry.activeAt.bind(gateRegistry);
         sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...args) =>
@@ -41,7 +42,7 @@ function dbFor(network, latestRows, secondsActive = false) {
     }
     const config   = getTestConfig();
     config.NETWORK = network;
-    config.COIN    = 'BTC';
+    config.COIN    = coin;
     const util     = new Utility();
     sinon.stub(util, 'logError');
     const db = new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', { config, util });
@@ -93,22 +94,53 @@ describe('VM oracle snapshot age in seconds (getOracleDataForVM) @regression @ti
         assert.strictEqual(out.snapshotAge, Number.MAX_SAFE_INTEGER);
     });
 
-    it('every network is unpinned: the legacy block-count query runs', async function () {
-        const row = gateRegistry.registry.get(ageSeconds.SECONDS_ACTIVATION);
-        assert.deepStrictEqual(row, {
-            mainnet: null,
-            'BTC:testnet': null,
-            'LTC:testnet': null,
-            'DOGE:testnet': null,
-            testnet: null,
-            regtest: null,
+    it('the row is unarmed on mainnet and every testnet key and armed from genesis on regtest', function () {
+        const UNARMED = 9999999999;
+        assert.deepStrictEqual(gateRegistry.registry.get(ageSeconds.SECONDS_ACTIVATION), {
+            mainnet: UNARMED,
+            'BTC:testnet': UNARMED,
+            'LTC:testnet': UNARMED,
+            'DOGE:testnet': UNARMED,
+            testnet: UNARMED,
+            regtest: 0,
         });
-        for (const network of ['mainnet', 'testnet', 'regtest']) {
-            sinon.restore();
-            const db = dbFor(network);
-            await db.getOracleDataForVM(1000000000, 1700000000, 0);
-            assert.ok(blocksCall(db), network + ' must keep the block-count age query');
-            assert.ok(!secondsCall(db), network + ' must not run the seconds query');
+    });
+
+    // Unarmed networks must behave exactly as before the row was ratified: the
+    // block-count query, and no seconds query, on every coin at any real height.
+    it('mainnet and testnet keep the legacy block-count query on every coin', async function () {
+        for (const network of ['mainnet', 'testnet']) {
+            for (const coin of ['BTC', 'LTC', 'DOGE']) {
+                sinon.restore();
+                const db = dbFor(network, [{ latest_time: 1699999900 }], false, coin);
+                await db.getOracleDataForVM(1000000000, 1700000000, 0);
+                assert.ok(blocksCall(db), coin + ' ' + network + ' must keep the block-count age query');
+                assert.ok(!secondsCall(db), coin + ' ' + network + ' must not run the seconds query');
+            }
         }
+    });
+
+    // No gate stub here: this is the shipped regtest row deciding the basis.
+    it('regtest reports seconds from genesis on every coin', async function () {
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            for (const height of [0, 1, 500]) {
+                sinon.restore();
+                const db = dbFor('regtest', [{ latest_time: 1699999900 }], false, coin);
+                const out = await db.getOracleDataForVM(height, 1700000000, 0);
+                assert.strictEqual(out.snapshotAge, 100, coin + ' regtest at ' + height + ' must report seconds');
+                assert.ok(!blocksCall(db), coin + ' regtest must not run the block-count query');
+            }
+        }
+    });
+
+    // Off the reference chain the height cap bounds nothing, so the seconds read
+    // must carry the same consensus-time bound as the other preload reads.
+    it('regtest off the reference chain keeps the consensus-time bound on the seconds read', async function () {
+        const db = dbFor('regtest', [{ latest_time: 1699999900 }], false, 'DOGE');
+        await db.getOracleDataForVM(6319000, 1700000000, 0);
+        const c = secondsCall(db);
+        assert.match(c.query.replace(/\s+/g, ' '), /reference_block <= \?/);
+        assert.match(c.query.replace(/\s+/g, ' '), /block_timestamp <= \?/);
+        assert.ok(c.args.includes(1700000000), 'the block time must be the bound argument');
     });
 });
