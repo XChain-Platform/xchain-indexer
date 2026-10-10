@@ -38,6 +38,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
+const { holdSecondsBasisInert } = require('../../helpers/oracle_age_basis');
 
 function dbFor(network, coin) {
     const config   = getTestConfig();
@@ -64,9 +65,13 @@ function ageCall(db) {
     return hit;
 }
 
+// The causal cap is graded on the block-count age read, which production networks
+// run until the seconds basis is armed; regtest arms it from genesis, so hold it inert.
+const blockCountAge = () => beforeEach(function () { holdSecondsBasisInert(sinon); });
 afterEach(function () { sinon.restore(); });
 
 describe('VM oracle snapshot-age causality gate (getOracleDataForVM age query) @regression @tier1', function () {
+    blockCountAge();
     describe('gate: which age query is emitted', function () {
 
         it('regtest (genesis-armed) causally caps the age query at the processing block', async function () {

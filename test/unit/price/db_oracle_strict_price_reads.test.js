@@ -50,6 +50,7 @@ function dbSource(){
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
+const { holdSecondsBasisInert } = require('../../helpers/oracle_age_basis');
 
 // A Database on a NON-transactional instance (hubDb's shape) whose every query
 // rejects the way a lock wait timeout does.
@@ -124,14 +125,18 @@ describe('price-barrier-guarded reads fail loudly on a DB fault @regression @tie
     // One case per read in the preload, each faulting alone. The round-window and
     // round-row reads only run once the reads above them answer, which is why the
     // fake resolves everything the pattern does not name.
+    // The age read has two forms: seconds once the basis is armed (regtest, from
+    // genesis) and the block count below it, reached here by holding the row inert.
     const PRELOAD_READS = [
-        ['the snapshot-age read',  /MAX\(reference_block\)/i],
+        ['the snapshot-age read',  /MAX\(block_timestamp\)\s+AS\s+latest_time/i],
+        ['the block-count snapshot-age read', /MAX\(reference_block\)/i, true],
         ['the latest-price read',  /INNER JOIN/i],
         ['the round-window read',  /SELECT DISTINCT round_number/i],
         ['the round-row read',     /round_number >= \?/]
     ];
-    for (const [label, pattern] of PRELOAD_READS) {
+    for (const [label, pattern, blockCountBasis] of PRELOAD_READS) {
         it('rejects when ' + label + ' alone faults', async function () {
+            if (blockCountBasis) holdSecondsBasisInert(sinon);
             const db  = dbFaultingOnly(pattern);
             const err = await rejects(() => db.getOracleDataForVM(500, 1700000000, 1800));
             assert.ok(db._seen.some(s => pattern.test(String(s))),
