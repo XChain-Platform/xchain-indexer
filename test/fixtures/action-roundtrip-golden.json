@@ -159,6 +159,8 @@
       "action": "ORDER",
       "version": 0,
       "input": {
+        "giveCoin": "BTC",
+        "getCoin": "BTC",
         "giveTick": "GOLDTOKEN",
         "giveAmount": "5",
         "getTick": "BRRR",
@@ -166,14 +168,14 @@
         "expiration": "100",
         "memo": "o"
       },
-      "wire": "ORDER|0||GOLDTOKEN|5|||BRRR|10|||100|||o",
+      "wire": "ORDER|0|BTC|GOLDTOKEN|5||BTC|BRRR|10|||100|||o",
       "parsed": {
         "VERSION": "0",
-        "GIVE_COIN": null,
+        "GIVE_COIN": "BTC",
         "GIVE_TICK": "GOLDTOKEN",
         "GIVE_AMOUNT": "5",
         "GIVE_OWNERSHIP": null,
-        "GET_COIN": null,
+        "GET_COIN": "BTC",
         "GET_TICK": "BRRR",
         "GET_AMOUNT": "10",
         "GET_OWNERSHIP": null,
@@ -190,6 +192,8 @@
       "action": "SWAP",
       "version": 0,
       "input": {
+        "giveCoin": "BTC",
+        "getCoin": "BTC",
         "giveTick": "GOLDTOKEN",
         "giveAmount": "5",
         "getTick": "BRRR",
@@ -197,14 +201,14 @@
         "expiration": "100",
         "memo": "s"
       },
-      "wire": "SWAP|0||GOLDTOKEN|5|||BRRR|10|||100|||s",
+      "wire": "SWAP|0|BTC|GOLDTOKEN|5||BTC|BRRR|10|||100|||s",
       "parsed": {
         "VERSION": "0",
-        "GIVE_COIN": null,
+        "GIVE_COIN": "BTC",
         "GIVE_TICK": "GOLDTOKEN",
         "GIVE_AMOUNT": "5",
         "GIVE_OWNERSHIP": null,
-        "GET_COIN": null,
+        "GET_COIN": "BTC",
         "GET_TICK": "BRRR",
         "GET_AMOUNT": "10",
         "GET_OWNERSHIP": null,
@@ -221,6 +225,7 @@
       "action": "DISPENSER",
       "version": 0,
       "input": {
+        "giveCoin": "BTC",
         "giveTick": "GOLDTOKEN",
         "giveAmount": "5",
         "getCoin": "BTC",
@@ -229,10 +234,10 @@
         "expiration": "500",
         "memo": "d"
       },
-      "wire": "DISPENSER|0||GOLDTOKEN|5|||BTC||100000|mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp||||500|||d",
+      "wire": "DISPENSER|0|BTC|GOLDTOKEN|5|||BTC||100000|mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp||||500|||d",
       "parsed": {
         "VERSION": "0",
-        "GIVE_COIN": null,
+        "GIVE_COIN": "BTC",
         "GIVE_TICK": "GOLDTOKEN",
         "GIVE_AMOUNT": "5",
         "GIVE_OWNERSHIP": null,
