@@ -16,7 +16,6 @@
 
 const assert = require('assert');
 const path = require('path');
-const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 const XChainVM = require('xchain-vm');
 const { runVmExecution } = require('../../../src/actions/execute/run_vm.js');
@@ -33,8 +32,11 @@ const COIN_KEYS = [
 ];
 const vmTarget = process.env.XCHAIN_VM_DIR
     ? path.join(process.env.XCHAIN_VM_DIR, VM_MODULE)
-    : path.join('..', '..', '..', '..', 'xchain-vm', VM_MODULE);
-const verdict = siblingCheckout(__dirname, vmTarget);
+    : require.resolve('xchain-vm/' + VM_MODULE);
+const {
+    BIGINT_SURFACE_STRIP_ACTIVATION: vmActivation,
+    isBigIntSurfaceStripActive: vmActivationAt,
+} = require(vmTarget);
 
 function indexerActivation() {
     return ProtocolChanges.copy(KEY);
@@ -96,10 +98,6 @@ function executionProbe(height, actionIndex) {
 
 describe('consensus/bigint_surface_strip_matches_vm: activation parity @regression @tier1', function () {
     it('matches every VM mainnet and testnet activation', function () {
-        if (!verdict.usable)
-            return skipOrFail(this, verdict, 'the BigInt surface-strip activation map');
-
-        const vmActivation = require(verdict.path).BIGINT_SURFACE_STRIP_ACTIVATION;
         const indexer = indexerActivation();
         for (const coinKey of COIN_KEYS) {
             const vmHeight = vmActivation[coinKey];
@@ -111,6 +109,12 @@ describe('consensus/bigint_surface_strip_matches_vm: activation parity @regressi
             assert.ok(Number.isFinite(vmHeight), coinKey + ' VM activation must be null or a finite height');
             assert.strictEqual(indexer[coinKey], vmHeight, coinKey + ' activation drifted from the VM');
         }
+        assert.strictEqual(ProtocolChanges.isBigIntSurfaceStripActive('testnet', 'DOGE', ProtocolChanges.UNARMED), false);
+        assert.strictEqual(vmActivationAt('testnet', 'DOGE', ProtocolChanges.UNARMED), false);
+        assert.strictEqual(vmActivationAt('regtest', 'LTC', -1), true);
+        assert.strictEqual(ProtocolChanges.isBigIntSurfaceStripActive('regtest', 'LTC', -1), true);
+        assert.strictEqual(vmActivationAt('regtest', 'LTC', 0), true);
+        assert.strictEqual(ProtocolChanges.isBigIntSurfaceStripActive('regtest', 'LTC', 0), true);
     });
 
     it('passes the production network, coin and height inputs into vm.execute()', async function () {
@@ -149,6 +153,14 @@ describe('consensus/bigint_surface_strip_matches_vm: activation parity @regressi
         assert.strictEqual(regtest.vmReturnValue, '"undefined"');
         assert.strictEqual(mainnet.vmError, null);
         assert.strictEqual(mainnet.vmReturnValue, '"function"');
+        assert.strictEqual(
+            ProtocolChanges.isBigIntSurfaceStripActive('regtest', 'LTC', 73),
+            vmActivationAt('regtest', 'LTC', 73),
+        );
+        assert.strictEqual(
+            ProtocolChanges.isBigIntSurfaceStripActive('mainnet', 'LTC', 74),
+            vmActivationAt('mainnet', 'LTC', 74),
+        );
     });
 
     it('keeps the indexer regtest activation at genesis', function () {
