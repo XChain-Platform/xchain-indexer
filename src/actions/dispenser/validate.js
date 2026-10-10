@@ -22,6 +22,8 @@
 
 const gateRegistry = require('../../consensus/gate_registry');
 
+const REFILL_POLICY_KEY = 'dispenser_refill_policy_activation.DISPENSER_REFILL_POLICY_ACTIVATION';
+
 // Installed onto Dispenser.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
 module.exports = {
@@ -115,7 +117,8 @@ module.exports = {
     },
 
     // Edit-time rules that run AFTER the authority gates: the ownership-escrow rule
-    // and the MAX_REFILLS cap, both gated with the dispenser-family cohort.
+    // and the MAX_REFILLS cap, both gated with the dispenser-family cohort, and the
+    // refill token-policy rule on its own row.
     async validateDispenserEditRules(ctx){
     let { data, error, format, dispenserInfo } = ctx;
 
@@ -134,6 +137,24 @@ module.exports = {
            !this.util.isNull(data['GIVE_ESCROW']) &&
            gateRegistry.activeAt('dispenser_caps_activation.DISPENSER_CAPS_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']))
             error = "invalid: GIVE_ESCROW (must be empty when GIVE_OWNERSHIP=1)";
+
+        // Token policy on a refill (the dispenser_refill_policy_activation row). A
+        // format-2 edit that adds GIVE_ESCROW debits SOURCE and escrows the give token,
+        // the same movement a create makes, but the sleep and allow/block-list rules in
+        // validateGeneralRules are format-0 only, so a refill moved a sleeping token and
+        // let a SOURCE the issuer had since listed out keep feeding its dispenser. The
+        // tick comes from the dispenser row because an edit carries no GIVE_TICK. Only an
+        // edit that adds escrow is judged: an expiration or list edit moves no token.
+        // Read at the edit's own block so historical replay below the height is unchanged.
+        if(!error && format==2 && !this.util.isNull(data['GIVE_ESCROW']) &&
+           this.util.bcgt(data['GIVE_ESCROW'], 0) &&
+           gateRegistry.activeAt(REFILL_POLICY_KEY, this.config['NETWORK'], this.config['COIN'], Number(data['BLOCK_INDEX']), null)){
+            let giveTick = dispenserInfo['GIVE_TICK'];
+            if(await this.indexerDb.isActionAllowed(null, giveTick, data['BLOCK_INDEX']) == false)
+                error = 'invalid: TICK (sleeping)';
+            else if(await this.indexerDb.isActionAllowed(data['SOURCE'], giveTick, data['BLOCK_INDEX']) == false)
+                error = 'invalid: SOURCE (not authorized)';
+        }
 
         // MAX_REFILLS cap (the dispenser_caps_activation row). A refill is a
         // format-2 DISPENSER_EDIT that tops up GIVE_ESCROW; each refill resets the

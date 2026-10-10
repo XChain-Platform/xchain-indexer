@@ -121,6 +121,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'anchor_archive_fold_term_activation',
     'anchor_empty_fold_reject_activation',
     'cooldown_maturity_escrow_reversal_activation',
+    'dispenser_refill_policy_activation',
     'dispenser_settlement_price_activation',
     'dispenser_freshness_proven_use_activation',
     'empty_allow_list_denies_activation',
