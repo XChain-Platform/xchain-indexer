@@ -18,6 +18,9 @@ const path   = require('path');
 const can = require('../../../src/consensus/attest_response_canonical.js');
 // Decides whether the hub twin path may be trusted before either guard reads it.
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+const HUB_DIR = process.env.XCHAIN_HUB_DIR
+    ? path.resolve(process.env.XCHAIN_HUB_DIR)
+    : path.resolve(__dirname, '../../../../xchain-hub');
 
 const BASE = {
     requestId:    'a'.repeat(64),
@@ -105,7 +108,7 @@ describe('attest_response_canonical', function () {
 
 describe('attest_response_canonical: hub/indexer twin', function () {
 
-    const HUB_COPY = path.resolve(__dirname, '../../../../xchain-hub/src/attestation/attest_response_canonical.js');
+    const HUB_COPY = path.join(HUB_DIR, 'src', 'attestation', 'attest_response_canonical.js');
 
     it('produces byte-identical canonicals to the hub copy across both eras', function () {
         // Refuses an absent hub and a lane symlink into a live main checkout alike.
