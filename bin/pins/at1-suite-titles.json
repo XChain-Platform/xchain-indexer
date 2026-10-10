@@ -4507,11 +4507,6 @@
       "deriveAnchorRewards per-row mint loop, pinned against the mint_row wiring @regression @tier1 mints both logical-reward groups and reconciles each once when every mint call succeeds",
       "deriveAnchorRewards per-row mint loop, pinned against the mint_row wiring @regression @tier1 passes the loop blockIndex through to the stubbed mint call for every minted row"
     ],
-    "52a1b2f740156f80": [
-      "consensus rules digest activeGatesAt unit filtering excludes network-shaped constant rows from the responsible set",
-      "consensus rules digest activeGatesAt unit filtering keeps coin-qualified height resolution without a named coin",
-      "consensus rules digest activeGatesAt unit filtering keeps height, time and epoch activation rows eligible"
-    ],
     "52c65c431929e0c6": [
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) R2b: per-ACTION error precedence is FIRST APPEARANCE DEPLOY first, ISSUE second \u2192 the DEPLOY limit",
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) R2b: per-ACTION error precedence is FIRST APPEARANCE INTERLEAVED: the action that appears first wins, not the cap completed first",
@@ -6369,6 +6364,12 @@
       "ANCHOR v3 wire splitter splits the frozen archive-bearing vector field by field",
       "ANCHOR v3 wire splitter splits the frozen archive-free vector without consuming its publisher tail"
     ],
+    "7164446c051270a8": [
+      "consensus rules digest activeGatesAt unit filtering excludes network-shaped constant rows from the responsible set",
+      "consensus rules digest activeGatesAt unit filtering keeps coin-qualified height resolution without a named coin",
+      "consensus rules digest activeGatesAt unit filtering keeps height, time and epoch activation rows eligible",
+      "consensus rules digest activeGatesAt unit filtering returns only activation-unit rows for every supported network and coin lookup"
+    ],
     "7176d07530da2fe0": [
       "markets: a token against the native coin @regression @tier1 collects ONE pair from two opposite-orientation orders on a token/native market",
       "markets: a token against the native coin @regression @tier1 createMarket writes the sentinel and the coin ids, never a NULL side",
@@ -7597,6 +7598,16 @@
       "pushvalidatorrewards is retired outright @regression @tier1 holds no reward-write call site anywhere in the controller surface",
       "pushvalidatorrewards is retired outright @regression @tier1 is not listed in WRITE_METHODS",
       "pushvalidatorrewards is retired outright @regression @tier1 leaves the write-gate list in place so a future write method lands in it"
+    ],
+    "81e8fdffad96b491": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
+      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
     ],
     "825c41e82648dc5f": [
       "Price v2 (PRICE batch) @regression @tier3 batch anchor rule (step 3) accepts an honest batch whose header anchor equals the last round anchor",
@@ -10010,14 +10021,6 @@
       "ANCHOR retired wires on a from-genesis replay @regression a v5 anchor below ANCHOR_ACTIVATION is recorded unverified and SQL-safe once the pre-activation status gate is active",
       "ANCHOR retired wires on a from-genesis replay @regression a v7 bundle below ANCHOR_ACTIVATION (three sections walked as one head) is recorded SQL-safe too",
       "ANCHOR retired wires on a from-genesis replay @regression the writer maps every non-numeric numeric-slot value to NULL and keeps real numbers"
-    ],
-    "9e7884adfcd7f5be": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash",
-      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
-      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings"
     ],
     "9ea42ee3d549b330": [
       "assignActionAddressIds: pre-handler-error skip (#4888) @regression @tier1 does NOT intern any id when the action was rejected before the handler",
@@ -12594,15 +12597,6 @@
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure SUMS across sibling sub-commands paying the same oracle",
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure a probe records the fee owed even with no oracle output to read",
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure records nothing when no fee is owed (belowDust / zero fee)"
-    ],
-    "cee72069c1a9d3bd": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
-      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
     ],
     "cf3bcc3e4ee7e191": [
       "performance ratio noise floor accepts the same baseline at the old 1ms floor",
@@ -15423,8 +15417,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1253,
-      "titleCount": 12901,
+      "fileCount": 1254,
+      "titleCount": 12906,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16021,7 +16015,7 @@
         "test/unit/config/message_limits.test.js": "8d38edb1fec12246",
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/config/touch_guards_env.test.js": "8f02c7885f4b9349",
-        "test/unit/consensus/active_gates_unit_aware.test.js": "52a1b2f740156f80",
+        "test/unit/consensus/active_gates_unit_aware.test.js": "7164446c051270a8",
         "test/unit/consensus/admission_binding.test.js": "989a461516486cec",
         "test/unit/consensus/admission_binding.test/attest_bind_predicate.test.js": "3d40ffcb0bc38a1d",
         "test/unit/consensus/admission_binding.test/attest_response_canonical.test.js": "daaa06423dba0a37",
