@@ -1042,6 +1042,14 @@
       "list_rematch_plan merges unsorted orders and swaps in ascending action-index order",
       "list_rematch_plan returns an empty plan for empty inputs"
     ],
+    "164da522808b4798": [
+      "ANCHOR v3 empty fold rejection keeps a one-section fold valid",
+      "ANCHOR v3 empty fold rejection preserves the historical empty-fold verdict below activation",
+      "ANCHOR v3 empty fold rejection preserves today's pre-gate behaviour by accepting the unsigned empty fold",
+      "ANCHOR v3 empty fold rejection refuses the archive-only empty fold",
+      "ANCHOR v3 empty fold rejection rejects an empty fold at activation using the ANCHOR mined height",
+      "ANCHOR v3 empty fold rejection ships the reject gate inert on live networks and active on regtest"
+    ],
     "1660347f96656b41": [
       "SQL schema column parity (definition path vs ledger path) @regression a migration-created table is NOT parked in the pre-ledger baseline",
       "SQL schema column parity (definition path vs ledger path) @regression a migration-created table matches its definition byte-for-byte (columns, keys, engine)",
@@ -10480,12 +10488,6 @@
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 vector: PARTIALLY unstaked owner stake burns only what remains",
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 zero-amount rows are skipped rather than re-burned"
     ],
-    "a7b0511aa619e3e1": [
-      "ANCHOR v3 empty fold rejection preserves the historical empty-fold verdict below activation",
-      "ANCHOR v3 empty fold rejection preserves today's pre-gate behaviour by accepting the unsigned empty fold",
-      "ANCHOR v3 empty fold rejection rejects an empty fold at activation using the ANCHOR mined height",
-      "ANCHOR v3 empty fold rejection ships the reject gate inert on live networks and active on regtest"
-    ],
     "a7bf3b007262c77c": [
       "Attest (ATTEST) @regression @tier3 _injectCallbackExecute internal branches callback_params_json with invalid JSON \u2192 catch branch fires, callbackParams stays []",
       "Attest (ATTEST) @regression @tier3 _injectCallbackExecute internal branches execute.parse returns non-valid STATUS \u2192 warning logged, response still valid (lines 455-456)",
@@ -15411,7 +15413,7 @@
   "scripts": {
     "test": {
       "fileCount": 1253,
-      "titleCount": 12901,
+      "titleCount": 12903,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15832,7 +15834,7 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "5278429cef8904ee",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_counter.test.js": "1c56af9b1dbd9f0c",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
-        "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "a7b0511aa619e3e1",
+        "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "164da522808b4798",
         "test/unit/anchor/anchor_v3_fold_parse.test.js": "6ea2607d7bbbc413",
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
