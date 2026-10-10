@@ -25,7 +25,9 @@ const NETWORK   = 'regtest';
 const ADMIT_AT  = 799000;                       // the realistic arming height
 const LEGACY_AT = ADMIT_AT - 1;
 
-const HUB_SRC  = path.resolve(__dirname, '../../../../../../xchain-hub/src');
+const HUB_SRC = process.env.XCHAIN_HUB_DIR
+    ? path.resolve(process.env.XCHAIN_HUB_DIR, 'src')
+    : path.resolve(__dirname, '../../../../../../xchain-hub/src');
 // Present is not enough to trust: in a lane worktree the hub entry can be a symlink into a
 // peer's live main checkout, which no commit pins, so the shared helper decides. Probed on
 // the admission gate at its W5 tail, so a hub checkout that predates the move reads as
@@ -49,12 +51,12 @@ const LOCAL_MODULES = [
     '../../../../../src/XChainIndexer.js'
 ];
 const HUB_MODULES = [
-    '../../../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js',
-    '../../../../../../xchain-hub/src/lib/admission_height.js',
-    '../../../../../../xchain-hub/src/cross_chain/dex_engine.js',
-    '../../../../../../xchain-hub/src/cross_chain/call_engine.js',
-    '../../../../../../xchain-hub/src/cross_chain/bridge_engine.js',
-    '../../../../../../xchain-hub/src/attestation/consensus.js'
+    path.join(HUB_SRC, 'consensus', 'gates', 'mirror_admission_gate.js'),
+    path.join(HUB_SRC, 'lib', 'admission_height.js'),
+    path.join(HUB_SRC, 'cross_chain', 'dex_engine.js'),
+    path.join(HUB_SRC, 'cross_chain', 'call_engine.js'),
+    path.join(HUB_SRC, 'cross_chain', 'bridge_engine.js'),
+    path.join(HUB_SRC, 'attestation', 'consensus.js')
 ];
 // A listed module is only its ENTRY. Both services assemble a long module from part files
 // beside it, under a directory spelled exactly as the entry (src/db/database/*.js here,
@@ -105,12 +107,12 @@ function load(activation) {
     };
     if (HAVE_HUB) {
         h.hub = {
-            act:    require('../../../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js'),
-            ah:     require('../../../../../../xchain-hub/src/lib/admission_height.js'),
-            Dex:    require('../../../../../../xchain-hub/src/cross_chain/dex_engine.js'),
-            Call:   require('../../../../../../xchain-hub/src/cross_chain/call_engine.js'),
-            Bridge: require('../../../../../../xchain-hub/src/cross_chain/bridge_engine.js'),
-            Attest: require('../../../../../../xchain-hub/src/attestation/consensus.js')
+            act:    require(HUB_MODULES[0]),
+            ah:     require(HUB_MODULES[1]),
+            Dex:    require(HUB_MODULES[2]),
+            Call:   require(HUB_MODULES[3]),
+            Bridge: require(HUB_MODULES[4]),
+            Attest: require(HUB_MODULES[5])
         };
     }
     h.restore = function () {

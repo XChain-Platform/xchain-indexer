@@ -174,7 +174,11 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 399);
+        // Counted from the registry and the VM mirror lists, never a literal: a
+        // literal moved with every registry row, so two rows built side by side
+        // always conflicted on this line.
+        assert.strictEqual(res.rows.length,
+            ProtocolChanges.rows().length + manifest.VM_EXPORT_NAMES.length + manifest.VM_ACCESSORS_EXPORT_NAMES.length);
     });
 
     it('carries the cross-chain remote-token gate heights', function () {
