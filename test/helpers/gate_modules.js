@@ -136,6 +136,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'anchor_fold_activation',
     'archive_section_verdict_activation',
     'bridge_policy_detach_activation',
+    'bridge_row_fields_terminal_activation',
     'vm_lint_optional_chain_heights',
     'bigint_surface_strip_heights',
     'vm_lint_banned_with_heights',
