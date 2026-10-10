@@ -38,21 +38,33 @@ const { SETTLE_REASON, isNull, int } = require('./reasons.js');
 const { buildInLegEffects, buildOutLegEffects } = require('./leg_effects.js');
 const { isSettled, isSourceLegSettled, recordSettlement } = require('./settlements.js');
 
-const BEFORE_ACTIVATION_REASON = 'destination chain is below its own XCHAIN_BRIDGE_ACTIVATION height';
 const XCHAIN_BRIDGE_KEY = 'xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION';
-
-// The destination chain's own XCHAIN_BRIDGE_ACTIVATION sub-gate, read at the block being
-// settled. TOKEN_BRIDGE_ACTIVATION is pinned at or above it per chain, so this one height
-// bounds both the v2 and v5 legs. Below it no leg of any transfer may apply or consume a
-// cap slot: the row waits, unrecorded, and is retried every block.
-function belowBridgeActivation(ctx){
-    return !gateRegistry.activeAt(XCHAIN_BRIDGE_KEY, ctx.network, ctx.coin, ctx.blockIndex, null);
-}
+const TOKEN_BRIDGE_KEY = 'token_bridge_activation.TOKEN_BRIDGE_ACTIVATION';
+const XCHAIN_BEFORE_ACTIVATION_REASON =
+    'destination chain is below its own XCHAIN_BRIDGE_ACTIVATION height';
+const TOKEN_BEFORE_ACTIVATION_REASON =
+    'destination chain is below its own TOKEN_BRIDGE_ACTIVATION height';
 
 // Decide "is this the gas tick" case-folded, the rule origin.js and leg_effects.js use
 // (every ticker lookup is LOWER(tick), so a signed row may carry any casing of GAS).
 function isGasTick(tick, gasTick){
     return String(tick).toUpperCase() === String(gasTick).toUpperCase();
+}
+
+// A v2 leg moves this chain's gas tick and a v5 leg moves every other tick. Each format
+// reads its own destination-chain activation at the block being settled.
+function bridgeActivation(row, ctx){
+    const gasTick = ctx.config ? String(ctx.config['GAS']) : 'XCHAIN';
+    const token = !isGasTick(row && row.tick, gasTick);
+    return token
+        ? { key: TOKEN_BRIDGE_KEY, reason: TOKEN_BEFORE_ACTIVATION_REASON }
+        : { key: XCHAIN_BRIDGE_KEY, reason: XCHAIN_BEFORE_ACTIVATION_REASON };
+}
+
+function belowBridgeActivation(row, ctx){
+    const activation = bridgeActivation(row, ctx);
+    return !gateRegistry.activeAt(activation.key,
+                                  ctx.network, ctx.coin, ctx.blockIndex, null);
 }
 
 /**
@@ -113,8 +125,8 @@ function screenRow(row, ctx){
 
     // Sub-gate deferral: the destination is below its own bridge activation height, so the
     // row is carried forward without a settlement record.
-    if(belowBridgeActivation(ctx))
-        return { reason: BEFORE_ACTIVATION_REASON };
+    if(belowBridgeActivation(row, ctx))
+        return { reason: bridgeActivation(row, ctx).reason };
 
     return { fields: { id, srcChain, destChain, tick, decimals, snapshot, srcIndex } };
 }
