@@ -128,8 +128,34 @@ module.exports = {
         return balances;
     },
 
-    // Handle getting token info (supply, price, etc) and updating the `tokens` table
-    async updateTokenInfo(tick){
+    // Handle getting token info (supply, price, etc) and updating the `tokens` table.
+    // Forward ISSUE actions write token metadata through createToken and defer supply to
+    // the block refresh. Synthetic ownership transfers only write an ISSUE row, so keep
+    // that projection current without re-running the full-history supply aggregates.
+    async updateTokenInfo(tick, refreshSupply=true){
+        if(!refreshSupply){
+            let tick_id = await this.createTicker(tick);
+            let rows = await this.doQuery(`SELECT
+                            i.action_index,
+                            COALESCE(i.transfer_id, a.source_id) AS owner_id
+                        FROM
+                            issues i
+                            INNER JOIN actions        a ON (a.action_index=i.action_index)
+                            INNER JOIN index_statuses s ON (s.id=i.status_id)
+                            INNER JOIN tokens         t ON (t.tick_id=i.tick_id)
+                        WHERE
+                            i.tick_id=? AND
+                            s.status='valid' AND
+                            (t.last_action_index IS NULL OR i.action_index > t.last_action_index)
+                        ORDER BY
+                            i.action_index DESC
+                        LIMIT 1`, [tick_id]);
+            if(rows.length > 0)
+                await this.doQuery(
+                    'UPDATE tokens SET owner_id=?, last_action_index=? WHERE tick_id=?',
+                    [rows[0].owner_id, rows[0].action_index, tick_id]);
+            return;
+        }
         // createTicker and getTokenInfo are independent; run them concurrently.
         // tick_id is unused here - createToken calls createTicker internally.
         const [, data] = await Promise.all([this.createTicker(tick), this.getTokenInfo(tick)]);
