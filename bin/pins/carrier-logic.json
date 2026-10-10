@@ -137,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "5065e82c2fc425cf9a3e667c0b0f1ac3abd41144c46a491f12a826c55eec1e6e",
+      "hash": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
       "twins": []
     },
     "rollcall_activation": {
@@ -2103,6 +2103,13 @@
       "from": "c9db9d1e1674d8ff27777522a7c68b5280c39c7c0d8d31eaf418d16a4e0317ec",
       "to": "5065e82c2fc425cf9a3e667c0b0f1ac3abd41144c46a491f12a826c55eec1e6e",
       "reason": "merge gate registry with unusable block-time handling",
+      "date": "2026-10-10"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "5065e82c2fc425cf9a3e667c0b0f1ac3abd41144c46a491f12a826c55eec1e6e",
+      "to": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
+      "reason": "fold registry constant rows into final gate part",
       "date": "2026-10-10"
     }
   ]
