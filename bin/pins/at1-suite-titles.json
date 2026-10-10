@@ -11237,6 +11237,10 @@
       "AnchorRecovery (full-parse recovery) @regression @tier2 skips anchor rows the chain parse recorded as invalid (status filter, not replayed)",
       "AnchorRecovery (full-parse recovery) @regression @tier2 the empty-archive log names exactly ARCHIVE_HEAD_VERSIONS, never a retired wire"
     ],
+    "b85c12080a6c6211": [
+      "bridge_settle: row-fields refusals and the per-block cap preserves the legacy cap behavior before activation",
+      "bridge_settle: row-fields refusals and the per-block cap settles the good row behind 25 malformed rows after activation"
+    ],
     "b8c9f15357e681d7": [
       "Deferred chunked DEPLOY assembly @regression @tier2 Gas parity: A + C sum to an inline deploy of the same source A's base gas_used plus C's constructor gas_used equals a single inline deploy's total",
       "Deferred chunked DEPLOY assembly @regression @tier2 R1 + R3: the carrier that completes the group deploys it assembles from a bound that INCLUDES the completing carrier and excludes anything above it",
@@ -15358,8 +15362,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1248,
-      "titleCount": 12859,
+      "fileCount": 1249,
+      "titleCount": 12861,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15889,6 +15893,7 @@
         "test/unit/bridge/bridge_settle.test/refusals.test.js": "32ded3574ceb5f61",
         "test/unit/bridge/bridge_settle.test/refused_policy_due_window.test.js": "6e3424428b660c0b",
         "test/unit/bridge/bridge_settle.test/refused_transfers_cap_slot.test.js": "b98e631c246e04f9",
+        "test/unit/bridge/bridge_settle.test/row_fields_terminal_cap_slot.test.js": "b85c12080a6c6211",
         "test/unit/bridge/bridge_settle.test/slash_and_pass_order.test.js": "44760e88af686de8",
         "test/unit/bridge/bridge_settle.test/source_leg.test.js": "d4c7f1b0a6ee82ef",
         "test/unit/bridge/db_pending_bridge_transfers.test.js": "9923a571b138cf79",
