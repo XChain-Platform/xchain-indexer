@@ -24,6 +24,90 @@
 const records  = require('./records.js');
 const listings = require('./listings.js');
 
+const BET_FEED_INFO_QUERY = `SELECT
+                                f.action_index,
+                                f.label,
+                                f.outcomes,
+                                t1.tick,
+                                f.fee,
+                                f.deadline,
+                                f.refund_window,
+                                f.expire_at,
+                                f.min_amount,
+                                CASE
+                                    WHEN ae.action_index IS NULL THEN f.allow_list
+                                    ELSE NULLIF(ae.allow_list, 0)
+                                END as allow_list,
+                                CASE
+                                    WHEN be.action_index IS NULL THEN f.block_list
+                                    ELSE NULLIF(be.block_list, 0)
+                                END as block_list,
+                                f.details,
+                                m1.memo,
+                                s1.status,
+                                s2.status as feed_status,
+                                f.closed_block,
+                                f.terminal_block,
+                                a2.address as source,
+                                b1.block_index,
+                                b1.block_time
+                            FROM
+                                bet_feeds f
+                                INNER JOIN actions         a1 ON (a1.action_index=f.action_index)
+                                INNER JOIN transactions    tx ON (tx.tx_index=a1.tx_index)
+                                LEFT  JOIN blocks          b1 ON (b1.block_index=tx.block_index)
+                                INNER JOIN index_addresses a2 ON (a2.id=a1.source_id)
+                                LEFT  JOIN index_tickers   t1 ON (t1.id=f.tick_id)
+                                LEFT  JOIN index_memos     m1 ON (m1.id=f.memo_id)
+                                INNER JOIN index_statuses  s1 ON (s1.id=f.status_id)
+                                INNER JOIN index_statuses  s2 ON (s2.id=f.feed_status_id)
+                                LEFT  JOIN bet_edits ae ON (
+                                    ae.action_index=(
+                                        SELECT MAX(e.action_index)
+                                        FROM bet_edits e
+                                        INNER JOIN index_statuses es ON (es.id=e.status_id)
+                                        WHERE
+                                            e.feed_action_index=f.action_index AND
+                                            es.status='valid' AND
+                                            e.allow_list IS NOT NULL
+                                    )
+                                )
+                                LEFT  JOIN bet_edits be ON (
+                                    be.action_index=(
+                                        SELECT MAX(e.action_index)
+                                        FROM bet_edits e
+                                        INNER JOIN index_statuses es ON (es.id=e.status_id)
+                                        WHERE
+                                            e.feed_action_index=f.action_index AND
+                                            es.status='valid' AND
+                                            e.block_list IS NOT NULL
+                                    )
+                                )
+                            WHERE
+                                f.action_index=?
+                            LIMIT 1`;
+
+function formatBetFeedInfo(row, util){
+    const feed = {};
+    const numericFields = [
+        'ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'DEADLINE', 'REFUND_WINDOW',
+        'EXPIRE_AT', 'ALLOW_LIST', 'BLOCK_LIST', 'CLOSED_BLOCK', 'TERMINAL_BLOCK'
+    ];
+    for(let key in row){
+        let name  = String(key).toUpperCase();
+        let value = row[key];
+        // Convert numerics but PRESERVE NULL: Number(null) is 0, and a
+        // NULL allow_list collapsing to 0 would make every ungated feed
+        // read as gated by the (nonexistent) list at action_index 0,
+        // rejecting all bets. Amount-ish fields (fee/min_amount) stay
+        // strings for bignumber math
+        if(!util.isNull(value) && numericFields.includes(name))
+            value = Number(value);
+        feed[name] = value;
+    }
+    return feed;
+}
+
 module.exports = {
 
     // Return order info for given action_index
@@ -42,86 +126,8 @@ module.exports = {
 
     // Return information on a bet feed for the given action_index
     async getBetFeedInfo(action_index){
-        let feed  = false;
-        let query = `SELECT
-                        f.action_index,
-                        f.label,
-                        f.outcomes,
-                        t1.tick,
-                        f.fee,
-                        f.deadline,
-                        f.refund_window,
-                        f.expire_at,
-                        f.min_amount,
-                        CASE
-                            WHEN ae.action_index IS NULL THEN f.allow_list
-                            ELSE NULLIF(ae.allow_list, 0)
-                        END as allow_list,
-                        CASE
-                            WHEN be.action_index IS NULL THEN f.block_list
-                            ELSE NULLIF(be.block_list, 0)
-                        END as block_list,
-                        f.details,
-                        m1.memo,
-                        s1.status,
-                        s2.status as feed_status,
-                        f.closed_block,
-                        f.terminal_block,
-                        a2.address as source,
-                        b1.block_index,
-                        b1.block_time
-                    FROM
-                        bet_feeds f
-                        INNER JOIN actions         a1 ON (a1.action_index=f.action_index)
-                        INNER JOIN transactions    tx ON (tx.tx_index=a1.tx_index)
-                        LEFT  JOIN blocks          b1 ON (b1.block_index=tx.block_index)
-                        INNER JOIN index_addresses a2 ON (a2.id=a1.source_id)
-                        LEFT  JOIN index_tickers   t1 ON (t1.id=f.tick_id)
-                        LEFT  JOIN index_memos     m1 ON (m1.id=f.memo_id)
-                        INNER JOIN index_statuses  s1 ON (s1.id=f.status_id)
-                        INNER JOIN index_statuses  s2 ON (s2.id=f.feed_status_id)
-                        LEFT  JOIN bet_edits ae ON (
-                            ae.action_index=(
-                                SELECT MAX(e.action_index)
-                                FROM bet_edits e
-                                INNER JOIN index_statuses es ON (es.id=e.status_id)
-                                WHERE
-                                    e.feed_action_index=f.action_index AND
-                                    es.status='valid' AND
-                                    e.allow_list IS NOT NULL
-                            )
-                        )
-                        LEFT  JOIN bet_edits be ON (
-                            be.action_index=(
-                                SELECT MAX(e.action_index)
-                                FROM bet_edits e
-                                INNER JOIN index_statuses es ON (es.id=e.status_id)
-                                WHERE
-                                    e.feed_action_index=f.action_index AND
-                                    es.status='valid' AND
-                                    e.block_list IS NOT NULL
-                            )
-                        )
-                    WHERE
-                        f.action_index=?
-                    LIMIT 1`;
-        let results = await this.doQuery(query, [action_index]);
-        if(results.length > 0){
-            feed = {};
-            for(let key in results[0]){
-                let name  = String(key).toUpperCase();
-                let value = results[0][key];
-                // Convert numerics but PRESERVE NULL: Number(null) is 0, and a
-                // NULL allow_list collapsing to 0 would make every ungated feed
-                // read as gated by the (nonexistent) list at action_index 0,
-                // rejecting all bets. Amount-ish fields (fee/min_amount) stay
-                // strings for bignumber math
-                if(!this.util.isNull(value) && ['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'DEADLINE', 'REFUND_WINDOW', 'EXPIRE_AT', 'ALLOW_LIST', 'BLOCK_LIST', 'CLOSED_BLOCK', 'TERMINAL_BLOCK'].includes(name))
-                    value = Number(value);
-                feed[name] = value;
-            }
-        }
-        return feed;
+        const results = await this.doQuery(BET_FEED_INFO_QUERY, [action_index]);
+        return results.length > 0 ? formatBetFeedInfo(results[0], this.util) : false;
     },
 
     // Return the `open` bets on a feed, action_index ASC (the normative
