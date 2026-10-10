@@ -186,7 +186,7 @@ async function activationError(commands, data, error, normalize, dispatchedOnly)
         if(normalize)
             action = this.normalizeSubAction(action);
         // Verify this sub-command's action is currently enabled on the network
-        if(!error && dispatchedOnly && action !== '' && !DISPATCHED_ACTIONS.has(action))
+        if(!error && dispatchedOnly && !DISPATCHED_ACTIONS.has(action))
             error = 'invalid: ACTION (unknown)';
         else if(!error && await this.protocolChanges.isEnabled(action, data['BLOCK_INDEX']) == false)
             error = 'invalid: ACTION (unknown)';
