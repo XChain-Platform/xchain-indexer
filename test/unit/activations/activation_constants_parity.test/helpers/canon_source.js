@@ -24,7 +24,10 @@ const { siblingCheckout, siblingsRequired } = require('../../../../helpers/sibli
 
 // The same absolute path the suite names in its titles: five levels up from this directory
 // is the directory holding the sibling checkouts, as three levels up is from test/unit.
-const CONSTANTS_PATH = path.resolve(__dirname, '../../../../../../xchain-documentation/protocol/constants.js');
+const CONSTANTS_PATH = path.join(process.env.XCHAIN_DOCS_DIR
+    ? path.resolve(process.env.XCHAIN_DOCS_DIR)
+    : path.resolve(__dirname, '../../../../../../xchain-documentation'),
+    'protocol', 'constants.js');
 
 // Usable, not merely present: a lane symlink into a live main checkout is refused here,
 // and every parity case below keys off this flag.

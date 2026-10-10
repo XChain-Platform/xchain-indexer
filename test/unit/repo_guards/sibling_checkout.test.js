@@ -68,7 +68,7 @@ function cleanupLayouts() {
     if (T) fs.rmSync(T, { recursive: true, force: true });
 }
 
-const judge = (ownRoot, target) => siblingCheckout(ownRoot, target, { ownRoot });
+const judge = (ownRoot, target, opts = {}) => siblingCheckout(ownRoot, target, Object.assign({ ownRoot }, opts));
 
 describe('sibling_checkout verdict against real git layouts', function () {
     this.timeout(120000);
@@ -88,11 +88,30 @@ describe('sibling_checkout verdict against real git layouts', function () {
 
     it('refuses a linked worktree reading a symlink into a live main checkout', function () {
         const own = path.join(T, 'lane', 'xchain-own');
+        const sibling = path.join(T, 'main', 'xchain-sib');
         git(path.join(T, 'main', 'xchain-own'), 'worktree', 'add', '-q', '--detach', own);
         fs.symlinkSync('../main/xchain-sib', path.join(T, 'lane', 'xchain-sib'));
         const v = judge(own, '../xchain-sib/f.js');
         assert.strictEqual(v.usable, false);
         assert.match(v.reason, /symlink into the live main checkout/);
+
+        const sha = git(sibling, 'rev-parse', 'HEAD').trim();
+        const env = { XCHAIN_SIBLING_COMMITS: JSON.stringify({ 'xchain-sib': sha }) };
+        assert.strictEqual(judge(own, '../xchain-sib/f.js', { env }).usable, true,
+            'an exact full-SHA pin admits the clean checkout');
+        assert.strictEqual(judge(own, '../xchain-sib/f.js', {
+            env: { XCHAIN_SIBLING_COMMITS: JSON.stringify({ 'xchain-sib': '0'.repeat(40) }) }
+        }).usable, false, 'a different pin is still refused');
+
+        const file = path.join(sibling, 'f.js');
+        const original = fs.readFileSync(file, 'utf8');
+        fs.writeFileSync(file, original + '// dirty\n');
+        try {
+            assert.strictEqual(judge(own, '../xchain-sib/f.js', { env }).usable, false,
+                'the pin never admits tracked edits on top of the commit');
+        } finally {
+            fs.writeFileSync(file, original);
+        }
     });
 
     it('trusts plain clones laid side by side, as a CI venue lays them', function () {

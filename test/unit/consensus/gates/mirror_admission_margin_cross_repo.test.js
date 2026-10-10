@@ -30,7 +30,13 @@ const HUB_FROM     = path.resolve(__dirname, '..');
 const HUB_GATE     = '../../../../xchain-hub/src/consensus/gates/mirror_admission_margin_gate.js';
 const HUB_ROWS     = '../../../../xchain-hub/src/consensus/gate_registry/shared_rows_5.js';
 const HUB_ADMIT    = '../../../../xchain-hub/src/lib/admission_height.js';
+const HUB_WATERMARK = '../../../../xchain-hub/src/peers/hub_db/admission_height_watermark.js';
 const ACTIVATION_KEY = 'mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION';
+const HUB_WINDOW_ENV = [
+    'HUB_NETWORK', 'XDEX_ROUND_TIMEOUT_MS', 'XDEX_ROUND_MAX_LIFETIME_MS',
+    'ATTESTATION_ROUND_TIMEOUT_MS', 'ANCHOR_ROUND_TIMEOUT_MS',
+    'ORACLE_ROUND_INTERVAL', 'ADMISSION_ORACLE_INGEST_WINDOW_MS',
+];
 
 let loaded = null;
 
@@ -51,25 +57,50 @@ function restoreCache(saved) {
     }
 }
 
-function usableHub(ctx) {
-    const files = [HUB_GATE, HUB_ROWS, HUB_ADMIT].map(file => path.resolve(HUB_FROM, file));
-    for(const file of files) {
-        const verdict = siblingCheckout(__dirname, file);
-        if(!verdict.usable) { skipOrFail(ctx, verdict, 'mirror-admission margin cross-repo parity'); return null; }
+function hubFiles(root) {
+    if(root) return [
+        path.join(root, 'src/consensus/gates/mirror_admission_margin_gate.js'),
+        path.join(root, 'src/consensus/gate_registry/shared_rows_5.js'),
+        path.join(root, 'src/lib/admission_height.js'),
+        path.join(root, 'src/peers/hub_db/admission_height_watermark.js'),
+    ];
+    return [HUB_GATE, HUB_ROWS, HUB_ADMIT, HUB_WATERMARK].map(rel => path.resolve(HUB_FROM, rel));
+}
+
+function withoutHubWindowEnv(fn) {
+    const saved = HUB_WINDOW_ENV.map(key => [key, process.env[key]]);
+    for(const [key] of saved) delete process.env[key];
+    try { return fn(); }
+    finally {
+        for(const [key, value] of saved) {
+            if(value === undefined) delete process.env[key];
+            else process.env[key] = value;
+        }
     }
-    return files;
+}
+
+function usableHub(ctx) {
+    const files = hubFiles(process.env.XCHAIN_HUB_DIR);
+    const verdicts = files.map(file => siblingCheckout(__dirname, file));
+    const refused = verdicts.find(verdict => !verdict.usable);
+    if(!refused) return files;
+    skipOrFail(ctx, refused, 'mirror-admission margin cross-repo parity');
+    return null;
 }
 
 function loadCopies(ctx) {
     const hub = usableHub(ctx);
     if(!hub) return null;
-    const [hubGateFile, hubRowsFile, hubAdmitFile] = hub;
+    const [hubGateFile, hubRowsFile, hubAdmitFile, hubWatermarkFile] = hub;
     const indexerPath = require.resolve(INDEXER_GATE);
     const hubGatePath = require.resolve(hubGateFile);
     const hubAdmitPath = require.resolve(hubAdmitFile);
+    const hubWatermarkPath = require.resolve(hubWatermarkFile);
     const normalIndexer = require(indexerPath);
     const normalHub = require(hubAdmitPath);
-    const saved = [indexerPath, hubGatePath, hubAdmitPath].map(p => [p, require.cache[p]]);
+    const normalWatermark = require(hubWatermarkPath).AdmissionHeightWatermark;
+    const saved = [indexerPath, hubGatePath, hubAdmitPath, hubWatermarkPath]
+        .map(p => [p, require.cache[p]]);
     const indexerRegistry = require('../../../../src/consensus/gate_registry.js');
     const hubRegistry = require(path.resolve(path.dirname(hubGateFile), '..', 'gate_registry'));
     const indexerGet = replaceActivationGet(indexerRegistry);
@@ -87,7 +118,7 @@ function loadCopies(ctx) {
         indexerRegistry.get = indexerGet;
         hubRegistry.get = hubGet;
     }
-    return { normalIndexer, normalHub, boundaryIndexer, boundaryHub, saved,
+    return { normalIndexer, normalHub, normalWatermark, boundaryIndexer, boundaryHub, saved,
         hubGateFile, hubRowsFile };
 }
 
@@ -121,6 +152,54 @@ describe('mirror-admission margin cross-repo parity', function() {
                 }
             }
         }
+    });
+
+    it('the activated DOGE margin clears the 8-minute xdex watermark trail that the legacy margin cannot', function() {
+        const table = 'cross_chain_matches';
+        const start = 1_700_000_000_000;
+        const trailsByCadence = [];
+        const legacyDeficitsByCadence = [];
+        for(const cadenceMs of [60000, 50000, 40000]) {
+            const watermark = withoutHubWindowEnv(() => new loaded.normalWatermark({
+                HUB_NETWORK: 'regtest',
+            }));
+            assert.strictEqual(watermark.roundTerminalMs(table), 8 * 60 * 1000);
+            const steadyStart = Math.ceil(watermark.roundTerminalMs(table) / cadenceMs) + 2;
+            const last = steadyStart + 4;
+            const trails = [];
+            const legacyDeficits = [];
+            for(let i = 0; i <= last; i++) {
+                const tip = 1000 + i;
+                watermark.observeTip('DOGE', tip, start + i * cadenceMs);
+                if(i < steadyStart) continue;
+                const claimed = watermark.heights(start + i * cadenceMs)[table].DOGE;
+                const trail = tip - claimed;
+                const legacyMargin = loaded.normalIndexer.baseMarginBlocks(table);
+                const activatedMargin = loaded.normalIndexer.rowMarginBlocks(
+                    table, 'DOGE', 'regtest', tip);
+                trails.push(trail);
+                legacyDeficits.push(trail - legacyMargin);
+                assert.strictEqual(legacyMargin, 4);
+                assert.ok(claimed < tip - legacyMargin);
+                assert.ok(trail - legacyMargin >= 5);
+                assert.ok(claimed >= loaded.normalIndexer.consumerTargetHeight(
+                    table, 'DOGE', 'regtest', tip));
+                assert.strictEqual(activatedMargin, 14);
+                assert.ok(activatedMargin > trail);
+            }
+            trailsByCadence.push(trails);
+            legacyDeficitsByCadence.push(legacyDeficits);
+        }
+        assert.deepStrictEqual(trailsByCadence, [
+            [9, 9, 9, 9, 9],
+            [11, 11, 11, 11, 11],
+            [13, 13, 13, 13, 13],
+        ]);
+        assert.deepStrictEqual(legacyDeficitsByCadence, [
+            [5, 5, 5, 5, 5],
+            [7, 7, 7, 7, 7],
+            [9, 9, 9, 9, 9],
+        ]);
     });
 
     it('hub and indexer agree on both sides of a stubbed DOGE testnet boundary', function() {
