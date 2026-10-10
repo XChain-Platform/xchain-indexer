@@ -21,6 +21,8 @@
 
 'use strict';
 
+const mathjs = require('mathjs');
+
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
 module.exports = {
@@ -57,12 +59,8 @@ module.exports = {
             return true;
         if(typeof value === 'number')
             return Number.isSafeInteger(value);
-        if(value && typeof value === 'object'){
-            if(typeof value.isInteger === 'function')
-                return value.isInteger();
-            if(typeof value.toString === 'function')
-                return /^[+-]?[0-9]+$/.test(value.toString());
-        }
+        if(value instanceof mathjs.BigNumber)
+            return value.isInteger() === true;
         return false;
     },
 

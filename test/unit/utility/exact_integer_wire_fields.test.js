@@ -10,6 +10,7 @@
 'use strict';
 
 const assert = require('assert');
+const mathjs = require('mathjs');
 const valueChecks = require('../../../src/utility/validation/value_checks.js');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 const orderValidation = require('../../../src/actions/order/validate.js');
@@ -40,9 +41,10 @@ function baseHandler(enabled){
 
 describe('exact integer wire fields @regression @tier1', function(){
     it('accepts only lossless integer representations', function(){
-        for(let value of ['0', '-1', '+2', '18446744073709551615', 7, 7n, { isInteger: () => true }])
+        for(let value of ['0', '-1', '+2', '18446744073709551615', 7, 7n, mathjs.bignumber('7')])
             assert.strictEqual(valueChecks.isExactInteger(value), true, String(value));
-        for(let value of ['', '1.0', '1e3', ' 1', 1.5, Number.MAX_SAFE_INTEGER + 1, null, { isInteger: () => false }])
+        for(let value of ['', '1.0', '1e3', ' 1', 1.5, Number.MAX_SAFE_INTEGER + 1, null,
+            [1], ['1'], { toString: () => '1' }, { isInteger: () => true }, mathjs.bignumber('1.5')])
             assert.strictEqual(valueChecks.isExactInteger(value), false, String(value));
     });
 
