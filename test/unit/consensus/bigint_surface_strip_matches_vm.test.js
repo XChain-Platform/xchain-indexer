@@ -48,6 +48,10 @@ function indexerActivation() {
     return ProtocolChanges.copy(KEY);
 }
 
+function indexerActivationAt(network, coin, height) {
+    return ProtocolChanges.activeAt(KEY, network, coin, height, null);
+}
+
 const GAS_SCHEDULE = {
     VM_COMPUTATION: 1,
     VM_STATE_READ: 100,
@@ -153,16 +157,22 @@ describe('consensus/bigint_surface_strip_matches_vm: activation parity @regressi
             if (vmHeight === null) {
                 assert.strictEqual(indexer[coinKey], ProtocolChanges.UNARMED,
                     coinKey + ' must pair VM null with indexer UNARMED');
+                const [coin, network] = coinKey.split(':');
+                assert.strictEqual(indexerActivationAt(network, coin, ProtocolChanges.UNARMED - 1), false);
                 continue;
             }
             assert.ok(Number.isFinite(vmHeight), coinKey + ' VM activation must be null or a finite height');
             assert.strictEqual(indexer[coinKey], vmHeight, coinKey + ' activation drifted from the VM');
+            const [coin, network] = coinKey.split(':');
+            assert.strictEqual(indexerActivationAt(network, coin, vmHeight - 1),
+                vmActivationAt(network, coin, vmHeight - 1));
+            assert.strictEqual(indexerActivationAt(network, coin, vmHeight),
+                vmActivationAt(network, coin, vmHeight));
         }
-        assert.strictEqual(ProtocolChanges.activeAt(
-            KEY, 'testnet', 'DOGE', ProtocolChanges.UNARMED - 1, null), false);
+        assert.strictEqual(indexerActivationAt('testnet', 'DOGE', ProtocolChanges.UNARMED - 1), false);
         assert.strictEqual(vmActivationAt('testnet', 'DOGE', ProtocolChanges.UNARMED - 1), false);
         assert.strictEqual(vmActivationAt('regtest', 'LTC', 0), true);
-        assert.strictEqual(ProtocolChanges.activeAt(KEY, 'regtest', 'LTC', 0, null), true);
+        assert.strictEqual(indexerActivationAt('regtest', 'LTC', 0), true);
     });
 
     it('passes the production network, coin and height inputs into vm.execute()', async function () {
@@ -214,11 +224,11 @@ describe('consensus/bigint_surface_strip_matches_vm: activation parity @regressi
         assert.strictEqual(mainnet.vmError, null);
         assert.strictEqual(mainnet.vmReturnValue, '"function"');
         assert.strictEqual(
-            ProtocolChanges.activeAt(KEY, 'regtest', 'LTC', 73, null),
+            indexerActivationAt('regtest', 'LTC', 73),
             vmActivationAt('regtest', 'LTC', 73),
         );
         assert.strictEqual(
-            ProtocolChanges.activeAt(KEY, 'mainnet', 'LTC', 74, null),
+            indexerActivationAt('mainnet', 'LTC', 74),
             vmActivationAt('mainnet', 'LTC', 74),
         );
     });

@@ -71,8 +71,10 @@ describe('consensus identity GATES field and pin comparison', function () {
     it('pins the BigInt surface-strip row in both checkout readings', function () {
         const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
         const key = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
+        const derived = codeIdentity('regtest').armed_map_rows[key];
+        assert.match(derived, /^[0-9a-f]{64}$/);
         for (const block of ['bare_checkout', 'armed_regtest_venue']) {
-            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+            assert.strictEqual(pin[block].armed_map_rows[key], derived, block);
         }
     });
 

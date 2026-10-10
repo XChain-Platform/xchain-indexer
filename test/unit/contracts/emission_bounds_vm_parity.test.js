@@ -22,10 +22,19 @@ const Execute = require('../../../src/actions/execute/index.js');
 const PROTO   = require('../../../src/protocol/constants.js');
 const OWN_PKG = require('../../../package.json');
 const { GAS_CEILING } = require('../../../src/actions/deploy/constants.js');
+const ProtocolChanges = require('../../../src/protocol_changes.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
+const BIGINT_SURFACE_STRIP_KEY = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
+
 // The VM modules this test loads; a tree missing any of them is a stale copy, not a pass.
-const VM_MODULES = ['src/gateway-emit.js', 'src/gas.js', 'src/collector.js', 'src/index/runtime/limits_defaults.js'];
+const VM_MODULES = [
+    'src/gateway-emit.js',
+    'src/gas.js',
+    'src/collector.js',
+    'src/index/runtime/limits_defaults.js',
+    'src/index/bigint_surface_strip_heights.js',
+];
 
 // Same schedule the VM's own call-limit test builds its tracker from.
 const SCHEDULE = {
@@ -67,7 +76,8 @@ function loadVm(root, source) {
         buildEmitAPI:      require(path.join(root, VM_MODULES[0])).buildEmitAPI,
         GasTracker:        require(path.join(root, VM_MODULES[1])),
         EmissionCollector: require(path.join(root, VM_MODULES[2])),
-        resolveLimits:     require(path.join(root, VM_MODULES[3])).resolveLimits
+        resolveLimits:     require(path.join(root, VM_MODULES[3])).resolveLimits,
+        bigIntSurface:     require(path.join(root, VM_MODULES[4])),
     };
 }
 
@@ -143,6 +153,18 @@ describe('EXECUTE host bounds match the bundled VM call limits @regression @tier
         const limits = vm.resolveLimits({ maxCpuTimeMs: 30000 });
         assert.strictEqual(limits.maxCallDepth, PROTO.VM_MAX_CALL_DEPTH, vm.label);
         assert.strictEqual(limits.minCallGas, PROTO.VM_MIN_CALL_GAS, vm.label);
+        for (const network of ['mainnet', 'testnet', 'regtest']) {
+            for (const coin of ['BTC', 'LTC', 'DOGE']) {
+                for (const height of [0, ProtocolChanges.UNARMED - 1]) {
+                    assert.strictEqual(
+                        ProtocolChanges.activeAt(
+                            BIGINT_SURFACE_STRIP_KEY, network, coin, height, null),
+                        vm.bigIntSurface.isBigIntSurfaceStripActive(network, coin, height),
+                        vm.label + ' BigInt surface ' + coin + ':' + network + '@' + height,
+                    );
+                }
+            }
+        }
     });
 
     it('the host is never stricter than the VM, and depth and floor agree exactly', async function () {
