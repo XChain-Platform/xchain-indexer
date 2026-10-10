@@ -14,14 +14,24 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 
 const { codeIdentity } = require('../../../bin/consensus-identity.js');
-const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+const { siblingCheckout } = require('../../helpers/sibling_checkout.js');
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
 const BIN = path.join(REPO, 'bin', 'consensus-identity.js');
 const PIN = path.join(REPO, 'bin', 'pins', 'at1-consensus-identity.json');
+const SHARED_ROWS = path.join(REPO, 'src', 'protocol_changes', 'shared_rows_5.js');
+const HUB_SHARED_ROWS = 'src/consensus/gate_registry/shared_rows_5.js';
+const HUB_PIN = 'bin/pins/at1-consensus-identity.json';
+
+function hubFileAtCommit(hubRoot, commit, file) {
+    return execFileSync('git', ['-C', hubRoot, 'show', commit + ':' + file], {
+        encoding: file.endsWith('.json') ? 'utf8' : null,
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+}
 
 function run(args) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'consensus-identity-stdout-'));
@@ -76,6 +86,14 @@ describe('consensus identity GATES field and pin comparison', function () {
         }
     });
 
+    it('pins the relay-response deadline row in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION';
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
     it('pins the dispatched-only action admission row in both checkout readings', function () {
         const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
         const key = 'action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY';
@@ -84,12 +102,18 @@ describe('consensus identity GATES field and pin comparison', function () {
         }
     });
 
-    it('matches the hub pinned GATES field hash', function () {
+    it('matches the hub shared-row bytes and pinned GATES field hash', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
         const hubRoot = process.env.XCHAIN_HUB_DIR || path.resolve(REPO, '..', 'xchain-hub');
-        const candidate = path.join(hubRoot, 'bin', 'pins', 'at1-consensus-identity.json');
+        const candidate = path.join(hubRoot, HUB_PIN);
         const sibling = siblingCheckout(REPO, candidate, { ownRoot: REPO });
-        if (!sibling.usable) return skipOrFail(this, sibling, 'the hub GATES field hash guard');
-        const hubPin = JSON.parse(fs.readFileSync(sibling.path, 'utf8'));
+        const hubRows = sibling.usable
+            ? fs.readFileSync(path.join(hubRoot, HUB_SHARED_ROWS))
+            : hubFileAtCommit(hubRoot, pin.hub_shared_rows_commit, HUB_SHARED_ROWS);
+        const hubPin = JSON.parse(sibling.usable
+            ? fs.readFileSync(sibling.path, 'utf8')
+            : hubFileAtCommit(hubRoot, pin.hub_shared_rows_commit, HUB_PIN));
+        assert.deepStrictEqual(fs.readFileSync(SHARED_ROWS), hubRows);
         assert.strictEqual(codeIdentity('regtest').gates_field_hash, hubPin.gates_field_hash);
     });
 
