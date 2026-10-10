@@ -345,11 +345,6 @@
       "ROLLCALL epoch close (\u00a73.4) the eviction effect stamps every delegation of the source, or the DELEGATE branch keeps it in",
       "ROLLCALL epoch close (\u00a73.4) the eviction effect stamps the stake SOURCE-SCOPED and sweeps pending rows"
     ],
-    "084b3b36044d643d": [
-      "/status schemaReady always emits a boolean and reports true only for completed startup",
-      "/status schemaReady stays false through table verification and flips after migrations finish",
-      "/status schemaReady stays false when migrations fail"
-    ],
     "087297546f0ad980": [
       "ISSUE settlement owner history adds no extra address when the source keeps ownership",
       "ISSUE settlement owner history lists the owner named at creation in the addresses refreshed for the tick"
@@ -12289,6 +12284,11 @@
       "rollcall_gates_filter: the rules-aware attestation capability filter @regression @tier1 the subset rule matches the pubkey case-insensitively (rows are stored lower-cased)",
       "rollcall_gates_filter: the rules-aware attestation capability filter @regression @tier1 the subset rule preserves input ORDER and the full row objects of the survivors"
     ],
+    "cb3e0ef54d91ff54": [
+      "ProtocolChanges unusable block_time @regression @tier3 continues accepting finite numeric timestamps and numeric timestamp strings",
+      "ProtocolChanges unusable block_time @regression @tier3 does not require a usable timestamp when the network time gate is at genesis",
+      "ProtocolChanges unusable block_time @regression @tier3 fails an armed finite time gate closed without throwing for unusable timestamps"
+    ],
     "cb6dfcd8bd1e5b65": [
       "DEPOSIT custody guard bindings @regression @tier2 names the depositor's address when an inert probe reaches its binding",
       "DEPOSIT custody guard bindings @regression @tier2 names the token when an inert probe reaches its binding",
@@ -13435,6 +13435,13 @@
       "ProtocolChanges @regression @tier3 parseChanges() should set all activation blocks to 0",
       "ProtocolChanges @regression @tier3 parseChanges() should set all activation times to 0"
     ],
+    "dffaba7ca7ce4ca9": [
+      "exact integer wire fields @regression @tier1 accepts only lossless integer representations",
+      "exact integer wire fields @regression @tier1 gates BET create and existing-feed integer wire spellings",
+      "exact integer wire fields @regression @tier1 gates DISPENSER integer wire spellings",
+      "exact integer wire fields @regression @tier1 gates ORDER and SWAP integer wire spellings",
+      "exact integer wire fields @regression @tier1 registers the protocol change unarmed on every network"
+    ],
     "e0826acdcf60989c": [
       "subtree node store row batches inserts a one-node chunk and returns the query result",
       "subtree node store row batches inserts a three-node chunk in node order and returns the query result",
@@ -13977,6 +13984,12 @@
       "Xcall (XCALL) @regression @tier3 v0: request rejects a missing METHOD",
       "Xcall (XCALL) @regression @tier3 v0: request rejects a non-positive TARGET_CONTRACT_INDEX",
       "Xcall (XCALL) @regression @tier3 v0: request rejects an unknown emitter contract"
+    ],
+    "e624e2e0e1e9bd13": [
+      "/status schemaReady always emits a boolean and reports true only for completed startup",
+      "/status schemaReady stays false through table verification and flips after migrations finish",
+      "/status schemaReady stays false when migrations are lock-skipped",
+      "/status schemaReady stays false when migrations fail"
     ],
     "e6445f756586849c": [
       "setTokenBridged() - the sticky tokens.bridged bit @regression is a no-op for every later lock of the same token",
@@ -14948,6 +14961,14 @@
       "attest_response_canonical: hub/indexer twin produces byte-identical canonicals to the hub copy across both eras",
       "attest_response_canonical: hub/indexer twin rejects the same spellings as the hub copy"
     ],
+    "fa99b888f85b3500": [
+      "Contract delegation signing key claim query @regression @tier2 reserves pending and live delegations but releases a key at its deactivation block",
+      "Delegated signing key materialization slot @regression @tier2 does not rotate a governed stake when another slot holds the delegated key",
+      "Delegated signing key materialization slot @regression @tier2 rotates when the merged claim query finds no key holder outside the governed slot",
+      "Stake v3 delegated signing key claim @regression @tier2 keeps the direct stake collision verdict ahead of the delegated-key verdict",
+      "Stake v3 delegated signing key claim @regression @tier2 rejects a new stake claim when the key is reserved by a contract delegation",
+      "Stake v3 delegated signing key claim @regression @tier2 rejects a same-source top-up through the delegated key"
+    ],
     "fabee4ab4b425a8a": [
       "indexer poll-freshness heartbeat metric (item 9bee49e8) advances the heartbeat while the commit stamp stands still, which is the whole point",
       "indexer poll-freshness heartbeat metric (item 9bee49e8) leaves the heartbeat absent until the loop has iterated once",
@@ -15319,8 +15340,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1243,
-      "titleCount": 12830,
+      "fileCount": 1246,
+      "titleCount": 12845,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15570,6 +15591,7 @@
         "test/unit/actions/stake/collect.test.js": "6ea9b4fd29f9e873",
         "test/unit/actions/stake/delegate.test.js": "dbb6f593f551838f",
         "test/unit/actions/stake/delegate.test/contract_targeted.test.js": "c94989555dc9675b",
+        "test/unit/actions/stake/delegate.test/delegated_signing_key_claim.test.js": "fa99b888f85b3500",
         "test/unit/actions/stake/delegate.test/revoke.test.js": "3d3c63ec939e8c68",
         "test/unit/actions/stake/deposit.test.js": "6125c439d7bdac50",
         "test/unit/actions/stake/deposit.test/custody_bypass_witness.test.js": "24ec309dd1a13c7d",
@@ -15798,7 +15820,7 @@
         "test/unit/api/rpc/token_policy_list_ref.test.js": "0d061e71ba86eff6",
         "test/unit/api/rpc/token_policy_resolve_refs.test.js": "64c039d7b0a6d648",
         "test/unit/api/stake_source.test.js": "bed4c39786728d9f",
-        "test/unit/api/status_schema_ready.test.js": "084b3b36044d643d",
+        "test/unit/api/status_schema_ready.test.js": "e624e2e0e1e9bd13",
         "test/unit/api/tip_block_time.test.js": "5fd61225b4760c51",
         "test/unit/attestation/attest_broadcast_fee_activation.test.js": "4dff9efe8fe9df01",
         "test/unit/attestation/attest_mirror_era_parity.test.js": "998149c6ec308465",
@@ -16390,6 +16412,7 @@
         "test/unit/protocol/protocol_change_registry_prototype.test.js": "9227d0e83b5535c1",
         "test/unit/protocol/protocol_changes.test.js": "dfed60b0be0a5889",
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "89da9b102e2aa560",
+        "test/unit/protocol/protocol_changes.test/unusable_block_time.test.js": "cb3e0ef54d91ff54",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
         "test/unit/protocol_changes/anchor/anchor_bundle_order_row.test.js": "332212f43d474164",
         "test/unit/protocol_changes/anchor/anchor_fold_rows.test.js": "2d944feb25011092",
@@ -16537,6 +16560,7 @@
         "test/unit/utility/amount_precision.test.js": "f8147b1f69e9d769",
         "test/unit/utility/controller_guard_custody.test.js": "49c6f8fe13359243",
         "test/unit/utility/controller_guard_inert_naming.test.js": "1bdf11fda7eec5f4",
+        "test/unit/utility/exact_integer_wire_fields.test.js": "dffaba7ca7ce4ca9",
         "test/unit/utility/fee_output.test.js": "b5fb412331972a99",
         "test/unit/utility/list_tick_airdrop_holders.test.js": "2987ec28ce152583",
         "test/unit/utility/price_age_at.test.js": "4b148378640ac7fa",

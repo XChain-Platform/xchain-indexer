@@ -25,6 +25,7 @@ function makeHandler(pinned) {
     const handler = {
         config: { NETWORK: 'regtest', COIN: 'BTC', MAX_MEMO_LENGTH: 80 },
         util: { isNull: (v) => v === undefined || v === null || v === '', bclte: () => false },
+        actions: { protocolChanges: { isEnabled: sinon.stub().resolves(false) } },
         indexerDb: {
             isActionAllowed: sinon.stub().resolves(true),
             mirrorDb: () => ({ getPinnedRemoteToken }),

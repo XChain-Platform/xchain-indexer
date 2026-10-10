@@ -96,6 +96,15 @@ module.exports = {
     async validateAddressAndExpirationFields(ctx){
     let { data, error, format, getTokenInfo } = ctx;
 
+        if(!error && await this.actions.protocolChanges.isEnabled('EXACT_INTEGER_WIRE_FIELDS', data['BLOCK_INDEX'])){
+            for(let field of ['EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'DISPENSER_ACTION_INDEX']){
+                if(!this.util.isNull(data[field]) && !this.util.isExactInteger(data[field])){
+                    error = 'invalid: ' + field + ' (format)';
+                    break;
+                }
+            }
+        }
+
         // Verify a NATIVE-COIN-priced GET_AMOUNT against COIN_DECIMALS, as order.js resolves
         // its native side. The rule above is a conjunct on getTokenInfo, which an empty
         // GET_TICK never loads, so that shape reached storage with no sign or precision

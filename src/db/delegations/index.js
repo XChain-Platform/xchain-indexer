@@ -200,10 +200,15 @@ module.exports = {
     },
 
     // The other half of that collision check: already claimed by a contract DELEGATION.
-    async isSigningPubkeyUsedByContractDelegation(pubkeyId, validId){
-        let rows = await this.doQuery(
-            `SELECT 1 FROM contract_delegations WHERE signing_pubkey_id=? AND status_id=? LIMIT 1`,
-            [pubkeyId, validId]);
+    async isSigningPubkeyUsedByContractDelegation(pubkeyId, validId, blockIndex){
+        let query = `SELECT 1 FROM contract_delegations WHERE signing_pubkey_id=? AND status_id=?`;
+        let args = [pubkeyId, validId];
+        if(blockIndex !== undefined && blockIndex !== null){
+            query += ' AND (deactivation_block IS NULL OR deactivation_block > ?)';
+            args.push(blockIndex);
+        }
+        query += ' LIMIT 1';
+        let rows = await this.doQuery(query, args);
         return rows.length > 0;
     },
 

@@ -21,6 +21,8 @@
 
 'use strict';
 
+const mathjs = require('mathjs');
+
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
 module.exports = {
@@ -46,6 +48,20 @@ module.exports = {
             return false;
         }
         return Number.isInteger(+value);
+    },
+
+    // Determine if a value carries an integer without numeric coercion. Wire strings
+    // must use integer decimal syntax; Numbers must still be exact in JavaScript.
+    isExactInteger(value){
+        if(typeof value === 'string')
+            return /^[+-]?[0-9]+$/.test(value);
+        if(typeof value === 'bigint')
+            return true;
+        if(typeof value === 'number')
+            return Number.isSafeInteger(value);
+        if(value instanceof mathjs.BigNumber)
+            return value.isInteger() === true;
+        return false;
     },
 
     // Whether an integer wire value is PROVABLY outside the unsigned range [0, max] its
