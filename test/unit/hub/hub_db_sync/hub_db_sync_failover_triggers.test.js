@@ -23,15 +23,15 @@ function twoHubSelector() {
     });
 }
 
-describe('HubDbSync failover triggers', function () {
-    let harness;
+let harness;
 
-    afterEach(function () {
-        if (harness && harness.restore) harness.restore();
-        harness = null;
-        sinon.restore();
-    });
+function resetHarness() {
+    if (harness && harness.restore) harness.restore();
+    harness = null;
+    sinon.restore();
+}
 
+function registerReconnectFailureTests() {
     it('moves after three failed reconnects and reports the move', async function () {
         const selector = twoHubSelector();
         const first = selector.current();
@@ -73,7 +73,9 @@ describe('HubDbSync failover triggers', function () {
         assert.strictEqual(selector.current(), afterFirstMove);
         assert.strictEqual(harness.sync.mirrorStatus().moveCount, 1);
     });
+}
 
+function registerStallTests() {
     it('moves a stalled selector after the resync stage', function () {
         const selector = twoHubSelector();
         const first = selector.current();
@@ -98,7 +100,9 @@ describe('HubDbSync failover triggers', function () {
         assert.strictEqual(harness.stage2(STALL_MS + EXIT_MS), 'exit');
         assert.strictEqual(harness.fatalReasons.length, 1);
     });
+}
 
+function registerNotCaughtUpMoveTests() {
     it('moves from a ready hub that reports it is not caught up', async function () {
         harness = makeSelectorReadyFrameHarness({
             drainOutcomes: [{ allDrained: true, marks: [81, 89] }]
@@ -146,7 +150,9 @@ describe('HubDbSync failover triggers', function () {
         assert.strictEqual(warn.args.filter(args => args.join(' ') ===
             'HubDbSync: serving from the only hub although it reports not caught up').length, 1);
     });
+}
 
+function registerReadyFrameCompatibilityTests() {
     it('waits on one not-caught-up candidate and accepts a later caught-up frame', async function () {
         harness = makeSelectorReadyFrameHarness({
             seeds: ['http://hub-a.test'],
@@ -191,7 +197,9 @@ describe('HubDbSync failover triggers', function () {
         assert.deepStrictEqual(result, { certified: true });
         assert.strictEqual(harness.retryCalls, 0);
     });
+}
 
+function registerPostFailoverBarrierTests() {
     it('keeps new-hub data and heartbeat evidence behind the first certified drain', async function () {
         const selector = twoHubSelector();
         const sync = new HubDbSync({ doQuery: async () => [] }, {
@@ -231,7 +239,9 @@ describe('HubDbSync failover triggers', function () {
         assert.strictEqual(sync.certifyFullDrain([1000], sync._wsEpoch), true);
         assert.strictEqual(sync._failoverPendingDrain, false);
     });
+}
 
+function registerReconnectBootstrapTests() {
     it('refreshes local barrier positions before bootstrapping after reconnect', async function () {
         harness = makeReconnectHarness({ connectOutcomes: [undefined] });
         harness.sync.scheduleReconnect();
@@ -262,7 +272,9 @@ describe('HubDbSync failover triggers', function () {
             else process.env.HUB_FAILOVER_MIN_DWELL_MS = previousDwell;
         }
     });
+}
 
+function registerNotCaughtUpEnvironmentTests() {
     it('reads the not-caught-up grace through the hub sync environment reader', function () {
         const previousGrace = process.env.HUB_NOT_CAUGHT_UP_GRACE_MS;
         process.env.HUB_NOT_CAUGHT_UP_GRACE_MS = '1234';
@@ -284,4 +296,17 @@ describe('HubDbSync failover triggers', function () {
             else process.env.HUB_NOT_CAUGHT_UP_GRACE_MS = previousGrace;
         }
     });
-});
+}
+
+function registerFailoverTriggerTests() {
+    afterEach(resetHarness);
+    registerReconnectFailureTests();
+    registerStallTests();
+    registerNotCaughtUpMoveTests();
+    registerReadyFrameCompatibilityTests();
+    registerPostFailoverBarrierTests();
+    registerReconnectBootstrapTests();
+    registerNotCaughtUpEnvironmentTests();
+}
+
+describe('HubDbSync failover triggers', registerFailoverTriggerTests);

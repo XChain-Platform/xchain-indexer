@@ -54,7 +54,7 @@ function rejects(row){
     });
 }
 
-describe('list snapshot archive rows @regression @tier1', function () {
+function registerShapeValidationTests(){
     it('accepts valid full and delta rows', function () {
         let full = rowWith();
         let delta = rowWith({
@@ -89,7 +89,9 @@ describe('list snapshot archive rows @regression @tier1', function () {
         rejects(rowWith({ network: 'testnet' }));
         rejects(rowWith({ status: 'retracted' }));
     });
+}
 
+function registerFieldValidationTests(){
     it('rejects invalid list identity and version fields', function () {
         rejects(rowWith({ home_chain: 'ETH' }));
         rejects(rowWith({ list_type: 3 }));
@@ -113,7 +115,9 @@ describe('list snapshot archive rows @regression @tier1', function () {
         rejects(rowWith({ added: JSON.stringify(['addr-b', 'addr-a']) }));
         rejects(rowWith({ removed: JSON.stringify(['addr-z']) }));
     });
+}
 
+function registerSnapshotWriteTests(){
     it('does not write when the snapshot id already exists', async function () {
         let row = rowWith();
         let queries = [];
@@ -167,7 +171,9 @@ describe('list snapshot archive rows @regression @tier1', function () {
             null, null, 0, '[]', 'finalized'
         ]);
     });
+}
 
+function registerArchiveWriteTests(){
     it('counts archive rows and treats an absent list_snapshots key as empty', async function () {
         let inserts = [];
         let db = {
@@ -185,4 +191,13 @@ describe('list snapshot archive rows @regression @tier1', function () {
         assert.strictEqual(report.lists, 1);
         assert.strictEqual(inserts.length, 1);
     });
-});
+}
+
+function registerListSnapshotArchiveRowTests(){
+    registerShapeValidationTests();
+    registerFieldValidationTests();
+    registerSnapshotWriteTests();
+    registerArchiveWriteTests();
+}
+
+describe('list snapshot archive rows @regression @tier1', registerListSnapshotArchiveRowTests);

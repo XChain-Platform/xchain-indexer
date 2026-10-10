@@ -158,52 +158,89 @@ describe('legacy migration rename: ledger remap + ordering @regression @tier1', 
     });
 });
 
-describe('fresh schema migration ledger @regression @tier1', function () {
-    const INSERT_SQL = /^INSERT INTO schema_migrations \(name, checksum, mode, applied_at\) VALUES \(\?, \?, \?, NOW\(\)\) ON DUPLICATE KEY UPDATE name = name$/;
+describe('fresh schema migration ledger @regression @tier1', registerFreshSchemaMigrationLedgerTests);
 
-    // Drive recordFreshSchemaMigrations over a connection that logs every statement in order.
-    async function seed(options = {}) {
-        const calls = [];
-        let ensured = false;
-        let inserted = 0;
-        const connection = {
-            async query(sql, params) {
-                calls.push({ sql, params });
-                if(/GET_LOCK/i.test(sql)) return [{ l: options.lockResult === undefined ? 1 : options.lockResult }];
-                if(/^INSERT INTO schema_migrations/i.test(sql)){
-                    inserted++;
-                    if(options.failAtInsert === inserted) throw new Error('insert failed');
-                }
-                return [];
-            },
-        };
-        const db = {
-            dbName: 'fake_indexer',
-            ensureMigrationsLedger: async function (conn) {
-                assert.strictEqual(conn, connection);
-                assert.strictEqual(calls.length, 0, 'the ledger DDL must run before the lock and the transaction');
-                ensured = true;
-            },
-            migrationMode: Database.prototype.migrationMode,
-            recordFreshSchemaMigrations: Database.prototype.recordFreshSchemaMigrations,
-        };
-        const realInfo = console.log;
-        console.log = () => {};
-        try {
-            await db.recordFreshSchemaMigrations(connection);
-            return { calls, ensured, error: null };
-        } catch(error){
-            return { calls, ensured, error };
-        } finally {
-            console.log = realInfo;
-        }
+const FRESH_LEDGER_INSERT_SQL = /^INSERT INTO schema_migrations \(name, checksum, mode, applied_at\) VALUES \(\?, \?, \?, NOW\(\)\) ON DUPLICATE KEY UPDATE name = name$/;
+
+async function seedFreshSchemaMigrations(options = {}) {
+    const calls = [];
+    let ensured = false;
+    let inserted = 0;
+    const connection = {
+        async query(sql, params) {
+            calls.push({ sql, params });
+            if(/GET_LOCK/i.test(sql)) return [{ l: options.lockResult === undefined ? 1 : options.lockResult }];
+            if(/^INSERT INTO schema_migrations/i.test(sql)){
+                inserted++;
+                if(options.failAtInsert === inserted) throw new Error('insert failed');
+            }
+            return [];
+        },
+    };
+    const db = {
+        dbName: 'fake_indexer',
+        ensureMigrationsLedger: async function (conn) {
+            assert.strictEqual(conn, connection);
+            assert.strictEqual(calls.length, 0, 'the ledger DDL must run before the lock and the transaction');
+            ensured = true;
+        },
+        migrationMode: Database.prototype.migrationMode,
+        recordFreshSchemaMigrations: Database.prototype.recordFreshSchemaMigrations,
+    };
+    const realInfo = console.log;
+    console.log = () => {};
+    try {
+        await db.recordFreshSchemaMigrations(connection);
+        return { calls, ensured, error: null };
+    } catch(error){
+        return { calls, ensured, error };
+    } finally {
+        console.log = realInfo;
     }
+}
 
-    const indexOf = (calls, re) => calls.findIndex(c => re.test(c.sql));
-    const lastIndexOf = (calls, re) => calls.map(c => c.sql).findLastIndex(sql => re.test(sql));
+const indexOfMigrationCall = (calls, re) => calls.findIndex(c => re.test(c.sql));
+const lastIndexOfMigrationCall = (calls, re) => calls.map(c => c.sql).findLastIndex(sql => re.test(sql));
 
+async function verifyFreshSchema(existingTable, options = {}) {
+    const created = [];
+    const order = [];
+    let recorded = 0;
+    const connection = {
+        async query(sql, params) {
+            if(/information_schema\.tables/i.test(sql))
+                return params[1] === existingTable ? [{}] : [];
+            throw new Error('unexpected statement: ' + sql);
+        },
+        async release() {},
+    };
+    const db = {
+        dbName: 'fake_indexer',
+        util: { throwError(message) { throw new Error(message); } },
+        getConnection: async () => connection,
+        createTable: async file => {
+            if(options.failCreateAt === created.length + 1) throw new Error('create failed');
+            created.push(file);
+            order.push('create');
+        },
+        alterTableForDrift: async () => {},
+        reconcileTableIndexes: async () => {},
+        recordFreshSchemaMigrations: async conn => {
+            assert.strictEqual(conn, connection);
+            recorded++;
+            order.push('seed');
+        },
+        schemaShapeSummary: () => 'Schema shape: test fixture.',
+        verifyTables: Database.prototype.verifyTables,
+    };
+    let error = null;
+    try { await db.verifyTables(); } catch(e){ error = e; }
+    return { created, recorded, order, error };
+}
+
+function registerFreshSchemaLedgerRecordingTest() {
     it('records every committed migration with its checksum, mode and database timestamp', async function () {
-        const { calls, ensured, error } = await seed();
+        const { calls, ensured, error } = await seedFreshSchemaMigrations();
         assert.strictEqual(error, null);
         const inserts = calls.filter(c => /^INSERT INTO schema_migrations/i.test(c.sql));
 
@@ -216,104 +253,78 @@ describe('fresh schema migration ledger @regression @tier1', function () {
             const raw = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
             assert.strictEqual(checksum, crypto.createHash('sha256').update(raw).digest('hex'));
             assert.strictEqual(mode, modeOf(raw));
-            assert.match(insert.sql, INSERT_SQL);
+            assert.match(insert.sql, FRESH_LEDGER_INSERT_SQL);
             assert.strictEqual(insert.params.length, 3, 'applied_at must come from NOW(), not a JavaScript value');
         }
         assert.ok(inserts.some(i => i.params[0] === '2026-09-12-bridge-tables.sql'),
             'the fresh bridge tables migration must be present in the applied ledger');
     });
+}
 
+function registerFreshSchemaLedgerTransactionTests() {
     it('seeds in one transaction under the migration lock, so a kill leaves all rows or none', async function () {
-        const { calls, error } = await seed();
+        const { calls, error } = await seedFreshSchemaMigrations();
         assert.strictEqual(error, null);
-        const getLock  = indexOf(calls, /GET_LOCK/i);
-        const begin    = indexOf(calls, /^START TRANSACTION$/i);
-        const first    = indexOf(calls, /^INSERT INTO schema_migrations/i);
-        const last     = lastIndexOf(calls, /^INSERT INTO schema_migrations/i);
-        const commit   = indexOf(calls, /^COMMIT$/i);
-        const release  = indexOf(calls, /RELEASE_LOCK/i);
+        const getLock  = indexOfMigrationCall(calls, /GET_LOCK/i);
+        const begin    = indexOfMigrationCall(calls, /^START TRANSACTION$/i);
+        const first    = indexOfMigrationCall(calls, /^INSERT INTO schema_migrations/i);
+        const last     = lastIndexOfMigrationCall(calls, /^INSERT INTO schema_migrations/i);
+        const commit   = indexOfMigrationCall(calls, /^COMMIT$/i);
+        const release  = indexOfMigrationCall(calls, /RELEASE_LOCK/i);
         assert.deepStrictEqual(calls[getLock].params, ['xchain_migrate_fake_indexer'],
             'the seed must take the same lock name the migration runner takes');
         assert.ok(getLock >= 0 && getLock < begin && begin < first, 'lock, then BEGIN, then the first row');
         assert.ok(last < commit && commit < release, 'last row, then COMMIT, then the lock is released');
-        assert.strictEqual(indexOf(calls, /^ROLLBACK$/i), -1);
+        assert.strictEqual(indexOfMigrationCall(calls, /^ROLLBACK$/i), -1);
     });
 
     it('rolls back, releases the lock and rethrows when a row fails partway', async function () {
-        const { calls, error } = await seed({ failAtInsert: 3 });
+        const { calls, error } = await seedFreshSchemaMigrations({ failAtInsert: 3 });
         assert.match(error && error.message, /insert failed/);
-        assert.ok(indexOf(calls, /^ROLLBACK$/i) > 0, 'a failed seed must roll back its partial rows');
-        assert.strictEqual(indexOf(calls, /^COMMIT$/i), -1, 'a failed seed must never commit a prefix');
-        assert.ok(indexOf(calls, /RELEASE_LOCK/i) > indexOf(calls, /^ROLLBACK$/i));
+        assert.ok(indexOfMigrationCall(calls, /^ROLLBACK$/i) > 0, 'a failed seed must roll back its partial rows');
+        assert.strictEqual(indexOfMigrationCall(calls, /^COMMIT$/i), -1, 'a failed seed must never commit a prefix');
+        assert.ok(indexOfMigrationCall(calls, /RELEASE_LOCK/i) > indexOfMigrationCall(calls, /^ROLLBACK$/i));
     });
 
     it('refuses without writing a row when another process holds the lock', async function () {
-        const { calls, error } = await seed({ lockResult: 0 });
+        const { calls, error } = await seedFreshSchemaMigrations({ lockResult: 0 });
         assert.match(error && error.message, /could not acquire lock xchain_migrate_fake_indexer/);
-        assert.strictEqual(indexOf(calls, /^INSERT INTO schema_migrations/i), -1);
-        assert.strictEqual(indexOf(calls, /^START TRANSACTION$/i), -1);
+        assert.strictEqual(indexOfMigrationCall(calls, /^INSERT INTO schema_migrations/i), -1);
+        assert.strictEqual(indexOfMigrationCall(calls, /^START TRANSACTION$/i), -1);
     });
+}
 
-    async function verifySchema(existingTable, options = {}) {
-        const created = [];
-        const order = [];
-        let recorded = 0;
-        const connection = {
-            async query(sql, params) {
-                if(/information_schema\.tables/i.test(sql))
-                    return params[1] === existingTable ? [{}] : [];
-                throw new Error('unexpected statement: ' + sql);
-            },
-            async release() {},
-        };
-        const db = {
-            dbName: 'fake_indexer',
-            util: { throwError(message) { throw new Error(message); } },
-            getConnection: async () => connection,
-            createTable: async file => {
-                if(options.failCreateAt === created.length + 1) throw new Error('create failed');
-                created.push(file);
-                order.push('create');
-            },
-            alterTableForDrift: async () => {},
-            reconcileTableIndexes: async () => {},
-            recordFreshSchemaMigrations: async conn => {
-                assert.strictEqual(conn, connection);
-                recorded++;
-                order.push('seed');
-            },
-            schemaShapeSummary: () => 'Schema shape: test fixture.',
-            verifyTables: Database.prototype.verifyTables,
-        };
-        let error = null;
-        try { await db.verifyTables(); } catch(e){ error = e; }
-        return { created, recorded, order, error };
-    }
-
+function registerFreshSchemaVerificationTests() {
     it('seeds the ledger only when no declared table existed (a fresh install)', async function () {
         const sqlFiles = fs.readdirSync(path.join(MIG_DIR, '..'))
             .filter(file => file.endsWith('.sql'));
-        const fresh = await verifySchema(null);
+        const fresh = await verifyFreshSchema(null);
         assert.strictEqual(fresh.error, null);
         assert.strictEqual(fresh.created.length, sqlFiles.length);
         assert.strictEqual(fresh.recorded, 1);
 
-        const aged = await verifySchema(sqlFiles[0].slice(0, -4));
+        const aged = await verifyFreshSchema(sqlFiles[0].slice(0, -4));
         assert.strictEqual(aged.created.length, sqlFiles.length - 1);
         assert.strictEqual(aged.recorded, 0);
     });
 
     it('seeds BEFORE the first table is created, so an interrupted create loop keeps a full ledger', async function () {
-        const fresh = await verifySchema(null);
+        const fresh = await verifyFreshSchema(null);
         assert.strictEqual(fresh.order[0], 'seed');
         assert.strictEqual(fresh.order.filter(step => step === 'seed').length, 1);
 
-        const partial = await verifySchema(null, { failCreateAt: 3 });
+        const partial = await verifyFreshSchema(null, { failCreateAt: 3 });
         assert.ok(partial.error, 'a failed CREATE must still surface');
         assert.strictEqual(partial.recorded, 1, 'the ledger was already seeded when the create loop broke');
         assert.strictEqual(partial.created.length, 2);
     });
-});
+}
+
+function registerFreshSchemaMigrationLedgerTests() {
+    registerFreshSchemaLedgerRecordingTest();
+    registerFreshSchemaLedgerTransactionTests();
+    registerFreshSchemaVerificationTests();
+}
 
 describe('legacy migration rename: ledger remap + ordering @regression @tier1', function () {
     it('planLedgerRenames is a no-op on a fresh database (nothing applied yet)', function () {
