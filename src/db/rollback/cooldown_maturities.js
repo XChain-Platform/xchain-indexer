@@ -52,7 +52,7 @@ module.exports = {
         let query;
         // Capability maturity refund and release are paid in GAS, keyed by the
         // unstake's action_index.
-        query = `DELETE e FROM escrows e
+        query = `DELETE e FROM escrows AS e
                     JOIN unstakes u ON u.action_index = e.action_index AND u.source_id = e.address_id
                     JOIN index_tickers g ON g.id = e.tick_id AND g.tick = ?
                     WHERE u.status_id = ? AND u.cooldown_end_block >= ? AND u.block_index < ?
@@ -64,7 +64,7 @@ module.exports = {
                     WHERE u.status_id = ? AND u.cooldown_end_block >= ? AND u.block_index < ?`;
         await db.doQuery(query, [gasTick, completedStatusId, block_index, block_index]);
         // Contract maturity refund and release are paid in the unstake's own tick.
-        query = `DELETE e FROM escrows e
+        query = `DELETE e FROM escrows AS e
                     JOIN contract_unstakes cu ON cu.action_index = e.action_index
                                              AND cu.source_id   = e.address_id
                                              AND cu.tick_id     = e.tick_id

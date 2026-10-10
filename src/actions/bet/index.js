@@ -58,6 +58,7 @@ const { getLogger } = require('../../observability/index.js');
 const createFeedPart = require('./create_feed.js');
 const validatePart   = require('./validate.js');
 const editListsPart  = require('./edit_lists_validate.js');
+const editApplyPart  = require('./edit_lists_apply.js');
 const feesPart       = require('./fees.js');
 const settlePart     = require('./settle.js');
 
@@ -198,6 +199,8 @@ class Bet {
             getLogger().info("\t BET : " + this.util.logAmount(data['AMOUNT']) + ' ' + (feedInfo ? feedInfo['TICK'] : '?') + ' on ' + data['OUTCOME'] + ' @ ' + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' : ' + data['STATUS']);
         if(format==3)
             getLogger().info("\t BET_RESOLVE : " + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' -> ' + data['OUTCOME'] + ' : ' + data['STATUS']);
+        if(format==4)
+            getLogger().info("\t BET_EDIT : " + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' : ' + data['STATUS']);
 
         // Every format stores its own typed row, whatever the status (house
         // convention). The cancel/resolve rows are what make a REJECTED cancel or
@@ -215,6 +218,7 @@ class Bet {
             await this.indexerDb.createBet(bet);
         if(format==3)
             await this.indexerDb.createBetResolve(bet);
+        await this.applyEditLists(bet, format);
 
         // Store the SOURCE and wagered TICK in addresses list
         if(format==0)
@@ -230,7 +234,7 @@ class Bet {
 // from produced: parse() reaches them as this.<method>, suites can stub them through
 // Bet.prototype, and for-in over a handler stays empty. Same install as db/index.js uses
 // for its query mixins.
-for(const part of [createFeedPart, validatePart, editListsPart, feesPart, settlePart]){
+for(const part of [createFeedPart, validatePart, editListsPart, editApplyPart, feesPart, settlePart]){
     const descriptors = Object.getOwnPropertyDescriptors(part);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
     Object.defineProperties(Bet.prototype, descriptors);

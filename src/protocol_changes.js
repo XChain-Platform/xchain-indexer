@@ -52,7 +52,7 @@ const {
     BROADCAST_FEE_LENGTH_MAINNET_TIME, BROADCAST_FEE_LENGTH_TESTNET_TIME,
     CONTROLLER_CUSTODY_GUARD_MAINNET_TIME, CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
     OWNER_WITHDRAW_OPT_IN_MAINNET_TIME, OWNER_WITHDRAW_OPT_IN_TESTNET_TIME, READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME, READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME, APPLY_LENGTH_METER_MAINNET_TIME, APPLY_LENGTH_METER_TESTNET_TIME, GAS_CEILING_SUCCESS_MAINNET_TIME, GAS_CEILING_SUCCESS_TESTNET_TIME, STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME, STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME, ITER_SET_METER_MAINNET_TIME, ITER_SET_METER_TESTNET_TIME,
-    DISPENSER_REFILL_MAINNET_TIME, DISPENSER_REFILL_TESTNET_TIME,
+    DISPENSER_REFILL_MAINNET_TIME, DISPENSER_REFILL_TESTNET_TIME, STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME, STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME,
 } = require('./protocol_changes/flag_times.js');
 const {
     BATCH_ISSUANCE_LIMITS_MAINNET_TIME,
@@ -270,12 +270,18 @@ class ProtocolChanges {
                     current.block_time  = await this.decoderDb.getBlockTime(block_index);
                     current.block_index = parseInt(block_index);
                     // Verify block_time
-                    if(enabled && network=='mainnet' && change.mainnet_time > current.block_time)
-                        enabled = false;
-                    if(enabled && network=='testnet' && change.testnet_time > current.block_time)
-                        enabled = false;
-                    if(enabled && network=='regtest' && change.regtest_time > current.block_time)
-                        enabled = false;
+                    const timeGate = change[network + '_time'];
+                    if(enabled && Number.isFinite(timeGate) && timeGate > 0){
+                        const rawBlockTime = current.block_time;
+                        const blockTime = typeof rawBlockTime === 'number' ||
+                            (typeof rawBlockTime === 'string' && rawBlockTime.trim() !== '')
+                            ? Number(rawBlockTime) : NaN;
+                        // An unusable block_time cannot satisfy an armed finite time gate.
+                        // This is a resolved but unusable value, not a decoder DB exception:
+                        // fail the gate closed while the catch below continues propagating faults.
+                        if(!Number.isFinite(blockTime) || timeGate > blockTime)
+                            enabled = false;
+                    }
                     // Verify block_index
                     if(enabled && network=='mainnet' && change.mainnet_block > current.block_index)
                         enabled = false;
@@ -352,7 +358,7 @@ module.exports.BROADCAST_FEE_LENGTH_MAINNET_TIME = BROADCAST_FEE_LENGTH_MAINNET_
 module.exports.BROADCAST_FEE_LENGTH_TESTNET_TIME = BROADCAST_FEE_LENGTH_TESTNET_TIME;
 module.exports.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME = CONTROLLER_CUSTODY_GUARD_MAINNET_TIME;
 module.exports.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME = CONTROLLER_CUSTODY_GUARD_TESTNET_TIME;
-Object.assign(module.exports, { OWNER_WITHDRAW_OPT_IN_MAINNET_TIME, OWNER_WITHDRAW_OPT_IN_TESTNET_TIME, READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME, READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME, APPLY_LENGTH_METER_MAINNET_TIME, APPLY_LENGTH_METER_TESTNET_TIME, GAS_CEILING_SUCCESS_MAINNET_TIME, GAS_CEILING_SUCCESS_TESTNET_TIME, STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME, STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME, ITER_SET_METER_MAINNET_TIME, ITER_SET_METER_TESTNET_TIME, DISPENSER_REFILL_MAINNET_TIME, DISPENSER_REFILL_TESTNET_TIME });
+Object.assign(module.exports, { OWNER_WITHDRAW_OPT_IN_MAINNET_TIME, OWNER_WITHDRAW_OPT_IN_TESTNET_TIME, READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME, READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME, APPLY_LENGTH_METER_MAINNET_TIME, APPLY_LENGTH_METER_TESTNET_TIME, GAS_CEILING_SUCCESS_MAINNET_TIME, GAS_CEILING_SUCCESS_TESTNET_TIME, STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME, STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME, ITER_SET_METER_MAINNET_TIME, ITER_SET_METER_TESTNET_TIME, DISPENSER_REFILL_MAINNET_TIME, DISPENSER_REFILL_TESTNET_TIME, STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME, STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME });
 // ARMED mainnet instant for the BATCH issuance-limits rework (1786838400, 2026-08-16T00:00Z,
 // armed 2026-08-14 pre-launch), exported so the suite can pin the ratified value, assert it
 // was never retroactive, that it never precedes BATCH_SUBACTION_NORMALIZATION, and that it

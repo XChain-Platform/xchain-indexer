@@ -48,7 +48,7 @@ function statusFor(schemaReady){
     });
 }
 
-function startupIndexer(runMigrations){
+function startupIndexer(runMigrations, expectedSchemaReadyDuringProbes = true){
     const indexer = {
         schemaReady: true,
         indexerDbName: 'indexer',
@@ -58,8 +58,8 @@ function startupIndexer(runMigrations){
             verifyTables: async () => true,
             runMigrations,
             warnOnOrphanIndexIds: async function(){
-                assert.strictEqual(indexer.schemaReady, true,
-                    'readiness must flip immediately after migrations finish');
+                assert.strictEqual(indexer.schemaReady, expectedSchemaReadyDuringProbes,
+                    'readiness must reflect whether migrations acquired the lock');
             },
             warnOnLegacyReorgCursor: async () => {}
         },
@@ -89,10 +89,21 @@ describe('/status schemaReady', function(){
         indexer = startupIndexer(async () => {
             assert.strictEqual(indexer.schemaReady, false,
                 'schema must not be ready while migrations are running');
+            return { lockSkipped: false };
         });
 
         await startupMethods.verifyIndexerDatabase.call(indexer);
         assert.strictEqual(indexer.schemaReady, true);
+    });
+
+    it('stays false when migrations are lock-skipped', async function(){
+        const indexer = startupIndexer(
+            async () => ({ lockSkipped: true }),
+            false
+        );
+
+        await startupMethods.verifyIndexerDatabase.call(indexer);
+        assert.strictEqual(indexer.schemaReady, false);
     });
 
     it('stays false when migrations fail', async function(){

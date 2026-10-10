@@ -223,6 +223,9 @@ module.exports = {
         // Create / Update DEX market information
         await this.util.processMarketUpdates(this.indexerDb, blockToParse, blockTime);
 
+        // Refresh every supply touched by this block after all ledger-writing passes.
+        await this.indexerDb.refreshTokenSuppliesForBlock(blockToParse);
+
         // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
         await this.indexerDb.sanityCheck(blockToParse);
 

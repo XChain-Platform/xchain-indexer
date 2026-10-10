@@ -72,6 +72,9 @@ function useStakeHarness(bind) {
         indexer.indexerDb.getDelegationByPubkey  = sinon.stub().resolves(null);  // pubkey not delegated
         indexer.indexerDb.createContractStake    = sinon.stub().resolves();
         indexer.indexerDb.getContractStakeOwner  = sinon.stub().resolves(null);
+        indexer.indexerDb.getStatusId             = sinon.stub().resolves(1);
+        indexer.indexerDb.getPubkeyId             = sinon.stub().resolves(null);
+        indexer.indexerDb.isSigningPubkeyUsedByContractDelegation = sinon.stub().resolves(false);
         indexer.indexerDb.getContract            = sinon.stub().resolves(null);
         indexer.indexerDb.getStatusString        = sinon.stub().resolves('valid');
 
