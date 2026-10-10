@@ -101,12 +101,16 @@ describe('Utility.processContractDelegationMaterializations() in-window gate @re
         const util = new Utility();
         const isEnabled = sinon.stub();
         isEnabled.withArgs('CONTRACT_DELEGATION_MATERIALIZE', 306).resolves(true);
+        isEnabled.withArgs('CONTRACT_DELEGATION_MATERIALIZE', 307).resolves(true);
         isEnabled.withArgs('DELEGATION_ROTATE_IN_WINDOW', 306).resolves(false);
+        isEnabled.withArgs('DELEGATION_ROTATE_IN_WINDOW', 307).resolves(true);
         const db = { materializeContractDelegations: sinon.stub().resolves([]) };
 
         await util.processContractDelegationMaterializations({ protocolChanges: { isEnabled } }, db, 306);
+        await util.processContractDelegationMaterializations({ protocolChanges: { isEnabled } }, db, 307);
 
-        assert.ok(db.materializeContractDelegations.calledOnceWithExactly(306, undefined, false));
+        assert.ok(db.materializeContractDelegations.firstCall.calledWithExactly(306, undefined, false));
+        assert.ok(db.materializeContractDelegations.secondCall.calledWithExactly(307, undefined, true));
     });
 });
 
