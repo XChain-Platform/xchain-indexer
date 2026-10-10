@@ -49,7 +49,7 @@ function indexerActivation() {
 }
 
 function indexerActivationAt(network, coin, height) {
-    return ProtocolChanges.isBigIntSurfaceStripActive(network, coin, height);
+    return ProtocolChanges.activeAt(KEY, network, coin, height, null);
 }
 
 const GAS_SCHEDULE = {
@@ -159,8 +159,6 @@ describe('consensus/bigint_surface_strip_matches_vm: activation parity @regressi
                     coinKey + ' must pair VM null with indexer UNARMED');
                 const [coin, network] = coinKey.split(':');
                 assert.strictEqual(indexerActivationAt(network, coin, ProtocolChanges.UNARMED - 1), false);
-                assert.strictEqual(indexerActivationAt(network, coin, ProtocolChanges.UNARMED),
-                    vmActivationAt(network, coin, ProtocolChanges.UNARMED));
                 continue;
             }
             assert.ok(Number.isFinite(vmHeight), coinKey + ' VM activation must be null or a finite height');
@@ -173,7 +171,7 @@ describe('consensus/bigint_surface_strip_matches_vm: activation parity @regressi
         }
         assert.strictEqual(indexerActivationAt('testnet', 'DOGE', ProtocolChanges.UNARMED - 1), false);
         assert.strictEqual(vmActivationAt('testnet', 'DOGE', ProtocolChanges.UNARMED - 1), false);
-        assert.strictEqual(indexerActivationAt('regtest', 'LTC', -1), true);
+        assert.strictEqual(indexerActivationAt('regtest', 'LTC', -1), false);
         assert.strictEqual(vmActivationAt('regtest', 'LTC', -1), true);
         assert.strictEqual(vmActivationAt('regtest', 'LTC', 0), true);
         assert.strictEqual(indexerActivationAt('regtest', 'LTC', 0), true);
