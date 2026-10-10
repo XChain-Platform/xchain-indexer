@@ -15,7 +15,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "54ba726e6d76278ba20f595e80370b0525fd053b80116f122531cf441c39acf4",
+    "armed_map_fingerprint": "d6799f069518d375a95393b8bebbeb05d07a98e4d9c177c2e45121bd81e9d03a",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY": "ef92238ca39f95442381fa7ecd0bacacafd42f06b45ebe961d7e9391d80daf7c",
@@ -128,7 +128,7 @@
       "oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION": "76a536a220d4fe3498597eba3f0df574655abf4c3952a75bb9d2ec1dbb550bdf",
       "oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION": "f5930fc31ad16a86917c871183d75d36481e9be2c7a79a3f1c5590f9f1ff8384",
       "oracle_snapshot_age_causality_activation.ORACLE_SNAPSHOT_AGE_CAUSALITY_ACTIVATION": "fb8f989f24dd5fda0b50767684e33d4e0c5a41adb8d0cfb7130fc93bf3a46207",
-      "oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION": "9f1994ae90a1eae68a1cc9c0cdfcd4b76e353ea6b1b36b5ddb19b7437a28ad3b",
+      "oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION": "95e34322344784c66ed84f586b7088d141fb9fb3167c5ce20771018edc8208c2",
       "oracle_stale_round_visibility_activation.ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION": "4a9cc3b533925547be70700d1b017d73789cdbab3189ed46deb4345c5bd655b4",
       "order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION": "de491f1800ecbafef8565ee3faa8b87707092505a441c8a970593c9025d9923d",
       "order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN": "de491f1800ecbafef8565ee3faa8b87707092505a441c8a970593c9025d9923d",
@@ -493,7 +493,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "c2c604b771b2e19835b04daa1897ae933491378a43b9be44b2c3fbbb3b760bd8",
+    "armed_map_fingerprint": "9a5bf9a997f660b6a06f8f3a9004dc0bba2e80fed06b6bec13e9ca07da85f5fa",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY": "ef92238ca39f95442381fa7ecd0bacacafd42f06b45ebe961d7e9391d80daf7c",
@@ -606,7 +606,7 @@
       "oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION": "76a536a220d4fe3498597eba3f0df574655abf4c3952a75bb9d2ec1dbb550bdf",
       "oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION": "f5930fc31ad16a86917c871183d75d36481e9be2c7a79a3f1c5590f9f1ff8384",
       "oracle_snapshot_age_causality_activation.ORACLE_SNAPSHOT_AGE_CAUSALITY_ACTIVATION": "fb8f989f24dd5fda0b50767684e33d4e0c5a41adb8d0cfb7130fc93bf3a46207",
-      "oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION": "9f1994ae90a1eae68a1cc9c0cdfcd4b76e353ea6b1b36b5ddb19b7437a28ad3b",
+      "oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION": "95e34322344784c66ed84f586b7088d141fb9fb3167c5ce20771018edc8208c2",
       "oracle_stale_round_visibility_activation.ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION": "4a9cc3b533925547be70700d1b017d73789cdbab3189ed46deb4345c5bd655b4",
       "order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION": "de491f1800ecbafef8565ee3faa8b87707092505a441c8a970593c9025d9923d",
       "order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN": "de491f1800ecbafef8565ee3faa8b87707092505a441c8a970593c9025d9923d",
