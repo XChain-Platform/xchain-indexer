@@ -68,8 +68,9 @@ module.exports = {
         }
         // Ticker ids are consensus state. Keep caller order so each MAX(id)+1 reservation
         // is inserted before the next token reads the dense counter.
+        const rebuildNow = rollback === true || (type === 'boolean' && tickers === true);
         for(const tick of tokens)
-            await this.updateTokenInfo(tick);
+            await this.updateTokenInfo(tick, rebuildNow);
     },
 
     // Mark a token's ownership as held in escrow by an ORDER/SWAP/DISPENSER action.
@@ -103,6 +104,10 @@ module.exports = {
     },
 
     ...sanityCheck,
+
+    async refreshTokenSuppliesForBlock(block_index){
+        return await sanityCheck.refreshTokenSuppliesForBlock.call(this, block_index);
+    },
 
     // Get tokens owned by a given address. Ticks whose ownership is currently
     // escrowed by an open ORDER/SWAP/DISPENSER (escrow_action_index set) are in
