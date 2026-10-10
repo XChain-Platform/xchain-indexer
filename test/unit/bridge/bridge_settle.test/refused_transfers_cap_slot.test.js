@@ -19,19 +19,26 @@
 'use strict';
 
 const assert = require('assert');
+const sinon = require('sinon');
 const PC = require('../../../../src/consensus/bridge_proof_client.js');
 const { XBRIDGE_MAX_PER_BLOCK } = require('../../../../src/protocol/constants.js');
+const { stubGate } = require('../../../helpers/gate_modules.js');
 const {
     BS, makeKey, buildProof, makeTransfer, snapshotSet, makeCtx, captureConsole
 } = require('./helpers/settle_fixtures.js');
 
 describe('bridge_settle: refused transfers and the per-block cap', function(){
+    const ROW_FIELDS_TERMINAL_KEY =
+        'bridge_row_fields_terminal_activation.BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION';
     let realBuild;
     beforeEach(function(){
         realBuild = PC.buildEscrowProof;
         PC.buildEscrowProof = async () => buildProof('100.00000000');
     });
-    afterEach(function(){ PC.buildEscrowProof = realBuild; });
+    afterEach(function(){
+        PC.buildEscrowProof = realBuild;
+        sinon.restore();
+    });
 
     function refusedRows(keys, count){
         const rows = [];
@@ -41,6 +48,7 @@ describe('bridge_settle: refused transfers and the per-block cap', function(){
     }
 
     it('settles a good row that sorts behind a full cap of quorum refusals', async function(){
+        stubGate(sinon, ROW_FIELDS_TERMINAL_KEY, false);
         const keys = [makeKey(), makeKey(), makeKey()];
         const good = makeTransfer(keys, { transfer_id: 'f'.repeat(64), src_action_index: 9000 });
         const rows = refusedRows(keys, XBRIDGE_MAX_PER_BLOCK).concat([good]);

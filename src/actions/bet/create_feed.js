@@ -30,6 +30,15 @@ module.exports = {
         if(format!=0)
             return error;
 
+        if(!error && await this.actions.protocolChanges.isEnabled('EXACT_INTEGER_WIRE_FIELDS', data['BLOCK_INDEX'])){
+            for(let field of ['DEADLINE', 'REFUND_WINDOW', 'ALLOW_LIST', 'BLOCK_LIST']){
+                if(!this.util.isNull(data[field]) && !this.util.isExactInteger(data[field])){
+                    error = 'invalid: ' + field + ' (format)';
+                    break;
+                }
+            }
+        }
+
         error = await this.validateFeedDefinition(data, tokenInfo, outcomeLabels, error);
 
         error = this.validateFeedTerms(data, tokenInfo, error);

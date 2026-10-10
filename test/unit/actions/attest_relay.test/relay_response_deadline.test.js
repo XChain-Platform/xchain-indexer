@@ -17,7 +17,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const { createBaseData } = require('../../../fixtures/mocks');
-const { v4Params, originRequestRow, setupRelay } = require('./helpers/relay_fixture.js');
+const { REQ_ID, v4Params, originRequestRow, setupRelay } = require('./helpers/relay_fixture.js');
 
 describe('ATTEST v4 relay response deadline @regression @tier1', function () {
     let indexer, handler, executeStub, deadlineGate;
@@ -28,6 +28,23 @@ describe('ATTEST v4 relay response deadline @regression @tier1', function () {
     });
 
     afterEach(function () { sinon.restore(); });
+
+    it("preserves today's pre-gate fulfilled status and callback at deadline+1", async function () {
+        deadlineGate.returns(false);
+        indexer.indexerDb.getAttestationRequestById.resolves(originRequestRow({
+            block_index: 3160000,
+            deadline_block: 3160005
+        }));
+        const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 4, BLOCK_INDEX: 3160006 });
+
+        await handler.parse(v4Params(), data, null);
+
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.deepStrictEqual(
+            indexer.indexerDb.updateAttestationRequestStatus.firstCall.args.slice(0, 2),
+            [REQ_ID, 'fulfilled']);
+        assert.strictEqual(executeStub.parse.calledOnce, true);
+    });
 
     it('accepts a response landing exactly at deadline_block', async function () {
         const deadline = 3160010;

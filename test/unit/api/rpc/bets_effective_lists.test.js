@@ -18,6 +18,7 @@ const assert = require('assert');
 
 const betsDb = require('../../../../src/db/bets/index.js');
 const { buildBetsRpc } = require('../../../../src/api/rpc/bets.js');
+const editApply = require('../../../../src/actions/bet/edit_lists_apply.js');
 const { recordingView, fakeIndexer } = require('./helpers/fake_indexer.js');
 
 function compactSql(sql){
@@ -43,6 +44,48 @@ function assertEffectiveListFold(sql){
 }
 
 describe('public BET reads expose effective list references', function(){
+    it('retags a format 4 action before storing its typed edit row', async function(){
+        const calls = [];
+        const data = { ACTION_INDEX: 91, STATUS: 'valid' };
+        const indexerDb = {
+            updateActionIndex: async (...args) => calls.push(['type', ...args]),
+            createBetEdit: async row => calls.push(['row', row])
+        };
+
+        await editApply.applyEditLists.call({ indexerDb }, data, 4);
+
+        assert.deepStrictEqual(calls, [
+            ['type', 91, 'BET_EDIT'],
+            ['row', data]
+        ]);
+    });
+
+    it('stores null inheritance and the zero detach sentinel without mutating the feed', async function(){
+        const calls = [];
+        const db = {
+            normalizeDataValues: data => data,
+            createMemo: async () => 14,
+            createStatus: async () => 15,
+            doQuery: async (...args) => {
+                calls.push(args);
+                return [];
+            }
+        };
+
+        await betsDb.createBetEdit.call(db, {
+            ACTION_INDEX: 91,
+            FEED_ACTION_INDEX: 50,
+            ALLOW_LIST: null,
+            BLOCK_LIST: 0,
+            MEMO: 'detach block list',
+            STATUS: 'valid'
+        });
+
+        assert.match(calls[1][0], /INSERT INTO bet_edits/);
+        assert.doesNotMatch(calls[1][0], /UPDATE\s+bet_feeds/);
+        assert.deepStrictEqual(calls[1][1], [50, null, 0, 14, 15, 91]);
+    });
+
     it('folds the latest valid allow and block edits into a detail row', async function(){
         const db = {
             util: { isNull: value => value === null || value === undefined },

@@ -41,11 +41,14 @@ const {
     ITER_SET_METER_TESTNET_TIME,
     DISPENSER_REFILL_MAINNET_TIME,
     DISPENSER_REFILL_TESTNET_TIME,
+    STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,
+    STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
 
 const CHANGES = [
+    ['EXACT_INTEGER_WIRE_FIELDS', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
     ['ITER_SET_METER','0.2.0', ITER_SET_METER_MAINNET_TIME,
         ITER_SET_METER_TESTNET_TIME, 0, 0, 0, 0],
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
@@ -98,6 +101,9 @@ const CHANGES = [
     ['DISPENSER_REFILL', '0.2.0', DISPENSER_REFILL_MAINNET_TIME,
         DISPENSER_REFILL_TESTNET_TIME,
         regtestTimeOverride('DISPENSER_REFILL_REGTEST_TIME'), 0, 0, 0],
+
+    ['STAKE_DELEGATED_SIGNING_KEY','0.2.0', STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,
+        STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME, 0, 0, 0, 0],
 
     // Groups sibling guards on one native-action leg under an outer savepoint.
     // It follows the custody guard on testnet, stays inert on mainnet, and is

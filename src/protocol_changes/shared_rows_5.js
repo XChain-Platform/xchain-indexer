@@ -184,6 +184,16 @@ addGate('attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLIN
     testnet: UNARMED,
     regtest: 0,
 });
+// bridge_row_fields_terminal_activation: malformed transfer rows stop consuming
+// bridge settle cap slots after the flag day.
+addGate('bridge_row_fields_terminal_activation.BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
 // list_share_producer_activation: the hub snapshot plane begins producing shared-list versions.
 addGate('list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION', 'height', {
     mainnet: UNARMED,

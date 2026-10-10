@@ -144,7 +144,7 @@ describe('reconcileAnchorRewardWinner() @regression @tier1', function () {
         assert.match(query.firstCall.args[0], /DELETE\s+vr\s+FROM\s+validator_rewards/i);
     });
 
-    it('passes a null anchor_action_index through to the log when omitted (legacy RPC push path)', async function () {
+    it('passes a null anchor_action_index through to the log when omitted', async function () {
         const db    = makeDb();
         const query = sinon.stub(db, 'doQuery').resolves({ affectedRows: 3 });
         await db.reconcileAnchorRewardWinner(306, 'anchor_archive', 900, null);

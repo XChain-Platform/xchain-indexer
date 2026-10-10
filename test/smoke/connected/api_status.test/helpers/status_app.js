@@ -149,4 +149,13 @@ function listen(indexer) {
     });
 }
 
-module.exports = { getJson, listen };
+module.exports = {
+    getJson,
+    listen,
+    stallHealthCopies: {
+        stallWedged,
+        waitingOnFutureBlock,
+        stallClassOf,
+        atProcessableTip
+    }
+};
