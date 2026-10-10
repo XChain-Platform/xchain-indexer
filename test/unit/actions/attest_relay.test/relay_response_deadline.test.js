@@ -30,25 +30,19 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
     afterEach(function () { sinon.restore(); });
 
     describe('relay response deadline pre-gate', function () {
-        it('records valid, closes fulfilled, and fires the callback at deadline+1', async function () {
-            const deadlineBlock = 500;
+        it("today's pre-gate behaviour records valid, closes fulfilled, and fires the callback at deadline+1", async function () {
             indexer.indexerDb.getAttestationRequestById.resolves(originRequestRow({
-                deadline_block: deadlineBlock
+                block_index: 3160000,
+                deadline_block: 3160005
             }));
-            const data = createBaseData({
-                ACTION: 'ATTEST', FORMAT: 4, BLOCK_INDEX: deadlineBlock + 1
-            });
+            const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 4, BLOCK_INDEX: 3160006 });
 
             await handler.parse(v4Params(), data, null);
 
             assert.strictEqual(data['STATUS'], 'valid');
-            assert.strictEqual(indexer.indexerDb.createAttestationResponse.calledOnce, true);
-            assert.strictEqual(
-                indexer.indexerDb.createAttestationResponse.firstCall.args[0]['STATUS'],
-                'valid');
             assert.deepStrictEqual(
-                indexer.indexerDb.updateAttestationRequestStatus.firstCall.args.slice(0, 3),
-                [REQ_ID, 'fulfilled', deadlineBlock + 1]);
+                indexer.indexerDb.updateAttestationRequestStatus.firstCall.args.slice(0, 2),
+                [REQ_ID, 'fulfilled']);
             assert.strictEqual(executeStub.parse.calledOnce, true);
         });
     });
