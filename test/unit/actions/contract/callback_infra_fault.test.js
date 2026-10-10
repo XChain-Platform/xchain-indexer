@@ -194,7 +194,7 @@ function registerXcallResultTests() {
 
 // ---------------- ATTEST ----------------
 function registerAttestResponseFaultTests() {
-    describe('ATTEST (attest.js)', function () {
+    describe('ATTEST (attest/response.js + attest/expire.js)', function () {
         beforeEach(setupAttest);
         it('v1 response: a VM host fault in the callback PROPAGATES (block halts)', async function () {
             sinon.stub(ed25519, 'verify').returns(true);
@@ -216,7 +216,7 @@ function registerAttestMixedTests() {
     // injected and there is no fault to propagate. These cases are the legacy
     // era's (matches attest.test.js default).
     const v2Data = () => createBaseData({ ACTION: 'ATTEST', FORMAT: 2, BLOCK_INDEX: 250, REQUEST_ID: REQ_ID, IS_SYNTHETIC: true });
-    describe('ATTEST (attest.js)', function () {
+    describe('ATTEST (attest/response.js + attest/expire.js)', function () {
         beforeEach(setupAttest);
         it('v1 response: a deterministic callback failure is still swallowed (response stands)', async function () {
             sinon.stub(ed25519, 'verify').returns(true);
@@ -244,7 +244,7 @@ function registerAttestExpiryTests() {
     // injected and there is no fault to propagate. These cases are the legacy
     // era's (matches attest.test.js default).
     const v2Data = () => createBaseData({ ACTION: 'ATTEST', FORMAT: 2, BLOCK_INDEX: 250, REQUEST_ID: REQ_ID, IS_SYNTHETIC: true });
-    describe('ATTEST (attest.js)', function () {
+    describe('ATTEST (attest/response.js + attest/expire.js)', function () {
         beforeEach(setupAttest);
         it('v2 expiry: a deterministic expiry-callback failure is still swallowed (expiry stands)', async function () {
             executeStub.parse.rejects(new Error('contract reverted'));
