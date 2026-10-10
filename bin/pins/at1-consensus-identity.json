@@ -15,7 +15,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "aa1789e2c7542ea8d181849c7ef6aaa416e1d0587bec94a2a673719f457939cd",
+    "armed_map_fingerprint": "54ba726e6d76278ba20f595e80370b0525fd053b80116f122531cf441c39acf4",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY": "ef92238ca39f95442381fa7ecd0bacacafd42f06b45ebe961d7e9391d80daf7c",
@@ -84,6 +84,7 @@
       "dispenser_give_amount_activation.DISPENSER_GIVE_AMOUNT_ACTIVATION": "3854d764b1962fb814248b9e46530d3128e066277ab25d406f43ba265128b9f9",
       "dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION": "3854d764b1962fb814248b9e46530d3128e066277ab25d406f43ba265128b9f9",
       "dispenser_ownership_cancel_activation.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION": "d83d71dc16ffc89b5716db2fa4accebe04762e2b82b5ae78c300e40695de9ba0",
+      "dispenser_refill_policy_activation.DISPENSER_REFILL_POLICY_ACTIVATION": "95e34322344784c66ed84f586b7088d141fb9fb3167c5ce20771018edc8208c2",
       "dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION": "7bc2f002584168c30d6b893e7bb5a94f712502ec2f881813a9783db6da3abf72",
       "dispenser_send_amount_compare_activation.DISPENSER_SEND_COMPARE_SCALE": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a",
       "dispenser_settlement_price_activation.DISPENSER_SETTLEMENT_PRICE_ACTIVATION": "2d08b9f6d95fcfdc9bd6b7b9a47eb14f6baa877ee4892fd6bb9fe103052d6c97",
@@ -427,7 +428,7 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 408,
+    "armed_map_row_count": 409,
     "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
     "carrier_logic_digest": "2c11db581f76c3b1a68d6d430321a06f5f25ac97bae58b2d54589ea1405bf1bf",
     "consensus_rules_digest": "ceb49c010893f8a5d8bb632536b0b3873ae4e6cc6d16b3557134c6d503c4840d",
@@ -492,7 +493,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "bf319209c6c5e5f22d8c289433cc799f0852a422c2963e7f0cebe0c889a9f6a9",
+    "armed_map_fingerprint": "c2c604b771b2e19835b04daa1897ae933491378a43b9be44b2c3fbbb3b760bd8",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY": "ef92238ca39f95442381fa7ecd0bacacafd42f06b45ebe961d7e9391d80daf7c",
@@ -561,6 +562,7 @@
       "dispenser_give_amount_activation.DISPENSER_GIVE_AMOUNT_ACTIVATION": "3854d764b1962fb814248b9e46530d3128e066277ab25d406f43ba265128b9f9",
       "dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION": "3854d764b1962fb814248b9e46530d3128e066277ab25d406f43ba265128b9f9",
       "dispenser_ownership_cancel_activation.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION": "d83d71dc16ffc89b5716db2fa4accebe04762e2b82b5ae78c300e40695de9ba0",
+      "dispenser_refill_policy_activation.DISPENSER_REFILL_POLICY_ACTIVATION": "95e34322344784c66ed84f586b7088d141fb9fb3167c5ce20771018edc8208c2",
       "dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION": "7bc2f002584168c30d6b893e7bb5a94f712502ec2f881813a9783db6da3abf72",
       "dispenser_send_amount_compare_activation.DISPENSER_SEND_COMPARE_SCALE": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a",
       "dispenser_settlement_price_activation.DISPENSER_SETTLEMENT_PRICE_ACTIVATION": "2d08b9f6d95fcfdc9bd6b7b9a47eb14f6baa877ee4892fd6bb9fe103052d6c97",
@@ -904,7 +906,7 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 408,
+    "armed_map_row_count": 409,
     "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
     "carrier_logic_digest": "2c11db581f76c3b1a68d6d430321a06f5f25ac97bae58b2d54589ea1405bf1bf",
     "consensus_rules_digest": "78f5ae7915c1a79c1da0ed59e454266a60c0e632d28d63ae6d5b358a6304decd",
