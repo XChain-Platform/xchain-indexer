@@ -14962,6 +14962,9 @@
       "attest_response_canonical: hub/indexer twin produces byte-identical canonicals to the hub copy across both eras",
       "attest_response_canonical: hub/indexer twin rejects the same spellings as the hub copy"
     ],
+    "fa331b6274442a21": [
+      "ANCHOR v3 empty fold rejection preserves today's pre-gate behaviour by accepting the unsigned empty fold"
+    ],
     "fa99b888f85b3500": [
       "Contract delegation signing key claim query @regression @tier2 reserves pending and live delegations but releases a key at its deactivation block",
       "Delegated signing key materialization slot @regression @tier2 does not rotate a governed stake when another slot holds the delegated key",
@@ -15349,8 +15352,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1246,
-      "titleCount": 12854,
+      "fileCount": 1247,
+      "titleCount": 12855,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15768,6 +15771,7 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "5278429cef8904ee",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_counter.test.js": "1c56af9b1dbd9f0c",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
+        "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "fa331b6274442a21",
         "test/unit/anchor/anchor_v3_fold_parse.test.js": "6ea2607d7bbbc413",
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
