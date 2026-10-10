@@ -6983,6 +6983,14 @@
       "Order_Match LIST trigger @regression @tier2 does not book a counterparty absent from the resting order allow list",
       "Order_Match LIST trigger @regression @tier2 matches the indexed resting order using the LIST block context"
     ],
+    "721f08577076ca3e": [
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 does not rotate a stake row at its deactivation height",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 keeps the historical selection below the flag day",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 reverts an in-window row when its delegation is no longer governing",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 rotates the visible stake row and keeps getContractStakeDataForVM aligned with cooldown stake",
+      "DELEGATION_ROTATE_IN_WINDOW protocol row @regression @tier1 ships unarmed and supports the regtest drill override",
+      "Utility.processContractDelegationMaterializations() in-window gate @regression @tier1 passes the new flag decision to the database sweep"
+    ],
     "72a0b56687489fbe": [
       "hourly price age flips VM execution at its action block gate",
       "hourly price age flips a controller guard verdict at its host action block gate",
@@ -15310,8 +15318,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1241,
-      "titleCount": 12825,
+      "fileCount": 1242,
+      "titleCount": 12831,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15980,6 +15988,7 @@
         "test/unit/contracts/controller_guard_returnvalue.test.js": "1734825922f9caa5",
         "test/unit/contracts/controller_policy_layer.test.js": "8fabcde2ac147e88",
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
+        "test/unit/contracts/delegate_rotation_unstake_window.test.js": "721f08577076ca3e",
         "test/unit/contracts/emission_bounds_vm_parity.test.js": "275cd1720c6c0c1f",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
