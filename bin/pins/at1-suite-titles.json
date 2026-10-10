@@ -3263,6 +3263,17 @@
       "indexer failure-leg diagnostics @regression XCALL_REJECTED clearing a refusal emits nothing: only the failure leg is an event",
       "indexer failure-leg diagnostics @regression isAnchorFailureStatus treats only the invalid verdicts as failures"
     ],
+    "3dd973dfca38d28f": [
+      "Dispenser refill token policy @regression @tier2 armed keeps the not-owner verdict ahead of the token policy",
+      "Dispenser refill token policy @regression @tier2 armed leaves an edit that adds no escrow alone, sleeping token or not",
+      "Dispenser refill token policy @regression @tier2 armed reads the row by height at the edit block, on the handler network and coin",
+      "Dispenser refill token policy @regression @tier2 armed reads the tick from the dispenser row at the edit block",
+      "Dispenser refill token policy @regression @tier2 armed refuses a refill from a SOURCE the give token lists out and escrows nothing",
+      "Dispenser refill token policy @regression @tier2 armed refuses a refill while the give token sleeps and escrows nothing",
+      "Dispenser refill token policy @regression @tier2 below the height settles a refill from a listed-out SOURCE and makes neither policy read",
+      "Dispenser refill token policy @regression @tier2 below the height settles a refill of a sleeping token and makes neither policy read",
+      "Dispenser refill token policy @regression @tier2 the row is unarmed on mainnet and on every testnet coin, and active from regtest genesis"
+    ],
     "3df297a740e13cca": [
       "HubDbSync pre-batch era floor @regression @tier1 does not let a pre-era block trip the bounded-mirror re-floor",
       "HubDbSync pre-batch era floor @regression @tier1 fails CLOSED without a usable block time, even with the floor armed",
@@ -15399,8 +15410,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1252,
-      "titleCount": 12892,
+      "fileCount": 1253,
+      "titleCount": 12901,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15596,6 +15607,7 @@
         "test/unit/actions/market/dispenser.test/freshness_proven_use.test.js": "14b50ce921f14971",
         "test/unit/actions/market/dispenser.test/oracle_fee.test.js": "13bc3a94cecac346",
         "test/unit/actions/market/dispenser.test/refill_guard.test.js": "438bc819233a1f98",
+        "test/unit/actions/market/dispenser.test/refill_token_policy.test.js": "3dd973dfca38d28f",
         "test/unit/actions/market/dispenser_amount_positivity.test.js": "ecf9f101aa70270a",
         "test/unit/actions/market/dispenser_amount_positivity.test/settlement.test.js": "af47dfc14d6003c2",
         "test/unit/actions/market/dispenser_close.test.js": "d44cf9f8cf86cabc",
