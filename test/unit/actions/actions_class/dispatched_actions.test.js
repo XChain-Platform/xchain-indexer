@@ -70,7 +70,7 @@ describe('dispatched-only ACTION admission @regression @tier1', function(){
         assert.strictEqual(actionsCtx.processAction.callCount, 0);
     });
 
-    it('invalidates a whole BATCH containing an empty action once active', async function(){
+    it('preserves the legacy empty-action no-op in a BATCH once active', async function(){
         const { indexer, actionsCtx, handler } = createBatchHarness();
         const data = createBaseData({
             ACTION: 'BATCH', FORMAT: 0, SOURCE,
@@ -78,8 +78,10 @@ describe('dispatched-only ACTION admission @regression @tier1', function(){
         });
         indexer.indexerDb.isActionAllowed.resolves(true);
         await handler.parse(['0'], data, null);
-        assert.strictEqual(data.STATUS, 'invalid: ACTION (unknown)');
-        assert.strictEqual(actionsCtx.processAction.callCount, 0);
+        assert.strictEqual(data.STATUS, 'valid');
+        assert.strictEqual(actionsCtx.processAction.callCount, 2);
+        assert.strictEqual(actionsCtx.processAction.firstCall.args[0], '');
+        assert.strictEqual(actionsCtx.processAction.secondCall.args[0], 'SEND');
     });
 
     it('preserves BATCH admission below the gate', async function(){

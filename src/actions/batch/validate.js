@@ -106,8 +106,8 @@ function readCommands(data, error){
 // first PINS error precedence: a batch that breaks this rule and others reports
 // the cap, never the rule a later loop would have found. Counting semantics are
 // consensus-pinned: the raw ';'-split list AFTER the BATCH|<version>| prefix
-// strip, EMPTY elements included (an empty element already whole-batch-rejects
-// via the activation scan, so charging it a slot is consistent). Over-limit
+// strip, EMPTY elements included (an empty element keeps its legacy no-op
+// dispatch, so charging it a slot is still consistent). Over-limit
 // takes the existing whole-batch shape: one invalid record, no sub-command runs.
 //
 // BATCH_COST_WEIGHTING replaces the count with a WEIGHT BUDGET in this same position,
@@ -186,7 +186,7 @@ async function activationError(commands, data, error, normalize, dispatchedOnly)
         if(normalize)
             action = this.normalizeSubAction(action);
         // Verify this sub-command's action is currently enabled on the network
-        if(!error && dispatchedOnly && !DISPATCHED_ACTIONS.has(action))
+        if(!error && dispatchedOnly && action && !DISPATCHED_ACTIONS.has(action))
             error = 'invalid: ACTION (unknown)';
         else if(!error && await this.protocolChanges.isEnabled(action, data['BLOCK_INDEX']) == false)
             error = 'invalid: ACTION (unknown)';
