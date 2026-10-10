@@ -6,7 +6,7 @@ const {
     listShareLegTx,
 } = require('../../../src/consensus/list_share_settle/legs.js');
 
-describe('list share legs', function () {
+function registerCreateAndCombinedDeltaTests() {
     it('plans the version 1 create leg', function () {
         assert.deepStrictEqual(planListShareLegs({
             seq: 1,
@@ -35,7 +35,9 @@ describe('list share legs', function () {
             ordinal: 1,
         }]);
     });
+}
 
+function registerSingleSidedDeltaTests() {
     it('plans a removal-only delta', function () {
         assert.deepStrictEqual(planListShareLegs({
             seq: 2,
@@ -71,7 +73,9 @@ describe('list share legs', function () {
             mirrorIndex: 77,
         }), []);
     });
+}
 
+function registerValidationTests() {
     it('rejects a non-array added value', function () {
         assert.throws(() => planListShareLegs({
             seq: 1, listType: 2, added: 'alice', removed: [], mirrorIndex: null,
@@ -99,7 +103,9 @@ describe('list share legs', function () {
             }), TypeError);
         }
     });
+}
 
+function registerTransactionTests() {
     it('builds the synthetic transaction shape', function () {
         const snapshotId = 'f'.repeat(64);
         const leg = {
@@ -127,4 +133,11 @@ describe('list share legs', function () {
             tx_outputs:    [],
         });
     });
+}
+
+describe('list share legs', function () {
+    registerCreateAndCombinedDeltaTests();
+    registerSingleSidedDeltaTests();
+    registerValidationTests();
+    registerTransactionTests();
 });
