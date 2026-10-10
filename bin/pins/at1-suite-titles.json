@@ -8626,6 +8626,14 @@
       "recovery v3 fold wrapper section lookup picks the sibling chain section whose signatures equal the head",
       "recovery v3 fold wrapper section lookup rejects a head with no matching wrapper section"
     ],
+    "8eef9eb4827f4e83": [
+      "cooldown maturity escrow release reversal @regression @tier3 deletes each legacy refund credit together with its paired negative escrow release",
+      "cooldown maturity escrow release reversal @regression @tier3 keeps both escrow releases and still deletes the credits and resets the status when the delete is off",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback at an active height deletes both releases so the re-maturity writes the only one",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback on an unarmed network keeps the escrow releases and reverses everything else as before",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 the row is unarmed on mainnet and every testnet chain and active from regtest genesis",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 the switch is read at the rollback target block, for this network and coin"
+    ],
     "8f02c7885f4b9349": [
       "touch guards env routing @regression has no process.env read of its own; the config home does the read",
       "touch guards env routing @regression re-reads INDEXER_TOUCH_GUARD on every call, so a flip on a running node takes effect",
@@ -11313,9 +11321,6 @@
       "push_generation stamping on hub-pinned federation reads (item 2367) @regression getopencrosschainorders reads the source-chain push generation",
       "push_generation stamping on hub-pinned federation reads (item 2367) @regression getpendingcrosschaincalls reads the generation BEFORE the rows (HUB-RETRACT-1 ordering)",
       "push_generation stamping on hub-pinned federation reads (item 2367) @regression getpendingcrosschaincalls reads the source-chain push generation"
-    ],
-    "b7bafbd9ea645940": [
-      "cooldown maturity escrow release reversal @regression @tier3 deletes each legacy refund credit together with its paired negative escrow release"
     ],
     "b803fe70b3727ead": [
       "AnchorRecovery (full-parse recovery) @regression @tier2 a junk ORPHAN chunk from an outsider never enters the reassembly (#3075)",
@@ -15395,7 +15400,7 @@
   "scripts": {
     "test": {
       "fileCount": 1252,
-      "titleCount": 12887,
+      "titleCount": 12892,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16545,7 +16550,7 @@
         "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "78664d20d86a7a0f",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
         "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
-        "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "b7bafbd9ea645940",
+        "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "8eef9eb4827f4e83",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
         "test/unit/rollback/rollback.test/transaction_and_rearm.test.js": "294f6ca3123cda7e",
         "test/unit/rollback/rollback_archive_author_scope.test.js": "d02af0af67a03e53",
