@@ -204,6 +204,9 @@ const TABLES = [
     // them, so they are action-derived for hashing like the other BET projections.
     { table: 'bet_cancels',       owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'bet_resolves',      owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
+    // Format 4 list edits are append-only action rows. Deleting an orphan row
+    // makes effective-list resolution fall back to the preceding valid edit.
+    { table: 'bet_edits',         owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'votes', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',
       hashed: DERIVED,
       note: 'Append-only: a re-vote inserts a new action_index set and tallies read each voter\'s MAX(action_index) set, so the generic delete re-exposes the prior surviving ballot on reorg.' },
