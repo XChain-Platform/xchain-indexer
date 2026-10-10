@@ -23,16 +23,18 @@ const MAINNET_DEFAULTS = Array.from({ length: 5 }, (_, i) =>
 const TESTNET_DEFAULTS = Array.from({ length: 5 }, (_, i) =>
     'http://validator' + String(i + 1).padStart(2, '0') + '.xchain.io:10002');
 
+function seededSelector(seeds) {
+    return createHubSelector('testnet', {
+        hubSeedUrls: seeds,
+        hubApiUrl: '',
+        randomInt: (max) => max - 1
+    });
+}
+
 function defineDefaultTests() {
     it('expands the built-in validators for each public network', function () {
-        let mainnet = createHubSelector('mainnet', {
-            hubSeedUrls: 'default',
-            randomInt: (max) => max - 1
-        });
-        let testnet = createHubSelector('testnet', {
-            hubSeedUrls: 'default',
-            randomInt: (max) => max - 1
-        });
+        let mainnet = createHubSelector('mainnet', { hubSeedUrls: 'default', randomInt: (max) => max - 1 });
+        let testnet = createHubSelector('testnet', { hubSeedUrls: 'default', randomInt: (max) => max - 1 });
 
         assert.deepStrictEqual(mainnet.status().candidates, MAINNET_DEFAULTS);
         assert.deepStrictEqual(testnet.status().candidates, TESTNET_DEFAULTS);
@@ -47,10 +49,7 @@ function defineDefaultTests() {
 
     it('uses crypto.randomInt to avoid always following the first configured seed', function () {
         let calls = 0;
-        crypto.randomInt = () => {
-            calls++;
-            return 0;
-        };
+        crypto.randomInt = () => { calls++; return 0; };
         let selector = createHubSelector('testnet', {
             hubSeedUrls: 'http://one.test:10002,http://two.test:10002,http://three.test:10002'
         });
@@ -64,9 +63,7 @@ function defineMergeTests() {
     it('keeps a lone HUB_API_URL pinned even after merge and advance', function () {
         let changes = [];
         let selector = createHubSelector('testnet', {
-            hubSeedUrls: '',
-            hubApiUrl: 'https://pinned.test:8443/',
-            randomInt: (max) => max - 1
+            hubSeedUrls: '', hubApiUrl: 'https://pinned.test:8443/', randomInt: (max) => max - 1
         });
         selector.onChange((...args) => changes.push(args));
 
@@ -94,8 +91,7 @@ function defineMergeTests() {
 
     it('deduplicates seeds and merge remains additive without moving the current hub', function () {
         let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://seed-a.test:10002/, default, http://seed-a.test:10002',
-            randomInt: (max) => max - 1
+            hubSeedUrls: 'http://seed-a.test:10002/, default, http://seed-a.test:10002', randomInt: (max) => max - 1
         });
         let original = selector.status();
 
@@ -120,9 +116,7 @@ function defineAdvanceTests() {
             randomInt: (max) => max - 1
         });
         let events = [];
-        let unsubscribe = selector.onChange((next, previous, reason) => {
-            events.push({ next, previous, reason });
-        });
+        let unsubscribe = selector.onChange((next, previous, reason) => events.push({ next, previous, reason }));
         let order = selector.status().candidates;
 
         assert.strictEqual(selector.advance('first'), order[1]);
@@ -136,11 +130,7 @@ function defineAdvanceTests() {
     });
 
     it('does not advance a dynamic selector until it has multiple candidates', function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://only.test:10002',
-            hubApiUrl: '',
-            randomInt: (max) => max - 1
-        });
+        let selector = seededSelector('http://only.test:10002');
         let changes = 0;
         selector.onChange(() => changes++);
 
@@ -155,16 +145,10 @@ function defineAdvanceTests() {
 function defineEnvTests() {
     it('reads HUB_SEED_URLS and HUB_API_URL through the supplied accessor', function () {
         let reads = [];
-        let values = {
-            HUB_SEED_URLS: 'http://from-env.test:10002',
-            HUB_API_URL: 'http://ignored-pin.test:10002'
-        };
+        let values = { HUB_SEED_URLS: 'http://from-env.test:10002', HUB_API_URL: 'http://ignored-pin.test:10002' };
         let selector = createHubSelector({
             network: 'testnet',
-            readEnvNow(key) {
-                reads.push(key);
-                return values[key];
-            },
+            readEnvNow(key) { reads.push(key); return values[key]; },
             randomInt: (max) => max - 1
         });
 
@@ -175,11 +159,8 @@ function defineEnvTests() {
 
     it('does not read environment keys supplied as arguments', function () {
         let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://argument.test:10002',
-            hubApiUrl: '',
-            readEnvNow() {
-                throw new Error('unexpected environment read');
-            },
+            hubSeedUrls: 'http://argument.test:10002', hubApiUrl: '',
+            readEnvNow() { throw new Error('unexpected environment read'); },
             randomInt: (max) => max - 1
         });
 
@@ -189,11 +170,7 @@ function defineEnvTests() {
 
 function defineClientTests() {
     it('enables a hub client from a selector candidate when only seeds are configured', function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://seed.test:10002',
-            hubApiUrl: '',
-            randomInt: (max) => max - 1
-        });
+        let selector = seededSelector('http://seed.test:10002');
         let client = new HubClient('', 'key', '', '');
 
         client.setAddressSource(() => selector.current());
@@ -204,11 +181,7 @@ function defineClientTests() {
     });
 
     it('keeps the config address fixed while the selected feed address moves', function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://feed-a.test:10002,http://feed-b.test:10002',
-            hubApiUrl: '',
-            randomInt: (max) => max - 1
-        });
+        let selector = seededSelector('http://feed-a.test:10002,http://feed-b.test:10002');
         let client = new HubClient('', 'feed-key', 'http://config.test:10000', 'config-key');
         client.setAddressSource(() => selector.current());
 
@@ -221,11 +194,7 @@ function defineClientTests() {
 
 function defineDrainTests() {
     it('aborts an in-flight mirror drain when the selector changes', async function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://hub-a.test:10002,http://hub-b.test:10002',
-            hubApiUrl: '',
-            randomInt: (max) => max - 1
-        });
+        let selector = seededSelector('http://hub-a.test:10002,http://hub-b.test:10002');
         let sync = new HubDbSync({ doQuery: async () => [] }, { selector });
         assert.strictEqual(sync.enabled, true);
         sync.captureConnectionAddress();
@@ -249,11 +218,7 @@ function defineDrainTests() {
     });
 
     it('stops paging a table when the selector changes during a request', async function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://hub-a.test:10002,http://hub-b.test:10002',
-            hubApiUrl: '',
-            randomInt: (max) => max - 1
-        });
+        let selector = seededSelector('http://hub-a.test:10002,http://hub-b.test:10002');
         let sync = new HubDbSync({ doQuery: async () => [] }, { selector });
         let applied = 0;
         sync.httpGet = async () => {
@@ -328,10 +293,7 @@ function defineLearnEdgeTests() {
     });
 
     it('does not learn hub lists in pinned mode', function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: '',
-            hubApiUrl: 'http://pinned.test:10002'
-        });
+        let selector = createHubSelector('testnet', { hubSeedUrls: '', hubApiUrl: 'http://pinned.test:10002' });
         let sync = new HubDbSync({ doQuery: async () => [] }, { selector });
         let fetchHubList = sinon.stub(sync, 'fetchHubList');
         assert.strictEqual(sync.certifyFullDrain([100], sync._wsEpoch), true);
@@ -377,11 +339,7 @@ async function reconnectWebSocket(sync) {
 }
 
 async function runEpochScenario(first, second, state) {
-    let selector = createHubSelector('testnet', {
-        hubSeedUrls: first.url + ',' + second.url,
-        hubApiUrl: '',
-        randomInt: (max) => max - 1
-    });
+    let selector = seededSelector(first.url + ',' + second.url);
     let sync = state.sync = new HubDbSync({ doQuery: async () => [] }, { selector });
     sync.running = true;
 
