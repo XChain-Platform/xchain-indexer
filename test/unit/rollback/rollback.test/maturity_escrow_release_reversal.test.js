@@ -22,8 +22,8 @@ describe('cooldown maturity escrow release reversal @regression @tier3', functio
         await maturitySql.reverseMaturedRefunds(db, 'XCHAIN', 7, 3, 100);
 
         const calls = db.doQuery.getCalls();
-        const capEscrowDel = calls.find(c => /DELETE e FROM escrows e/.test(c.args[0]) && /JOIN unstakes u/.test(c.args[0]));
-        const conEscrowDel = calls.find(c => /DELETE e FROM escrows e/.test(c.args[0]) && /JOIN contract_unstakes cu/.test(c.args[0]));
+        const capEscrowDel = calls.find(c => /DELETE e FROM escrows AS e/.test(c.args[0]) && /JOIN unstakes u/.test(c.args[0]));
+        const conEscrowDel = calls.find(c => /DELETE e FROM escrows AS e/.test(c.args[0]) && /JOIN contract_unstakes cu/.test(c.args[0]));
         assert.ok(capEscrowDel, 'expected the capability maturity escrow release to be deleted');
         assert.ok(conEscrowDel, 'expected the contract maturity escrow release to be deleted');
         assert.match(capEscrowDel.args[0], /u\.action_index = e\.action_index AND u\.source_id = e\.address_id/);
