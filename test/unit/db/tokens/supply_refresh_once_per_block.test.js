@@ -44,20 +44,52 @@ function tokenHarness(){
 describe('block-scoped token supply refresh @unit @regression @tier1', function () {
     it('runs once after market updates and before the sanity check', async function () {
         const calls = [];
+        const updates = [];
+        const indexerDb = {
+            util: {
+                isNull: value => value === null || value === undefined || value === '',
+                bcsub: (left, right) => String(Number(left) - Number(right)),
+                bcadd: (left, right, decimals) => (Number(left) + Number(right)).toFixed(decimals),
+            },
+            async createBlock(){
+                calls.push('block');
+                return ['ledger', 'actions', 'contracts'];
+            },
+            async doQuery(query, params){
+                if(query.includes('DISTINCT(x.tick_id)')){
+                    calls.push('refresh:touched');
+                    assert.deepStrictEqual(params, [501, 501, 501]);
+                    return [{ tick_id: 7, tick: 'ALPHA', decimals: 2 }];
+                }
+                if(query.includes('FROM credits m')){
+                    calls.push('refresh:credits');
+                    return [{ tick_id: 7, s: '15' }];
+                }
+                if(query.includes('FROM debits m')){
+                    calls.push('refresh:debits');
+                    return [{ tick_id: 7, s: '4' }];
+                }
+                if(query.includes('FROM escrows m')){
+                    calls.push('refresh:escrows');
+                    return [{ tick_id: 7, s: '2' }];
+                }
+                if(query === 'UPDATE tokens SET supply=? WHERE tick_id=?'){
+                    calls.push('refresh:update');
+                    updates.push(params);
+                    return { affectedRows: 1 };
+                }
+                assert.fail('Unexpected query: ' + query);
+            },
+            async sanityCheck(block){ calls.push('sanity:' + block); },
+        };
+        indexerDb.refreshTokenSuppliesForBlock = tokenQueries.refreshTokenSuppliesForBlock;
         const indexer = {
             actions: {},
             config: {},
             util: {
                 async processMarketUpdates(){ calls.push('markets'); },
             },
-            indexerDb: {
-                async createBlock(){
-                    calls.push('block');
-                    return ['ledger', 'actions', 'contracts'];
-                },
-                async refreshTokenSuppliesForBlock(block){ calls.push('refresh:' + block); },
-                async sanityCheck(block){ calls.push('sanity:' + block); },
-            },
+            indexerDb,
         };
 
         const result = await blockPasses.finalizeBlock.call(indexer, {
@@ -67,7 +99,17 @@ describe('block-scoped token supply refresh @unit @regression @tier1', function 
         }, false);
 
         assert.deepStrictEqual(result, ['ledger', 'actions', 'contracts']);
-        assert.deepStrictEqual(calls, ['block', 'markets', 'refresh:501', 'sanity:501']);
+        assert.deepStrictEqual(calls, [
+            'block',
+            'markets',
+            'refresh:touched',
+            'refresh:credits',
+            'refresh:debits',
+            'refresh:escrows',
+            'refresh:update',
+            'sanity:501',
+        ]);
+        assert.deepStrictEqual(updates, [['13.00', 7]]);
     });
 
     it('does not reconstruct full supply during ordinary forward updates', async function () {
