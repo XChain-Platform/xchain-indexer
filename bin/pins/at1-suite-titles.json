@@ -3493,6 +3493,9 @@
       "cross-chain settlement per-block cap getEffectiveUnsettledMatches returns at most the cap, as the ordered prefix",
       "cross-chain settlement per-block cap processCrossChainSettlements passes the protocol cap and carries the overflow forward"
     ],
+    "4294555ce1d8a39a": [
+      "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 relay response deadline pre-gate today's pre-gate behaviour records valid, closes fulfilled, and fires the callback at deadline+1"
+    ],
     "42ad51cf8687bdd1": [
       "HubPushQueue per-hub fan-out delivers one queued row to both selector candidates",
       "HubPushQueue per-hub fan-out keeps only the down hub delivery pending after the other hub acknowledges",
@@ -10725,9 +10728,6 @@
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: two MINTs of the SAME tick \u2192 invalid: MINT (limit)",
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: unresolvable ticks share ONE bucket, so two of them reject"
     ],
-    "ac5bf89bceed3327": [
-      "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 relay response deadline pre-gate records valid, closes fulfilled, and fires the callback at deadline+1"
-    ],
     "ac781e9d77a4b277": [
       "migration live-schema MODIFY guard @regression @tier1 does not read a keyword inside a string literal as an attribute",
       "migration live-schema MODIFY guard @regression @tier1 finds each MODIFY clause, ignoring FIRST/AFTER and other clauses",
@@ -14971,6 +14971,9 @@
       "attest_response_canonical: hub/indexer twin produces byte-identical canonicals to the hub copy across both eras",
       "attest_response_canonical: hub/indexer twin rejects the same spellings as the hub copy"
     ],
+    "fa331b6274442a21": [
+      "ANCHOR v3 empty fold rejection preserves today's pre-gate behaviour by accepting the unsigned empty fold"
+    ],
     "fa99b888f85b3500": [
       "Contract delegation signing key claim query @regression @tier2 reserves pending and live delegations but releases a key at its deactivation block",
       "Delegated signing key materialization slot @regression @tier2 does not rotate a governed stake when another slot holds the delegated key",
@@ -15358,8 +15361,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1247,
-      "titleCount": 12858,
+      "fileCount": 1248,
+      "titleCount": 12859,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15453,7 +15456,7 @@
         "test/unit/actions/attest_relay.test/relay_canonicals.test.js": "d3c72ac176cde46a",
         "test/unit/actions/attest_relay.test/relay_request.test.js": "5e848392b2703195",
         "test/unit/actions/attest_relay.test/relay_response.test.js": "a3b18fb1d683293a",
-        "test/unit/actions/attest_relay.test/relay_response_deadline.test.js": "ac5bf89bceed3327",
+        "test/unit/actions/attest_relay.test/relay_response_deadline.test.js": "4294555ce1d8a39a",
         "test/unit/actions/attest_responsible_set_vectors.test.js": "6ee9ec17dc5d367c",
         "test/unit/actions/batch/mint_cap.test.js": "1e74889cf67f01b5",
         "test/unit/actions/batch_execute_attest.test.js": "56d2189dafc1f3bf",
@@ -15778,6 +15781,7 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "5278429cef8904ee",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_counter.test.js": "1c56af9b1dbd9f0c",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
+        "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "fa331b6274442a21",
         "test/unit/anchor/anchor_v3_fold_parse.test.js": "6ea2607d7bbbc413",
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
