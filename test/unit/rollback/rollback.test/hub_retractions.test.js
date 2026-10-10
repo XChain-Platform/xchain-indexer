@@ -131,7 +131,7 @@ describe('Rollback @regression @tier3', function () {
         const payload = idx.indexerDb.enqueueHubPushTx.getCalls().find(c => c.args[0] === 'price_retraction').args[1];
         assert.strictEqual(payload.action_index, 50);
         assert.strictEqual(payload.last_action_index, 75, 'durable write-ahead retraction must carry the closed-range ceiling');
-        // The durable payload also carries the pre-bump generation fence (item 5308); the mock bump
+        // The durable payload also carries the pre-bump generation fence; the mock bump
         // returns 1, so the pre-bump value is 0.
         assert.strictEqual(payload.retraction_generation, 0, 'durable write-ahead retraction must carry the generation fence');
     });
@@ -162,14 +162,14 @@ describe('Rollback @regression @tier3', function () {
         idx.indexerDb.doQuery.resolves([]);
         await rb.rollback(100);
         // Live call passes (coin, from, null, retractionGeneration): the ceiling is intentionally
-        // omitted (open-ended), but the generation fence (item 5308) IS threaded. The mock bump
+        // omitted (open-ended), but the generation fence IS threaded. The mock bump
         // returns 1, so the pre-bump retraction generation is 0.
         assert.strictEqual(hubClient.retractPriceRange.firstCall.args[1], 50);
         assert.strictEqual(hubClient.retractPriceRange.firstCall.args[2], null, 'no closed-range ceiling on the live retraction');
         assert.strictEqual(hubClient.retractPriceRange.firstCall.args[3], 0, 'pre-bump generation threaded as the fence');
     });
 
-    it('bumps the push generation once at rollback start and threads the PRE-bump value (item 5308)', async function () {
+    it('bumps the push generation once at rollback start and threads the PRE-bump value', async function () {
         const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves(), retractBridgeRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
