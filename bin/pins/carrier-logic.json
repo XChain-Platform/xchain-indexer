@@ -137,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "5065e82c2fc425cf9a3e667c0b0f1ac3abd41144c46a491f12a826c55eec1e6e",
+      "hash": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
       "twins": [],
       "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
@@ -2097,6 +2097,13 @@
       "from": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
       "to": "5065e82c2fc425cf9a3e667c0b0f1ac3abd41144c46a491f12a826c55eec1e6e",
       "reason": "VM lint destructure activation row",
+      "date": "2026-10-10"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "5065e82c2fc425cf9a3e667c0b0f1ac3abd41144c46a491f12a826c55eec1e6e",
+      "to": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
+      "reason": "fold constant rows into the fifth gate part",
       "date": "2026-10-10"
     }
   ]

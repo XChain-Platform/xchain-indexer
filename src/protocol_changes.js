@@ -40,7 +40,6 @@ require('./protocol_changes/gates_2.js');
 require('./protocol_changes/gates_3.js');
 require('./protocol_changes/gates_4.js');
 require('./protocol_changes/gates_5.js');
-require('./protocol_changes/gates_flag_times.js');
 const {
     VM_BANNED_ASYNC_MAINNET_TIME,
     NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,
