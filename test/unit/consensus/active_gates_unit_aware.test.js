@@ -25,6 +25,18 @@ describe('consensus rules digest activeGatesAt unit filtering', function () {
         assert.ok(!activeGatesAt(Number.MAX_SAFE_INTEGER, 'regtest').includes(key));
     });
 
+    it('returns only activation-unit rows for every supported network and coin lookup', function () {
+        const activationUnits = new Set(['height', 'time', 'epoch']);
+        for (const network of ['mainnet', 'testnet', 'regtest']) {
+            for (const coin of [undefined, 'BTC', 'LTC', 'DOGE']) {
+                for (const key of activeGatesAt(Number.MAX_SAFE_INTEGER, network, coin)) {
+                    const unit = registry.registry.unitOf(key);
+                    assert.ok(activationUnits.has(unit), key + ' has non-activation unit ' + unit);
+                }
+            }
+        }
+    });
+
     it('keeps height, time and epoch activation rows eligible', function () {
         const cases = [
             ['price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION', 'time'],
