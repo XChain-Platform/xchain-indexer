@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * The registry's own constants as rows: the 34 flag-day instants the
+ * The registry's own constants as rows: the 36 flag-day instants the
  * time-table parts share and the compiled consensus-version pin, under the
  * `protocol_changes.<NAME>` keys the entry has always exported them by. The
  * values stay declared in flag_times.js, flag_times_batch_fees.js and
@@ -56,6 +56,8 @@ const {
     ITER_SET_METER_TESTNET_TIME,
     DISPENSER_REFILL_MAINNET_TIME,
     DISPENSER_REFILL_TESTNET_TIME,
+    STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,
+    STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME,
 } = require('./flag_times.js');
 const {
     BATCH_ISSUANCE_LIMITS_MAINNET_TIME,
@@ -101,3 +103,5 @@ addGate('protocol_changes.ITER_SET_METER_MAINNET_TIME', 'constant', ITER_SET_MET
 addGate('protocol_changes.ITER_SET_METER_TESTNET_TIME', 'constant', ITER_SET_METER_TESTNET_TIME);
 addGate('protocol_changes.DISPENSER_REFILL_MAINNET_TIME', 'constant', DISPENSER_REFILL_MAINNET_TIME);
 addGate('protocol_changes.DISPENSER_REFILL_TESTNET_TIME', 'constant', DISPENSER_REFILL_TESTNET_TIME);
+addGate('protocol_changes.STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME', 'constant', STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME);
+addGate('protocol_changes.STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME', 'constant', STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME);

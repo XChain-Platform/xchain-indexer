@@ -207,7 +207,10 @@ describe('attest_responsible_widening: the V2 ladder (zero-conf armed, D27, D28)
 
 describe('attest_responsible_widening: hub/indexer twin', function () {
 
-    const HUB_COPY = path.resolve(__dirname, '../../../../xchain-hub/src/consensus/gates/attest_responsible_widening_gate.js');
+    const HUB_COPY = path.join(process.env.XCHAIN_HUB_DIR
+        ? path.resolve(process.env.XCHAIN_HUB_DIR)
+        : path.resolve(__dirname, '../../../../xchain-hub'),
+        'src', 'consensus', 'gates', 'attest_responsible_widening_gate.js');
 
     // Skips green when the sibling checkout is absent, matching the house convention in
     // activation_constants_parity.test.js; CI sets XCHAIN_REQUIRE_SIBLINGS=1 to make it hard.

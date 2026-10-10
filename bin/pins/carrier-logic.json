@@ -137,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "95dd2e0aebce9beff41c3254835a4fc412732c4b7bbdfafc38ee3190a07b900f",
+      "hash": "c9db9d1e1674d8ff27777522a7c68b5280c39c7c0d8d31eaf418d16a4e0317ec",
       "twins": []
     },
     "rollcall_activation": {
@@ -2073,9 +2073,16 @@
     {
       "id": "protocol_changes",
       "from": "4bf3fd9ee0f13631ff8ba31ee0f55ece0ea97499d6092cb4eaa8c3a3ddcd6775",
-      "to": "95dd2e0aebce9beff41c3254835a4fc412732c4b7bbdfafc38ee3190a07b900f",
-      "reason": "load the fifth indexer gate registry part",
+      "to": "56bcc99834e44db67b997941a74b94f641a47a0a8e1abcd2f84ffd52031c11ef",
+      "reason": "merge delegated signing key with current registry rows",
       "date": "2026-10-09"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "56bcc99834e44db67b997941a74b94f641a47a0a8e1abcd2f84ffd52031c11ef",
+      "to": "c9db9d1e1674d8ff27777522a7c68b5280c39c7c0d8d31eaf418d16a4e0317ec",
+      "reason": "merge fifth gate part with delegated signing registry",
+      "date": "2026-10-10"
     }
   ]
 }

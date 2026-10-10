@@ -61,7 +61,7 @@ DEP_FILES="consensus/gates/price_batching_floor_gate.js consensus/gates/mirror_a
 # What DEP_FILES require, relative to the consumer's src/: present or the modules
 # cannot load (see the header).
 REGISTRY_ENTRY="consensus/gate_registry.js"
-SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql bridge_transfers.sql policy_snapshots.sql list_snapshots.sql"
+SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql bridge_transfers.sql policy_snapshots.sql list_snapshots.sql remote_token_snapshots.sql"
 SERVICES="xchain-explorer"
 
 CHECK=0
