@@ -38,7 +38,7 @@ const plan = (lists, extra = {}) => planDueVersions({
     ...extra
 });
 
-describe('shared-list due planning and membership steps @regression @tier1', function(){
+function registerPlanningTests(){
     it('matches every authoritative members-hash vector', function(){
         for(const vector of vectors.membersHash)
             assert.strictEqual(listMembershipHash(vector.members), vector.expected, vector.name);
@@ -89,7 +89,9 @@ describe('shared-list due planning and membership steps @regression @tier1', fun
             halt: { reason: 'SEQ_GAP', home_chain: 'LTC', home_list_index: 1, seq: 1 }
         });
     });
+}
 
+function registerVersionOneTests(){
     it('builds version 1 only when no mirror membership exists', function(){
         const full = vectors.canonicals.find(vector => vector.seq === 1);
         const transport = {
@@ -132,7 +134,9 @@ describe('shared-list due planning and membership steps @regression @tier1', fun
             members_hash: listMembershipHash([])
         }), { halt: 'MEMBERS_HASH' });
     });
+}
 
+function registerDeltaTests(){
     it('removes and adds members in canonical byte order', function(){
         const vector = vectors.deltas.find(item => item.name === 'remove and add in one version');
         const result = nextMembership(vector.prev, {
@@ -184,4 +188,10 @@ describe('shared-list due planning and membership steps @regression @tier1', fun
         });
         assert.deepStrictEqual(result, { halt: 'MEMBERS_HASH' });
     });
+}
+
+describe('shared-list due planning and membership steps @regression @tier1', function(){
+    registerPlanningTests();
+    registerVersionOneTests();
+    registerDeltaTests();
 });
