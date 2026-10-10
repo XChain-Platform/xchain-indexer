@@ -11344,6 +11344,10 @@
       "anchor-action-query: validateAnchorActionParams() txid/version rejects a malformed txid rather than silently ignoring the filter",
       "anchor-action-query: validateAnchorActionParams() txid/version treats an empty-string txid/version as \"no filter\", not as a rejection"
     ],
+    "bbda5587791d3dbd": [
+      "protocol_changes/STAKE_DELEGATED_SIGNING_KEY row @regression @tier1 is present in the class table and registry in the same shape",
+      "protocol_changes/STAKE_DELEGATED_SIGNING_KEY row @regression @tier1 is unarmed on production networks and active from regtest genesis"
+    ],
     "bbecc628447a4958": [
       "shared list storage reads falls back to the list source when no transfer exists",
       "shared list storage reads recognizes a valid format-2 share for a root",
@@ -15296,8 +15300,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1241,
-      "titleCount": 12811,
+      "fileCount": 1242,
+      "titleCount": 12813,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16391,6 +16395,7 @@
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/send_gated/send_gated_total_tick_id_row.test.js": "9cb0cc0fc24db1ca",
+        "test/unit/protocol_changes/stake_delegated_signing_key/stake_delegated_signing_key_row.test.js": "bbda5587791d3dbd",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_lint/vm_lint_banned_with_row.test.js": "783b89448d7f13a0",
         "test/unit/protocol_changes/vm_lint/vm_lint_nesting_depth_row.test.js": "06ffa42905e141f0",
