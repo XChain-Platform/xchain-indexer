@@ -20,6 +20,17 @@
  *
  ********************************************************************/
 
+const DISPATCHED_ACTIONS = new Set([
+    'ADDRESS', 'AIRDROP', 'BATCH', 'BET', 'BET_EXPIRE', 'BROADCAST', 'CALLBACK',
+    'COINPAY', 'COINPAY_EXPIRE', 'DESTROY', 'DISPENSER', 'DISPENSER_CLOSE',
+    'DISPENSER_EXPIRE', 'DISPENSE', 'DIVIDEND', 'FILE', 'ISSUE', 'LIST', 'LINK',
+    'MINT', 'MESSAGE', 'ORDER', 'ORDER_EXPIRE', 'ORDER_MATCH', 'SLEEP', 'SEND',
+    'SWAP', 'SWAP_EXPIRE', 'SWAP_MATCH', 'CROSS_SETTLE', 'SWEEP', 'UNKNOWN',
+    'DEPLOY', 'EXECUTE', 'DEPOSIT', 'WITHDRAW', 'VOTE', 'STAKE', 'UNSTAKE',
+    'DELEGATE', 'COLLECT', 'SLASH', 'PRICE', 'ATTEST', 'ANCHOR', 'XCALL', 'XEXEC',
+    'XBRIDGE', 'NODEPROOF', 'ROLLCALL',
+]);
+
 // The handler dispatch table, in two runs so neither is one long function. Module functions
 // called with the Actions instance as `this` (see processAction) rather than class methods,
 // so a context that borrows only Actions.prototype.processAction still dispatches. Every
@@ -103,6 +114,8 @@ async function dispatchProtocolAction(action, params, data, error){
 }
 
 module.exports = {
+
+    DISPATCHED_ACTIONS,
 
     // Generalized function to handle parsing and processing a specific ACTION
     // NOTE: If the action is UNKNOWN, fail silently (prevent crashing indexer on unsupported actions)
