@@ -161,6 +161,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'price_wire_trailing_activation',
     'oracle_snapshot_age_seconds_activation',
     'attest_relay_fee_activation',
+    'attest_relay_response_deadline_activation',
     'bet_feed_list_edit_activation',
     'cross_chain_offer_list_export_activation',
     'cross_chain_remote_token_activation',
