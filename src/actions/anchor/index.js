@@ -82,7 +82,12 @@ function foldHeaderReason(config, data, error){
     if(error) return error;
     if(String(data['NETWORK']) !== String(config['NETWORK'] || '')) return 'invalid: NETWORK (not this network)';
     if(!/^[0-9]+$/.test(String(data['SNAPSHOT_BLOCK']))) return 'invalid: SNAPSHOT_BLOCK (format)';
-    return /^[0-9]+$/.test(String(data['SECTION_COUNT'])) ? error : 'invalid: SECTION_COUNT (format)';
+    if(!/^[0-9]+$/.test(String(data['SECTION_COUNT']))) return 'invalid: SECTION_COUNT (format)';
+    if(Number(data['SECTION_COUNT']) === 0 && gateRegistry.activeAt(
+        'anchor_empty_fold_reject_activation.ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION',
+        config['NETWORK'], config['COIN'], Number(data['BLOCK_INDEX']), null))
+        return 'invalid: SECTION_COUNT (empty fold)';
+    return null;
 }
 async function checkFoldSeqs(handler, sections, archive, error){
     if(error) return error;

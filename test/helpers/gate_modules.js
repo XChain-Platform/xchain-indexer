@@ -119,6 +119,7 @@ const REPLACED_STEMS = Object.freeze([
 // Kept apart from REPLACED_STEMS so that list stays the W4 and W5 census.
 const REGISTRY_ONLY_STEMS = Object.freeze([
     'anchor_archive_fold_term_activation',
+    'anchor_empty_fold_reject_activation',
     'dispenser_settlement_price_activation',
     'dispenser_freshness_proven_use_activation',
     'empty_allow_list_denies_activation',
