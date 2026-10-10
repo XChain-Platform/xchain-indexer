@@ -137,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "56bcc99834e44db67b997941a74b94f641a47a0a8e1abcd2f84ffd52031c11ef",
+      "hash": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
       "twins": []
     },
     "rollcall_activation": {
@@ -2076,6 +2076,20 @@
       "to": "56bcc99834e44db67b997941a74b94f641a47a0a8e1abcd2f84ffd52031c11ef",
       "reason": "merge delegated signing key with current registry rows",
       "date": "2026-10-09"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "4bf3fd9ee0f13631ff8ba31ee0f55ece0ea97499d6092cb4eaa8c3a3ddcd6775",
+      "to": "b382b3597c59a785e5bf4fdf6128e63e47014ad5c7b3bf4b3023ceba54664817",
+      "reason": "fail armed finite time gates closed on unusable block times",
+      "date": "2026-10-09"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "b382b3597c59a785e5bf4fdf6128e63e47014ad5c7b3bf4b3023ceba54664817",
+      "to": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
+      "reason": "merge delegated signing key with unusable block-time handling",
+      "date": "2026-10-10"
     }
   ]
 }

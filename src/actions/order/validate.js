@@ -174,6 +174,15 @@ async function validateGeneral(handler, st){
     let { format, data, isNativeCoinGive, isNativeCoinGet, isCrossChain, orderInfo } = st;
     let error = st.error;
 
+    if(!error && await handler.actions.protocolChanges.isEnabled('EXACT_INTEGER_WIRE_FIELDS', data['BLOCK_INDEX'])){
+        for(let field of ['EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'ORDER_ACTION_INDEX']){
+            if(!handler.util.isNull(data[field]) && !handler.util.isExactInteger(data[field])){
+                error = 'invalid: ' + field + ' (format)';
+                break;
+            }
+        }
+    }
+
     // Verify SOURCE is not sleeping
     if(!error && await handler.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
         error = 'invalid: SOURCE (sleeping)';

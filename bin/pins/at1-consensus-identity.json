@@ -14,7 +14,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "8aed5f47ef2730629c597d719bf23a39bfbf9b5b7089cf36c9cdec69695cd39e",
+    "armed_map_fingerprint": "8b88c9b6677d60db2e213c60acb0c85075b5d7a2320ba24a3c98ee13d8ebde28",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
@@ -272,6 +272,7 @@
       "protocol_changes.changes.DISPENSER_REFILL": "a9ef44846372dad5ff93c9d863a9210e5cc420ce66cd74262776ef0dd6e5fc00",
       "protocol_changes.changes.DIVIDEND": "ba72f3b6e93b65d8b08fb96b057365543980664ad91aa559cf82e2132fdae769",
       "protocol_changes.changes.EMISSION_ISSUANCE_LIMITS": "0110b8b0513d33d619ab732d5418ab57aef380179f7704732bd08441e561f065",
+      "protocol_changes.changes.EXACT_INTEGER_WIRE_FIELDS": "a68406035b0ed19dad70b8c8a194fb6929b8dad5471bb98e49b82bef24db4f56",
       "protocol_changes.changes.EXECUTE": "0110b8b0513d33d619ab732d5418ab57aef380179f7704732bd08441e561f065",
       "protocol_changes.changes.FIAT_DISPENSER_PRICING": "0110b8b0513d33d619ab732d5418ab57aef380179f7704732bd08441e561f065",
       "protocol_changes.changes.FILE": "ba72f3b6e93b65d8b08fb96b057365543980664ad91aa559cf82e2132fdae769",
@@ -420,9 +421,9 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 402,
+    "armed_map_row_count": 403,
     "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
-    "carrier_logic_digest": "393656d9732e506d27c6a1fb8271d3ffe4ec3fbc7d58f8fb1e596628067c6f62",
+    "carrier_logic_digest": "2c11db581f76c3b1a68d6d430321a06f5f25ac97bae58b2d54589ea1405bf1bf",
     "consensus_rules_digest": "ceb49c010893f8a5d8bb632536b0b3873ae4e6cc6d16b3557134c6d503c4840d",
     "gate_key_count": 45,
     "consensus_rules_gates": {
@@ -485,7 +486,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "f86c394a7a16af53dd7f3f7541c8bb3a0477dd3138c8c6ca2c978de72f61dd18",
+    "armed_map_fingerprint": "91f194e0b8402266b3ba0bb7497ae0248538de06ea97d5332f26c805130a2959",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
@@ -743,6 +744,7 @@
       "protocol_changes.changes.DISPENSER_REFILL": "a9ef44846372dad5ff93c9d863a9210e5cc420ce66cd74262776ef0dd6e5fc00",
       "protocol_changes.changes.DIVIDEND": "ba72f3b6e93b65d8b08fb96b057365543980664ad91aa559cf82e2132fdae769",
       "protocol_changes.changes.EMISSION_ISSUANCE_LIMITS": "0110b8b0513d33d619ab732d5418ab57aef380179f7704732bd08441e561f065",
+      "protocol_changes.changes.EXACT_INTEGER_WIRE_FIELDS": "a68406035b0ed19dad70b8c8a194fb6929b8dad5471bb98e49b82bef24db4f56",
       "protocol_changes.changes.EXECUTE": "0110b8b0513d33d619ab732d5418ab57aef380179f7704732bd08441e561f065",
       "protocol_changes.changes.FIAT_DISPENSER_PRICING": "0110b8b0513d33d619ab732d5418ab57aef380179f7704732bd08441e561f065",
       "protocol_changes.changes.FILE": "ba72f3b6e93b65d8b08fb96b057365543980664ad91aa559cf82e2132fdae769",
@@ -891,9 +893,9 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 402,
+    "armed_map_row_count": 403,
     "gates_field_hash": "ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a",
-    "carrier_logic_digest": "393656d9732e506d27c6a1fb8271d3ffe4ec3fbc7d58f8fb1e596628067c6f62",
+    "carrier_logic_digest": "2c11db581f76c3b1a68d6d430321a06f5f25ac97bae58b2d54589ea1405bf1bf",
     "consensus_rules_digest": "78f5ae7915c1a79c1da0ed59e454266a60c0e632d28d63ae6d5b358a6304decd",
     "gate_key_count": 45,
     "consensus_rules_gates": {
