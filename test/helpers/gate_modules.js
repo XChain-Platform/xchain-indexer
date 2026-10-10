@@ -139,6 +139,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'bridge_row_fields_terminal_activation',
     'vm_lint_optional_chain_heights',
     'bigint_surface_strip_heights',
+    'vm_lint_banned_with_heights',
     'vm_lint_nesting_depth_activation',
     'swap_edit_rematch_activation',
     'market_list_source_activation',
