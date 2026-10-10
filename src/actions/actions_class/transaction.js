@@ -20,6 +20,11 @@
  *
  ********************************************************************/
 
+const gateRegistry = require('../../consensus/gate_registry');
+const { DISPATCHED_ACTIONS } = require('./dispatch.js');
+
+const ACTION_ADMISSION_GATE = 'action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY';
+
 // Trim the PARAMS in place, take the ACTION off the front, expand aliases, and apply the
 // legacy VERSION-0 injection. Mutates `params` exactly as the handler dispatch expects.
 function normalizeTransactionAction(actions, params){
@@ -136,8 +141,11 @@ module.exports = {
             data['ACTION'] = action;
         }
 
-        // Validate Action is known
-        if(!this.protocolChanges.isDefined(action)){
+        // Validate Action is known. Once the admission gate is active, a protocol
+        // feature-flag name is not an ACTION unless the dispatcher has a handler for it.
+        let dispatchedOnly = gateRegistry.activeAt(ACTION_ADMISSION_GATE,
+            this.config['NETWORK'], this.config['COIN'], tx.block_index, null);
+        if(!this.protocolChanges.isDefined(action) || (dispatchedOnly && !DISPATCHED_ACTIONS.has(action))){
             error = 'invalid: Unknown ACTION';
             data['ACTION'] = action = 'UNKNOWN';
         }

@@ -71,17 +71,10 @@ addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION',
 });
 
 // list_owner_activation
-// LIST_OWNER_ACTIVATION: the height (per network) on the chain being parsed at/above
-// which a LIST format 1 whose SOURCE is not the source of the list's root create is
-// 'invalid: LIST_ACTION_INDEX (not owner)'. Keyed on the chain's OWN block_index: the
-// action being judged is the edit mined here.
-//
-// Mainnet and every testnet chain park at the house sentinel 9999999999 until the
-// operator assigns each chain its own safe activation height. The shared testnet key
-// remains as the fallback for callers without a coin. Regtest is 0 so the e2e rail
-// exercises the armed rule from genesis.
+// LIST format 1 edits must come from the list root's creator. Mainnet and regtest
+// start at genesis; testnet uses per-chain heights and keeps the fallback unarmed.
 addGate('list_owner_activation.LIST_OWNER_ACTIVATION', 'height', {
-    mainnet: UNARMED,
+    mainnet: 0,
     'BTC:testnet': 155001,
     'LTC:testnet': 4906040,
     'DOGE:testnet': 67962387,
