@@ -81,9 +81,7 @@ function setup(armed=true){
     };
 }
 
-describe('LIST union activation @regression @tier2', function () {
-    afterEach(function () { sinon.restore(); });
-
+function registerActivationGateTests(){
     it('keeps TYPE 3 unknown below the activation and stores only the LIST row', async function () {
         const { indexer, handler } = setup(false);
         const data = actionData();
@@ -109,7 +107,9 @@ describe('LIST union activation @regression @tier2', function () {
         sinon.assert.notCalled(indexer.indexerDb.createListItem);
         sinon.assert.notCalled(indexer.indexerDb.createListItemInvalid);
     });
+}
 
+function registerCreateMemberTests(){
     it('accepts local and mirror members, normalizes roots, and records bad items', async function () {
         const ctx = setup();
         ctx.addList(11, 2, [ADDR1], 10);
@@ -144,7 +144,9 @@ describe('LIST union activation @regression @tier2', function () {
         assert.strictEqual(data['STATUS'], 'invalid: ITEM (union exceeds LIST_UNION_MAX_MEMBERS)');
         sinon.assert.notCalled(ctx.indexer.indexerDb.createListItem);
     });
+}
 
+function registerMembershipLimitTests(){
     it('refuses a distinct merged membership of 10001 addresses', async function () {
         const ctx = setup();
         ctx.addList(10, 2, Array.from({ length: 10001 }, (_, index) => 'address-' + index));
@@ -175,7 +177,9 @@ describe('LIST union activation @regression @tier2', function () {
         assert.strictEqual(tooManyMembers, 'invalid: ITEM (union exceeds LIST_UNION_MAX_MEMBERS)');
         sinon.assert.notCalled(ctx.indexer.indexerDb.getList);
     });
+}
 
+function registerCreateValidationAndEditTests(){
     it('rejects a create with no valid member list', async function () {
         const ctx = setup();
         const data = actionData();
@@ -213,7 +217,9 @@ describe('LIST union activation @regression @tier2', function () {
             [202, '10'], [202, '50'],
         ]);
     });
+}
 
+function registerMembershipHelperTests(){
     it('stores type-3 ids directly and exposes root membership helpers', async function () {
         const db = {
             createTicker: sinon.stub(),
@@ -239,7 +245,9 @@ describe('LIST union activation @regression @tier2', function () {
         sinon.assert.notCalled(db.createTicker);
         sinon.assert.notCalled(db.createAddress);
     });
+}
 
+function registerWireOrderTests(){
     it('derives edit member type from the root create wire order, not root index order', async function () {
         const wireRows = [
             { action_index: 10, wire_data: 'LIST|0|3||21|10', list_position: 1 },
@@ -260,7 +268,9 @@ describe('LIST union activation @regression @tier2', function () {
         assert.deepStrictEqual(db.getListRootIndex.getCalls().map((call) => call.args[0]), ['21', '10']);
         sinon.assert.calledOnceWithExactly(db.getListStoredType, '20');
     });
+}
 
+function registerBatchSelectionTests(){
     it('selects the requested root create when a batch has matching union creates', async function () {
         const wireData = 'BATCH|0|LIST|0|3||21|10;LIST|0|3||10|21';
         const db = {
@@ -286,4 +296,16 @@ describe('LIST union activation @regression @tier2', function () {
         assert.deepStrictEqual(db.doQuery.getCalls().map((call) => call.args[1]), [[100], [101]]);
         assert.match(db.doQuery.firstCall.args[0], /prior\.source_id<=>t\.source_id/);
     });
+}
+
+describe('LIST union activation @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
+
+    registerActivationGateTests();
+    registerCreateMemberTests();
+    registerMembershipLimitTests();
+    registerCreateValidationAndEditTests();
+    registerMembershipHelperTests();
+    registerWireOrderTests();
+    registerBatchSelectionTests();
 });
