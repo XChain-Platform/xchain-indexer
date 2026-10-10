@@ -1879,13 +1879,6 @@
       "bridge_checkpoint_check: D2 escrow cross-check the positive case, built from a real checkpoint fixture accepts roots spelled in upper case",
       "bridge_checkpoint_check: D2 escrow cross-check the positive case, built from a real checkpoint fixture accepts the compressed wire form of the same proof"
     ],
-    "23f34951579879b3": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash",
-      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings"
-    ],
     "2420626fd805ab93": [
       "bridgePolicyHash (policy spec section 5, D5, D7) @regression @tier1 \"-\" marks an ABSENT list, distinct from an empty one (D7)",
       "bridgePolicyHash (policy spec section 5, D5, D7) @regression @tier1 \"0\" marks an EXISTING but empty list (D7)",
@@ -3157,32 +3150,12 @@
       "Airdrop @regression @tier2 format 2: multi-airdrop full valid multi-airdrop full processes multiple TICK/LIST pairs",
       "Airdrop @regression @tier2 format 3: multi-airdrop full with multiple memos valid format-3 multi-airdrop processes TICK/LIST/MEMO triples"
     ],
-    "3bd78cc1cc1aae71": [
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) LTC and DOGE flip ON at their own ratified heights",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) at the BTC mainnet height (961000): both flags ON",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) below the BTC mainnet height (960999): both flags OFF, contract still accepted",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) does NOT track the Pkg 3 gate (a separate epoch, resolved separately)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is per-coin: LTC and DOGE mainnet at the BTC height stay OFF",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) regtest is genesis-armed (both flags ON from height 0)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads enforceLintGlobalAlias as its own flag",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads the new flags ALONGSIDE the existing async / lint-hardening flags (no regression)",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) at the flag day: enforceBannedRest ON",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) below the flag day: enforceBannedRest OFF, contract still accepted",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads enforceBannedWith from its own height row",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads enforceLintDestructure from its own height row",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads exactly the ten enforce* flags validateSyntax reads"
-    ],
     "3c3e9083fd560d8d": [
       "finds and deduplicates open orders whose token lists resolve to the changed root",
       "finds and deduplicates open swaps whose token lists resolve to the changed root",
       "finds open orders whose effective lists resolve to the changed root",
       "finds open swaps whose effective lists resolve to the changed root",
       "rejects an unknown token-list market kind before querying"
-    ],
-    "3c864b6bfe359c45": [
-      "protocol_changes VM lint destructure row is active on regtest at genesis and unarmed on every public chain",
-      "protocol_changes VM lint destructure row registers the per-chain height map"
     ],
     "3c9c6d401385d0db": [
       "gettokenpolicy shared-list references answers a home-shared list and a pre-existing mirror by reference after activation",
@@ -4257,6 +4230,13 @@
       "HubDbSync mirror network scope @regression @tier2 treats an advertised ceiling of ZERO as authoritative, not as missing information",
       "HubDbSync mirror network scope @regression @tier2 uses the wire position for ready-message catch-up"
     ],
+    "4d952349cc7e96e7": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings"
+    ],
     "4d95352bdf288616": [
       "Utility.getDustThresholdCoin() fails closed - @regression @tier1 does not cache a failed lookup",
       "Utility.getDustThresholdCoin() fails closed - @regression @tier1 throws instead of using a 0 floor when the bundle dustThreshold is 0",
@@ -4345,15 +4325,26 @@
       "Utility FIAT dispenser price matching @regression reversePriceMatch() - Mode A, validator snapshot returns null when the oracle produced nothing in the window",
       "Utility FIAT dispenser price matching @regression reversePriceMatch() - Mode A, validator snapshot returns the newest snapshot that yields at least one unit"
     ],
-    "4e8f8ab1fecbfb96": [
-      "consensus/vm_lint_destructure_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
-      "consensus/vm_lint_destructure_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
-    ],
     "4ea28f17e16f01bd": [
       "getEffectiveUnprocessedCallResults same-DB deployment: MAX_SAFE_INTEGER cap threads through unchanged (caller needs full set)",
       "getEffectiveUnprocessedCallResults same-DB deployment: one SQL statement pushes NOT EXISTS + ORDER BY + LIMIT",
       "getEffectiveUnprocessedCallResults separate hub mirror: empty mirror short-circuits with no callbacks lookup",
       "getEffectiveUnprocessedCallResults separate hub mirror: keeps the two-query JS filter, excluding processed then slicing"
+    ],
+    "4ee2d96267d8e33b": [
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) LTC and DOGE flip ON at their own ratified heights",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) at the BTC mainnet height (961000): both flags ON",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) below the BTC mainnet height (960999): both flags OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) does NOT track the Pkg 3 gate (a separate epoch, resolved separately)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is per-coin: LTC and DOGE mainnet at the BTC height stay OFF",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) regtest is genesis-armed (both flags ON from height 0)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads enforceLintGlobalAlias as its own flag",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads the new flags ALONGSIDE the existing async / lint-hardening flags (no regression)",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) at the flag day: enforceBannedRest ON",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) below the flag day: enforceBannedRest OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads enforceBannedWith from its own height row",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads exactly the nine enforce* flags validateSyntax reads"
     ],
     "4ee376dc5f1c5cb0": [
       "mirror admission compatibility: a mirrored admission map never stops the block loop ARMED consumer, the measured {BTC:280} row from cursor 277 commits 278, 279 and 280 with zero exceptions reaching the block applier",
@@ -15497,7 +15488,7 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "3bd78cc1cc1aae71",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "4ee2d96267d8e33b",
         "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "c0bf65d90cf86ae9",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/native_fee.test.js": "2ef587e9e97d807d",
@@ -16018,7 +16009,6 @@
         "test/unit/consensus/stale_twin_module_refs.test.js": "25c3d82b177fdf7c",
         "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "4db50e18ffcab3aa",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
-        "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
         "test/unit/consensus/vm_lint_rows_match_vm.test.js": "e0d21a7b4e18e9e2",
@@ -16475,7 +16465,6 @@
         "test/unit/protocol_changes/stake_delegated_signing_key/stake_delegated_signing_key_row.test.js": "bbda5587791d3dbd",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_lint/vm_lint_banned_with_row.test.js": "783b89448d7f13a0",
-        "test/unit/protocol_changes/vm_lint/vm_lint_destructure_row.test.js": "3c864b6bfe359c45",
         "test/unit/protocol_changes/vm_lint/vm_lint_nesting_depth_row.test.js": "06ffa42905e141f0",
         "test/unit/protocol_changes/vm_lint/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
@@ -16502,7 +16491,7 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "23f34951579879b3",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "4d952349cc7e96e7",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
