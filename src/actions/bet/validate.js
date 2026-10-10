@@ -24,6 +24,15 @@ module.exports = {
 
     // Format 1 / 2 / 3 / 4 (existing feed) validations
     async validateFeedState(data, format, feedInfo, error){
+        if(!error && format!=0 && await this.actions.protocolChanges.isEnabled('EXACT_INTEGER_WIRE_FIELDS', data['BLOCK_INDEX'])){
+            for(let field of ['FEED_ACTION_INDEX', 'OUTCOME', 'ALLOW_LIST', 'BLOCK_LIST']){
+                if(!this.util.isNull(data[field]) && !this.util.isExactInteger(data[field])){
+                    error = 'invalid: ' + field + ' (format)';
+                    break;
+                }
+            }
+        }
+
         if(!error && (format==1 || format==2 || format==3 || format==4) && !feedInfo)
             error = 'invalid: FEED_ACTION_INDEX (unknown)';
 

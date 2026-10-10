@@ -212,6 +212,43 @@ module.exports = {
         results = await this.doQuery(query, args);
     },
 
+    // Create/Update record in `bet_edits` table (BET format 4). Unset fields
+    // stay NULL and therefore inherit their prior effective value; zero is a
+    // stored detach sentinel interpreted by the effective-feed reads.
+    async createBetEdit(data){
+        data                  = this.normalizeDataValues(data);
+        let memo_id           = await this.createMemo(data['MEMO']);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let action_index      = data['ACTION_INDEX'];
+        let feed_action_index = data['FEED_ACTION_INDEX'];
+        let allow_list        = data['ALLOW_LIST'];
+        let block_list        = data['BLOCK_LIST'];
+        let query = `SELECT
+                            action_index
+                        FROM
+                            bet_edits
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let results = await this.doQuery(query, args);
+        if(results.length > 0){
+            query = `UPDATE
+                        bet_edits
+                    SET
+                        feed_action_index=?,
+                        allow_list=?,
+                        block_list=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE
+                        action_index=?`;
+        } else {
+            query = `INSERT INTO bet_edits (feed_action_index, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+        }
+        args = [feed_action_index, allow_list, block_list, memo_id, status_id, action_index];
+        await this.doQuery(query, args);
+    },
+
     // Create/Update record in `bet_feed_statuses` table (status history; the
     // causing action's index + the feed's index, order_statuses pattern). The
     // `closed` latch writes NO row here - it has no causing action; its durable

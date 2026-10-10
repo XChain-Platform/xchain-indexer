@@ -242,8 +242,9 @@ module.exports = {
             // drift reconciler can't make on its own). Manual/destructive migrations stay
             // gated for an explicit operator run (`node src/db/migration/migrate.js`). Recorded in the
             // schema_migrations ledger, so this is a no-op once applied.
-            await this.indexerDb.runMigrations();
-            this.schemaReady = true;
+            const migrationResult = await this.indexerDb.runMigrations();
+            if(!migrationResult.lockSkipped)
+                this.schemaReady = true;
 
             // Invariant probe (a precondition for arming the dense-id rules): the deterministic
             // address/ticker id counter (getNextAddressId = MAX(id)+1) and every wire ^<id>

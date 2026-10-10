@@ -270,12 +270,18 @@ class ProtocolChanges {
                     current.block_time  = await this.decoderDb.getBlockTime(block_index);
                     current.block_index = parseInt(block_index);
                     // Verify block_time
-                    if(enabled && network=='mainnet' && change.mainnet_time > current.block_time)
-                        enabled = false;
-                    if(enabled && network=='testnet' && change.testnet_time > current.block_time)
-                        enabled = false;
-                    if(enabled && network=='regtest' && change.regtest_time > current.block_time)
-                        enabled = false;
+                    const timeGate = change[network + '_time'];
+                    if(enabled && Number.isFinite(timeGate) && timeGate > 0){
+                        const rawBlockTime = current.block_time;
+                        const blockTime = typeof rawBlockTime === 'number' ||
+                            (typeof rawBlockTime === 'string' && rawBlockTime.trim() !== '')
+                            ? Number(rawBlockTime) : NaN;
+                        // An unusable block_time cannot satisfy an armed finite time gate.
+                        // This is a resolved but unusable value, not a decoder DB exception:
+                        // fail the gate closed while the catch below continues propagating faults.
+                        if(!Number.isFinite(blockTime) || timeGate > blockTime)
+                            enabled = false;
+                    }
                     // Verify block_index
                     if(enabled && network=='mainnet' && change.mainnet_block > current.block_index)
                         enabled = false;
