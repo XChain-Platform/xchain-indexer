@@ -180,6 +180,20 @@ addGate('anchor_empty_fold_reject_activation.ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION
     testnet: UNARMED,
     regtest: 0,
 });
+// cooldown_maturity_escrow_reversal_activation
+// A reorg that orphans a legacy cooldown maturity deletes the refund credit; from this
+// height it also deletes the paired negative escrow release, which otherwise survives and
+// is written a second time when the cooldown re-matures. Keyed on the rollback's own target
+// block. Gated because the delete moves the supply a reorged node hashes afterwards, so
+// the fleet needs one switch height per network.
+addGate('cooldown_maturity_escrow_reversal_activation.COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
 // anchor_fold_activation
 addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
 // archive_section_verdict_activation
