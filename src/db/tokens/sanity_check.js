@@ -27,6 +27,34 @@ const { getLogger } = require('../../observability/index.js');
 
 module.exports = {
 
+    // Rebuild the supply projection once after every ledger-writing pass in the block.
+    async refreshTokenSuppliesForBlock(block_index){
+        if(this.util.isNull(block_index))
+            return;
+        let tickers  = {};
+        let decimals = {};
+        await supplyCheck.touchedTicks(this, block_index, tickers, decimals);
+        let tickList = Object.keys(tickers);
+        if(tickList.length === 0)
+            return;
+        let allIds = tickList.map(tick => tickers[tick]);
+        let creditsById = await supplyCheck.sumByTick(this, allIds, 'credits', true);
+        let debitsById  = await supplyCheck.sumByTick(this, allIds, 'debits',  true);
+        let escrowsById = await supplyCheck.sumByTick(this, allIds, 'escrows', true);
+        for(let tick of tickList){
+            let tick_id = tickers[tick];
+            let credits = (creditsById[tick_id] != null) ? creditsById[tick_id] : 0;
+            let debits  = (debitsById[tick_id]  != null) ? debitsById[tick_id]  : 0;
+            let escrows = (escrowsById[tick_id] != null) ? escrowsById[tick_id] : 0;
+            let supply = this.util.bcadd(
+                this.util.bcsub(credits, debits, ledgerPrecision.LEDGER_AMOUNT_PRECISION),
+                escrows,
+                decimals[tick]
+            );
+            await this.doQuery('UPDATE tokens SET supply=? WHERE tick_id=?', [supply, tick_id]);
+        }
+    },
+
     // Validate that token supplys match credits/debits/balances information
     async sanityCheck(block_index){
         // Ignore any calls without a block index
