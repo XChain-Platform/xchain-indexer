@@ -26,9 +26,25 @@
 'use strict';
 
 const assert = require('assert');
+const path   = require('path');
 const eq     = require('../../../../src/consensus/equivocation_header.js');
 // Decides whether each sibling path may be trusted before the parity guards require it.
 const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checkout.js');
+
+const DOCS_DIR = process.env.XCHAIN_DOCS_DIR
+    ? path.resolve(process.env.XCHAIN_DOCS_DIR)
+    : path.resolve(__dirname, '../../../../../xchain-documentation');
+const SIBLING_COPIES = {
+    hub: path.join(process.env.XCHAIN_HUB_DIR
+        ? path.resolve(process.env.XCHAIN_HUB_DIR)
+        : path.resolve(__dirname, '../../../../../xchain-hub'), 'src', 'consensus', 'equivocation_header.js'),
+    sdk: path.join(process.env.XCHAIN_SDK_PATH
+        ? path.resolve(process.env.XCHAIN_SDK_PATH)
+        : path.resolve(__dirname, '../../../../../xchain-sdk'), 'src', 'consensus', 'equivocation_header.js'),
+    explorer: path.join(process.env.XCHAIN_EXPLORER_DIR
+        ? path.resolve(process.env.XCHAIN_EXPLORER_DIR)
+        : path.resolve(__dirname, '../../../../../xchain-explorer'), 'src', 'consensus', 'equivocation_header.js')
+};
 
 describe('equivocation_header (indexer)', function () {
     describe('isEquivHeaderActive', function () {
@@ -74,11 +90,12 @@ describe('equivocation_header (indexer)', function () {
         it('indexer activation map == canonical constants.js', function () {
             // Judged before the require: a lane symlink into a live main checkout would
             // load uncommitted constants and pass against them.
-            const docs = siblingCheckout(__dirname, '../../../../../xchain-documentation/protocol/constants.js');
+            const constantsPath = path.join(DOCS_DIR, 'protocol', 'constants.js');
+            const docs = siblingCheckout(__dirname, constantsPath);
             if (!docs.usable) return skipOrFail(this, docs, 'the canonical constants.js equivocation activation parity');
             let canonical;
             // A trusted file that fails to load is a broken sibling: fail it under XCHAIN_REQUIRE_SIBLINGS=1.
-            try { canonical = require('../../../../../xchain-documentation/protocol/constants.js').EQUIV_HEADER_ACTIVATION; }
+            try { canonical = require(constantsPath).EQUIV_HEADER_ACTIVATION; }
             catch (e) {
                 return skipOrFail(this, { usable: false, reason: 'canonical constants.js is present but failed to load: ' + e.message },
                     'the canonical constants.js equivocation activation parity');
@@ -89,19 +106,17 @@ describe('equivocation_header (indexer)', function () {
             // hub + indexer (server consensus) + sdk + explorer (client checkpoint
             // verifiers). A drift in ANY copy flips the header on different blocks → fork.
             // Every copy must be a trusted checkout, as the require block below needs all three.
-            for (const rel of ['../../../../../xchain-hub/src/consensus/equivocation_header.js',
-                               '../../../../../xchain-sdk/src/consensus/equivocation_header.js',
-                               '../../../../../xchain-explorer/src/consensus/equivocation_header.js']) {
-                const copy = siblingCheckout(__dirname, rel);
+            for (const copyPath of Object.values(SIBLING_COPIES)) {
+                const copy = siblingCheckout(__dirname, copyPath);
                 if (!copy.usable) return skipOrFail(this, copy, 'the five-copy equivocation_header parity');
             }
             let copies;
             // Every copy passed the precheck, so a load failure here is a broken sibling, never an absent one.
             try {
                 copies = {
-                    hub:      require('../../../../../xchain-hub/src/consensus/equivocation_header.js'),
-                    sdk:      require('../../../../../xchain-sdk/src/consensus/equivocation_header.js'),
-                    explorer: require('../../../../../xchain-explorer/src/consensus/equivocation_header.js'),
+                    hub:      require(SIBLING_COPIES.hub),
+                    sdk:      require(SIBLING_COPIES.sdk),
+                    explorer: require(SIBLING_COPIES.explorer),
                 };
             } catch (e) {
                 return skipOrFail(this, { usable: false, reason: 'a sibling equivocation_header.js is present but failed to load: ' + e.message },
