@@ -40,9 +40,7 @@ class PreCheckpointPriceWriterRecovery extends AnchorRecovery {
     }
 }
 
-describe('AnchorRecovery checkpoint and price tables @regression @tier2', function(){
-    beforeEach(freshKeys);
-
+function registerArchiveWriterTest(){
     it('uses the ABP archive key orders and only the full writer restores both tables', async function(){
         let batchPrice = rawPrice(202, 'DOGE/USD', { reference_block: 99 });
         let canonical = ed25519.buildPriceBatchPayload(202, 202, 99, [{
@@ -93,7 +91,9 @@ describe('AnchorRecovery checkpoint and price tables @regression @tier2', functi
         assert.deepStrictEqual(Object.keys(archive.price_snapshots[0]), PRICE_KEYS);
         assert.deepStrictEqual(Object.keys(archive.price_tombstones[0]), ['round_number', 'coin_pair']);
     });
+}
 
+function registerForgedCheckpointTest(){
     it('rejects a forged checkpoint signature and writes none of the batch', async function(){
         let batch = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, {
             checkpoints: [rawCheckpoint(102)], checkpointKeys: crossKeys,
@@ -109,7 +109,9 @@ describe('AnchorRecovery checkpoint and price tables @regression @tier2', functi
         assert.strictEqual(db.checkpoints.length, 0);
         assert.strictEqual(db.prices.length, 0);
     });
+}
 
+function registerForgedPriceRoundTest(){
     it('rejects a forged signature-proofed price round and writes none of the batch', async function(){
         let batch = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, {
             checkpoints: [rawCheckpoint(103)],
@@ -126,7 +128,9 @@ describe('AnchorRecovery checkpoint and price tables @regression @tier2', functi
         assert.strictEqual(db.checkpoints.length, 0);
         assert.strictEqual(db.prices.length, 0);
     });
+}
 
+function registerForgedDisputedPriceTest(){
     it('rejects a forged disputed price proof and writes none of the batch', async function(){
         let honest = buildBatch(0, [], oracleKeys, crossKeys, {
             prices: [rawPrice(204, 'BTC/USD')]
@@ -148,7 +152,9 @@ describe('AnchorRecovery checkpoint and price tables @regression @tier2', functi
         assert.strictEqual(db.matches.length, 0);
         assert.strictEqual(db.prices.length, 0);
     });
+}
 
+function registerObjectBatchProofTest(){
     it('rejects an object-form batch proof that lacks price quorum', async function(){
         let price = rawPrice(204, 'BTC/USD');
         let canonical = ed25519.buildPriceBatchPayload(204, 204, 100, [{
@@ -172,7 +178,9 @@ describe('AnchorRecovery checkpoint and price tables @regression @tier2', functi
         assert.strictEqual(db.matches.length, 0);
         assert.strictEqual(db.prices.length, 0);
     });
+}
 
+function registerPriceOverwriteTest(){
     it('lets later batches overwrite a disputed flip and a late batch_block_time', async function(){
         let initial = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
             { prices: [rawPrice(204, 'BTC/USD')] });
@@ -196,7 +204,9 @@ describe('AnchorRecovery checkpoint and price tables @regression @tier2', functi
         assert.strictEqual(db.prices[0].status, 'disputed');
         assert.strictEqual(db.prices[0].batch_block_time, 1700000999);
     });
+}
 
+function registerTombstoneRestoreTest(){
     it('applies a tombstone and lets a later batch restore the republished round', async function(){
         let first = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
             { prices: [rawPrice(205, 'XCP/USD')] });
@@ -214,7 +224,9 @@ describe('AnchorRecovery checkpoint and price tables @regression @tier2', functi
         assert.strictEqual(db.prices[0].price, '101.75');
         assert.strictEqual(db.prices[0].id, 999);
     });
+}
 
+function registerCheckpointCollisionTest(){
     it('fails a checkpoint sequence collision with different content', async function(){
         let first = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
             { checkpoints: [rawCheckpoint(106)] });
@@ -230,4 +242,18 @@ describe('AnchorRecovery checkpoint and price tables @regression @tier2', functi
         assert.strictEqual(db.checkpoints.length, 1);
         assert.strictEqual(db.checkpoints[0].block_hash, '11'.repeat(32));
     });
-});
+}
+
+function registerCheckpointPriceTests(){
+    beforeEach(freshKeys);
+    registerArchiveWriterTest();
+    registerForgedCheckpointTest();
+    registerForgedPriceRoundTest();
+    registerForgedDisputedPriceTest();
+    registerObjectBatchProofTest();
+    registerPriceOverwriteTest();
+    registerTombstoneRestoreTest();
+    registerCheckpointCollisionTest();
+}
+
+describe('AnchorRecovery checkpoint and price tables @regression @tier2', registerCheckpointPriceTests);
