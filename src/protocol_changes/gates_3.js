@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Indexer-only registry rows, part 3 of 5: protocol/constants to vm_lint_global_alias_activation
+ * Indexer-only registry rows, part 3 of 5: protocol/constants through bigint_surface_strip_heights
  *
  * One part of the indexer-only registry rows: every data export of a module
  * that no other repo twins, as `addGate(key, unit, table)` calls at column
