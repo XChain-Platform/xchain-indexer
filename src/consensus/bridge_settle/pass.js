@@ -183,12 +183,14 @@ async function dueBridgeTransfers(deps, ctx){
 }
 
 async function unsettledBridgeTransfers(deps, ctx){
-    // Sub-gate deferral: nothing is due on a destination below its own bridge activation.
-    if(belowBridgeActivation(ctx)) return [];
     const db  = ctx.indexerDb;
     // Bound by height in the admission era and by the clock below it (mirrorBindClause).
     const bind = deps.canonicals.mirrorBindClause(ctx);
-    const rows = await db.mirrorDb().getFinalizedBridgeTransfersForChain(ctx.network, ctx.coin, bind);
+    let rows = await db.mirrorDb().getFinalizedBridgeTransfersForChain(ctx.network, ctx.coin, bind);
+    if(rows.length === 0) return [];
+    // Sub-gate deferral is per settle format: v2 reads XCHAIN_BRIDGE_ACTIVATION and v5
+    // reads TOKEN_BRIDGE_ACTIVATION. Deferred rows consume no settlement lookup or cap slot.
+    rows = rows.filter(row => !belowBridgeActivation(row, ctx));
     if(rows.length === 0) return [];
     const ids = rows.map(r => r.transfer_id);
     const settled = await db.getRecordedTransferSettlementIds(ids);

@@ -171,6 +171,43 @@ addGate('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION', 'height', {
     regtest:        0,            // genesis-active so the e2e rail exercises the armed rule
 });
 // Part 5 holds these earlier rows because parts 1 to 4 are near their line limit and have concurrent additions.
+// anchor_empty_fold_reject_activation
+addGate('anchor_empty_fold_reject_activation.ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+// cooldown_maturity_escrow_reversal_activation
+// A reorg that orphans a legacy cooldown maturity deletes the refund credit; from this
+// height it also deletes the paired negative escrow release, which otherwise survives and
+// is written a second time when the cooldown re-matures. Keyed on the rollback's own target
+// block. Gated because the delete moves the supply a reorged node hashes afterwards, so
+// the fleet needs one switch height per network.
+addGate('cooldown_maturity_escrow_reversal_activation.COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+// dispenser_refill_policy_activation
+// A format-2 DISPENSER edit that adds GIVE_ESCROW moves the give token into escrow, the same
+// movement a create makes. From this height the refill is refused while the token sleeps or
+// while its allow and block lists exclude the refilling SOURCE, as a create and a SEND are.
+// Keyed on the edit's own block. Gated because the refusal turns a refill every node
+// accepted into an invalid one, so the fleet needs one switch height per network.
+addGate('dispenser_refill_policy_activation.DISPENSER_REFILL_POLICY_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
 // anchor_fold_activation
 addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
 // archive_section_verdict_activation

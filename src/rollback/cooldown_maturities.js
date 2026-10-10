@@ -23,6 +23,9 @@
 'use strict';
 
 const maturitySql = require('../db/rollback/cooldown_maturities.js');
+const gateRegistry = require('../consensus/gate_registry');
+
+const ESCROW_REVERSAL_KEY = 'cooldown_maturity_escrow_reversal_activation.COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION';
 
 module.exports = {
 
@@ -49,6 +52,15 @@ module.exports = {
     // rollback transaction, BEFORE the blockTables delete and BEFORE updateBalances/updateTokens (the
     // seeded addresses/ticks feed the unconditional recompute via the live util lists). No-op when no
     // maturity landed in the range (every predicate is keyed on block_index / cooldown_end_block).
+    //
+    // The escrow release is deleted only from the escrow-reversal activation height. Below it
+    // the release survives the rollback, as it did on every node before the rule, so the
+    // re-maturity writes a second release for the one bond and the ledger a reorged node
+    // hashes runs short by the bond. The delete is gated rather than applied at once because
+    // it changes that hashed supply: nodes that reorg under different rules disagree, so the
+    // switch needs one height per network. The gate reads the rollback's own target block:
+    // every orphaned maturity sits at or above it, so the rule that judges a maturity is the
+    // rule in force where it landed.
     async reverseCooldownMaturities(block_index){
         let completedStatusId = await this.indexerDb.getStatusId('completed');
         let validStatusId     = await this.indexerDb.getStatusId('valid');
@@ -69,7 +81,8 @@ module.exports = {
         let conAffected = await maturitySql.readMaturedContractSources(this.indexerDb, completedStatusId, block_index);
         for(let row of conAffected)
             this.util.addAddressTicker(row.address, row.tick);
-        await maturitySql.reverseMaturedRefunds(this.indexerDb, gasTick, completedStatusId, validStatusId, block_index);
+        let deleteReleases = gateRegistry.activeAt(ESCROW_REVERSAL_KEY, this.config['NETWORK'], this.config['COIN'], Number(block_index), null);
+        await maturitySql.reverseMaturedRefunds(this.indexerDb, gasTick, completedStatusId, validStatusId, block_index, deleteReleases);
     },
 
 };
