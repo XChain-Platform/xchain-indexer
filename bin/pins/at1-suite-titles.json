@@ -289,11 +289,6 @@
       "protocol_changes VM lint nesting-depth row is active on regtest at genesis and unarmed on public networks",
       "protocol_changes VM lint nesting-depth row registers the per-chain height map"
     ],
-    "077fed969308f497": [
-      "mirror-admission margin cross-repo parity hub admitBlocks stamps the indexer row margin and the consumer target certifies the opening tip on regtest",
-      "mirror-admission margin cross-repo parity hub and indexer agree on both sides of a stubbed DOGE testnet boundary",
-      "mirror-admission margin cross-repo parity hub and indexer copies of the margin gate and shared_rows_5 are byte-identical"
-    ],
     "079fb83998032d1b": [
       "HubDbSync ready frame harness certifies an older-hub ready frame after a full drain without retrying",
       "HubDbSync ready frame harness leaves an older-hub ready frame uncertified after a partial drain and retries once",
@@ -1489,6 +1484,12 @@
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-08-state-tree-roots-block-index-idx.sql: if tagged mode=auto, passes the destructive-DDL scan",
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-08-token-bridge-fields.sql: if tagged mode=auto, passes the destructive-DDL scan",
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-09-remote-token-snapshots.sql: if tagged mode=auto, passes the destructive-DDL scan"
+    ],
+    "646cf7e6b3829f4e": [
+      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate applies the same row once the gate is active",
+      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate applyBridgeTransfer defers a row below the gate and writes nothing",
+      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate dueBridgeTransfers and the pass skip the row below the gate",
+      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate reads the gate on the destination coin at the block height"
     ],
     "1c56af9b1dbd9f0c": [
       "late anchor reward derive counter does not log for an on-time or early derive",
@@ -3295,6 +3296,12 @@
       "Database.updateBalances() @regression @tier1 handles array of addresses",
       "Database.updateBalances() @regression @tier1 handles boolean true, fetches all addresses then calls once per row",
       "Database.updateBalances() @regression @tier1 handles string address, calls updateAddressBalance once"
+    ],
+    "ed6f0e05cd4ccaef": [
+      "mirror-admission margin cross-repo parity hub admitBlocks stamps the indexer row margin and the consumer target certifies the opening tip on regtest",
+      "mirror-admission margin cross-repo parity hub and indexer agree on both sides of a stubbed DOGE testnet boundary",
+      "mirror-admission margin cross-repo parity hub and indexer copies of the margin gate and shared_rows_5 are byte-identical",
+      "mirror-admission margin cross-repo parity the activated DOGE margin clears the 8-minute xdex watermark trail that the legacy margin cannot"
     ],
     "fd58c31990531541": [
       "HubDbSync content-keyed apply @regression @tier1 anchor_reward_attestations ignores a colliding wire id and dedupes or upgrades on content",
@@ -7244,6 +7251,11 @@
       "migration-scoped query timeout cleanup @regression @tier1 does not change max_statement_time when the migration lock is unavailable",
       "migration-scoped query timeout cleanup @regression @tier1 restores the runtime timeout before unlocking after a migration error",
       "migration-scoped query timeout cleanup @regression @tier1 sets and restores max_statement_time before checking for pending migrations"
+    ],
+    "7e9e0954be3bb895": [
+      "Database.materializeContractDelegations() held delegated key gate off @regression @tier1 rotates a cooldown row when another source contract stake already holds the delegated key",
+      "Database.materializeContractDelegations() held delegated key gate off @regression @tier1 rotates a stake when another live delegation already holds the delegated key",
+      "Database.materializeContractDelegations() held delegated key gate off @regression @tier1 rotates a stake when another source contract stake already holds the delegated key"
     ],
     "7ea4c8c89c5481c5": [
       "alterTableForDrift(): column-order convergence @regression a source-leading column with nothing before it live is placed FIRST",
@@ -15286,8 +15298,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1233,
-      "titleCount": 12789,
+      "fileCount": 1234,
+      "titleCount": 12793,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15890,6 +15902,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
+        "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "646cf7e6b3829f4e",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
@@ -15903,7 +15916,7 @@
         "test/unit/consensus/equivocation/equiv_xcall_canonical.test.js": "93b9e527a571fc32",
         "test/unit/consensus/equivocation/equivocation_header.test.js": "3ad67665f530b06c",
         "test/unit/consensus/gates/mirror_admission_margin_boundary.test.js": "5ad6c4b0c28cb058",
-        "test/unit/consensus/gates/mirror_admission_margin_cross_repo.test.js": "077fed969308f497",
+        "test/unit/consensus/gates/mirror_admission_margin_cross_repo.test.js": "ed6f0e05cd4ccaef",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
         "test/unit/consensus/list_rematch/plan.test.js": "15d8cc2e94c0564c",
         "test/unit/consensus/list_share/list_meta_hash.test.js": "50ed779f04dda399",
@@ -16080,6 +16093,7 @@
         "test/unit/db/sql_datetime_not_null_columns.test.js": "3eff44edf9ce6f56",
         "test/unit/db/sql_no_timestamp_columns.test.js": "8e2cf44bb819cf2a",
         "test/unit/db/sql_quote_backslash_escapes.test.js": "c8655466e49bee5a",
+        "test/unit/db/stakes/db_contract_delegation_held_key_gate_off.test.js": "7e9e0954be3bb895",
         "test/unit/db/stakes/db_contract_delegation_materialize.test.js": "8e2845a99501f6fb",
         "test/unit/db/stakes/db_contract_stake_refund_precision.test.js": "ebee9ed4a6d4955f",
         "test/unit/db/stakes/db_get_poll_results_for_vm_tick.test.js": "d8b5e860c7d126cc",
