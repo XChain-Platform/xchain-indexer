@@ -8135,6 +8135,12 @@
       "HubDbSync price bootstrap throughput and progress @regression @tier2 stays silent on a drain that finishes inside the progress interval",
       "HubDbSync price bootstrap throughput and progress @regression @tier2 still stops the page at the first unappliable row"
     ],
+    "850d161466315079": [
+      "smoke status stall-health parity keeps atProcessableTip identical across sync, reason, and clear boundaries",
+      "smoke status stall-health parity keeps stallClassOf identical across every classification boundary",
+      "smoke status stall-health parity keeps stallWedged identical across reason, grace, commit, and clear boundaries",
+      "smoke status stall-health parity keeps waitingOnFutureBlock identical across reason and clear boundaries"
+    ],
     "854ebc44f7fae694": [
       "migration ledger applied_at type creates new ledgers with a DATETIME applied_at",
       "migration ledger applied_at type does not alter an existing DATETIME applied_at",
@@ -15349,8 +15355,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1246,
-      "titleCount": 12854,
+      "fileCount": 1247,
+      "titleCount": 12858,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16595,6 +16601,7 @@
         "test/unit/xchain_indexer/stall_health.test.js": "2537dd40819c57ff",
         "test/unit/xchain_indexer/stall_health.test/barrier_mapping.test.js": "26506740301590af",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
+        "test/unit/xchain_indexer/stall_health_smoke_parity.test.js": "850d161466315079",
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
