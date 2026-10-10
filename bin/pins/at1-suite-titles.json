@@ -5432,12 +5432,6 @@
       "ANCHOR archive section verdict integration keeps consumed checkpoint sections valid after a late folded archive failure",
       "ANCHOR archive section verdict integration preserves the action-wide verdict before the section verdict activation"
     ],
-    "646cf7e6b3829f4e": [
-      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate applies the same row once the gate is active",
-      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate applyBridgeTransfer defers a row below the gate and writes nothing",
-      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate dueBridgeTransfers and the pass skip the row below the gate",
-      "bridge_settle: destination below its XCHAIN_BRIDGE_ACTIVATION sub-gate reads the gate on the destination coin at the block height"
-    ],
     "64b41c6b97257367": [
       "consensus parameters are frozen (track 8 guard) @regression GAS_SCHEDULE + GAS_PRICE equal the golden on every chain (identical across BTC/LTC/DOGE)",
       "consensus parameters are frozen (track 8 guard) @regression VALIDATOR_QUERY_LIMIT equals the golden on every chain (frozen node-local, not env-tunable)",
@@ -6441,6 +6435,14 @@
       "Order_Match LIST trigger @regression @tier2 books the same counterparty for an edit-shaped trigger",
       "Order_Match LIST trigger @regression @tier2 does not book a counterparty absent from the resting order allow list",
       "Order_Match LIST trigger @regression @tier2 matches the indexed resting order using the LIST block context"
+    ],
+    "721f08577076ca3e": [
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 does not rotate a stake row at its deactivation height",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 keeps the historical selection below the flag day",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 reverts an in-window row when its delegation is no longer governing",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 rotates the visible stake row and keeps getContractStakeDataForVM aligned with cooldown stake",
+      "DELEGATION_ROTATE_IN_WINDOW protocol row @regression @tier1 ships unarmed and supports the regtest drill override",
+      "Utility.processContractDelegationMaterializations() in-window gate @regression @tier1 passes the new flag decision to the database sweep"
     ],
     "72a0b56687489fbe": [
       "hourly price age flips VM execution at its action block gate",
@@ -10459,6 +10461,12 @@
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 vector: PARTIALLY unstaked owner stake burns only what remains",
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 zero-amount rows are skipped rather than re-burned"
     ],
+    "a7b0511aa619e3e1": [
+      "ANCHOR v3 empty fold rejection preserves the historical empty-fold verdict below activation",
+      "ANCHOR v3 empty fold rejection preserves today's pre-gate behaviour by accepting the unsigned empty fold",
+      "ANCHOR v3 empty fold rejection rejects an empty fold at activation using the ANCHOR mined height",
+      "ANCHOR v3 empty fold rejection ships the reject gate inert on live networks and active on regtest"
+    ],
     "a7bf3b007262c77c": [
       "Attest (ATTEST) @regression @tier3 _injectCallbackExecute internal branches callback_params_json with invalid JSON \u2192 catch branch fires, callbackParams stays []",
       "Attest (ATTEST) @regression @tier3 _injectCallbackExecute internal branches execute.parse returns non-valid STATUS \u2192 warning logged, response still valid (lines 455-456)",
@@ -12875,6 +12883,15 @@
       "BATCH composition limit boundary tests @regression @tier3 BAT-06: BATCH with 10 SENDs is valid and calls processAction 10 times",
       "BATCH composition limit boundary tests @regression @tier3 BAT-07: BATCH with empty action name followed by a valid SEND is handled gracefully"
     ],
+    "d500ae1d3581f002": [
+      "bridge_settle: destination below its format-specific bridge sub-gate applies the same v2 row once the XCHAIN gate is active",
+      "bridge_settle: destination below its format-specific bridge sub-gate applyBridgeTransfer defers a v2 row below XCHAIN_BRIDGE_ACTIVATION and writes nothing",
+      "bridge_settle: destination below its format-specific bridge sub-gate defers a v5 row below TOKEN_BRIDGE_ACTIVATION while XCHAIN is active",
+      "bridge_settle: destination below its format-specific bridge sub-gate does not use TOKEN_BRIDGE_ACTIVATION for a v2 row",
+      "bridge_settle: destination below its format-specific bridge sub-gate does not use XCHAIN_BRIDGE_ACTIVATION for a v5 row",
+      "bridge_settle: destination below its format-specific bridge sub-gate dueBridgeTransfers and the pass skip a v2 row below XCHAIN_BRIDGE_ACTIVATION",
+      "bridge_settle: destination below its format-specific bridge sub-gate reads the XCHAIN gate on the destination coin at the block height"
+    ],
     "d5091677642a6150": [
       "bridge reads are registered open (base spec D44) @regression @tier1 getbridgebalances is in none of WRITE_METHODS / GATED_EXEC_METHODS / FEDERATION_READ_METHODS",
       "bridge reads are registered open (base spec D44) @regression @tier1 getbridgebalances is registered as a controller handler",
@@ -14990,9 +15007,6 @@
       "attest_response_canonical: hub/indexer twin produces byte-identical canonicals to the hub copy across both eras",
       "attest_response_canonical: hub/indexer twin rejects the same spellings as the hub copy"
     ],
-    "fa331b6274442a21": [
-      "ANCHOR v3 empty fold rejection preserves today's pre-gate behaviour by accepting the unsigned empty fold"
-    ],
     "fa99b888f85b3500": [
       "Contract delegation signing key claim query @regression @tier2 reserves pending and live delegations but releases a key at its deactivation block",
       "Delegated signing key materialization slot @regression @tier2 does not rotate a governed stake when another slot holds the delegated key",
@@ -15380,8 +15394,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1251,
-      "titleCount": 12875,
+      "fileCount": 1252,
+      "titleCount": 12887,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15801,7 +15815,7 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "5278429cef8904ee",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_counter.test.js": "1c56af9b1dbd9f0c",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
-        "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "fa331b6274442a21",
+        "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "a7b0511aa619e3e1",
         "test/unit/anchor/anchor_v3_fold_parse.test.js": "6ea2607d7bbbc413",
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
@@ -15991,7 +16005,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
-        "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "646cf7e6b3829f4e",
+        "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "d500ae1d3581f002",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
@@ -16056,6 +16070,7 @@
         "test/unit/contracts/controller_guard_returnvalue.test.js": "1734825922f9caa5",
         "test/unit/contracts/controller_policy_layer.test.js": "8fabcde2ac147e88",
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
+        "test/unit/contracts/delegate_rotation_unstake_window.test.js": "721f08577076ca3e",
         "test/unit/contracts/emission_bounds_vm_parity.test.js": "275cd1720c6c0c1f",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
