@@ -385,8 +385,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
             // activation maps. The checks stay so a mistyped export name cannot compare
             // undefined to undefined and pass vacuously on both sides.
             assert.ok(local !== undefined, file + ' must export ' + exportName);
-            assert.ok(canon[exportName] !== undefined,
-                'constants.js must export ' + exportName + ' (the canonical authority for this gate)');
+            assert.notStrictEqual(canon[exportName], undefined, exportName + ' must exist in constants.js');
             const expected = exportName === 'LIST_OWNER_ACTIVATION' ?
                 { ...canon[exportName], mainnet: 0 } : canon[exportName];
             // And the registry row under the same key, so the canon is compared against
