@@ -1629,19 +1629,6 @@
       "armed_map/canonical: value serialisation writes a RegExp as its source and flags, so two patterns never collide",
       "armed_map/canonical: value serialisation writes scalars as the design table says"
     ],
-    "219281ee0bdd5eb8": [
-      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 getOracleDataForVM rejects rather than handing the VM an empty oracle",
-      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 getOraclePrice rejects rather than reporting no effective oracle price",
-      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 getOraclePricesInTimeRange rejects rather than reporting an empty window",
-      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 getPricesInTimeRange rejects rather than reporting no validator price",
-      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 leaves the local-table cross-chain preload on the permissive helper",
-      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 never resolves the shape a swallowed fault used to produce",
-      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 rejects when the latest-price read alone faults",
-      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 rejects when the round-row read alone faults",
-      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 rejects when the round-window read alone faults",
-      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 rejects when the snapshot-age read alone faults",
-      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 releases the pooled connection on the way out, as the permissive helper did"
-    ],
     "21b214062cb737f9": [
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_CALLBACK_TIMELOCK flag-day (/ finalize\u2192callback timelock) due-callback sweep (processDueCallbacks) fires the deferred callback at its due block with the frozen result, and marks it fired",
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_CALLBACK_TIMELOCK flag-day (/ finalize\u2192callback timelock) due-callback sweep (processDueCallbacks) no-op when nothing is due",
@@ -2787,13 +2774,6 @@
       "contract_state_root: key derivation @regression contract_index type does not change the key (driver bigint config is not consensus)",
       "contract_state_root: key derivation @regression is domain-separated from the balance and escrow key domains",
       "contract_state_root: key derivation @regression separates chain, network, contract and key (no field can be smeared into another)"
-    ],
-    "34a24a8be0a149e4": [
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 an armed row returns block time minus the newest snapshot time",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 clamps a snapshot stamped after the block to 0",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 every network is unpinned: the legacy block-count query runs",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 reports MAX_SAFE_INTEGER when the block time is unknown",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 reports MAX_SAFE_INTEGER with no admitted snapshot"
     ],
     "3504b9c89af4189f": [
       "LIST shared-list fees @regression @tier3 accepts a DOGE native fee output",
@@ -5179,6 +5159,20 @@
       "hub selector refuses malformed and unsafe hub URLs",
       "hub selector stops paging a table when the selector changes during a request",
       "hub selector uses crypto.randomInt to avoid always following the first configured seed"
+    ],
+    "5f003062269c93ec": [
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 getOracleDataForVM rejects rather than handing the VM an empty oracle",
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 getOraclePrice rejects rather than reporting no effective oracle price",
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 getOraclePricesInTimeRange rejects rather than reporting an empty window",
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 getPricesInTimeRange rejects rather than reporting no validator price",
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 leaves the local-table cross-chain preload on the permissive helper",
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 never resolves the shape a swallowed fault used to produce",
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 rejects when the block-count snapshot-age read alone faults",
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 rejects when the latest-price read alone faults",
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 rejects when the round-row read alone faults",
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 rejects when the round-window read alone faults",
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 rejects when the snapshot-age read alone faults",
+      "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 releases the pooled connection on the way out, as the permissive helper did"
     ],
     "5f8cffffeaeb4b00": [
       "Stake handler delegated signing key gate off @regression @tier2 accepts a new claim when the delegation claim gate is off",
@@ -11136,6 +11130,16 @@
       "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 reads the regtest-only drill override when a fresh table is built",
       "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 registers the row and both network constants"
     ],
+    "b2faf3a707176a9c": [
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 an armed row returns block time minus the newest snapshot time",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 clamps a snapshot stamped after the block to 0",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 mainnet and testnet keep the legacy block-count query on every coin",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 regtest off the reference chain keeps the consensus-time bound on the seconds read",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 regtest reports seconds from genesis on every coin",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 reports MAX_SAFE_INTEGER when the block time is unknown",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 reports MAX_SAFE_INTEGER with no admitted snapshot",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 the row is unarmed on mainnet and every testnet key and armed from genesis on regtest"
+    ],
     "b361ae8704d52118": [
       "HubDbSync _applyRow cross_chain_calls generation fence @regression @tier1 assigns the fence LAST, so every gated column is judged against the ORIGINAL generation",
       "HubDbSync _applyRow cross_chain_calls generation fence @regression @tier1 gates content on the incoming generation too, so a stale finalized page cannot overwrite newer terms",
@@ -15413,7 +15417,7 @@
   "scripts": {
     "test": {
       "fileCount": 1253,
-      "titleCount": 12903,
+      "titleCount": 12907,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16454,9 +16458,9 @@
         "test/unit/price/db_oracle_preload_monotone_key.test.js": "35e26beb860c4323",
         "test/unit/price/db_oracle_round_window.test.js": "547b276e75268fee",
         "test/unit/price/db_oracle_snapshot_age_causality.test.js": "54fd86289db48f29",
-        "test/unit/price/db_oracle_snapshot_age_seconds.test.js": "34a24a8be0a149e4",
+        "test/unit/price/db_oracle_snapshot_age_seconds.test.js": "b2faf3a707176a9c",
         "test/unit/price/db_oracle_stale_round_visibility.test.js": "4549c1e4b7ebd824",
-        "test/unit/price/db_oracle_strict_price_reads.test.js": "219281ee0bdd5eb8",
+        "test/unit/price/db_oracle_strict_price_reads.test.js": "5f003062269c93ec",
         "test/unit/price/db_price_capability_off_btc.test.js": "c562c3c3096c665e",
         "test/unit/price/get_latest_price_batch_landed.test.js": "05993a17e695dbea",
         "test/unit/price/oracle_snapshot_age_seconds_query.test.js": "17c33ccc3e9829c6",
