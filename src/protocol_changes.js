@@ -25,7 +25,6 @@ const {
     UNARMED, UNPINNED, RegistryMissError, createRegistry, applyChanges,
 } = require('./protocol_changes/core.js');
 const { registerRows } = require('./protocol_changes/shared_rows.js');
-const { resolveBigIntSurfaceStripActive } = require('./protocol_changes/bigint_surface_strip.js');
 const { getLogger } = require('./observability/index.js');
 // The gate rows, in registration order: the SHARED block parts (twinned into
 // hub, sync, explorer and sdk), the indexer-only parts, and the registry's own
@@ -322,8 +321,6 @@ module.exports.VM_BANNED_ASYNC_MAINNET_TIME = VM_BANNED_ASYNC_MAINNET_TIME;
 // H-3 price-selection flag-day + its shared gate predicate (see registration).
 module.exports.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
 module.exports.isNativeFeePriceTimeGateActive = isNativeFeePriceTimeGateActive;
-module.exports.isBigIntSurfaceStripActive = (network, coin, height) =>
-    resolveBigIntSurfaceStripActive(registry, UNARMED, network, coin, height);
 // Compiled consensus-version pin and its no-op proof. Exported for the
 // boot path (XChainIndexer) and for test/unit/protocol_changes.test.js, which
 // pins the constant against package.json so the two cannot drift.

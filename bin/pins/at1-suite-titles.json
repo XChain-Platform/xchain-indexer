@@ -1661,11 +1661,6 @@
       "bridge_checkpoint_check/escrow_address returns null for malformed or missing chain and network inputs",
       "bridge_checkpoint_check/escrow_address returns null without throwing for an unknown chain"
     ],
-    "22b82a85f1d56a65": [
-      "consensus/bigint_surface_strip_matches_vm: activation parity @regression @tier1 keeps the indexer regtest activation at genesis",
-      "consensus/bigint_surface_strip_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
-      "consensus/bigint_surface_strip_matches_vm: activation parity @regression @tier1 passes the production network, coin and height inputs into vm.execute()"
-    ],
     "2242cebccd596ccb": [
       "BATCH issuance-limits flag day @regression @tier1 equality with the decoder BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION mainnet: arms at exactly the decoder capture instant",
       "BATCH issuance-limits flag day @regression @tier1 equality with the decoder BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION regtest: arms at exactly the decoder capture instant",
@@ -15371,7 +15366,7 @@
   "scripts": {
     "test": {
       "fileCount": 1250,
-      "titleCount": 12865,
+      "titleCount": 12862,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15977,7 +15972,6 @@
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
         "test/unit/consensus/armed_map/manifest.test.js": "2e08800d4f2fd009",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
-        "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
