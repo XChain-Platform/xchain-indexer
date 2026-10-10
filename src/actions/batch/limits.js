@@ -156,7 +156,7 @@ function installFanOutWeights(){
 //    ProcessExecutor forks one worker and dispatches sequentially and beginBlock/endBlock
 //    scope the compile cache per block. So a per-sub-command constant is the right shape
 //    and there is no unamortized setup a weight would have to absorb;
-//  - WALL TIME IS NOT BOUNDED BY GAS (the F3-globals note in xchain-vm/src/index.js
+//  - WALL TIME IS NOT BOUNDED BY GAS (the F3-globals note in xchain-vm/src/index/runtime/harness_part_1.js
 //    records a shape burning ~13.5s at ~540k gas), so the architectural worst case is
 //    well above the measured one. Every execution IS hard-capped, identically on every
 //    node, by the consensus constant CONSENSUS_MAX_WALL_MS (xchain-vm
