@@ -31,7 +31,7 @@
 // and not a schema probe, so the verdict can never depend on one operator's database.
 // test/unit/db/db_queries.test/action_index_table.test.js holds it equal to src/sql.
 const STATUS_TABLES = new Set([
-    'addresses', 'airdrops', 'anchor_actions', 'attests', 'batches', 'bet_cancels',
+    'addresses', 'airdrops', 'anchor_actions', 'attests', 'batches', 'bet_cancels', 'bet_edits',
     'bet_feed_statuses', 'bet_feeds', 'bet_resolves', 'bet_statuses', 'bets', 'broadcasts',
     'callbacks', 'coinpay_expires', 'coinpay_statuses', 'coinpays', 'contract_delegations',
     'contract_executions', 'contract_stakes', 'contract_unstakes', 'contracts', 'delegations',
