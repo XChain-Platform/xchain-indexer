@@ -18,6 +18,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const acorn = require('acorn');
+const { execFileSync } = require('child_process');
 const { codeIdentity } = require('../../../bin/consensus-identity.js');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 const XChainVM = require('xchain-vm');
@@ -25,6 +26,7 @@ const { runVmExecution } = require('../../../src/actions/execute/run_vm.js');
 
 const KEY = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
 const IDENTITY_PIN = path.resolve(__dirname, '../../../bin/pins/at1-consensus-identity.json');
+const HUB_ROOT = path.resolve(__dirname, '../../../../xchain-hub');
 const VM_MODULE = 'src/index/bigint_surface_strip_heights.js';
 const COIN_KEYS = [
     'BTC:mainnet',
@@ -45,6 +47,22 @@ const {
     BIGINT_SURFACE_STRIP_ACTIVATION: vmActivation,
     isBigIntSurfaceStripActive: vmActivationAt,
 } = require(vmTarget);
+
+const previousSiblingCommits = process.env.XCHAIN_SIBLING_COMMITS;
+if (fs.existsSync(path.join(HUB_ROOT, '.git'))) {
+    const siblingCommits = JSON.parse(previousSiblingCommits || '{}');
+    if (!siblingCommits['xchain-hub']) {
+        siblingCommits['xchain-hub'] = execFileSync(
+            'git', ['-C', HUB_ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
+        ).trim();
+        process.env.XCHAIN_SIBLING_COMMITS = JSON.stringify(siblingCommits);
+    }
+}
+
+after(function () {
+    if (previousSiblingCommits === undefined) delete process.env.XCHAIN_SIBLING_COMMITS;
+    else process.env.XCHAIN_SIBLING_COMMITS = previousSiblingCommits;
+});
 
 function indexerActivation() {
     return ProtocolChanges.copy(KEY);
