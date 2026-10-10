@@ -42,17 +42,27 @@ describe('protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier
     });
 
     it('stays inactive below the sentinel and is active from regtest genesis', function () {
+        assert.strictEqual(typeof ProtocolChanges.isBigIntSurfaceStripActive, 'function');
         for (const network of ['mainnet', 'testnet']) {
             for (const coin of ['BTC', 'LTC', 'DOGE']) {
                 assert.strictEqual(
-                    ProtocolChanges.activeAt(KEY, network, coin, ProtocolChanges.UNARMED - 1, null),
+                    ProtocolChanges.isBigIntSurfaceStripActive(
+                        network, coin, ProtocolChanges.UNARMED - 1),
                     false,
                     coin + ':' + network,
                 );
+                assert.strictEqual(
+                    ProtocolChanges.isBigIntSurfaceStripActive(network, coin, ProtocolChanges.UNARMED),
+                    false,
+                    coin + ':' + network + ' must not arm at the indexer sentinel',
+                );
             }
         }
-        assert.strictEqual(ProtocolChanges.activeAt(KEY, 'regtest', 'BTC', -1, null), false);
-        assert.strictEqual(ProtocolChanges.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
+        assert.strictEqual(ProtocolChanges.isBigIntSurfaceStripActive('regtest', 'BTC', -1), true);
+        assert.strictEqual(ProtocolChanges.isBigIntSurfaceStripActive('regtest', 'BTC', 0), true);
+        assert.strictEqual(ProtocolChanges.isBigIntSurfaceStripActive('unknown', 'BTC', 0), false);
+        assert.strictEqual(ProtocolChanges.isBigIntSurfaceStripActive('mainnet', null, 0), false);
+        assert.strictEqual(ProtocolChanges.isBigIntSurfaceStripActive('mainnet', 'BTC', NaN), false);
     });
 
     it('keeps the final registry part within the structure limit', function () {

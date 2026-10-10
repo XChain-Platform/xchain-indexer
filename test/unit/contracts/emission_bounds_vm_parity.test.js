@@ -25,8 +25,6 @@ const { GAS_CEILING } = require('../../../src/actions/deploy/constants.js');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
-const BIGINT_SURFACE_STRIP_KEY = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
-
 // The VM modules this test loads; a tree missing any of them is a stale copy, not a pass.
 const VM_MODULES = [
     'src/gateway-emit.js',
@@ -155,10 +153,9 @@ describe('EXECUTE host bounds match the bundled VM call limits @regression @tier
         assert.strictEqual(limits.minCallGas, PROTO.VM_MIN_CALL_GAS, vm.label);
         for (const network of ['mainnet', 'testnet', 'regtest']) {
             for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                for (const height of [0, ProtocolChanges.UNARMED - 1]) {
+                for (const height of [0, ProtocolChanges.UNARMED - 1, ProtocolChanges.UNARMED]) {
                     assert.strictEqual(
-                        ProtocolChanges.activeAt(
-                            BIGINT_SURFACE_STRIP_KEY, network, coin, height, null),
+                        ProtocolChanges.isBigIntSurfaceStripActive(network, coin, height),
                         vm.bigIntSurface.isBigIntSurfaceStripActive(network, coin, height),
                         vm.label + ' BigInt surface ' + coin + ':' + network + '@' + height,
                     );
