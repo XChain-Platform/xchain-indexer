@@ -162,10 +162,12 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'price_wire_trailing_activation',
     'oracle_snapshot_age_seconds_activation',
     'attest_relay_fee_activation',
+    'attest_relay_response_deadline_activation',
     'bet_feed_list_edit_activation',
     'cross_chain_offer_list_export_activation',
     'cross_chain_remote_token_activation',
     'send_gated_total_tick_id_activation',
+    'action_admission_dispatched_only',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
