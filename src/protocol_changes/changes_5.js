@@ -78,6 +78,8 @@ const CHANGES = [
     // STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME.
     ['STAKE_SNAPSHOT_SLASH_WINDOW', '0.2.0', UNARMED, UNARMED,
         () => regtestTimeOverride('STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME')() || UNARMED, 0, 0, 0],
+    ['DELEGATION_ROTATE_IN_WINDOW', '0.2.0', UNARMED, UNARMED,
+        () => regtestTimeOverride('DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME')() || UNARMED, 0, 0, 0],
 
     // SLASH_ATTEST_MULTIROUND_EXEMPT: an XATTEST base-leg pair is no longer slashable,
     // because honest retry rounds sign one EQUIV key with differing content
