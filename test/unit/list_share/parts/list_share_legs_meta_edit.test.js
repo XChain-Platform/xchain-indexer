@@ -17,7 +17,7 @@ const base = {
     currentMeta: { name: 'Old friends', description: 'People I know' },
 };
 
-describe('list share edit leg metadata', function () {
+function registerMetadataCreationTests() {
     it('does not append a metadata leg to seq 1', function () {
         assert.deepStrictEqual(planListShareLegs({
             ...base,
@@ -53,7 +53,9 @@ describe('list share edit leg metadata', function () {
             ordinal: 2,
         }]);
     });
+}
 
+function registerMetadataChangeTests() {
     it('does not plan metadata when it is unchanged', function () {
         assert.deepStrictEqual(planListShareLegs({
             ...base,
@@ -81,7 +83,9 @@ describe('list share edit leg metadata', function () {
             ordinal: 2,
         }]);
     });
+}
 
+function registerMetadataFallbackTests() {
     it('treats null, absent, and empty fields as no metadata', function () {
         assert.deepStrictEqual(planListShareLegs({
             ...base,
@@ -131,4 +135,10 @@ describe('list share edit leg metadata', function () {
             blockTime: 20,
         }).vout, 2);
     });
+}
+
+describe('list share edit leg metadata', function () {
+    registerMetadataCreationTests();
+    registerMetadataChangeTests();
+    registerMetadataFallbackTests();
 });
