@@ -16,8 +16,8 @@
  *
  * Everything a block applies inside its transaction, in consensus order: the opening
  * passes and the block's own transactions, then the settlement, cross-chain, reward and
- * closing passes, then the blocks row, the markets, the supply sanity check and the state
- * roots. The order assigns action indexes, so moving a pass moves every later index in
+ * closing passes, then the supply refresh, the blocks row, the markets, the supply sanity
+ * check and the state roots. The order assigns action indexes, so moving a pass moves every later index in
  * the block. Installed onto XChainIndexer.prototype by ../XChainIndexer.js.
  *
  ********************************************************************/
@@ -206,9 +206,18 @@ module.exports = {
         await this.util.processCooldownCompletions(this.actions, this.indexerDb, blockToParse);
     },
 
-    // Close the VM cache, write the blocks row, update the markets, sanity-check supplies
-    // and store the state roots. Returns [ledger, actions, contracts].
+    // Refresh supplies, close the VM cache, write the blocks row, update the markets,
+    // sanity-check supplies and store the state roots. Returns [ledger, actions, contracts].
     async finalizeBlock({ blockToParse, blockTime, rawBlockTime }, stateCommitActive){
+        // Refresh every supply the block touched before createBlock hashes it. The
+        // state_hash token_supply class reads tokens.supply for each touched tick, and
+        // the per-action path this refresh replaced had already written the end-of-block
+        // supply by now, so running it after createBlock would hash the previous block's
+        // supply and fork the state hash. Every ledger-writing pass has run by this point.
+        // It runs ahead of endBlock so the blocks row stays the first write after the
+        // cache closes; the refresh is plain SQL and reaches no contract code.
+        await this.indexerDb.refreshTokenSuppliesForBlock(blockToParse);
+
         // Clear VM compilation cache for this block
         if(this.actions.vm)
             this.actions.vm.endBlock();
@@ -222,9 +231,6 @@ module.exports = {
 
         // Create / Update DEX market information
         await this.util.processMarketUpdates(this.indexerDb, blockToParse, blockTime);
-
-        // Refresh every supply touched by this block after all ledger-writing passes.
-        await this.indexerDb.refreshTokenSuppliesForBlock(blockToParse);
 
         // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
         await this.indexerDb.sanityCheck(blockToParse);

@@ -47,9 +47,7 @@ async function activateAfterBalanceExists(context){
     active = true;
 }
 
-describe('Withdraw custody guard handler integration @regression @tier1', function () {
-    afterEach(() => sinon.restore());
-
+function registerPreActivationTests(){
     it('settles a token-bound denial before activation', async function () {
         const context = makeWithdrawCustodyContext({
             custodyGuard: false,
@@ -81,7 +79,9 @@ describe('Withdraw custody guard handler integration @regression @tier1', functi
             [[TICK, '10', CONTRACT_ADDRESS]],
         ]);
     });
+}
 
+function registerActivatedDenialTests(){
     it('rejects an activated token denial without moving custody', async function () {
         const context = makeWithdrawCustodyContext({
             custodyGuard: true,
@@ -105,7 +105,9 @@ describe('Withdraw custody guard handler integration @regression @tier1', functi
         assert.strictEqual(data.STATUS, 'invalid: policy denied');
         assertCustodyUntouched(context);
     });
+}
 
+function registerNoGrandfatheringTests(){
     it('does not grandfather a custody balance against a later token denial', async function () {
         const context = makeWithdrawCustodyContext({
             custodyGuard: false,
@@ -131,7 +133,9 @@ describe('Withdraw custody guard handler integration @regression @tier1', functi
         assert.strictEqual(data.STATUS, 'invalid: policy denied');
         assertCustodyUntouched(context);
     });
+}
 
+function registerGuardRequestTests(){
     it('shows both guards the withdrawal leg from custody to SOURCE', async function () {
         const context = makeWithdrawCustodyContext({
             custodyGuard: true,
@@ -152,7 +156,9 @@ describe('Withdraw custody guard handler integration @regression @tier1', functi
             assert.strictEqual(request.to, SOURCE);
         }
     });
+}
 
+function registerFeeSettlementTests(){
     it('burns the summed fee when both guards allow', async function () {
         const tokenGas = 2000;
         const addressGas = 500;
@@ -198,4 +204,13 @@ describe('Withdraw custody guard handler integration @regression @tier1', functi
         assert.deepStrictEqual(context.guardCalls, []);
         assertCustodyUntouched(context);
     });
+}
+
+describe('Withdraw custody guard handler integration @regression @tier1', function () {
+    afterEach(() => sinon.restore());
+    registerPreActivationTests();
+    registerActivatedDenialTests();
+    registerNoGrandfatheringTests();
+    registerGuardRequestTests();
+    registerFeeSettlementTests();
 });

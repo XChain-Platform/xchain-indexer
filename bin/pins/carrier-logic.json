@@ -59,7 +59,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "2847f3f69ac4280baa67d70562c63f210cc6c3d27b1713bf92cbfb4601994c91",
+      "hash": "4de1110b4bcdcc39f62664dfa843501536fec6065a585eeda60825dab1d26245",
       "twins": [
         "xchain-hub"
       ]
@@ -2091,6 +2091,13 @@
       "to": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
       "reason": "merge delegated signing key with unusable block-time handling",
       "date": "2026-10-10"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "2847f3f69ac4280baa67d70562c63f210cc6c3d27b1713bf92cbfb4601994c91",
+      "to": "4de1110b4bcdcc39f62664dfa843501536fec6065a585eeda60825dab1d26245",
+      "reason": "admit only unit-bearing registry rows into the active gate set",
+      "date": "2026-10-11"
     }
   ]
 }
