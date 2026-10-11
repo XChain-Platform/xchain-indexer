@@ -6372,6 +6372,12 @@
       "ANCHOR v3 wire splitter splits the frozen archive-bearing vector field by field",
       "ANCHOR v3 wire splitter splits the frozen archive-free vector without consuming its publisher tail"
     ],
+    "7164446c051270a8": [
+      "consensus rules digest activeGatesAt unit filtering excludes network-shaped constant rows from the responsible set",
+      "consensus rules digest activeGatesAt unit filtering keeps coin-qualified height resolution without a named coin",
+      "consensus rules digest activeGatesAt unit filtering keeps height, time and epoch activation rows eligible",
+      "consensus rules digest activeGatesAt unit filtering returns only activation-unit rows for every supported network and coin lookup"
+    ],
     "7176d07530da2fe0": [
       "markets: a token against the native coin @regression @tier1 collects ONE pair from two opposite-orientation orders on a token/native market",
       "markets: a token against the native coin @regression @tier1 createMarket writes the sentinel and the coin ids, never a NULL side",
@@ -7600,6 +7606,16 @@
       "pushvalidatorrewards is retired outright @regression @tier1 holds no reward-write call site anywhere in the controller surface",
       "pushvalidatorrewards is retired outright @regression @tier1 is not listed in WRITE_METHODS",
       "pushvalidatorrewards is retired outright @regression @tier1 leaves the write-gate list in place so a future write method lands in it"
+    ],
+    "81e8fdffad96b491": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
+      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
     ],
     "825c41e82648dc5f": [
       "Price v2 (PRICE batch) @regression @tier3 batch anchor rule (step 3) accepts an honest batch whose header anchor equals the last round anchor",
@@ -12589,15 +12605,6 @@
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure a probe records the fee owed even with no oracle output to read",
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure records nothing when no fee is owed (belowDust / zero fee)"
     ],
-    "cee72069c1a9d3bd": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
-      "consensus identity GATES field and pin comparison pins the BigInt surface-strip row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
-    ],
     "cf3bcc3e4ee7e191": [
       "performance ratio noise floor accepts the same baseline at the old 1ms floor",
       "performance ratio noise floor accepts values at or above the floor",
@@ -15423,8 +15430,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1254,
-      "titleCount": 12912,
+      "fileCount": 1255,
+      "titleCount": 12917,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16021,6 +16028,7 @@
         "test/unit/config/message_limits.test.js": "8d38edb1fec12246",
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/config/touch_guards_env.test.js": "8f02c7885f4b9349",
+        "test/unit/consensus/active_gates_unit_aware.test.js": "7164446c051270a8",
         "test/unit/consensus/admission_binding.test.js": "989a461516486cec",
         "test/unit/consensus/admission_binding.test/attest_bind_predicate.test.js": "3d40ffcb0bc38a1d",
         "test/unit/consensus/admission_binding.test/attest_response_canonical.test.js": "daaa06423dba0a37",
@@ -16557,7 +16565,7 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "cee72069c1a9d3bd",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "81e8fdffad96b491",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
