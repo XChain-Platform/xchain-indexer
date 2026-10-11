@@ -3,6 +3,7 @@
 const assert  = require('assert')
 const http    = require('http')
 const express = require('express')
+const sinon   = require('sinon')
 const observability = require('../../../../src/observability/index.js')
 const { installMiddleware } = require('../../../../src/api/middleware.js')
 const { fakeIndexer } = require('../rpc/helpers/fake_indexer.js')
@@ -20,14 +21,11 @@ function post(port, body){
 }
 
 describe('api body parse rejection through installMiddleware', () => {
-    let server, port, calls, restore
+    let server, port, warn, error
 
     beforeEach(done => {
-        calls = { warn: [], error: [] }
-        const origWarn = console.warn, origError = console.error
-        console.warn  = (...a) => calls.warn.push(a)
-        console.error = (...a) => calls.error.push(a)
-        restore = () => { console.warn = origWarn; console.error = origError }
+        warn = sinon.stub(observability.getLogger(), 'warn')
+        error = sinon.stub(observability.getLogger(), 'error')
         const app = express()
         installMiddleware(app, {
             indexer: fakeIndexer(), CONFIG_ENV: {}, INDEXER_NETWORK: 'regtest',
@@ -39,7 +37,7 @@ describe('api body parse rejection through installMiddleware', () => {
     })
 
     afterEach(done => {
-        restore()
+        sinon.restore()
         observability._resetObservability()
         server.close(done)
     })
@@ -47,14 +45,15 @@ describe('api body parse rejection through installMiddleware', () => {
     it('answers a malformed JSON body with 400 and one warn line, no error log', async () => {
         const res = await post(port, '{"a":')
         assert.strictEqual(res.status, 400)
-        assert.deepStrictEqual(calls.error, [])
-        assert.strictEqual(calls.warn.length, 1)
-        assert.ok(!String(calls.warn[0][0]).includes('\n'))
+        assert.strictEqual(error.called, false)
+        assert.strictEqual(warn.calledOnce, true)
+        assert.strictEqual(warn.firstCall.args[0], '[api] rejected request body: entity.parse.failed (400)')
+        assert.ok(!warn.firstCall.args[0].includes('\n'))
     })
 
     it('passes a well-formed body through', async () => {
         const res = await post(port, '{"a":1}')
         assert.strictEqual(res.status, 200)
-        assert.strictEqual(calls.warn.length, 0)
+        assert.strictEqual(warn.called, false)
     })
 })
