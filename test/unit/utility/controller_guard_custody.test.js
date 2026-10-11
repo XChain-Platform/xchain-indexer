@@ -70,19 +70,13 @@ function assertNoGuardValue(result){
     assert.strictEqual(result.payoutLegs, null);
 }
 
-describe('Utility maybeRunCustodyGuard() @regression @tier1', function () {
-    let util;
-
-    beforeEach(function () {
-        util = new Utility();
-    });
-
+function registerGuardActivationTests(getUtil){
     it('returns without any guard work when custody guards are disabled', async function () {
         const actions = makeActions(false);
         const db = makeDb();
         const opts = makeOpts();
 
-        const result = await util.maybeRunCustodyGuard(actions, db, opts);
+        const result = await getUtil().maybeRunCustodyGuard(actions, db, opts);
 
         assert.deepStrictEqual(result, NO_GUARD);
         sinon.assert.calledOnceWithExactly(actions.protocolChanges.isEnabled,
@@ -97,7 +91,7 @@ describe('Utility maybeRunCustodyGuard() @regression @tier1', function () {
         const db = makeDb();
         const opts = makeOpts();
 
-        const result = await util.maybeRunCustodyGuard(actions, db, opts);
+        const result = await getUtil().maybeRunCustodyGuard(actions, db, opts);
 
         assertNoGuardValue(result);
         assert.strictEqual(opts.data['_CUSTODY_GUARD_ARMED'], true);
@@ -105,14 +99,16 @@ describe('Utility maybeRunCustodyGuard() @regression @tier1', function () {
         sinon.assert.calledOnce(db.getEffectiveAddressControllerForGuard);
         sinon.assert.notCalled(actions.actionExecute.runControllerGuard);
     });
+}
 
+function registerGuardDenialTests(getUtil){
     it('returns a token denial without looking up an address controller', async function () {
         const actions = makeActions(true);
         const db = makeDb();
         db.getEffectiveTokenControllerForGuard.resolves({ contract_index: 7 });
         actions.actionExecute.runControllerGuard.resolves({ allow: false, reason: 'denied' });
 
-        const result = await util.maybeRunCustodyGuard(actions, db, makeOpts());
+        const result = await getUtil().maybeRunCustodyGuard(actions, db, makeOpts());
 
         assert.deepStrictEqual(result, { error: 'denied', guardFee: 0, payoutLegs: null });
         sinon.assert.calledOnce(actions.actionExecute.runControllerGuard);
@@ -130,13 +126,15 @@ describe('Utility maybeRunCustodyGuard() @regression @tier1', function () {
         actions.actionExecute.runControllerGuard.onSecondCall()
             .resolves({ allow: false, reason: 'address denied' });
 
-        const result = await util.maybeRunCustodyGuard(actions, db, makeOpts());
+        const result = await getUtil().maybeRunCustodyGuard(actions, db, makeOpts());
 
         assert.deepStrictEqual(result,
             { error: 'address denied', guardFee: 0, payoutLegs: null });
         sinon.assert.calledTwice(actions.actionExecute.runControllerGuard);
     });
+}
 
+function registerGuardBillingTests(getUtil){
     it('sums both allowed guards at the configured gas price', async function () {
         const actions = makeActions(true);
         const db = makeDb();
@@ -147,7 +145,7 @@ describe('Utility maybeRunCustodyGuard() @regression @tier1', function () {
         actions.actionExecute.runControllerGuard.onSecondCall()
             .resolves({ allow: true, gasBilled: 2000 });
 
-        const result = await util.maybeRunCustodyGuard(actions, db, makeOpts());
+        const result = await getUtil().maybeRunCustodyGuard(actions, db, makeOpts());
 
         assert.strictEqual(result.error, null);
         assert.strictEqual(result.guardFee.toString(), '0.03');
@@ -159,18 +157,20 @@ describe('Utility maybeRunCustodyGuard() @regression @tier1', function () {
         const actions = makeActions(true);
         const db = makeDb();
 
-        const result = await util.maybeRunCustodyGuard(actions, db,
+        const result = await getUtil().maybeRunCustodyGuard(actions, db,
             makeOpts({ gasBalances: null }));
 
         assertNoGuardValue(result);
         sinon.assert.calledOnceWithExactly(db.getAddressBalances, 'owner', null, 100, 5);
     });
+}
 
+function registerGuardContextTests(getUtil){
     it('uses supplied gasBalances without loading SOURCE balances', async function () {
         const actions = makeActions(true);
         const db = makeDb();
 
-        const result = await util.maybeRunCustodyGuard(actions, db,
+        const result = await getUtil().maybeRunCustodyGuard(actions, db,
             makeOpts({ gasBalances: { 99: '25' } }));
 
         assertNoGuardValue(result);
@@ -185,9 +185,23 @@ describe('Utility maybeRunCustodyGuard() @regression @tier1', function () {
         const opts = makeOpts();
         opts.data.CALL_DEPTH = 3;
 
-        await util.maybeRunCustodyGuard(actions, db, opts);
+        await getUtil().maybeRunCustodyGuard(actions, db, opts);
 
         sinon.assert.calledOnce(actions.actionExecute.runControllerGuard);
         assert.strictEqual(actions.actionExecute.runControllerGuard.firstCall.args[0].callDepth, 4);
     });
+}
+
+describe('Utility maybeRunCustodyGuard() @regression @tier1', function () {
+    let util;
+
+    beforeEach(function () {
+        util = new Utility();
+    });
+
+    const getUtil = () => util;
+    registerGuardActivationTests(getUtil);
+    registerGuardDenialTests(getUtil);
+    registerGuardBillingTests(getUtil);
+    registerGuardContextTests(getUtil);
 });
