@@ -44,9 +44,7 @@ function buildRpc({ tokenInfo, sharedLists = [], mirrors = {}, roots = {}, coin 
     return { db, rpc: buildTokenPolicyRpc({ indexer }) };
 }
 
-describe('gettokenpolicy shared-list references', function () {
-    afterEach(function () { sinon.restore(); });
-
+function registerHomeSharedReferenceTest(){
     it('answers a home-shared list and a pre-existing mirror by reference after activation', async function () {
         sinon.stub(gateRegistry, 'activeAt').returns(true);
         const { db, rpc } = buildRpc({
@@ -81,7 +79,9 @@ describe('gettokenpolicy shared-list references', function () {
         sinon.assert.calledWithExactly(db.getListRootIndex.firstCall, 15, 16, ORIGIN_BLOCK);
         sinon.assert.calledWithExactly(db.getListRootIndex.secondCall, 40, 16, ORIGIN_BLOCK);
     });
+}
 
+function registerChainLabelTest(){
     it('labels a list shared on a DOGE indexer with DOGE, not BTC', async function () {
         sinon.stub(gateRegistry, 'activeAt').returns(true);
         const { rpc } = buildRpc({
@@ -100,7 +100,9 @@ describe('gettokenpolicy shared-list references', function () {
         sinon.assert.calledOnceWithExactly(gateRegistry.activeAt,
             PRODUCER_GATE, 'regtest', 'BTC', SNAPSHOT_BLOCK, null);
     });
+}
 
+function registerFullMembershipTest(){
     it('keeps an after-origin share and an unshared local list as full membership', async function () {
         sinon.stub(gateRegistry, 'activeAt').returns(true);
         const { rpc } = buildRpc({
@@ -125,7 +127,9 @@ describe('gettokenpolicy shared-list references', function () {
         assert.ok(!Object.prototype.hasOwnProperty.call(result, 'allow_list_ref'));
         assert.ok(!Object.prototype.hasOwnProperty.call(result, 'block_list_ref'));
     });
+}
 
+function registerUnarmedSnapshotTest(){
     it('keeps the legacy response unchanged at an unarmed snapshot block', async function () {
         sinon.stub(gateRegistry, 'activeAt').returns(false);
         const { db, rpc } = buildRpc({
@@ -151,7 +155,9 @@ describe('gettokenpolicy shared-list references', function () {
         sinon.assert.notCalled(db.getListRootIndex);
         sinon.assert.notCalled(db.getListShareMirrorByIndex);
     });
+}
 
+function registerOmittedSnapshotTest(){
     it('keeps the legacy response unchanged when snapshot_block is omitted', async function () {
         const gate = sinon.spy(gateRegistry, 'activeAt');
         const { db, rpc } = buildRpc({
@@ -176,4 +182,14 @@ describe('gettokenpolicy shared-list references', function () {
         sinon.assert.notCalled(db.getListRootIndex);
         sinon.assert.notCalled(db.getListShareMirrorByIndex);
     });
+}
+
+describe('gettokenpolicy shared-list references', function () {
+    afterEach(function () { sinon.restore(); });
+
+    registerHomeSharedReferenceTest();
+    registerChainLabelTest();
+    registerFullMembershipTest();
+    registerUnarmedSnapshotTest();
+    registerOmittedSnapshotTest();
 });

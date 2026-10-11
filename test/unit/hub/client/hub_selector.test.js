@@ -23,22 +23,18 @@ const MAINNET_DEFAULTS = Array.from({ length: 5 }, (_, i) =>
 const TESTNET_DEFAULTS = Array.from({ length: 5 }, (_, i) =>
     'http://validator' + String(i + 1).padStart(2, '0') + '.xchain.io:10002');
 
-describe('hub selector', function () {
-    const originalRandomInt = crypto.randomInt;
-
-    afterEach(function () {
-        crypto.randomInt = originalRandomInt;
+function seededSelector(seeds) {
+    return createHubSelector('testnet', {
+        hubSeedUrls: seeds,
+        hubApiUrl: '',
+        randomInt: (max) => max - 1
     });
+}
 
+function defineDefaultTests() {
     it('expands the built-in validators for each public network', function () {
-        let mainnet = createHubSelector('mainnet', {
-            hubSeedUrls: 'default',
-            randomInt: (max) => max - 1
-        });
-        let testnet = createHubSelector('testnet', {
-            hubSeedUrls: 'default',
-            randomInt: (max) => max - 1
-        });
+        let mainnet = createHubSelector('mainnet', { hubSeedUrls: 'default', randomInt: (max) => max - 1 });
+        let testnet = createHubSelector('testnet', { hubSeedUrls: 'default', randomInt: (max) => max - 1 });
 
         assert.deepStrictEqual(mainnet.status().candidates, MAINNET_DEFAULTS);
         assert.deepStrictEqual(testnet.status().candidates, TESTNET_DEFAULTS);
@@ -53,10 +49,7 @@ describe('hub selector', function () {
 
     it('uses crypto.randomInt to avoid always following the first configured seed', function () {
         let calls = 0;
-        crypto.randomInt = () => {
-            calls++;
-            return 0;
-        };
+        crypto.randomInt = () => { calls++; return 0; };
         let selector = createHubSelector('testnet', {
             hubSeedUrls: 'http://one.test:10002,http://two.test:10002,http://three.test:10002'
         });
@@ -64,13 +57,13 @@ describe('hub selector', function () {
         assert.notStrictEqual(selector.current(), 'http://one.test:10002');
         assert.strictEqual(calls, 2);
     });
+}
 
+function defineMergeTests() {
     it('keeps a lone HUB_API_URL pinned even after merge and advance', function () {
         let changes = [];
         let selector = createHubSelector('testnet', {
-            hubSeedUrls: '',
-            hubApiUrl: 'https://pinned.test:8443/',
-            randomInt: (max) => max - 1
+            hubSeedUrls: '', hubApiUrl: 'https://pinned.test:8443/', randomInt: (max) => max - 1
         });
         selector.onChange((...args) => changes.push(args));
 
@@ -98,8 +91,7 @@ describe('hub selector', function () {
 
     it('deduplicates seeds and merge remains additive without moving the current hub', function () {
         let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://seed-a.test:10002/, default, http://seed-a.test:10002',
-            randomInt: (max) => max - 1
+            hubSeedUrls: 'http://seed-a.test:10002/, default, http://seed-a.test:10002', randomInt: (max) => max - 1
         });
         let original = selector.status();
 
@@ -115,16 +107,16 @@ describe('hub selector', function () {
         for(let seed of original.candidates) assert.ok(merged.candidates.includes(seed), seed);
         assert.ok(merged.candidates.includes('http://learned.test:10002'));
     });
+}
 
+function defineAdvanceTests() {
     it('advances in shuffled order, wraps, and notifies only on a move', function () {
         let selector = createHubSelector('testnet', {
             hubSeedUrls: 'http://a.test,http://b.test,http://c.test',
             randomInt: (max) => max - 1
         });
         let events = [];
-        let unsubscribe = selector.onChange((next, previous, reason) => {
-            events.push({ next, previous, reason });
-        });
+        let unsubscribe = selector.onChange((next, previous, reason) => events.push({ next, previous, reason }));
         let order = selector.status().candidates;
 
         assert.strictEqual(selector.advance('first'), order[1]);
@@ -138,11 +130,7 @@ describe('hub selector', function () {
     });
 
     it('does not advance a dynamic selector until it has multiple candidates', function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://only.test:10002',
-            hubApiUrl: '',
-            randomInt: (max) => max - 1
-        });
+        let selector = seededSelector('http://only.test:10002');
         let changes = 0;
         selector.onChange(() => changes++);
 
@@ -152,19 +140,15 @@ describe('hub selector', function () {
         assert.strictEqual(selector.advance('now movable'), 'http://second.test:10002');
         assert.strictEqual(changes, 1);
     });
+}
 
+function defineEnvTests() {
     it('reads HUB_SEED_URLS and HUB_API_URL through the supplied accessor', function () {
         let reads = [];
-        let values = {
-            HUB_SEED_URLS: 'http://from-env.test:10002',
-            HUB_API_URL: 'http://ignored-pin.test:10002'
-        };
+        let values = { HUB_SEED_URLS: 'http://from-env.test:10002', HUB_API_URL: 'http://ignored-pin.test:10002' };
         let selector = createHubSelector({
             network: 'testnet',
-            readEnvNow(key) {
-                reads.push(key);
-                return values[key];
-            },
+            readEnvNow(key) { reads.push(key); return values[key]; },
             randomInt: (max) => max - 1
         });
 
@@ -175,23 +159,18 @@ describe('hub selector', function () {
 
     it('does not read environment keys supplied as arguments', function () {
         let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://argument.test:10002',
-            hubApiUrl: '',
-            readEnvNow() {
-                throw new Error('unexpected environment read');
-            },
+            hubSeedUrls: 'http://argument.test:10002', hubApiUrl: '',
+            readEnvNow() { throw new Error('unexpected environment read'); },
             randomInt: (max) => max - 1
         });
 
         assert.strictEqual(selector.current(), 'http://argument.test:10002');
     });
+}
 
+function defineClientTests() {
     it('enables a hub client from a selector candidate when only seeds are configured', function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://seed.test:10002',
-            hubApiUrl: '',
-            randomInt: (max) => max - 1
-        });
+        let selector = seededSelector('http://seed.test:10002');
         let client = new HubClient('', 'key', '', '');
 
         client.setAddressSource(() => selector.current());
@@ -202,11 +181,7 @@ describe('hub selector', function () {
     });
 
     it('keeps the config address fixed while the selected feed address moves', function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://feed-a.test:10002,http://feed-b.test:10002',
-            hubApiUrl: '',
-            randomInt: (max) => max - 1
-        });
+        let selector = seededSelector('http://feed-a.test:10002,http://feed-b.test:10002');
         let client = new HubClient('', 'feed-key', 'http://config.test:10000', 'config-key');
         client.setAddressSource(() => selector.current());
 
@@ -215,13 +190,11 @@ describe('hub selector', function () {
         assert.strictEqual(client.configUrl, 'http://config.test:10000');
         assert.notStrictEqual(selector.current(), client.configUrl);
     });
+}
 
+function defineDrainTests() {
     it('aborts an in-flight mirror drain when the selector changes', async function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://hub-a.test:10002,http://hub-b.test:10002',
-            hubApiUrl: '',
-            randomInt: (max) => max - 1
-        });
+        let selector = seededSelector('http://hub-a.test:10002,http://hub-b.test:10002');
         let sync = new HubDbSync({ doQuery: async () => [] }, { selector });
         assert.strictEqual(sync.enabled, true);
         sync.captureConnectionAddress();
@@ -245,11 +218,7 @@ describe('hub selector', function () {
     });
 
     it('stops paging a table when the selector changes during a request', async function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: 'http://hub-a.test:10002,http://hub-b.test:10002',
-            hubApiUrl: '',
-            randomInt: (max) => max - 1
-        });
+        let selector = seededSelector('http://hub-a.test:10002,http://hub-b.test:10002');
         let sync = new HubDbSync({ doQuery: async () => [] }, { selector });
         let applied = 0;
         sync.httpGet = async () => {
@@ -268,74 +237,9 @@ describe('hub selector', function () {
         assert.strictEqual(applied, 0);
         assert.strictEqual(drain.pagesFetched, 0);
     });
+}
 
-    it('keeps requests on the captured address until the next connection epoch', async function () {
-        this.timeout(10000);
-        async function openHub(label, holdResponse) {
-            let release;
-            let arrived;
-            let responseGate = holdResponse ? new Promise((resolve) => { release = resolve; }) : Promise.resolve();
-            let requestArrived = new Promise((resolve) => { arrived = resolve; });
-            let server = http.createServer(async (req, res) => {
-                arrived();
-                await responseGate;
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ source: label }));
-            });
-            let socketServer = new WebSocketServer({ server });
-            socketServer.on('connection', (socket) => socket.send(JSON.stringify({ type: 'ready' })));
-            await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-            return {
-                url: 'http://127.0.0.1:' + server.address().port,
-                server, socketServer, requestArrived,
-                release: release || (() => {})
-            };
-        }
-        async function closeHub(hub) {
-            for(let socket of hub.socketServer.clients) socket.terminate();
-            await new Promise((resolve) => hub.socketServer.close(resolve));
-            await new Promise((resolve) => hub.server.close(resolve));
-        }
-
-        let first = await openHub('first', true);
-        let second = await openHub('second', false);
-        let sync;
-        try {
-            let selector = createHubSelector('testnet', {
-                hubSeedUrls: first.url + ',' + second.url,
-                hubApiUrl: '',
-                randomInt: (max) => max - 1
-            });
-            sync = new HubDbSync({ doQuery: async () => [] }, { selector });
-            sync.running = true;
-
-            await sync.connectWebSocket();
-            assert.strictEqual(sync.hubUrl, first.url);
-            let oldEpochRequest = sync.httpGet('/hub-db/snapshot/oracle_prices');
-            await first.requestArrived;
-
-            selector.advance('move during request');
-            assert.strictEqual(sync.hubUrl, first.url);
-            first.release();
-            assert.deepStrictEqual(await oldEpochRequest, { source: 'first' });
-
-            let closed = new Promise((resolve) => sync.ws.once('close', resolve));
-            sync.running = false;
-            sync.ws.close();
-            await closed;
-            sync.running = true;
-
-            await sync.connectWebSocket();
-            assert.strictEqual(sync.hubUrl, second.url);
-            assert.deepStrictEqual(await sync.httpGet('/hub-db/snapshot/oracle_prices'), { source: 'second' });
-        } finally {
-            if(sync) sync.stop();
-            first.release();
-            await closeHub(first);
-            await closeHub(second);
-        }
-    });
-
+function defineLearnTests() {
     it('learns hubs after a certified drain without replacing seeds', async function () {
         let hub = await openListHub({ hubs: [{ api_url: 'http://learned.test:10002' }] });
         try {
@@ -364,7 +268,9 @@ describe('hub selector', function () {
         await certify(sync, 1, 102);
         assert.strictEqual(fetchHubList.callCount, 2);
     });
+}
 
+function defineLearnEdgeTests() {
     it('keeps candidates unchanged and logs once for empty and unsupported lists', async function () {
         let { selector, sync } = makeDynamicSync();
         let initial = selector.status().candidates;
@@ -387,14 +293,101 @@ describe('hub selector', function () {
     });
 
     it('does not learn hub lists in pinned mode', function () {
-        let selector = createHubSelector('testnet', {
-            hubSeedUrls: '',
-            hubApiUrl: 'http://pinned.test:10002'
-        });
+        let selector = createHubSelector('testnet', { hubSeedUrls: '', hubApiUrl: 'http://pinned.test:10002' });
         let sync = new HubDbSync({ doQuery: async () => [] }, { selector });
         let fetchHubList = sinon.stub(sync, 'fetchHubList');
         assert.strictEqual(sync.certifyFullDrain([100], sync._wsEpoch), true);
         assert.strictEqual(fetchHubList.called, false);
         assert.strictEqual(sync._hubListRefreshPromise, null);
     });
+}
+
+async function openHub(label, holdResponse) {
+    let release;
+    let arrived;
+    let responseGate = holdResponse ? new Promise((resolve) => { release = resolve; }) : Promise.resolve();
+    let requestArrived = new Promise((resolve) => { arrived = resolve; });
+    let server = http.createServer(async (req, res) => {
+        arrived();
+        await responseGate;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ source: label }));
+    });
+    let socketServer = new WebSocketServer({ server });
+    socketServer.on('connection', (socket) => socket.send(JSON.stringify({ type: 'ready' })));
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    return {
+        url: 'http://127.0.0.1:' + server.address().port,
+        server, socketServer, requestArrived,
+        release: release || (() => {})
+    };
+}
+
+async function closeHub(hub) {
+    for(let socket of hub.socketServer.clients) socket.terminate();
+    await new Promise((resolve) => hub.socketServer.close(resolve));
+    await new Promise((resolve) => hub.server.close(resolve));
+}
+
+async function reconnectWebSocket(sync) {
+    let closed = new Promise((resolve) => sync.ws.once('close', resolve));
+    sync.running = false;
+    sync.ws.close();
+    await closed;
+    sync.running = true;
+    await sync.connectWebSocket();
+}
+
+async function runEpochScenario(first, second, state) {
+    let selector = seededSelector(first.url + ',' + second.url);
+    let sync = state.sync = new HubDbSync({ doQuery: async () => [] }, { selector });
+    sync.running = true;
+
+    await sync.connectWebSocket();
+    assert.strictEqual(sync.hubUrl, first.url);
+    let oldEpochRequest = sync.httpGet('/hub-db/snapshot/oracle_prices');
+    await first.requestArrived;
+
+    selector.advance('move during request');
+    assert.strictEqual(sync.hubUrl, first.url);
+    first.release();
+    assert.deepStrictEqual(await oldEpochRequest, { source: 'first' });
+
+    await reconnectWebSocket(sync);
+    assert.strictEqual(sync.hubUrl, second.url);
+    assert.deepStrictEqual(await sync.httpGet('/hub-db/snapshot/oracle_prices'), { source: 'second' });
+}
+
+function defineEpochTests() {
+    it('keeps requests on the captured address until the next connection epoch', async function () {
+        this.timeout(10000);
+        let first = await openHub('first', true);
+        let second = await openHub('second', false);
+        let state = {};
+        try {
+            await runEpochScenario(first, second, state);
+        } finally {
+            if(state.sync) state.sync.stop();
+            first.release();
+            await closeHub(first);
+            await closeHub(second);
+        }
+    });
+}
+
+describe('hub selector', function () {
+    const originalRandomInt = crypto.randomInt;
+
+    afterEach(function () {
+        crypto.randomInt = originalRandomInt;
+    });
+    defineDefaultTests();
+    defineMergeTests();
+    defineAdvanceTests();
+    defineEnvTests();
+    defineClientTests();
+    defineDrainTests();
+    defineEpochTests();
+    defineLearnTests();
+    defineLearnEdgeTests();
 });
