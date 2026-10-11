@@ -40,85 +40,103 @@ function mutex(){
     };
 }
 
+async function findTicker(args, context, clientState){
+    const wanted = String(args[0]).toLowerCase();
+    const row = context.rows.find(item => item.tick.toLowerCase() === wanted);
+    if(!row && !clientState.initialLookupDone){
+        clientState.initialLookupDone = true;
+        await context.initialLookupBarrier();
+    }
+    return row ? [{ id: row.id }] : [];
+}
+
+async function readLatestTickerId(sql, context, clientState){
+    const locking = /FOR UPDATE\s*$/i.test(sql);
+    if(locking)
+        clientState.releaseAllocationLock = await context.acquireAllocationLock();
+    const snapshot = context.rows.reduce((max, row) => Math.max(max, row.id), 0);
+    context.allocationReads.push({ processId: clientState.processId, snapshot, locking });
+    if(!locking)
+        await context.unlockedReadBarrier();
+    return snapshot === 0 ? [] : [{ id: snapshot }];
+}
+
+function insertTicker(args, context, clientState){
+    const [id, tick, block_index] = args;
+    context.attempts.push({ processId: clientState.processId, id, tick, block_index });
+    const duplicate = context.rows.some(row => row.id === id || row.tick === tick);
+    if(!duplicate)
+        context.rows.push({ id, tick, block_index });
+    return { affectedRows: duplicate ? 0 : 1 };
+}
+
+function queryHandler(context, clientState){
+    return async function doQuery(sql, args = []){
+        if(/SELECT id FROM index_tickers WHERE LOWER\(tick\)=\? ORDER BY id ASC LIMIT 1/.test(sql))
+            return await findTicker(args, context, clientState);
+        if(/SELECT id FROM index_tickers ORDER BY id DESC LIMIT 1/.test(sql))
+            return await readLatestTickerId(sql, context, clientState);
+        if(/INSERT IGNORE INTO index_tickers/.test(sql))
+            return insertTicker(args, context, clientState);
+        throw new Error('Unexpected query: ' + sql);
+    };
+}
+
+function transactionClient(processId, context, methods){
+    const tick = 'TICK_' + String(processId).padStart(2, '0');
+    const clientState = {
+        processId,
+        initialLookupDone: false,
+        releaseAllocationLock: null,
+    };
+    const db = {
+        util: { isNull: value => value === null || value === undefined || value === '' },
+        transactionConnection: { processId },
+        blockIndex: 901,
+        suppressIndexIdCreation: false,
+        deterministicIndexingStarted: true,
+        _internCache: null,
+        doQuery: queryHandler(context, clientState),
+    };
+    Object.assign(db, methods);
+
+    return {
+        async allocate(){
+            try {
+                return await db.createTicker(tick);
+            } finally {
+                if(clientState.releaseAllocationLock)
+                    clientState.releaseAllocationLock();
+            }
+        },
+    };
+}
+
+function harnessContext(){
+    return {
+        rows: [{ id: SEED_ID, tick: 'SEED', block_index: 900 }],
+        attempts: [],
+        allocationReads: [],
+        initialLookupBarrier: barrier(FANOUT),
+        unlockedReadBarrier: barrier(FANOUT),
+        acquireAllocationLock: mutex(),
+    };
+}
+
 // Models independent indexer transactions sharing one seeded index_tickers table.
 // Each client has its own transactionConnection, while the locking read is arbitrated
 // by the shared server. The initial name-lookup barrier forces every client to observe
 // its ticker as missing before any client starts the dense-id allocation read.
 function seededConcurrencyHarness(methods = tickerQueries){
-    const rows = [{ id: SEED_ID, tick: 'SEED', block_index: 900 }];
-    const attempts = [];
-    const allocationReads = [];
-    const initialLookupBarrier = barrier(FANOUT);
-    const unlockedReadBarrier = barrier(FANOUT);
-    const acquireAllocationLock = mutex();
-    const clients = [];
-
-    for(let processId = 0; processId < FANOUT; processId++){
-        const tick = 'TICK_' + String(processId).padStart(2, '0');
-        let initialLookupDone = false;
-        let releaseAllocationLock = null;
-
-        const db = {
-            util: { isNull: value => value === null || value === undefined || value === '' },
-            transactionConnection: { processId },
-            blockIndex: 901,
-            suppressIndexIdCreation: false,
-            deterministicIndexingStarted: true,
-            _internCache: null,
-
-            async doQuery(sql, args = []){
-                if(/SELECT id FROM index_tickers WHERE LOWER\(tick\)=\? ORDER BY id ASC LIMIT 1/.test(sql)){
-                    const wanted = String(args[0]).toLowerCase();
-                    const row = rows.find(item => item.tick.toLowerCase() === wanted);
-                    if(!row && !initialLookupDone){
-                        initialLookupDone = true;
-                        await initialLookupBarrier();
-                    }
-                    return row ? [{ id: row.id }] : [];
-                }
-
-                if(/SELECT id FROM index_tickers ORDER BY id DESC LIMIT 1/.test(sql)){
-                    const locking = /FOR UPDATE\s*$/i.test(sql);
-                    if(locking)
-                        releaseAllocationLock = await acquireAllocationLock();
-                    const snapshot = rows.reduce((max, row) => Math.max(max, row.id), 0);
-                    allocationReads.push({ processId, snapshot, locking });
-                    if(!locking)
-                        await unlockedReadBarrier();
-                    return snapshot === 0 ? [] : [{ id: snapshot }];
-                }
-
-                if(/INSERT IGNORE INTO index_tickers/.test(sql)){
-                    const [id, insertedTick, block_index] = args;
-                    attempts.push({ processId, id, tick: insertedTick, block_index });
-                    const duplicate = rows.some(row => row.id === id || row.tick === insertedTick);
-                    if(!duplicate)
-                        rows.push({ id, tick: insertedTick, block_index });
-                    return { affectedRows: duplicate ? 0 : 1 };
-                }
-
-                throw new Error('Unexpected query: ' + sql);
-            },
-        };
-
-        Object.assign(db, methods);
-        clients.push({
-            tick,
-            async allocate(){
-                try {
-                    return await db.createTicker(tick);
-                } finally {
-                    if(releaseAllocationLock)
-                        releaseAllocationLock();
-                }
-            },
-        });
-    }
+    const context = harnessContext();
+    const clients = Array.from(
+        { length: FANOUT },
+        (_, processId) => transactionClient(processId, context, methods));
 
     return {
-        rows,
-        attempts,
-                allocationReads,
+        rows: context.rows,
+        attempts: context.attempts,
+        allocationReads: context.allocationReads,
         async run(){
             return await Promise.all(clients.map(client => client.allocate()));
         },
