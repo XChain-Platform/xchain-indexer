@@ -74,7 +74,7 @@ function noWriteState(state){
     assert.deepStrictEqual(state.actions, []);
 }
 
-describe('list share consuming-chain apply pass', function () {
+function registerGateTests(){
     it('does no read or write while mirror admission is unarmed', async function () {
         const { ctx, state } = H.makeListShareCtx({ mirrorRows: vectorRows() });
         ctx.indexerDb.mirrorDb = () => { throw new Error('mirror read'); };
@@ -91,7 +91,9 @@ describe('list share consuming-chain apply pass', function () {
         assert.deepStrictEqual(await armed.processListSharePass(ctx), { applied: [] });
         noWriteState(state);
     });
+}
 
+function registerApplyTests(){
     it('creates the fixture full list under the home bridge owner and records it', async function () {
         const keys = [H.makeKey(), H.makeKey(), H.makeKey()];
         const [full] = signedRows(vectorRows().slice(0, 1), keys);
@@ -137,7 +139,9 @@ describe('list share consuming-chain apply pass', function () {
         );
         assert.strictEqual(state.settlements.length, 2);
     });
+}
 
+function registerValidationTests(){
     it('halts on a members hash mismatch before injecting or recording', async function () {
         const keys = [H.makeKey(), H.makeKey(), H.makeKey()];
         const [row] = vectorRows();
@@ -194,7 +198,9 @@ describe('list share consuming-chain apply pass', function () {
         assert.deepStrictEqual(state.actions, [{ ACTION: 'LIST_SHARE', BLOCK_INDEX: 901, FORMAT: 0 }]);
         assert.deepStrictEqual(state.settlements.map(row => row.action_index), [7000, 7001]);
     });
+}
 
+function registerGuardTests(){
     it('halts on a failed quorum before injecting or recording', async function () {
         const keys = [H.makeKey(), H.makeKey(), H.makeKey()];
         const [row] = vectorRows();
@@ -232,4 +238,11 @@ describe('list share consuming-chain apply pass', function () {
         assert.deepStrictEqual(await armed.processListSharePass(ctx), { applied: [] });
         noWriteState(state);
     });
+}
+
+describe('list share consuming-chain apply pass', function () {
+    registerGateTests();
+    registerApplyTests();
+    registerValidationTests();
+    registerGuardTests();
 });

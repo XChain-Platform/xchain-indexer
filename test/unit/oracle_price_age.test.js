@@ -65,7 +65,7 @@ function oracleDataResult(maxPriceAgeSeconds){
     return BLOCK_TIME - SNAPSHOT_TIME <= maxPriceAgeSeconds ? { BTC: 'fresh' } : null;
 }
 
-describe('hourly price age', function(){
+function registerPriceAgeBasics(){
     afterEach(function(){
         sinon.restore();
     });
@@ -120,7 +120,9 @@ describe('hourly price age', function(){
         assert.deepStrictEqual(activeAt.firstCall.args, [GATE, NETWORK, 'BTC', ACTIVATION - 1, null]);
         assert.deepStrictEqual(activeAt.secondCall.args, [GATE, NETWORK, 'BTC', ACTIVATION, null]);
     });
+}
 
+function registerFeePricing(){
     it('flips fee pricing from stale to valid at the quoted block gate', async function(){
         armHourlyGate();
         let config = hourlyConfig({ FEE_TOLERANCE_MIN: '0.95', FEE_TOLERANCE_MAX: '1.10' });
@@ -148,7 +150,9 @@ describe('hourly price age', function(){
         assert.deepStrictEqual(priceRead.secondCall.args,
             [indexerDb, 'BTC', ACTIVATION, BLOCK_TIME, 4500]);
     });
+}
 
+function registerFeeSchedule(){
     it('flips the fee schedule price verdict at the tip block gate', async function(){
         armHourlyGate();
         let blockIndex = ACTIVATION - 1;
@@ -179,7 +183,9 @@ describe('hourly price age', function(){
         assert.deepStrictEqual(priceRead.secondCall.args,
             [indexerDb, 'BTC', ACTIVATION, BLOCK_TIME, 4500]);
     });
+}
 
+function registerAttestationPricing(){
     it('flips attestation settlement pricing at its action block gate', async function(){
         armHourlyGate();
         let priceRead = sinon.stub().callsFake(
@@ -203,7 +209,9 @@ describe('hourly price age', function(){
         assert.deepStrictEqual(priceRead.secondCall.args,
             [indexerDb, 'BTC', ACTIVATION, BLOCK_TIME, 4500]);
     });
+}
 
+function registerConstructorExecution(){
     it('flips deployment constructor execution at its action block gate', async function(){
         armHourlyGate();
         let oracleRead = sinon.stub().callsFake(
@@ -255,14 +263,14 @@ describe('hourly price age', function(){
         assert.deepStrictEqual(oracleRead.firstCall.args, [ACTIVATION - 1, BLOCK_TIME, 1800]);
         assert.deepStrictEqual(oracleRead.secondCall.args, [ACTIVATION, BLOCK_TIME, 4500]);
     });
+}
 
+function registerControllerGuard(){
     it('flips a controller guard verdict at its host action block gate', async function(){
         armHourlyGate();
         let oracleRead = sinon.stub().callsFake(
             (blockIndex, blockTime, maxPriceAgeSeconds) => oracleDataResult(maxPriceAgeSeconds));
-        let context = {
-            config: hourlyConfig(),
-            guardSavepointCounter: 0,
+        let context = { config: hourlyConfig(), guardSavepointCounter: 0,
             actions: {
                 protocolChanges: { isEnabled: async () => false },
                 vm: {
@@ -280,11 +288,8 @@ describe('hourly price age', function(){
                     }
                 }
             },
-            util: {
-                isNull: value => value === undefined || value === null,
-                resolveGuardGasCeiling: () => 100,
-                vmFailureStatus: error => error
-            },
+            util: { isNull: value => value === undefined || value === null,
+                resolveGuardGasCeiling: () => 100, vmFailureStatus: error => error },
             indexerDb: {
                 getContract: async () => ({ code: 'code' }),
                 getStatusString: async () => 'valid',
@@ -299,16 +304,8 @@ describe('hourly price age', function(){
                 releaseSavepoint: async () => {}
             }
         };
-        function hostData(blockIndex){
-            return {
-                BLOCK_INDEX: blockIndex,
-                BLOCK_TIME: BLOCK_TIME,
-                SOURCE: 'source',
-                ACTION_INDEX: 12,
-                TX_HASH: 'tx',
-                TX_VOUT: 0
-            };
-        }
+        function hostData(blockIndex){ return { BLOCK_INDEX: blockIndex, BLOCK_TIME: BLOCK_TIME,
+            SOURCE: 'source', ACTION_INDEX: 12, TX_HASH: 'tx', TX_VOUT: 0 }; }
 
         let below = await controllerGuard.runControllerGuard.call(
             context, { controllerIndex: 7, actionType: 'SEND', hostData: hostData(ACTIVATION - 1) },
@@ -323,14 +320,14 @@ describe('hourly price age', function(){
         assert.deepStrictEqual(oracleRead.firstCall.args, [ACTIVATION - 1, BLOCK_TIME, 1800]);
         assert.deepStrictEqual(oracleRead.secondCall.args, [ACTIVATION, BLOCK_TIME, 4500]);
     });
+}
 
+function registerVmExecution(){
     it('flips VM execution at its action block gate', async function(){
         armHourlyGate();
         let oracleRead = sinon.stub().callsFake(
             (blockIndex, blockTime, maxPriceAgeSeconds) => oracleDataResult(maxPriceAgeSeconds));
-        let context = {
-            config: hourlyConfig(),
-            providerDeadlineWindows: {},
+        let context = { config: hourlyConfig(), providerDeadlineWindows: {},
             actions: {
                 protocolChanges: { isEnabled: async () => false },
                 vm: {
@@ -358,23 +355,10 @@ describe('hourly price age', function(){
                 releaseSavepoint: async () => {}
             }
         };
-        function buildRun(blockIndex){
-            return {
-                data: {
-                    BLOCK_INDEX: blockIndex,
-                    BLOCK_TIME: BLOCK_TIME,
-                    CONTRACT_ACTION_INDEX: 7,
-                    ACTION_INDEX: 13,
-                    SOURCE: 'source',
-                    METHOD: 'run',
-                    TX_HASH: 'tx',
-                    TX_VOUT: 0,
-                    ROOT_ACTION_INDEX: 0
-                },
-                gasCost: 1,
-                contractInfo: { code: 'code' }
-            };
-        }
+        function buildRun(blockIndex){ return { data: { BLOCK_INDEX: blockIndex,
+            BLOCK_TIME: BLOCK_TIME, CONTRACT_ACTION_INDEX: 7, ACTION_INDEX: 13, SOURCE: 'source',
+            METHOD: 'run', TX_HASH: 'tx', TX_VOUT: 0, ROOT_ACTION_INDEX: 0 }, gasCost: 1,
+            contractInfo: { code: 'code' } }; }
 
         let below = buildRun(ACTIVATION - 1);
         let at = buildRun(ACTIVATION);
@@ -388,4 +372,14 @@ describe('hourly price age', function(){
         assert.deepStrictEqual(oracleRead.firstCall.args, [ACTIVATION - 1, BLOCK_TIME, 1800]);
         assert.deepStrictEqual(oracleRead.secondCall.args, [ACTIVATION, BLOCK_TIME, 4500]);
     });
+}
+
+describe('hourly price age', function(){
+    registerPriceAgeBasics();
+    registerFeePricing();
+    registerFeeSchedule();
+    registerAttestationPricing();
+    registerConstructorExecution();
+    registerControllerGuard();
+    registerVmExecution();
 });
