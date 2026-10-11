@@ -8336,6 +8336,19 @@
       "HubPushQueue start() / stop() stop() clears the timer and sets it to null",
       "HubPushQueue start() / stop() stop() is safe when timer is already null"
     ],
+    "886d47aceb47229b": [
+      "cooldown maturity escrow release reversal @regression @tier3 deletes each legacy refund credit together with its paired negative escrow release",
+      "cooldown maturity escrow release reversal @regression @tier3 keeps both escrow releases and still deletes the credits and resets the status when the delete is off",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback at an active height deletes both releases so the re-maturity writes the only one",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback on an unarmed network keeps the escrow releases and reverses everything else as before",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 the row is unarmed on mainnet and every testnet chain and active from regtest genesis",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 the switch is read at the rollback target block, for this network and coin",
+      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 a slashed-to-zero cooldown alone makes the reversal a no-op",
+      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 a slashed-to-zero source is not seeded into the recompute",
+      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 an active reversal undoes the matured sibling and keeps the slash release and the slashed row",
+      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 an unarmed reversal also leaves the slashed-to-zero source untouched",
+      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 the sweep never matures a slashed-to-zero cooldown, so it never reads completed"
+    ],
     "8889c181c1ea0632": [
       "BET action handler @regression @tier2 accepts a valid place, escrows the stake, writes the open bet",
       "BET action handler @regression @tier2 cancel refunds every open bet in full with no oracle fee and works past expire_at",
@@ -8669,14 +8682,6 @@
       "recovery v3 fold wrapper canonical matches the frozen section string with the archive suffix and lower-case CRC",
       "recovery v3 fold wrapper section lookup picks the sibling chain section whose signatures equal the head",
       "recovery v3 fold wrapper section lookup rejects a head with no matching wrapper section"
-    ],
-    "8eef9eb4827f4e83": [
-      "cooldown maturity escrow release reversal @regression @tier3 deletes each legacy refund credit together with its paired negative escrow release",
-      "cooldown maturity escrow release reversal @regression @tier3 keeps both escrow releases and still deletes the credits and resets the status when the delete is off",
-      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback at an active height deletes both releases so the re-maturity writes the only one",
-      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback on an unarmed network keeps the escrow releases and reverses everything else as before",
-      "cooldown maturity escrow release reversal: activation @regression @tier3 the row is unarmed on mainnet and every testnet chain and active from regtest genesis",
-      "cooldown maturity escrow release reversal: activation @regression @tier3 the switch is read at the rollback target block, for this network and coin"
     ],
     "8f02c7885f4b9349": [
       "touch guards env routing @regression has no process.env read of its own; the config home does the read",
@@ -15440,7 +15445,7 @@
   "scripts": {
     "test": {
       "fileCount": 1257,
-      "titleCount": 12922,
+      "titleCount": 12927,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16595,7 +16600,7 @@
         "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "78664d20d86a7a0f",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
         "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
-        "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "8eef9eb4827f4e83",
+        "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "886d47aceb47229b",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
         "test/unit/rollback/rollback.test/transaction_and_rearm.test.js": "294f6ca3123cda7e",
         "test/unit/rollback/rollback_archive_author_scope.test.js": "d02af0af67a03e53",
