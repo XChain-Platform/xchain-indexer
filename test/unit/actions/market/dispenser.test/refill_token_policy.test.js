@@ -52,21 +52,15 @@ function tickReads() {
     return indexer.indexerDb.isActionAllowed.getCalls().filter((call) => call.args[1] === 'JDOG');
 }
 
-describe('Dispenser refill token policy @regression @tier2', function () {
-    useDispenserHarness(bind);
+function sleepTick() {
+    indexer.indexerDb.isActionAllowed.withArgs(null, 'JDOG', sinon.match.any).resolves(false);
+}
 
-    beforeEach(function () {
-        indexer.indexerDb.getDispenserInfo.resolves(dispenserInfo());
-    });
+function excludeSource() {
+    indexer.indexerDb.isActionAllowed.withArgs(OWNER_ADDR, 'JDOG', sinon.match.any).resolves(false);
+}
 
-    function sleepTick() {
-        indexer.indexerDb.isActionAllowed.withArgs(null, 'JDOG', sinon.match.any).resolves(false);
-    }
-
-    function excludeSource() {
-        indexer.indexerDb.isActionAllowed.withArgs(OWNER_ADDR, 'JDOG', sinon.match.any).resolves(false);
-    }
-
+function registerArmedTests() {
     describe('armed', function () {
         it('refuses a refill while the give token sleeps and escrows nothing', async function () {
             sleepTick();
@@ -124,7 +118,9 @@ describe('Dispenser refill token policy @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], 'invalid: SOURCE (not owner)');
         });
     });
+}
 
+function registerBelowHeightTests() {
     describe('below the height', function () {
         beforeEach(function () {
             stubGate(sinon, KEY, false);
@@ -150,7 +146,9 @@ describe('Dispenser refill token policy @regression @tier2', function () {
             assert.strictEqual(tickReads().length, 0);
         });
     });
+}
 
+function registerRowTests() {
     describe('the row', function () {
         it('is unarmed on mainnet and on every testnet coin, and active from regtest genesis', function () {
             for (const coin of ['BTC', 'LTC', 'DOGE']) {
@@ -160,4 +158,16 @@ describe('Dispenser refill token policy @regression @tier2', function () {
             }
         });
     });
+}
+
+describe('Dispenser refill token policy @regression @tier2', function () {
+    useDispenserHarness(bind);
+
+    beforeEach(function () {
+        indexer.indexerDb.getDispenserInfo.resolves(dispenserInfo());
+    });
+
+    registerArmedTests();
+    registerBelowHeightTests();
+    registerRowTests();
 });
