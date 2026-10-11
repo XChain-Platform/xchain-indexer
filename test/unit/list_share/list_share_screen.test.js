@@ -71,7 +71,7 @@ function assertHalt(row, detail, context = ctx, run = screen){
     });
 }
 
-describe('list share snapshot screen', function () {
+function registerSnapshotParsingTests(){
     it('returns parsed fields for a full snapshot', function () {
         const row = fullRow({
             snapshot_block: '100',
@@ -119,7 +119,9 @@ describe('list share snapshot screen', function () {
             removed: ['a'],
         });
     });
+}
 
+function registerRowValidationTests(){
     for(const field of ['snapshot_block', 'home_list_index', 'seq', 'origin_block']){
         it('halts on a non-integer ' + field, function () {
             assertHalt(fullRow({ [field]: '1.5' }), field);
@@ -157,7 +159,9 @@ describe('list share snapshot screen', function () {
     it('halts unless list type is 1 or 2', function () {
         assertHalt(fullRow({ list_type: 3 }), 'list_type');
     });
+}
 
+function registerSequenceAndAdmissionTests(){
     it('halts unless sequence 1 is full and later sequences are delta', function () {
         assertHalt(fullRow({ kind: 'delta' }), 'kind');
         assertHalt(fullRow({ seq: 2, kind: 'full' }), 'kind');
@@ -196,4 +200,10 @@ describe('list share snapshot screen', function () {
             status: 'pending',
         }), 'snapshot_block');
     });
+}
+
+describe('list share snapshot screen', function () {
+    registerSnapshotParsingTests();
+    registerRowValidationTests();
+    registerSequenceAndAdmissionTests();
 });

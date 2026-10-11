@@ -61,9 +61,7 @@ async function createTickList(handler, data, items){
     await handler.parse(['0', '1', '', ...items], data, null);
 }
 
-describe('LIST tick coin activation @regression @tier1', function () {
-    afterEach(function () { sinon.restore(); });
-
+function registerLegacyAndForeignItemTests(){
     it('keeps qualified items on the literal legacy lookup path below the gate', async function () {
         const { indexer, handler, gate } = setup(false);
         for(const method of ['createListEdit', 'createListItemInvalid'])
@@ -99,7 +97,9 @@ describe('LIST tick coin activation @regression @tier1', function () {
         ]);
         sinon.assert.notCalled(indexer.indexerDb.getTokenInfo);
     });
+}
 
+function registerOwnCoinLookupTests(){
     it('looks up and stores the rest of an own-coin name', async function () {
         const { indexer, handler } = setup(true);
         indexer.indexerDb.getTokenInfo.withArgs('FOO').resolves(createTokenInfo({ TICK: 'FOO' }));
@@ -135,7 +135,9 @@ describe('LIST tick coin activation @regression @tier1', function () {
         sinon.assert.calledOnceWithExactly(indexer.indexerDb.getTokenInfo, '^5');
         assert.deepStrictEqual(storedItems(indexer), ['^5']);
     });
+}
 
+function registerQualifiedItemValidationTests(){
     it('rejects malformed qualified items under their written keys', async function () {
         const { indexer, handler } = setup(true);
         const data = listData(0);
@@ -160,7 +162,9 @@ describe('LIST tick coin activation @regression @tier1', function () {
         ]);
         assert.deepStrictEqual(storedItems(indexer), ['FOO:BAR', ':PEPE']);
     });
+}
 
+function registerMembershipTests(){
     it('removes an own-coin qualified name from its local membership key', async function () {
         const { indexer, handler } = setup(true);
         indexer.indexerDb.getListType.resolves(1);
@@ -190,4 +194,13 @@ describe('LIST tick coin activation @regression @tier1', function () {
         ]);
         sinon.assert.notCalled(indexer.indexerDb.getTokenInfo);
     });
+}
+
+describe('LIST tick coin activation @regression @tier1', function () {
+    afterEach(function () { sinon.restore(); });
+
+    registerLegacyAndForeignItemTests();
+    registerOwnCoinLookupTests();
+    registerQualifiedItemValidationTests();
+    registerMembershipTests();
 });
