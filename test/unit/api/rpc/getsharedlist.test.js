@@ -28,9 +28,7 @@ function parseApiSet(source, name){
     return Array.from(match[1].matchAll(/['"]([a-z0-9_]+)['"]/gi), hit => hit[1]);
 }
 
-describe('getsharedlist JSON-RPC read', function(){
-    afterEach(function(){ sinon.restore(); });
-
+function registerDispatchTests(){
     it('is registered in the shared RPC method table and dispatches to this family', async function(){
         const view = recordingView({ getListShareMirror: null });
         const controller = buildRpcController({ indexer: fakeIndexer({ view }) });
@@ -40,7 +38,9 @@ describe('getsharedlist JSON-RPC read', function(){
             { error: 'no mirror of LTC list 23 on this chain' });
         assert.deepStrictEqual(view.calls, [['getListShareMirror', 'LTC', 23]]);
     });
+}
 
+function registerForeignMirrorTests(){
     it('returns a foreign mirror at its applied sequence and latest local membership', async function(){
         const mirrorView = recordingView({
             getListSnapshotAtSeq: { origin_block: '75' }
@@ -77,7 +77,9 @@ describe('getsharedlist JSON-RPC read', function(){
             ['getListSnapshotAtSeq', 'testnet', 'DOGE', 9, 3]
         ]);
     });
+}
 
+function registerHomeChainTests(){
     it('returns a shared home-chain list without mirror metadata', async function(){
         const view = recordingView({
             doQuery: [{ shared: 1 }],
@@ -112,7 +114,9 @@ describe('getsharedlist JSON-RPC read', function(){
             { error: 'list is not shared' });
         assert.deepStrictEqual(view.calls.map(call => call[0]), ['doQuery']);
     });
+}
 
+function registerMissingMirrorTests(){
     it('reports an unknown foreign home-chain pair', async function(){
         const view = recordingView({ getListShareMirror: null });
         const rpc = buildListShareMirrorRpc({ indexer: fakeIndexer({ view }) });
@@ -137,7 +141,9 @@ describe('getsharedlist JSON-RPC read', function(){
         assert.strictEqual(result.origin_block, null);
         assert.deepStrictEqual(result.members, []);
     });
+}
 
+function registerValidationTests(){
     it('rejects bad parameters before opening the database view', async function(){
         const indexerDb = { apiView: sinon.stub() };
         const rpc = buildListShareMirrorRpc({ indexer: fakeIndexer({ indexerDb }) });
@@ -158,7 +164,18 @@ describe('getsharedlist JSON-RPC read', function(){
             assert.ok(!parseApiSet(source, setName).includes('getsharedlist'),
                 setName + ' must not gate getsharedlist');
     });
-});
+}
+
+function registerGetSharedListTests(){
+    afterEach(function(){ sinon.restore(); });
+    registerDispatchTests();
+    registerForeignMirrorTests();
+    registerHomeChainTests();
+    registerMissingMirrorTests();
+    registerValidationTests();
+}
+
+describe('getsharedlist JSON-RPC read', registerGetSharedListTests);
 
 require('./list_share/list_share_meta_answer.test.js');
 require('./list_share/list_share_reads.test.js');

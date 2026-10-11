@@ -55,8 +55,7 @@ const ROWS = [
     row(GOOD_ID, GOOD_SIGS, GOOD_BODY)
 ];
 
-function follower() {
-    const config = { COIN: 'BTC', NETWORK: 'regtest', BLOCK_CHECK_INTERVAL: 1 };
+function followerUtility(config) {
     const util = new Utility(config);
     sinon.stub(util, 'logError');
     sinon.stub(util, 'withTimeout').callsFake((promise) => promise);
@@ -65,22 +64,29 @@ function follower() {
         { request: request(BAD_ID), response: ROWS[0] },
         { request: request(GOOD_ID), response: ROWS[1] }
     ]);
+    return util;
+}
 
+function followerDatabase(config) {
+    return {
+        config,
+        beginTransaction: sinon.stub().resolves(),
+        commitTransaction: sinon.stub().resolves(),
+        rollbackTransaction: sinon.stub().resolves(),
+        currentTxEpoch: () => 1,
+        runInTxEpoch: (epoch, fn) => fn(),
+        getAttestationRequestsAwaitingMirrorResponse: sinon.stub().resolves([
+            request(BAD_ID), request(GOOD_ID)
+        ]),
+        getMirroredAttestationResponses: sinon.stub().resolves(ROWS)
+    };
+}
+
+function followerNode(config, util) {
     const node = Object.assign({}, blockParse, blockPasses, blockFaults, {
         config,
         util,
-        indexerDb: {
-            config,
-            beginTransaction: sinon.stub().resolves(),
-            commitTransaction: sinon.stub().resolves(),
-            rollbackTransaction: sinon.stub().resolves(),
-            currentTxEpoch: () => 1,
-            runInTxEpoch: (epoch, fn) => fn(),
-            getAttestationRequestsAwaitingMirrorResponse: sinon.stub().resolves([
-                request(BAD_ID), request(GOOD_ID)
-            ]),
-            getMirroredAttestationResponses: sinon.stub().resolves(ROWS)
-        },
+        indexerDb: followerDatabase(config),
         applied: [],
         passTrace: [],
         openBlockTransaction: async () => false,
@@ -95,10 +101,13 @@ function follower() {
             return [0, 0, 0];
         }
     }, { abandonBlock: blockCommit.abandonBlock });
+    return node;
+}
 
-    const actions = Object.assign({}, dispatchMethods, {
-        config,
-        util,
+function followerActions(node) {
+    return Object.assign({}, dispatchMethods, {
+        config: node.config,
+        util: node.util,
         indexerDb: node.indexerDb,
         decoderDb: {},
         mapper: { createMappings: sinon.stub().resolves() },
@@ -106,6 +115,9 @@ function follower() {
         _actionCounters: {},
         assignActionAddressIds: sinon.stub().resolves()
     });
+}
+
+function followerHandler(node, actions) {
     const handler = new Attest(actions);
     Object.assign(handler, mirrorApply, {
         isMirrorEraRequest: sinon.stub().returns(true),
@@ -117,6 +129,15 @@ function follower() {
         settleMirroredResponse: sinon.stub().resolves()
     });
     sinon.spy(handler, 'applyMirroredResponse');
+    return handler;
+}
+
+function follower() {
+    const config = { COIN: 'BTC', NETWORK: 'regtest', BLOCK_CHECK_INTERVAL: 1 };
+    const util = followerUtility(config);
+    const node = followerNode(config, util);
+    const actions = followerActions(node);
+    const handler = followerHandler(node, actions);
     actions.actionAttest = handler;
     node.actions = actions;
     return node;
