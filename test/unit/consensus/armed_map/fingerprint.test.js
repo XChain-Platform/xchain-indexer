@@ -46,7 +46,7 @@ describe('armed_map/fingerprint: the running process', function () {
         assert.strictEqual(out.rows['list_owner_activation.LIST_OWNER_ACTIVATION'],
             'fcc08a9502c12cda2dbd29452342101310d6f2c7c947e596315eb73b1bf7be11');
         assert.strictEqual(out.rows['cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'],
-            '95e34322344784c66ed84f586b7088d141fb9fb3167c5ce20771018edc8208c2');
+            '813f95010af2ab02a8d76a1ab03feb8fe4c0542e6251f34a2530737c312234b9');
     });
 
     it('is memoized per process', function () {
@@ -266,7 +266,8 @@ describe('armed_map/fingerprint: temp-tree falsification of armed values (design
     it('arming the cross-chain remote-token gate moves v2', function () {
         const dir = makeTree();
         editFile(dir, partDeclaring('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'),
-            "mainnet: UNARMED, 'BTC:testnet': UNARMED,", "mainnet: 1, 'BTC:testnet': UNARMED,");
+            "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION', 'height', { mainnet: UNARMED,",
+            "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION', 'height', { mainnet: 1,");
         const r = readTree(dir);
         assert.strictEqual(r.status, 0, r.stderr);
         assert.match(r.out.hex, HEX64, r.out.reason);

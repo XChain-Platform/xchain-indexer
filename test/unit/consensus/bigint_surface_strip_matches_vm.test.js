@@ -189,8 +189,16 @@ describe('consensus/bigint_surface_strip_matches_vm: activation parity @regressi
             assert.strictEqual(indexerActivationAt(network, coin, vmHeight),
                 vmActivationAt(network, coin, vmHeight));
         }
-        assert.strictEqual(indexerActivationAt('testnet', 'DOGE', ProtocolChanges.UNARMED - 1), false);
-        assert.strictEqual(vmActivationAt('testnet', 'DOGE', ProtocolChanges.UNARMED - 1), false);
+        // The v0.23.0 cut armed testnet: both sides are dark at height 1 and live from the
+        // armed DOGE height, read from the registry. Mainnet stays dark below the sentinel.
+        const dogeTestnet = indexer['DOGE:testnet'];
+        assert.ok(Number.isInteger(dogeTestnet) && dogeTestnet > 1 && dogeTestnet < ProtocolChanges.UNARMED);
+        for (const at of [indexerActivationAt, vmActivationAt]) {
+            assert.strictEqual(at('testnet', 'DOGE', 1), false);
+            assert.strictEqual(at('testnet', 'DOGE', dogeTestnet - 1), false);
+            assert.strictEqual(at('testnet', 'DOGE', dogeTestnet), true);
+            assert.strictEqual(at('mainnet', 'DOGE', ProtocolChanges.UNARMED - 1), false);
+        }
         assert.strictEqual(indexerActivationAt('regtest', 'LTC', -1), false);
         assert.strictEqual(vmActivationAt('regtest', 'LTC', -1), true);
         assert.strictEqual(vmActivationAt('regtest', 'LTC', 0), true);

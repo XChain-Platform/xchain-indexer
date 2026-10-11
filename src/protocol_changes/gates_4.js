@@ -212,9 +212,9 @@ addGate('vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION', 'height', 
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -226,9 +226,9 @@ addGate('vm_lint_nesting_depth_activation.VM_LINT_NESTING_DEPTH_ACTIVATION', 'he
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -343,36 +343,36 @@ addGate('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', 'height
 
 addGate('dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
 
 addGate('bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
 
 addGate('price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
 
 addGate('oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -383,18 +383,18 @@ addGate('oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTI
 // names per-chain activation heights.
 addGate('bet_feed_list_edit_activation.BET_FEED_LIST_EDIT_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
 
 addGate('cross_chain_offer_list_export_activation.CROSS_CHAIN_OFFER_LIST_EXPORT', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });

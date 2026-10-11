@@ -80,14 +80,22 @@ afterEach(function () {
 });
 
 describe('DELEGATION_ROTATE_IN_WINDOW protocol row @regression @tier1', function () {
-    it('ships unarmed and supports the regtest drill override', function () {
+    it('ships unarmed on mainnet, armed on testnet at a cut instant, and supports the regtest drill override', async function () {
         const saved = process.env.DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME;
         delete process.env.DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME;
         const row = require('../../../src/protocol_changes/changes_5')
             .find(([name]) => name === 'DELEGATION_ROTATE_IN_WINDOW');
         assert.ok(row);
         assert.strictEqual(row[2], UNARMED);
-        assert.strictEqual(row[3], UNARMED);
+        // The armed testnet instant is read from the row so the next cut moves it without a test edit.
+        const armed = row[3];
+        assert.ok(Number.isSafeInteger(armed) && armed > 1 && armed < UNARMED, String(armed));
+        const ProtocolChanges = require('../../../src/protocol_changes');
+        const enabledAt = (blockTime) => new ProtocolChanges({ config: { NETWORK: 'testnet' },
+            util: new Utility(), decoderDb: { getBlockTime: async () => blockTime }, indexerDb: {} })
+            .isEnabled('DELEGATION_ROTATE_IN_WINDOW', 100);
+        assert.strictEqual(await enabledAt(armed), true);
+        assert.strictEqual(await enabledAt(1), false);
         assert.strictEqual(row[4](), UNARMED);
         process.env.DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME = '1000';
         assert.strictEqual(row[4](), 1000);

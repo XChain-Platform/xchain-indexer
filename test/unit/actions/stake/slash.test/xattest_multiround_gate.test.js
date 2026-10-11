@@ -31,11 +31,16 @@ function indexerDbWith(block) {
 }
 
 describe('SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1', function () {
-    it('registers a row unarmed on mainnet and testnet and genesis-active on regtest', function () {
+    it('registers a row unarmed on mainnet, armed on testnet, and genesis-active on regtest', async function () {
         const row = ProtocolChanges.get(KEY);
         assert.strictEqual(row.mainnet_time, ProtocolChanges.UNARMED);
-        assert.strictEqual(row.testnet_time, ProtocolChanges.UNARMED);
+        assert.ok(Number.isFinite(row.testnet_time) && row.testnet_time > 1 && row.testnet_time !== ProtocolChanges.UNARMED, 'testnet is armed');
         assert.strictEqual(row.regtest_time, 0);
+        const enabledAt = (blockTime) => new ProtocolChanges({ config: { NETWORK: 'testnet' }, util: {},
+            decoderDb: { getBlockTime: async () => blockTime } }).isEnabled('SLASH_ATTEST_MULTIROUND_EXEMPT', 1);
+        assert.strictEqual(await enabledAt(row.testnet_time), true);
+        assert.strictEqual(await enabledAt(row.testnet_time - 1), false);
+        assert.strictEqual(await enabledAt(1), false);
     });
 
     it('below the gate a base pair resolves its snapshot block from the request row', async function () {

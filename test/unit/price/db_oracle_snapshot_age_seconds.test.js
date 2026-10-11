@@ -15,7 +15,8 @@
  * Seconds-basis getSnapshotAge(): once the oracle_snapshot_age_seconds_activation
  * row is armed, db.getOracleDataForVM reports consensus seconds since the newest
  * admitted finalized snapshot; below it the legacy block-count query runs. The
- * row is armed from genesis on regtest and unarmed on mainnet and every testnet.
+ * row is armed from genesis on regtest, at a per-chain cut height on testnet, and
+ * unarmed on mainnet.
  * Mock-based (doQueryStrict stubbed).
  *
  ********************************************************************/
@@ -94,29 +95,45 @@ describe('VM oracle snapshot age in seconds (getOracleDataForVM) @regression @ti
         assert.strictEqual(out.snapshotAge, Number.MAX_SAFE_INTEGER);
     });
 
-    it('the row is unarmed on mainnet and every testnet key and armed from genesis on regtest', function () {
+    it('the row is unarmed on mainnet, armed per testnet chain, and armed from genesis on regtest', function () {
         const UNARMED = 9999999999;
-        assert.deepStrictEqual(gateRegistry.registry.get(ageSeconds.SECONDS_ACTIVATION), {
-            mainnet: UNARMED,
-            'BTC:testnet': UNARMED,
-            'LTC:testnet': UNARMED,
-            'DOGE:testnet': UNARMED,
-            testnet: UNARMED,
-            regtest: 0,
-        });
+        const row = gateRegistry.registry.get(ageSeconds.SECONDS_ACTIVATION);
+        assert.strictEqual(row.mainnet, UNARMED);
+        assert.strictEqual(row.regtest, 0);
+        // Each testnet chain's height is read from the registry so the next cut moves it without a test edit.
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            const armed = row[coin + ':testnet'];
+            assert.ok(Number.isSafeInteger(armed) && armed > 1 && armed < UNARMED, coin + ' ' + armed);
+        }
     });
 
-    // Unarmed networks must behave exactly as before the row was ratified: the
-    // block-count query, and no seconds query, on every coin at any real height.
-    it('mainnet and testnet keep the legacy block-count query on every coin', async function () {
-        for (const network of ['mainnet', 'testnet']) {
-            for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                sinon.restore();
-                const db = dbFor(network, [{ latest_time: 1699999900 }], false, coin);
-                await db.getOracleDataForVM(1000000000, 1700000000, 0);
-                assert.ok(blocksCall(db), coin + ' ' + network + ' must keep the block-count age query');
-                assert.ok(!secondsCall(db), coin + ' ' + network + ' must not run the seconds query');
-            }
+    // Mainnet must behave exactly as before the row was ratified: the block-count
+    // query, and no seconds query, on every coin at any real height.
+    it('mainnet keeps the legacy block-count query on every coin', async function () {
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            sinon.restore();
+            const db = dbFor('mainnet', [{ latest_time: 1699999900 }], false, coin);
+            await db.getOracleDataForVM(1000000000, 1700000000, 0);
+            assert.ok(blocksCall(db), coin + ' mainnet must keep the block-count age query');
+            assert.ok(!secondsCall(db), coin + ' mainnet must not run the seconds query');
+        }
+    });
+
+    // No gate stub here: the shipped testnet row decides the basis on each side of its height.
+    it('testnet keeps the block-count query at height 1 and reports seconds from the armed height', async function () {
+        const row = gateRegistry.registry.get(ageSeconds.SECONDS_ACTIVATION);
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            const armed = row[coin + ':testnet'];
+            sinon.restore();
+            const below = dbFor('testnet', [{ latest_time: 1699999900 }], false, coin);
+            await below.getOracleDataForVM(1, 1700000000, 0);
+            assert.ok(blocksCall(below), coin + ' testnet at height 1 must keep the block-count age query');
+            assert.ok(!secondsCall(below), coin + ' testnet at height 1 must not run the seconds query');
+            sinon.restore();
+            const above = dbFor('testnet', [{ latest_time: 1699999900 }], false, coin);
+            const out = await above.getOracleDataForVM(armed, 1700000000, 0);
+            assert.strictEqual(out.snapshotAge, 100, coin + ' testnet at the armed height reports seconds');
+            assert.ok(!blocksCall(above), coin + ' testnet at the armed height must not run the block-count query');
         }
     });
 

@@ -16,6 +16,30 @@ const registry = require('../../../../src/consensus/gate_registry.js');
 const KEY = 'vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION';
 const UNARMED = 9999999999;
 
+// The v0.23.0 cut armed this row with one sized height per testnet chain. The values are read
+// from the registry row, never repeated here, so the case grades the shape the arming train
+// writes and the resolver at each chain's own boundary: dark at 1 and one short, live at it.
+function armedTestnetSlots(row) {
+    const slots = {};
+    for (const coin of ['BTC', 'LTC', 'DOGE']) {
+        const v = row[coin + ':testnet'];
+        assert.ok(Number.isInteger(v) && v > 1 && v < UNARMED, coin + ':testnet is not a sized height: ' + v);
+        slots[coin + ':testnet'] = v;
+    }
+    return slots;
+}
+
+function assertArmedOnEachTestnetChain(key) {
+    const slots = armedTestnetSlots(registry.get(key));
+    for (const coin of ['BTC', 'LTC', 'DOGE']) {
+        const v = slots[coin + ':testnet'];
+        const at = (n) => registry.activeAt(key, 'testnet', coin, n, null);
+        assert.strictEqual(at(1), false, coin + ':testnet at 1');
+        assert.strictEqual(at(v - 1), false, coin + ':testnet one short of its activation');
+        assert.strictEqual(at(v), true, coin + ':testnet at its activation');
+    }
+}
+
 describe('protocol_changes VM lint banned-with row', function () {
     it('registers the per-chain height map', function () {
         assert.strictEqual(registry.registry.unitOf(KEY), 'height');
@@ -23,9 +47,7 @@ describe('protocol_changes VM lint banned-with row', function () {
             'BTC:mainnet': UNARMED,
             'LTC:mainnet': UNARMED,
             'DOGE:mainnet': UNARMED,
-            'BTC:testnet': UNARMED,
-            'LTC:testnet': UNARMED,
-            'DOGE:testnet': UNARMED,
+            ...armedTestnetSlots(registry.get(KEY)),
             testnet: UNARMED,
             regtest: 0,
         });
@@ -33,11 +55,9 @@ describe('protocol_changes VM lint banned-with row', function () {
 
     it('is active on regtest at genesis and unarmed on every mainnet and testnet chain', function () {
         assert.strictEqual(registry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
-        for (const network of ['mainnet', 'testnet']) {
-            for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                assert.strictEqual(registry.activeAt(KEY, network, coin, 10000000, null), false,
-                    coin + ':' + network);
-            }
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            assert.strictEqual(registry.activeAt(KEY, 'mainnet', coin, UNARMED - 1, null), false, coin + ':mainnet');
         }
+        assertArmedOnEachTestnetChain(KEY);
     });
 });

@@ -167,6 +167,22 @@ describe('armed_map/manifest: the row list', function () {
     });
 });
 
+// The v0.23.0 cut armed these gates on testnet. The armed values are read from the
+// registry rather than repeated here, so the cases grade the manifest against the row and
+// pin only the shape the arming train writes: mainnet and the bare testnet fallback on the
+// sentinel for a height gate, one sized height per testnet chain, regtest at genesis.
+function assertSizedTestnetSlot(value, label) {
+    assert.ok(Number.isInteger(value) && value > 1 && value < ProtocolChanges.UNARMED,
+        label + ' is not a sized testnet activation: ' + value);
+}
+
+function assertArmedHeightRow(row) {
+    assert.strictEqual(row.mainnet, ProtocolChanges.UNARMED);
+    assert.strictEqual(row.testnet, ProtocolChanges.UNARMED, 'the bare testnet fallback stays on the sentinel');
+    assert.strictEqual(row.regtest, 0);
+    for (const coin of ['BTC', 'LTC', 'DOGE']) assertSizedTestnetSlot(row[coin + ':testnet'], coin + ':testnet');
+}
+
 describe('armed_map/manifest: collectRows', function () {
 
     it('resolves every entry to a serialisable value, in manifest order', function () {
@@ -184,24 +200,26 @@ describe('armed_map/manifest: collectRows', function () {
     it('carries the relay-response deadline time gate', function () {
         const key = 'attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION';
         const byKey = new Map(manifest.collectRows().rows);
-        assert.deepStrictEqual(byKey.get(key), {
-            mainnet: 9999999999,
-            testnet: 9999999999,
-            regtest: 0,
-        });
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.deepStrictEqual(Object.keys(row).sort(),
+            ['BTC:testnet', 'DOGE:testnet', 'LTC:testnet', 'mainnet', 'regtest', 'testnet']);
+        assert.strictEqual(row.mainnet, ProtocolChanges.UNARMED);
+        assert.strictEqual(row.regtest, 0);
+        // A time gate arms one instant for the whole network, so the bare fallback carries
+        // it too and every chain agrees.
+        assertSizedTestnetSlot(row.testnet, 'testnet');
+        for (const coin of ['BTC', 'LTC', 'DOGE']) assert.strictEqual(row[coin + ':testnet'], row.testnet, coin);
         assert.strictEqual(ProtocolChanges.registry.unitOf(key), 'time');
     });
 
     it('carries the cross-chain remote-token gate heights', function () {
         const byKey = new Map(manifest.collectRows().rows);
-        assert.deepStrictEqual(byKey.get('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'), {
-            mainnet: 9999999999,
-            'BTC:testnet': 9999999999,
-            'LTC:testnet': 9999999999,
-            'DOGE:testnet': 9999999999,
-            testnet: 9999999999,
-            regtest: 0,
-        });
+        const key = 'cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION';
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.strictEqual(Object.keys(row).length, 6);
+        assertArmedHeightRow(row);
     });
 
     it('carries the three row families the design names', function () {
@@ -219,12 +237,14 @@ describe('armed_map/manifest: collectRows', function () {
 
     it('carries the DOGE mirror-admission chain margins and activation', function () {
         const byKey = new Map(manifest.collectRows().rows);
-        assert.deepStrictEqual(byKey.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'), {
-            mainnet: null,
-            'DOGE:mainnet': null,
-            'DOGE:testnet': 9999999999,
-            regtest: 0,
-        });
+        const key = 'mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION';
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.deepStrictEqual(Object.keys(row).sort(), ['DOGE:mainnet', 'DOGE:testnet', 'mainnet', 'regtest']);
+        assert.strictEqual(row.mainnet, null);
+        assert.strictEqual(row['DOGE:mainnet'], null);
+        assertSizedTestnetSlot(row['DOGE:testnet'], 'DOGE:testnet');
+        assert.strictEqual(row.regtest, 0);
         assert.deepStrictEqual(byKey.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS').DOGE, {
             bridge_transfers: 14,
             cross_chain_calls: 14,
@@ -237,14 +257,11 @@ describe('armed_map/manifest: collectRows', function () {
 
     it('carries the anchor archive fold-term heights', function () {
         const byKey = new Map(manifest.collectRows().rows);
-        assert.deepStrictEqual(byKey.get('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION'), {
-            mainnet: 9999999999,
-            'BTC:testnet': 9999999999,
-            'LTC:testnet': 9999999999,
-            'DOGE:testnet': 9999999999,
-            testnet: 9999999999,
-            regtest: 0,
-        });
+        const key = 'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.strictEqual(Object.keys(row).length, 6);
+        assertArmedHeightRow(row);
     });
 
     it('carries the per-chain LIST owner testnet heights', function () {
