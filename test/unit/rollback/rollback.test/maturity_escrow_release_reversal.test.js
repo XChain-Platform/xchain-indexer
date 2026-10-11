@@ -134,3 +134,151 @@ describe('cooldown maturity escrow release reversal: activation @regression @tie
         assert.deepStrictEqual(reads, [['testnet', 'BTC', 499, null], ['testnet', 'BTC', 500, null]]);
     });
 });
+
+// A cooldown slashed to zero never matures: the sweep skips amount = 0, so the row keeps
+// 'valid' and no refund credit or release is written under the unstake's action_index. The
+// only negative escrow its source holds is the slash's own release, keyed on the slash's
+// action_index. The reversal must leave that row, that release and the stake-time lock
+// alone while it undoes a sibling cooldown that did mature in the orphaned range. These
+// cases run the real statements on node:sqlite rather than matching their text, since a
+// join that also caught the slash release would read the same as one that does not.
+describe('cooldown maturity escrow release reversal: slash to zero @regression @tier3', function () {
+    const cooldownSql = require('../../../../src/db/contracts/cooldowns.js');
+
+    const GAS = 'XCHAIN';
+    const REORG = 100;
+    const VALID = 3;
+    const COMPLETED = 7;
+    // Two sources: alice's cooldowns matured in the orphaned range, bob's were slashed to zero.
+    const ALICE = 1;
+    const BOB = 2;
+    const GAS_ID = 1;
+    const TOK_ID = 2;
+
+    let sql;
+    let db;
+
+    // MySQL's multi-table DELETE has no sqlite spelling; rewrite it to the equivalent
+    // rowid subselect so the join and WHERE run unchanged.
+    function toSqlite(text){
+        const m = /^\s*DELETE (\w+) FROM (\w+) (?:AS )?(\w+)\s+([\s\S]*)$/.exec(text);
+        if(!m) return text;
+        assert.strictEqual(m[1], m[3], 'the delete target is the aliased table');
+        return 'DELETE FROM ' + m[2] + ' WHERE rowid IN (SELECT ' + m[3] + '.rowid FROM ' + m[2] + ' AS ' + m[3] + ' ' + m[4] + ')';
+    }
+
+    function rows(text, ...args){
+        return sql.prepare(text).all(...args).map(r => Object.assign({}, r));
+    }
+
+    beforeEach(function () {
+        const { DatabaseSync } = require('node:sqlite');
+        sql = new DatabaseSync(':memory:');
+        sql.exec(`
+            CREATE TABLE index_addresses (id INTEGER PRIMARY KEY, address TEXT NOT NULL);
+            CREATE TABLE index_tickers   (id INTEGER PRIMARY KEY, tick TEXT NOT NULL);
+            CREATE TABLE unstakes (action_index INTEGER NOT NULL, source_id INTEGER NOT NULL,
+                cooldown_end_block INTEGER NOT NULL, amount TEXT NOT NULL, status_id INTEGER, block_index INTEGER NOT NULL);
+            CREATE TABLE contract_unstakes (action_index INTEGER NOT NULL, source_id INTEGER NOT NULL, tick_id INTEGER,
+                cooldown_end_block INTEGER NOT NULL, amount TEXT NOT NULL, status_id INTEGER, block_index INTEGER NOT NULL);
+            CREATE TABLE credits (action_index INTEGER NOT NULL, address_id INTEGER, tick_id INTEGER, amount TEXT);
+            CREATE TABLE escrows (action_index INTEGER NOT NULL, address_id INTEGER, tick_id INTEGER, amount TEXT);
+            INSERT INTO index_addresses VALUES (1, 'alice'), (2, 'bob');
+            INSERT INTO index_tickers   VALUES (1, 'XCHAIN'), (2, 'TOK');
+
+            -- Stake-time locks for every bond.
+            INSERT INTO escrows VALUES (4, 1, 1, '5'), (5, 2, 1, '7'), (14, 1, 2, '3'), (15, 2, 2, '9');
+
+            -- alice: both cooldowns matured at 120, inside the orphaned range, with the legacy
+            -- refund and release written under each unstake's own action_index.
+            INSERT INTO unstakes          VALUES (10, 1,    120, '5', 7, 50);
+            INSERT INTO contract_unstakes VALUES (20, 1, 2, 120, '3', 7, 50);
+            INSERT INTO credits VALUES (10, 1, 1, '5'), (20, 1, 2, '3');
+            INSERT INTO escrows VALUES (10, 1, 1, '-5'), (20, 1, 2, '-3');
+
+            -- bob: both cooldowns slashed to zero at surviving block 60 (slash actions 30 and 31),
+            -- so neither ever matured. The slash released each bond under its own action_index.
+            INSERT INTO unstakes          VALUES (11, 2,    120, '0', 3, 50);
+            INSERT INTO contract_unstakes VALUES (21, 2, 2, 120, '0', 3, 50);
+            INSERT INTO escrows VALUES (30, 2, 1, '-7'), (31, 2, 2, '-9');
+        `);
+        db = {
+            config: { GAS },
+            async doQuery(text, args){ return rows(toSqlite(text), ...(args || [])); },
+            async getStatusId(name){ return { valid: VALID, completed: COMPLETED }[name] ?? null; },
+            async createStatus(name){ return { valid: VALID, completed: COMPLETED }[name]; },
+        };
+    });
+
+    afterEach(function () { sql.close(); });
+
+    function bobState(){
+        return {
+            unstakes: rows('SELECT action_index, amount, status_id FROM unstakes WHERE source_id = ?', BOB),
+            contractUnstakes: rows('SELECT action_index, amount, status_id FROM contract_unstakes WHERE source_id = ?', BOB),
+            credits: rows('SELECT * FROM credits WHERE address_id = ? ORDER BY action_index', BOB),
+            escrows: rows('SELECT * FROM escrows WHERE address_id = ? ORDER BY action_index', BOB),
+        };
+    }
+
+    it('the sweep never matures a slashed-to-zero cooldown, so it never reads completed', async function () {
+        const sweep = await cooldownSql.sweepCompletedCooldowns.call(db, 120);
+        // alice is already completed; bob's rows are due and valid but hold nothing.
+        assert.deepStrictEqual(sweep.capabilityRows, []);
+        assert.deepStrictEqual(sweep.contractRows, []);
+        sql.exec('UPDATE unstakes SET status_id = 3 WHERE action_index = 10');
+        sql.exec('UPDATE contract_unstakes SET status_id = 3 WHERE action_index = 20');
+        const both = await cooldownSql.sweepCompletedCooldowns.call(db, 120);
+        assert.deepStrictEqual(both.capabilityRows, [10], 'only the funded capability cooldown is swept');
+        assert.deepStrictEqual(both.contractRows, [20], 'only the funded contract cooldown is swept');
+    });
+
+    it('a slashed-to-zero source is not seeded into the recompute', async function () {
+        const cap = await maturitySql.readMaturedCapabilitySources(db, COMPLETED, REORG);
+        const con = await maturitySql.readMaturedContractSources(db, COMPLETED, REORG);
+        assert.deepStrictEqual(cap, [{ address: 'alice' }]);
+        assert.deepStrictEqual(con, [{ address: 'alice', tick: 'TOK' }]);
+    });
+
+    it('an active reversal undoes the matured sibling and keeps the slash release and the slashed row', async function () {
+        const before = bobState();
+
+        await maturitySql.reverseMaturedRefunds(db, GAS, COMPLETED, VALID, REORG, true);
+
+        assert.deepStrictEqual(bobState(), before, 'nothing of the slashed-to-zero source moves');
+        assert.deepStrictEqual(before.escrows.map(e => [e.action_index, e.amount]),
+            [[5, '7'], [15, '9'], [30, '-7'], [31, '-9']], 'both stake locks and both slash releases survive');
+        assert.deepStrictEqual(rows('SELECT * FROM credits'), [], 'only the matured refunds existed and both are gone');
+        assert.deepStrictEqual(rows('SELECT action_index, amount FROM escrows WHERE address_id = ? ORDER BY action_index', ALICE),
+            [{ action_index: 4, amount: '5' }, { action_index: 14, amount: '3' }], 'only the matured releases are deleted');
+        assert.deepStrictEqual(rows('SELECT status_id FROM unstakes WHERE action_index = 10'), [{ status_id: VALID }]);
+        assert.deepStrictEqual(rows('SELECT status_id FROM contract_unstakes WHERE action_index = 20'), [{ status_id: VALID }]);
+        // Net escrow per source and tick: alice's bond is locked again for the re-maturity,
+        // bob's slashed bond stays fully released.
+        assert.deepStrictEqual(
+            rows('SELECT address_id, tick_id, SUM(CAST(amount AS REAL)) AS net FROM escrows GROUP BY address_id, tick_id ORDER BY address_id, tick_id'),
+            [{ address_id: ALICE, tick_id: GAS_ID, net: 5 }, { address_id: ALICE, tick_id: TOK_ID, net: 3 },
+             { address_id: BOB, tick_id: GAS_ID, net: 0 }, { address_id: BOB, tick_id: TOK_ID, net: 0 }]);
+    });
+
+    it('an unarmed reversal also leaves the slashed-to-zero source untouched', async function () {
+        const before = bobState();
+
+        await maturitySql.reverseMaturedRefunds(db, GAS, COMPLETED, VALID, REORG, false);
+
+        assert.deepStrictEqual(bobState(), before);
+        assert.deepStrictEqual(rows('SELECT * FROM credits'), []);
+        assert.strictEqual(rows('SELECT * FROM escrows WHERE address_id = ? AND CAST(amount AS REAL) < 0', ALICE).length, 2,
+            'below the activation the matured releases survive');
+    });
+
+    it('a slashed-to-zero cooldown alone makes the reversal a no-op', async function () {
+        sql.exec('DELETE FROM unstakes WHERE source_id = 1; DELETE FROM contract_unstakes WHERE source_id = 1;');
+        sql.exec('DELETE FROM credits; DELETE FROM escrows WHERE address_id = 1;');
+        const before = bobState();
+
+        await maturitySql.reverseMaturedRefunds(db, GAS, COMPLETED, VALID, REORG, true);
+
+        assert.deepStrictEqual(bobState(), before);
+    });
+});
