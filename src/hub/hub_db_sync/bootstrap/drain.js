@@ -293,7 +293,10 @@ module.exports = {
             let result = await this.httpGet(path);
             if (drain.connectionEpoch !== this._wsEpoch ||
                 drain.selectorRevision !== this._selectorRevision) return false;
-            if (!result || !Array.isArray(result.rows)) return false;
+            if (!result || !Array.isArray(result.rows)) {
+                this.reportRowlessPage(table, path, result);
+                return false;
+            }
             if (!(await this.acceptSnapshotPage(table, result))) return false;
 
             drain.pagesFetched++;
@@ -322,6 +325,26 @@ module.exports = {
             if (result.rows.length < PAGE_LIMIT) break;      // short page = drained
         }
         return true;
+    },
+
+    // A page with no rows array leaves the table undrained and the heartbeat gate shut, so
+    // say which table and what came back. A hub that predates a mirrored table answers its
+    // snapshot route through the pathless JSON-RPC router with HTTP 200 and an error body;
+    // unnamed, that stalled a regtest indexer for ten hours behind a log about other tables.
+    reportRowlessPage(table, path, result) {
+        let shape;
+        let hint = '';
+        if (result && result.error) {
+            let err = result.error;
+            shape = 'an error body: ' + ((err && err.message) ? String(err.message) : JSON.stringify(err));
+            hint = '; a hub that does not serve ' + table + ' answers this way, so check the hub build';
+        } else if (result && typeof result === 'object') {
+            shape = 'keys [' + Object.keys(result).slice(0, 8).join(', ') + ']';
+        } else {
+            shape = String(result);
+        }
+        getLogger().warn('HubDbSync: ' + table + ' snapshot page from ' + path + ' carried no rows array (' +
+            shape + '); the table stays undrained' + hint);
     },
 
     // The two handshakes every snapshot page passes before a row of it is applied. False
