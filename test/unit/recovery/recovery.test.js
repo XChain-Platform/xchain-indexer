@@ -276,7 +276,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
     });
 });
 
-describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () {
+function registerFoldEnvironmentHooks() {
     let foldEnv;
     beforeEach(function () {
         freshKeys();
@@ -287,7 +287,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         if(foldEnv === undefined) delete process.env.XC_ANCHOR_FOLD_REGTEST_ACTIVATION;
         else process.env.XC_ANCHOR_FOLD_REGTEST_ACTIVATION = foldEnv;
     });
+}
 
+function registerFoldArchiveTestsOne() {
     // a junk head at the same batch seq used to CAPTURE the batch. It is the
     // earliest v1/v6 row, the head pick is status-agnostic (it must be, or mirrored and
     // unmirrored nodes fork), so its author became the only author whose chunks counted
@@ -316,7 +318,6 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.strictEqual(db.matches.length, 1);
         assert.strictEqual(db.matches[0].match_id, 'm6');
     });
-
     it('below fold a version-1 junk head still denies the real archive', async function () {
         let multi = buildBatch(7, [rawMatch('m8')], oracleKeys, crossKeys, { chunkSize: 200 });
         let foldedJunk = Object.assign({}, multi.v1, {
@@ -337,7 +338,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.match(report.failed[0].reason, /incomplete batch/);
         assert.strictEqual(db.matches.length, 0);
     });
+}
 
+function registerFoldArchiveTestsTwo() {
     // Teeth: the junk head's own (unpublished) batch still fails on its own merits, so
     // the case above is not "authorship stopped being checked". Same seq, same rows,
     // but the head under test is the outsider's and it has no chunks of its own.
@@ -359,7 +362,6 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.strictEqual(report.failed.length, 1, 'the outsider head has no chunks of its own');
         assert.match(report.failed[0].reason, /incomplete batch/);
     });
-
     it('below fold both heads use the version-1 junk head chunk set', async function () {
         let multi = buildBatch(8, [rawMatch('m9')], oracleKeys, crossKeys, { chunkSize: 200 });
         let foldedJunk = Object.assign({}, multi.v1, {
@@ -378,7 +380,6 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.ok(report.failed.every(row => /incomplete batch/.test(row.reason)));
         assert.strictEqual(db.matches.length, 0);
     });
-
     it('rejects a sub-quorum wrapper and sub-quorum match signatures', async function () {
         let weakWrapper = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { wrapperSigners: 2 });   // 2 < 2f+1 = 3
         let weakMatch   = buildBatch(1, [rawMatch('m2')], oracleKeys, crossKeys, { matchSigners: 2 });
@@ -389,4 +390,10 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.ok(report.failed[0].reason.includes('wrapper signatures fail quorum'));
         assert.ok(report.failed[1].reason.includes('fails quorum against the archived cross_chain set'));
     });
+}
+
+describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () {
+    registerFoldEnvironmentHooks();
+    registerFoldArchiveTestsOne();
+    registerFoldArchiveTestsTwo();
 });

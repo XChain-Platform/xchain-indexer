@@ -50,9 +50,7 @@ function proofFor(origin, dest, tick, balance){
     };
 }
 
-describe('bridge escrow origin generalization @regression @tier1', function(){
-    afterEach(function(){ sinon.restore(); });
-
+function registerOriginProofTests(){
     it('derives XCHAIN from BTC, bare tokens from src_chain, and burns only from a dest-rooted tick', function(){
         assert.deepStrictEqual(resolveTransferOrigin({ src_chain: 'BTC', dest_chain: 'DOGE', tick: 'XCHAIN' }),
             { originChain: 'BTC', nativeTick: 'XCHAIN', kind: 'lock' });
@@ -96,7 +94,9 @@ describe('bridge escrow origin generalization @regression @tier1', function(){
         assert.strictEqual(await BS.fetchProofForTransfer(wrong, dogeCtx), null);
         assert.strictEqual(stub.callCount, 1);
     });
+}
 
+function registerMintOriginTests(){
     it('mints colliding FUFU assets under distinct origin roots', async function(){
         const keys = [makeKey(), makeKey(), makeKey()];
         const btcRow = makeTransfer(keys, { transfer_id: 'b'.repeat(64), src_chain: 'BTC', dest_chain: 'DOGE',
@@ -126,7 +126,9 @@ describe('bridge escrow origin generalization @regression @tier1', function(){
         assert.deepStrictEqual(dogeMint.state.credits, [['DOGE.FUFU', '6.00', DEST_ADDR]]);
         assert.deepStrictEqual(crossedProof.state.credits, [], 'a BTC FUFU proof must mint no DOGE FUFU');
     });
+}
 
+function registerBurnOriginTests(){
     it('releases rooted burns only from the matching native escrow asset', async function(){
         const keys = [makeKey(), makeKey(), makeKey()];
         const btcBurn = makeTransfer(keys, { transfer_id: 'c'.repeat(64), src_chain: 'DOGE', dest_chain: 'BTC',
@@ -152,4 +154,11 @@ describe('bridge escrow origin generalization @regression @tier1', function(){
         assert.deepStrictEqual(crossedCtx.state.credits, []);
         assert.deepStrictEqual(crossedCtx.state.debits, []);
     });
+}
+
+describe('bridge escrow origin generalization @regression @tier1', function(){
+    afterEach(function(){ sinon.restore(); });
+    registerOriginProofTests();
+    registerMintOriginTests();
+    registerBurnOriginTests();
 });

@@ -75,9 +75,7 @@ async function add(handler, overrides = {}){
     return data;
 }
 
-describe('LIST share activation @regression @tier2', function () {
-    afterEach(function () { sinon.restore(); });
-
+function registerGateTests(){
     it('declares format 2 behind the LIST share gate', function () {
         const { handler } = setup(false);
         assert.deepStrictEqual(handler.shareFormat(), {
@@ -113,7 +111,9 @@ describe('LIST share activation @regression @tier2', function () {
         assert.strictEqual(data.STATUS, 'valid');
         assertNoSharedRead(indexer.indexerDb);
     });
+}
 
+function registerShareValidationTests(){
     it('accepts the owner SHARE and snapshots every current member at the SHARE index', async function () {
         const list = [ADDR1, ADDR2];
         const { indexer, handler, shareGate } = setup(true, list);
@@ -149,7 +149,9 @@ describe('LIST share activation @regression @tier2', function () {
         assert.strictEqual(data.STATUS, 'invalid: LIST_ACTION_INDEX (type)');
         assertNoSharedRead(indexer.indexerDb);
     });
+}
 
+function registerShareLimitTests(){
     it('refuses a second SHARE', async function () {
         const { indexer, handler } = setup(true);
         sharedListRow(indexer.indexerDb);
@@ -175,7 +177,9 @@ describe('LIST share activation @regression @tier2', function () {
         const accepted = await share(exact.handler);
         assert.strictEqual(accepted.STATUS, 'valid');
     });
+}
 
+function registerEditLimitTests(){
     it('refuses an ADD past the cap only after the list has been shared', async function () {
         const sharedList = members(MEMBER_LIMIT);
         const shared = setup(true, sharedList);
@@ -214,4 +218,12 @@ describe('LIST share activation @regression @tier2', function () {
         assert.strictEqual(added.STATUS, 'valid');
         assertNoSharedRead(edit.indexer.indexerDb);
     });
+}
+
+describe('LIST share activation @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
+    registerGateTests();
+    registerShareValidationTests();
+    registerShareLimitTests();
+    registerEditLimitTests();
 });

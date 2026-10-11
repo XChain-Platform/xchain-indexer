@@ -131,74 +131,83 @@ describe('policy apply: token-policy inheritance onto a bridged copy', function(
     });
 });
 
-describe('policy apply: token-policy inheritance onto a bridged copy', function(){
-    describe('terminal versus carried', function(){
-        // GUARD: the policy_hash recomputation.
-        it('is TERMINAL and injects nothing when the membership does not match policy_hash', async function(){
-            const keys = [makeKey(), makeKey(), makeKey()];
-            const row  = makeSnapshot(keys, { allow: [ADDR_A] });
-            // Swap a member without touching the hash or the signatures: exactly what a
-            // tampering mirror can do, since the arrays are transport and are not signed.
-            row.allow_list = JSON.stringify([ADDR_C]);
-            const { ctx, state } = makeCtx({ validators: snapshotSet(keys) });
-            const res = await BS.applyPolicySnapshot(row, ctx);
-            assert.strictEqual(res.applied, false);
-            assert.strictEqual(res.reason, BS.SETTLE_REASON.POLICY_HASH);
-            assert.strictEqual(res.terminal, true);
-            assert.deepStrictEqual(state.injected, []);
-        });
-
-        it('is TERMINAL for a malformed membership transport, never read as an empty list', async function(){
-            const keys = [makeKey(), makeKey(), makeKey()];
-            const row  = makeSnapshot(keys, { allow: [ADDR_A] });
-            row.allow_list = 'not json at all';
-            const { ctx, state } = makeCtx({ validators: snapshotSet(keys) });
-            const res = await BS.applyPolicySnapshot(row, ctx);
-            assert.strictEqual(res.terminal, true);
-            assert.strictEqual(res.reason, BS.SETTLE_REASON.POLICY_HASH);
-            assert.deepStrictEqual(state.injected, []);
-        });
-
-        it('is TERMINAL for a quorum that does not meet the bar', async function(){
-            const keys = [makeKey(), makeKey(), makeKey()];
-            const row  = makeSnapshot([keys[0]], {});
-            const { ctx, state } = makeCtx({ validators: snapshotSet(keys) });
-            const res = await BS.applyPolicySnapshot(row, ctx);
-            assert.strictEqual(res.applied, false);
-            assert.strictEqual(res.reason, BS.SETTLE_REASON.QUORUM);
-            assert.strictEqual(res.terminal, true);
-            assert.deepStrictEqual(state.injected, []);
-        });
-
-        it('is TERMINAL for a foreign network and for a foreign btc_chain_id', async function(){
-            const keys = [makeKey(), makeKey(), makeKey()];
-            const lines = [];
-            const origWarn = console.warn;
-            BS.resetRefusalMemo();
-            console.warn = (...a) => lines.push(a.join(' '));
-            try {
-                const foreignNet = await BS.applyPolicySnapshot(
-                    makeSnapshot(keys, { row: { network: 'mainnet' } }),
-                    makeCtx({ validators: snapshotSet(keys) }).ctx);
-                assert.strictEqual(foreignNet.terminal, true);
-                assert.strictEqual(foreignNet.reason, BS.SETTLE_REASON.NETWORK);
-
-                const c = makeCtx({ validators: snapshotSet(keys) });
-                c.ctx.config['BTC_CHAIN_ID'] = 'c'.repeat(64);
-                const foreignChain = await BS.applyPolicySnapshot(
-                    makeSnapshot(keys, { row: { btc_chain_id: 'b'.repeat(64) } }), c.ctx);
-                assert.strictEqual(foreignChain.terminal, true);
-                assert.strictEqual(foreignChain.reason, BS.SETTLE_REASON.CHAIN_ID);
-            } finally {
-                console.warn = origWarn;
-            }
-            assert.deepStrictEqual(lines, [
-                '\t XPOLICY : dddddddddddddddd... : ' + BS.SETTLE_REASON.NETWORK + ' : terminal',
-                '\t XPOLICY : dddddddddddddddd... : ' + BS.SETTLE_REASON.CHAIN_ID + ' : terminal'
-            ]);
-        });
+function registerTerminalPolicyValidationTests() {
+    // GUARD: the policy_hash recomputation.
+    it('is TERMINAL and injects nothing when the membership does not match policy_hash', async function(){
+        const keys = [makeKey(), makeKey(), makeKey()];
+        const row  = makeSnapshot(keys, { allow: [ADDR_A] });
+        // Swap a member without touching the hash or the signatures: exactly what a
+        // tampering mirror can do, since the arrays are transport and are not signed.
+        row.allow_list = JSON.stringify([ADDR_C]);
+        const { ctx, state } = makeCtx({ validators: snapshotSet(keys) });
+        const res = await BS.applyPolicySnapshot(row, ctx);
+        assert.strictEqual(res.applied, false);
+        assert.strictEqual(res.reason, BS.SETTLE_REASON.POLICY_HASH);
+        assert.strictEqual(res.terminal, true);
+        assert.deepStrictEqual(state.injected, []);
     });
-});
+
+    it('is TERMINAL for a malformed membership transport, never read as an empty list', async function(){
+        const keys = [makeKey(), makeKey(), makeKey()];
+        const row  = makeSnapshot(keys, { allow: [ADDR_A] });
+        row.allow_list = 'not json at all';
+        const { ctx, state } = makeCtx({ validators: snapshotSet(keys) });
+        const res = await BS.applyPolicySnapshot(row, ctx);
+        assert.strictEqual(res.terminal, true);
+        assert.strictEqual(res.reason, BS.SETTLE_REASON.POLICY_HASH);
+        assert.deepStrictEqual(state.injected, []);
+    });
+
+    it('is TERMINAL for a quorum that does not meet the bar', async function(){
+        const keys = [makeKey(), makeKey(), makeKey()];
+        const row  = makeSnapshot([keys[0]], {});
+        const { ctx, state } = makeCtx({ validators: snapshotSet(keys) });
+        const res = await BS.applyPolicySnapshot(row, ctx);
+        assert.strictEqual(res.applied, false);
+        assert.strictEqual(res.reason, BS.SETTLE_REASON.QUORUM);
+        assert.strictEqual(res.terminal, true);
+        assert.deepStrictEqual(state.injected, []);
+    });
+}
+
+function registerTerminalPolicyScopeTests() {
+    it('is TERMINAL for a foreign network and for a foreign btc_chain_id', async function(){
+        const keys = [makeKey(), makeKey(), makeKey()];
+        const lines = [];
+        const origWarn = console.warn;
+        BS.resetRefusalMemo();
+        console.warn = (...a) => lines.push(a.join(' '));
+        try {
+            const foreignNet = await BS.applyPolicySnapshot(
+                makeSnapshot(keys, { row: { network: 'mainnet' } }),
+                makeCtx({ validators: snapshotSet(keys) }).ctx);
+            assert.strictEqual(foreignNet.terminal, true);
+            assert.strictEqual(foreignNet.reason, BS.SETTLE_REASON.NETWORK);
+
+            const c = makeCtx({ validators: snapshotSet(keys) });
+            c.ctx.config['BTC_CHAIN_ID'] = 'c'.repeat(64);
+            const foreignChain = await BS.applyPolicySnapshot(
+                makeSnapshot(keys, { row: { btc_chain_id: 'b'.repeat(64) } }), c.ctx);
+            assert.strictEqual(foreignChain.terminal, true);
+            assert.strictEqual(foreignChain.reason, BS.SETTLE_REASON.CHAIN_ID);
+        } finally {
+            console.warn = origWarn;
+        }
+        assert.deepStrictEqual(lines, [
+            '\t XPOLICY : dddddddddddddddd... : ' + BS.SETTLE_REASON.NETWORK + ' : terminal',
+            '\t XPOLICY : dddddddddddddddd... : ' + BS.SETTLE_REASON.CHAIN_ID + ' : terminal'
+        ]);
+    });
+}
+
+function registerTerminalPolicyTests() {
+    describe('terminal versus carried', function(){
+        registerTerminalPolicyValidationTests();
+        registerTerminalPolicyScopeTests();
+    });
+}
+
+describe('policy apply: token-policy inheritance onto a bridged copy', registerTerminalPolicyTests);
 
 describe('policy apply: token-policy inheritance onto a bridged copy', function(){
     describe('terminal versus carried', function(){
