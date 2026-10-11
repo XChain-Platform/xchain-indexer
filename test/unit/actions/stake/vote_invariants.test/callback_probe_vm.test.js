@@ -85,139 +85,154 @@ function realProbeOptions(){
     };
 }
 
-describe('Vote invariants (escrow conservation + callback metering) @regression @tier1', function(){
+function registerCallbackRejectionTests(){
+    it('refuses inactive and missing-method targets', async function(){
+        stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 2 }, 'invalid: disabled');
+        let inactive = await runBindingCreate();
+        assert.strictEqual(inactive.STATUS, 'invalid: CALLBACK_CONTRACT (not active)');
+        assert.strictEqual(vm.probeInstances.length, 0, 'inactive contracts are refused before probing');
+
+        freshHandler();
+        const code = 'module.exports={other:function(){}}';
+        stubBindingCreate({ action_index: 5, code, status_id: 1 });
+        vm.probeReadManifest.resolves({
+            success: true, manifest: { metaJson: '{"callbackFns":["other"]}' }, error: null
+        });
+        let missing = await runBindingCreate();
+        assert.strictEqual(missing.STATUS, 'invalid: CALLBACK_METHOD (unavailable)');
+        assert.ok(vm.probeReadManifest.calledOnce);
+        assert.strictEqual(vm.probeReadManifest.firstCall.args[0],
+            callbackProbeVm.buildListingProbeCode(code));
+        assert.ok(indexer.indexerDb.createPoll.notCalled);
+    });
+
+    it('refuses stored code over the cap without constructing the probe', async function(){
+        stubBindingCreate({ action_index: 5, code: codeAtSize(MAX_CODE_SIZE + 1), status_id: 1 });
+        const data = await runBindingCreate();
+        assert.strictEqual(data.STATUS, 'invalid: CALLBACK_METHOD (unavailable)');
+        assert.strictEqual(vm.probeInstances.length, 0);
+        assert.ok(vm.probeReadManifest.notCalled);
+    });
+}
+
+function registerCallbackReuseTests(){
+    it('accepts cap-minus-one and cap contracts with one reused probe VM', async function(){
+        vm.probeReadManifest.resolves({
+            success: true, manifest: { metaJson: '{"callbackFns":["onResult"]}' }, error: null
+        });
+        stubBindingCreate({ action_index: 5, code: codeAtSize(MAX_CODE_SIZE - 1), status_id: 1 });
+        let belowCap = await runBindingCreate();
+        assert.strictEqual(belowCap.STATUS, 'valid');
+
+        stubBindingCreate({ action_index: 5, code: codeAtSize(MAX_CODE_SIZE), status_id: 1 });
+        let atCap = await runBindingCreate();
+        assert.strictEqual(atCap.STATUS, 'valid');
+        assert.strictEqual(vm.probeInstances.length, 1, 'both VOTEs share one probe construction');
+        assert.strictEqual(vm.probeReadManifest.callCount, 2);
+        assert.strictEqual(vm.probeInstances[0].config.limits.maxCodeSize,
+            MAX_CODE_SIZE + callbackProbeVm.PROBE_SUFFIX_ALLOWANCE);
+        assert.strictEqual(vm.probeInstances[0].config.limits.maxMemory, vm.limits.maxMemory);
+        assert.deepStrictEqual(vm.probeReadManifest.firstCall.args[1], {
+            network: 'regtest',
+            contractAddress: 'C:BTC:5',
+            blockContext: { height: 100, timestamp: 1700000000 }
+        });
+        assert.ok(vm.probeInstances[0].shutdown.notCalled, 'the warm probe stays alive between VOTEs');
+    });
+
+    it('reuses the probe VM after its worker restarts from a throw', async function(){
+        stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
+        vm.probeReadManifest.onFirstCall().rejects(new Error('probe worker failed'));
+        vm.probeReadManifest.onSecondCall().resolves({ success: true, manifest: { hasInitialize: true }, error: null });
+        vm.probeReadManifest.onThirdCall().resolves({
+            success: true, manifest: { metaJson: '{"callbackFns":["onResult"]}' }, error: null
+        });
+        const recovered = await runBindingCreate();
+        assert.strictEqual(recovered.STATUS, 'valid');
+        const probeVm = vm.probeInstances[0];
+        assert.ok(probeVm.shutdown.notCalled);
+
+        const retried = await runBindingCreate();
+        assert.strictEqual(retried.STATUS, 'valid');
+        assert.strictEqual(vm.probeReadManifest.callCount, 3);
+        assert.strictEqual(vm.probeInstances.length, 1, 'the executor restarts its worker inside the same VM');
+        assert.strictEqual(actionsCtx.getVoteCallbackProbeVm.secondCall.returnValue, probeVm);
+    });
+}
+
+function registerCallbackActivationGateTests(){
+    // Arm only the configured coin slot, the shape a per-chain arming train writes.
+    it('follows an arm of the configured coin slot alone', async function(){
+        stubGate(sinon, 'vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD', false)
+            .callsFake((key, network, coin) => coin === 'BTC');
+        stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 2 }, 'invalid: disabled');
+        const data = await runBindingCreate();
+        assert.strictEqual(data.STATUS, 'invalid: CALLBACK_CONTRACT (not active)');
+    });
+
+    it('preserves below-gate admission without status reads or a probe', async function(){
+        actionsCtx.config.NETWORK = 'mainnet';
+        stubBindingCreate({ action_index: 5, code: 'module.exports={other:function(){}}', status_id: 2 }, 'invalid: disabled');
+        const data = await runBindingCreate();
+        assert.strictEqual(data.STATUS, 'valid');
+        assert.ok(indexer.indexerDb.getStatusString.notCalled);
+        assert.strictEqual(vm.probeInstances.length, 0);
+    });
+}
+
+function registerCallbackManifestProbeAdmissionTests(){
+    registerCallbackRejectionTests();
+    registerCallbackReuseTests();
+    registerCallbackActivationGateTests();
+}
+
+function registerGuardInertDryRunTests(){
+    it('refuses the method probe as unjudged and never builds the probe VM', async function(){
+        stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
+        const data = await runBindingCreate({ GUARD_INERT: true });
+        assert.ok(String(data.STATUS).startsWith('invalid: '), data.STATUS);
+        assert.ok(indexer.util.isGuardInertError(data.STATUS), data.STATUS);
+        assert.ok(String(data.STATUS).includes('contract 5'), data.STATUS);
+        assert.strictEqual(vm.probeInstances.length, 0);
+        assert.ok(vm.probeReadManifest.notCalled);
+        assert.ok(actionsCtx.getVoteCallbackProbeVm.notCalled);
+        assert.ok(indexer.indexerDb.createPoll.notCalled);
+    });
+
+    it('keeps the real verdict for an inactive callback contract', async function(){
+        stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 2 }, 'invalid: disabled');
+        const data = await runBindingCreate({ GUARD_INERT: true });
+        assert.strictEqual(data.STATUS, 'invalid: CALLBACK_CONTRACT (not active)');
+        assert.strictEqual(vm.probeInstances.length, 0);
+    });
+
+    it('leaves a signaling poll create fully judged', async function(){
+        stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
+        const data = await runBindingCreate({ GUARD_INERT: true }, signalingCreateParams());
+        assert.strictEqual(data.STATUS, 'valid');
+        assert.strictEqual(vm.probeInstances.length, 0);
+    });
+
+    it('still probes a block transaction, where GUARD_INERT is false', async function(){
+        stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
+        vm.probeReadManifest.resolves({
+            success: true, manifest: { metaJson: '{"callbackFns":["onResult"]}' }, error: null
+        });
+        const data = await runBindingCreate({ GUARD_INERT: false });
+        assert.strictEqual(data.STATUS, 'valid');
+        assert.ok(vm.probeReadManifest.calledOnce);
+    });
+}
+
+function registerVoteCallbackProbeVmTests(){
     beforeEach(freshHandler);
     afterEach(function(){ sinon.restore(); });
+    describe('VOTE callback manifest probe admission', registerCallbackManifestProbeAdmissionTests);
+    describe('VOTE callback probe on the public guard-inert dry-run', registerGuardInertDryRunTests);
+}
 
-    describe('VOTE callback manifest probe admission', function(){
-        it('refuses inactive and missing-method targets', async function(){
-            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 2 }, 'invalid: disabled');
-            let inactive = await runBindingCreate();
-            assert.strictEqual(inactive.STATUS, 'invalid: CALLBACK_CONTRACT (not active)');
-            assert.strictEqual(vm.probeInstances.length, 0, 'inactive contracts are refused before probing');
-
-            freshHandler();
-            const code = 'module.exports={other:function(){}}';
-            stubBindingCreate({ action_index: 5, code, status_id: 1 });
-            vm.probeReadManifest.resolves({
-                success: true, manifest: { metaJson: '{"callbackFns":["other"]}' }, error: null
-            });
-            let missing = await runBindingCreate();
-            assert.strictEqual(missing.STATUS, 'invalid: CALLBACK_METHOD (unavailable)');
-            assert.ok(vm.probeReadManifest.calledOnce);
-            assert.strictEqual(vm.probeReadManifest.firstCall.args[0],
-                callbackProbeVm.buildListingProbeCode(code));
-            assert.ok(indexer.indexerDb.createPoll.notCalled);
-        });
-
-        it('refuses stored code over the cap without constructing the probe', async function(){
-            stubBindingCreate({ action_index: 5, code: codeAtSize(MAX_CODE_SIZE + 1), status_id: 1 });
-            const data = await runBindingCreate();
-            assert.strictEqual(data.STATUS, 'invalid: CALLBACK_METHOD (unavailable)');
-            assert.strictEqual(vm.probeInstances.length, 0);
-            assert.ok(vm.probeReadManifest.notCalled);
-        });
-
-        it('accepts cap-minus-one and cap contracts with one reused probe VM', async function(){
-            vm.probeReadManifest.resolves({
-                success: true, manifest: { metaJson: '{"callbackFns":["onResult"]}' }, error: null
-            });
-            stubBindingCreate({ action_index: 5, code: codeAtSize(MAX_CODE_SIZE - 1), status_id: 1 });
-            let belowCap = await runBindingCreate();
-            assert.strictEqual(belowCap.STATUS, 'valid');
-
-            stubBindingCreate({ action_index: 5, code: codeAtSize(MAX_CODE_SIZE), status_id: 1 });
-            let atCap = await runBindingCreate();
-            assert.strictEqual(atCap.STATUS, 'valid');
-            assert.strictEqual(vm.probeInstances.length, 1, 'both VOTEs share one probe construction');
-            assert.strictEqual(vm.probeReadManifest.callCount, 2);
-            assert.strictEqual(vm.probeInstances[0].config.limits.maxCodeSize,
-                MAX_CODE_SIZE + callbackProbeVm.PROBE_SUFFIX_ALLOWANCE);
-            assert.strictEqual(vm.probeInstances[0].config.limits.maxMemory, vm.limits.maxMemory);
-            assert.deepStrictEqual(vm.probeReadManifest.firstCall.args[1], {
-                network: 'regtest',
-                contractAddress: 'C:BTC:5',
-                blockContext: { height: 100, timestamp: 1700000000 }
-            });
-            assert.ok(vm.probeInstances[0].shutdown.notCalled, 'the warm probe stays alive between VOTEs');
-        });
-
-        it('reuses the probe VM after its worker restarts from a throw', async function(){
-            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
-            vm.probeReadManifest.onFirstCall().rejects(new Error('probe worker failed'));
-            vm.probeReadManifest.onSecondCall().resolves({ success: true, manifest: { hasInitialize: true }, error: null });
-            vm.probeReadManifest.onThirdCall().resolves({
-                success: true, manifest: { metaJson: '{"callbackFns":["onResult"]}' }, error: null
-            });
-            const recovered = await runBindingCreate();
-            assert.strictEqual(recovered.STATUS, 'valid');
-            const probeVm = vm.probeInstances[0];
-            assert.ok(probeVm.shutdown.notCalled);
-
-            const retried = await runBindingCreate();
-            assert.strictEqual(retried.STATUS, 'valid');
-            assert.strictEqual(vm.probeReadManifest.callCount, 3);
-            assert.strictEqual(vm.probeInstances.length, 1, 'the executor restarts its worker inside the same VM');
-            assert.strictEqual(actionsCtx.getVoteCallbackProbeVm.secondCall.returnValue, probeVm);
-        });
-
-        // Arm only the configured coin slot, the shape a per-chain arming train writes.
-        it('follows an arm of the configured coin slot alone', async function(){
-            stubGate(sinon, 'vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD', false)
-                .callsFake((key, network, coin) => coin === 'BTC');
-            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 2 }, 'invalid: disabled');
-            const data = await runBindingCreate();
-            assert.strictEqual(data.STATUS, 'invalid: CALLBACK_CONTRACT (not active)');
-        });
-
-        it('preserves below-gate admission without status reads or a probe', async function(){
-            actionsCtx.config.NETWORK = 'mainnet';
-            stubBindingCreate({ action_index: 5, code: 'module.exports={other:function(){}}', status_id: 2 }, 'invalid: disabled');
-            const data = await runBindingCreate();
-            assert.strictEqual(data.STATUS, 'valid');
-            assert.ok(indexer.indexerDb.getStatusString.notCalled);
-            assert.strictEqual(vm.probeInstances.length, 0);
-        });
-    });
-
-    describe('VOTE callback probe on the public guard-inert dry-run', function(){
-        it('refuses the method probe as unjudged and never builds the probe VM', async function(){
-            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
-            const data = await runBindingCreate({ GUARD_INERT: true });
-            assert.ok(String(data.STATUS).startsWith('invalid: '), data.STATUS);
-            assert.ok(indexer.util.isGuardInertError(data.STATUS), data.STATUS);
-            assert.ok(String(data.STATUS).includes('contract 5'), data.STATUS);
-            assert.strictEqual(vm.probeInstances.length, 0);
-            assert.ok(vm.probeReadManifest.notCalled);
-            assert.ok(actionsCtx.getVoteCallbackProbeVm.notCalled);
-            assert.ok(indexer.indexerDb.createPoll.notCalled);
-        });
-
-        it('keeps the real verdict for an inactive callback contract', async function(){
-            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 2 }, 'invalid: disabled');
-            const data = await runBindingCreate({ GUARD_INERT: true });
-            assert.strictEqual(data.STATUS, 'invalid: CALLBACK_CONTRACT (not active)');
-            assert.strictEqual(vm.probeInstances.length, 0);
-        });
-
-        it('leaves a signaling poll create fully judged', async function(){
-            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
-            const data = await runBindingCreate({ GUARD_INERT: true }, signalingCreateParams());
-            assert.strictEqual(data.STATUS, 'valid');
-            assert.strictEqual(vm.probeInstances.length, 0);
-        });
-
-        it('still probes a block transaction, where GUARD_INERT is false', async function(){
-            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
-            vm.probeReadManifest.resolves({
-                success: true, manifest: { metaJson: '{"callbackFns":["onResult"]}' }, error: null
-            });
-            const data = await runBindingCreate({ GUARD_INERT: false });
-            assert.strictEqual(data.STATUS, 'valid');
-            assert.ok(vm.probeReadManifest.calledOnce);
-        });
-    });
-});
+describe('Vote invariants (escrow conservation + callback metering) @regression @tier1',
+    registerVoteCallbackProbeVmTests);
 
 describe('Vote invariants (escrow conservation + callback metering) @regression @tier1', function(){
     beforeEach(freshHandler);
