@@ -112,13 +112,20 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
     // pattern that execute accepts. The gate table is stubbed here, so these pin the
     // WIRING (flag present, resolved from that change, for this block), not the instant.
     describe('REST_PATTERN_METER deploy-lint gate threading (banned-rest)', function () {
-        it('threads exactly the nine enforce* flags validateSyntax reads', async function () {
+        it('threads exactly the ten enforce* flags validateSyntax reads', async function () {
             const { opts } = await optsFor('regtest', 'BTC', 0);
             assert.deepStrictEqual(Object.keys(opts).sort(), [
                 'enforceBannedAsync', 'enforceBannedGenerator', 'enforceBannedRest',
-                'enforceBannedWasm', 'enforceBannedWith', 'enforceLintGlobalAlias', 'enforceLintHardening',
-                'enforceLintNestingDepth', 'enforceLintOptionalChain',
+                'enforceBannedWasm', 'enforceBannedWith', 'enforceLintDestructure', 'enforceLintGlobalAlias',
+                'enforceLintHardening', 'enforceLintNestingDepth', 'enforceLintOptionalChain',
             ], 'deploy lint-flag option set drifted; an omitted flag reads as enforced in validateSyntax');
+        });
+
+        it('threads enforceLintDestructure from its own height row', async function () {
+            const regtest = await optsFor('regtest', 'BTC', 0);
+            assert.strictEqual(regtest.opts.enforceLintDestructure, true, 'regtest is genesis-armed');
+            const mainnet = await optsFor('mainnet', 'BTC', 10000000);
+            assert.strictEqual(mainnet.opts.enforceLintDestructure, false, 'mainnet is unarmed');
         });
 
         it('threads enforceBannedWith from its own height row', async function () {

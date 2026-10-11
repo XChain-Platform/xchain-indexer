@@ -91,11 +91,16 @@ describe('consensus identity GATES field and pin comparison', function () {
         }
     });
 
-    it('pins the BigInt surface-strip row in both checkout readings', function () {
+    it('pins both merged registry-only rows in both checkout readings', function () {
         const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
-        const key = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
+        const keys = [
+            'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION',
+            'vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION',
+        ];
         for (const block of ['bare_checkout', 'armed_regtest_venue']) {
-            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+            for (const key of keys) {
+                assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, `${block}: ${key}`);
+            }
         }
     });
 
