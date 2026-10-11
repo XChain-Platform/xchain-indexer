@@ -138,86 +138,100 @@ async function parsed(params){
     return data;
 }
 
-describe('Price v2 (PRICE batch) @regression @tier3', function () {
+function registerWireShapeTests(){
+    it('the testnet producer height is sized, so both eras below are real', function () {
+        assert.ok(Number.isFinite(ADMIT_AT) && ADMIT_AT > 2, 'BTC:testnet admission height is ' + ADMIT_AT);
+        assert.strictEqual(adm.isAdmissionEra(NETWORK, LEGACY_AT + 1), false);
+        assert.strictEqual(adm.isAdmissionEra(NETWORK, ADMIT_AT + 1), true);
+    });
+
+    it('a well-formed batch with nothing left over still parses valid', async function () {
+        const data = await parsed(uncompressedParams(eraBody()));
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+        assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, true);
+    });
+
+    it('rejects a batch wire with one junk field appended after the last signature', async function () {
+        const data = await parsed(uncompressedParams(eraBody().concat(['JUNK'])));
+        assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+        assert.ok(/^invalid: /.test(data['STATUS']), data['STATUS']);
+        assert.ok(data['STATUS'].includes('trailing'), data['STATUS']);
+        assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, false,
+            'a batch refused for trailing data must never reach the hub push outbox');
+    });
+
+    it('rejects a batch wire with several junk fields appended after the last signature', async function () {
+        const data = await parsed(uncompressedParams(eraBody().concat(['JUNK1', 'JUNK2', 'JUNK3'])));
+        assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+        assert.ok(data['STATUS'].includes('trailing'), data['STATUS']);
+    });
+
+    it('rejects a bare trailing empty field, the shape a stray trailing "|" on the wire produces', async function () {
+        const data = await parsed(uncompressedParams(eraBody().concat([''])));
+        assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+        assert.ok(data['STATUS'].includes('trailing'), data['STATUS']);
+    });
+}
+
+function registerCompressedAndShortWireTests(){
+    it('rejects the SAME junk in the COMPRESSED wire form, so compression cannot cheapen the second spelling', async function () {
+        const data = await parsed(compressedParams(eraBody().concat(['JUNK'])));
+        assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+        assert.ok(data['STATUS'].includes('trailing'), data['STATUS']);
+        assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, false);
+    });
+
+    it('the clean batch in the COMPRESSED wire form is unaffected: the guard needs no lookahead over the marker', async function () {
+        const data = await parsed(compressedParams(eraBody()));
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+    });
+
+    it('a batch missing its final field (short, not long) still invalidates as it always has', async function () {
+        const body = eraBody();
+        body.pop();
+        const data = await parsed(uncompressedParams(body));
+        assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+    });
+}
+
+function registerAdmissionHeightTests(){
+    it('BELOW the admission height a trailing field is left unread and the batch stays valid, as v0.20.0 judged it', async function () {
+        for(const params of [uncompressedParams(legacyBody().concat(['x'])),
+                             compressedParams(legacyBody().concat(['JUNK1', 'JUNK2']))]){
+            indexer.indexerDb.enqueueHubPushTx.resetHistory();
+            const data = await parsed(params);
+            assert.strictEqual(data['STATUS'], 'valid', data['STATUS']);
+            assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.calledOnce, true,
+                'a pre-era batch must still reach the hub push, or the mirror diverges from history');
+        }
+    });
+
+    it('the legacy verdict holds up to the height and flips exactly at it', async function () {
+        // One-round batches, so the batch anchor is exactly H-1 and exactly H.
+        const below = await parsed(uncompressedParams(batchBody(signedBatch(ADMIT_AT - 1, false, 1)).concat(['x'])));
+        assert.strictEqual(below['STATUS'], 'valid', 'anchor ' + (ADMIT_AT - 1) + ': ' + below['STATUS']);
+        const clean = await parsed(uncompressedParams(batchBody(signedBatch(ADMIT_AT, true, 1))));
+        assert.strictEqual(clean['STATUS'], 'valid', 'anchor ' + ADMIT_AT + ' clean: ' + clean['STATUS']);
+        const at = await parsed(uncompressedParams(batchBody(signedBatch(ADMIT_AT, true, 1)).concat(['x'])));
+        assert.ok(String(at['STATUS']).includes('trailing'), 'anchor ' + ADMIT_AT + ': ' + at['STATUS']);
+    });
+}
+
+function registerStrictParameterLengthTests(){
+    describe('strict parameter length', function () {
+        registerWireShapeTests();
+        registerCompressedAndShortWireTests();
+        registerAdmissionHeightTests();
+    });
+}
+
+function registerPriceBatchTests(){
     beforeEach(installHarness);
     afterEach(function () { sinon.restore(); });
+    registerStrictParameterLengthTests();
+}
 
-    describe('strict parameter length', function () {
-
-        it('the testnet producer height is sized, so both eras below are real', function () {
-            assert.ok(Number.isFinite(ADMIT_AT) && ADMIT_AT > 2, 'BTC:testnet admission height is ' + ADMIT_AT);
-            assert.strictEqual(adm.isAdmissionEra(NETWORK, LEGACY_AT + 1), false);
-            assert.strictEqual(adm.isAdmissionEra(NETWORK, ADMIT_AT + 1), true);
-        });
-
-        it('a well-formed batch with nothing left over still parses valid', async function () {
-            const data = await parsed(uncompressedParams(eraBody()));
-            assert.strictEqual(data['STATUS'], 'valid');
-            assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
-            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, true);
-        });
-
-        it('rejects a batch wire with one junk field appended after the last signature', async function () {
-            const data = await parsed(uncompressedParams(eraBody().concat(['JUNK'])));
-            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
-            assert.ok(/^invalid: /.test(data['STATUS']), data['STATUS']);
-            assert.ok(data['STATUS'].includes('trailing'), data['STATUS']);
-            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, false,
-                'a batch refused for trailing data must never reach the hub push outbox');
-        });
-
-        it('rejects a batch wire with several junk fields appended after the last signature', async function () {
-            const data = await parsed(uncompressedParams(eraBody().concat(['JUNK1', 'JUNK2', 'JUNK3'])));
-            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
-            assert.ok(data['STATUS'].includes('trailing'), data['STATUS']);
-        });
-
-        it('rejects a bare trailing empty field, the shape a stray trailing "|" on the wire produces', async function () {
-            const data = await parsed(uncompressedParams(eraBody().concat([''])));
-            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
-            assert.ok(data['STATUS'].includes('trailing'), data['STATUS']);
-        });
-
-        it('rejects the SAME junk in the COMPRESSED wire form, so compression cannot cheapen the second spelling', async function () {
-            const data = await parsed(compressedParams(eraBody().concat(['JUNK'])));
-            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
-            assert.ok(data['STATUS'].includes('trailing'), data['STATUS']);
-            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, false);
-        });
-
-        it('the clean batch in the COMPRESSED wire form is unaffected: the guard needs no lookahead over the marker', async function () {
-            const data = await parsed(compressedParams(eraBody()));
-            assert.strictEqual(data['STATUS'], 'valid');
-            assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
-        });
-
-        it('a batch missing its final field (short, not long) still invalidates as it always has', async function () {
-            const body = eraBody();
-            body.pop();
-            const data = await parsed(uncompressedParams(body));
-            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
-        });
-
-        it('BELOW the admission height a trailing field is left unread and the batch stays valid, as v0.20.0 judged it', async function () {
-            for(const params of [uncompressedParams(legacyBody().concat(['x'])),
-                                 compressedParams(legacyBody().concat(['JUNK1', 'JUNK2']))]){
-                indexer.indexerDb.enqueueHubPushTx.resetHistory();
-                const data = await parsed(params);
-                assert.strictEqual(data['STATUS'], 'valid', data['STATUS']);
-                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
-                assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.calledOnce, true,
-                    'a pre-era batch must still reach the hub push, or the mirror diverges from history');
-            }
-        });
-
-        it('the legacy verdict holds up to the height and flips exactly at it', async function () {
-            // One-round batches, so the batch anchor is exactly H-1 and exactly H.
-            const below = await parsed(uncompressedParams(batchBody(signedBatch(ADMIT_AT - 1, false, 1)).concat(['x'])));
-            assert.strictEqual(below['STATUS'], 'valid', 'anchor ' + (ADMIT_AT - 1) + ': ' + below['STATUS']);
-            const clean = await parsed(uncompressedParams(batchBody(signedBatch(ADMIT_AT, true, 1))));
-            assert.strictEqual(clean['STATUS'], 'valid', 'anchor ' + ADMIT_AT + ' clean: ' + clean['STATUS']);
-            const at = await parsed(uncompressedParams(batchBody(signedBatch(ADMIT_AT, true, 1)).concat(['x'])));
-            assert.ok(String(at['STATUS']).includes('trailing'), 'anchor ' + ADMIT_AT + ': ' + at['STATUS']);
-        });
-    });
-});
+describe('Price v2 (PRICE batch) @regression @tier3', registerPriceBatchTests);

@@ -34,9 +34,7 @@ function parseApiSet(source, name){
     return Array.from(match[1].matchAll(/['"]([a-z0-9_]+)['"]/gi), hit => hit[1]);
 }
 
-describe('JSON-RPC list share reads @regression @tier1', function(){
-    afterEach(function(){ sinon.restore(); });
-
+function registerHistoricalMembershipRead(){
     it('reads membership at the requested pre-edit block and hashes the documented string', async function(){
         const beforeEdit = [
             'bcrt1qqyqszqgpqyqszqgpqyqszqgpqyqszqgpvxat9t',
@@ -70,7 +68,9 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
         assert.deepStrictEqual(current.members, afterEdit);
         assert.notStrictEqual(current.hash, sha256('MEMBERS|2|' + beforeEdit.join('|')));
     });
+}
 
+function registerMetadataRenameRead(){
     it('changes metadata without changing root membership after a later rename', async function(){
         const members = ['bc1q-list-member', '1LegacyListMember'];
         const membershipHash = sha256('MEMBERS|2|' + members.join('|'));
@@ -107,7 +107,9 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
             ['getListMeta', 100, 60]
         ]);
     });
+}
 
+function registerDatabaseApiViewRead(){
     it('uses the registered metadata reader through the Database API view', async function(){
         const members = ['bc1q-live-view-member'];
         const db = Object.create(Database.prototype);
@@ -149,7 +151,9 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
         }]);
         assert.strictEqual(db.poolQuery.callCount, 4);
     });
+}
 
+function registerEmptyMembershipRead(){
     it('hashes an empty membership as MEMBERS|0 and reports tick-list type 1', async function(){
         const view = recordingView({
             getListRootIndex: listIndex => listIndex,
@@ -176,7 +180,9 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
             meta_hash: ''
         });
     });
+}
 
+function registerInvalidListReadErrors(){
     it('returns distinct errors for unknown, rejected, and malformed list reads', async function(){
         const view = recordingView({
             getListRootIndex: listIndex => listIndex,
@@ -196,7 +202,9 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
                 { error: 'block must be a non-negative integer' });
         assert.deepStrictEqual(await rpc.getlistat(null), { error: 'list_index must be a positive integer' });
     });
+}
 
+function registerTransferredOwnerRead(){
     it('lists a shared root with its owner after a transfer', async function(){
         const view = {
             doQuery: sinon.stub().callsFake(async (sql, args) => {
@@ -225,7 +233,9 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
         assert.ok(view.getListMeta.calledOnceWithExactly(100, null));
         assert.ok(indexerDb.apiView.calledOnceWithExactly());
     });
+}
 
+function registerForeignNetworkRejection(){
     it('rejects a foreign network before opening the database view', async function(){
         const indexerDb = { apiView: sinon.stub() };
         const rpc = buildListShareRpc({ indexer: fakeIndexer({ indexerDb }) });
@@ -236,7 +246,9 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
             { error: 'network does not match this indexer' });
         assert.ok(indexerDb.apiView.notCalled);
     });
+}
 
+function registerDatabaseFailureReads(){
     it('refuses without a database and logs lookup failures', async function(){
         const log = sinon.stub(observability.getLogger(), 'error');
         const notReady = buildListShareRpc({ indexer: fakeIndexer({ indexerDb: null }) });
@@ -253,7 +265,9 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
             { error: 'failed to look up shared lists' });
         assert.strictEqual(log.callCount, 2);
     });
+}
 
+function registerApiGateExclusions(){
     it('keeps both reads outside every authenticated API gate', function(){
         const source = readApiSource();
         for(const setName of ['WRITE_METHODS', 'GATED_EXEC_METHODS', 'FEDERATION_READ_METHODS']){
@@ -262,4 +276,18 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
             assert.ok(!methods.includes('getsharedlists'), setName + ' must not gate getsharedlists');
         }
     });
+}
+
+describe('JSON-RPC list share reads @regression @tier1', function(){
+    afterEach(function(){ sinon.restore(); });
+
+    registerHistoricalMembershipRead();
+    registerMetadataRenameRead();
+    registerDatabaseApiViewRead();
+    registerEmptyMembershipRead();
+    registerInvalidListReadErrors();
+    registerTransferredOwnerRead();
+    registerForeignNetworkRejection();
+    registerDatabaseFailureReads();
+    registerApiGateExclusions();
 });
