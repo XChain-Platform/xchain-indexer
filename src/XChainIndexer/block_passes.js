@@ -206,19 +206,21 @@ module.exports = {
         await this.util.processCooldownCompletions(this.actions, this.indexerDb, blockToParse);
     },
 
-    // Close the VM cache, refresh supplies, write the blocks row, update the markets,
+    // Refresh supplies, close the VM cache, write the blocks row, update the markets,
     // sanity-check supplies and store the state roots. Returns [ledger, actions, contracts].
     async finalizeBlock({ blockToParse, blockTime, rawBlockTime }, stateCommitActive){
-        // Clear VM compilation cache for this block
-        if(this.actions.vm)
-            this.actions.vm.endBlock();
-
         // Refresh every supply the block touched before createBlock hashes it. The
         // state_hash token_supply class reads tokens.supply for each touched tick, and
         // the per-action path this refresh replaced had already written the end-of-block
         // supply by now, so running it after createBlock would hash the previous block's
         // supply and fork the state hash. Every ledger-writing pass has run by this point.
+        // It runs ahead of endBlock so the blocks row stays the first write after the
+        // cache closes; the refresh is plain SQL and reaches no contract code.
         await this.indexerDb.refreshTokenSuppliesForBlock(blockToParse);
+
+        // Clear VM compilation cache for this block
+        if(this.actions.vm)
+            this.actions.vm.endBlock();
 
         // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
         // rawBlockTime, not blockTime: this row is what the explorer and the
