@@ -47,7 +47,7 @@ function makePolicySnapshot(keys, tick){
     return row;
 }
 
-describe('bridge_settle: the in-leg policy barrier', function(){
+function registerGeneralTokenPolicyBarrierTest(){
     it('refuses a general-token in-leg until its policy snapshot applies', async function(){
         const keys = [makeKey(), makeKey(), makeKey()];
         const row = makeTransfer(keys, { tick: 'PEPECASH', decimals: 2, amount: '5.00' });
@@ -86,7 +86,9 @@ describe('bridge_settle: the in-leg policy barrier', function(){
         assert.strictEqual(state.actions[0].FORMAT, 5);
         assert.strictEqual(state.settlements.length, 1);
     });
+}
 
+function registerPolicyThenTransferTest(){
     it('applies policy then transfer with no seeded copy', async function(){
         const keys = [makeKey(), makeKey(), makeKey()];
         const tokens = {};
@@ -130,7 +132,9 @@ describe('bridge_settle: the in-leg policy barrier', function(){
         assert.deepStrictEqual(state.credits, [['BTC.PEPECASH', '5.0000', DEST_ADDR]]);
         assert.strictEqual(state.settlements.length, 2);
     });
+}
 
+function registerPolicyBarrierLoggingTest(){
     it('logs each policy barrier once per transfer or tick', async function(){
         BS.resetRefusalMemo();
         const keys = [makeKey(), makeKey(), makeKey()];
@@ -155,4 +159,12 @@ describe('bridge_settle: the in-leg policy barrier', function(){
         assert.strictEqual(lines.filter(line => line.includes(BS.SETTLE_REASON.IN_LEG_NO_POLICY)).length, 1);
         assert.strictEqual(lines.filter(line => line.includes(BS.SETTLE_REASON.POLICY_NO_COPY)).length, 1);
     });
-});
+}
+
+function registerPolicyBarrierTests(){
+    registerGeneralTokenPolicyBarrierTest();
+    registerPolicyThenTransferTest();
+    registerPolicyBarrierLoggingTest();
+}
+
+describe('bridge_settle: the in-leg policy barrier', registerPolicyBarrierTests);

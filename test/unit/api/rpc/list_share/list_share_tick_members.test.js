@@ -21,6 +21,7 @@ const sinon = require('sinon');
 const { buildListShareRpc } = require('../../../../../src/api/rpc/list_share.js');
 const { qualifyTickMembers } = require('../../../../../src/api/rpc/list_share/list_share_tick_members.js');
 const { recordingView, fakeIndexer } = require('../helpers/fake_indexer.js');
+const coins = ['BTC', 'LTC', 'DOGE'];
 
 function sha256(value){
     return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
@@ -33,11 +34,7 @@ function dogeRpc(view){
     }) });
 }
 
-describe('shared list tick member qualification', function () {
-    const coins = ['BTC', 'LTC', 'DOGE'];
-
-    afterEach(function(){ sinon.restore(); });
-
+function registerBasicQualificationTests(){
     it('qualifies bare members, preserves qualified members, and sorts UTF-8 bytes', async function () {
         let lookups = 0;
         const db = { getTickerId: async () => { lookups++; return 5; } };
@@ -73,7 +70,9 @@ describe('shared list tick member qualification', function () {
             ['DOGE:PEPE']
         );
     });
+}
 
+function registerQualificationErrorTests(){
     it('throws when an over-long ticker name has no indexed id', async function () {
         const item = 'A'.repeat(196);
         const db = { getTickerId: async () => null };
@@ -92,7 +91,9 @@ describe('shared list tick member qualification', function () {
             TypeError
         );
     });
+}
 
+function registerQualifiedGetListAtTest(){
     it('qualifies, deduplicates, and byte-sorts getlistat members before hashing', async function(){
         const view = recordingView({
             getListRootIndex: listIndex => listIndex,
@@ -117,7 +118,9 @@ describe('shared list tick member qualification', function () {
             ['getListMeta', 7, 90]
         ]);
     });
+}
 
+function registerLongTickerGetListAtTest(){
     it('uses a ticker id in getlistat when the qualified name exceeds 200 characters', async function(){
         const longName = 'P'.repeat(196);
         const view = recordingView({
@@ -144,7 +147,9 @@ describe('shared list tick member qualification', function () {
             ['getListMeta', 8, 91]
         ]);
     });
+}
 
+function registerAddressListGetListAtTest(){
     it('leaves address-list membership and order unchanged', async function(){
         const addresses = ['z-address', 'A-address', 'z-address'];
         const view = recordingView({
@@ -170,4 +175,14 @@ describe('shared list tick member qualification', function () {
             ['getListMeta', 9, 92]
         ]);
     });
+}
+
+describe('shared list tick member qualification', function () {
+    afterEach(function(){ sinon.restore(); });
+
+    registerBasicQualificationTests();
+    registerQualificationErrorTests();
+    registerQualifiedGetListAtTest();
+    registerLongTickerGetListAtTest();
+    registerAddressListGetListAtTest();
 });
