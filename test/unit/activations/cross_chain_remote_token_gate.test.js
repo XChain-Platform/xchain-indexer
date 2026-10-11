@@ -19,26 +19,30 @@ const ProtocolChanges = require('../../../src/protocol_changes.js');
 const { REGTEST_ARMING } = require('../../../src/protocol_changes/shared_rows.js');
 
 const KEY = 'cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION';
-const EXPECTED = {
-    mainnet: ProtocolChanges.UNARMED,
-    'BTC:testnet': ProtocolChanges.UNARMED,
-    'LTC:testnet': ProtocolChanges.UNARMED,
-    'DOGE:testnet': ProtocolChanges.UNARMED,
-    testnet: ProtocolChanges.UNARMED,
-    regtest: 0,
-};
+const COINS = ['BTC', 'LTC', 'DOGE'];
+const ROW_KEYS = ['BTC:testnet', 'DOGE:testnet', 'LTC:testnet', 'mainnet', 'regtest', 'testnet'];
+const isArmed = (h) => Number.isFinite(h) && h > 1 && h !== ProtocolChanges.UNARMED;
 
 describe('CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION', function () {
     it('is a frozen height row with explicit defaults for every launched key', function () {
         assert.strictEqual(ProtocolChanges.registry.unitOf(KEY), 'height');
-        assert.deepStrictEqual(ProtocolChanges.get(KEY), EXPECTED);
-        assert.strictEqual(Object.isFrozen(ProtocolChanges.get(KEY)), true);
+        const row = ProtocolChanges.get(KEY);
+        assert.deepStrictEqual(Object.keys(row).sort(), ROW_KEYS);
+        assert.strictEqual(row.mainnet, ProtocolChanges.UNARMED);
+        assert.strictEqual(row.testnet, ProtocolChanges.UNARMED);
+        assert.strictEqual(row.regtest, 0);
+        for (const coin of COINS) assert.ok(isArmed(row[coin + ':testnet']), coin + ':testnet is armed');
+        assert.strictEqual(Object.isFrozen(row), true);
     });
 
-    it('stays unarmed on mainnet and every testnet chain', function () {
+    it('stays unarmed on mainnet and is active on each testnet chain from its armed height', function () {
         assert.strictEqual(ProtocolChanges.activeAt(KEY, 'mainnet', 'BTC', ProtocolChanges.UNARMED - 1, null), false);
-        for (const coin of ['BTC', 'LTC', 'DOGE']) {
-            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, ProtocolChanges.UNARMED - 1, null), false, coin);
+        const row = ProtocolChanges.get(KEY);
+        for (const coin of COINS) {
+            const armed = row[coin + ':testnet'];
+            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, armed, null), true, coin + ' at the armed height');
+            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, armed - 1, null), false, coin + ' below the armed height');
+            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, 1, null), false, coin + ' at height 1');
         }
     });
 

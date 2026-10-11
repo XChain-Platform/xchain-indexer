@@ -23,7 +23,7 @@ const Rollback = require('../../../../src/rollback/index.js');
 
 const GATE_KEY = 'cooldown_maturity_escrow_reversal_activation.COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION';
 
-// Far above any chain tip, yet below the sentinel an unarmed row holds.
+// Far above any chain tip and every armed testnet height, yet below the sentinel an unarmed row holds.
 const FAR_HEIGHT = 1e9;
 
 const isReleaseDelete = c => /DELETE e FROM escrows AS e/.test(c.args[0]);
@@ -92,10 +92,15 @@ describe('cooldown maturity escrow release reversal: activation @regression @tie
 
     afterEach(function () { sinon.restore(); });
 
-    it('the row is unarmed on mainnet and every testnet chain and active from regtest genesis', function () {
+    it('the row is unarmed on mainnet, armed per testnet chain, and active from regtest genesis', function () {
+        const row = gateRegistry.get(GATE_KEY);
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'mainnet', coin, FAR_HEIGHT, null), false);
-            assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', coin, FAR_HEIGHT, null), false);
+            // The armed height is read from the registry so the next cut moves it without a test edit.
+            const armed = row[coin + ':testnet'];
+            assert.ok(Number.isSafeInteger(armed) && armed > 1 && armed < FAR_HEIGHT, coin + ' ' + armed);
+            assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', coin, armed, null), true, coin);
+            assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', coin, 1, null), false, coin);
             assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'regtest', coin, 0, null), true);
         }
     });

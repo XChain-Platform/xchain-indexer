@@ -106,6 +106,14 @@
     "0318b82ac3ee5657": [
       "malformed mirrored row rejection @regression @tier1 has two followers reject the same malformed row identically while the block loop continues"
     ],
+    "032507a4392ad944": [
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 does not rotate a stake row at its deactivation height",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 keeps the historical selection below the flag day",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 reverts an in-window row when its delegation is no longer governing",
+      "DELEGATE rotation during the UNSTAKE window @regression @tier1 rotates the visible stake row and keeps getContractStakeDataForVM aligned with cooldown stake",
+      "DELEGATION_ROTATE_IN_WINDOW protocol row @regression @tier1 ships unarmed on mainnet, armed on testnet at a cut instant, and supports the regtest drill override",
+      "Utility.processContractDelegationMaterializations() in-window gate @regression @tier1 passes the new flag decision to the database sweep"
+    ],
     "03383d47d43bb92e": [
       "public VOTE binding dry-run refusal answers a guard-inert VOTE v0 binding create as guard-inert without a transaction",
       "public VOTE binding dry-run refusal builds the listing probe from the code alone so every callback method shares one probe text",
@@ -266,6 +274,14 @@
       "ATTEST hub-mirror response applier @regression @tier3 bounded applicability read (utility.processAttestationResponses paging) short-circuits an empty pending set without touching the mirror",
       "ATTEST hub-mirror response applier @regression @tier3 bounded applicability read (utility.processAttestationResponses paging) stops reading once the cap is filled instead of dragging the whole pending set in",
       "ATTEST hub-mirror response applier @regression @tier3 bounded applicability read (utility.processAttestationResponses paging) walks past pages that yield nothing, and carries the keyset rather than an offset"
+    ],
+    "06f9bcdda9c7ef64": [
+      "strict same-chain price landings @regression @tier1 advances the own landing block when protocol time is unchanged",
+      "strict same-chain price landings @regression @tier1 excludes a DOGE round stamped at exactly T(B) when strict landing is armed",
+      "strict same-chain price landings @regression @tier1 keeps the inclusive query byte-for-byte when strict landing is unarmed",
+      "strict same-chain price landings @regression @tier1 leaves BTC inclusive even when the strict gate seam is forced active",
+      "strict same-chain price landings @regression @tier1 stays unpinned on mainnet, bare testnet and regtest, and is armed at the DOGE testnet cut height",
+      "strict same-chain price landings @regression @tier1 waits for the preceding own landing block instead of own protocol time"
     ],
     "06fb3462a9f977e7": [
       "price_batch_compression: consensus constants @regression PRICE_WIRE_MAX_BYTES matches the declaration in xchain-hub OraclePublisher.js",
@@ -645,6 +661,24 @@
       "ROLLCALL epoch close (\u00a73.4) verification: only signatures bound to THIS chain count rolls and pins no absence when every source is present",
       "ROLLCALL epoch close (\u00a73.4) when the close does not run at all is a no-op at a block that closes no epoch",
       "ROLLCALL epoch close (\u00a73.4) when the close does not run at all is a no-op off BTC, where no stake row lives"
+    ],
+    "0e41118ce76b9e51": [
+      "four flag days registered on 2026-10-07, armed per testnet coin by the release cut bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION is a frozen height row with explicit network defaults",
+      "four flag days registered on 2026-10-07, armed per testnet coin by the release cut bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION is inactive on mainnet, active on testnet from the armed height, and active from regtest genesis",
+      "four flag days registered on 2026-10-07, armed per testnet coin by the release cut cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is a frozen height row with explicit network defaults",
+      "four flag days registered on 2026-10-07, armed per testnet coin by the release cut cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is inactive on mainnet, active on testnet from the armed height, and active from regtest genesis",
+      "four flag days registered on 2026-10-07, armed per testnet coin by the release cut dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION is a frozen height row with explicit network defaults",
+      "four flag days registered on 2026-10-07, armed per testnet coin by the release cut dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION is inactive on mainnet, active on testnet from the armed height, and active from regtest genesis",
+      "four flag days registered on 2026-10-07, armed per testnet coin by the release cut price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is a frozen height row with explicit network defaults",
+      "four flag days registered on 2026-10-07, armed per testnet coin by the release cut price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is inactive on mainnet, active on testnet from the armed height, and active from regtest genesis"
+    ],
+    "0e534b2440f8d999": [
+      "Dispenser refill controller guard @regression @tier2 DISPENSER_REFILL is unarmed on mainnet and active on testnet from its armed time",
+      "Dispenser refill controller guard @regression @tier2 DISPENSER_REFILL routes to the trade controller class",
+      "Dispenser refill controller guard @regression @tier2 active: a refill the controller allows settles",
+      "Dispenser refill controller guard @regression @tier2 active: a refill the controller denies is refused and nothing is escrowed",
+      "Dispenser refill controller guard @regression @tier2 active: an edit that adds no escrow is not guarded",
+      "Dispenser refill controller guard @regression @tier2 inactive: the same denied refill is unguarded and settles"
     ],
     "0ec0f41236d14b46": [
       "legacy migrations/ DDL is ported to the tracked ledger every legacy DROP COLUMN has a tracked counterpart naming the same table + column",
@@ -1042,14 +1076,6 @@
       "list_rematch_plan merges unsorted orders and swaps in ascending action-index order",
       "list_rematch_plan returns an empty plan for empty inputs"
     ],
-    "164da522808b4798": [
-      "ANCHOR v3 empty fold rejection keeps a one-section fold valid",
-      "ANCHOR v3 empty fold rejection preserves the historical empty-fold verdict below activation",
-      "ANCHOR v3 empty fold rejection preserves today's pre-gate behaviour by accepting the unsigned empty fold",
-      "ANCHOR v3 empty fold rejection refuses the archive-only empty fold",
-      "ANCHOR v3 empty fold rejection rejects an empty fold at activation using the ANCHOR mined height",
-      "ANCHOR v3 empty fold rejection ships the reject gate inert on live networks and active on regtest"
-    ],
     "1660347f96656b41": [
       "SQL schema column parity (definition path vs ledger path) @regression a migration-created table is NOT parked in the pre-ledger baseline",
       "SQL schema column parity (definition path vs ledger path) @regression a migration-created table matches its definition byte-for-byte (columns, keys, engine)",
@@ -1381,6 +1407,17 @@
       "late anchor reward derive counter measures derives at, before, and after the theoretical watermark",
       "late anchor reward derive counter returns lateness even when diagnostic logging throws"
     ],
+    "1c7af3ff7c39a754": [
+      "Dispenser refill token policy @regression @tier2 armed keeps the not-owner verdict ahead of the token policy",
+      "Dispenser refill token policy @regression @tier2 armed leaves an edit that adds no escrow alone, sleeping token or not",
+      "Dispenser refill token policy @regression @tier2 armed reads the row by height at the edit block, on the handler network and coin",
+      "Dispenser refill token policy @regression @tier2 armed reads the tick from the dispenser row at the edit block",
+      "Dispenser refill token policy @regression @tier2 armed refuses a refill from a SOURCE the give token lists out and escrows nothing",
+      "Dispenser refill token policy @regression @tier2 armed refuses a refill while the give token sleeps and escrows nothing",
+      "Dispenser refill token policy @regression @tier2 below the height settles a refill from a listed-out SOURCE and makes neither policy read",
+      "Dispenser refill token policy @regression @tier2 below the height settles a refill of a sleeping token and makes neither policy read",
+      "Dispenser refill token policy @regression @tier2 the row is unarmed on mainnet, armed per testnet coin, and active from regtest genesis"
+    ],
     "1c8358d37961f103": [
       "applyPendingReorgs logging and processed-reorg count counts each reorg once its marker row is written",
       "applyPendingReorgs logging and processed-reorg count leaves the count unmoved when a marker write fails",
@@ -1504,14 +1541,6 @@
       "Rollback contract slash-restore order @regression @tier3 restores the pre-slash amount when a re-entrant nested EXECUTE slashes first under a higher action_index",
       "Rollback contract slash-restore order @regression @tier3 restores the pre-slash amount when the orphaned slashes arrive in ascending execution order",
       "Rollback contract slash-restore order @regression @tier3 touches nothing when every debit survives the rollback"
-    ],
-    "1eff3e5bc060dc55": [
-      "SLASH action handler: XANCPUB publisher-only pair @regression keeps legacy handling below the gate: the snapshot block alone decides the slot",
-      "SLASH action handler: XANCPUB publisher-only pair @regression reads inactive on mainnet and testnet and active on regtest through isEnabled",
-      "SLASH action handler: XANCPUB publisher-only pair @regression registers the gate with mainnet and testnet unarmed and regtest genesis-active",
-      "SLASH action handler: XANCPUB publisher-only pair @regression rejects a pair that differs beyond the publisher once the gate is active",
-      "SLASH action handler: XANCPUB publisher-only pair @regression rejects a pair with the same publisher once the gate is active",
-      "SLASH action handler: XANCPUB publisher-only pair @regression resolves a publisher-only pair to a slashable slot once the gate is active"
     ],
     "1f0e549847cee838": [
       "HubDbSync stream-watermark stall recovery @regression @tier1 _checkWatermarkStall wiring a PARTIAL advance re-arms stage 1 rather than falling through to the exit",
@@ -2284,14 +2313,16 @@
       "bridge and policy barriers when the schema changes underneath @regression @tier1 reads the table anyway when the probe itself fails",
       "bridge and policy barriers when the schema changes underneath @regression @tier1 records the 1146 a stale positive memo earns, and skips the statement next time"
     ],
-    "2b62c6cd80d4f027": [
-      "dispatched-only ACTION admission @regression @tier1 defines the admission set as exactly the names in the dispatch table",
-      "dispatched-only ACTION admission @regression @tier1 invalidates a whole BATCH containing a registered but undispatched name once active",
-      "dispatched-only ACTION admission @regression @tier1 is unarmed on public networks and active from regtest genesis",
-      "dispatched-only ACTION admission @regression @tier1 preserves BATCH admission below the gate",
-      "dispatched-only ACTION admission @regression @tier1 preserves the legacy empty-action no-op in a BATCH once active",
-      "dispatched-only ACTION admission @regression @tier1 preserves top-level admission below the gate",
-      "dispatched-only ACTION admission @regression @tier1 routes a top-level registered feature flag to UNKNOWN once active"
+    "2b58170f54dc994d": [
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 an armed row returns block time minus the newest snapshot time",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 clamps a snapshot stamped after the block to 0",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 mainnet keeps the legacy block-count query on every coin",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 regtest off the reference chain keeps the consensus-time bound on the seconds read",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 regtest reports seconds from genesis on every coin",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 reports MAX_SAFE_INTEGER when the block time is unknown",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 reports MAX_SAFE_INTEGER with no admitted snapshot",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 testnet keeps the block-count query at height 1 and reports seconds from the armed height",
+      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 the row is unarmed on mainnet, armed per testnet chain, and armed from genesis on regtest"
     ],
     "2b716c727c33a522": [
       "Swap action handler maker policy admission @regression @tier2 admits a GET_ADDRESS allowed for GET_TICK but blocked for GIVE_TICK after payout-policy activation",
@@ -2914,6 +2945,13 @@
       "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 the table names every height, time and epoch row once, or the row is listed as skipped",
       "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 the two findings differ for the recorded reason, not for a moved threshold"
     ],
+    "37d8b66508317d63": [
+      "exact integer wire fields @regression @tier1 accepts only lossless integer representations",
+      "exact integer wire fields @regression @tier1 gates BET create and existing-feed integer wire spellings",
+      "exact integer wire fields @regression @tier1 gates DISPENSER integer wire spellings",
+      "exact integer wire fields @regression @tier1 gates ORDER and SWAP integer wire spellings",
+      "exact integer wire fields @regression @tier1 registers the protocol change armed on testnet at a cut instant and unarmed on mainnet and regtest"
+    ],
     "383eb974c61ae810": [
       "archive-anchor content query: ARCHIVE_ANCHOR_BY_CONTENT_SQL @regression @tier1 LEFT JOINs the author and txid linkage",
       "archive-anchor content query: ARCHIVE_ANCHOR_BY_CONTENT_SQL @regression @tier1 does NOT filter on match_batch_seq",
@@ -3282,17 +3320,6 @@
       "indexer failure-leg diagnostics @regression XCALL_REJECTED clearing a refusal emits nothing: only the failure leg is an event",
       "indexer failure-leg diagnostics @regression isAnchorFailureStatus treats only the invalid verdicts as failures"
     ],
-    "3dd973dfca38d28f": [
-      "Dispenser refill token policy @regression @tier2 armed keeps the not-owner verdict ahead of the token policy",
-      "Dispenser refill token policy @regression @tier2 armed leaves an edit that adds no escrow alone, sleeping token or not",
-      "Dispenser refill token policy @regression @tier2 armed reads the row by height at the edit block, on the handler network and coin",
-      "Dispenser refill token policy @regression @tier2 armed reads the tick from the dispenser row at the edit block",
-      "Dispenser refill token policy @regression @tier2 armed refuses a refill from a SOURCE the give token lists out and escrows nothing",
-      "Dispenser refill token policy @regression @tier2 armed refuses a refill while the give token sleeps and escrows nothing",
-      "Dispenser refill token policy @regression @tier2 below the height settles a refill from a listed-out SOURCE and makes neither policy read",
-      "Dispenser refill token policy @regression @tier2 below the height settles a refill of a sleeping token and makes neither policy read",
-      "Dispenser refill token policy @regression @tier2 the row is unarmed on mainnet and on every testnet coin, and active from regtest genesis"
-    ],
     "3df297a740e13cca": [
       "HubDbSync pre-batch era floor @regression @tier1 does not let a pre-era block trip the bounded-mirror re-floor",
       "HubDbSync pre-batch era floor @regression @tier1 fails CLOSED without a usable block time, even with the floor armed",
@@ -3495,11 +3522,6 @@
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_POLL_TICK_VISIBLE flag-day (/ poll electorate TICK to callback) gate ACTIVE: inserts the resolved electorate TICK after min_voters_met, before the developer params",
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_POLL_TICK_VISIBLE flag-day (/ poll electorate TICK to callback) gate INACTIVE: signature is byte-identical to the pre-flag layout (no tick slot, no getTicker read)"
     ],
-    "41fd87b6ede40aa8": [
-      "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is a frozen height row with explicit defaults for every launched key",
-      "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is active from regtest genesis without an environment arming lever",
-      "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION stays unarmed on mainnet and every testnet chain"
-    ],
     "4263b1fd459a70bf": [
       "gas seeder: chain-shaped preamble an unset INDEXER_COIN is BTC, the launcher default",
       "gas seeder: chain-shaped preamble clearSystemGas forgets every pending seed",
@@ -3556,14 +3578,6 @@
       "Withdraw custody guard helper gas accounting @regression @tier1 returns the sum of both allowed guards metered fees",
       "Withdraw custody guard helper routing @regression @tier1 loads SOURCE balances when the caller supplies null gas balances",
       "Withdraw custody guard helper routing @regression @tier1 sends the custody-to-SOURCE leg to the token and SOURCE transfer guards"
-    ],
-    "438bc819233a1f98": [
-      "Dispenser refill controller guard @regression @tier2 DISPENSER_REFILL is unarmed on mainnet and testnet, so it is inactive there",
-      "Dispenser refill controller guard @regression @tier2 DISPENSER_REFILL routes to the trade controller class",
-      "Dispenser refill controller guard @regression @tier2 active: a refill the controller allows settles",
-      "Dispenser refill controller guard @regression @tier2 active: a refill the controller denies is refused and nothing is escrowed",
-      "Dispenser refill controller guard @regression @tier2 active: an edit that adds no escrow is not guarded",
-      "Dispenser refill controller guard @regression @tier2 inactive: the same denied refill is unguarded and settles"
     ],
     "4419d7ba08b430c7": [
       "protocolAddressRoles (consensus hash canonicalization) canonicalizes a known special address to its role and passes others through",
@@ -5139,25 +5153,6 @@
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) rejects when a signature does not verify",
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) rejects when the cross_chain snapshot is empty (fails closed)"
     ],
-    "5eaca2bad759fb97": [
-      "STAKE_SNAPSHOT_SLASH_WINDOW registry row @regression @tier1 ships UNARMED on mainnet and testnet",
-      "getContractStakeDataForVM() slash-window cap @regression @tier1 armed but block time before the flag day: legacy snapshot",
-      "getContractStakeDataForVM() slash-window cap @regression @tier1 armed: a slash inside the window lowers the stake the snapshot shows",
-      "getContractStakeDataForVM() slash-window cap @regression @tier1 armed: an unslashed window row is unchanged",
-      "getContractStakeDataForVM() slash-window cap @regression @tier1 unarmed (regtest env unset): legacy snapshot keeps the full row amount",
-      "getContractStakeDataForVM() slash-window cap @regression @tier1 unarmed (testnet and mainnet ship inert): legacy snapshot",
-      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 armed: a fresh STAKE still inside its activation delay stays hidden",
-      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 armed: a slash that lands on the pending residual is visible",
-      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 armed: a slash through the residual into the cooldown is visible",
-      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 armed: an unslashed partial UNSTAKE shows the full stake, as unarmed does",
-      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 armed: the residual still counts after its cooldown was already refunded",
-      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 unarmed: the residual lookup is never issued",
-      "slash-window cap scoped to the UNSTAKE that opened the window @regression @tier1 armed: an in-window row whose UNSTAKE left no open cooldown shows nothing",
-      "slash-window cap scoped to the UNSTAKE that opened the window @regression @tier1 armed: an older open cooldown does not hide a slash on the newer window",
-      "slash-window cap scoped to the UNSTAKE that opened the window @regression @tier1 armed: two windows open at once are each capped by their own cooldown",
-      "slashContractStake then snapshot @regression @tier1 armed: the slash debits the cooldown row and the snapshot shows the remainder",
-      "slashContractStake then snapshot @regression @tier1 unarmed: the same slash leaves the legacy snapshot figure"
-    ],
     "5ec5de0135d41cfb": [
       "Execute (EXECUTE) @regression @tier2 processSlashEmission consumes a delimiter-bearing token whole (named-field read, never pipe-split)",
       "Execute (EXECUTE) @regression @tier2 processSlashEmission no-ops silently when the pubkey is not staked here",
@@ -6485,13 +6480,9 @@
       "Order_Match LIST trigger @regression @tier2 does not book a counterparty absent from the resting order allow list",
       "Order_Match LIST trigger @regression @tier2 matches the indexed resting order using the LIST block context"
     ],
-    "721f08577076ca3e": [
-      "DELEGATE rotation during the UNSTAKE window @regression @tier1 does not rotate a stake row at its deactivation height",
-      "DELEGATE rotation during the UNSTAKE window @regression @tier1 keeps the historical selection below the flag day",
-      "DELEGATE rotation during the UNSTAKE window @regression @tier1 reverts an in-window row when its delegation is no longer governing",
-      "DELEGATE rotation during the UNSTAKE window @regression @tier1 rotates the visible stake row and keeps getContractStakeDataForVM aligned with cooldown stake",
-      "DELEGATION_ROTATE_IN_WINDOW protocol row @regression @tier1 ships unarmed and supports the regtest drill override",
-      "Utility.processContractDelegationMaterializations() in-window gate @regression @tier1 passes the new flag decision to the database sweep"
+    "71fab19d4d4b4dfb": [
+      "relay fee activation row attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION is a frozen height row with explicit network defaults",
+      "relay fee activation row attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION is inactive on mainnet, active on testnet from the armed height, and active from regtest genesis"
     ],
     "72a0b56687489fbe": [
       "hourly price age flips VM execution at its action block gate",
@@ -7005,6 +6996,12 @@
       "LIST metadata storage stores null fields for a valid empty format 4 meta",
       "LIST metadata storage stores null fields for a valid format 5 with no current meta",
       "LIST metadata storage stores null fields for an invalid format 5 without reading"
+    ],
+    "7ae0e3eb59a78a58": [
+      "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 at the gate a base pair is refused as a multi-round retry",
+      "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 at the gate a relay pair still resolves under cross_chain",
+      "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 below the gate a base pair resolves its snapshot block from the request row",
+      "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 registers a row unarmed on mainnet, armed on testnet, and genesis-active on regtest"
     ],
     "7b26338ac8262f8c": [
       "anchor archive fold-term gate BTC reward derivation does not terminate the bundle family",
@@ -8341,19 +8338,6 @@
       "HubPushQueue start() / stop() stop() clears the timer and sets it to null",
       "HubPushQueue start() / stop() stop() is safe when timer is already null"
     ],
-    "886d47aceb47229b": [
-      "cooldown maturity escrow release reversal @regression @tier3 deletes each legacy refund credit together with its paired negative escrow release",
-      "cooldown maturity escrow release reversal @regression @tier3 keeps both escrow releases and still deletes the credits and resets the status when the delete is off",
-      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback at an active height deletes both releases so the re-maturity writes the only one",
-      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback on an unarmed network keeps the escrow releases and reverses everything else as before",
-      "cooldown maturity escrow release reversal: activation @regression @tier3 the row is unarmed on mainnet and every testnet chain and active from regtest genesis",
-      "cooldown maturity escrow release reversal: activation @regression @tier3 the switch is read at the rollback target block, for this network and coin",
-      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 a slashed-to-zero cooldown alone makes the reversal a no-op",
-      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 a slashed-to-zero source is not seeded into the recompute",
-      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 an active reversal undoes the matured sibling and keeps the slash release and the slashed row",
-      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 an unarmed reversal also leaves the slashed-to-zero source untouched",
-      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 the sweep never matures a slashed-to-zero cooldown, so it never reads completed"
-    ],
     "8889c181c1ea0632": [
       "BET action handler @regression @tier2 accepts a valid place, escrows the stake, writes the open bet",
       "BET action handler @regression @tier2 cancel refunds every open bet in full with no oracle fee and works past expire_at",
@@ -8389,6 +8373,15 @@
       "providerMinStakeHistory @regression @tier1 providerMinStakeAt returns null when neither history nor genesis floor can be resolved",
       "providerMinStakeHistory @regression @tier1 providerMinStakeAt returns the genesis floor when no activation applies",
       "providerMinStakeHistory @regression @tier1 the frozen activation table declares all three networks and arms nothing on any of them"
+    ],
+    "88a89e22afc51ea6": [
+      "Anchor pre-activation status gate @regression @tier3 changes nothing at or above ANCHOR_ACTIVATION",
+      "Anchor pre-activation status gate @regression @tier3 fails closed on a junk height whatever the gate says",
+      "Anchor pre-activation status gate @regression @tier3 is registered unarmed on mainnet, armed on testnet at the DOGE height, and armed from genesis on regtest",
+      "Anchor pre-activation status gate @regression @tier3 keeps the old text byte for byte while the gate is inactive",
+      "Anchor pre-activation status gate @regression @tier3 leaves the gate inert for an anchor below its own height",
+      "Anchor pre-activation status gate @regression @tier3 reads the old spelling as a non-candidate, so the stamp is what changes the verdict",
+      "Anchor pre-activation status gate @regression @tier3 stamps unverified below ANCHOR_ACTIVATION once the gate is active"
     ],
     "88d6102dd7170497": [
       "shared-list table contracts @regression @tier1 baselines only when both shared-list tables are present",
@@ -8729,6 +8722,14 @@
       "Fee boundary tests @regression @tier1 FEE-06: Sub-token issuance charges ISSUANCE_FEE_SUBTOKEN (0.5 XCHAIN) : valid with exact balance",
       "Fee boundary tests @regression @tier1 FEE-07: Sub-token issuance with 1 sat below ISSUANCE_FEE_SUBTOKEN (0.49999999) is invalid"
     ],
+    "8fa159824bb3391d": [
+      "SLASH action handler: XANCPUB publisher-only pair @regression keeps legacy handling below the gate: the snapshot block alone decides the slot",
+      "SLASH action handler: XANCPUB publisher-only pair @regression reads inactive on mainnet, active on testnet from the armed time, and active on regtest through isEnabled",
+      "SLASH action handler: XANCPUB publisher-only pair @regression registers the gate with mainnet unarmed, testnet armed, and regtest genesis-active",
+      "SLASH action handler: XANCPUB publisher-only pair @regression rejects a pair that differs beyond the publisher once the gate is active",
+      "SLASH action handler: XANCPUB publisher-only pair @regression rejects a pair with the same publisher once the gate is active",
+      "SLASH action handler: XANCPUB publisher-only pair @regression resolves a publisher-only pair to a slashable slot once the gate is active"
+    ],
     "8fabcde2ac147e88": [
       "Programmable policy layer : Phase A binding wire contract @regression ADDRESS format 1 : self-gating controller bind/unbind CONTROLLER/COOLDOWN_BLOCKS/UNBIND are NOT in the ADDRESS NUMBER list",
       "Programmable policy layer : Phase A binding wire contract @regression ADDRESS format 1 : self-gating controller bind/unbind a bind wire string round-trips through split/join",
@@ -8749,6 +8750,11 @@
       "src/consensus/merkle.js is byte-identical across its four carriers every carrier present on disk has the same bytes",
       "src/consensus/merkle.js is byte-identical across its four carriers every merkle/primitives.js carrier present on disk has the same bytes",
       "src/consensus/merkle.js is byte-identical across its four carriers this repo carries the module at all"
+    ],
+    "8fcbc76f528097f2": [
+      "Deploy (DEPLOY) @regression @tier2 nesting-depth deploy-lint gate threading passes enforceLintNestingDepth false on mainnet below the unarmed gate",
+      "Deploy (DEPLOY) @regression @tier2 nesting-depth deploy-lint gate threading passes enforceLintNestingDepth true on regtest from genesis",
+      "Deploy (DEPLOY) @regression @tier2 nesting-depth deploy-lint gate threading passes enforceLintNestingDepth true on testnet at the armed height and false below it"
     ],
     "8fcf19004337f429": [
       "decideReply accepts a valid buried reply and normalizes its signers",
@@ -9347,6 +9353,13 @@
       "EMISSION_ISSUANCE_LIMITS budget in issue.js @regression @tier1 classification agrees with batch.js for every shape it has to decide",
       "EMISSION_ISSUANCE_LIMITS budget in issue.js @regression @tier1 the first top-level issuance in a budget is admitted and consumes the slot"
     ],
+    "95dc191db8213672": [
+      "state_hash attest_batch_head class @regression active: stamped heads fold in before block_index and a dropped stamp changes the hash",
+      "state_hash attest_batch_head class @regression below threshold: no attest_batch_head key and no extra query",
+      "state_hash attest_batch_head class @regression gate: regtest armed from genesis, mainnet inert, testnet armed per chain, unknown network off",
+      "state_hash attest_batch_head class @regression literal twins equal the canonical wire constants",
+      "state_hash attest_batch_head class @regression selection: stamped v5 head keyed by the completing chunk block, resolved status, total order"
+    ],
     "95e6be8c73046399": [
       "LIST meta part format specs defines create metadata format 4 with ITEM at field 5",
       "LIST meta part format specs defines set metadata format 5 without ITEM",
@@ -9523,10 +9536,6 @@
       "db.insertRollcallGates (the epoch-close write) @regression @tier1 writes one row per signer as (epoch_height, lower-cased pubkey, close_block, gates JSON array)",
       "db.insertRollcallSigners carries the gates column @regression @tier1 passes the signed GATES string as the 8th bound value",
       "db.insertRollcallSigners carries the gates column @regression @tier1 stores NULL for a v0 roll call, which carries no gates field"
-    ],
-    "981dc6a195e515a0": [
-      "relay fee activation row attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION is a frozen height row with explicit network defaults",
-      "relay fee activation row attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION is inactive on launched networks and active from regtest genesis"
     ],
     "983e3e8b65387695": [
       "a fee quote answers for the action it was asked about [REGRESSION] reads the fee row of the ORDER, not of the match",
@@ -10245,15 +10254,6 @@
       "activation-gate constant parity to canonical constants.js @regression train_activation.js TRAIN_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
       "activation-gate constant parity to canonical constants.js @regression xchain_bridge_activation.js XCHAIN_BRIDGE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js"
     ],
-    "a04403a0cd08030c": [
-      "Anchor pre-activation status gate @regression @tier3 changes nothing at or above ANCHOR_ACTIVATION",
-      "Anchor pre-activation status gate @regression @tier3 fails closed on a junk height whatever the gate says",
-      "Anchor pre-activation status gate @regression @tier3 is registered unarmed on mainnet and testnet and armed from genesis on regtest",
-      "Anchor pre-activation status gate @regression @tier3 keeps the old text byte for byte while the gate is inactive",
-      "Anchor pre-activation status gate @regression @tier3 leaves the gate inert for an anchor below its own height",
-      "Anchor pre-activation status gate @regression @tier3 reads the old spelling as a non-candidate, so the stamp is what changes the verdict",
-      "Anchor pre-activation status gate @regression @tier3 stamps unverified below ANCHOR_ACTIVATION once the gate is active"
-    ],
     "a0a533092c7a2e98": [
       "stakeSnapshotStrings fresh output does not mutate or reuse input objects, arrays, entries, or amounts",
       "stakeSnapshotStrings fresh output returns three fresh empty objects for an empty snapshot",
@@ -10522,6 +10522,19 @@
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 vector: INTACT owner stake burns in full",
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 vector: PARTIALLY unstaked owner stake burns only what remains",
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 zero-amount rows are skipped rather than re-burned"
+    ],
+    "a7b9a30696b4da72": [
+      "cooldown maturity escrow release reversal @regression @tier3 deletes each legacy refund credit together with its paired negative escrow release",
+      "cooldown maturity escrow release reversal @regression @tier3 keeps both escrow releases and still deletes the credits and resets the status when the delete is off",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback at an active height deletes both releases so the re-maturity writes the only one",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 a rollback on an unarmed network keeps the escrow releases and reverses everything else as before",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 the row is unarmed on mainnet, armed per testnet chain, and active from regtest genesis",
+      "cooldown maturity escrow release reversal: activation @regression @tier3 the switch is read at the rollback target block, for this network and coin",
+      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 a slashed-to-zero cooldown alone makes the reversal a no-op",
+      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 a slashed-to-zero source is not seeded into the recompute",
+      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 an active reversal undoes the matured sibling and keeps the slash release and the slashed row",
+      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 an unarmed reversal also leaves the slashed-to-zero source untouched",
+      "cooldown maturity escrow release reversal: slash to zero @regression @tier3 the sweep never matures a slashed-to-zero cooldown, so it never reads completed"
     ],
     "a7bf3b007262c77c": [
       "Attest (ATTEST) @regression @tier3 _injectCallbackExecute internal branches callback_params_json with invalid JSON \u2192 catch branch fires, callbackParams stays []",
@@ -11046,6 +11059,15 @@
       "Utility @regression @tier1 processMarketUpdates() sets last_updated to the current block_time on every refreshed row",
       "Utility @regression @tier1 processMarketUpdates() skips the ageing sweep (without throwing) when block_time is the false sentinel"
     ],
+    "b0aefc4c8409d013": [
+      "dispatched-only ACTION admission @regression @tier1 defines the admission set as exactly the names in the dispatch table",
+      "dispatched-only ACTION admission @regression @tier1 invalidates a whole BATCH containing a registered but undispatched name once active",
+      "dispatched-only ACTION admission @regression @tier1 is unarmed on mainnet, armed per testnet coin, and active from regtest genesis",
+      "dispatched-only ACTION admission @regression @tier1 preserves BATCH admission below the gate",
+      "dispatched-only ACTION admission @regression @tier1 preserves the legacy empty-action no-op in a BATCH once active",
+      "dispatched-only ACTION admission @regression @tier1 preserves top-level admission below the gate",
+      "dispatched-only ACTION admission @regression @tier1 routes a top-level registered feature flag to UNKNOWN once active"
+    ],
     "b0be5e75e30decd3": [
       "deepFreeze() freezes nested objects and arrays",
       "deepFreeze() returns primitives and null unchanged",
@@ -11170,16 +11192,6 @@
       "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 is present in part 5 with mainnet unarmed and testnet armed at the v0.21.3 instant",
       "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 reads the regtest-only drill override when a fresh table is built",
       "protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1 registers the row and both network constants"
-    ],
-    "b2faf3a707176a9c": [
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 an armed row returns block time minus the newest snapshot time",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 clamps a snapshot stamped after the block to 0",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 mainnet and testnet keep the legacy block-count query on every coin",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 regtest off the reference chain keeps the consensus-time bound on the seconds read",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 regtest reports seconds from genesis on every coin",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 reports MAX_SAFE_INTEGER when the block time is unknown",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 reports MAX_SAFE_INTEGER with no admitted snapshot",
-      "VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1 the row is unarmed on mainnet and every testnet key and armed from genesis on regtest"
     ],
     "b361ae8704d52118": [
       "HubDbSync _applyRow cross_chain_calls generation fence @regression @tier1 assigns the fence LAST, so every gated column is judged against the ORIGINAL generation",
@@ -11917,11 +11929,6 @@
       "Database getTickerId lookup order @unit @regression orders a case-insensitive name lookup by ascending id and returns the first row",
       "Database getTickerId lookup order @unit @regression returns null when a name lookup misses"
     ],
-    "c0bf65d90cf86ae9": [
-      "Deploy (DEPLOY) @regression @tier2 nesting-depth deploy-lint gate threading passes enforceLintNestingDepth false on mainnet below the unarmed gate",
-      "Deploy (DEPLOY) @regression @tier2 nesting-depth deploy-lint gate threading passes enforceLintNestingDepth false on testnet below the unarmed gate",
-      "Deploy (DEPLOY) @regression @tier2 nesting-depth deploy-lint gate threading passes enforceLintNestingDepth true on regtest from genesis"
-    ],
     "c1156153bb6a807f": [
       "Execute (EXECUTE) @regression @tier2 cross-contract calls a callee run uses VM_GAS_LIMIT as its VM ceiling and reports its unused subtree gas",
       "Execute (EXECUTE) @regression @tier2 cross-contract calls a failed callee rolls back the tree and forfeits all refunds",
@@ -11935,6 +11942,14 @@
     "c126f106c7f18f5a": [
       "integration harness VM block rhythm through production's passes leaves the cache open when a pass throws inside the window, and the next attempt opens a fresh one",
       "integration harness VM block rhythm through production's passes opens the cache first inside the block and closes it after every pass group, just before createBlock"
+    ],
+    "c1df08e38339ad37": [
+      "ANCHOR v3 empty fold rejection keeps a one-section fold valid",
+      "ANCHOR v3 empty fold rejection preserves the historical empty-fold verdict below activation",
+      "ANCHOR v3 empty fold rejection preserves today's pre-gate behaviour by accepting the unsigned empty fold",
+      "ANCHOR v3 empty fold rejection refuses the archive-only empty fold",
+      "ANCHOR v3 empty fold rejection rejects an empty fold at activation using the ANCHOR mined height",
+      "ANCHOR v3 empty fold rejection ships the reject gate inert on mainnet, armed per testnet chain, and active on regtest"
     ],
     "c1ef0fe71cbe3da1": [
       "Mint handler @regression @tier1 DESTINATION DESTINATION not authorized by token list \u2192 invalid",
@@ -12135,13 +12150,6 @@
       "Actions.processTransaction() @regression @tier3 routes SLEEP to actionSleep.parse",
       "Actions.processTransaction() @regression @tier3 routes SWAP to actionSwap.parse",
       "Actions.processTransaction() @regression @tier3 routes SWEEP to actionSweep.parse"
-    ],
-    "c52b47b60b51b013": [
-      "state_hash attest_batch_head class @regression active: stamped heads fold in before block_index and a dropped stamp changes the hash",
-      "state_hash attest_batch_head class @regression below threshold: no attest_batch_head key and no extra query",
-      "state_hash attest_batch_head class @regression gate: regtest armed from genesis, mainnet and testnet inert, unknown network off",
-      "state_hash attest_batch_head class @regression literal twins equal the canonical wire constants",
-      "state_hash attest_batch_head class @regression selection: stamped v5 head keyed by the completing chunk block, resolved status, total order"
     ],
     "c5325def56415d0d": [
       "execContext (injected-execution TX_HASH seam) @regression @tier2 attest expiry callback (previously-broken site 1) post-flag-day the injected context carries the ATTESTEXPCB synthetic TX_HASH",
@@ -12646,12 +12654,6 @@
       "BATCH per-subcommand root discriminator flag day @regression @tier1 the discriminator form on each side of the gate gate ON: a non-BATCH root still hashes the bare TX_VOUT",
       "BATCH per-subcommand root discriminator flag day @regression @tier1 the discriminator form on each side of the gate positions Number() would fold together stay distinct"
     ],
-    "cfb6687fc10b9586": [
-      "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 at the gate a base pair is refused as a multi-round retry",
-      "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 at the gate a relay pair still resolves under cross_chain",
-      "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 below the gate a base pair resolves its snapshot block from the request row",
-      "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 registers a row unarmed on mainnet and testnet and genesis-active on regtest"
-    ],
     "d02af0af67a03e53": [
       "archive invalid_archive reset: publisher scoping @regression against a real SQL engine changes nothing for a single-publisher batch, scoped or not",
       "archive invalid_archive reset: publisher scoping @regression against a real SQL engine scoped, a chunk with no resolvable author resets nothing",
@@ -13067,6 +13069,11 @@
       "state_root routing pin (syntax tree) @regression extraSubRoots is only ever SUB.gateSubRoots(await reservedSubRootCandidates(...), ...)",
       "state_root routing pin (syntax tree) @regression knows this repo and finds exactly its assembleStateRoot call sites, all in the orchestrator",
       "state_root routing pin (syntax tree) @regression no shadow value reaches gateSubRoots or assembleStateRoot"
+    ],
+    "d67fd006b4bcd8ff": [
+      "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is a frozen height row with explicit defaults for every launched key",
+      "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is active from regtest genesis without an environment arming lever",
+      "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION stays unarmed on mainnet and is active on each testnet chain from its armed height"
     ],
     "d6d993761e998d4a": [
       "the fee-quote dry run drops the SMT name memos it poisoned @regression a quote whose handler THROWS invalidates too (the teardown is in the finally)",
@@ -13625,13 +13632,6 @@
       "ProtocolChanges @regression @tier3 parseChanges() should parse version into major/minor/revision",
       "ProtocolChanges @regression @tier3 parseChanges() should set all activation blocks to 0",
       "ProtocolChanges @regression @tier3 parseChanges() should set all activation times to 0"
-    ],
-    "dffaba7ca7ce4ca9": [
-      "exact integer wire fields @regression @tier1 accepts only lossless integer representations",
-      "exact integer wire fields @regression @tier1 gates BET create and existing-feed integer wire spellings",
-      "exact integer wire fields @regression @tier1 gates DISPENSER integer wire spellings",
-      "exact integer wire fields @regression @tier1 gates ORDER and SWAP integer wire spellings",
-      "exact integer wire fields @regression @tier1 registers the protocol change unarmed on every network"
     ],
     "e0826acdcf60989c": [
       "subtree node store row batches inserts a one-node chunk and returns the query result",
@@ -14275,14 +14275,6 @@
       "VM snapshot memo: cross-chain snapshot @regression @tier1 serves exactly what an uncached build returns, key order included",
       "VM snapshot memo: poll snapshot @regression @tier1 builds once per block pass and per tick variant",
       "VM snapshot memo: poll snapshot @regression @tier1 serves exactly what an uncached build returns"
-    ],
-    "e984d925c06ceb59": [
-      "strict same-chain price landings @regression @tier1 advances the own landing block when protocol time is unchanged",
-      "strict same-chain price landings @regression @tier1 excludes a DOGE round stamped at exactly T(B) when strict landing is armed",
-      "strict same-chain price landings @regression @tier1 is unpinned on every declared network until the release cut",
-      "strict same-chain price landings @regression @tier1 keeps the inclusive query byte-for-byte when strict landing is unarmed",
-      "strict same-chain price landings @regression @tier1 leaves BTC inclusive even when the strict gate seam is forced active",
-      "strict same-chain price landings @regression @tier1 waits for the preceding own landing block instead of own protocol time"
     ],
     "e9c3f47b50704d38": [
       "HubDbSync failover when no candidate is caught up a caught-up ready frame clears the record",
@@ -14944,6 +14936,25 @@
       "health advertises committed height only @regression @tier1 src/api.js height-advertising endpoints (static guard) health() reads its height through committedView()",
       "health advertises committed height only @regression @tier1 src/api.js height-advertising endpoints (static guard) health() reports the in-flight block separately"
     ],
+    "f77ff8b4e904c81e": [
+      "STAKE_SNAPSHOT_SLASH_WINDOW registry row @regression @tier1 ships UNARMED on mainnet and armed on testnet at a cut instant",
+      "getContractStakeDataForVM() slash-window cap @regression @tier1 armed but block time before the flag day: legacy snapshot",
+      "getContractStakeDataForVM() slash-window cap @regression @tier1 armed: a slash inside the window lowers the stake the snapshot shows",
+      "getContractStakeDataForVM() slash-window cap @regression @tier1 armed: an unslashed window row is unchanged",
+      "getContractStakeDataForVM() slash-window cap @regression @tier1 unarmed (regtest env unset): legacy snapshot keeps the full row amount",
+      "getContractStakeDataForVM() slash-window cap @regression @tier1 unarmed (testnet and mainnet ship inert): legacy snapshot",
+      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 armed: a fresh STAKE still inside its activation delay stays hidden",
+      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 armed: a slash that lands on the pending residual is visible",
+      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 armed: a slash through the residual into the cooldown is visible",
+      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 armed: an unslashed partial UNSTAKE shows the full stake, as unarmed does",
+      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 armed: the residual still counts after its cooldown was already refunded",
+      "slash-window cap counts a partial UNSTAKE residual @regression @tier1 unarmed: the residual lookup is never issued",
+      "slash-window cap scoped to the UNSTAKE that opened the window @regression @tier1 armed: an in-window row whose UNSTAKE left no open cooldown shows nothing",
+      "slash-window cap scoped to the UNSTAKE that opened the window @regression @tier1 armed: an older open cooldown does not hide a slash on the newer window",
+      "slash-window cap scoped to the UNSTAKE that opened the window @regression @tier1 armed: two windows open at once are each capped by their own cooldown",
+      "slashContractStake then snapshot @regression @tier1 armed: the slash debits the cooldown row and the snapshot shows the remainder",
+      "slashContractStake then snapshot @regression @tier1 unarmed: the same slash leaves the legacy snapshot figure"
+    ],
     "f788420989313a03": [
       "Price v2 (PRICE batch) @regression @tier3 decompression (step 1) NEVER falls back to reading an undecodable compressed field as an uncompressed body",
       "Price v2 (PRICE batch) @regression @tier3 decompression (step 1) a compression failure stores nothing batch-shaped and pushes nothing",
@@ -15217,16 +15228,6 @@
       "Swap_Match payout token policies @regression @tier2 checks the active GIVE-token policy only against the matching payout",
       "Swap_Match payout token policies @regression @tier2 keeps the below-gate rule that checks the GET-token policy against both payouts"
     ],
-    "fc29d05a79dee0de": [
-      "four unarmed flag days registered on 2026-10-07 bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION is a frozen height row with explicit network defaults",
-      "four unarmed flag days registered on 2026-10-07 bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION is inactive on launched networks and active from regtest genesis",
-      "four unarmed flag days registered on 2026-10-07 cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is a frozen height row with explicit network defaults",
-      "four unarmed flag days registered on 2026-10-07 cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is inactive on launched networks and active from regtest genesis",
-      "four unarmed flag days registered on 2026-10-07 dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION is a frozen height row with explicit network defaults",
-      "four unarmed flag days registered on 2026-10-07 dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION is inactive on launched networks and active from regtest genesis",
-      "four unarmed flag days registered on 2026-10-07 price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is a frozen height row with explicit network defaults",
-      "four unarmed flag days registered on 2026-10-07 price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION is inactive on launched networks and active from regtest genesis"
-    ],
     "fc5d6e4ae9cfb50a": [
       "Database.getActiveCapabilityCount() threshold source @regression @tier1 counts over the SAME effective-set SQL as getValidatorsByCapability (quorum agreement)",
       "Database.getActiveCapabilityCount() threshold source @regression @tier1 falls back to local config when no override is supplied",
@@ -15450,7 +15451,7 @@
   "scripts": {
     "test": {
       "fileCount": 1258,
-      "titleCount": 12930,
+      "titleCount": 12931,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15472,13 +15473,13 @@
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/preflight_memo.test.js": "fcceb01127354bd9",
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
-        "test/unit/actions/actions_class/dispatched_actions.test.js": "2b62c6cd80d4f027",
+        "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
         "test/unit/actions/actions_class/install_methods.test.js": "13e1f9bf869b82b9",
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "e80bd7614da629b4",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "afd595adc550c449",
-        "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "a04403a0cd08030c",
+        "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
@@ -15577,7 +15578,7 @@
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
         "test/unit/actions/contract/deploy.test/lint_gates.test.js": "3bd78cc1cc1aae71",
-        "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "c0bf65d90cf86ae9",
+        "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "8fcbc76f528097f2",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/native_fee.test.js": "2ef587e9e97d807d",
         "test/unit/actions/contract/deploy.test/staking_config.test.js": "750c96e2e1dcca8c",
@@ -15645,8 +15646,8 @@
         "test/unit/actions/market/dispenser.test/freshness_oracle_shape.test.js": "32667c285d881516",
         "test/unit/actions/market/dispenser.test/freshness_proven_use.test.js": "14b50ce921f14971",
         "test/unit/actions/market/dispenser.test/oracle_fee.test.js": "13bc3a94cecac346",
-        "test/unit/actions/market/dispenser.test/refill_guard.test.js": "438bc819233a1f98",
-        "test/unit/actions/market/dispenser.test/refill_token_policy.test.js": "3dd973dfca38d28f",
+        "test/unit/actions/market/dispenser.test/refill_guard.test.js": "0e534b2440f8d999",
+        "test/unit/actions/market/dispenser.test/refill_token_policy.test.js": "1c7af3ff7c39a754",
         "test/unit/actions/market/dispenser_amount_positivity.test.js": "ecf9f101aa70270a",
         "test/unit/actions/market/dispenser_amount_positivity.test/settlement.test.js": "af47dfc14d6003c2",
         "test/unit/actions/market/dispenser_close.test.js": "d44cf9f8cf86cabc",
@@ -15717,8 +15718,8 @@
         "test/unit/actions/stake/slash.test/near_miss_rejects.test.js": "fbc19a87c019bbd2",
         "test/unit/actions/stake/slash.test/oracle_engines.test.js": "2cca37e54b2963e5",
         "test/unit/actions/stake/slash.test/snapshot_burial.test.js": "3878ee7e71147c86",
-        "test/unit/actions/stake/slash.test/xancpub_publisher_pair.test.js": "1eff3e5bc060dc55",
-        "test/unit/actions/stake/slash.test/xattest_multiround_gate.test.js": "cfb6687fc10b9586",
+        "test/unit/actions/stake/slash.test/xancpub_publisher_pair.test.js": "8fa159824bb3391d",
+        "test/unit/actions/stake/slash.test/xattest_multiround_gate.test.js": "7ae0e3eb59a78a58",
         "test/unit/actions/stake/slash.test/xconfig_engine.test.js": "ccecd76f58683b00",
         "test/unit/actions/stake/sleep.test.js": "65fda33d23415561",
         "test/unit/actions/stake/stake.test.js": "c2b86ae1598a2164",
@@ -15818,9 +15819,9 @@
         "test/unit/activations/activation_constants_parity.test/sentinel_coin_isolation.test.js": "d27e69ca0f3eb0d0",
         "test/unit/activations/activation_ladder_constraints.test.js": "018402ee475c49ef",
         "test/unit/activations/anchor_reward_null_threshold.test.js": "86e3b95c0a42a9c6",
-        "test/unit/activations/attest_relay_fee_activation.test.js": "981dc6a195e515a0",
+        "test/unit/activations/attest_relay_fee_activation.test.js": "71fab19d4d4b4dfb",
         "test/unit/activations/capability_min_stake_history.test.js": "a1bc8adce48d1864",
-        "test/unit/activations/cross_chain_remote_token_gate.test.js": "41fd87b6ede40aa8",
+        "test/unit/activations/cross_chain_remote_token_gate.test.js": "d67fd006b4bcd8ff",
         "test/unit/activations/dispenser_oracle_price_activation.test.js": "bbf4d90405bf6e71",
         "test/unit/activations/dispenser_settlement_price_activation.test.js": "91fb11e60f21efba",
         "test/unit/activations/list/empty_allow_list_denies_activation.test.js": "97183ecc8d1ea3cb",
@@ -15850,7 +15851,7 @@
         "test/unit/activations/testnet_arm/dispenser_collation_arm.test.js": "0bf881f235cb766f",
         "test/unit/activations/tick_coin_prefix.test/rule.test.js": "6012f94711b5b5f9",
         "test/unit/activations/train_gate_verdict_characterization.test.js": "3fc3ca95409f973e",
-        "test/unit/activations/unarmed_flag_days_2026_10_07.test.js": "fc29d05a79dee0de",
+        "test/unit/activations/unarmed_flag_days_2026_10_07.test.js": "0e41118ce76b9e51",
         "test/unit/activations/x_chain_indexer_train_activation.test.js": "d2d34246f342ca3f",
         "test/unit/anchor/anchor_action_query.test.js": "bbc1475cf6fea867",
         "test/unit/anchor/anchor_action_query.test/anchor_action_query_getanchorconfirmations.test.js": "fb363eb621927a61",
@@ -15871,7 +15872,7 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "5278429cef8904ee",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_counter.test.js": "1c56af9b1dbd9f0c",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
-        "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "164da522808b4798",
+        "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "c1df08e38339ad37",
         "test/unit/anchor/anchor_v3_fold_parse.test.js": "6ea2607d7bbbc413",
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
@@ -16129,7 +16130,7 @@
         "test/unit/contracts/controller_guard_returnvalue.test.js": "1734825922f9caa5",
         "test/unit/contracts/controller_policy_layer.test.js": "8fabcde2ac147e88",
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
-        "test/unit/contracts/delegate_rotation_unstake_window.test.js": "721f08577076ca3e",
+        "test/unit/contracts/delegate_rotation_unstake_window.test.js": "032507a4392ad944",
         "test/unit/contracts/emission_bounds_vm_parity.test.js": "275cd1720c6c0c1f",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
@@ -16251,7 +16252,7 @@
         "test/unit/db/orders/cross_chain_offer_lists.test.js": "87976ddf94e91add",
         "test/unit/db/orders/cross_chain_offer_lists_fold.test.js": "e411489fced259a6",
         "test/unit/db/prices/landed_bound_clause.test.js": "d5f3085637164b79",
-        "test/unit/db/prices/landed_strict_same_chain.test.js": "e984d925c06ceb59",
+        "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/remote_token_snapshots.test.js": "bccbc26b36f075a9",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
@@ -16268,7 +16269,7 @@
         "test/unit/db/stakes/db_slash_capability_stake_burn.test.js": "1d82a5234c4257e3",
         "test/unit/db/stakes/db_slash_contract_stake_double_count.test.js": "a43841db7e6fd6b9",
         "test/unit/db/stakes/db_slash_grid.test.js": "8a545ba89ab1419c",
-        "test/unit/db/stakes/db_stake_snapshot_slash_window.test.js": "5eaca2bad759fb97",
+        "test/unit/db/stakes/db_stake_snapshot_slash_window.test.js": "f77ff8b4e904c81e",
         "test/unit/db/stakes/db_stake_weight_collation.test.js": "0253c5d47ddef3e9",
         "test/unit/db/stakes/db_swq_source_cap.test.js": "6f546e7c5ca35187",
         "test/unit/db/stakes/db_unstake_pending_activation.test.js": "5db30922de7745c3",
@@ -16495,7 +16496,7 @@
         "test/unit/price/db_oracle_preload_monotone_key.test.js": "35e26beb860c4323",
         "test/unit/price/db_oracle_round_window.test.js": "547b276e75268fee",
         "test/unit/price/db_oracle_snapshot_age_causality.test.js": "54fd86289db48f29",
-        "test/unit/price/db_oracle_snapshot_age_seconds.test.js": "b2faf3a707176a9c",
+        "test/unit/price/db_oracle_snapshot_age_seconds.test.js": "2b58170f54dc994d",
         "test/unit/price/db_oracle_stale_round_visibility.test.js": "4549c1e4b7ebd824",
         "test/unit/price/db_oracle_strict_price_reads.test.js": "5f003062269c93ec",
         "test/unit/price/db_price_capability_off_btc.test.js": "c562c3c3096c665e",
@@ -16606,7 +16607,7 @@
         "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "78664d20d86a7a0f",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
         "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
-        "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "886d47aceb47229b",
+        "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "a7b9a30696b4da72",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
         "test/unit/rollback/rollback.test/transaction_and_rearm.test.js": "294f6ca3123cda7e",
         "test/unit/rollback/rollback_archive_author_scope.test.js": "d02af0af67a03e53",
@@ -16663,7 +16664,7 @@
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/archive_match_count_class.test.js": "8a8d0afa6dccfafa",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
-        "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "c52b47b60b51b013",
+        "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
         "test/unit/state_commitment/state_hash/state_hash_bet_status.test.js": "e285cca529713787",
         "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "93c91f292d24175d",
@@ -16680,7 +16681,7 @@
         "test/unit/utility/amount_precision.test.js": "f8147b1f69e9d769",
         "test/unit/utility/controller_guard_custody.test.js": "49c6f8fe13359243",
         "test/unit/utility/controller_guard_inert_naming.test.js": "1bdf11fda7eec5f4",
-        "test/unit/utility/exact_integer_wire_fields.test.js": "dffaba7ca7ce4ca9",
+        "test/unit/utility/exact_integer_wire_fields.test.js": "37d8b66508317d63",
         "test/unit/utility/fee_output.test.js": "b5fb412331972a99",
         "test/unit/utility/list_tick_airdrop_holders.test.js": "2987ec28ce152583",
         "test/unit/utility/price_age_at.test.js": "4b148378640ac7fa",

@@ -174,9 +174,9 @@ addGate('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION', 'height', {
 // anchor_empty_fold_reject_activation
 addGate('anchor_empty_fold_reject_activation.ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -188,9 +188,9 @@ addGate('anchor_empty_fold_reject_activation.ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION
 // the fleet needs one switch height per network.
 addGate('cooldown_maturity_escrow_reversal_activation.COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -202,9 +202,9 @@ addGate('cooldown_maturity_escrow_reversal_activation.COOLDOWN_MATURITY_ESCROW_R
 // accepted into an invalid one, so the fleet needs one switch height per network.
 addGate('dispenser_refill_policy_activation.DISPENSER_REFILL_POLICY_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -218,16 +218,19 @@ addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_A
 // chain's block-height plane.
 addGate('attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION', 'time', {
     mainnet: UNARMED,
-    testnet: UNARMED,
+    'BTC:testnet': 1791804379,
+    'LTC:testnet': 1791804379,
+    'DOGE:testnet': 1791804379,
+    testnet: 1791804379,
     regtest: 0,
 });
 // bridge_row_fields_terminal_activation: malformed transfer rows stop consuming
 // bridge settle cap slots after the flag day.
 addGate('bridge_row_fields_terminal_activation.BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -270,7 +273,7 @@ addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS', 'constan
 addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION', 'height', {
     mainnet:        UNPINNED,
     'DOGE:mainnet': UNPINNED,
-    'DOGE:testnet': UNARMED,
+    'DOGE:testnet': 67989993,
     regtest:        0,
 });
 // oracle_price_age_hourly_activation: gates the hourly price-snapshot age limit
@@ -304,6 +307,9 @@ addGate('oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION', 'height', {
 // Inert on mainnet and testnet until a flag day is sized; regtest is armed from genesis.
 addGate('stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });

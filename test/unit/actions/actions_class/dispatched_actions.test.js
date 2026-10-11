@@ -33,9 +33,17 @@ describe('dispatched-only ACTION admission @regression @tier1', function(){
         assert.deepStrictEqual([...dispatch.DISPATCHED_ACTIONS].sort(), dispatchNames());
     });
 
-    it('is unarmed on public networks and active from regtest genesis', function(){
-        for(const network of ['mainnet', 'testnet'])
-            assert.strictEqual(gateRegistry.activeAt(GATE, network, 'BTC', 9999999998, null), false);
+    it('is unarmed on mainnet, armed per testnet coin, and active from regtest genesis', function(){
+        assert.strictEqual(gateRegistry.activeAt(GATE, 'mainnet', 'BTC', 9999999998, null), false);
+        // The callers read with the indexer's own coin, so each coin key is the live threshold.
+        const row = gateRegistry.get(GATE);
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            const armed = row[coin + ':testnet'];
+            assert.ok(Number.isFinite(armed) && armed > 1 && armed !== gateRegistry.UNARMED, coin + ':testnet is armed');
+            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', coin, armed, null), true, coin + ' at the armed height');
+            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', coin, armed - 1, null), false, coin + ' below the armed height');
+            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', coin, 1, null), false, coin + ' at height 1');
+        }
         assert.strictEqual(gateRegistry.activeAt(GATE, 'regtest', 'BTC', 0, null), true);
     });
 

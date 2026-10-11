@@ -11,8 +11,8 @@
 // DISPENSER Format 2 refill: from the dispenser_refill_policy_activation height a
 // refill is refused while the give token sleeps or while its allow and block
 // lists exclude the refilling SOURCE, as a create is. Below the height, and on
-// every network where the row is unarmed, the refill settles as it always did
-// and the two policy reads are never made.
+// mainnet where the row is unarmed, the refill settles as it always did and the
+// two policy reads are never made.
 // Part of the Dispenser suite; see ../dispenser.test.js.
 
 process.env.INDEXER_COIN = 'BTC';
@@ -150,10 +150,15 @@ function registerBelowHeightTests() {
 
 function registerRowTests() {
     describe('the row', function () {
-        it('is unarmed on mainnet and on every testnet coin, and active from regtest genesis', function () {
+        it('is unarmed on mainnet, armed per testnet coin, and active from regtest genesis', function () {
+            const row = gateRegistry.get(KEY);
             for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                for (const network of ['mainnet', 'testnet'])
-                    assert.strictEqual(gateRegistry.activeAt(KEY, network, coin, FAR_HEIGHT, null), false, coin + ':' + network);
+                assert.strictEqual(gateRegistry.activeAt(KEY, 'mainnet', coin, FAR_HEIGHT, null), false, coin + ':mainnet');
+                const armed = row[coin + ':testnet'];
+                assert.ok(Number.isFinite(armed) && armed > 1 && armed !== gateRegistry.UNARMED, coin + ':testnet is armed');
+                assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', coin, armed, null), true, coin + ':testnet at the armed height');
+                assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', coin, armed - 1, null), false, coin + ':testnet below the armed height');
+                assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', coin, 1, null), false, coin + ':testnet at height 1');
                 assert.strictEqual(gateRegistry.activeAt(KEY, 'regtest', coin, 0, null), true, coin + ':regtest');
             }
         });

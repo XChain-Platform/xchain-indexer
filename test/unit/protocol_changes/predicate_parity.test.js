@@ -126,8 +126,15 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
     });
 
     it('keeps anchor archive folding inactive on live networks and active at regtest genesis', function () {
+        // The v0.23.0 cut armed the fold term on each testnet chain: dark at 1 and one block
+        // short of the chain's own height (read from the registry), live from it.
+        const row = ProtocolChanges.get(ANCHOR_ARCHIVE_FOLD_TERM);
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
-            assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'testnet', coin, 9999999998, null), false);
+            const h = row[coin + ':testnet'];
+            assert.ok(Number.isInteger(h) && h > 1 && h < ProtocolChanges.UNARMED, coin + ':testnet is not a sized height: ' + h);
+            assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'testnet', coin, 1, null), false);
+            assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'testnet', coin, h - 1, null), false);
+            assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'testnet', coin, h, null), true);
         }
         assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'mainnet', 'BTC', 9999999998, null), false);
         assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'regtest', 'BTC', 0, null), true);

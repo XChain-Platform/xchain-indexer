@@ -16,6 +16,9 @@ const sinon  = require('sinon');
 const { VALID_CODE_B64, makeVm, deployData, freshDeploySuite } = require('./helpers/deploy_suite.js');
 
 const Deploy = require('../../../../../src/actions/deploy/index.js');
+const gateRegistry = require('../../../../../src/consensus/gate_registry');
+
+const NESTING_DEPTH_GATE = 'vm_lint_nesting_depth_activation.VM_LINT_NESTING_DEPTH_ACTIVATION';
 
 let actionsCtx, handler;
 function freshSuite() {
@@ -43,9 +46,12 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.strictEqual(opts.enforceLintNestingDepth, true);
         });
 
-        it('passes enforceLintNestingDepth false on testnet below the unarmed gate', async function () {
-            const opts = await optsFor('testnet', 9999999998);
-            assert.strictEqual(opts.enforceLintNestingDepth, false);
+        it('passes enforceLintNestingDepth true on testnet at the armed height and false below it', async function () {
+            const armed = gateRegistry.get(NESTING_DEPTH_GATE)['BTC:testnet'];
+            assert.ok(Number.isFinite(armed) && armed > 1 && armed !== gateRegistry.UNARMED, 'BTC:testnet is armed');
+            assert.strictEqual((await optsFor('testnet', armed)).enforceLintNestingDepth, true);
+            assert.strictEqual((await optsFor('testnet', armed - 1)).enforceLintNestingDepth, false);
+            assert.strictEqual((await optsFor('testnet', 1)).enforceLintNestingDepth, false);
         });
 
         it('passes enforceLintNestingDepth false on mainnet below the unarmed gate', async function () {

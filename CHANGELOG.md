@@ -7,6 +7,129 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-11
+
+### Added
+- Added mirror admission margins per chain and mirrored remote token snapshots for cross-chain trades.
+- Added the registered gates for iterator and Set metering, stake snapshot decimal strings, the strict price landing and the attest relay fee.
+- Added the anchor archive fold termination, BET feed list edit and cross-chain offer list export gates.
+- Added gated totals keyed by the resolved tick, dispenser delays on protocol time and the dispenser refill gate.
+- Added the slash window, multi-round slash exemption and publisher pair changes behind unarmed activations.
+- Exposed schema readiness and hub consensus hash drift in status and health.
+
+### Changed
+- Folded the attest batch-head completion stamp into the state hash behind a flag day.
+- Resolved train rules by activation height and read the oracle snapshot age in consensus seconds once armed.
+- Refused auto migrations that narrow a live column and added covering indexes to the ledger tables.
+- Armed ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION on BTC:testnet at 156230.
+- Armed ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION on LTC:testnet at 4912984.
+- Armed ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION on DOGE:testnet at 67989993.
+- Armed COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION on BTC:testnet at 156230.
+- Armed COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION on LTC:testnet at 4912984.
+- Armed COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION on DOGE:testnet at 67989993.
+- Armed DISPENSER_REFILL_POLICY_ACTIVATION on BTC:testnet at 156230.
+- Armed DISPENSER_REFILL_POLICY_ACTIVATION on LTC:testnet at 4912984.
+- Armed DISPENSER_REFILL_POLICY_ACTIVATION on DOGE:testnet at 67989993.
+- Armed ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION on BTC:testnet at 1791804379.
+- Armed ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION on LTC:testnet at 1791804379.
+- Armed ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION on DOGE:testnet at 1791804379.
+- Armed BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION on BTC:testnet at 156230.
+- Armed BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION on LTC:testnet at 4912984.
+- Armed BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION on DOGE:testnet at 67989993.
+- Armed ADMIT_CHAIN_MARGIN_ACTIVATION on DOGE:testnet at 67989993.
+- Armed ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION on BTC:testnet at 156230.
+- Armed ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION on LTC:testnet at 4912984.
+- Armed ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION on DOGE:testnet at 67989993.
+- Armed ANCHOR_PREACTIVATION_STATUS_ACTIVATION on BTC:testnet at 156230.
+- Armed ANCHOR_PREACTIVATION_STATUS_ACTIVATION on LTC:testnet at 4912984.
+- Armed ANCHOR_PREACTIVATION_STATUS_ACTIVATION on DOGE:testnet at 67989993.
+- Armed ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION on BTC:testnet at 156230.
+- Armed ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION on LTC:testnet at 4912984.
+- Armed ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION on DOGE:testnet at 67989993.
+- Armed CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION on BTC:testnet at 156230.
+- Armed CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION on LTC:testnet at 4912984.
+- Armed CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION on DOGE:testnet at 67989993.
+- Armed SEND_GATED_TOTAL_TICK_ID_ACTIVATION on BTC:testnet at 1791804379.
+- Armed SEND_GATED_TOTAL_TICK_ID_ACTIVATION on LTC:testnet at 1791804379.
+- Armed SEND_GATED_TOTAL_TICK_ID_ACTIVATION on DOGE:testnet at 1791804379.
+- Armed PRICE_LANDED_STRICT_ACTIVATION on BTC:testnet at 156230.
+- Armed PRICE_LANDED_STRICT_ACTIVATION on LTC:testnet at 4912984.
+- Armed PRICE_LANDED_STRICT_ACTIVATION on DOGE:testnet at 67989993.
+- Armed ATTEST_RELAY_FEE_ACTIVATION on BTC:testnet at 156230.
+- Armed ATTEST_RELAY_FEE_ACTIVATION on LTC:testnet at 4912984.
+- Armed ATTEST_RELAY_FEE_ACTIVATION on DOGE:testnet at 67989993.
+- Armed BIGINT_SURFACE_STRIP_ACTIVATION on BTC:testnet at 156230.
+- Armed BIGINT_SURFACE_STRIP_ACTIVATION on LTC:testnet at 4912984.
+- Armed BIGINT_SURFACE_STRIP_ACTIVATION on DOGE:testnet at 67989993.
+- Armed ACTION_ADMISSION_DISPATCHED_ONLY on BTC:testnet at 156230.
+- Armed ACTION_ADMISSION_DISPATCHED_ONLY on LTC:testnet at 4912984.
+- Armed ACTION_ADMISSION_DISPATCHED_ONLY on DOGE:testnet at 67989993.
+- Armed VM_LINT_BANNED_WITH_ACTIVATION on BTC:testnet at 156230.
+- Armed VM_LINT_BANNED_WITH_ACTIVATION on LTC:testnet at 4912984.
+- Armed VM_LINT_BANNED_WITH_ACTIVATION on DOGE:testnet at 67989993.
+- Armed VM_LINT_NESTING_DEPTH_ACTIVATION on BTC:testnet at 156230.
+- Armed VM_LINT_NESTING_DEPTH_ACTIVATION on LTC:testnet at 4912984.
+- Armed VM_LINT_NESTING_DEPTH_ACTIVATION on DOGE:testnet at 67989993.
+- Armed DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION on BTC:testnet at 156230.
+- Armed DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION on LTC:testnet at 4912984.
+- Armed DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION on DOGE:testnet at 67989993.
+- Armed BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION on BTC:testnet at 156230.
+- Armed BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION on LTC:testnet at 4912984.
+- Armed BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION on DOGE:testnet at 67989993.
+- Armed PRICE_WIRE_TRAILING_ACTIVATION on BTC:testnet at 156230.
+- Armed PRICE_WIRE_TRAILING_ACTIVATION on LTC:testnet at 4912984.
+- Armed PRICE_WIRE_TRAILING_ACTIVATION on DOGE:testnet at 67989993.
+- Armed ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION on BTC:testnet at 156230.
+- Armed ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION on LTC:testnet at 4912984.
+- Armed ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION on DOGE:testnet at 67989993.
+- Armed BET_FEED_LIST_EDIT_ACTIVATION on BTC:testnet at 156230.
+- Armed BET_FEED_LIST_EDIT_ACTIVATION on LTC:testnet at 4912984.
+- Armed BET_FEED_LIST_EDIT_ACTIVATION on DOGE:testnet at 67989993.
+- Armed CROSS_CHAIN_OFFER_LIST_EXPORT on BTC:testnet at 156230.
+- Armed CROSS_CHAIN_OFFER_LIST_EXPORT on LTC:testnet at 4912984.
+- Armed CROSS_CHAIN_OFFER_LIST_EXPORT on DOGE:testnet at 67989993.
+- Armed VM_LINT_DESTRUCTURE_ACTIVATION on BTC:testnet at 156230.
+- Armed VM_LINT_DESTRUCTURE_ACTIVATION on LTC:testnet at 4912984.
+- Armed VM_LINT_DESTRUCTURE_ACTIVATION on DOGE:testnet at 67989993.
+- Armed EXACT_INTEGER_WIRE_FIELDS on BTC:testnet at 1791804379.
+- Armed EXACT_INTEGER_WIRE_FIELDS on LTC:testnet at 1791804379.
+- Armed EXACT_INTEGER_WIRE_FIELDS on DOGE:testnet at 1791804379.
+- Armed ITER_SET_METER on BTC:testnet at 1791804379.
+- Armed ITER_SET_METER on LTC:testnet at 1791804379.
+- Armed ITER_SET_METER on DOGE:testnet at 1791804379.
+- Armed SLASH_XANCPUB_PUBLISHER_PAIR on BTC:testnet at 1791804379.
+- Armed SLASH_XANCPUB_PUBLISHER_PAIR on LTC:testnet at 1791804379.
+- Armed SLASH_XANCPUB_PUBLISHER_PAIR on DOGE:testnet at 1791804379.
+- Armed STAKE_SNAPSHOT_SLASH_WINDOW on BTC:testnet at 1791804379.
+- Armed STAKE_SNAPSHOT_SLASH_WINDOW on LTC:testnet at 1791804379.
+- Armed STAKE_SNAPSHOT_SLASH_WINDOW on DOGE:testnet at 1791804379.
+- Armed DELEGATION_ROTATE_IN_WINDOW on BTC:testnet at 1791804379.
+- Armed DELEGATION_ROTATE_IN_WINDOW on LTC:testnet at 1791804379.
+- Armed DELEGATION_ROTATE_IN_WINDOW on DOGE:testnet at 1791804379.
+- Armed SLASH_ATTEST_MULTIROUND_EXEMPT on BTC:testnet at 1791804379.
+- Armed SLASH_ATTEST_MULTIROUND_EXEMPT on LTC:testnet at 1791804379.
+- Armed SLASH_ATTEST_MULTIROUND_EXEMPT on DOGE:testnet at 1791804379.
+- Armed APPLY_LENGTH_METER on BTC:testnet at 1791804379.
+- Armed APPLY_LENGTH_METER on LTC:testnet at 1791804379.
+- Armed APPLY_LENGTH_METER on DOGE:testnet at 1791804379.
+- Armed GAS_CEILING_SUCCESS on BTC:testnet at 1791804379.
+- Armed GAS_CEILING_SUCCESS on LTC:testnet at 1791804379.
+- Armed GAS_CEILING_SUCCESS on DOGE:testnet at 1791804379.
+- Armed DISPENSER_REFILL on BTC:testnet at 1791804379.
+- Armed DISPENSER_REFILL on LTC:testnet at 1791804379.
+- Armed DISPENSER_REFILL on DOGE:testnet at 1791804379.
+- Armed STAKE_DELEGATED_SIGNING_KEY on BTC:testnet at 1791804379.
+- Armed STAKE_DELEGATED_SIGNING_KEY on LTC:testnet at 1791804379.
+- Armed STAKE_DELEGATED_SIGNING_KEY on DOGE:testnet at 1791804379.
+- Armed STAKE_SNAPSHOT_DECIMAL_STRINGS on BTC:testnet at 1791804379.
+- Armed STAKE_SNAPSHOT_DECIMAL_STRINGS on LTC:testnet at 1791804379.
+- Armed STAKE_SNAPSHOT_DECIMAL_STRINGS on DOGE:testnet at 1791804379.
+
+### Fixed
+- Stopped slashing honest multi-round XATTEST base signatures and rejected malformed mirrored rows per row.
+- Rebuilt the folded archive wrapper canonical in recovery and kept terminally refused bridge transfers from holding cap slots.
+- Held the hub when every candidate reports not caught up.
+
 ## [0.22.4] - 2026-10-05
 
 ### Added

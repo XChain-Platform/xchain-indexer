@@ -137,9 +137,13 @@ describe('consensus_rules_digest: the coin-keyed bridge gate', function () {
     // LTC:testnet leg null while BTC:testnet and DOGE:testnet stay armed, so it is now a
     // SECOND coin-keyed gate whose own coin argument moves it independently of the bridge
     // gate this test otherwise covers, exactly the 'coin inert while a sibling arms' shape
-    // the cases above already carve out for KEY itself.
+    // the cases above already carve out for KEY itself. The DOGE chain-margin activation
+    // joined them when the v0.23.0 cut armed it: its map carries a DOGE:testnet slot and no
+    // BTC, LTC or bare testnet slot, so the network-wide answer follows the armed DOGE height
+    // while BTC and LTC stay inert, by construction.
     const COIN_DIVERGENT = [KEY, 'mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION',
-        'mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION'];
+        'mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION',
+        'mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'];
     it('leaves every network-keyed gate answering the same with a coin named as without', function () {
         for (const net of ['mainnet', 'testnet', 'regtest']) {
             for (const h of [0, 150780, 999999999]) {
