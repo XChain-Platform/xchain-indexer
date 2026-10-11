@@ -85,10 +85,18 @@ function statusVerdict(XChainIndexer, indexer){
              lastHubConfigFetchAt, hubConfigAgeSeconds, hubConfigStale };
 }
 
-// The /status JSON body, in the key order monitors have always read.
-function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict, hubMirror }){
-    let { now, stalled, wedged, futureWait, stallClass,
-          lastHubConfigFetchAt, hubConfigAgeSeconds, hubConfigStale } = verdict;
+// Block-poll loop liveness, reported for the fleet watcher to page on and never
+// folded into the 503 verdict (see health/advance_fields.js).
+function pollHeartbeatFields(indexer){
+    return {
+        pollSilent: (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false,
+        lastPollAt: indexer.lastPollAt || null
+    };
+}
+
+// The sync and stall half of the /status body, in the key order monitors have always read.
+function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict }){
+    let { now, stalled, wedged, futureWait, stallClass } = verdict;
     return {
         indexerBlock: indexerBlock,
         inFlightBlock: inFlightBlock,
@@ -132,7 +140,15 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         // Single machine-readable verdict on the counter, so a probe does not have to
         // join stallReason/degraded/stallClearsAt: 'none' | 'future_block_wait' |
         // 'barrier_defer' | 'wedged'.
-        stallClass:   stallClass,
+        stallClass:   stallClass
+    };
+}
+
+// The /status JSON body, in the key order monitors have always read.
+function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict, hubMirror }){
+    let { lastHubConfigFetchAt, hubConfigAgeSeconds, hubConfigStale } = verdict;
+    return {
+        ...statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict }),
         // epoch-ms of the most recent successful block commit (null until the first),
         // so a probe can read advance-recency directly rather than infer it from lag.
         lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
@@ -141,10 +157,7 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         hubConfigStale:       hubConfigStale,
         schemaReady:          indexer.schemaReady === true,
         hubMirror:            hubMirror,
-        // Block-poll loop liveness, appended after hubMirror so no earlier key a monitor reads moves. Reported for the fleet
-        // watcher to page on, never folded into the 503 above (see health/advance_fields.js).
-        pollSilent:           (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false,
-        lastPollAt:           indexer.lastPollAt || null,
+        ...pollHeartbeatFields(indexer),
         ...hubConsensusHashFields(indexer)
     };
 }
