@@ -43,9 +43,7 @@ function openCrossChainOrdersRpc({ indexer }){
         async getopencrosschainorders({to_coin, limit, after_action_index}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 100;
-            if(max > 500) max = 500;
+            let max = clampOrderLimit(limit);
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
@@ -74,34 +72,56 @@ function openCrossChainOrdersRpc({ indexer }){
                 // LIMIT + keyset cursor bounds the whole book. Each offer is tagged `kind`; the
                 // returned array carries .truncated + .next_cursor out-of-band.
                 let merged = await db.getOpenCrossChainOffers(max, after_action_index, to_coin, blockTime);
-                let exportOfferLists = gateRegistry.activeAt(
-                    OFFER_LIST_EXPORT_KEY,
-                    indexer.config['NETWORK'],
-                    indexer.config['COIN'],
-                    latest,
-                    null
-                );
-                if(exportOfferLists && typeof db.applyEffectiveOpenCrossChainOfferLists === 'function')
-                    await db.applyEffectiveOpenCrossChainOfferLists(merged);
-                let truncated = merged.truncated === true;
-                if(truncated)
-                    getLogger().warn('getopencrosschainorders hit the cap of ' + max + ' at block ' + latest + ' - the open cross-chain book is truncated (newer offers dropped); the hub should page via next_cursor or raise its limit.');
-                for(let o of merged) o.push_generation = pushGeneration;
-                await stampGiveDecimals(db, indexer.util, indexer.config['COIN_DECIMALS'], merged, latest);
-                return {
-                    latest_block_index: latest,
-                    network:            indexer.config['NETWORK'],
-                    count:              merged.length,
-                    truncated:          truncated,
-                    // Keyset cursor for the hub's page loop: feed back as after_action_index.
-                    next_cursor:        (merged.next_cursor != null) ? merged.next_cursor : null,
-                    orders:             merged
-                };
+                let truncated = await shapeOpenOffers(indexer, db, merged, { max, latest, pushGeneration });
+                return openOrdersResult(indexer, merged, latest, truncated);
             } catch (err) {
                 getLogger().error('getopencrosschainorders error:', err);
                 return { error: 'failed to look up cross-chain orders' };
             }
         },
+    };
+}
+
+// A missing, non-numeric or non-positive page size reads as 100; anything over
+// 500 is capped at 500.
+function clampOrderLimit(limit){
+    let max = Number(limit);
+    if(!Number.isFinite(max) || max <= 0) max = 100;
+    if(max > 500) max = 500;
+    return max;
+}
+
+// Overlay the effective offer lists when their export is active at the tip, warn
+// on a page that hit the cap, then stamp every offer with the push generation and
+// its give-side decimals. Returns whether the page is truncated.
+async function shapeOpenOffers(indexer, db, merged, { max, latest, pushGeneration }){
+    let exportOfferLists = gateRegistry.activeAt(
+        OFFER_LIST_EXPORT_KEY,
+        indexer.config['NETWORK'],
+        indexer.config['COIN'],
+        latest,
+        null
+    );
+    if(exportOfferLists && typeof db.applyEffectiveOpenCrossChainOfferLists === 'function')
+        await db.applyEffectiveOpenCrossChainOfferLists(merged);
+    let truncated = merged.truncated === true;
+    if(truncated)
+        getLogger().warn('getopencrosschainorders hit the cap of ' + max + ' at block ' + latest + ' - the open cross-chain book is truncated (newer offers dropped); the hub should page via next_cursor or raise its limit.');
+    for(let o of merged) o.push_generation = pushGeneration;
+    await stampGiveDecimals(db, indexer.util, indexer.config['COIN_DECIMALS'], merged, latest);
+    return truncated;
+}
+
+// The getopencrosschainorders response, in the key order the hub reads.
+function openOrdersResult(indexer, merged, latest, truncated){
+    return {
+        latest_block_index: latest,
+        network:            indexer.config['NETWORK'],
+        count:              merged.length,
+        truncated:          truncated,
+        // Keyset cursor for the hub's page loop: feed back as after_action_index.
+        next_cursor:        (merged.next_cursor != null) ? merged.next_cursor : null,
+        orders:             merged
     };
 }
 
