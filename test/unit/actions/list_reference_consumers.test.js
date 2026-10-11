@@ -59,7 +59,7 @@ afterEach(function () {
     sinon.restore();
 });
 
-describe('invalid LIST references in policy consumers @regression @tier2', function () {
+function registerSwapMatchTests(){
     it('swap_match skips the rejected list above the gate and denies below it', async function () {
         async function match(active){
             const { config, util, db } = invalidListDb(active);
@@ -82,7 +82,9 @@ describe('invalid LIST references in policy consumers @regression @tier2', funct
         assert.strictEqual(await match(false), false);
         assert.ok(await match(true));
     });
+}
 
+function registerCallbackTests(){
     it('callback skips the rejected list above the gate and denies below it', async function () {
         async function recipients(active){
             const { config, util, db } = invalidListDb(active);
@@ -104,7 +106,9 @@ describe('invalid LIST references in policy consumers @regression @tier2', funct
         assert.deepStrictEqual(await recipients(false), {});
         assert.deepStrictEqual(Object.keys(await recipients(true)), [TARGET]);
     });
+}
 
+function registerAirdropTests(){
     it('airdrop skips the rejected list above the gate and denies below it', async function () {
         async function approved(active){
             const { util, db } = invalidListDb(active);
@@ -117,7 +121,9 @@ describe('invalid LIST references in policy consumers @regression @tier2', funct
         assert.deepStrictEqual([...await approved(false)], []);
         assert.deepStrictEqual([...await approved(true)], [TARGET]);
     });
+}
 
+function registerDividendTests(){
     it('dividend skips the rejected list above the gate and denies below it', async function () {
         async function recipients(active){
             const { util, db } = invalidListDb(active);
@@ -133,7 +139,9 @@ describe('invalid LIST references in policy consumers @regression @tier2', funct
         assert.deepStrictEqual(await recipients(false), {});
         assert.deepStrictEqual(Object.keys(await recipients(true)), [TARGET]);
     });
+}
 
+function registerBetTests(){
     it('bet skips the rejected list above the gate and denies below it', async function () {
         async function error(active){
             const { config, util, db } = invalidListDb(active);
@@ -148,7 +156,9 @@ describe('invalid LIST references in policy consumers @regression @tier2', funct
         assert.strictEqual(await error(false), 'invalid: SOURCE (not authorized)');
         assert.strictEqual(await error(true), null);
     });
+}
 
+function registerDispenseTests(){
     it('dispense skips the rejected list above the gate and denies below it', async function () {
         async function error(active){
             const { config, util, db } = invalidListDb(active);
@@ -177,4 +187,15 @@ describe('invalid LIST references in policy consumers @regression @tier2', funct
         assert.match(await error(false), /dispenser allow list/);
         assert.strictEqual(await error(true), null);
     });
-});
+}
+
+function registerInvalidListReferenceTests(){
+    registerSwapMatchTests();
+    registerCallbackTests();
+    registerAirdropTests();
+    registerDividendTests();
+    registerBetTests();
+    registerDispenseTests();
+}
+
+describe('invalid LIST references in policy consumers @regression @tier2', registerInvalidListReferenceTests);
