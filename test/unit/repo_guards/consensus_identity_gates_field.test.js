@@ -78,11 +78,29 @@ function childEnv() {
 }
 
 describe('consensus identity GATES field and pin comparison', function () {
-    it('pins the BigInt surface-strip row in both checkout readings', function () {
+    it('pins activeGatesAt unit filtering as identity-neutral', function () {
         const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
-        const key = 'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION';
+        const key = 'oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND';
+        assert.match(pin.active_gates_unit_aware_note, /constant rows/);
         for (const block of ['bare_checkout', 'armed_regtest_venue']) {
-            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+            assert.strictEqual(pin[block].consensus_rules_gates[key],
+                '{"mainnet":9999999999,"regtest":0,"testnet":5082}', block);
+            assert.strictEqual(pin[block].gate_key_count, 45, block);
+            assert.strictEqual(pin[block].gates_field_hash,
+                'ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a', block);
+        }
+    });
+
+    it('pins both merged registry-only rows in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const keys = [
+            'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION',
+            'vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION',
+        ];
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            for (const key of keys) {
+                assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, `${block}: ${key}`);
+            }
         }
     });
 

@@ -165,10 +165,7 @@ class Bet {
     }
 
     // Canonical stored values, the final status, and the typed row every format writes
-    async storeBetRows(data, format, feedInfo, outcomeLabels, error){
-        /*****************************************************************
-         * Storage + ledger changes
-         ****************************************************************/
+    prepareBetRow(data, format, feedInfo, outcomeLabels, error){
         // Canonical stored values (create): trimmed labels joined with a single
         // comma, defaulted refund window, materialized expire_at
         if(format==0 && !error)
@@ -190,6 +187,10 @@ class Bet {
             bet['TICK'] = feedInfo ? feedInfo['TICK'] : null; // denormalized feed tick
         }
 
+        return { status, bet };
+    }
+
+    logBetRow(data, format, feedInfo){
         // Print status message
         if(format==0)
             getLogger().info("\t BET_FEED : " + this.config['COIN'] + ' : ' + data['LABEL'] + ' : ' + data['STATUS']);
@@ -201,7 +202,9 @@ class Bet {
             getLogger().info("\t BET_RESOLVE : " + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' -> ' + data['OUTCOME'] + ' : ' + data['STATUS']);
         if(format==4)
             getLogger().info("\t BET_EDIT : " + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' : ' + data['STATUS']);
+    }
 
+    async storeTypedBetRow(bet, format){
         // Every format stores its own typed row, whatever the status (house
         // convention). The cancel/resolve rows are what make a REJECTED cancel or
         // resolve reportable at all: those legs used to write nothing but a
@@ -219,12 +222,26 @@ class Bet {
         if(format==3)
             await this.indexerDb.createBetResolve(bet);
         await this.applyEditLists(bet, format);
+    }
 
+    addBetAddressTicker(data, feedInfo, format){
         // Store the SOURCE and wagered TICK in addresses list
         if(format==0)
             this.util.addAddressTicker(data['SOURCE'], data['TICK']);
         if(feedInfo)
             this.util.addAddressTicker(data['SOURCE'], feedInfo['TICK']);
+    }
+
+    // Canonical stored values, the final status, and the typed row every format writes
+    async storeBetRows(data, format, feedInfo, outcomeLabels, error){
+        /*****************************************************************
+         * Storage + ledger changes
+         ****************************************************************/
+        const { status, bet } = this.prepareBetRow(data, format, feedInfo, outcomeLabels, error);
+
+        this.logBetRow(data, format, feedInfo);
+        await this.storeTypedBetRow(bet, format);
+        this.addBetAddressTicker(data, feedInfo, format);
 
         return status;
     }
