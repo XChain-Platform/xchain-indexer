@@ -23,7 +23,7 @@ const {
     readLogEnv
 } = require('../../../src/observability/logShipper.js');
 
-describe('log shipper redaction and formatting', function () {
+function registerScrubMessageTests() {
     describe('scrubMessage', function () {
         it('redacts inline secrets and a bare bearer token without redacting a txid', function () {
             const txid = '0123456789abcdef'.repeat(4);
@@ -41,7 +41,9 @@ describe('log shipper redaction and formatting', function () {
             );
         });
     });
+}
 
+function registerRedactFieldsTests() {
     describe('redactFields', function () {
         it('redacts secret-bearing keys at every nesting depth', function () {
             const input = {
@@ -96,7 +98,9 @@ describe('log shipper redaction and formatting', function () {
             });
         });
     });
+}
 
+function registerFormatTextLineTests() {
     describe('formatTextLine', function () {
         it('renders one escaped text line and JSON-quotes complex field values', function () {
             const line = formatTextLine({
@@ -114,7 +118,9 @@ describe('log shipper redaction and formatting', function () {
             );
         });
     });
+}
 
+function registerReadLogEnvTests() {
     describe('readLogEnv', function () {
         it('uses inert text defaults for an empty environment', function () {
             const config = readLogEnv({});
@@ -160,4 +166,11 @@ describe('log shipper redaction and formatting', function () {
             assert.ok(!JSON.stringify(otherFields).includes(secret));
         });
     });
+}
+
+describe('log shipper redaction and formatting', function () {
+    registerScrubMessageTests();
+    registerRedactFieldsTests();
+    registerFormatTextLineTests();
+    registerReadLogEnvTests();
 });
