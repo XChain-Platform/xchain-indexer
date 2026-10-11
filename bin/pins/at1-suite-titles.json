@@ -13330,6 +13330,12 @@
       "HubDbSync attestation_responses mirror registration @regression @tier1 generates an upsert whose ONLY assignment is a hub-following batch_action_index",
       "HubDbSync attestation_responses mirror registration @regression @tier1 skips the link entirely when there is no local indexer connection to stamp"
     ],
+    "db68fb7aaa7e576a": [
+      "HubDbSync rowless snapshot page @regression @tier2 a well-formed page still drains unchanged",
+      "HubDbSync rowless snapshot page @regression @tier2 names a null hub reply too",
+      "HubDbSync rowless snapshot page @regression @tier2 names the table and what the hub sent when a snapshot page carries no rows array",
+      "HubDbSync rowless snapshot page @regression @tier2 the partial-bootstrap retry line names every table that did not drain"
+    ],
     "dbb6f593f551838f": [
       "Delegate (DELEGATE) @regression @tier2 v0: capability rotate calls mapper.createMappings after parse",
       "Delegate (DELEGATE) @regression @tier2 v0: capability rotate calls updateBalances and updateTokens after parse",
@@ -15417,8 +15423,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1253,
-      "titleCount": 12908,
+      "fileCount": 1254,
+      "titleCount": 12912,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16319,6 +16325,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync.test/price_and_oracle_upgrades.test.js": "a3a9680a2521091d",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/resync_close_repages.test.js": "08779979a717f622",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/retraction_guards.test.js": "e5cd1cda0fbb8e49",
+        "test/unit/hub/hub_db_sync/hub_db_sync.test/rowless_snapshot_page.test.js": "db68fb7aaa7e576a",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/signed_retractions.test.js": "410c1a526adef6ac",
         "test/unit/hub/hub_db_sync/hub_db_sync_apply_failure_watermark.test.js": "a696a1a3bf2e3e82",
         "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test.js": "db5f0c16a6ea1616",
