@@ -21,9 +21,8 @@ const HubClient = require('../../../../src/hub/hub_client.js');
 const HubPushQueue = require('../../../../src/hub/hub_push_queue.js');
 const { makeRow } = require('./helpers/fixtures.js');
 
-function makeFixture(){
+function makeSelectorFixture(){
     let address = 'http://hub-a.test';
-    let deliveries = [];
     let advanceCalls = 0;
     let selector = {
         current: () => address,
@@ -34,56 +33,79 @@ function makeFixture(){
             return address;
         }
     };
-    let hubClient = new HubClient('http://hub-a.test', 'push-key');
-    hubClient.setAddressSource(() => selector.current());
-    sinon.stub(http, 'request').callsFake(function(options, onResponse){
-        deliveries.push('http://' + options.hostname);
-        let request = new EventEmitter();
-        request.write = sinon.stub();
-        request.destroy = sinon.stub().callsFake(function(error){
-            setImmediate(() => {
-                if(error) request.emit('error', error);
-                request.emit('close');
-            });
-        });
-        request.end = sinon.stub().callsFake(function(){
-            if(options.hostname === 'hub-a.test'){
-                let error = new Error('connect ECONNREFUSED');
-                error.code = 'ECONNREFUSED';
-                setImmediate(() => {
-                    request.emit('error', error);
-                    request.emit('close');
-                });
-                return;
-            }
-            setImmediate(() => {
-                let response = new EventEmitter();
-                response.statusCode = 200;
-                response.headers = {};
-                response.complete = true;
-                onResponse(response);
-                setImmediate(() => {
-                    response.emit('data', JSON.stringify({
-                        jsonrpc: '2.0', id: 1, result: { accepted: true }
-                    }));
-                    response.emit('end');
-                    request.emit('close');
-                });
-            });
-        });
-        return request;
+
+    return { selector, advanceCalls: () => advanceCalls };
+}
+
+function emitConnectionError(request){
+    let error = new Error('connect ECONNREFUSED');
+    error.code = 'ECONNREFUSED';
+    setImmediate(() => {
+        request.emit('error', error);
+        request.emit('close');
     });
-    let indexerDb = {
+}
+
+function emitSuccessResponse(request, onResponse){
+    setImmediate(() => {
+        let response = new EventEmitter();
+        response.statusCode = 200;
+        response.headers = {};
+        response.complete = true;
+        onResponse(response);
+        setImmediate(() => {
+            response.emit('data', JSON.stringify({
+                jsonrpc: '2.0', id: 1, result: { accepted: true }
+            }));
+            response.emit('end');
+            request.emit('close');
+        });
+    });
+}
+
+function makeHttpRequest(options, onResponse, deliveries){
+    deliveries.push('http://' + options.hostname);
+    let request = new EventEmitter();
+    request.write = sinon.stub();
+    request.destroy = sinon.stub().callsFake(function(error){
+        setImmediate(() => {
+            if(error) request.emit('error', error);
+            request.emit('close');
+        });
+    });
+    request.end = sinon.stub().callsFake(function(){
+        if(options.hostname === 'hub-a.test'){
+            emitConnectionError(request);
+            return;
+        }
+        emitSuccessResponse(request, onResponse);
+    });
+    return request;
+}
+
+function makeIndexerDb(){
+    return {
         poolQuery: sinon.stub().resolves(),
         getPendingHubPushes: sinon.stub().resolves([]),
         recordHubPushAttempt: sinon.stub().resolves(),
         markHubPushDelivered: sinon.stub().resolves()
     };
+}
+
+function makeFixture(){
+    let { selector, advanceCalls } = makeSelectorFixture();
+    let deliveries = [];
+    let hubClient = new HubClient('http://hub-a.test', 'push-key');
+    hubClient.setAddressSource(() => selector.current());
+    sinon.stub(http, 'request').callsFake(function(options, onResponse){
+        return makeHttpRequest(options, onResponse, deliveries);
+    });
+    let indexerDb = makeIndexerDb();
     return {
         selector,
         indexer: { hubClient, indexerDb, hubSelector: selector },
         deliveries,
-        advanceCalls: () => advanceCalls
+        advanceCalls
     };
 }
 
