@@ -120,7 +120,7 @@ module.exports = {
                 this._selectorRevision === selectorRevision;
             if (drained.allDrained && drained.marks.length > 0 && sameConnection)
                 this.certifyFullDrain(drained.marks, drainEpoch);
-            else if (this.running) this.scheduleBootstrapRetry();
+            else if (this.running) this.scheduleBootstrapRetry(sameConnection ? drained.undrained : ['the hub connection changed']);
         } finally {
             this._bootstrapping = false;
             this._bootstrapLastProgressAt = null;
@@ -140,18 +140,18 @@ module.exports = {
     // tables drain, independent of order.
     async drainEveryTable() {
         let marks = [];
-        let allDrained = true;
+        let undrained = [];                // what held the gate this pass, named on the retry line
         let connectionEpoch = this._wsEpoch;
         let selectorRevision = this._selectorRevision;
         for (let table of ['oracle_prices'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES, ['price_snapshots'])) {
             if(connectionEpoch !== this._wsEpoch || selectorRevision !== this._selectorRevision){
-                allDrained = false;
+                undrained.push('the hub connection changed');
                 break;
             }
             try {
                 let mark = await this.bootstrapTable(table);
                 if (mark === null) {
-                    allDrained = false;
+                    undrained.push(table);
                     if(connectionEpoch !== this._wsEpoch || selectorRevision !== this._selectorRevision) break;
                 }
                 else {
@@ -159,11 +159,11 @@ module.exports = {
                     this._bootstrapLastProgressAt = Date.now();
                 }
             } catch (err) {
-                allDrained = false;
+                undrained.push(table);
                 getLogger().warn('HubDbSync: ' + table + ' bootstrap failed:', err);
             }
         }
-        return { marks: marks, allDrained: allDrained };
+        return { marks: marks, allDrained: undrained.length === 0, undrained: undrained };
     },
 
     // Every table drained in full: open the heartbeat gate and advance the stream
@@ -211,9 +211,10 @@ module.exports = {
         return true;
     },
 
-    // A partial drain leaves the gate closed and comes back around after one poll interval.
-    scheduleBootstrapRetry() {
-        getLogger().warn('HubDbSync: bootstrap partial, retrying in ' + this.pollIntervalMs + 'ms (heartbeat gate stays closed)');
+    // A partial drain leaves the gate closed and retries after one poll interval, naming what held it.
+    scheduleBootstrapRetry(undrained) {
+        let held = (Array.isArray(undrained) && undrained.length > 0) ? '; not drained: ' + undrained.join(', ') : '';
+        getLogger().warn('HubDbSync: bootstrap partial, retrying in ' + this.pollIntervalMs + 'ms (heartbeat gate stays closed' + held + ')');
         setTimeout(() => {
             if (!this.running || this._bootstrapDrained) return;
             // A throw inside bootstrapAll never reaches its own retry, so re-arm here on
