@@ -152,14 +152,34 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
 // reached a deployed consumer (price_snapshots.idx_status_timestamp_round, 2026-09-06:
 // the barrier read behind it full-scanned a million-row mirror on every poll).
 // ---------------------------------------------------------------------------
-describe('HubDbSync.ensureTables index reconciliation @regression @tier3', function () {
-    const { parseDeclaredIndexes } = require('../../../../../src/hub/hub_db_sync/ensure_tables.js');
-    const TWIN = 'CREATE TABLE t (\n  id BIGINT PRIMARY KEY,\n  status VARCHAR(10),\n  ts BIGINT,\n  addr VARCHAR(80),\n'
-        + '  UNIQUE KEY uq_status_ts (status, ts),\n  KEY idx_ts (ts),  -- a comment; with a semicolon\n  KEY idx_addr (addr(62))\n);\n'
-        + 'CREATE INDEX idx_status ON t (status);';
+const { parseDeclaredIndexes } = require('../../../../../src/hub/hub_db_sync/ensure_tables.js');
+const INDEX_TWIN = 'CREATE TABLE t (\n  id BIGINT PRIMARY KEY,\n  status VARCHAR(10),\n  ts BIGINT,\n  addr VARCHAR(80),\n'
+    + '  UNIQUE KEY uq_status_ts (status, ts),\n  KEY idx_ts (ts),  -- a comment; with a semicolon\n  KEY idx_addr (addr(62))\n);\n'
+    + 'CREATE INDEX idx_status ON t (status);';
 
+function liveRows(indexes) {
+    const rows = [];
+    for (const [name, unique, cols] of indexes)
+        cols.forEach((c, i) => rows.push({ INDEX_NAME: name, NON_UNIQUE: unique ? 0 : 1, COLUMN_NAME: c, SEQ_IN_INDEX: i + 1 }));
+    return rows;
+}
+
+async function runIndexReconciliation(live) {
+    const dir = makeSqlDir({ 't.sql': INDEX_TWIN });
+    const alters = [];
+    const doQuery = async (sql) => {
+        if (/^SHOW TABLES/.test(sql)) return [{ t: 't' }];
+        if (/information_schema\.statistics/.test(sql)) return live;
+        if (/^ALTER TABLE/.test(sql)) { alters.push(sql); return []; }
+        throw new Error('unexpected statement: ' + sql);
+    };
+    await ensureTables({ doQuery }, dir);
+    return alters;
+}
+
+function registerIndexReconciliationTests() {
     it('parses inline KEY, UNIQUE KEY (prefix widths stripped) and standalone CREATE INDEX', function () {
-        const got = parseDeclaredIndexes(TWIN, 't').map((i) => [i.name, i.unique, i.columns.join(',')]);
+        const got = parseDeclaredIndexes(INDEX_TWIN, 't').map((i) => [i.name, i.unique, i.columns.join(',')]);
         assert.deepStrictEqual(got, [
             ['uq_status_ts', true, 'status,ts'],
             ['idx_ts', false, 'ts'],
@@ -168,30 +188,10 @@ describe('HubDbSync.ensureTables index reconciliation @regression @tier3', funct
         ]);
     });
 
-    function liveRows(indexes) {
-        const rows = [];
-        for (const [name, unique, cols] of indexes)
-            cols.forEach((c, i) => rows.push({ INDEX_NAME: name, NON_UNIQUE: unique ? 0 : 1, COLUMN_NAME: c, SEQ_IN_INDEX: i + 1 }));
-        return rows;
-    }
-
-    async function run(live) {
-        const dir = makeSqlDir({ 't.sql': TWIN });
-        const alters = [];
-        const doQuery = async (sql) => {
-            if (/^SHOW TABLES/.test(sql)) return [{ t: 't' }];
-            if (/information_schema\.statistics/.test(sql)) return live;
-            if (/^ALTER TABLE/.test(sql)) { alters.push(sql); return []; }
-            throw new Error('unexpected statement: ' + sql);
-        };
-        await ensureTables({ doQuery }, dir);
-        return alters;
-    }
-
     it('adds every declared index the live table lacks, and nothing that is already there', async function () {
         // uq_status_ts present by name; idx_ts satisfied by column set under another name;
         // idx_addr and idx_status missing.
-        const alters = await run(liveRows([['PRIMARY', true, ['id']], ['uq_status_ts', true, ['status', 'ts']], ['ts_by_other_name', false, ['ts']]]));
+        const alters = await runIndexReconciliation(liveRows([['PRIMARY', true, ['id']], ['uq_status_ts', true, ['status', 'ts']], ['ts_by_other_name', false, ['ts']]]));
         assert.deepStrictEqual(alters, [
             'ALTER TABLE `t` ADD INDEX `idx_addr` (addr(62))',
             'ALTER TABLE `t` ADD INDEX `idx_status` (status)'
@@ -199,7 +199,7 @@ describe('HubDbSync.ensureTables index reconciliation @regression @tier3', funct
     });
 
     it('a UNIQUE declaration is not satisfied by a non-unique live index on the same columns', async function () {
-        const alters = await run(liveRows([['PRIMARY', true, ['id']], ['loose', false, ['status', 'ts']], ['idx_ts', false, ['ts']], ['idx_addr', false, ['addr']], ['idx_status', false, ['status']]]));
+        const alters = await runIndexReconciliation(liveRows([['PRIMARY', true, ['id']], ['loose', false, ['status', 'ts']], ['idx_ts', false, ['ts']], ['idx_addr', false, ['addr']], ['idx_status', false, ['status']]]));
         assert.deepStrictEqual(alters, ['ALTER TABLE `t` ADD UNIQUE INDEX `uq_status_ts` (status, ts)']);
     });
 
@@ -211,7 +211,7 @@ describe('HubDbSync.ensureTables index reconciliation @regression @tier3', funct
     });
 
     it('an ADD INDEX failure is logged and skipped, never thrown', async function () {
-        const dir = makeSqlDir({ 't.sql': TWIN });
+        const dir = makeSqlDir({ 't.sql': INDEX_TWIN });
         const doQuery = async (sql) => {
             if (/^SHOW TABLES/.test(sql)) return [{ t: 't' }];
             if (/information_schema\.statistics/.test(sql)) return [];
@@ -219,19 +219,37 @@ describe('HubDbSync.ensureTables index reconciliation @regression @tier3', funct
         };
         await ensureTables({ doQuery }, dir);                      // resolves
     });
-});
+}
 
-describe('HubDbSync.ensureTables column reconciliation @regression @tier3', function () {
-    const { parseDeclaredColumns } = require('../../../../../src/hub/hub_db_sync/ensure_tables.js');
-    const PRICE_TWIN = 'CREATE TABLE price_snapshots (\n'
-        + '  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,\n'
-        + '  coin_pair VARCHAR(20) NOT NULL,\n'
-        + '  push_generation BIGINT NOT NULL DEFAULT 0,\n'
-        + '  batch_block_time BIGINT NOT NULL DEFAULT 0,\n'
-        + '  round_number BIGINT NOT NULL,\n'
-        + '  KEY idx_pair_batchtime_round (coin_pair, batch_block_time, round_number)\n'
-        + ') ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;';
+describe('HubDbSync.ensureTables index reconciliation @regression @tier3', registerIndexReconciliationTests);
 
+const { parseDeclaredColumns } = require('../../../../../src/hub/hub_db_sync/ensure_tables.js');
+const PRICE_TWIN = 'CREATE TABLE price_snapshots (\n'
+    + '  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,\n'
+    + '  coin_pair VARCHAR(20) NOT NULL,\n'
+    + '  push_generation BIGINT NOT NULL DEFAULT 0,\n'
+    + '  batch_block_time BIGINT NOT NULL DEFAULT 0,\n'
+    + '  round_number BIGINT NOT NULL,\n'
+    + '  KEY idx_pair_batchtime_round (coin_pair, batch_block_time, round_number)\n'
+    + ') ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;';
+
+async function runColumnReconciliation(liveColumnNames) {
+    const dir = makeSqlDir({ 'price_snapshots.sql': PRICE_TWIN });
+    const alters = [];
+    const doQuery = async (sql, args) => {
+        if (/^SHOW TABLES/.test(sql)) return [{ t: 'price_snapshots' }];
+        if (/information_schema\.columns/.test(sql)) return liveColumnNames.map((n) => ({ COLUMN_NAME: n }));
+        if (/information_schema\.statistics/.test(sql)) return liveColumnNames.includes('batch_block_time')
+            ? [{ INDEX_NAME: 'idx_pair_batchtime_round', NON_UNIQUE: 1, COLUMN_NAME: 'coin_pair', SEQ_IN_INDEX: 1 }]
+            : [];
+        if (/^ALTER TABLE/.test(sql)) { alters.push(sql); return []; }
+        throw new Error('unexpected statement: ' + sql);
+    };
+    await ensureTables({ doQuery }, dir);
+    return alters;
+}
+
+function registerColumnParsingTests() {
     it('parses declared columns with their verbatim definition and NOT NULL/DEFAULT shape', function () {
         const got = parseDeclaredColumns(PRICE_TWIN).map((c) => [c.name, c.notNull, c.hasDefault]);
         assert.deepStrictEqual(got, [
@@ -242,30 +260,16 @@ describe('HubDbSync.ensureTables column reconciliation @regression @tier3', func
             ['round_number', true, false]
         ]);
     });
+}
 
-    async function run(liveColumnNames) {
-        const dir = makeSqlDir({ 'price_snapshots.sql': PRICE_TWIN });
-        const alters = [];
-        const doQuery = async (sql, args) => {
-            if (/^SHOW TABLES/.test(sql)) return [{ t: 'price_snapshots' }];
-            if (/information_schema\.columns/.test(sql)) return liveColumnNames.map((n) => ({ COLUMN_NAME: n }));
-            if (/information_schema\.statistics/.test(sql)) return liveColumnNames.includes('batch_block_time')
-                ? [{ INDEX_NAME: 'idx_pair_batchtime_round', NON_UNIQUE: 1, COLUMN_NAME: 'coin_pair', SEQ_IN_INDEX: 1 }]
-                : [];
-            if (/^ALTER TABLE/.test(sql)) { alters.push(sql); return []; }
-            throw new Error('unexpected statement: ' + sql);
-        };
-        await ensureTables({ doQuery }, dir);
-        return alters;
-    }
-
+function registerColumnAdditionTests() {
     it('adds a missing column the twin declares, with its DEFAULT and AFTER the nearest live preceding column', async function () {
-        const alters = await run(['id', 'coin_pair', 'push_generation', 'round_number']);
+        const alters = await runColumnReconciliation(['id', 'coin_pair', 'push_generation', 'round_number']);
         assert.strictEqual(alters[0], 'ALTER TABLE `price_snapshots` ADD COLUMN batch_block_time BIGINT NOT NULL DEFAULT 0 AFTER `push_generation`');
     });
 
     it('does not touch a mirror that already has every declared column', async function () {
-        const alters = await run(['id', 'coin_pair', 'push_generation', 'batch_block_time', 'round_number']);
+        const alters = await runColumnReconciliation(['id', 'coin_pair', 'push_generation', 'batch_block_time', 'round_number']);
         assert.deepStrictEqual(alters.filter((s) => /ADD COLUMN/.test(s)), []);
     });
 
@@ -285,13 +289,15 @@ describe('HubDbSync.ensureTables column reconciliation @regression @tier3', func
     });
 
     it('never MODIFYs or DROPs, only ADD COLUMN', async function () {
-        const alters = await run(['id', 'coin_pair', 'push_generation', 'round_number']);
+        const alters = await runColumnReconciliation(['id', 'coin_pair', 'push_generation', 'round_number']);
         assert.deepStrictEqual(alters.filter((s) => /ADD COLUMN/.test(s)), [
             'ALTER TABLE `price_snapshots` ADD COLUMN batch_block_time BIGINT NOT NULL DEFAULT 0 AFTER `push_generation`'
         ]);
         assert.ok(!alters.some((s) => /MODIFY|DROP/.test(s)));
     });
+}
 
+function registerColumnSafetyTests() {
     it('a NOT NULL column with no DEFAULT is skipped, not added', async function () {
         const dir = makeSqlDir({
             't.sql': 'CREATE TABLE t (\n  id BIGINT NOT NULL,\n  owner VARCHAR(40) NOT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8;'
@@ -325,4 +331,12 @@ describe('HubDbSync.ensureTables column reconciliation @regression @tier3', func
         await ensureTables({ doQuery: async (sql) => { calls.push(sql); return [{ t: 'plain' }]; } }, dir);
         assert.deepStrictEqual(calls.filter((s) => !/^SHOW TABLES/.test(s)), []);
     });
-});
+}
+
+function registerColumnReconciliationTests() {
+    registerColumnParsingTests();
+    registerColumnAdditionTests();
+    registerColumnSafetyTests();
+}
+
+describe('HubDbSync.ensureTables column reconciliation @regression @tier3', registerColumnReconciliationTests);

@@ -1243,6 +1243,12 @@
       "health() response builder surfaces hub-config age in seconds from the fixed clock",
       "health() response builder surfaces reorg counters from reorgStats (#1813)"
     ],
+    "1a278c22b8f80e7c": [
+      "block-scoped token supply refresh @unit @regression @tier1 does not reconstruct full supply during ordinary forward updates",
+      "block-scoped token supply refresh @unit @regression @tier1 hashes the same token_supply state as the per-action rebuild when an action defers supply",
+      "block-scoped token supply refresh @unit @regression @tier1 rebuilds token information immediately during rollback updates",
+      "block-scoped token supply refresh @unit @regression @tier1 runs once before the blocks row is hashed and before the sanity check"
+    ],
     "1a6466e594d949e6": [
       "HubDbSync feed authentication falls back to HUB_API_KEY for subscriptions and snapshots",
       "HubDbSync feed authentication leaves push and reorg credentials on their dedicated environment keys",
@@ -12543,11 +12549,6 @@
       "Xcall (XCALL) @regression @tier3 v0: request the mismatch status fits index_statuses.status without DB truncation",
       "Xcall (XCALL) @regression @tier3 v0: request valid request \u2192 STATUS valid, createCrossChainCallRequest called with the derived deadline"
     ],
-    "ce4f6eb1e1d9a371": [
-      "block-scoped token supply refresh @unit @regression @tier1 does not reconstruct full supply during ordinary forward updates",
-      "block-scoped token supply refresh @unit @regression @tier1 rebuilds token information immediately during rollback updates",
-      "block-scoped token supply refresh @unit @regression @tier1 runs once after market updates and before the sanity check"
-    ],
     "ce5272c68d71c930": [
       "HubPushQueue _attempt() calls retractBridgeRange for bridge_retraction rows with the ceiling + generation fence and marks delivered"
     ],
@@ -13328,6 +13329,12 @@
       "HubDbSync attestation_responses mirror registration @regression @tier1 fills a NULL link from a re-delivery and stamps the applied v1 row through the request id",
       "HubDbSync attestation_responses mirror registration @regression @tier1 generates an upsert whose ONLY assignment is a hub-following batch_action_index",
       "HubDbSync attestation_responses mirror registration @regression @tier1 skips the link entirely when there is no local indexer connection to stamp"
+    ],
+    "db68fb7aaa7e576a": [
+      "HubDbSync rowless snapshot page @regression @tier2 a well-formed page still drains unchanged",
+      "HubDbSync rowless snapshot page @regression @tier2 names a null hub reply too",
+      "HubDbSync rowless snapshot page @regression @tier2 names the table and what the hub sent when a snapshot page carries no rows array",
+      "HubDbSync rowless snapshot page @regression @tier2 the partial-bootstrap retry line names every table that did not drain"
     ],
     "dbb6f593f551838f": [
       "Delegate (DELEGATE) @regression @tier2 v0: capability rotate calls mapper.createMappings after parse",
@@ -15416,8 +15423,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1253,
-      "titleCount": 12907,
+      "fileCount": 1254,
+      "titleCount": 12912,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16244,7 +16251,7 @@
         "test/unit/db/subtree/node_store_rows.test.js": "e0826acdcf60989c",
         "test/unit/db/subtree/orphan_stats_reads.test.js": "84a5bb8715a5c817",
         "test/unit/db/tickers/ticker_lookup_order.test.js": "c0917406521a91c5",
-        "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "ce4f6eb1e1d9a371",
+        "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
@@ -16318,6 +16325,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync.test/price_and_oracle_upgrades.test.js": "a3a9680a2521091d",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/resync_close_repages.test.js": "08779979a717f622",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/retraction_guards.test.js": "e5cd1cda0fbb8e49",
+        "test/unit/hub/hub_db_sync/hub_db_sync.test/rowless_snapshot_page.test.js": "db68fb7aaa7e576a",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/signed_retractions.test.js": "410c1a526adef6ac",
         "test/unit/hub/hub_db_sync/hub_db_sync_apply_failure_watermark.test.js": "a696a1a3bf2e3e82",
         "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test.js": "db5f0c16a6ea1616",
