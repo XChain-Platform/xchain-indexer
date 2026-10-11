@@ -32,7 +32,7 @@ const cors          = require('cors');
 // costs pooled DB round-trips) without affecting the handful of legitimate
 // hub/explorer callers (see sibling services: decoder, encoder, explorer, hub).
 const rateLimit     = require('express-rate-limit');
-const { installObservability } = require('../observability');   // default-off /metrics + structured log shim
+const { installObservability, getLogger } = require('../observability'); // default-off /metrics + structured log shim
 const { installIndexerMetrics } = require('./indexer_metrics');  // poll-freshness heartbeat gauge
 const { parseCorsOrigin } = require('./cors_origin.js');
 const { apiKeyGate } = require('./auth_gate');
@@ -51,7 +51,7 @@ function installMiddleware(app, ctx){
 function jsonBodyErrorHandler(err, req, res, next){
     const status = err && err.status;
     if(!err || !(status >= 400 && status < 500) || res.headersSent) return next(err);
-    console.warn('[api] rejected request body: ' + (err.type || 'body_error') + ' (' + status + ')');
+    getLogger().warn('[api] rejected request body: ' + (err.type || 'body_error') + ' (' + status + ')');
     res.status(status).json({ error: 'Invalid request body' });
 }
 
