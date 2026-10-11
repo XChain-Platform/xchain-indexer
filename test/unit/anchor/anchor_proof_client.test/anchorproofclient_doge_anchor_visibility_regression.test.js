@@ -176,8 +176,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
     });
 });
 
-describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => {
-    describe('proveMined walks every page before judging', function () {
+function registerCompletedPageWalkTests() {
         it('follows the cursor and finds a match that fell past the first page', async function () {
         const c = client();
         const seen = [];
@@ -218,7 +217,9 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
         assert.strictEqual(await c.proveMined(expectation()), 'rejected');
         assert.strictEqual(calls, 1);
         });
+}
 
+function registerDefensivePageWalkTests() {
         it('refuses to judge a partial set when the cursor is missing or does not advance', async function () {
         // A missing cursor must be refused on the first page itself, so exactly one fetch.
         for (const missing of [null, undefined, '', '  ', false, true, '41x', -1]) {
@@ -264,8 +265,18 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
         assert.strictEqual(await c.proveMined(expectation()), 'verified');
         assert.deepStrictEqual(seen, [null, 41]);
         });
-        });
-});
+}
+
+function registerPageWalkTests() {
+    registerCompletedPageWalkTests();
+    registerDefensivePageWalkTests();
+}
+
+function registerPageWalkSuite() {
+    describe('proveMined walks every page before judging', registerPageWalkTests);
+}
+
+describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', registerPageWalkSuite);
 
 describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => {
     function sibling() { return anchor({ match_batch_seq: 999 }); }

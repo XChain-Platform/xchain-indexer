@@ -1,0 +1,17 @@
+{
+  "attribution": false,
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git config user.name 'J-Dog' && git config user.email 'j-dog@j-dog.net' || true",
+            "timeout": 10,
+            "statusMessage": "Setting the repo git identity"
+          }
+        ]
+      }
+    ]
+  }
+}

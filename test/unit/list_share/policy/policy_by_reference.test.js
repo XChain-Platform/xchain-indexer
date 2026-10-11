@@ -35,9 +35,7 @@ function dueRow(id, tick, seq, ref){
     };
 }
 
-describe('policy apply by shared-list reference', function(){
-    afterEach(function(){ sinon.restore(); });
-
+function registerMirrorReferenceTests(){
     it('points a copy at a foreign mirror with one ISSUE 5 leg and no LIST leg', async function(){
         stubActiveAt(sinon, CONSUMER_GATE, true);
         const keys = [makeKey(), makeKey(), makeKey()];
@@ -78,7 +76,9 @@ describe('policy apply by shared-list reference', function(){
         assert.deepStrictEqual(state.injected, []);
         assert.deepStrictEqual(state.settlements, []);
     });
+}
 
+function registerConsumerGateTests(){
     it('carries refs below the gate and removes their tail before the due-set cap', async function(){
         const gate = stubActiveAt(sinon, CONSUMER_GATE, false);
         const keys = [makeKey(), makeKey(), makeKey()];
@@ -105,7 +105,9 @@ describe('policy apply by shared-list reference', function(){
         assert.strictEqual(armed.length, XPOLICY_MAX_PER_BLOCK);
         assert.ok(armed.every(r => r.tick === 'HELD'));
     });
+}
 
+function registerSharedPointerTests(){
     it('creates a fresh full-copy list instead of editing a shared pointer', async function(){
         stubActiveAt(sinon, CONSUMER_GATE, true);
         const keys = [makeKey(), makeKey(), makeKey()];
@@ -143,4 +145,12 @@ describe('policy apply by shared-list reference', function(){
         assert.deepStrictEqual(above.state.injected, below.state.injected);
         assert.deepStrictEqual(aboveResult.actionIndexes, belowResult.actionIndexes);
     });
+}
+
+describe('policy apply by shared-list reference', function(){
+    afterEach(function(){ sinon.restore(); });
+
+    registerMirrorReferenceTests();
+    registerConsumerGateTests();
+    registerSharedPointerTests();
 });

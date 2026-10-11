@@ -78,64 +78,79 @@ function referencesAny(row, targets){
     return targets.has(String(row.allow_list)) || targets.has(String(row.block_list));
 }
 
+function matchingMarketRows(sql, args, fixtures){
+    assert.match(sql, /SELECT MAX\(latest\.action_index\)/i);
+    assert.match(sql, /st\.status='open'/i);
+    assert.deepStrictEqual(args, [
+        LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT,
+        LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT,
+        LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT,
+        LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT
+    ]);
+    const targets = new Set([String(LIST_ROOT), String(LIST_EDIT), String(LIST_EDIT_OF_EDIT)]);
+    const rows = fixtures.markets.filter(market => {
+        const latest = latestStatus(fixtures.statuses, market.action_index);
+        const namedByEdit = fixtures.edits.some(edit =>
+            edit.market_action_index === market.action_index && referencesAny(edit, targets));
+        return latest && latest.status === 'open' &&
+            (referencesAny(market, targets) || namedByEdit);
+    }).sort((a, b) => a.action_index - b.action_index);
+    fixtures.candidateIndexes.push(...rows.map(row => row.action_index));
+    return rows;
+}
+
+function childListRows(args, listParentsRead){
+    listParentsRead.push(args[0]);
+    const children = {
+        [LIST_ROOT]: [{ action_index: LIST_EDIT }],
+        [LIST_EDIT]: [{ action_index: LIST_EDIT_OF_EDIT }],
+        [LIST_EDIT_OF_EDIT]: [{ action_index: LIST_ROOT }]
+    };
+    return children[args[0]] || [];
+}
+
+function matchingEditRows(args, edits){
+    return edits
+        .filter(row => row.market_action_index === args[0] && row.status === args[1])
+        .sort((a, b) => a.action_index - b.action_index)
+        .map(row => ({
+            expiration: null,
+            allow_list: row.allow_list,
+            block_list: row.block_list
+        }));
+}
+
+function stubMarketQueries(db, kind, fixtures){
+    sinon.stub(db, 'doQuery').callsFake((query, args) => {
+        const sql = query.replace(/\s+/g, ' ');
+        if(new RegExp(`FROM ${kind}s [os] INNER JOIN ${kind}_statuses`, 'i').test(sql)){
+            return Promise.resolve(matchingMarketRows(sql, args, fixtures));
+        }
+        if(/^SELECT action_index FROM lists WHERE list_action_index=\?/i.test(sql)){
+            return Promise.resolve(childListRows(args, fixtures.listParentsRead));
+        }
+        const editAlias = kind === 'order' ? 'o' : 's1';
+        if(new RegExp(`FROM ${kind}_edits ${editAlias} INNER JOIN index_statuses`, 'i').test(sql)){
+            return Promise.resolve(matchingEditRows(args, fixtures.edits));
+        }
+        return Promise.resolve([]);
+    });
+}
+
 function dbWithMarkets(kind){
     const config = getTestConfig();
     const util = new Utility();
     const db = new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', { config, util });
-    const markets = marketRows();
-    const statuses = statusRows();
-    const edits = editRows();
     const candidateIndexes = [];
     const listParentsRead = [];
-
-    sinon.stub(db, 'doQuery').callsFake((query, args) => {
-        const sql = query.replace(/\s+/g, ' ');
-        if(new RegExp(`FROM ${kind}s [os] INNER JOIN ${kind}_statuses`, 'i').test(sql)){
-            assert.match(sql, /SELECT MAX\(latest\.action_index\)/i);
-            assert.match(sql, /st\.status='open'/i);
-            assert.deepStrictEqual(args, [
-                LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT,
-                LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT,
-                LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT,
-                LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT
-            ]);
-            const targets = new Set([String(LIST_ROOT), String(LIST_EDIT), String(LIST_EDIT_OF_EDIT)]);
-            const rows = markets.filter(market => {
-                const latest = latestStatus(statuses, market.action_index);
-                const namedByEdit = edits.some(edit =>
-                    edit.market_action_index === market.action_index && referencesAny(edit, targets));
-                return latest && latest.status === 'open' &&
-                    (referencesAny(market, targets) || namedByEdit);
-            }).sort((a, b) => a.action_index - b.action_index);
-            candidateIndexes.push(...rows.map(row => row.action_index));
-            return Promise.resolve(rows);
-        }
-
-        if(/^SELECT action_index FROM lists WHERE list_action_index=\?/i.test(sql)){
-            listParentsRead.push(args[0]);
-            const children = {
-                [LIST_ROOT]: [{ action_index: LIST_EDIT }],
-                [LIST_EDIT]: [{ action_index: LIST_EDIT_OF_EDIT }],
-                [LIST_EDIT_OF_EDIT]: [{ action_index: LIST_ROOT }]
-            };
-            return Promise.resolve(children[args[0]] || []);
-        }
-
-        const editAlias = kind === 'order' ? 'o' : 's1';
-        if(new RegExp(`FROM ${kind}_edits ${editAlias} INNER JOIN index_statuses`, 'i').test(sql)){
-            const rows = edits
-                .filter(row => row.market_action_index === args[0] && row.status === args[1])
-                .sort((a, b) => a.action_index - b.action_index)
-                .map(row => ({
-                    expiration: null,
-                    allow_list: row.allow_list,
-                    block_list: row.block_list
-                }));
-            return Promise.resolve(rows);
-        }
-
-        return Promise.resolve([]);
-    });
+    const fixtures = {
+        markets: marketRows(),
+        statuses: statusRows(),
+        edits: editRows(),
+        candidateIndexes,
+        listParentsRead
+    };
+    stubMarketQueries(db, kind, fixtures);
     db._candidateIndexes = candidateIndexes;
     db._listParentsRead = listParentsRead;
     return db;
