@@ -123,13 +123,21 @@ class List {
 
     // Handle parsing the LIST transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // Example payloads by FORMAT version:
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+        let parsed = this.prepareParse(params, data, error);
+        data = parsed.data;
+        error = parsed.error;
+        let format = parsed.format;
 
+        let validated = await this.validateParse(data, format, error);
+        error = validated.error;
+
+        let changed = await this.applyListChanges(data, format, params, validated.list, error);
+        error = await this.validateResult(data, format, validated.list, changed.changes, error);
+
+        await this.finalizeParse(data, format, error, validated.list, changed);
+    }
+
+    prepareParse(params, data, error){
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && !this.isFormatActive(format, data))
@@ -148,36 +156,32 @@ class List {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // Define some placeholders
-        let edit    = {};
-        let list    = [];
-        let invalid = {};
+        return { data, error, format };
+    }
 
-        // Load the list this action edits, which also decides TYPE and the stored index
+    async validateParse(data, format, error){
         let loaded = await this.validateAndLoadList(data, format, error);
         error = loaded.error;
-        list  = loaded.list;
 
         error = await this.validateEditAuthority(data, format, error);
-
         error = await this.validateFields(data, error);
+        error = await this.validateFormatRules(data, format, loaded.list, error);
+        return { error, list: loaded.list };
+    }
 
-        error = await this.validateFormatRules(data, format, list, error);
-
+    async applyListChanges(data, format, params, list, error){
+        let edit = {};
+        let invalid = {};
         let changes = 0;
-
-        // Handle building out some data arrays using list items
         if(!error && (this.isCreateFormat(format) || this.isEditFormat(format))){
-
             await this.collectEditItems(data, format, params, edit);
-
             changes = this.applyEditItems(data, format, edit, list, invalid);
-
         }
+        return { edit, invalid, changes };
+    }
 
-        error = await this.validateResult(data, format, list, changes, error);
-
-        let fee = await this.chargeFee(data, format, changes, error);
+    async finalizeParse(data, format, error, list, changed){
+        let fee = await this.chargeFee(data, format, changed.changes, error);
         error = fee.error;
         fee = fee.fees;
 
@@ -188,10 +192,8 @@ class List {
         // Print status message
         getLogger().info("\t LIST : " + data['STATUS']);
 
-        await this.storeList(data, status, edit, list, invalid, fee);
-
+        await this.storeList(data, status, changed.edit, list, changed.invalid, fee);
         await this.rematchMarkets(data, format, status);
-
     }
 
     async rematchMarkets(data, format, status){
