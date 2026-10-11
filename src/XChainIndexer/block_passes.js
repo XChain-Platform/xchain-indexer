@@ -16,8 +16,8 @@
  *
  * Everything a block applies inside its transaction, in consensus order: the opening
  * passes and the block's own transactions, then the settlement, cross-chain, reward and
- * closing passes, then the blocks row, the markets, the supply sanity check and the state
- * roots. The order assigns action indexes, so moving a pass moves every later index in
+ * closing passes, then the supply refresh, the blocks row, the markets, the supply sanity
+ * check and the state roots. The order assigns action indexes, so moving a pass moves every later index in
  * the block. Installed onto XChainIndexer.prototype by ../XChainIndexer.js.
  *
  ********************************************************************/
@@ -206,12 +206,19 @@ module.exports = {
         await this.util.processCooldownCompletions(this.actions, this.indexerDb, blockToParse);
     },
 
-    // Close the VM cache, write the blocks row, update the markets, sanity-check supplies
-    // and store the state roots. Returns [ledger, actions, contracts].
+    // Close the VM cache, refresh supplies, write the blocks row, update the markets,
+    // sanity-check supplies and store the state roots. Returns [ledger, actions, contracts].
     async finalizeBlock({ blockToParse, blockTime, rawBlockTime }, stateCommitActive){
         // Clear VM compilation cache for this block
         if(this.actions.vm)
             this.actions.vm.endBlock();
+
+        // Refresh every supply the block touched before createBlock hashes it. The
+        // state_hash token_supply class reads tokens.supply for each touched tick, and
+        // the per-action path this refresh replaced had already written the end-of-block
+        // supply by now, so running it after createBlock would hash the previous block's
+        // supply and fork the state hash. Every ledger-writing pass has run by this point.
+        await this.indexerDb.refreshTokenSuppliesForBlock(blockToParse);
 
         // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
         // rawBlockTime, not blockTime: this row is what the explorer and the
@@ -222,9 +229,6 @@ module.exports = {
 
         // Create / Update DEX market information
         await this.util.processMarketUpdates(this.indexerDb, blockToParse, blockTime);
-
-        // Refresh every supply touched by this block after all ledger-writing passes.
-        await this.indexerDb.refreshTokenSuppliesForBlock(blockToParse);
 
         // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
         await this.indexerDb.sanityCheck(blockToParse);

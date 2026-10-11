@@ -1243,6 +1243,12 @@
       "health() response builder surfaces hub-config age in seconds from the fixed clock",
       "health() response builder surfaces reorg counters from reorgStats (#1813)"
     ],
+    "1a278c22b8f80e7c": [
+      "block-scoped token supply refresh @unit @regression @tier1 does not reconstruct full supply during ordinary forward updates",
+      "block-scoped token supply refresh @unit @regression @tier1 hashes the same token_supply state as the per-action rebuild when an action defers supply",
+      "block-scoped token supply refresh @unit @regression @tier1 rebuilds token information immediately during rollback updates",
+      "block-scoped token supply refresh @unit @regression @tier1 runs once before the blocks row is hashed and before the sanity check"
+    ],
     "1a6466e594d949e6": [
       "HubDbSync feed authentication falls back to HUB_API_KEY for subscriptions and snapshots",
       "HubDbSync feed authentication leaves push and reorg credentials on their dedicated environment keys",
@@ -12543,11 +12549,6 @@
       "Xcall (XCALL) @regression @tier3 v0: request the mismatch status fits index_statuses.status without DB truncation",
       "Xcall (XCALL) @regression @tier3 v0: request valid request \u2192 STATUS valid, createCrossChainCallRequest called with the derived deadline"
     ],
-    "ce4f6eb1e1d9a371": [
-      "block-scoped token supply refresh @unit @regression @tier1 does not reconstruct full supply during ordinary forward updates",
-      "block-scoped token supply refresh @unit @regression @tier1 rebuilds token information immediately during rollback updates",
-      "block-scoped token supply refresh @unit @regression @tier1 runs once after market updates and before the sanity check"
-    ],
     "ce5272c68d71c930": [
       "HubPushQueue _attempt() calls retractBridgeRange for bridge_retraction rows with the ceiling + generation fence and marks delivered"
     ],
@@ -15417,7 +15418,7 @@
   "scripts": {
     "test": {
       "fileCount": 1253,
-      "titleCount": 12907,
+      "titleCount": 12908,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16244,7 +16245,7 @@
         "test/unit/db/subtree/node_store_rows.test.js": "e0826acdcf60989c",
         "test/unit/db/subtree/orphan_stats_reads.test.js": "84a5bb8715a5c817",
         "test/unit/db/tickers/ticker_lookup_order.test.js": "c0917406521a91c5",
-        "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "ce4f6eb1e1d9a371",
+        "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
