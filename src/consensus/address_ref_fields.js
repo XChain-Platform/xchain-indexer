@@ -18,9 +18,11 @@
  * value. An address can be referenced on the wire either as its full string or
  * by its numeric id with a caret prefix (^57), exactly like a ticker (^1234).
  *
- * CONSENSUS SURFACE. The indexer assigns each new address a deterministic id by
- * walking the NEW addresses an action introduces in BYTE-SORTED VALUE order, so
- * the ORDER of fields in these lists is irrelevant: only the SET matters, and
+ * CONSENSUS SURFACE. The indexer assigns each new address a deterministic id. For
+ * the fixed-layout actions (MINT, MESSAGE, DISPENSER, ORDER, SWAP) a pre-pass walks
+ * the NEW addresses in BYTE-SORTED VALUE order; ISSUE, SWEEP, DEPLOY and the
+ * multi-value fields get ids in their handler's fixed interning order instead.
+ * Either way the ORDER of fields in these lists is irrelevant: only the SET matters, and
  * that set per action-version is pinned by the (immutable) wire format. Adding
  * or removing a field here changes which values become consensus-relevant ids,
  * so it is a wire-format-level change, never a routine edit.

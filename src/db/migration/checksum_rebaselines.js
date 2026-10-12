@@ -248,6 +248,30 @@ const MIGRATION_CHECKSUM_REBASELINES = {
         ],
         to: '3ce329fb2d98b14d7b61aa892fed9ef483957eba6da77e708912efaf24318d09',
     },
+    // Corrected FALSE notes in both WHY blocks. They said a replay-only replica missing the
+    // fence column was harmless because hub_db_sync fenced "conditionally on column presence";
+    // the retraction DELETE names the column unconditionally and fails there instead, so
+    // believing them strands orphaned mirror rows. Comment lines only: each ALTER TABLE is
+    // byte-identical, verified by comparing the comment-stripped residue. 1284845c2 is each
+    // file's only committed revision and an object-store scan found no other blob with the
+    // same residue, so one `from` covers every DB that applied them.
+    '2026-07-17-cross-chain-matches-reorg-fence-columns.sql': {
+        from: '8d8ef7feba1291153ea93c39e6f5b842643cb0ca74120d59478ac6664a8f3ed0', // 1284845c2, as authored
+        to:   '5940b7e0e676cb7523b7dd3b19cbce605d65428b105d8cdf3bf3cafeaab7cd02',
+    },
+    '2026-07-17-oracle-prices-add-push-generation.sql': {
+        from: '3690eb643162fa851103bc803103bb22a6427344002c2607ad1ef9680f764ff8', // 1284845c2, as authored
+        to:   'bb0fb2b5be674d00807255e61781b319f3e3f10207327926ec3274e3555d1a24',
+    },
+    // Corrected a FALSE note: the header named a v5-handler writer for batch_action_index
+    // and called a persistent NULL a coverage gap to alert on; the link is a best-effort
+    // hub-mirror stamp a reorg clears. Comment lines only: the ALTER TABLE is byte-identical,
+    // verified by comparing the comment-stripped residue. 3ddbf7689 is the file's only
+    // revision and an object-store scan found no other blob with the same residue.
+    '2026-09-03-attests-batch-action-index.sql': {
+        from: '755dcb61fb94a534f44f7ece590fbdc009ad1a85d100d4e8bae9144f10b95e5a', // 3ddbf7689, as authored
+        to:   '4f61f3b78e0fb0c3b06eec68ed2ff9d929f5b897be409684c5933e2ef40c0b16',
+    },
 };
 
 module.exports = { MIGRATION_CHECKSUM_REBASELINES };

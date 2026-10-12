@@ -13,8 +13,9 @@
  * The gate list of the suite whose entry is test/unit/activations/activation_constants_parity.test.js,
  * derived from the activation modules on disk instead of trusted as hand-maintained. Every
  * gate carrier under src/ must be a module test/helpers/gate_modules.js knows, and every
- * stem it maps must either be pinned by a GATES row of the entry or be named below with the
- * reason it has no canonical map, so a new module that nobody listed fails here.
+ * stem it maps must either be pinned by a GATES row of the entry (or of its live-network part)
+ * or be named below with the reason it has no canonical map, so a new module that nobody
+ * listed fails here.
  *
  ********************************************************************/
 
@@ -26,6 +27,8 @@ const path   = require('path');
 const { SRC, GATE_MODULE_PATHS } = require('../../../helpers/gate_modules.js');
 
 const ENTRY = path.resolve(__dirname, '..', 'activation_constants_parity.test.js');
+// Read the live-network part too: its rows pin the env-derived maps on mainnet and testnet only.
+const PINNING_FILES = [ENTRY, path.resolve(__dirname, 'live_network_gates.test.js')];
 
 // Files named *_gate.js or *_activation.js that are not activation carriers.
 const NOT_CARRIERS = new Set([
@@ -47,8 +50,6 @@ const NO_CANONICAL_MAP = new Set([
     'oracle_preload_causality_activation',
     'price_batching_floor_activation',
     'price_zero_validity_activation',
-    'rollcall_activation',
-    'rollcall_gates_activation',
     'slash_grid_activation',
     'stake_weight_collation_activation',
     'stake_weighted_quorum',
@@ -75,7 +76,7 @@ function carriersOnDisk() {
 }
 
 function pinnedStems() {
-    const source = fs.readFileSync(ENTRY, 'utf8');
+    const source = PINNING_FILES.map(file => fs.readFileSync(file, 'utf8')).join('\n');
     const rows = source.match(/^\s*\['[^']+',\s*'[A-Za-z0-9_]+'\],?/gm) || [];
     return new Set(rows.map(row => row.match(/'([^']+)'/)[1].replace(/\.js$/, '')));
 }

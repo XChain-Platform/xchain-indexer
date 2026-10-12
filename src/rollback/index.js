@@ -83,12 +83,8 @@ class Rollback {
         // relay rows seeded from rolled-back PRICE / XCALL actions on the cross-chain hub)
         this.hubClient = indexer.hubClient;
 
-        // Setup alias to the durable hub-push queue. Paused around the post-commit retraction
-        // block so an in-flight deferred drain cannot interleave with this rollback and re-issue
-        // a stale open-ended retraction against the just-rolled-back range (item 5297). May be
-        // unset during early boot (rollbacks only occur in the main loop after the queue starts),
-        // so every use is null-guarded.
-        this.hubPushQueue = indexer.hubPushQueue || null;
+        // No alias to the durable hub-push queue: XChainIndexer creates it after Rollback, so a
+        // copy taken here is always null. deliverStagedRetractions reads it from the indexer at use.
 
         // Deliberately NO alias to indexer.protocolChanges. That registry answers
         // isEnabled(name, block_index) against a LOCAL height, and during an unwind there is no
@@ -225,8 +221,14 @@ class Rollback {
             await this.commitAndInvalidateCaches();
 
         } catch(e) {
-            // Roll back so the DB is left untouched rather than in a partial rollback state
-            await this.indexerDb.rollbackTransaction();
+            // Roll back so the DB is left untouched rather than in a partial rollback state.
+            // A rollback that throws too is logged here, so it never replaces `e`.
+            try {
+                await this.indexerDb.rollbackTransaction();
+            } catch(rollbackErr) {
+                getLogger().error('Reorg rollback to block ' + block_index + ' failed while unwinding after: ' +
+                    ((e && e.message) || e) + '; rollback error: ' + ((rollbackErr && rollbackErr.message) || rollbackErr));
+            }
             // Clear the reorg marker on failure too so it can't stick; the next pass (after the
             // restart this throw causes) re-detects the reorg and retries, re-arming it (#1812).
             if(this.indexer) this.indexer.stallReason = null;

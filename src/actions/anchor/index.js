@@ -76,7 +76,7 @@ const reassembly   = require('./reassembly.js');
 const { splitV3Wire } = require('./v3/v3_wire.js');
 const { walkFoldSections } = require('./v3/v3_sections.js');
 const { foldArchiveReason } = require('./v3/v3_archive_check.js');
-const { canonicalBatchCrc, signsExtendedCanonical, extendSectionCanonicalBase } = require('./v3_canonical.js');
+const { archiveCanonicalSuffix, signsExtendedCanonical, extendSectionCanonicalBase } = require('./v3_canonical.js');
 const { recordFoldAction } = require('./v3/v3_record.js');
 function foldHeaderReason(config, data, error){
     if(error) return error;
@@ -171,8 +171,7 @@ class Anchor {
             // hub's archiveCanonical, which nests the bare rawCanonicalCheckpoint; the
             // wrapper sigs are produced over the SAME archive canonical (the publisher tail
             // is attested separately via rewardCanonical).
-            base += '|' + String(d['MATCH_BATCH_SEQ']) + '|' + String(d['MATCH_COUNT']) + '|' +
-                    canonicalBatchCrc(d['BATCH_CRC32']) + '|' + String(d['TOTAL_CHUNKS']);
+            base += archiveCanonicalSuffix(d);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
         } else if(Number(d['FORMAT']) === 0){
             // Append the root suffix UNCONDITIONALLY. Of the seven checkpoint-family
