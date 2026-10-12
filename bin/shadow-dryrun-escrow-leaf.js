@@ -157,6 +157,34 @@ function liveSet(rows){
     return live;
 }
 
+// The dry run's core: replay `blocks` through the writer's incremental path, then run
+// the arming replay from a clean journal, and list every key the two disagree on.
+// `overlay` is the journalOverlay(db) the writer is reading and writing through.
+async function compareIncrementalToReplay(db, overlay, blocks, hi){
+    const t0 = process.hrtime.bigint();
+    let written = 0;
+    for(const b of blocks) written += await EJW.writeEscrowJournal(db, b);
+    const incMs = Number(process.hrtime.bigint() - t0) / 1e6;
+    const incremental = liveSet(overlay.rows);
+
+    overlay.reset();
+    const t1 = process.hrtime.bigint();
+    const replayWrote = await EJW.writeEscrowJournal(db, hi, { full: true });
+    const repMs = Number(process.hrtime.bigint() - t1) / 1e6;
+    const replay = liveSet(overlay.rows);
+
+    const mismatches = [];
+    for(const [k, v] of replay){
+        const other = incremental.get(k);
+        if(other === undefined) mismatches.push('MISSING from incremental: ' + k + ' = ' + v);
+        else if(M.canonicalAmount(other) !== M.canonicalAmount(v))
+            mismatches.push('DIVERGENT ' + k + ': incremental ' + other + ' vs replay ' + v);
+    }
+    for(const k of incremental.keys())
+        if(!replay.has(k)) mismatches.push('EXTRA in incremental: ' + k);
+    return { written, replayWrote, incMs, repMs, incremental, replay, mismatches };
+}
+
 async function main(argv){
     const opts = parseArgs(argv);
     const Database = require('../src/db');
@@ -188,45 +216,24 @@ async function main(argv){
 
     const overlay = journalOverlay(db);
 
-    // (1) INCREMENTAL: every block that touched escrow, in order.
+    // (1)-(3): incremental path, arming replay, and the key-for-key assertion.
     const touchedBlocks = await db.doQuery(
         'SELECT DISTINCT a.block_index AS b FROM escrows e ' +
         'INNER JOIN actions a ON a.action_index = e.action_index ' +
         'WHERE a.block_index BETWEEN ? AND ? ORDER BY a.block_index ASC', [lo, hi]);
-    const t0 = process.hrtime.bigint();
-    let written = 0;
-    for(const r of touchedBlocks) written += await EJW.writeEscrowJournal(db, Number(r.b));
-    const incMs = Number(process.hrtime.bigint() - t0) / 1e6;
-    const incremental = liveSet(overlay.rows);
-    console.log('# incremental: ' + touchedBlocks.length + ' block(s), ' + written + ' journal row(s), ' +
-                incMs.toFixed(0) + ' ms -> ' + incremental.size + ' live locked key(s)');
-
-    // (2) ARMING REPLAY over the same ledger, from a clean journal.
-    overlay.reset();
-    const t1 = process.hrtime.bigint();
-    const replayWrote = await EJW.writeEscrowJournal(db, hi, { full: true });
-    const repMs = Number(process.hrtime.bigint() - t1) / 1e6;
-    const replay = liveSet(overlay.rows);
-    console.log('# replay:      ' + replayWrote + ' journal row(s), ' + repMs.toFixed(0) + ' ms -> ' +
-                replay.size + ' live locked key(s)');
-
-    // (3) THE ASSERTION. A mismatch is a fork in waiting.
-    let bad = 0;
-    for(const [k, v] of replay){
-        const other = incremental.get(k);
-        if(other === undefined){ console.error('  MISSING from incremental: ' + k + ' = ' + v); bad++; }
-        else if(M.canonicalAmount(other) !== M.canonicalAmount(v)){
-            console.error('  DIVERGENT ' + k + ': incremental ' + other + ' vs replay ' + v); bad++;
-        }
-    }
-    for(const k of incremental.keys())
-        if(!replay.has(k)){ console.error('  EXTRA in incremental: ' + k); bad++; }
+    const cmp = await compareIncrementalToReplay(db, overlay, touchedBlocks.map(r => Number(r.b)), hi);
+    console.log('# incremental: ' + touchedBlocks.length + ' block(s), ' + cmp.written + ' journal row(s), ' +
+                cmp.incMs.toFixed(0) + ' ms -> ' + cmp.incremental.size + ' live locked key(s)');
+    console.log('# replay:      ' + cmp.replayWrote + ' journal row(s), ' + cmp.repMs.toFixed(0) + ' ms -> ' +
+                cmp.replay.size + ' live locked key(s)');
+    for(const m of cmp.mismatches) console.error('  ' + m);
+    const bad = cmp.mismatches.length;
     if(bad){
         console.error('# FAIL: ' + bad + ' key(s) disagree between the incremental path and the arming replay');
         if(db.close) await db.close();
         process.exit(1);
     }
-    console.log('# OK: incremental and arming replay agree on all ' + replay.size + ' live key(s)');
+    console.log('# OK: incremental and arming replay agree on all ' + cmp.replay.size + ' live key(s)');
 
     // (4) The would-be balances_root, next to the committed one. In-memory node
     // store: not one SMT node is persisted.
@@ -270,7 +277,7 @@ async function main(argv){
     if(db.close) await db.close();
 }
 
-module.exports = { journalOverlay, liveSet, main };
+module.exports = { journalOverlay, liveSet, compareIncrementalToReplay, main };
 
 if(require.main === module)
     main(process.argv).catch(e => { console.error(e); process.exit(1); });
