@@ -114,3 +114,66 @@ describe('migration live-schema MODIFY guard: block comments @regression @tier1'
         assert.match(modifyClauses(statementsOf('ALTER TABLE t MODIFY n INT /*!50000 NULL */;'))[0].definition, /\/\*!50000 NULL \*\//);
     });
 });
+
+// Answer the information_schema read with the live row and a MIN probe with `min`, and
+// record every statement so a test can see whether the probe ran.
+async function probedVerdict(live, sql, min) {
+    const seen = [];
+    const conn = { query: async (text) => {
+        seen.push(text);
+        return /^SELECT MIN\(/.test(text) ? [{ m: min }] : [live];
+    } };
+    try { await assertNoLiveColumnLoss(conn, 'f.sql', statementsOf(sql)); return { message: null, seen }; }
+    catch (e) { return { message: e.message, seen }; }
+}
+
+describe('migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1', function () {
+    const signedId = liveRow({ COLUMN_TYPE: 'bigint(20)', EXTRA: 'auto_increment' });
+    const ALIGN = 'ALTER TABLE cross_chain_matches MODIFY id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT;';
+
+    it('allows the retype when no stored id is negative', async function () {
+        const got = await probedVerdict(signedId, ALIGN, 1);
+        assert.strictEqual(got.message, null);
+        assert.ok(got.seen.includes('SELECT MIN(`id`) AS m FROM `cross_chain_matches`'), 'the MIN probe must run');
+    });
+
+    it('allows the retype on an empty table and on a BigInt minimum', async function () {
+        assert.strictEqual((await probedVerdict(signedId, ALIGN, null)).message, null);
+        assert.strictEqual((await probedVerdict(signedId, ALIGN, BigInt(0))).message, null);
+    });
+
+    it('refuses the retype when a stored id is negative and names the minimum', async function () {
+        const got = await probedVerdict(signedId, ALIGN, -5);
+        assert.match(got.message, /narrows the type \(bigint -> bigint unsigned\), live MIN\(id\) is -5/);
+    });
+
+    it('still refuses a MODIFY that drops AUTO_INCREMENT while going unsigned', async function () {
+        const got = await probedVerdict(signedId, 'ALTER TABLE t MODIFY id BIGINT UNSIGNED NOT NULL;', 1);
+        assert.match(got.message, /strips AUTO_INCREMENT/);
+        assert.match(got.message, /narrows the type/);
+        assert.ok(!got.seen.some(s => /^SELECT MIN\(/.test(s)), 'an ineligible MODIFY must not probe');
+    });
+
+    it('still refuses unsigned to signed on an AUTO_INCREMENT id', async function () {
+        const live = liveRow({ COLUMN_TYPE: 'bigint(20) unsigned', EXTRA: 'auto_increment' });
+        const got = await probedVerdict(live, 'ALTER TABLE t MODIFY id BIGINT NOT NULL AUTO_INCREMENT;', 1);
+        assert.match(got.message, /narrows the type \(bigint unsigned -> bigint\)/);
+    });
+
+    it('does not count AUTO_INCREMENT inside a COMMENT literal as restated', async function () {
+        const got = await probedVerdict(signedId, "ALTER TABLE t MODIFY id BIGINT UNSIGNED NOT NULL COMMENT 'AUTO_INCREMENT';", 1);
+        assert.match(got.message, /strips AUTO_INCREMENT/);
+        assert.match(got.message, /narrows the type/);
+    });
+
+    it('still refuses a signed to unsigned retype of a column without AUTO_INCREMENT', async function () {
+        const got = await probedVerdict(liveRow({ COLUMN_TYPE: 'bigint(20)' }), 'ALTER TABLE t MODIFY n BIGINT UNSIGNED;', 1);
+        assert.match(got.message, /narrows the type \(bigint -> bigint unsigned\)/);
+        assert.ok(!got.seen.some(s => /^SELECT MIN\(/.test(s)), 'a non AUTO_INCREMENT column must not probe');
+    });
+
+    it('still refuses a narrower rank even when the id is AUTO_INCREMENT and unsigned', async function () {
+        const got = await probedVerdict(signedId, 'ALTER TABLE t MODIFY id INT UNSIGNED NOT NULL AUTO_INCREMENT;', 1);
+        assert.match(got.message, /narrows the type \(bigint -> int\)/);
+    });
+});

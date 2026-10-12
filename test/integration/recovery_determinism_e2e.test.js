@@ -18,8 +18,8 @@
  * from-genesis node A and a recovered node B over the IDENTICAL chain, where the
  * only difference is HOW the anchor reward arrives:
  *
- *   - Node A (from-genesis): processes the chain in-block, then the live hub push
- *     writes the anchor reward via the REAL createValidatorReward (source resolved
+ *   - Node A (from-genesis): processes the chain in-block, then, as the live derive
+ *     mint does, writes the anchor reward via the REAL createValidatorReward (source resolved
  *     through the on-chain stake).
  *   - Node B (recovered): the REAL AnchorRecovery.run() restores a signed archive
  *     carrying the same reward (stages it by raw source-address string into

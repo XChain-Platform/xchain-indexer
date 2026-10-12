@@ -58,7 +58,7 @@ const gateRegistry = require('../gate_registry.js');
 // anchor_proof_client/binding.js; the getanchorconfirmations page walk proveMined runs
 // before it judges lives in anchor_proof_client/page_walk.js.
 const {
-    ATTESTED_VERSIONS, REWARD_FAMILY_VERSIONS, isRewardCandidateRow, judgeAnchors
+    ATTESTED_VERSIONS, REWARD_FAMILY_VERSIONS, isRewardCandidateRow, judgeAnchors, rewardFamily
 } = require('./anchor_proof_client/binding.js');
 const { walkAnchorPages } = require('./anchor_proof_client/page_walk.js');
 
@@ -179,6 +179,10 @@ class AnchorProofClient {
         // and "cannot be proven" is a property of the ROW, identical on every node, so this
         // is a deterministic permanent skip rather than a defer.
         if(!/^[0-9a-f]{64}$/.test(txid)) return 'rejected';
+        // A reward_type naming no live family is the same kind of row property: judgeAnchors
+        // rejects it whatever DOGE serves, so answer before any I/O rather than defer the
+        // block on a DOGE outage for a reward that can never mint.
+        if(rewardFamily(e.rewardType) === null) return 'rejected';
         if(!this.url) return 'unknown';                       // fail closed: defer, never pay unproven
 
         let memoKey = this.memoKey(txid, e);

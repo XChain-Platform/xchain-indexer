@@ -32,7 +32,8 @@ const { getLogger } = require('../../observability/index.js');
 function stakeModeFilter(config, blockIndex, opts){
     if(blockIndex === undefined || blockIndex === null) return { clause: '', args: [] };
     if(opts && opts.reuseBlockingOnly){
-        // STAKE v1 KEY-REUSE path (stake_key_reuse_activation.js), and the ONLY mode
+        // STAKE v1 KEY-REUSE path (gate row stake_key_reuse_activation.STAKE_KEY_REUSE_ACTIVATION,
+        // read by validateFreeKey in src/actions/stake/capability_stake.js), and the ONLY mode
         // here that applies no activation filter at all. It answers "is this key
         // FREE", not "is this key active", so it must count EVERY valid stakes row
         // the pubkey has ever held and exclude only the rows that have genuinely
@@ -50,7 +51,8 @@ function stakeModeFilter(config, blockIndex, opts){
         // COOLDOWN_BLOCKS) rather than joined to unstakes.cooldown_end_block: one row
         // set, no join, no dependence on an unstakes row existing, and the resulting
         // ACTIVATION_DELAY_BLOCKS of slack falls on the REFUSING side, which is the
-        // legacy behaviour. The rationale lives in stake_key_reuse_activation.js.
+        // legacy behaviour. This comment is the full statement of that rationale;
+        // validateFreeKey holds the caller's half (why the armed branch needs this mode).
         //
         // EXISTENCE ONLY. The GROUP BY aggregate is meaningless in this mode: the SUM
         // spans pending and cooled-down rows alike, so callers must read the return

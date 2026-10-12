@@ -72,6 +72,28 @@ function findRewardCalls(source) {
     return found;
 }
 
+function isQualifierCall(node) {
+    return !!node && node.type === 'CallExpression' &&
+        (hasMemberName(node.callee, 'rewardRoundQualifier') ||
+         (node.callee.type === 'Identifier' && node.callee.name === 'rewardRoundQualifier'));
+}
+
+// The body of the object-literal method `name` in `source`, or null.
+function methodBody(source, name) {
+    const ast = acorn.parse(source, { ecmaVersion: 'latest', sourceType: 'script' });
+    let body = null;
+    walkSyntax(ast, (node) => {
+        if(node.type === 'Property' && node.key && node.key.name === name) body = node.value;
+    });
+    return body;
+}
+
+function containsQualifierCall(node) {
+    let hit = false;
+    walkSyntax(node, (n) => { if(isQualifierCall(n)) hit = true; });
+    return hit;
+}
+
 function isRollcallPublishWriter(call) {
     const args = call.node.arguments;
     return call.kind === 'calls' &&
@@ -101,6 +123,21 @@ describe('createValidatorReward call-site census @regression @tier1', function (
         const writers = findRewardCalls(source).filter(isRollcallPublishWriter);
         assert.strictEqual(writers.length, 1,
             'rollcall_publish must stamp derive_block_index with the close block');
+    });
+
+    it('keys round_qualifier through rewardRoundQualifier at both anchor-reward writers', function () {
+        // The derive mint: the qualifier is createValidatorReward's 8th argument.
+        const mint = fs.readFileSync(path.join(SRC, 'consensus', 'anchor_reward_derive', 'mint_row.js'), 'utf8');
+        const calls = findRewardCalls(mint).filter(site => site.kind === 'calls');
+        assert.strictEqual(calls.length, 1, 'mint_row.js holds exactly one createValidatorReward call');
+        assert.ok(isQualifierCall(calls[0].node.arguments[7]),
+            'the derive mint must pass rewardRoundQualifier(...) as round_qualifier');
+        // Recovery's staged-reward writer builds its INSERT by hand, so look inside the method.
+        const rewards = fs.readFileSync(path.join(SRC, 'db', 'rewards', 'index.js'), 'utf8');
+        const body = methodBody(rewards, 'applyPendingRewardsForAddress');
+        assert.ok(body, 'applyPendingRewardsForAddress must exist in db/rewards/index.js');
+        assert.ok(containsQualifierCall(body),
+            'recovery materialization must key round_qualifier through rewardRoundQualifier');
     });
 
     it('ignores call-like comments and strings', function () {

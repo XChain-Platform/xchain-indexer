@@ -17,8 +17,10 @@
 -- Hub-authored, append-only federation-state table mirrored to every indexer via
 -- hub_db_sync (HUB_STATE_TABLES, exactly like state_checkpoints: id-parity INSERT
 -- IGNORE, never retracted). The hub INSERTs ONE row per attested reward tuple after
--- the XANCPUB publisher-attestation quorum resolves (v4/v5 per-chain checkpoint reward
--- and v6 archive reward). The BTC indexer keys its reward derivation on these rows:
+-- the XANCPUB publisher-attestation quorum resolves: an anchor_bundle row per per-network
+-- checkpoint bundle and an anchor_archive row per archive batch (retired anchor_<CHAIN>
+-- rows may remain mirrored, but no live anchor proves them, so they derive nothing).
+-- The BTC indexer keys its reward derivation on these rows:
 -- it re-verifies publisher_attestations against its OWN locally-computed oracle_publish
 -- set at snapshot_block (the mirror is TRANSPORT, not trust) and materializes the
 -- COLLECT-spendable validator_rewards row at block_index = snapshot_block, where the
@@ -51,10 +53,10 @@
 
 CREATE TABLE anchor_reward_attestations (
     id                     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, -- mirror cursor (matches hub id)
-    chain                  VARCHAR(10)  NOT NULL,                    -- reward's chain: BTC/LTC/DOGE (or DOGE for archive)
+    chain                  VARCHAR(10)  NOT NULL,                    -- DOGE (the anchor chain) for bundle and archive; BTC/LTC/DOGE on retired anchor_<CHAIN>
     network                VARCHAR(20)  NOT NULL,                    -- mainnet/testnet/regtest
-    reward_type            VARCHAR(32)  NOT NULL,                    -- anchor_<CHAIN> (v4/v5) or anchor_archive (v6)
-    round_reference        BIGINT UNSIGNED NOT NULL,                 -- CHECKPOINT_SEQ (v4/v5) or MATCH_BATCH_SEQ (v6)
+    reward_type            VARCHAR(32)  NOT NULL,                    -- anchor_bundle or anchor_archive (live); anchor_<CHAIN> is retired
+    round_reference        BIGINT UNSIGNED NOT NULL,                 -- bundle: SNAPSHOT_BLOCK; archive: MATCH_BATCH_SEQ; retired per-chain: CHECKPOINT_SEQ
     snapshot_block         BIGINT UNSIGNED NOT NULL,                 -- BTC block selecting the oracle_publish set + reward block_index
     publisher              VARCHAR(64)  NOT NULL,                    -- elected publisher pubkey (lowercase hex) credited the reward
     reward_amount          VARCHAR(32)  NOT NULL,                    -- audit only; the indexer credits the FROZEN constant, never this wire value

@@ -272,7 +272,7 @@ function registerRoundQualifierTests3() {
             await credit(PK_SMALL, type, SNAP_OLD, SNAP_OLD);
             assert.deepStrictEqual((await credited(type, SNAP_OLD)).map(r => r.qualifier), [0, 0]);
 
-            // Called the legacy 4-argument way, exactly as api.js's push path still does.
+            // Called the 4-argument way with no qualifier, which must land on qualifier 0.
             const removed = await db.reconcileAnchorRewardWinner(SNAP_OLD, type, SNAP_OLD + 1, null);
             assert.strictEqual(removed, 1);
             assert.deepStrictEqual(await credited(type, SNAP_OLD), [

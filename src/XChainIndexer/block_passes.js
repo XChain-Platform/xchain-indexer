@@ -70,7 +70,8 @@ module.exports = {
             await this.actions.processTransaction(tx);
     },
 
-    // Expirations, BET, the cross-chain DEX settlement and the pinned XBRIDGE settle pass.
+    // Expirations, BET, the cross-chain DEX settlement, the pinned list-share pass and the
+    // pinned XBRIDGE settle pass.
     async runSettlementPasses({ blockToParse, blockTime }){
         // Check for any expired items (orders, swaps, dispensers)
         await this.util.processExpirations(this.actions, this.indexerDb, blockToParse, blockTime);

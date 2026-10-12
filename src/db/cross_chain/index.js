@@ -25,6 +25,7 @@ const path    = require('path');
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
 const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
         CROSS_SETTLE_MAX_PER_BLOCK,
+        XCALL_MAX_CALLS_PER_BLOCK,
         ORACLE_VM_ROUND_WINDOW,
         ORACLE_VM_MAX_ROWS } = require('../../protocol/constants.js');
 const diag = require('../../actions/anchor/diagnostic_events.js');
@@ -116,7 +117,9 @@ module.exports = {
         // re-dispatch a call already executed. Compare both sides lowercased. No-op for all-
         // lowercase data (no consensus change on the current chain).
         let executedSet = new Set(executed.map(r => String(r.call_id).toLowerCase()));
-        return calls.filter(c => !executedSet.has(String(c.call_id).toLowerCase())).slice(0, Number(limit) || 25);
+        // Default to the protocol cap, never a literal copy (see getEffectiveUnsettledMatches).
+        return calls.filter(c => !executedSet.has(String(c.call_id).toLowerCase()))
+                    .slice(0, Number(limit) || XCALL_MAX_CALLS_PER_BLOCK || 25);
     },
 
     // Effective, unprocessed result rows for requests THIS chain originated -
@@ -137,7 +140,8 @@ module.exports = {
     // rows accumulate on the mirror and are re-scanned every block), a residual cost that
     // a cross-database exclusion cannot address without a cross-DB join.
     async getEffectiveUnprocessedCallResults(coin, network, block_time, limit, block_index){
-        let cap = Number(limit) || 25;
+        // Default to the protocol cap, never a literal copy (see getEffectiveUnsettledMatches).
+        let cap = Number(limit) || XCALL_MAX_CALLS_PER_BLOCK || 25;
         let mirror = this.mirrorDb();
         // doQueryStrict (not doQuery) on both branches: these are CONSENSUS input reads. The
         // mirror branch never holds a transaction, so doQuery turns a transient DB fault into

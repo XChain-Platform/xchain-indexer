@@ -324,6 +324,34 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
     });
 
+    it('the bundled VM REST_PATTERN_METER gate flips at the indexer REST_PATTERN_METER row instant per network', function(){
+        // The VM meters rest destructuring and the indexer refuses banned-rest deploys on
+        // one flag day with its own future instant, so it sits outside GATE_EXPORTS above.
+        // The VM side pins the same pair; checking it here too means a repin that moves
+        // only the indexer row goes red in this repo's CI, not later in the VM's.
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        assert.ok(vm && full,
+            'REST_PATTERN_METER coupling requires the full xchain-vm package surface: ' +
+            (pkgErr ? String(pkgErr.message) : 'package not present') +
+            (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+        assert.strictEqual(typeof vm.isRestPatternMeterActive, 'function',
+            'xchain-vm did not export isRestPatternMeterActive (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.REST_PATTERN_METER');
+        assert.strictEqual(vm.REST_PATTERN_METER_GATE_BLOCK_TIME, row.mainnet_time,
+            'xchain-vm REST_PATTERN_METER_GATE_BLOCK_TIME != indexer REST_PATTERN_METER mainnet_time; repin both repos in lockstep');
+        // Probe the VM's own predicate at each network's indexer instant and one second
+        // before it, so a network the VM arms differently from the indexer row disagrees.
+        for(const net of ['mainnet', 'testnet', 'regtest']){
+            const at = row[net + '_time'];
+            assert.ok(Number.isInteger(at) && at >= 0, net + '_time is not an armed instant: ' + at);
+            assert.strictEqual(vm.isRestPatternMeterActive(net, at), true,
+                'xchain-vm REST_PATTERN_METER is inactive for ' + net + ' at the indexer instant ' + at);
+            if(at > 0) assert.strictEqual(vm.isRestPatternMeterActive(net, at - 1), false,
+                'xchain-vm REST_PATTERN_METER is active for ' + net + ' one second before the indexer instant ' + at);
+        }
+    });
+
     it('the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp', function(){
         // Deterministic (time-gated) price_snapshots selection for native-coin fee
         // validation on non-reference chains flips at this flag-day. It is an indexer-internal

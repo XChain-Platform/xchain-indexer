@@ -39,6 +39,8 @@ const SQL_DIR = path.join(__dirname, '../../src/sql');
 const MIGRATIONS_DIR = path.join(SQL_DIR, 'migrations');
 const COLUMN_BASELINE = require('../fixtures/schema-baseline-origin.json').baseline;
 const INDEX_BASELINE = require('../fixtures/schema-index-baseline-origin.json').baseline;
+const LITERAL_ORIGIN = require('../fixtures/schema-literal-origin.json').literals;
+const SQL_LITERAL = /'(?:''|\\.|[^'\\])*'/g;
 const ORIGIN_PRIMARY_KEYS = {
     anchor_actions: ['action_index'],
     pending_hub_pushes: ['id'],
@@ -61,7 +63,6 @@ function scopedDbName(label) {
 
 const FRESH_DB = scopedDbName('fresh');
 const MIGRATED_DB = scopedDbName('migrated');
-const CURRENT_COLUMN_SPECS = new Map();
 
 function testIndexer() {
     return {
@@ -80,25 +81,15 @@ function currentTableTail(table) {
     return match[1].trim();
 }
 
+// Restore the origin-era literal case the column anchor folded away, by position, from the
+// pinned literal anchor (never from today's definition, which would hide a recase).
 function agedColumnSpec(table, column) {
-    if (!CURRENT_COLUMN_SPECS.has(table)) {
-        const raw = fs.readFileSync(path.join(SQL_DIR, table + '.sql'), 'utf8');
-        const currentColumns = Database.prototype.parseExpectedColumns.call(
-            { stripSqlLineComments: Database.prototype.stripSqlLineComments }, raw);
-        CURRENT_COLUMN_SPECS.set(table, new Map(currentColumns.map(entry => {
-            const spec = entry.definition.replace(
-                new RegExp('^\\s*`?' + entry.name + '`?\\s*', 'i'), '');
-            return [entry.name.toLowerCase(), spec];
-        })));
-    }
-    const currentSpec = CURRENT_COLUMN_SPECS.get(table).get(column.name.toLowerCase());
-    // Keep a retired column in the aged DB as the anchor froze it: the replay below must
-    // then carry its dated DROP, or the fresh-vs-migrated comparison fails on the leftover.
-    if (!currentSpec) return column.spec;
-    const currentLiterals = new Map(
-        (currentSpec.match(/'(?:''|\\\\.|[^'])*'/g) || []).map(literal => [literal.toUpperCase(), literal]));
-    return column.spec.replace(/'(?:''|\\\\.|[^'])*'/g,
-        literal => currentLiterals.get(literal.toUpperCase()) || literal);
+    const anchorLiterals = column.spec.match(SQL_LITERAL) || [];
+    const originLiterals = LITERAL_ORIGIN[table + '.' + column.name] || [];
+    assert.strictEqual(originLiterals.length, anchorLiterals.length,
+        table + '.' + column.name + ': schema-literal-origin.json does not carry this column\'s literals');
+    let i = 0;
+    return column.spec.replace(SQL_LITERAL, () => originLiterals[i++]);
 }
 
 function quotedIndexColumn(spec, availableColumns) {
