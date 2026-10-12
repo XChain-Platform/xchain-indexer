@@ -15442,6 +15442,14 @@
       "ADDRESS_PARAMS parity with the consensus-pinned coins registry LTC/testnet base58 prefixes + HRP equal the canonical net object",
       "ADDRESS_PARAMS parity with the consensus-pinned coins registry covers exactly the allowed coins and networks"
     ],
+    "fe8f001bb389e37d": [
+      "armed_map/vm_gate_coverage: every public VM gate is classified classifies every exported activation and gate time exactly once",
+      "armed_map/vm_gate_coverage: every public VM gate is classified pins every alias through its canonical VM mirror",
+      "armed_map/vm_gate_coverage: every public VM gate is classified pins every direct mirror as an xchain-vm armed-map row",
+      "armed_map/vm_gate_coverage: every public VM gate is classified pins every registry twin in the armed-map manifest",
+      "armed_map/vm_gate_coverage: every public VM gate is classified requires every known gap to state why it is not pinned",
+      "armed_map/vm_gate_coverage: every public VM gate is classified walks own and prototype statics"
+    ],
     "fecd6ae9e0eccb90": [
       "Order_Match action handler @regression @tier2 LEGACY (flag OFF): the mis-paired native match still settles (pre-flag-day replay parity)",
       "Order_Match action handler @regression @tier2 native coin GET_TICK on orderInfo \u2192 pending_coinpay, matchInfo is coin payer",
@@ -15536,8 +15544,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1270,
-      "titleCount": 12993,
+      "fileCount": 1271,
+      "titleCount": 12999,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16146,6 +16154,7 @@
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
         "test/unit/consensus/armed_map/manifest.test.js": "65019f130fd744f9",
+        "test/unit/consensus/armed_map/vm_gate_coverage.test.js": "fe8f001bb389e37d",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
