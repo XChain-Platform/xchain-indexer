@@ -150,7 +150,7 @@ describe('Hash coverage guard @regression', function () {
 
 describe('Hash coverage guard @regression', function () {
     describe('content-parity coverage declaration', function () {
-        it('declares every state-hash table and its later-block mutation columns', function () {
+        it('in-place parity columns stay declared apart and match every order_matches UPDATE', function () {
             assert.deepStrictEqual(lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS, {
                 anchor_actions:       ['status_id'],
                 attests:              ['request_status', 'resolved_block', 'callback_execute_action_index',
@@ -182,9 +182,6 @@ describe('Hash coverage guard @regression', function () {
             assert.deepStrictEqual(
                 lifecycle.contentParityMutableTables().filter(t => !(t in lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS)),
                 []);
-        });
-
-        it('keeps order_matches parity columns apart and matches every UPDATE', function () {
             // Kept out of the by-design map so the end-to-end byte oracle still compares them.
             assert.ok(!lifecycle.CONTENT_PARITY_EXCLUDED_COLUMNS.order_matches);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('order_matches'), ['status_id']);
