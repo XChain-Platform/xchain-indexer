@@ -247,6 +247,49 @@ describe('ci fast selector', function () {
     }
   });
 
+  it('replaces a vendored VM symlink without writing through it', function () {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'vendor-vm-symlink-'));
+    try {
+      const indexer = path.join(cwd, 'xchain-indexer');
+      const canonical = path.join(cwd, 'xchain-vm');
+      const external = path.join(cwd, 'external-vendored-vm');
+      writeScratchFile(
+        indexer,
+        'bin/vendor-vm.sh',
+        fs.readFileSync(path.resolve(__dirname, '../vendor-vm.sh'), 'utf8')
+      );
+      writeScratchFile(
+        canonical,
+        'src/consensus-runtime.js',
+        "const CONSENSUS_VERSION = '7';\n"
+      );
+      writeScratchFile(canonical, 'package.json', '{"name":"xchain-vm"}\n');
+      writeScratchFile(canonical, 'tmp/lanes/ignored', 'scratch\n');
+      writeScratchFile(external, 'outside-marker', 'unchanged\n');
+      fs.symlinkSync(external, path.join(indexer, 'xchain-vm'), 'dir');
+
+      const result = spawnSync('bash', [path.join(indexer, 'bin/vendor-vm.sh'), 'stage'], {
+        encoding: 'utf8',
+        env: { ...process.env, XCHAIN_VM_SOURCE: canonical }
+      });
+
+      assert.strictEqual(result.status, 0, result.stderr);
+      const destination = path.join(indexer, 'xchain-vm');
+      assert.strictEqual(fs.lstatSync(destination).isSymbolicLink(), false);
+      assert.strictEqual(
+        fs.readFileSync(path.join(external, 'outside-marker'), 'utf8'),
+        'unchanged\n'
+      );
+      assert.strictEqual(
+        fs.readFileSync(path.join(destination, 'package.json'), 'utf8'),
+        '{"name":"xchain-vm"}\n'
+      );
+      assert.strictEqual(fs.existsSync(path.join(destination, 'tmp')), false);
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it('replays develop history, compares narrowing, and checks required selections', function () {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-fast-select-replay-'));
     try {

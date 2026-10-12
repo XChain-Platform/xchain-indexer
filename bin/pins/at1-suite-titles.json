@@ -11918,6 +11918,12 @@
       "integration harness VM block rhythm through production's passes leaves the cache open when a pass throws inside the window, and the next attempt opens a fresh one",
       "integration harness VM block rhythm through production's passes opens the cache first inside the block and closes it after every pass group, just before createBlock"
     ],
+    "c18d29a26d5a4f54": [
+      "slashContractStake active-first gate @regression @tier1 armed: debits visible active stake before a newer pending-activation row",
+      "slashContractStake active-first gate @regression @tier1 armed: falls through to pending stake only after exhausting active stake",
+      "slashContractStake active-first gate @regression @tier1 is armed on regtest and at the per-chain testnet cut, while mainnet stays inert",
+      "slashContractStake active-first gate @regression @tier1 legacy: keeps action-index LIFO and therefore debits pending stake first"
+    ],
     "c1df08e38339ad37": [
       "ANCHOR v3 empty fold rejection keeps a one-section fold valid",
       "ANCHOR v3 empty fold rejection preserves the historical empty-fold verdict below activation",
@@ -15530,8 +15536,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1269,
-      "titleCount": 12989,
+      "fileCount": 1270,
+      "titleCount": 12993,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16216,6 +16222,7 @@
         "test/unit/contracts/emission_bounds_vm_parity.test.js": "275cd1720c6c0c1f",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
+        "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
         "test/unit/contracts/stake_snapshot_strings.test.js": "a0a533092c7a2e98",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",

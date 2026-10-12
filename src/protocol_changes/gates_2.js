@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Indexer-only registry rows, part 2 of 3: gated_handoff_ref_activation to protocol/constants
+ * Indexer-only registry rows, part 2 of 3: contract_slash_active_first_activation to protocol/constants
  *
  * One part of the indexer-only registry rows: every data export of a module
  * that no other repo twins, as `addGate(key, unit, table)` calls at column
@@ -27,6 +27,12 @@
 'use strict';
 
 const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
+
+// Contract SLASH consumes snapshot-visible active rows before pending activation rows.
+addGate('contract_slash_active_first_activation.CONTRACT_SLASH_ACTIVE_FIRST_ACTIVATION', 'height', {
+    mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0,
+});
 
 // gated_handoff_ref_activation
 // Per-network activation, interpreted against the block's consensus timestamp
