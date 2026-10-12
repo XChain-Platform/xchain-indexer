@@ -234,6 +234,62 @@ function assertVmConsensusEpoch(vmModule, expected = EXPECTED_VM_CONSENSUS_VERSI
             'deliberately moving epochs, bump EXPECTED_VM_CONSENSUS_VERSION with that coordinated release.');
 }
 
+// The third-party packages whose behaviour reaches contract-observable bytes, pinned to the exact
+// versions this indexer's package.json declares (and the root overrides force for decimal.js).
+// acorn parses and rewrites contract source, mathjs and decimal.js produce the numeric results a
+// contract can hash into state; a different release on one validator can commit different bytes
+// for the same block. Moves only with a coordinated release, together with package.json.
+const CONSENSUS_DEPENDENCIES = Object.freeze({
+    'acorn':      '8.18.0',
+    'mathjs':     '15.2.0',
+    'decimal.js': '10.4.3'
+});
+
+// The installed version of one package, resolved from xchain-vm's tree first (the VM is the
+// consumer whose copy decides the bytes) and then from this module's own paths. Returns null
+// when the package is not installed or its manifest is unreadable.
+function installedPackageVersion(name){
+    const roots = [];
+    try {
+        roots.push(path.dirname(require.resolve('xchain-vm/package.json')));
+    } catch(e) {
+        // VM not resolvable: fall through to this module's own paths.
+    }
+    for(const from of roots.concat([__dirname])){
+        try {
+            const manifest = require.resolve(name + '/package.json', { paths: [from] });
+            return JSON.parse(fs.readFileSync(manifest, 'utf8')).version;
+        } catch(e) {
+            // Try the next root.
+        }
+    }
+    return null;
+}
+
+// Consensus-dependency gate: refuse to run contracts when a pinned dependency is missing or
+// resolves to any version other than its pin. Same shape and reasoning as the epoch gate above:
+// CI cannot protect a running validator, so the check lives at boot, throws, and has no bypass
+// flag. A dependency that cannot be resolved is a mismatch, not a skip. Pure and dependency-
+// injected (`resolveVersion`, `pins`) so the gate is unit-testable.
+function assertConsensusDependencies(vmModule, resolveVersion = installedPackageVersion, pins = CONSENSUS_DEPENDENCIES){
+    // A VM that failed to load is assertVmRuntimeLoadable's refusal, not this one.
+    if(!vmModule)
+        return;
+    const bad = [];
+    for(const name of Object.keys(pins)){
+        const actual = resolveVersion(name);
+        if(actual !== pins[name])
+            bad.push(name + ' ' + (actual ? JSON.stringify(actual) : 'not installed') +
+                ' (expected ' + JSON.stringify(pins[name]) + ')');
+    }
+    if(bad.length)
+        throw new Error('CONSENSUS DEPENDENCY MISMATCH: ' + bad.join('; ') + '. These packages shape ' +
+            'contract-observable bytes, so running on another version would commit different state and ' +
+            'FORK this node from the fleet. Reinstall with npm ci and re-vendor the VM (npm run ' +
+            'vendor:vm); if the fleet is deliberately moving versions, change CONSENSUS_DEPENDENCIES ' +
+            'and package.json together in that coordinated release.');
+}
+
 module.exports = {
     bindingObjectFormat,
     bindingPathFromError,
@@ -242,5 +298,8 @@ module.exports = {
     assertVmRuntimeLoadable,
     assertConsensusRuntime,
     EXPECTED_VM_CONSENSUS_VERSION,
-    assertVmConsensusEpoch
+    assertVmConsensusEpoch,
+    CONSENSUS_DEPENDENCIES,
+    installedPackageVersion,
+    assertConsensusDependencies
 };
