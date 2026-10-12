@@ -120,6 +120,7 @@ function collectAttestBatchHead(db, B){
             "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
             "JOIN actions ca ON ca.action_index = c.action_index AND ca.source_id = pa.source_id " +
             "WHERE c.request_id = p.request_id AND c.version = ? AND c.batch_chunk_index IS NOT NULL " +
+            "AND c.batch_total_chunks = p.batch_total_chunks AND c.batch_crc32 = p.batch_crc32 " +
             "ORDER BY c.action_index DESC LIMIT 1 " +
         ") = ? ORDER BY p.action_index ASC",
         ['%' + ATTEST_BATCH_COMPLETION_STAMP, ATTEST_BATCH_HEAD_VERSION, ATTEST_BATCH_CONTINUATION_VERSION, B]);
