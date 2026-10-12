@@ -78,7 +78,9 @@ function parseArgs(argv){
 // back from it, leaving every other query untouched and read-only. This is what
 // lets the incremental path be replayed over history without touching the DB.
 function journalOverlay(db){
-    const rows = [];                       // {address, tick, locked_amount, block_index, id}
+    const rows = [];                       // {address_id, tick_id, address, tick, locked_amount, block_index, id}
+    const addresses = new Map();           // index id -> canonical string
+    const ticks = new Map();               // index id -> canonical string
     let nextId = 1;
     // BOTH readers are wrapped. The writer inserts through doQuery while the
     // reader (escrow_leaf_subtree.js) reads through doQueryStrict, so
@@ -89,8 +91,12 @@ function journalOverlay(db){
     const realStrict = db.doQueryStrict ? db.doQueryStrict.bind(db) : realQuery;
     const overlay = async function(sql, args, passthrough){
         if(sql.indexOf('INSERT INTO escrow_leaf_journal') === 0){
-            rows.push({ id: nextId++, address: args[0], tick: args[1],
-                        locked_amount: args[2], block_index: args[3] });
+            for(let i = 0; i < args.length; i += 4){
+                const addressId = args[i], tickId = args[i + 1];
+                rows.push({ id: nextId++, address_id: addressId, tick_id: tickId,
+                            address: addresses.get(String(addressId)), tick: ticks.get(String(tickId)),
+                            locked_amount: args[i + 2], block_index: args[i + 3] });
+            }
             return [];
         }
         if(sql.indexOf('FROM escrow_leaf_journal') !== -1){
@@ -110,16 +116,28 @@ function journalOverlay(db){
                     if(r.block_index === args[0]) seen.set(r.address + '\t' + r.tick, { address: r.address, tick: r.tick });
                 return Array.from(seen.values());
             }
-            // Live set.
+            // Latest rows by index-id pair for the writer's set-based prior read.
             const max = new Map();
             for(const r of rows){
-                const k = r.address + '\t' + r.tick;
+                const k = String(r.address_id) + '\t' + String(r.tick_id);
                 const cur = max.get(k);
                 if(!cur || r.id > cur.id) max.set(k, r);
             }
+            if(sql.indexOf('SELECT j.address_id AS address_id') === 0){
+                const asked = new Set(args.map(String));
+                return Array.from(max.values())
+                    .filter(r => asked.has(String(r.address_id)) && asked.has(String(r.tick_id)))
+                    .map(r => ({ address_id: r.address_id, tick_id: r.tick_id, locked_amount: r.locked_amount }));
+            }
+            // Live set for the escrow-leaf reader.
             return Array.from(max.values()).map(r => ({ address: r.address, tick: r.tick, locked_amount: r.locked_amount }));
         }
-        return passthrough(sql, args);
+        const result = await passthrough(sql, args);
+        if(sql.indexOf('FROM index_addresses a WHERE a.address IN') !== -1)
+            for(const r of (result || [])) addresses.set(String(r.id), String(r.address));
+        if(sql.indexOf('FROM index_tickers t WHERE t.tick IN') !== -1)
+            for(const r of (result || [])) ticks.set(String(r.id), String(r.tick));
+        return result;
     };
     db.doQuery       = async (sql, args) => overlay(sql, args, realQuery);
     db.doQueryStrict = async (sql, args) => overlay(sql, args, realStrict);
@@ -139,8 +157,8 @@ function liveSet(rows){
     return live;
 }
 
-(async () => {
-    const opts = parseArgs(process.argv);
+async function main(argv){
+    const opts = parseArgs(argv);
     const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');
@@ -250,4 +268,9 @@ function liveSet(rows){
                     (committed[0].balances_root === v1Root ? '  (matches the v1 rebuild)' : '  (differs: tip moved since the rebuild read)'));
     console.log('# nothing was written: no journal row, no SMT node, no root');
     if(db.close) await db.close();
-})().catch(e => { console.error(e); process.exit(1); });
+}
+
+module.exports = { journalOverlay, liveSet, main };
+
+if(require.main === module)
+    main(process.argv).catch(e => { console.error(e); process.exit(1); });
