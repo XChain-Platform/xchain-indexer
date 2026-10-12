@@ -15207,6 +15207,10 @@
       "stallFields() train activation report defaults absent optional fields to null without erasing height zero",
       "stallFields() train activation report reports an unevaluated train activation before any block is evaluated"
     ],
+    "fb66a40be5e24b51": [
+      "escrow journal shadow dry run: batched lock history @regression drives the dry run, the XCHAIN_ESC leaves and a contract-state proof end to end",
+      "escrow journal shadow dry run: batched lock history @regression retains every batched lock so a later release is not replayed before its lock"
+    ],
     "fbbf1fb377a41e64": [
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE callback manifest probe admission accepts cap-minus-one and cap contracts with one reused probe VM",
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE callback manifest probe admission follows an arm of the configured coin slot alone",
@@ -15456,8 +15460,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1259,
-      "titleCount": 12935,
+      "fileCount": 1260,
+      "titleCount": 12937,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16083,6 +16087,7 @@
         "test/unit/consensus/equivocation/equiv_price_canonical.test.js": "a324b1eb4aa93061",
         "test/unit/consensus/equivocation/equiv_xcall_canonical.test.js": "93b9e527a571fc32",
         "test/unit/consensus/equivocation/equivocation_header.test.js": "3ad67665f530b06c",
+        "test/unit/consensus/escrow_journal_release_before_lock.test.js": "fb66a40be5e24b51",
         "test/unit/consensus/gates/mirror_admission_margin_boundary.test.js": "5ad6c4b0c28cb058",
         "test/unit/consensus/gates/mirror_admission_margin_cross_repo.test.js": "ed6f0e05cd4ccaef",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
