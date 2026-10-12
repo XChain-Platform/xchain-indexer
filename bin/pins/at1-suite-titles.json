@@ -1518,6 +1518,12 @@
       "BATCH MINT cap probeTickerId() restores suppression and propagates a lookup error",
       "BATCH MINT cap probeTickerId() suppresses id creation during the lookup and restores it afterward"
     ],
+    "1eb17536e3364766": [
+      "Security: ATTEST response mirror boot guard @regression @tier1 does not apply the BTC-only response-mirror refusal to another chain",
+      "Security: ATTEST response mirror boot guard @regression @tier1 does not apply the response-mirror refusal on unpinned mainnet",
+      "Security: ATTEST response mirror boot guard @regression @tier1 refuses BTC regtest without a hub database source",
+      "Security: ATTEST response mirror boot guard @regression @tier1 refuses BTC testnet without a hub database source"
+    ],
     "1ee272a3d0a523fd": [
       "coverage ratchet floors coverage includes files not loaded by the test suite",
       "coverage ratchet floors coverage loads the shared Mocha bootstrap",
@@ -15450,8 +15456,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1258,
-      "titleCount": 12931,
+      "fileCount": 1259,
+      "titleCount": 12935,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16637,6 +16643,7 @@
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
         "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
+        "test/unit/security/configuration/response_mirror_boot_guard.test.js": "1eb17536e3364766",
         "test/unit/security/configuration/startup_validation.test.js": "9b13c5407b7bccf8",
         "test/unit/security/input-validation/negative_amounts.test.js": "d6f6a4b7d2e1a81e",
         "test/unit/security/input-validation/parameter_injection.test.js": "fe3fce070c5e1bad",
