@@ -106,9 +106,7 @@ async function collectBetStatus(db, B){
 // Attest batch-head completion stamps: v5 heads whose verdict was re-stamped when
 // the completing v6 continuation landed at block B. The head's own action_index is
 // in an earlier block, so no action-scoped hash sees the flip. The completing
-// continuation is the author's last valid chunk of the head's own encoding (same
-// chunk total and crc32, so a window republished in a new encoding does not
-// re-key the old head), the same author and validity scope restoreStampedAttestHeads
+// continuation is the author's last valid chunk, the same author and validity
 // scope restoreStampedAttestHeads resets by; the status is hashed as its resolved
 // string, never its surrogate id, and action_index is a total order. Each stamp is
 // bound to the batch it completes by the head's declared chunk total and body crc32.
