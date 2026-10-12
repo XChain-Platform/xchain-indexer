@@ -10,7 +10,7 @@
 //
 // DISPENSER Format 2 refill: the controller guard runs on a refill of a
 // controller-bound token only once the DISPENSER_REFILL protocol change is
-// active; the row is unarmed on mainnet and testnet.
+// active; the row is unarmed on mainnet and armed on testnet by the release cut.
 // Part of the Dispenser suite; see ../dispenser.test.js.
 
 process.env.INDEXER_COIN = 'BTC';
@@ -97,12 +97,18 @@ describe('Dispenser refill controller guard @regression @tier2', function () {
         assert.strictEqual(guardUtil.controllerActionClass('DISPENSER_REFILL'), 'trade');
     });
 
-    it('DISPENSER_REFILL is unarmed on mainnet and testnet, so it is inactive there', async function () {
-        for (const network of ['mainnet', 'testnet']) {
-            const pc = new ProtocolChanges({ config: { NETWORK: network }, util: {}, decoderDb: { getBlockTime: async () => 4102444800 }, indexerDb: {} });
+    it('DISPENSER_REFILL is unarmed on mainnet and active on testnet from its armed time', async function () {
+        const enabledAt = async (network, blockTime) => {
+            const pc = new ProtocolChanges({ config: { NETWORK: network }, util: {}, decoderDb: { getBlockTime: async () => blockTime }, indexerDb: {} });
             assert.strictEqual(pc.isDefined('DISPENSER_REFILL'), true, network);
-            assert.strictEqual(await pc.isEnabled('DISPENSER_REFILL', 1), false, network);
-        }
+            return pc.isEnabled('DISPENSER_REFILL', 1);
+        };
         assert.strictEqual(ProtocolChanges.DISPENSER_REFILL_MAINNET_TIME, ProtocolChanges.UNARMED);
+        assert.strictEqual(await enabledAt('mainnet', 4102444800), false, 'mainnet');
+        const armed = ProtocolChanges.get('protocol_changes.changes.DISPENSER_REFILL').testnet_time;
+        assert.ok(Number.isFinite(armed) && armed > 1 && armed !== ProtocolChanges.UNARMED, 'testnet is armed');
+        assert.strictEqual(await enabledAt('testnet', armed), true, 'testnet at the armed time');
+        assert.strictEqual(await enabledAt('testnet', armed - 1), false, 'testnet below the armed time');
+        assert.strictEqual(await enabledAt('testnet', 1), false, 'testnet at time 1');
     });
 });

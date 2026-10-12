@@ -114,10 +114,15 @@ describe('getContractStakeDataForVM() slash-window cap @regression @tier1', func
 });
 
 describe('STAKE_SNAPSHOT_SLASH_WINDOW registry row @regression @tier1', function () {
-    it('ships UNARMED on mainnet and testnet', function () {
+    it('ships UNARMED on mainnet and armed on testnet at a cut instant', async function () {
         const row = protocolChanges.get(ROW);
         assert.strictEqual(row.mainnet_time, protocolChanges.UNARMED);
-        assert.strictEqual(row.testnet_time, protocolChanges.UNARMED);
+        // The armed instant is read from the registry so the next cut moves it without a test edit.
+        const armed = row.testnet_time;
+        assert.ok(Number.isSafeInteger(armed) && armed > 1 && armed < protocolChanges.UNARMED, String(armed));
+        assert.strictEqual(await slashWindowActive('testnet', undefined, armed), true);
+        assert.strictEqual(await slashWindowActive('testnet', undefined, 1), false);
+        assert.strictEqual(await slashWindowActive('mainnet', undefined, armed), false);
     });
 });
 

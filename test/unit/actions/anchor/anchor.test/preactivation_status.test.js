@@ -51,10 +51,17 @@ describe('Anchor pre-activation status gate @regression @tier3', function () {
         disarmAnchor({ verifyStub, swqStub, deriveGateStub });
     });
 
-    it('is registered unarmed on mainnet and testnet and armed from genesis on regtest', function () {
+    it('is registered unarmed on mainnet, armed on testnet at the DOGE height, and armed from genesis on regtest', function () {
         const heights = gateRegistry.get(GATE);
         assert.ok(heights.mainnet >= 9999999999);
-        assert.ok(heights.testnet >= 9999999999);
+        // The handler reads with a null coin against the anchor's own DOGE height,
+        // so the bare testnet key must carry the DOGE:testnet arming.
+        const armed = heights['DOGE:testnet'];
+        assert.ok(Number.isFinite(armed) && armed > 1 && armed !== gateRegistry.UNARMED, 'DOGE:testnet is armed');
+        assert.strictEqual(heights.testnet, armed);
+        assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', null, armed, null), true);
+        assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', null, armed - 1, null), false);
+        assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', null, 1, null), false);
         assert.strictEqual(heights.regtest, 0);
     });
 

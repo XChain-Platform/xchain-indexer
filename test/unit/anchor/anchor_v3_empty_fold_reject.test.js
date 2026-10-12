@@ -67,17 +67,19 @@ describe('ANCHOR v3 empty fold rejection', function(){
         sinon.restore();
     });
 
-    it('ships the reject gate inert on live networks and active on regtest', function(){
-        assert.deepStrictEqual(ProtocolChanges.get(EMPTY_FOLD_GATE), {
-            mainnet: 9999999999,
-            'BTC:testnet': 9999999999,
-            'LTC:testnet': 9999999999,
-            'DOGE:testnet': 9999999999,
-            testnet: 9999999999,
-            regtest: 0,
-        });
+    it('ships the reject gate inert on mainnet, armed per testnet chain, and active on regtest', function(){
+        const row = ProtocolChanges.get(EMPTY_FOLD_GATE);
+        assert.strictEqual(row.mainnet, ProtocolChanges.UNARMED);
+        assert.strictEqual(row.regtest, 0);
         assert.strictEqual(ProtocolChanges.activeAt(
-            EMPTY_FOLD_GATE, 'testnet', 'DOGE', 9999999998, null), false);
+            EMPTY_FOLD_GATE, 'mainnet', 'DOGE', ProtocolChanges.UNARMED - 1, null), false);
+        // Each testnet chain's height is read from the registry so the next cut moves it without a test edit.
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            const armed = row[coin + ':testnet'];
+            assert.ok(Number.isSafeInteger(armed) && armed > 1 && armed < ProtocolChanges.UNARMED, coin + ' ' + armed);
+            assert.strictEqual(ProtocolChanges.activeAt(EMPTY_FOLD_GATE, 'testnet', coin, armed, null), true, coin);
+            assert.strictEqual(ProtocolChanges.activeAt(EMPTY_FOLD_GATE, 'testnet', coin, 1, null), false, coin);
+        }
         assert.strictEqual(ProtocolChanges.activeAt(
             EMPTY_FOLD_GATE, 'regtest', 'DOGE', 0, null), true);
     });

@@ -115,6 +115,26 @@ describe('protocol_changes/assembler: the public export shape @regression @tier1
     });
 });
 
+// The v0.23.0 cut armed this row on testnet with one dated instant. The instant is read from
+// the registry row, never repeated here, and judged through isEnabled() over a stubbed decoder
+// block time: dark at time 1 and one second short, live from the instant. Mainnet stays dark.
+function enabledAt(name, network, time) {
+    const pc = new (require(ENTRY))({ config: { NETWORK: network }, util: {}, decoderDb: { getBlockTime: async () => time } });
+    return pc.isEnabled(name, 1);
+}
+
+async function assertArmedOnTestnetOnly(name, row) {
+    assert.strictEqual(row.mainnet_time, require(ENTRY).UNARMED);
+    assert.ok(Number.isInteger(row.testnet_time) && row.testnet_time > 1 && row.testnet_time < require(ENTRY).UNARMED,
+        name + ' testnet_time is not a sized instant: ' + row.testnet_time);
+    assert.strictEqual(row.regtest_time, 0);
+    assert.strictEqual(await enabledAt(name, 'testnet', 1), false);
+    assert.strictEqual(await enabledAt(name, 'testnet', row.testnet_time - 1), false);
+    assert.strictEqual(await enabledAt(name, 'testnet', row.testnet_time), true);
+    assert.strictEqual(await enabledAt(name, 'mainnet', require(ENTRY).UNARMED - 1), false);
+    assert.strictEqual(await enabledAt(name, 'regtest', 0), true);
+}
+
 describe('protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1', function () {
     const ProtocolChanges = require(ENTRY);
     const key = 'protocol_changes.changes.GAS_CEILING_SUCCESS';
@@ -125,17 +145,19 @@ describe('protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1
         assert.deepStrictEqual(table.GAS_CEILING_SUCCESS, ProtocolChanges.get(key));
     });
 
-    it('is unarmed on production networks and active from regtest genesis', function () {
+    it('is unarmed on production networks and active from regtest genesis', async function () {
+        const armed = ProtocolChanges.get(key).testnet_time;
+        await assertArmedOnTestnetOnly('GAS_CEILING_SUCCESS', ProtocolChanges.get(key));
         assert.strictEqual(ProtocolChanges.GAS_CEILING_SUCCESS_MAINNET_TIME, ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.GAS_CEILING_SUCCESS_TESTNET_TIME, ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.GAS_CEILING_SUCCESS_TESTNET_TIME, armed);
         assert.strictEqual(ProtocolChanges.get('protocol_changes.GAS_CEILING_SUCCESS_MAINNET_TIME'), ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.get('protocol_changes.GAS_CEILING_SUCCESS_TESTNET_TIME'), ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.get('protocol_changes.GAS_CEILING_SUCCESS_TESTNET_TIME'), armed);
         assert.deepStrictEqual(ProtocolChanges.get(key), {
             version_major: 0,
             version_minor: 2,
             version_revision: 0,
             mainnet_time: ProtocolChanges.UNARMED,
-            testnet_time: ProtocolChanges.UNARMED,
+            testnet_time: armed,
             regtest_time: 0,
             mainnet_block: 0,
             testnet_block: 0,

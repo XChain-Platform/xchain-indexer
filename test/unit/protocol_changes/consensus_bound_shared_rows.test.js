@@ -56,10 +56,16 @@ describe('protocol_changes consensus-bound shared rows', function () {
     });
 
     it('resolves both mirror-admission chain-margin rows through the gate registry', function () {
-        assert.deepStrictEqual(gateRegistry.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'), {
+        // The v0.23.0 cut armed the DOGE testnet slot; its height is read from the row, never
+        // repeated here, and must be a sized height below the sentinel.
+        const margin = gateRegistry.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION');
+        const dogeTestnet = margin['DOGE:testnet'];
+        assert.ok(Number.isInteger(dogeTestnet) && dogeTestnet > 1 && dogeTestnet < 9999999999,
+            'DOGE:testnet is not a sized height: ' + dogeTestnet);
+        assert.deepStrictEqual(margin, {
             mainnet: null,
             'DOGE:mainnet': null,
-            'DOGE:testnet': 9999999999,
+            'DOGE:testnet': dogeTestnet,
             regtest: 0,
         });
         assert.deepStrictEqual(gateRegistry.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS'), {

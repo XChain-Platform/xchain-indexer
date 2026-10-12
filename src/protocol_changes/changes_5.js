@@ -48,7 +48,7 @@ const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
 
 const CHANGES = [
-    ['EXACT_INTEGER_WIRE_FIELDS', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
+    ['EXACT_INTEGER_WIRE_FIELDS', '0.2.0', UNARMED, 1791804379, UNARMED, 0, 0, 0],
     ['ITER_SET_METER','0.2.0', ITER_SET_METER_MAINNET_TIME,
         ITER_SET_METER_TESTNET_TIME, 0, 0, 0, 0],
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
@@ -69,16 +69,16 @@ const CHANGES = [
     // Below the flag the legacy rule reads the snapshot block alone. Judged by the
     // block that carries the SLASH. Mainnet and testnet are unarmed; regtest is
     // genesis-active.
-    ['SLASH_XANCPUB_PUBLISHER_PAIR', '0.2.0', UNARMED, UNARMED, 0, 0, 0, 0],
+    ['SLASH_XANCPUB_PUBLISHER_PAIR', '0.2.0', UNARMED, 1791804379, 0, 0, 0, 0],
 
     // STAKE_SNAPSHOT_SLASH_WINDOW: from the flag day the VM stake snapshot caps a (pubkey, tick)'s
     // mid-UNSTAKE contract_stakes rows at what its open contract_unstakes rows still hold, the
     // place SLASH debits during the activation delay (db/contracts/vm_stake_snapshot.js).
     // Every chain ships UNARMED and arms on its own; regtest is inert unless a venue sets
     // STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME.
-    ['STAKE_SNAPSHOT_SLASH_WINDOW', '0.2.0', UNARMED, UNARMED,
+    ['STAKE_SNAPSHOT_SLASH_WINDOW', '0.2.0', UNARMED, 1791804379,
         () => regtestTimeOverride('STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME')() || UNARMED, 0, 0, 0],
-    ['DELEGATION_ROTATE_IN_WINDOW', '0.2.0', UNARMED, UNARMED,
+    ['DELEGATION_ROTATE_IN_WINDOW', '0.2.0', UNARMED, 1791804379,
         () => regtestTimeOverride('DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME')() || UNARMED, 0, 0, 0],
 
     // SLASH_ATTEST_MULTIROUND_EXEMPT: an XATTEST base-leg pair is no longer slashable,
@@ -86,7 +86,7 @@ const CHANGES = [
     // (slash/resolve_slot.js). Relay-leg equivocation stays slashable. Narrowing which
     // proofs burn a bond is a consensus acceptance rule, so it is gated. Mainnet and
     // testnet are unarmed until a release cut pins an instant; regtest is genesis-active.
-    ['SLASH_ATTEST_MULTIROUND_EXEMPT', '0.2.0', UNARMED, UNARMED, 0, 0, 0, 0],
+    ['SLASH_ATTEST_MULTIROUND_EXEMPT', '0.2.0', UNARMED, 1791804379, 0, 0, 0, 0],
 
     // READONLY_ACCESSOR_OWN_KEY: mirrors xchain-vm's ACCESSOR_OWN_KEY_ACTIVATION (testnet and regtest
     // active from genesis, mainnet unarmed); a readonly accessor resolves a snapshot

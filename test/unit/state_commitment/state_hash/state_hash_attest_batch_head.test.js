@@ -71,10 +71,16 @@ describe('state_hash attest_batch_head class @regression', function(){
         for(const k of Object.keys(maps)) maps[k].regtest = prev[k];
     });
 
-    it('gate: regtest armed from genesis, mainnet and testnet inert, unknown network off', function(){
+    it('gate: regtest armed from genesis, mainnet inert, testnet armed per chain, unknown network off', function(){
         assert.strictEqual(isAttestBatchHeadStateHashActive(1, 'regtest', 'DOGE'), true);
         assert.strictEqual(isAttestBatchHeadStateHashActive(999999999, 'mainnet', 'DOGE'), false);
-        assert.strictEqual(isAttestBatchHeadStateHashActive(999999999, 'testnet', 'DOGE'), false);
+        // Each testnet chain's height is read from the registry row so the next cut moves it without a test edit.
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            const armed = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION[coin + ':testnet'];
+            assert.ok(Number.isSafeInteger(armed) && armed > 1 && armed < 999999999, coin + ' ' + armed);
+            assert.strictEqual(isAttestBatchHeadStateHashActive(armed, 'testnet', coin), true, coin);
+            assert.strictEqual(isAttestBatchHeadStateHashActive(1, 'testnet', coin), false, coin);
+        }
         assert.strictEqual(isAttestBatchHeadStateHashActive(999999999, 'mainnet', null), false);
         assert.strictEqual(isAttestBatchHeadStateHashActive(7, 'nonexistent', 'BTC'), false);
         assert.strictEqual(isAttestBatchHeadStateHashActive('x', 'regtest', 'BTC'), false);

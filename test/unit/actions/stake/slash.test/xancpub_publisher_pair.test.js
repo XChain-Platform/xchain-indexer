@@ -25,6 +25,10 @@ function pair(contentA, contentB) {
     return params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey);
 }
 const gateStub = (on) => sinon.stub().callsFake(async (name) => name !== GATE || on);
+const PC = require(path.join('..', '..', '..', '..', '..', 'src', 'protocol_changes.js'));
+// isEnabled on a fresh class whose decoder reports `blockTime` for every block.
+const readGate = (network, height, blockTime = 1900000000) => new PC({ config: { NETWORK: network }, util: {},
+    decoderDb: { getBlockTime: async () => blockTime } }).isEnabled(GATE, height);
 
 describe('SLASH action handler: XANCPUB publisher-only pair @regression', function () {
     useSlashHarness(bind);
@@ -65,23 +69,21 @@ describe('SLASH action handler: XANCPUB publisher-only pair @regression', functi
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce);
     });
 
-    it('registers the gate with mainnet and testnet unarmed and regtest genesis-active', function () {
-        const PC = require(path.join('..', '..', '..', '..', '..', 'src', 'protocol_changes.js'));
+    it('registers the gate with mainnet unarmed, testnet armed, and regtest genesis-active', function () {
         const row = new PC({ config: {}, util: {} }).changes[GATE];
         assert.ok(row, 'gate must be registered');
         assert.strictEqual(row.mainnet_time, PC.UNARMED);
-        assert.strictEqual(row.testnet_time, PC.UNARMED);
+        assert.strictEqual(row.testnet_time, PC.get('protocol_changes.changes.' + GATE).testnet_time);
+        assert.ok(Number.isFinite(row.testnet_time) && row.testnet_time > 1 && row.testnet_time !== PC.UNARMED, 'testnet is armed');
         assert.strictEqual(row.mainnet_block, 0);
         assert.strictEqual(row.regtest_block, 0);
     });
-    it('reads inactive on mainnet and testnet and active on regtest through isEnabled', async function () {
-        const PC = require(path.join('..', '..', '..', '..', '..', 'src', 'protocol_changes.js'));
-        const read = async (network, height) => {
-            const pc = new PC({ config: { NETWORK: network }, util: {}, decoderDb: { getBlockTime: async () => 1900000000 } });
-            return pc.isEnabled(GATE, height);
-        };
-        assert.strictEqual(await read('mainnet', 900000), false);
-        assert.strictEqual(await read('testnet', 900000), false);
-        assert.strictEqual(await read('regtest', 1), true);
+    it('reads inactive on mainnet, active on testnet from the armed time, and active on regtest through isEnabled', async function () {
+        const armed = PC.get('protocol_changes.changes.' + GATE).testnet_time;
+        assert.strictEqual(await readGate('mainnet', 900000), false);
+        assert.strictEqual(await readGate('testnet', 900000, armed), true);
+        assert.strictEqual(await readGate('testnet', 900000, armed - 1), false);
+        assert.strictEqual(await readGate('testnet', 1, 1), false);
+        assert.strictEqual(await readGate('regtest', 1), true);
     });
 });

@@ -386,13 +386,13 @@ addGate('bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION', 'height'
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });
 
 addGate('action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY', 'height', {
-    mainnet: UNARMED, testnet: UNARMED, regtest: 0,
+    mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984, 'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0,
 });
