@@ -21,16 +21,9 @@
 const assert = require('assert');
 const L = require('../../../src/hub/table_lifecycle');
 
-describe('table lifecycle: push_generations replication class', () => {
-  it('is local (per-node reorg fence counter, never snapshot-shipped)', () => {
-    const e = L.entry('push_generations');
-    assert.ok(e, 'push_generations must be registered');
-    assert.strictEqual(e.replication, 'local');
-  });
+const entry = L.entry('push_generations');
 
-  it('stays rollback-exempt with a local replica rollback', () => {
-    const e = L.entry('push_generations');
-    assert.strictEqual(e.rollback, 'exempt');
-    assert.strictEqual(e.replicaRollback, 'local');
-  });
-});
+assert.ok(entry, 'push_generations must be registered');
+assert.strictEqual(entry.replication, 'local');
+assert.strictEqual(entry.rollback, 'exempt');
+assert.strictEqual(entry.replicaRollback, 'local');
