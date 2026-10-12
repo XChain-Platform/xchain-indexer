@@ -57,8 +57,9 @@ function checkRollcallHeader(config, f, error){
     // the BTC close gates on, NOT this chain's local height. That is what makes
     // a pre-activation roll call inert on both chains without a second
     // DOGE-height flag day to coordinate. isRollcallActive carries the
-    // parseInt + Number.isFinite guard every placeholder gate needs, because
-    // mainnet ships null and `h >= null` is TRUE in JS.
+    // parseInt + Number.isFinite guard every placeholder gate needs, because a
+    // network whose row is null (regtest until the venue opts in) must stay
+    // inert and `h >= null` is TRUE in JS.
     if(!error && !rca.isRollcallActive(epochHeight, network))
         error = 'invalid: VERSION (unknown)';
 

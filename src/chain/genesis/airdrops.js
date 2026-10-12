@@ -160,10 +160,10 @@ module.exports = {
                 throw new Error('GENESIS FATAL: mainnet airdrop bucket ' + name + ' has no sha256 pin (GENESIS_AIRDROP_HASHES); mainnet CSV genesis requires every bucket pinned (expected path is the genesis dump)');
             buckets.push({ name: name, file: paths[i], hash: hash, amount: amount });
         }
-        // Canonical order: action_index is a hashed consensus field, so bucket
-        // iteration order must not depend on the operator's env-var CSV order. Bucket names
-        // are unique (checked above), so a byte-order sort on name is total + deterministic.
-        buckets.sort((a, b) => a.name < b.name ? -1 : 1);
+        // Canonical order: action_index is a hashed consensus field, so bucket iteration
+        // order must not follow the env-var CSV order. Sort by UTF-16 code-unit order on the
+        // unique names; moving to UTF-8 byte order would reorder some non-BMP names.
+        buckets.sort((a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0));
         return buckets;
     },
 

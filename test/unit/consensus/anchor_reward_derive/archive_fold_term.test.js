@@ -13,11 +13,25 @@
 'use strict';
 
 const assert = require('assert');
+const sinon = require('sinon');
 const derive = require('../../../../src/consensus/anchor_reward_derive.js');
 const AnchorProofClient = require('../../../../src/consensus/doge_peer_clients/anchor_proof_client.js');
+const { stubActiveAt } = require('../../../helpers/gate_modules.js');
 
 const PUBLISHER = 'aa'.repeat(32);
 const FOLD_ENV = 'XC_ANCHOR_FOLD_REGTEST_ACTIVATION';
+const TERM_GATE = 'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
+
+// Run fn with the fold gate active and the archive fold-term gate off, the one gate
+// state where a rule keyed on the fold gate alone would refuse an eligible archive reward.
+function withFoldOnly(fn) {
+    stubActiveAt(sinon, TERM_GATE, false);
+    try {
+        return withFoldHeight(0, fn);
+    } finally {
+        sinon.restore();
+    }
+}
 
 function withFoldHeight(height, fn) {
     const before = process.env[FOLD_ENV];
@@ -86,6 +100,9 @@ describe('anchor archive fold-term gate', function () {
             assert.strictEqual(derive.rowGatesActive(rewardRow({
                 network: 'mainnet', snapshot_block: 1000000,
             })), true);
+            withFoldOnly(function () {
+                assert.strictEqual(derive.rowGatesActive(rewardRow()), true);
+            });
         });
 
         it('does not terminate the bundle family', function () {
@@ -112,6 +129,9 @@ describe('anchor archive fold-term gate', function () {
             assert.strictEqual(proofClient().judge([
                 archiveAnchor({ checkpoint_network: 'mainnet' }),
             ], archiveReward({ network: 'mainnet' })), 'verified');
+            withFoldOnly(function () {
+                assert.strictEqual(proofClient().judge([archiveAnchor()], archiveReward()), 'verified');
+            });
         });
 
         it('does not terminate the bundle family', function () {

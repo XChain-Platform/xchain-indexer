@@ -126,8 +126,9 @@ module.exports = [
     // Inverts its NODEPROOF neighbour above: DOGE-only, because that is where
     // every validator can already publish. Carries a BTC epoch height and is
     // proved BTC-side at the epoch close. Registered at all-zero columns like
-    // every other action: the per-network HEIGHT gate is ROLLCALL_ACTIVATION in
-    // rollcall_activation.js, not this registry, so mainnet stays inert here.
+    // every other action: the per-network HEIGHT gate is the registry row
+    // rollcall_activation.ROLLCALL_ACTIVATION (read by consensus/gates/rollcall_gate.js),
+    // so that row, not this one, decides which networks are armed.
     // (See xchain-documentation/protocol/actions/rollcall.md)
     ['ROLLCALL',           '0.2.0',0,0,0,0,0,0],
 

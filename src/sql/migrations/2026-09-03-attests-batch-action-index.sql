@@ -14,15 +14,15 @@
 -- own action_index. A mirror-applied response is an action minted locally at the
 -- applying block, and the transaction that carried its body is a different action
 -- on a different chain, landing at a different time. This column names it, so the
--- explorer can link a response to the batch that published it and an operator can
--- ask the inverse question: which responses has the chain actually got yet.
+-- explorer can link a response to the batch that published it. It is a display link,
+-- not a coverage signal: complete valid v5/v6 batches per window prove a window published.
 --
--- NULL is meaningful in two distinct ways and both are correct:
+-- NULL is meaningful in two distinct ways, and neither is a coverage gap:
 --   * NULL on a legacy-era row, forever. There was never a batch; the response was
 --     the transaction.
---   * NULL on a mirror-era row whose window has not been published yet. The v5
---     handler stamps it when the batch lands, so a persistent NULL on an old
---     mirror-era row is a real coverage gap worth alerting on, not a schema quirk.
+--   * NULL on a mirror-era row whose link was never stamped. The hub mirror stamps it
+--     best effort (a failed link write is logged and skipped) and a reorg clears it,
+--     so never alert on a NULL here.
 --
 -- Purely additive and nullable, so alterTableForDrift reconciles it automatically
 -- at startup and an indexer that has not upgraded simply lacks the column. It

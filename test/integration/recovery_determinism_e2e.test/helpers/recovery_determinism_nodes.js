@@ -69,7 +69,7 @@ const CHAIN = [
 const EARN_BLOCK    = 3;            // anchor reward earn-block (carried onto validator_rewards)
 const COLLECT_BLOCK = 4;
 // anchor_<chain> reward amounts are consensus-frozen at/above the anchor-reward
-// flag-day (regtest = genesis-active): the live push path credits
+// flag-day (regtest = genesis-active): the live BTC-side derive credits
 // ANCHOR_REWARD_AMOUNT and recovery pins the archived amount to it. Node A must
 // credit the frozen amount like a real live node; the ARCHIVE keeps a deliberately
 // wrong 5.00000000 so this suite also proves recovery pins a forged amount.
@@ -220,8 +220,8 @@ async function dbReachable() {
     } catch (e) { return false; }
 }
 
-// Node A: from-genesis. Replay the chain, then the live hub push writes the
-// anchor reward through the REAL createValidatorReward (on-chain source resolution).
+// Node A: from-genesis. Replay the chain, then write the anchor reward the way the
+// live derive mint does, through the REAL createValidatorReward (on-chain source resolution).
 async function buildNodeA() {
     nodes.A = await freshDb(DB_A);
     await replayChain(nodes.A);

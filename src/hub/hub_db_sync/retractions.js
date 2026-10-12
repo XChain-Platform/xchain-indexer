@@ -70,8 +70,7 @@ function verifyEd25519(payload, sigHex, pubkeyHex) {
 // fenced DELETE names a_/b_push_generation or push_generation unconditionally, so on a table
 // missing its fence column it fails with ER_BAD_FIELD_ERROR and the row stays mirrored: it never
 // degrades to an unfenced delete. The cure is the dated fence-column migrations (2026-07-17 and
-// 2026-07-19); the 2026-07-19 header is right, and the 2026-07-17 headers' "no-op" and
-// column-presence-guard wording is wrong.
+// 2026-07-19), whose headers state the same failure.
 function parseRetractionRange(event) {
     let from = Number(event.from_action_index);
     if (!Number.isFinite(from)) return null;
