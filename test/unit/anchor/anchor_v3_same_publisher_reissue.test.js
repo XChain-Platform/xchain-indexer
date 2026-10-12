@@ -18,6 +18,7 @@ const { crc32Hex } = require(
     '../actions/anchor/anchor.test/helpers/anchor_fixtures.js');
 
 const FOLD_GATE = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
+const SOURCE_AUTHOR_GATE = 'anchor_fold_reissue_source_author_activation.ANCHOR_FOLD_REISSUE_SOURCE_AUTHOR_ACTIVATION';
 const PUBKEY = 'a'.repeat(64);
 
 function validWire(options = {}){
@@ -46,7 +47,9 @@ function fixture(storedRows, foldActive = true){
     sinon.stub(ed25519, 'verify').returns(true);
     sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
     sinon.stub(ar, 'isAnchorRewardDeriveActive').returns(false);
-    sinon.stub(gateRegistry, 'activeAt').callThrough().withArgs(FOLD_GATE).returns(foldActive);
+    let gate = sinon.stub(gateRegistry, 'activeAt').callThrough();
+    gate.withArgs(FOLD_GATE).returns(foldActive);
+    gate.withArgs(SOURCE_AUTHOR_GATE).returns(false);
     return { indexer, handler: new Anchor(indexer) };
 }
 

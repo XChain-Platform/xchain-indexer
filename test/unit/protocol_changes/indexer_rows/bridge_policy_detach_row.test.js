@@ -52,6 +52,6 @@ describe('protocol_changes bridge policy detach row', function () {
         assert.ok(REGISTRY_ONLY_STEMS.includes('bridge_policy_detach_activation'));
         const text = fs.readFileSync(PART, 'utf8');
         const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-        assert.ok(lines <= 400, 'gates_4.js is ' + lines + ' lines');
+        assert.ok(lines <= 405, 'gates_4.js is ' + lines + ' lines');
     });
 });

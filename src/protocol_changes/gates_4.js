@@ -398,3 +398,8 @@ addGate('cross_chain_offer_list_export_activation.CROSS_CHAIN_OFFER_LIST_EXPORT'
     testnet: UNARMED,
     regtest: 0,
 });
+
+addGate('anchor_fold_reissue_source_author_activation.ANCHOR_FOLD_REISSUE_SOURCE_AUTHOR_ACTIVATION', 'height', {
+    mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0,
+});

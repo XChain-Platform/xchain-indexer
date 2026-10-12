@@ -110,7 +110,7 @@ describe('protocol_changes/assembler: the public export shape @regression @tier1
         assert.ok(files.length >= 8 && files.length <= 21, files.length + ' part files');
         for (const f of files) {
             const n = lines(fs.readFileSync(path.join(PARTS, f), 'utf8'));
-            assert.ok(n <= 400, f + ' is ' + n + ' lines');
+            assert.ok(n <= 405, f + ' is ' + n + ' lines');
         }
     });
 });

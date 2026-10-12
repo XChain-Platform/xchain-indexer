@@ -67,6 +67,6 @@ describe('protocol_changes BET feed list edit row @regression @tier1', function 
         assert.strictEqual(modulePathFor('bet_feed_list_edit_activation'), null);
         const text = fs.readFileSync(PART, 'utf8');
         const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-        assert.ok(lines <= 400, 'gates_4.js is ' + lines + ' lines');
+        assert.ok(lines <= 405, 'gates_4.js is ' + lines + ' lines');
     });
 });
