@@ -106,8 +106,10 @@ async function collectBetStatus(db, B){
 // Attest batch-head completion stamps: v5 heads whose verdict was re-stamped when
 // the completing v6 continuation landed at block B. The head's own action_index is
 // in an earlier block, so no action-scoped hash sees the flip. The completing
-// continuation is the author's last valid chunk, the same author and validity
-// scope restoreStampedAttestHeads resets by; the status is hashed as its resolved
+// continuation is the author's last valid chunk of the head's own encoding (same
+// chunk total and crc32, so a window republished in a new encoding does not
+// re-key the old head), the same author and validity scope restoreStampedAttestHeads
+// resets by; the status is hashed as its resolved
 // string, never its surrogate id, and action_index is a total order.
 function collectAttestBatchHead(db, B){
     return tolerantQuery(db,
@@ -119,6 +121,7 @@ function collectAttestBatchHead(db, B){
             "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
             "JOIN actions ca ON ca.action_index = c.action_index AND ca.source_id = pa.source_id " +
             "WHERE c.request_id = p.request_id AND c.version = ? AND c.batch_chunk_index IS NOT NULL " +
+            "AND c.batch_total_chunks = p.batch_total_chunks AND c.batch_crc32 = p.batch_crc32 " +
             "ORDER BY c.action_index DESC LIMIT 1 " +
         ") = ? ORDER BY p.action_index ASC",
         ['%' + ATTEST_BATCH_COMPLETION_STAMP, ATTEST_BATCH_HEAD_VERSION, ATTEST_BATCH_CONTINUATION_VERSION, B]);

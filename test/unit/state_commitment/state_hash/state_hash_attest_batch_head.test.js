@@ -123,8 +123,37 @@ describe('state_hash attest_batch_head class @regression', function(){
         assert.match(sql, /p\.version = \? AND p\.batch_chunk_index = 0/);
         assert.match(sql, /ca\.source_id = pa\.source_id/);
         assert.match(sql, /cs\.status = 'valid'/);
+        assert.match(sql, /c\.request_id = p\.request_id AND c\.version = \? AND c\.batch_chunk_index IS NOT NULL AND c\.batch_total_chunks = p\.batch_total_chunks AND c\.batch_crc32 = p\.batch_crc32 /);
         assert.match(sql, /\) = \? ORDER BY p\.action_index ASC$/);
         assert.doesNotMatch(sql, /status_id,|p\.status_id AS/);
+    });
+
+    it('republished window in a new encoding: the old head appears only in block B preimage', async function(){
+        // Head stamped at block 7 by its own-encoding continuation. The author then
+        // republishes the window with a different chunk total and crc32 at block 9;
+        // the head-bound subquery no longer sees that continuation, so the old head
+        // is selected for block 7 and never for block 9.
+        const head = { action_index: 100, total: 2, crc: 'aaaa1111', status: STAMPED };
+        const conts = [
+            { block: 7, total: 2, crc: 'aaaa1111' },
+            { block: 9, total: 3, crc: 'bbbb2222' },
+        ];
+        const db = { doQuery: async (sql, args) => {
+            const m = /c\.batch_total_chunks = p\.batch_total_chunks/.test(sql) && /c\.batch_crc32 = p\.batch_crc32/.test(sql);
+            assert.ok(m, 'subquery must bind chunk total and crc32');
+            const B = args[args.length - 1];
+            const last = conts.filter(c => c.total === head.total && c.crc === head.crc).pop();
+            return last && last.block === B ? [{ action_index: head.action_index, status: head.status }] : [];
+        } };
+        const at7 = await G.collectAttestBatchHead(db, 7);
+        const at9 = await G.collectAttestBatchHead(db, 9);
+        assert.deepStrictEqual(at7, [{ action_index: 100, status: STAMPED }]);
+        assert.deepStrictEqual(at9, []);
+        const opts = { activationDelay: null, gasTick: 'XCHAIN', network: 'regtest', coin: 'BTC' };
+        const pre7 = await buildStateHashData(dbFor(baseResults().concat([at7])), 7, opts);
+        const pre9 = await buildStateHashData(dbFor(baseResults().concat([at9])), 9, opts);
+        assert.deepStrictEqual(pre7.attest_batch_head, [{ action_index: 100, status: STAMPED }]);
+        assert.deepStrictEqual(pre9.attest_batch_head, []);
     });
 
     it('literal twins equal the canonical wire constants', function(){
