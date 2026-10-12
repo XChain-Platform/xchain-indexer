@@ -218,6 +218,14 @@ function buildMap(only) {
     return { titleSets: sortedSets, scripts };
 }
 
+/** Script names whose mocha collection did not produce a title map. */
+function collectionErrorScripts(map) {
+    return Object.entries(map.scripts)
+        .filter(([, result]) => Object.prototype.hasOwnProperty.call(result, 'error'))
+        .map(([name]) => name)
+        .sort();
+}
+
 /** The flat {file: [titles]} view of one script in a map, pin or fresh. */
 function expand(map, scriptName) {
     const s = map.scripts[scriptName];
@@ -370,6 +378,13 @@ function main() {
         }
     }
 
+    const collectionErrors = collectionErrorScripts(map);
+    if (opts.out && collectionErrors.length) {
+        console.error(`refusing --out: collection failed for ${collectionErrors.join(', ')}`);
+        process.exitCode = 1;
+        return;
+    }
+
     // Escaped to pure ASCII on the way out. The titles are captured verbatim and
     // some of them carry characters the platform's prose rules keep out of
     // committed files; escaping changes the encoding and not one parsed
@@ -399,4 +414,13 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { buildMap, collect, mochaArgsFor, splitCommand, compare, expand, mergeScriptMap };
+module.exports = {
+    buildMap,
+    collect,
+    collectionErrorScripts,
+    mochaArgsFor,
+    splitCommand,
+    compare,
+    expand,
+    mergeScriptMap,
+};
