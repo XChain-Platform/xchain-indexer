@@ -53,6 +53,10 @@ module.exports = {
     },
 
     // Keep each sweep's { table, ms, rows } for logRollbackSummary; runRollbackTransaction resets the list.
+    // The attest_validator_stats recompute report must also expose its elapsed ms,
+    // surviving source-row count and affected (validator, provider) pair count. Before
+    // quality_score drives responsible-set selection or slashing, replace the aggregate-only
+    // counters with block-stamped counters so rollback can remove orphaned increments directly.
     recordSweepStats(stats){
         this.sweepStats = (this.sweepStats || []).concat(stats || []);
     },
