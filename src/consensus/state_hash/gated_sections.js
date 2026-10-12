@@ -109,11 +109,12 @@ async function collectBetStatus(db, B){
 // continuation is the author's last valid chunk of the head's own encoding (same
 // chunk total and crc32, so a window republished in a new encoding does not
 // re-key the old head), the same author and validity scope restoreStampedAttestHeads
-// resets by; the status is hashed as its resolved
-// string, never its surrogate id, and action_index is a total order.
+// scope restoreStampedAttestHeads resets by; the status is hashed as its resolved
+// string, never its surrogate id, and action_index is a total order. Each stamp is
+// bound to the batch it completes by the head's declared chunk total and body crc32.
 function collectAttestBatchHead(db, B){
     return tolerantQuery(db,
-        "SELECT p.action_index, s.status AS status FROM attests p " +
+        "SELECT p.action_index, s.status AS status, p.batch_total_chunks AS total_chunks, p.batch_crc32 AS crc32 FROM attests p " +
         "JOIN index_statuses s ON s.id = p.status_id AND s.status LIKE ? " +
         "JOIN actions pa ON pa.action_index = p.action_index " +
         "WHERE p.version = ? AND p.batch_chunk_index = 0 AND ( " +

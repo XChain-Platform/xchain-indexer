@@ -68,6 +68,10 @@ CREATE TABLE attests (
     -- landing after the head has no other way to rebuild the head it must verify against.
     -- The network is NOT stored: this database is one network, and a head declaring another
     -- is refused before it is ever recorded valid.
+    -- These columns are NOT hash-neutral: batch_chunk_index selects the heads the gated
+    -- attest_batch_head state-hash section (stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION)
+    -- reads, and batch_total_chunks/batch_crc32 scope the head re-stamp a rollback undoes.
+    -- Renaming them, or changing what a head or continuation writes to them, needs a flag day.
     batch_window_start            BIGINT UNSIGNED,                 -- v5: unix start of the published window (batch identity, hashed into request_id)
     batch_window_end              BIGINT UNSIGNED,                 -- v5: unix end of the window
     batch_row_count               INT UNSIGNED,                    -- v5: responses carried (cap ATTEST_BATCH_MAX_ROWS)

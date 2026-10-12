@@ -238,9 +238,9 @@ const newAddressIds = {
     async assignInBlock(db, address, blockIndex){
         // Block-processing context: assign a deterministic dense id and stamp the
         // block, so the id is reorg-reproducible and ^<id> resolves identically on
-        // every node. Ids are assigned in caller order; Actions.assignActionAddressIds
-        // registers an action's new wire-field addresses FIRST, in byte-sorted VALUE
-        // order, so the within-action id order is pinned by value, not field layout.
+        // every node. Ids are assigned in caller order; for the fixed-layout actions,
+        // Actions.assignActionAddressIds registers the new wire-field addresses FIRST, in
+        // byte-sorted VALUE order, and every other action keeps its handler's fixed order.
         // INSERT IGNORE keeps this race-safe against the UNIQUE address index (a
         // concurrent same-address insert is skipped; the refetch resolves the row);
         // the explicit id is MAX(id)+1 so it cannot collide with an existing row.

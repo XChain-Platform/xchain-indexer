@@ -482,3 +482,65 @@ describe('retention: startStateRetention arms the bounded config', () => {
         }
     });
 });
+
+describe('retention: startStateRetention reports a skipped node reclaim', () => {
+    const jobs = require('../../../src/XChainIndexer/background_jobs.js');
+    const { getLogger } = require('../../../src/observability/index.js');
+
+    // Arm the sweep with reclaim on, feed it the given phase-2 results one sweep at a
+    // time, and return every warn and info line it logged.
+    async function sweepWith(nodeResults){
+        const saved = { parse: R.parseRetentionConfig, sweep: R.runSweep, setInterval: global.setInterval,
+                        warn: getLogger().warn, info: getLogger().info };
+        const warnings = [], infos = [], queue = nodeResults.slice();
+        let armedFn = null;
+        R.parseRetentionConfig = () => saved.parse({ STATE_ROOT_RETENTION_BLOCKS: '200', STATE_NODE_RECLAIM: '1',
+                                                     STATE_TREE_METRIC_MAX_NODES: '1000' });
+        R.runSweep = async () => ({ enabled: true, roots: { deleted: 0 }, nodes: queue.shift() });
+        global.setInterval = (fn) => { armedFn = fn; return { unref(){} }; };
+        getLogger().warn = msg => { warnings.push(String(msg)); };
+        getLogger().info = msg => { infos.push(String(msg)); };
+        try {
+            const host = { config: { COIN: 'BTC', NETWORK: 'regtest' }, indexerDb: {} };
+            jobs.startStateRetention.call(host);
+            for(let i = 0; i < nodeResults.length; i++) await armedFn();
+        } finally {
+            R.parseRetentionConfig = saved.parse;
+            R.runSweep = saved.sweep;
+            global.setInterval = saved.setInterval;
+            getLogger().warn = saved.warn;
+            getLogger().info = saved.info;
+        }
+        return { warnings, infos };
+    }
+    const SKIP = { skipped: true, reason: 'too_many_nodes', totalNodes: 5000, deleted: 0 };
+    const RAN = { skipped: false, totalNodes: 900, reachable: 800, orphanCount: 100, deleted: 100 };
+
+    it('warns once when reclaim skips above the node cap, naming the count, the cap and the variable', async () => {
+        const { warnings } = await sweepWith([SKIP, SKIP]);
+        const skipWarns = warnings.filter(w => /node reclaim is not running/.test(w));
+        assert.strictEqual(skipWarns.length, 1, warnings.join('\n'));
+        assert.match(skipWarns[0], /5000/);
+        assert.match(skipWarns[0], /STATE_TREE_METRIC_MAX_NODES=1000/);
+        assert.match(skipWarns[0], /BTC\/regtest/);
+    });
+
+    it('logs one resume line when a later sweep reclaims again', async () => {
+        const { warnings, infos } = await sweepWith([SKIP, SKIP, RAN, RAN]);
+        assert.strictEqual(warnings.filter(w => /node reclaim is not running/.test(w)).length, 1, warnings.join('\n'));
+        const resumed = infos.filter(l => /node reclaim resumed/.test(l));
+        assert.strictEqual(resumed.length, 1, infos.join('\n'));
+        assert.match(resumed[0], /2 skipped sweep/);
+    });
+
+    it('emits a node-reclaim METRIC line on every sweep with reclaim on', async () => {
+        const { infos } = await sweepWith([SKIP, RAN]);
+        const metrics = infos.filter(l => l.startsWith('[METRIC] ')).map(l => JSON.parse(l.slice(9)))
+            .filter(m => m.metric === 'state_retention_node_reclaim');
+        assert.strictEqual(metrics.length, 2, infos.join('\n'));
+        assert.deepStrictEqual(
+            metrics.map(m => [m.skipped, m.reason, m.total_nodes, m.max_nodes, m.deleted, m.consecutive_skips]),
+            [[true, 'too_many_nodes', 5000, 1000, 0, 1], [false, null, 900, 1000, 100, 0]]);
+        assert.ok(metrics.every(m => Number.isFinite(m.sweep_duration_ms) && m.chain === 'BTC'));
+    });
+});

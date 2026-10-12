@@ -17,11 +17,11 @@ CREATE TABLE validator_rewards (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     source_id           BIGINT UNSIGNED NOT NULL,        -- staking address
     signing_pubkey_id   BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys
-    reward_type         VARCHAR(20) NOT NULL,             -- 'oracle_round' (legacy/share=0), 'oracle_base' + 'oracle_full_node' (two-tranche split), 'attest_fee', 'attest_bcast' (spec §11 leader broadcast-fee reimbursement; a separate type so the leader's carve-out and its equal share coexist under reward_unique), 'anchor_<chain>' (e.g. 'anchor_BTC'), 'anchor_archive'
+    reward_type         VARCHAR(20) NOT NULL,             -- 'oracle_round' (legacy/share=0), 'oracle_base' + 'oracle_full_node' (two-tranche split), 'attest_fee', 'attest_bcast' (spec §11 leader broadcast-fee reimbursement; a separate type so the leader's carve-out and its equal share coexist under reward_unique), 'anchor_bundle' (one per per-network checkpoint bundle), 'anchor_archive', and the retired 'anchor_<chain>' (e.g. 'anchor_BTC', historical rows only)
     round_reference     BIGINT UNSIGNED,                  -- round number or attestation ref
     -- The round_reference QUALIFIER, part of reward_unique below. round_reference alone is a
-    -- safe identity for every reward type but one: the per-chain anchor legs use CHECKPOINT_SEQ,
-    -- which equals the checkpoint's snapshot_block, a chain height that only advances. The
+    -- safe identity for every reward type but one: the bundle leg uses SNAPSHOT_BLOCK (as the
+    -- retired per-chain legs used CHECKPOINT_SEQ, equal to it), a chain height that only advances. The
     -- ARCHIVE leg uses MATCH_BATCH_SEQ, a DENSE counter the hub allocates from its own tables,
     -- and those tables are reset by a wipe-and-replay rebase - so after a rebase the hub
     -- reissues seq values earlier archive batches already used, and two genuinely distinct

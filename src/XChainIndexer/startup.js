@@ -104,7 +104,9 @@ module.exports = {
                 // the mirror refuses hub-broadcast reorg retractions of THIS
                 // chain's rows unless their generation fence is below our own
                 // push_generations value, i.e. a rollback we actually performed.
-                getOwnRollbackGeneration: () => this.indexerDb.getPushGeneration(this.config['COIN']),
+                // Read through apiView() so it sees only the COMMITTED generation, never
+                // an open rollback's bump, and a read error throws so the guard fails closed.
+                getOwnRollbackGeneration: () => this.indexerDb.apiView().getPushGeneration(this.config['COIN']),
                 // Bound the price_snapshots bootstrap: the mirror needs the
                 // rounds the blocks THIS node will parse can read, not the oracle's whole
                 // history. Re-evaluated on every (re-)bootstrap, and null-safe - an

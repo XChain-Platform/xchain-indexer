@@ -86,7 +86,7 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
 const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/consensus/state_hash.js');
 const { foldArchiveHeadFloor } = require('../src/db/anchors/archive_head_pick.js');
-const { canonicalBatchCrc, archiveCanonicalSuffix } = require('../src/actions/anchor/v3_canonical.js');
+const { archiveCanonicalSuffix } = require('../src/actions/anchor/v3_canonical.js');
 const bridgePolicy = require('./recovery/bridge_policy.js');
 const listShareRecovery = require('./recovery/list_share.js');
 const checkpointPrice = require('./recovery/checkpoint_price.js');
@@ -1081,15 +1081,17 @@ class AnchorRecovery {
             for(let r of rewards){
                 // Pin the per-chain anchor-publish reward amount to the FROZEN consensus
                 // constant at/above the anchor-reward flag-day, EXACTLY as the live indexer
-                // credits it (anchor.js: createValidatorReward with ar.ANCHOR_REWARD_AMOUNT,
-                // "NEVER taken from the wire"). Otherwise a colluding oracle_publish quorum
+                // credits it (the BTC-side derive, consensus/anchor_reward_derive.js minting via
+                // anchor_reward_derive/mint_row.js with ar.ANCHOR_REWARD_AMOUNT, "NEVER taken
+                // from the wire"). Otherwise a colluding oracle_publish quorum
                 // (or, without --verify-stakes, a fabricated on-chain archive) could archive an
                 // inflated anchor_<chain> amount that recovery would stage COLLECT-spendable
                 // while a live node credits only the frozen amount -> recovered/live divergence
                 // + over-credit on the COLLECT rail. anchor_archive gets the same pinning at/above
                 // its own ARCHIVE_REWARD flag-day (derived from the ANCHOR v1 archive-head
-                // attestation with the frozen ARCHIVE_REWARD_AMOUNT); below each flag-day the
-                // legacy operator-tunable amount is kept as archived (matches the live push path).
+                // attestation with the frozen ARCHIVE_REWARD_AMOUNT); below each flag-day no live
+                // writer mints these rows (no derive, and the hub push rail is retired), so the
+                // archived amount is kept as the only record of what was credited.
                 // anchor_bundle (the ANCHOR v0 bundle) rides the per-chain pin: it is the same
                 // ANCHOR_REWARD_AMOUNT under the same anchor-reward flag-day, one per
                 // per-network bundle instead of one per chain. Without it an archived
@@ -1226,9 +1228,9 @@ class AnchorRecovery {
     }
 
     wrapperCanonical(v1){
-        let raw = this.rawCheckpointCanonical(v1) + '|' +
-                [String(v1.match_batch_seq), String(v1.match_count), canonicalBatchCrc(v1.batch_crc32),
-                 String(v1.total_chunks)].join('|');
+        let raw = this.rawCheckpointCanonical(v1) +
+                archiveCanonicalSuffix({ MATCH_BATCH_SEQ: v1.match_batch_seq, MATCH_COUNT: v1.match_count,
+                                         BATCH_CRC32: v1.batch_crc32, TOTAL_CHUNKS: v1.total_chunks });
         if(eq.isEquivHeaderActive(v1.snapshot_block, v1.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
                 v1.chain + '|' + v1.network + '|' + v1.block_index + '|' + v1.checkpoint_seq + '|' + v1.match_batch_seq, 0, raw);
