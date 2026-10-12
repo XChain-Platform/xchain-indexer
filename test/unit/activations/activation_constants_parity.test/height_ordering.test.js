@@ -28,8 +28,8 @@ const { canonExists, loadCanon } = require('./helpers/canon_source.js');
 
 // The threshold a chain identified by `key` actually reads out of `map`: the exact key when
 // the map declares one, otherwise the bare network half of a '<COIN>:<network>' key. This is
-// the same fallback xchain_bridge_activation._activationThreshold and
-// stake_key_reuse_activation._activationThreshold implement, restated here because the
+// the same fallback resolveThreshold in src/protocol_changes/core.js implements for every
+// coin-keyed gate row, restated here because the
 // ordering invariants below compare two maps that are keyed at DIFFERENT granularities and a
 // bare-key-only comparison would silently stop covering the coin-keyed slots.
 function resolveChainKey(map, key) {

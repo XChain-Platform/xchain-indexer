@@ -1,0 +1,101 @@
+{
+  "_note": "IMMUTABLE ANCHOR. The exact quoted literals (ENUM members, DEFAULT and COMMENT text, in source order) of every literal-bearing column in schema-baseline-origin.json, read from src/sql/<table>.sql at the origin commit. That anchor froze its specs uppercased, so it cannot say what case an aged database holds; this file can. The literal-case parity suite holds each definition to these literals unless a dated migration MODIFYs the column to the new text, and the fresh-vs-migrated integration test builds its aged tables with them. NEVER edit this file to make a failing guard pass. Its sha256 is pinned by LITERAL_ORIGIN_SHA256 in that suite.",
+  "_origin_commit": "01f321c1",
+  "literals": {
+    "attests.request_status": [
+      "'pending'",
+      "'fulfilled'",
+      "'expired'",
+      "'errored'",
+      "'rejected'"
+    ],
+    "attests.response_status": [
+      "'ok'",
+      "'timeout'",
+      "'no_quorum'",
+      "'provider_error'",
+      "'expired'"
+    ],
+    "capability_slash_debits.target_table": [
+      "'stakes'",
+      "'unstakes'"
+    ],
+    "capability_slash_events.bounty_amount": [
+      "'0'"
+    ],
+    "capability_slash_events.treasury_amount": [
+      "'0'"
+    ],
+    "contract_slash_debits.target_table": [
+      "'contract_stakes'",
+      "'contract_unstakes'"
+    ],
+    "cross_chain_calls.status": [
+      "'finalized'"
+    ],
+    "cross_chain_matches.status": [
+      "'finalized'"
+    ],
+    "fees.gas_price": [
+      "'0'"
+    ],
+    "fees.xchain_amount": [
+      "'0'"
+    ],
+    "icons.status": [
+      "'pending'",
+      "'ok'",
+      "'failed'",
+      "'stale'",
+      "'pending'"
+    ],
+    "order_matches.settlement_type": [
+      "'instant'",
+      "'coinpay'",
+      "'instant'"
+    ],
+    "pending_hub_pushes.status": [
+      "'pending'"
+    ],
+    "polls.tally_mode": [
+      "'approval'",
+      "'split'"
+    ],
+    "polls.weight_mode": [
+      "'balance'",
+      "'stake'",
+      "'flat'",
+      "'quadratic'",
+      "'time_weighted'"
+    ],
+    "polls.poll_status": [
+      "'open'",
+      "'finalized'",
+      "'failed_quorum'",
+      "'open'"
+    ],
+    "polls.fail_reason": [
+      "'quorum'",
+      "'min_voters'",
+      "'both'"
+    ],
+    "polls.deposit_resolved": [
+      "'refunded'",
+      "'forfeited'"
+    ],
+    "price_snapshots.reference_chain": [
+      "'BTC'"
+    ],
+    "price_snapshots.status": [
+      "'finalized'",
+      "'skipped'",
+      "'disputed'"
+    ],
+    "price_snapshots.source_chain": [
+      "'DOGE'"
+    ],
+    "prices.validation_status": [
+      "'pending'"
+    ]
+  }
+}

@@ -174,8 +174,10 @@ module.exports = {
             let blockTimeout = this.blockWatchdogTimeout(blockToParse);
             let [ledger, actions, contracts] = await this.util.withTimeout(blockProcessing, blockTimeout, 'block ' + blockToParse);
 
-            // Commit the block data to the database
-            await this.indexerDb.commitTransaction();
+            // Commit the block data to the database. False means no block transaction was
+            // open to commit, so the block is abandoned rather than reported as committed.
+            if((await this.indexerDb.commitTransaction()) === false)
+                throw new Error('block ' + blockToParse + ': no open block transaction at commit; nothing was committed');
             committed = true;
 
             lastDecoderBlock = await this.afterBlockCommit(blk, [ledger, actions, contracts], lastDecoderBlock, debugTimer);

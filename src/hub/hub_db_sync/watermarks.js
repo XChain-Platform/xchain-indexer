@@ -318,6 +318,8 @@ module.exports = {
         // outside any real heartbeat cadence, so a legitimate hub is never
         // clamped.
         const MIN_WATERMARK_INTERVAL_MS = 1000;
+        // Pairs with the hub's WATERMARK_INTERVAL_MAX_MS (src/peers/hub_db_broadcaster.js);
+        // the indexer's watermark_interval_hub_parity test holds the two equal.
         const MAX_WATERMARK_INTERVAL_MS = 300000;
         ms = Math.min(Math.max(ms, MIN_WATERMARK_INTERVAL_MS), MAX_WATERMARK_INTERVAL_MS);
         this.watermarkIntervalMs = ms;

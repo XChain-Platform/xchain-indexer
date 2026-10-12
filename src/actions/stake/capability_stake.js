@@ -159,7 +159,8 @@ async function validateFreeKey(data){
     // branch cannot simply pass the real block to the same mode: the legacy
     // predicate's activation filter would hide a freshly-staked, not-yet-activated
     // row, so the armed branch selects its own query mode instead
-    // (the stake_key_reuse_activation row's note records the whole argument).
+    // (the reuseBlockingOnly branch of stakeModeFilter in src/db/stakes/active_stake.js
+    // records the whole argument).
     let anyStake;
     if(gateRegistry.activeAt('stake_key_reuse_activation.STAKE_KEY_REUSE_ACTIVATION', this.config['NETWORK'], data['COIN'], data['BLOCK_INDEX'], null))
         anyStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX'], {reuseBlockingOnly: true});

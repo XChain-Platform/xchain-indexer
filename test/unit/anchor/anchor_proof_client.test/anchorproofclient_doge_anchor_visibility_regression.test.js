@@ -331,3 +331,27 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
     });
     });
 });
+
+describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => {
+    // A reward_type naming no live family is rejected from the signed row alone, so the
+    // verdict must not wait on DOGE: a missing or unreachable indexer would defer the block
+    // for a reward that can never mint.
+    describe('proveMined guards', function () {
+        it('rejects a retired per-chain reward type with no DOGE indexer wired', async function () {
+            const c = new AnchorProofClient({ COIN: 'BTC', NETWORK: 'regtest' }, { url: '' });
+            for (const rewardType of ['anchor_BTC', 'anchor_LTC', 'anchor_DOGE', 'anchor_nonsense'])
+                assert.strictEqual(await c.proveMined(expectation({ rewardType })), 'rejected', rewardType);
+        });
+
+        it('rejects a retired per-chain reward type without asking DOGE', async function () {
+            const c = client();
+            let calls = 0;
+            c.fetch = async () => { calls++; return null; };
+            assert.strictEqual(await c.proveMined(expectation({ rewardType: 'anchor_BTC' })), 'rejected');
+            assert.strictEqual(calls, 0, 'the family verdict needs no chain data');
+            const live = new AnchorProofClient({ COIN: 'BTC', NETWORK: 'regtest' }, { url: '' });
+            assert.strictEqual(await live.proveMined(expectation({ rewardType: 'anchor_bundle' })), 'unknown',
+                'a live family with no DOGE indexer still defers');
+        });
+    });
+});

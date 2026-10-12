@@ -69,7 +69,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             // A colluding oracle_publish quorum (or, without --verify-stakes, a fabricated
             // archive) claims an inflated anchor_BTC amount. The batch still verifies (the
             // wrapper sigs are valid over the CRC-bound JSON), but recovery must STAGE the
-            // FROZEN ANCHOR_REWARD_AMOUNT the live indexer credits (anchor.js), never the wire
+            // FROZEN ANCHOR_REWARD_AMOUNT the live indexer credits (anchor_reward_derive.js), never the wire
             // amount, or the recovered COLLECT rail over-credits vs a live node.
             let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
                                     { rewards: [ reward({ amount: '999.00000000' }),

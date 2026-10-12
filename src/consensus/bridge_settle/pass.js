@@ -124,8 +124,9 @@ async function fetchProofForTransfer(row, ctx){
 }
 
 /**
- * The end-of-block settle pass. XChainIndexer.js calls this in its PINNED position,
- * immediately after util.processCrossChainSettlements and before util.processCrossChainCalls.
+ * The end-of-block settle pass. runSettlementPasses in XChainIndexer/block_passes.js calls
+ * this in its PINNED position, after util.processCrossChainSettlements and
+ * listShareSettle.processListSharePass and before util.processCrossChainCalls.
  *
  * ORDER INSIDE THE PASS is pinned too: policy snapshots run at the HEAD, then the transfer
  * legs. A snapshot materialized after a credit in the same block would gate that credit under

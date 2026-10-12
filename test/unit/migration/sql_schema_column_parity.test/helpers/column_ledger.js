@@ -29,18 +29,30 @@ const MIG_DIR = path.join(SQL_DIR, 'migrations');
 
 const stripComments = (sql) => Database.prototype.stripSqlLineComments.call({}, sql);
 
-// A column spec normalized for comparison across the two paths: uppercased, single
-// spaces, no backticks/trailing commas, and with any positional clause removed (the
-// position is asserted separately). `VARCHAR(256) NOT NULL DEFAULT '0'` compares equal
-// no matter how the source file wrapped or aligned it.
+// One single-quoted SQL literal, with '' and backslash escapes.
+const SQL_LITERAL = /'(?:''|\\.|[^'\\])*'/g;
+
+// The quoted literals of a spec in source order, case kept.
+const sqlLiterals = (spec) => String(spec || '').match(SQL_LITERAL) || [];
+
+// Uppercase everything but the quoted literals (MariaDB keeps DEFAULT and ENUM literal case).
+const upperOutsideLiterals = (text) => String(text).split(/('(?:''|\\.|[^'\\])*')/)
+    .map((part, i) => (i % 2 === 1 ? part : part.toUpperCase())).join('');
+
+// Fold literal case too, for comparing against the origin anchor (frozen fully uppercased).
+const foldLiteralCase = (spec) => String(spec).toUpperCase();
+
+// A column spec normalized for comparison across the two paths: uppercased outside its
+// quoted literals, single spaces, no backticks/trailing commas, and with any positional
+// clause removed (the position is asserted separately). `VARCHAR(256) NOT NULL DEFAULT '0'`
+// compares equal no matter how the source file wrapped or aligned it.
 function normalizeSpec(spec) {
-    return String(spec || '')
+    return upperOutsideLiterals(String(spec || '')
         .replace(/`/g, '')
         .replace(/\s+/g, ' ')
         .replace(/\s*,\s*$/, '')
         .replace(/\s+(AFTER\s+\w+|FIRST)\s*$/i, '')
-        .trim()
-        .toUpperCase();
+        .trim());
 }
 
 // table -> ordered [{ name, spec }] from the canonical definitions. Uses the SAME
@@ -117,18 +129,17 @@ function collectMigrationCreatedTables() {
 }
 
 // The whole CREATE TABLE block reduced to a comparable form: no backticks, collapsed
-// whitespace, uppercased, and with the optional `IF NOT EXISTS` removed. Two blocks that
-// compare equal produce the same SHOW CREATE TABLE.
+// whitespace, uppercased outside quoted literals, and with the optional `IF NOT EXISTS`
+// removed. Two blocks that compare equal produce the same SHOW CREATE TABLE.
 function normalizeCreateBody(sql) {
-    return String(sql)
+    return upperOutsideLiterals(String(sql)
         .replace(/`/g, '')
         .replace(/\bIF\s+NOT\s+EXISTS\s+/i, '')
         .replace(/\s+/g, ' ')
         .replace(/\s*,\s*/g, ',')
         .replace(/\s*\(\s*/g, '(')
         .replace(/\s*\)\s*/g, ')')
-        .trim()
-        .toUpperCase();
+        .trim());
 }
 
 const byFile = (x, y) => (x.file < y.file ? -1 : x.file > y.file ? 1 : 0);
@@ -234,5 +245,5 @@ function supersededAdds() {
 module.exports = {
     collectDefinitionColumns, collectMigrationColumns, collectMigrationCreatedTables,
     composeLedgerColumns, bodyTail, collectDefinitionBodies, collectMigrationModifies,
-    stripInlineKeys, supersededAdds,
+    stripInlineKeys, supersededAdds, sqlLiterals, upperOutsideLiterals, foldLiteralCase,
 };
