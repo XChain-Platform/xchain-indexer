@@ -9433,19 +9433,6 @@
       "custody guard scenario fixtures provides exactly null for an unbound guard",
       "custody guard scenario fixtures provides plain positive-index rows for every bound guard scenario"
     ],
-    "96ef5454f3c8b466": [
-      "bin/suite-title-map pure helpers compare accepts an identical title set moved through the rename map",
-      "bin/suite-title-map pure helpers compare reports dropped and added titles for an unrenamed file",
-      "bin/suite-title-map pure helpers compare reports files that exist on only one side",
-      "bin/suite-title-map pure helpers expand returns null for an uncollected script",
-      "bin/suite-title-map pure helpers expand returns the flat file-to-titles view for a collected script",
-      "bin/suite-title-map pure helpers mergeScriptMap refreshes one script without dropping unrelated scripts or their title sets",
-      "bin/suite-title-map pure helpers mergeScriptMap refuses to create a misleading partial map from a missing script",
-      "bin/suite-title-map pure helpers mochaArgsFor extracts leading environment assignments from mocha arguments",
-      "bin/suite-title-map pure helpers mochaArgsFor extracts npm scripts from a composite command",
-      "bin/suite-title-map pure helpers mochaArgsFor identifies a non-mocha command in the skip reason",
-      "bin/suite-title-map pure helpers splitCommand keeps quoted grep patterns and globs as single tokens"
-    ],
     "97183ecc8d1ea3cb": [
       "empty allow list denial activation @regression @tier1 parks mainnet at the sentinel, arms testnet at the v0.21.3 heights and activates regtest at genesis"
     ],
@@ -10752,6 +10739,20 @@
       "chainBlockHash() returns null for an empty row list",
       "chainBlockHash() returns null for null and empty block hashes",
       "chainBlockHash() stringifies a Buffer-like hash and passes the target through unchanged"
+    ],
+    "ab24904df7e00e0b": [
+      "bin/suite-title-map pure helpers compare accepts an identical title set moved through the rename map",
+      "bin/suite-title-map pure helpers compare reports a collection error instead of claiming the script was removed",
+      "bin/suite-title-map pure helpers compare reports dropped and added titles for an unrenamed file",
+      "bin/suite-title-map pure helpers compare reports files that exist on only one side",
+      "bin/suite-title-map pure helpers expand returns null for an uncollected script",
+      "bin/suite-title-map pure helpers expand returns the flat file-to-titles view for a collected script",
+      "bin/suite-title-map pure helpers mergeScriptMap refreshes one script without dropping unrelated scripts or their title sets",
+      "bin/suite-title-map pure helpers mergeScriptMap refuses to create a misleading partial map from a missing script",
+      "bin/suite-title-map pure helpers mochaArgsFor extracts leading environment assignments from mocha arguments",
+      "bin/suite-title-map pure helpers mochaArgsFor extracts npm scripts from a composite command",
+      "bin/suite-title-map pure helpers mochaArgsFor identifies a non-mocha command in the skip reason",
+      "bin/suite-title-map pure helpers splitCommand keeps quoted grep patterns and globs as single tokens"
     ],
     "ab44c3cb98ffce39": [
       "XBRIDGE action handler @regression @tier3 v3 lock (a native token on its origin chain) admits a destination listed beside others",
@@ -15537,7 +15538,7 @@
   "scripts": {
     "test": {
       "fileCount": 1270,
-      "titleCount": 12993,
+      "titleCount": 12994,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16042,7 +16043,7 @@
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
-        "test/unit/bin/suite_title_map.test.js": "96ef5454f3c8b466",
+        "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
         "test/unit/boundary/amounts/supply_limits.test.js": "a3ff598f6a613223",

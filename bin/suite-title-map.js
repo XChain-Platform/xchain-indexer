@@ -273,6 +273,11 @@ function compare(pin, fresh, renames, only) {
         .filter((n) => !only || n === only)
         .sort();
     for (const name of names) {
+        const freshScript = fresh.scripts[name];
+        if (freshScript && freshScript.error) {
+            differences.push({ script: name, kind: 'collection_error', detail: freshScript.error });
+            continue;
+        }
         const before = expand(pin, name);
         const after = expand(fresh, name);
         if (!before && !after) continue;
