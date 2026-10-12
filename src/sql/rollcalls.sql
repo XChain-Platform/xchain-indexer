@@ -13,7 +13,7 @@
 -- fee spike, a dead federation or a truncated validator read can never evict
 -- anyone -- so it must be recorded as "happened, decided nothing".
 --
--- rollback: 'special' on close_block (tableLifecycle.js). These rows are derived
+-- rollback: 'special' on close_block (table_lifecycle.js). These rows are derived
 -- at the close block and delete with it, so a reorg past C removes the epoch's
 -- verdict along with the synthetic UNSTAKE actions and the reward row it produced.
 

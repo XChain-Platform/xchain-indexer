@@ -315,14 +315,6 @@
     "residue": "0123a996d8f66783b15aa7f8cfc2b0545844d3d8579cc50df66c79a6334a6a2e",
     "sha256": "e4ef50910ca9ebc4582b1fbf1e3c6a151cb0b342c76a3949c7d0704729d8a6a7"
   },
-  "2026-09-12-state-tree-roots-block-index-idx.sql": {
-    "residue": "cb5c930ccfc59040a01db825833db29ab447943a03911246da9e21b376a8cfac",
-    "sha256": "12823f2f2c80bc6a864ab931367a615f9abf308bf2e0cfd6da0085f28c8fe22c"
-  },
-  "2026-09-12-token-bridge-fields.sql": {
-    "residue": "54620667c5ff1aa2276a60683d248023cb8427ec9bb577b7616bcd874e32f1f8",
-    "sha256": "64127c01e9b417496f324fa8c54393b811679b0550e16e5b9d4b5f44e428692b"
-  },
   "2026-09-13-destroys-sends-leg-ordinal.sql": {
     "residue": "007ae93c02c0dd960e92d898d95215cba7e7fa10c40a97667e0d7704d990d61e",
     "sha256": "40f12736a5444a9efc328e49dbf360e38ff76c3320ac59e541d51a05c58dc4a4"
@@ -359,6 +351,10 @@
     "residue": "ce04a8f00583ac7570b28b02dad5ce18cdafb3dbbe441e7a3291858246e29fdf",
     "sha256": "c9cf3cba2d21d96f3e3bb0dde812d11a09c17e1d68e82bae945d068c0e2a7745"
   },
+  "2026-10-01-list-metas.sql": {
+    "residue": "60354a033c6737584e996de96ea3de8d53a2d8a637057780b66f84304bf8519d",
+    "sha256": "fb92a3876bf0ba987caab7bb8b18edbcf4ace057522135a6a9fab1f223058367"
+  },
   "2026-10-01-list-transfers.sql": {
     "residue": "ff7ac0e317c9ffae0a414cea196ad7741249a0a6a9ee3b08a9613a26054718d9",
     "sha256": "6707570b7a88c2a4f8e4a4d220d37cb6da00af5b4cbd2cb42d280c7905f8aafa"
@@ -366,5 +362,29 @@
   "2026-10-01-response-mirror-batch-action-index.sql": {
     "residue": "e7294acae1967cfd1253530e335c238970b4edd1095f30158face7ff74d6f4d9",
     "sha256": "e39bdb420f27d1bdc4016195d6caea0c4e6e16abdd10491d0cb255c4dc98c6a8"
+  },
+  "2026-10-02-list-snapshots-meta.sql": {
+    "residue": "47dbbf301e1486757e53743c26e6d3256e451be5c333797bf163d49853f31b00",
+    "sha256": "39e37ea756164e86a73aeed7f89310f6df2fa6eb39a9d1a620437f7bf1c290fe"
+  },
+  "2026-10-03-pending-hub-pushes-delivered-to.sql": {
+    "residue": "3497a1a8ddf21025b78e2eb4bcd7a7f4df479bda859485bed47eaa29deb94f8a",
+    "sha256": "adb1242dcb10057486435e6331804a005d7ce008e19b6696c6000d6fab460eff"
+  },
+  "2026-10-06-resolved-block-idx.sql": {
+    "residue": "74fc02605ccfb7ef35c0eae8481ab51976b6d68bde6adadbfc6ecc2df4a2f313",
+    "sha256": "92f86b203c4c68c8d43354d1cc47f0b68dad50539f4264b65a2843bc8d2009d9"
+  },
+  "2026-10-07-ledger-covering-index.sql": {
+    "residue": "164d350a7b5828eeb01316348f23eae9bed3c3da7f8b738200eac23e1e31475f",
+    "sha256": "f1d3b4bd39680f0ab63f5d48459de9e6392346738183b97b7021918678deb88d"
+  },
+  "2026-10-08-state-tree-roots-block-index-idx.sql": {
+    "residue": "cb5c930ccfc59040a01db825833db29ab447943a03911246da9e21b376a8cfac",
+    "sha256": "12823f2f2c80bc6a864ab931367a615f9abf308bf2e0cfd6da0085f28c8fe22c"
+  },
+  "2026-10-08-token-bridge-fields.sql": {
+    "residue": "54620667c5ff1aa2276a60683d248023cb8427ec9bb577b7616bcd874e32f1f8",
+    "sha256": "64127c01e9b417496f324fa8c54393b811679b0550e16e5b9d4b5f44e428692b"
   }
 }

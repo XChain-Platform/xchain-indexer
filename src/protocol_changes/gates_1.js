@@ -32,11 +32,11 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']).
 addGate('amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION', 'time', {
-    mainnet: 9999999999,    // UNARMED (house sentinel, year 2286): mainnet writes are held
+    mainnet: UNARMED,       // UNARMED (house sentinel, year 2286): mainnet writes are held
     'BTC:testnet': 1791061097,
     'LTC:testnet': 1791061097,
     'DOGE:testnet': 1791061097,
-    testnet: 9999999999,    // UNARMED (house sentinel): live launched history, arm needs a measured replay witness
+    testnet: UNARMED,       // UNARMED (house sentinel): live launched history, arm needs a measured replay witness
     regtest: 0,
 });
 
@@ -52,9 +52,9 @@ addGate('amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS', 'constan
 // archive fold) parses only once ANCHOR_FOLD_ACTIVATION is also active, and every other version
 // byte is 'invalid: VERSION (unknown)'. Keyed on the action's OWN DOGE block_index
 // (data['BLOCK_INDEX'] at parse time, anchor_actions.block_index_doge), never on SNAPSHOT_BLOCK or
-// the checkpointed height: the row being judged is the anchor itself. Mainnet 6360000 sits ABOVE
-// the chain tip on purpose: the restarted wire set has NOT activated on mainnet yet, and the height
-// is a flag day the operator arms deliberately rather than one that silently already passed.
+// the checkpointed height: the row being judged is the anchor itself. Mainnet 6360000 is live:
+// the chain tip is past it, so the restarted wire set is active on mainnet and the height is
+// a flag day that has already passed.
 // Testnet 67858600 is 24 blocks above its last pre-restart anchor (67858576) and is already past.
 // Neither is 0, because both carry pre-restart history (mainnet 56 rows, testnet 11, measured
 // 2026-08-30): at 0 the gate can never fire, so the retired wires fall through to the restarted
@@ -68,6 +68,10 @@ addGate('anchor_activation.ANCHOR_ACTIVATION', 'height', {
     testnet: 67858600,
     regtest: 0,
 });
+// Below-activation anchors become 'unverified'; unarmed until the cut sets it with the reindex.
+addGate('anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984, 'DOGE:testnet': 67989993, testnet: 67989993, regtest: 0 });
+// anchor_archive_fold_term_activation
+addGate('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984, 'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0 });
 
 // archive_batch_author_activation
 // Per-network activation, interpreted against the DOGE block_index of the batch's
@@ -243,14 +247,14 @@ addGate('caret_ref_strict_activation.CARET_REF_STRICT_ACTIVATION', 'height', {
 });
 
 // consolidation_leg_amount_activation
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
+// Per-network activation, interpreted against the block's consensus timestamp (data['BLOCK_TIME']).
 addGate('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION', 'time', {
     mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 SEND, 0 DESTROY, measured 2026-09-09)
     testnet: 0,
     regtest: 0,
 });
-
+addGate('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984, 'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0 });
+addGate('send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION', 'time', { mainnet: UNARMED, testnet: 1791804379, 'BTC:testnet': 1791804379, 'LTC:testnet': 1791804379, 'DOGE:testnet': 1791804379, regtest: 0 });
 // dispense_cancelling_match_activation
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']). Mainnet flips at the coordinated 2.0.0 contract-era
@@ -321,10 +325,10 @@ addGate('dispenser_freshness_activation.DISPENSER_FRESHNESS_ACTIVATION', 'height
 // block_index. At/after the height a shape-violating non-null get_first_seen
 // result throws; below it the legacy fail-open null is returned.
 addGate('dispenser_freshness_shape_activation.DISPENSER_FRESHNESS_SHAPE_ACTIVATION', 'height', {
-    'BTC:mainnet':  null,   // UNARMED: operator-owned, sized below 961000 on the arming train
-    'LTC:mainnet':  null,   // UNARMED: operator-owned, sized below 3154250 on the arming train
-    'DOGE:mainnet': null,   // UNARMED: operator-owned, sized below 6319000 on the arming train
-    mainnet:        null,   // UNARMED: a coin with no entry above inherits the inert posture
+    'BTC:mainnet':  null,   // INERT: operator-owned, sized below 961000 on the arming train
+    'LTC:mainnet':  null,   // INERT: operator-owned, sized below 3154250 on the arming train
+    'DOGE:mainnet': null,   // INERT: operator-owned, sized below 6319000 on the arming train
+    mainnet:        null,   // INERT: a coin with no entry above inherits the inert posture
     testnet:        0,      // genesis-active: the tracker path is unreachable there, nothing replays differently
     regtest:        0,      // genesis-active so the venue exercises the strict path
 });
@@ -375,7 +379,8 @@ addGate('dispenser_send_amount_compare_activation.DISPENSER_SEND_COMPARE_SCALE',
 
 // Per-chain activation heights, interpreted against the chain's own block_index.
 // `null` = NOT YET PINNED = inert (legacy lexicographic compare, byte-identical
-// replay). Mainnet and regtest are armed; testnet is still unpinned.
+// replay). All three networks are armed; testnet at heights, with the legacy
+// lexicographic compare below them.
 addGate('dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION', 'height', {
     // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet
     // history (0 dispensers, 0 dispenses on every chain, measured 2026-09-09), so
@@ -383,8 +388,8 @@ addGate('dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_
     'BTC:mainnet':  0,
     'LTC:mainnet':  0,
     'DOGE:mainnet': 0,
-    // Unpinned. Testnet arms at flag-day assembly, above the tip recorded at that
-    // time, in one coordinated fleet deploy. A height a carrying fleet has already
+    // ARMED by the v0.21.3 cut at these heights rather than at genesis, with the
+    // legacy lexicographic compare below them. A height a carrying fleet has already
     // passed opens a retroactive window: a node that reindexes across it derives
     // different state than one that did not, and testnet does carry the history
     // that makes that real.

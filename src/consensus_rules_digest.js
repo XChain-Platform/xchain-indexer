@@ -31,13 +31,13 @@
  *     carries none) hashes every armed row its repo's registry carries, a far
  *     wider set than SHARED_GATES. It compares processes that share that
  *     registry, two indexers or an indexer and its sync replica, never a hub.
- *   - This digest hashes the DECIDED HEIGHTS of SHARED_GATES alone. It answers
+ *   - This digest hashes the DECIDED VALUES of SHARED_GATES alone. It answers
  *     "do you and I apply the same rules to the same chain", which is the
  *     question that actually predicts divergence, and it is comparable ACROSS
  *     repos: a hub and an indexer running the same flag days produce the same
  *     digest even though they share no source file.
  *
- * Neither moves on a comment reformat (prose cannot fork a chain, a height
+ * Neither moves on a comment reformat (prose cannot fork a chain, a value
  * can), and both move when a regtest venue arms a gate from its environment.
  *
  * SHARED_GATES is deliberately a hardcoded intersection rather than a
@@ -136,15 +136,21 @@ const SHARED_GATES = [
     ['list_share_producer_activation',          ['LIST_SHARE_PRODUCER_ACTIVATION']],
     // The hub signs list snapshots in two shapes either side of this gate, so a build that
     // sizes it differently must report a rules mismatch.
-    ['list_meta_activation',                    ['LIST_META_ACTIVATION']]
+    ['list_meta_activation',                    ['LIST_META_ACTIVATION']],
+    // The per-chain admission margins decide which block a hub stamps and which watermark an
+    // indexer accepts. Both the activation and the selected margins therefore belong in the
+    // cross-process digest. Appended at the end to preserve every earlier preimage row.
+    ['mirror_admission_margin_activation',      ['ADMIT_CHAIN_MARGIN_ACTIVATION', 'ADMIT_CHAIN_MARGIN_BLOCKS']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an
-// activation (PRICE_PAIR_WIDEN_ACTIVATION.mainnet is the live example), and activeGatesAt
+// activation (TOKEN_BRIDGE_ACTIVATION.mainnet and LIST_META_ACTIVATION.mainnet are the live examples), and activeGatesAt
 // must never report such a gate as active however high the chain climbs.
 const FAR_FUTURE_HEIGHT_SENTINEL = 9999999999;
 
 const ABSENT = '<absent>';
+
+const ACTIVE_GATES_UNIT_AWARE_ACTIVATION = Object.freeze(['height', 'time', 'epoch']);
 
 // Canonical JSON with object keys sorted, so two builds that spell the same map
 // with its networks in a different order still digest alike. JSON.stringify's
@@ -278,13 +284,25 @@ function networkActivationHeight(map, network, coin){
     return declared ? map[network] : undefined;
 }
 
+function hasActivationUnit(key){
+    try {
+        registry.activeAt(key, '', null, 0, 0);
+        return true;
+    } catch (e) {
+        if (e && e.name === 'RegistryMissError') return false;
+        const match = e && /^activeAt: unsupported unit ([a-z]+) for /.exec(e.message);
+        if (match && !ACTIVE_GATES_UNIT_AWARE_ACTIVATION.includes(match[1])) return false;
+        throw e;
+    }
+}
+
 // The shared gates ACTIVE at `height` on `network`, '<module>.<EXPORT>', sorted: every
-// per-network activation MAP whose entry for the network is a finite height, below the
-// far-future sentinel, and <= height. Non-map exports (frozen ladder constants such as
-// ATTEST_RESPONSIBLE_WIDENING) are never active in this sense and are never listed; a
-// null entry is the unratified sentinel and reads as inactive. This is the comparand the
-// rules-aware capability set filters on: a validator whose last rolled call did not name
-// every key returned here is dropped for a request at this height.
+// registry row with an activation unit (height, time or epoch) whose entry for the network
+// is finite, below the far-future sentinel, and <= height. Constant and ruleset rows are
+// never active in this sense even when their value is a network-shaped object; a null entry
+// is the unratified sentinel and reads as inactive. This is the comparand the rules-aware
+// capability set filters on: a validator whose last rolled call did not name every key
+// returned here is dropped for a request at this height.
 //
 // `coin` is optional and only changes the answer for a coin-keyed gate: pass the chain
 // being judged to get that chain's own activation, omit it to get the network-wide answer
@@ -298,6 +316,7 @@ function activeGatesAt(height, network, coin){
     for (const key of Object.keys(values)) {
         const v = values[key];
         if (v === ABSENT || v === null || typeof v !== 'object' || Array.isArray(v)) continue;
+        if (!hasActivationUnit(key)) continue;
         const at = networkActivationHeight(v, network, coin);
         if (at === undefined) continue;
         if (!Number.isFinite(at) || at >= FAR_FUTURE_HEIGHT_SENTINEL) continue;

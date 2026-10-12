@@ -45,7 +45,7 @@ const bridgeStateSubtree = require('../../consensus/gates/state_subtree_gate.js'
 async function readVerifiedCheckpoint(db, chain, network, height){
     let cpRows = await db.mirrorDb().doQueryStrict(
         `SELECT checkpoint_seq, snapshot_block, state_root, state_root_version
-             FROM state_checkpoints WHERE chain=? AND network=? AND block_index=? LIMIT 1`,
+             FROM state_checkpoints WHERE chain=? AND network=? AND block_index=? ORDER BY checkpoint_seq DESC LIMIT 1`,
         [chain, network, height]);
     if(!cpRows.length) return null;
     let cp = cpRows[0];

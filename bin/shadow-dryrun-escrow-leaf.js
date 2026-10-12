@@ -161,6 +161,7 @@ function liveSet(rows){
     if(!span.length || span[0].n == null || Number(span[0].n) === 0){
         console.log('# ' + opts.db + ': no escrow rows; nothing to shadow');
         if(db.close) await db.close();
+        process.exit(1);
         return;
     }
     const lo = (opts.from != null) ? opts.from : Number(span[0].lo);
@@ -236,6 +237,10 @@ function liveSet(rows){
     console.log(root === v1Root
         ? '# NOTE identical: this chain holds nothing locked, so the leaf set is unchanged'
         : '# differs, as it must: arming this chain would move balances_root');
+    if(root === v1Root){
+        if(db.close) await db.close();
+        process.exit(1);
+    }
 
     const committed = await db.doQuery(
         'SELECT balances_root FROM state_tree_roots WHERE chain=? AND network=? ORDER BY block_index DESC LIMIT 1',

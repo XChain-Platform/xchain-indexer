@@ -75,6 +75,33 @@ function warnPrefixDrift(table, key, idx, live){
     }
 }
 
+// Find a live index STRICTER than its plain declaration (UNIQUE or FULLTEXT), which a fresh
+// install never builds (a stale UNIQUE rejects rows it accepts). Returns { live, kind } or null.
+function stricterLiveIndex(idx, key, byName, liveByCols, declared){
+    // Judge the live index carrying the declared name first; with none, the column-set match,
+    // unless another declaration (inline key, PRIMARY, sibling CREATE INDEX) accounts for it.
+    let named = null;
+    for(const [nm, info] of byName){ if(nm.toLowerCase() === idx.name.toLowerCase()){ named = info; break; } }
+    let live = null;
+    if(named){
+        // A same-named index on other columns is the name-collision branch's case, not this one.
+        if(named.cols.join(',') !== key) return null;
+        live = named;
+    } else {
+        const coveredElsewhere = (declared || []).some(d =>
+            d !== idx && String(d.name || '').toLowerCase() !== idx.name.toLowerCase() &&
+            d.columns && d.columns.map(c => String(c).toLowerCase()).join(',') === key);
+        if(coveredElsewhere) return null;
+        live = liveByCols.get(key) || null;
+    }
+    // Only a live index that already SATISFIES the declaration can be stricter than it; any
+    // other shape stays with the add and name-collision branches, so no ALTER path changes.
+    if(!live || !((!idx.unique || live.unique) && (!idx.fulltext || live.fulltext))) return null;
+    if(live.unique && !idx.unique)     return { live, kind: 'UNIQUE' };
+    if(live.fulltext && !idx.fulltext) return { live, kind: 'FULLTEXT' };
+    return null;
+}
+
 // A declared index whose name a different live index already holds: warn, never DROP.
 function warnNameCollision(table, key, idx, byName){
     // Name taken by a DIFFERENT live index (different column set, or same
@@ -162,9 +189,25 @@ module.exports = {
             // inline declares no standalone CREATE INDEX at all.
 
             const { byName, liveNames, liveByCols } = await readLiveIndexes(this, db, table);
+            // Every declaration, standalone and inline, read once: the kind check below and
+            // the undeclared-index detector at the bottom both need the full declared set.
+            const declared = expected.concat(this.parseInlineIndexes(data, table));
 
             for(const idx of expected){
                 const key  = idx.columns.map(c => c.toLowerCase()).join(',');
+                // Report a live index stricter than declared, never DROP or rebuild it (the
+                // never-DROP posture of the name-collision branch); a dated migration converges it.
+                const stricter = stricterLiveIndex(idx, key, byName, liveByCols, declared);
+                if(stricter){
+                    warnPrefixDrift(table, key, idx, stricter.live);
+                    const declaredKind = stricter.kind === 'FULLTEXT' ? 'B-tree' : 'non-unique';
+                    getLogger().warn('Schema shape drift on ' + table + ': index ' + idx.name + ' on (' + key + ') is live ' +
+                        stricter.kind + ' but declared ' + declaredKind + ', so this DB does not match a fresh install. ' +
+                        'Not auto-healed (never DROP an index we did not create); converge with a dated migration via node src/db/migration/migrate.js.');
+                    recordShapeDrift(this.schemaShapeDrift, table, 'indexKinds',
+                        [{ name: idx.name, columns: idx.columns.map(c => c.toLowerCase()), live: stricter.kind, declared: declaredKind }]);
+                    continue;
+                }
                 const live = liveByCols.get(key);
                 if(live && (!idx.unique || live.unique) && (!idx.fulltext || live.fulltext)){
                     warnPrefixDrift(table, key, idx, live);
@@ -182,8 +225,7 @@ module.exports = {
             // CREATE TABLE block) so only a genuine orphan is reported. Detection only -
             // the never-DROP rule that governs the name-collision branch above governs
             // this too; converging is a dated migration's job.
-            const undeclared = this.undeclaredLiveIndexes(
-                expected.concat(this.parseInlineIndexes(data, table)), byName);
+            const undeclared = this.undeclaredLiveIndexes(declared, byName);
             if(undeclared.length){
                 getLogger().warn('Schema shape drift on ' + table + ': live index(es) ' +
                     undeclared.map(i => (i.unique ? 'UNIQUE ' : i.fulltext ? 'FULLTEXT ' : '') + i.name + ' (' + i.columns.join(',') + ')').join('; ') +

@@ -124,4 +124,28 @@ async function getOpenSwapsByList(db, list_root){
     return getOpenMarketsByList(db, list_root, 'swap', 'getSwapEdits');
 }
 
-module.exports = { getOpenOrdersByList, getOpenSwapsByList };
+function tokenListSql(kind){
+    if(kind !== 'order' && kind !== 'swap')
+        throw new Error('invalid market kind');
+    return `WITH RECURSIVE list_refs(action_index) AS (
+                SELECT ?
+                UNION DISTINCT
+                SELECT ed.action_index FROM lists ed
+                INNER JOIN list_refs parent ON (ed.list_action_index=parent.action_index)
+            )
+            SELECT DISTINCT m.action_index FROM ${kind}s m
+            INNER JOIN ${kind}_statuses ms ON (ms.${kind}_action_index=m.action_index)
+            INNER JOIN index_statuses st ON (st.id=ms.status_id)
+            INNER JOIN tokens tk ON (tk.tick_id IN (m.give_tick_id, m.get_tick_id))
+            WHERE ms.action_index=(SELECT MAX(l.action_index) FROM ${kind}_statuses l
+                WHERE l.${kind}_action_index=m.action_index) AND st.status='open'
+            AND (tk.allow_list IN (SELECT action_index FROM list_refs)
+                 OR tk.block_list IN (SELECT action_index FROM list_refs))`;
+}
+
+async function getOpenMarketsByTokenList(db, list_root, kind){
+    let rows = await db.doQuery(tokenListSql(kind), [list_root]);
+    return [...new Set(rows.map(row => Number(row.action_index)))];
+}
+
+module.exports = { getOpenOrdersByList, getOpenSwapsByList, getOpenMarketsByTokenList };

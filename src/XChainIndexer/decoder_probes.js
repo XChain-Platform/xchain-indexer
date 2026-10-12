@@ -66,18 +66,21 @@ module.exports = {
         return halted;
     },
 
-    // Resolve (and memoize) this chain's instance identity: the hash of BITCOIN block 1.
+    // Resolve (and memoize) this Bitcoin chain's instance identity. Block 1 is preferred;
+    // when a public-network decoder begins at a later protocol boundary and therefore has
+    // no block-1 row, its first decoded block supplies the stable chain-specific hash.
     //
     // Bitcoin only. The cross-chain tables are BTC-anchored, so the hub stamps its rows with
     // the id its Bitcoin indexer reports and every mirror fences on it; a DOGE or LTC indexer
     // has no such chain of its own to read and learns the id from the hub's snapshot
     // envelopes instead (HubDbSync.setExpectedBtcChainId with source 'hub').
     //
-    // Returns null while block 1 is not in the decoder database yet, which is the normal
-    // state of a freshly re-genesised regtest chain at startup: nothing is pushed and no
-    // fence is armed until it resolves, and the caller retries once per parsed block. The
-    // read is memoized because block 1's hash cannot change without a reorg that deep, which
-    // is a new chain rather than an event this process survives.
+    // Returns null while block 1 is not in a decoder that begins at block 0, which is the
+    // normal state of a freshly re-genesised regtest chain at startup: block 0 cannot serve
+    // because its hash is shared by every fresh chain using the same chainparams. Nothing is
+    // pushed and no fence is armed until block 1 resolves. The selected hash is memoized
+    // because changing a chain's first decoded block is a new chain, not an event this
+    // process survives.
     //
     // Never throws: the identity is transport (it enters no canonical and no block-hash
     // preimage), so a decoder read fault must never reach the block loop.
@@ -85,14 +88,24 @@ module.exports = {
         if(this.btcChainId) return this.btcChainId;
         if(this.config['COIN'] !== 'BTC') return null;
         let hash = null;
+        let identityBlock = 1;
+        const validHash = (value) => (typeof value === 'string' && /^[0-9a-f]{64}$/.test(value));
         try {
-            hash = await this.decoderDb.getDecoderBlockHash(1);
+            hash = await this.decoderDb.getDecoderBlockHash(identityBlock);
+            if(!validHash(hash) && typeof this.decoderDb.getBlockIndex === 'function'){
+                let firstDecoderBlock = Number(await this.decoderDb.getBlockIndex('decoder', 'first'));
+                if(Number.isSafeInteger(firstDecoderBlock) && firstDecoderBlock > 1){
+                    identityBlock = firstDecoderBlock;
+                    hash = await this.decoderDb.getDecoderBlockHash(identityBlock);
+                }
+            }
         } catch(e){
             return null;
         }
-        if(typeof hash !== 'string' || !/^[0-9a-f]{64}$/.test(hash)) return null;
+        if(!validHash(hash)) return null;
         this.btcChainId = hash;
-        getLogger().info('Chain identity  : BTC block 1 is ' + hash + ' (stamped on this hub\'s cross-chain rows)');
+        getLogger().info('Chain identity  : BTC block ' + identityBlock + ' is ' + hash +
+            ' (stamped on this hub\'s cross-chain rows)');
         // Authoritative for this node: a hub advertising another chain never overrides it.
         if(this.hubDbSync && typeof this.hubDbSync.setExpectedBtcChainId === 'function'){
             try { await this.hubDbSync.setExpectedBtcChainId(hash, 'local'); }

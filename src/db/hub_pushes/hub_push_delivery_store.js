@@ -77,6 +77,22 @@ class HubPushDeliveryStore {
         );
     }
 
+    // Settle a row after a LIVE post-commit send reached `address`. With no unpinned
+    // candidates the row is done; otherwise record that hub and drop the row only once
+    // every candidate has it, so the drain still fans it out to the rest.
+    async settleLiveDelivery(rowId, address){
+        let candidates = this.candidateAddresses();
+        if(candidates.length === 0){
+            await this.indexerDb.markHubPushDelivered(rowId);
+            return;
+        }
+        if(typeof address === 'string' && address.length > 0)
+            await this.markDelivered(rowId, address);
+        let deliveredTo = await this.getDeliveredTo(rowId);
+        if(candidates.every(candidate => deliveredTo.has(candidate)))
+            await this.indexerDb.markHubPushDelivered(rowId);
+    }
+
     async attempt(row, candidates){
         let parsed = await this.queue.parseHubPushPayload(row);
         if(parsed === null) return;

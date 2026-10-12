@@ -21,7 +21,7 @@
 
 'use strict';
 
-const attestBcastFee  = require('./attest_broadcast_fee_gate.js');
+const attestBcastFee  = require('./gates/attest_broadcast_fee_gate.js');
 const wid     = require('../../consensus/gates/attest_responsible_widening_gate.js');
 // The zero-conf flip, keyed on the REQUEST's own block: a registry row read by literal
 // key (W5). Read here for the fulfilled fee split, which pays the verified signers
@@ -30,14 +30,39 @@ const gateRegistry = require('../../consensus/gate_registry');
 const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { getLogger } = require('../../observability/index.js');
-const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
+
+async function splitRelayFulfilledFee(handler, request, data, feeAmount, gas, credits, validSigners){
+    let rewardPool = handler.config['ADDRESS']['REWARD'];
+    let rewardAmount = feeAmount;
+
+    let gasDecimals = await handler.indexerDb.getTokenDecimalPrecision(
+        await handler.indexerDb.getTickerId(gas)
+    );
+    let feeCap = Math.min(8, gasDecimals);
+    let allowance = await handler.relayFeeAllowance(request, data, feeAmount, feeCap);
+
+    if(handler.util.bcgt(allowance, '0')){
+        let payee = handler.relayFeePayee(request.request_id, validSigners);
+        let payoutAddress = await handler.relayFeePayoutAddress(payee, data['SNAPSHOT_BLOCK']);
+        if(payoutAddress){
+            rewardAmount = handler.util.bcsub(feeAmount, allowance, feeCap);
+            handler.util.addAddressTicker(payoutAddress, gas);
+            credits.push([gas, allowance, payoutAddress]);
+        }
+    }
+
+    handler.util.addAddressTicker(rewardPool, gas);
+    if(handler.util.bcgt(rewardAmount, '0'))
+        credits.push([gas, rewardAmount, rewardPool]);
+}
 
 module.exports = {
     // Settle the request fee escrowed at v0 (paid attestations). Runs at the
     // terminal flip and writes ledger rows at the SETTLING action's action_index
     // (the v1 response or the synthesized v2 expire), so a reorg of the settle
     // action removes them generically while the v0 escrow row survives.
-    //   'fulfilled'          → escrow → REWARD pool + equal validator_rewards
+    //   'fulfilled' local    → escrow → REWARD pool + equal validator_rewards
     //                          split across the responsible set (floor to GAS
     //                          decimals; remainder dust stays in the pool;
     //                          COLLECT only ever pays what validator_rewards
@@ -54,9 +79,13 @@ module.exports = {
     //                          widened set (signerPaySet); the pool credit,
     //                          the carve-out and the solvency argument are
     //                          unchanged, since the paid set is a subset.
+    //   'fulfilled' relay    → escrow → selected verified relay signer allowance
+    //                          + REWARD pool remainder. If the relay fee gate is
+    //                          inactive or no payout source resolves, the full
+    //                          escrow goes to REWARD.
     //   'errored'/'expired'  → escrow → refund to FEE_PAYER.
     // Feeless requests (fee_amount NULL/0) are a no-op.
-    async settleRequestFee(request, data, terminalStatus){
+    async settleRequestFee(request, data, terminalStatus, relaySigners){
         let feeAmount = String((request && request.fee_amount) || '0');
         if(!this.util.bcgt(feeAmount, '0')) return;
 
@@ -74,7 +103,11 @@ module.exports = {
         this.util.addAddressTicker(feePayer, gas);
 
         if(terminalStatus === 'fulfilled'){
-            await this.splitFulfilledFee(request, data, feeAmount, gas, credits);
+            if(Array.isArray(relaySigners))
+                await splitRelayFulfilledFee(
+                    this, request, data, feeAmount, gas, credits, relaySigners);
+            else
+                await this.splitFulfilledFee(request, data, feeAmount, gas, credits);
         } else {
             // errored / expired: service not rendered, refund the payer
             credits.push([gas, feeAmount, feePayer]);
@@ -158,8 +191,8 @@ module.exports = {
             splitPool = this.util.bcsub(feeAmount, broadcastFee, feeCap);
             // The broadcaster is a responsible-set member, so it collects this row
             // ON TOP of its equal share below ("additionally receives").
-            // A distinct reward_type keeps the two rows apart under the
-            // (source, pubkey, type, round_reference) unique key.
+            // A distinct reward_type keeps the two rows apart under the reward_unique key
+            // (source, pubkey, type, round_reference, round_qualifier); both rows use qualifier 0.
             await this.indexerDb.createValidatorReward(
                 responsible[0], Number(request.action_index), 'attest_bcast', broadcastFee, data['BLOCK_INDEX'], true
             );
@@ -223,8 +256,14 @@ module.exports = {
             return responsible;
         }
 
-        keys.sort((a, b) => (a < b) ? -1 : (a > b ? 1 : 0));
-        return keys;
+        let canonical = this.canonicalSignerSet(keys.map(pubkey => ({ pubkey, sig: '' })), responsible, request.redundancy);
+        if(canonical.length === 0){
+            getLogger().warn('Attestation fee settle: no stored signer is in the responsible set for request ' +
+                         String(request.request_id).substring(0,16) +
+                         '..., splitting among the recomputed responsible set instead');
+            return responsible;
+        }
+        return canonical.map(s => s.pubkey);
     },
 
     // The XCHAIN-denominated broadcast-fee reimbursement owed to the leader for this

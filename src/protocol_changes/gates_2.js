@@ -45,9 +45,9 @@ addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION', 'constant'
 
 // Per-chain activation heights, interpreted against the chain's own block_index.
 // `null` = NOT YET PINNED = inert (legacy per-row quantization, byte-identical
-// replay). Only regtest is armed, so fresh regtest stacks exercise the exact-fee
-// path end to end; mainnet/testnet heights are pinned at flag-day assembly with
-// the replay evidence this item requires.
+// replay). Mainnet is pinned at the heights below; testnet and regtest are armed
+// at genesis, so fresh regtest stacks exercise the exact-fee path end to end. Each
+// network's reason sits beside its entries.
 addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION', 'height', {
     // Pinned on the standing 21-day rule, to the same boundary the oracle
     // stale-round gate uses, so both consensus changes arm in one fleet deploy
@@ -71,21 +71,14 @@ addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION',
 });
 
 // list_owner_activation
-// LIST_OWNER_ACTIVATION: the height (per network) on the chain being parsed at/above
-// which a LIST format 1 whose SOURCE is not the source of the list's root create is
-// 'invalid: LIST_ACTION_INDEX (not owner)'. Keyed on the chain's OWN block_index: the
-// action being judged is the edit mined here.
-//
-// Mainnet and every testnet chain park at the house sentinel 9999999999 until the
-// operator assigns each chain its own safe activation height. The shared testnet key
-// remains as the fallback for callers without a coin. Regtest is 0 so the e2e rail
-// exercises the armed rule from genesis.
+// LIST format 1 edits must come from the list root's creator. Mainnet and regtest
+// start at genesis; testnet uses per-chain heights and keeps the fallback unarmed.
 addGate('list_owner_activation.LIST_OWNER_ACTIVATION', 'height', {
-    mainnet: 9999999999,
+    mainnet: 0,
     'BTC:testnet': 155001,
     'LTC:testnet': 4906040,
     'DOGE:testnet': 67962387,
-    testnet: 9999999999,
+    testnet: UNARMED,
     regtest: 0,
 });
 
@@ -145,7 +138,7 @@ addGate('price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION', '
 
 // price_landed_strict_activation: own-chain height; the release cut arms DOGE:testnet.
 addGate('price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION', 'height', {
-    mainnet: UNPINNED, 'DOGE:testnet': UNPINNED, testnet: UNPINNED, regtest: UNPINNED });
+    mainnet: UNPINNED, 'DOGE:testnet': 67989993, 'BTC:testnet': 156230, 'LTC:testnet': 4912984, testnet: UNPINNED, regtest: UNPINNED });
 // price_zero_validity_activation
 // Per-network activation TIME, keyed on the action's own block time.
 addGate('price_zero_validity_activation.PRICE_ZERO_VALIDITY_ACTIVATION', 'time', {
@@ -397,3 +390,4 @@ addGate('protocol/constants.STAKE_WEIGHTED_QUORUM_ACTIVATION', 'height', {
     testnet: 0,
     regtest: 0,
 });
+addGate('attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984, 'DOGE:testnet': 67989993, testnet: 156230, regtest: 0 });

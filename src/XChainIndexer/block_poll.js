@@ -117,7 +117,8 @@ module.exports = {
             if(minReorgBlock === null || reorg.block_index < minReorgBlock)
                 minReorgBlock = reorg.block_index;
         }
-        getLogger().warn("Detected " + unprocessedReorgs.length + " block reorganization(s); deepest at block #" + minReorgBlock);
+        // The decoder writes one REORG event per orphaned block, so this is a block count, not a reorg count.
+        getLogger().warn("Detected " + unprocessedReorgs.length + " orphaned block(s) from decoder reorg events; deepest at block #" + minReorgBlock);
         if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= minReorgBlock){
             await this.rollback.rollback(minReorgBlock);
             // Re-read the resume cursor: rollback() deleted every block >=
@@ -137,7 +138,8 @@ module.exports = {
         // window left the cursor advanced and the rollback was never retried, stranding
         // orphaned old-chain rows below minReorgBlock (silent consensus divergence). Writing
         // strictly after the commit keeps the cursor un-advanced on failure, so the same
-        // reorg is re-detected and retried on the next pass; the retry is idempotent because
+        // reorg is re-detected and retried on the next pass (a throw ends the process, so that
+        // pass runs after the supervisor restart); the retry is idempotent because
         // the rollback is skipped once lastIndexerBlock has dropped below minReorgBlock.
         // Oldest-first so a partial-write crash only advances the cursor as far as is durable.
         for(let reorg of unprocessedReorgs){

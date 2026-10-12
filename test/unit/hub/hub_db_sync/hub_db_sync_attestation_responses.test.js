@@ -85,8 +85,9 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
             'the hub id must not be written: hub ids are hub-LOCAL (every hub that verifies the ' +
             'gossiped result inserts its own row), so a wire id can collide with a locally-assigned ' +
             'PK and INSERT IGNORE would silently drop a real response. Generated SQL was: ' + sql);
-        assert.ok(cols.indexOf('network') !== -1 && cols.indexOf('request_id') !== -1,
-            'the natural key (network, request_id) must be written, or the row has no identity');
+        assert.ok(cols.indexOf('network') !== -1 && cols.indexOf('request_id') !== -1 &&
+            cols.indexOf('effective_time') !== -1,
+            'the natural key (network, request_id, effective_time) must be written, or the row has no identity');
         assert.strictEqual(inserts[0].args.length, cols.length, 'one bound arg per written column');
         assert.ok(inserts[0].args.indexOf(row.id) === -1, 'the hub id must not be bound as a value either');
     });

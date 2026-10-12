@@ -33,7 +33,7 @@ const crypto = require('crypto');
 const { resolveRootDiscriminator } = require('../../consensus/batch_root_discriminator.js');
 
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
-const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
 
 // Read-only data the gateway sees. Every member is loaded at the host block, and
 // each flag-day gated member stays null below its activation so a heterogeneous
@@ -46,7 +46,8 @@ async function loadVmSnapshot(ctx){
 
     // Load contract state from DB. BLOCK_INDEX drives the state_key collation
     // flag-day (binary-collation reload at/after activation, so case-colliding
-    // keys survive; see state_key_collation_activation.js).
+    // keys survive; see the state_key_collation_activation registry row in
+    // src/protocol_changes/shared_rows_4.js).
     snapshot.contractState = await this.indexerDb.getContractState(data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX']);
 
     // Load read-only data for gateway (price data lives in local hub DB when configured)
@@ -68,8 +69,11 @@ async function loadVmSnapshot(ctx){
     // Pre-load contract-stake snapshot scoped to THIS contract. Backs the
     // xchain.contract.{getStake,getTotalStaked,getStakers,slash} APIs synchronously.
     // Implicit slash authorization: the accessor only knows this contract's stakes.
+    // Both gates are decided here, on the decoder's time for this block.
+    let slashWindowActive = await this.actions.protocolChanges.isEnabled('STAKE_SNAPSHOT_SLASH_WINDOW', data['BLOCK_INDEX']);
+    let decimalStringsActive = await this.actions.protocolChanges.isEnabled('STAKE_SNAPSHOT_DECIMAL_STRINGS', data['BLOCK_INDEX']);
     snapshot.contractStakeData = await this.indexerDb.getContractStakeDataForVM(
-        data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX']
+        data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX'], slashWindowActive, decimalStringsActive
     );
 
     // Balance + token-info snapshot backing xchain.getBalance / getTokenInfo.
@@ -237,7 +241,7 @@ async function commitVmEffects(ctx, vmResult){
         // Every slash in this frame writes its credit and escrow rows under the same
         // action_index, and createLedgerChangeRecord overwrites a same-key row rather
         // than accumulating, so a second same-token slash would erase the first
-        // (slash_ledger_consolidation_activation.js). Owned by the frame that owns the
+        // (the slash_ledger_consolidation_activation gate row). Owned by the frame that owns the
         // action_index: a nested EXECUTE builds its own and never merges into this one,
         // and a savepoint rollback abandons it with the frame.
         let slashLedger = { credits: new Map(), escrows: new Map() };

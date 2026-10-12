@@ -150,8 +150,10 @@ module.exports = {
     //
     // Idempotent and unordered: a re-delivered or replayed batch restamps the same
     // value, a NULL clears the link after a reorg un-lands the batch, and a batch that
-    // lands before the mirror row was applied simply matches no row yet. That is why the column is nullable and why the coverage watermark, not
-    // this write, is what proves a window reached the chain.
+    // lands before the mirror row was applied simply matches no row yet. Callers stamp it
+    // best effort (row_apply.js linkAppliedResponseToBatch skips a failed write), so never
+    // alert on its NULLs: complete valid v5/v6 batches per window
+    // (getCompleteAttestBatchesByWindowStart) prove a window reached the chain.
     async setAttestationResponseBatchIndex(requestId, batchActionIndex){
         let query = `UPDATE attests
                      SET batch_action_index = ?

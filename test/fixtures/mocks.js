@@ -73,7 +73,7 @@ function createMockDb() {
         bumpPushGeneration: sinon.stub().resolves(1),
         // Hub-push durability: enqueueHubPushTx write-aheads a retraction row inside the rollback
         // transaction and returns its id (distinct per call); markHubPushDelivered drops it on a
-        // successful immediate delivery. enqueueHubPush is the pooled (non-tx) forward-push variant.
+        // successful immediate delivery. enqueueHubPush is an alias that delegates to the Tx writer.
         enqueueHubPush: sinon.stub().resolves(),
         enqueueHubPushTx: (() => { let n = 0; return sinon.stub().callsFake(async () => ++n); })(),
         markHubPushDelivered: sinon.stub().resolves(),

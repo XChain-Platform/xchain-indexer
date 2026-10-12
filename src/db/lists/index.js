@@ -28,6 +28,50 @@ const { listItemId } = require('./membership');
 const { getUnionResolution, readUnionMembers } = require('./union');
 const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION';
 const LIST_REFERENCE_VALIDITY_KEY = 'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST';
+// Rows per multi-row INSERT, so a large membership never builds an unbounded statement.
+const LIST_BULK_INSERT_CHUNK = 500;
+const LIST_BULK_TABLES = {
+    list_edits: { withStatus: true, select: 'SELECT item_id FROM list_edits WHERE action_index=? AND status_id=?', insert: 'INSERT INTO list_edits (action_index, item_id, status_id) values ' },
+    list_items: { withStatus: false, select: 'SELECT item_id FROM list_items WHERE action_index=?', insert: 'INSERT INTO list_items (action_index, item_id) values ' },
+    list_items_invalid: { withStatus: true, select: 'SELECT item_id FROM list_items_invalid WHERE action_index=? AND status_id=?', insert: 'INSERT INTO list_items_invalid (action_index, item_id, status_id) values ' },
+};
+
+// Resolve an item => status map to [item_id, status_id] tuples in input order.
+async function statusRows(db, data, byItem){
+    let rows = [];
+    for(let item in byItem){
+        let status_id = await db.createStatus(byItem[item]);
+        rows.push([await listItemId(db, data['TYPE'], item), status_id]);
+    }
+    return rows;
+}
+
+// Insert row tuples with one statement per chunk. A null item_id never matches an
+// existing row, mirroring the per-row lookup it replaces, so those rows always insert.
+async function bulkInsertListRows(db, table, action_index, rows){
+    let spec = LIST_BULK_TABLES[table];
+    if(rows.length === 0)
+        return;
+    let seen = new Set();
+    let statuses = spec.withStatus ? [...new Set(rows.map((row) => row[1]))] : [null];
+    for(let status of statuses){
+        let existing = await db.doQuery(spec.select, status === null ? [action_index] : [action_index, status]);
+        for(let row of existing)
+            seen.add(`${row['item_id']}|${status}`);
+    }
+    let fresh = rows.filter((row) => {
+        let key = `${row[0]}|${row[1] ?? null}`;
+        if(row[0] === null || row[0] === undefined)
+            return true;
+        return !seen.has(key) && seen.add(key);
+    });
+    let marks = '(' + new Array(spec.withStatus ? 3 : 2).fill('?').join(', ') + ')';
+    for(let i = 0; i < fresh.length; i += LIST_BULK_INSERT_CHUNK){
+        let chunk = fresh.slice(i, i + LIST_BULK_INSERT_CHUNK);
+        let args = chunk.flatMap((row) => [action_index, ...row]);
+        await db.doQuery(spec.insert + chunk.map(() => marks).join(', '), args);
+    }
+}
 
 // Distinguish a stored LIST rejected by the validity gate from an unknown id.
 // Policy readers treat the rejected reference as absent, while unknown getList
@@ -39,6 +83,61 @@ async function isRejectedListReference(db, action_index, block_index){
         return false;
     let rows = await db.doQuery("SELECT type FROM lists WHERE action_index=? LIMIT 1", [action_index]);
     return rows.length > 0;
+}
+
+// a LIST edit writes its resulting items under the EDIT's own
+// action_index and never touches the parent's rows, so reading the
+// pinned (create) index returned create-time membership forever and
+// on-chain lists were immutable. Resolve the edit chain's head
+// instead. Flag-day gated per chain (list_edit_resolution_activation.js)
+// because it changes which actions the allow/block gates accept, hence
+// historical replay; below the height (or with no block context) the
+// legacy create-index read runs unchanged.
+async function resolveListReadIndex(db, action_index, block_index){
+    if(gateRegistry.activeAt(LIST_EDIT_RESOLUTION_KEY, db.config['NETWORK'], db.config['COIN'], block_index, null))
+        return db.getListHeadIndex(action_index, block_index);
+    return action_index;
+}
+
+async function queryListMembers(db, type, resolved){
+    let query = '';
+    // CONSENSUS: list_items has no ORDER BY on the AUTO_INCREMENT insert
+    // order, so the row order MariaDB returns is engine/plan-arbitrary. The
+    // consuming AIRDROP recipient loop (airdrop.js) builds credits in this
+    // order, so an unordered list makes the credit-insert order (and any
+    // order-sensitive step) diverge across independently-built nodes. Pin a
+    // deterministic total order on the resolved item string with a BINARY
+    // collation, mirroring the getHolders/getBlockHashes hardening
+    // (index_addresses is utf8_general_ci = case/accent-folding). Duplicate
+    // items resolve to byte-identical strings, so the ordering is total for
+    // consensus purposes (a tie is byte-identical and the consumer dedups).
+    // Left UNGATED, mirroring getHolders' own ungated sort: the ledger hash is
+    // invariant to this order because getBlockHashes re-sorts credits on the
+    // resolved (address, tick, amount) columns and never hashes a surrogate
+    // id, so ordered and unordered produce byte-identical block hashes; this
+    // removes the engine-order dependency at the source (3c05dcb9).
+    if(type==1){
+        query = `SELECT
+                    t.tick as item
+                FROM
+                    list_items l
+                    INNER JOIN index_tickers t ON (l.item_id=t.id)
+                WHERE
+                    l.action_index=?
+                ORDER BY t.tick COLLATE utf8mb4_bin ASC`;
+    }
+    if(type==2){
+        query = `SELECT
+                    a.address as item
+                FROM
+                    list_items l
+                    INNER JOIN index_addresses a ON (l.item_id=a.id)
+                WHERE
+                    l.action_index=?
+                ORDER BY a.address COLLATE utf8_bin ASC`;
+    }
+    let results = await db.doQuery(query, [resolved]);
+    return results.map(row => row['item']);
 }
 
 module.exports = {
@@ -134,64 +233,12 @@ module.exports = {
         let type = await this.getListType(action_index, block_index, resolution);
         if(!type && await isRejectedListReference(this, action_index, block_index))
             return null;
-        let list = [];
-        if(type){
-            // a LIST edit writes its resulting items under the EDIT's own
-            // action_index and never touches the parent's rows, so reading the
-            // pinned (create) index returned create-time membership forever and
-            // on-chain lists were immutable. Resolve the edit chain's head
-            // instead. Flag-day gated per chain (list_edit_resolution_activation.js)
-            // because it changes which actions the allow/block gates accept, hence
-            // historical replay; below the height (or with no block context) the
-            // legacy create-index read runs unchanged.
-            let resolved = action_index;
-            if(gateRegistry.activeAt(LIST_EDIT_RESOLUTION_KEY, this.config['NETWORK'], this.config['COIN'], block_index, null))
-                resolved = await this.getListHeadIndex(action_index, block_index);
-            if(resolution.union)
-                return readUnionMembers(this, resolved, block_index, false);
-            let query = '';
-            let args  = [resolved];
-            // CONSENSUS: list_items has no ORDER BY on the AUTO_INCREMENT insert
-            // order, so the row order MariaDB returns is engine/plan-arbitrary. The
-            // consuming AIRDROP recipient loop (airdrop.js) builds credits in this
-            // order, so an unordered list makes the credit-insert order (and any
-            // order-sensitive step) diverge across independently-built nodes. Pin a
-            // deterministic total order on the resolved item string with a BINARY
-            // collation, mirroring the getHolders/getBlockHashes hardening
-            // (index_addresses is utf8_general_ci = case/accent-folding). Duplicate
-            // items resolve to byte-identical strings, so the ordering is total for
-            // consensus purposes (a tie is byte-identical and the consumer dedups).
-            // Left UNGATED, mirroring getHolders' own ungated sort: the ledger hash is
-            // invariant to this order because getBlockHashes re-sorts credits on the
-            // resolved (address, tick, amount) columns and never hashes a surrogate
-            // id, so ordered and unordered produce byte-identical block hashes; this
-            // removes the engine-order dependency at the source (3c05dcb9).
-            if(type==1){
-                query = `SELECT
-                            t.tick as item
-                        FROM
-                            list_items l
-                            INNER JOIN index_tickers t ON (l.item_id=t.id)
-                        WHERE
-                            l.action_index=?
-                        ORDER BY t.tick COLLATE utf8mb4_bin ASC`;
-            }
-            if(type==2){
-                query = `SELECT
-                            a.address as item
-                        FROM
-                            list_items l
-                            INNER JOIN index_addresses a ON (l.item_id=a.id)
-                        WHERE
-                            l.action_index=?
-                        ORDER BY a.address COLLATE utf8_bin ASC`;
-            }
-            let results = await this.doQuery(query, args);
-            if(results.length > 0)
-                for(let row of results)
-                    list.push(row['item']);
-        }
-        return list;
+        if(!type)
+            return [];
+        let resolved = await resolveListReadIndex(this, action_index, block_index);
+        if(resolution.union)
+            return readUnionMembers(this, resolved, block_index, false);
+        return queryListMembers(this, type, resolved);
     },
 
     // "As of a block" variant of getList (the token bridge policy spec
@@ -313,60 +360,34 @@ module.exports = {
         return (results.length > 0) ? results[0]['address'] : null;
     },
 
-    // Create record in `list_edits` table
     async createListEdit(data, item, status){
-        let action_index = data['ACTION_INDEX'];
-        let status_id = await this.createStatus(status);
-        let item_id   = await listItemId(this, data['TYPE'], item);
-        // Check if record already exists for this list
-        let query  = "SELECT item_id FROM list_edits WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
-        let args   = [action_index, item_id, status_id];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        // INSERT record
-        if(!exists){
-            query = "INSERT INTO list_edits (action_index, item_id, status_id) values (?, ?, ?)";
-            results = await this.doQuery(query, args);
-        }
+        await this.createListEdits(data, { [item]: status });
     },
 
-    // Create record in `list_items` table
     async createListItem(data, item){
-        let action_index = data['ACTION_INDEX'];
-        let item_id      = await listItemId(this, data['TYPE'], item);
-        // Check if record already exists for this list
-        let query  = "SELECT item_id FROM list_items WHERE action_index=? AND item_id=? LIMIT 1";
-        let args   = [action_index, item_id];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        // INSERT record
-        if(!exists){
-            query = "INSERT INTO list_items (action_index, item_id) values (?, ?)";
-            results = await this.doQuery(query, args);
-        }
+        await this.createListItems(data, [item]);
     },
 
-    // Create record in `list_items_invalid` table
     async createListItemInvalid(data, item, status){
-        let action_index = data['ACTION_INDEX'];
-        let status_id    = await this.createStatus(status);
-        let item_id      = await listItemId(this, data['TYPE'], item);
-        // Check if record already exists for this list
-        let query  = "SELECT item_id FROM list_items_invalid WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
-        let args   = [action_index, item_id, status_id];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        // INSERT record
-        if(!exists){
-            query = "INSERT INTO list_items_invalid (action_index, item_id, status_id) values (?, ?, ?)";
-            results = await this.doQuery(query, args);
-        }
+        await this.createListItemsInvalid(data, { [item]: status });
+    },
+
+    // Bulk writers: ids resolve in input order, then rows insert in bounded chunks.
+    async createListEdits(data, edit){
+        await bulkInsertListRows(this, 'list_edits', data['ACTION_INDEX'],
+            await statusRows(this, data, edit));
+    },
+
+    async createListItems(data, items){
+        let rows = [];
+        for(let item of items)
+            rows.push([await listItemId(this, data['TYPE'], item)]);
+        await bulkInsertListRows(this, 'list_items', data['ACTION_INDEX'], rows);
+    },
+
+    async createListItemsInvalid(data, invalid){
+        await bulkInsertListRows(this, 'list_items_invalid', data['ACTION_INDEX'],
+            await statusRows(this, data, invalid));
     },
 
 };

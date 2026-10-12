@@ -53,6 +53,19 @@ function makeSync(){
     return sync;
 }
 
+// The armed height is read from the registry so the next cut moves it without a test edit.
+function assertStrictRowArming(){
+    const row = gateRegistry.get(STRICT_ROW);
+    assert.strictEqual(row.mainnet, null);
+    assert.strictEqual(row.testnet, null);
+    assert.strictEqual(row.regtest, null);
+    const armed = row['DOGE:testnet'];
+    assert.ok(Number.isSafeInteger(armed) && armed > 1, String(armed));
+    assert.strictEqual(gateRegistry.activeAt(STRICT_ROW, 'testnet', 'DOGE', armed, null), true);
+    assert.strictEqual(gateRegistry.activeAt(STRICT_ROW, 'testnet', 'DOGE', 1, null), false);
+    assert.strictEqual(gateRegistry.activeAt(STRICT_ROW, 'mainnet', 'DOGE', armed, null), false);
+}
+
 afterEach(function () {
     sinon.restore();
 });
@@ -62,18 +75,15 @@ describe('strict same-chain price landings @regression @tier1', function () {
         stubActiveAt(sinon, LANDED_ROW, true);
     });
 
-    it('is unpinned on every declared network until the release cut', function () {
-        const row = gateRegistry.get(STRICT_ROW);
-        assert.ok(Object.values(row).every((height) => height === null));
-        assert.strictEqual(gateRegistry.activeAt(STRICT_ROW, 'testnet', 'DOGE', BLOCK_HEIGHT, null), false);
-    });
+    it('stays unpinned on mainnet, bare testnet and regtest, and is armed at the DOGE testnet cut height',
+        assertStrictRowArming);
 
     it('excludes a DOGE round stamped at exactly T(B) when strict landing is armed', async function () {
         stubActiveAt(sinon, STRICT_ROW, true);
         const db = makeDb('DOGE');
         assert.strictEqual(await latest(db), null);
         assert.ok(/batch_block_time > 0 AND batch_block_time < \?/.test(db.lastQuery.query));
-        assert.deepStrictEqual(db.lastQuery.args, ['DOGE/USD', BLOCK_TIME, BLOCK_TIME]);
+        assert.deepStrictEqual(db.lastQuery.args, ['DOGE/USD', BLOCK_TIME, BLOCK_HEIGHT, BLOCK_TIME]);
     });
 
     it('keeps the inclusive query byte-for-byte when strict landing is unarmed', async function () {
@@ -82,7 +92,7 @@ describe('strict same-chain price landings @regression @tier1', function () {
         assert.strictEqual((await latest(db)).roundNumber, 7);
         assert.ok(/batch_block_time > 0 AND batch_block_time <= \?/.test(db.lastQuery.query));
         assert.ok(!/batch_block_time > 0 AND batch_block_time < \?/.test(db.lastQuery.query));
-        assert.deepStrictEqual(db.lastQuery.args, ['DOGE/USD', BLOCK_TIME, BLOCK_TIME]);
+        assert.deepStrictEqual(db.lastQuery.args, ['DOGE/USD', BLOCK_TIME, BLOCK_HEIGHT, BLOCK_TIME]);
     });
 
     it('leaves BTC inclusive even when the strict gate seam is forced active', async function () {

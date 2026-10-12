@@ -33,7 +33,8 @@
  * non-COINPAY transaction that fanned out to more than one row is treated as a
  * consensus-critical fault and throws, converting any live or historical
  * occurrence of the double-execution bug into a visible, deterministic block halt
- * (the watchdog/rollback path retries the block) instead of a silent doubled
+ * (the throw lands before the block transaction opens and ends the indexer process;
+ * every restart re-reads the block and halts again) instead of a silent doubled
  * ledger effect.
  *
  ********************************************************************/

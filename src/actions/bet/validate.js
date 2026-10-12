@@ -14,7 +14,7 @@
  *
  * BET checks on an existing feed and on every action: whether the feed can take
  * this cancel, bet or resolve, who may place on it, and the SOURCE and MEMO rules
- * all four formats share.
+ * all five formats share.
  *
  ********************************************************************/
 
@@ -22,13 +22,22 @@
 // handler, exactly as the class method it was.
 module.exports = {
 
-    // Format 1 / 2 / 3 (existing feed) validations
+    // Format 1 / 2 / 3 / 4 (existing feed) validations
     async validateFeedState(data, format, feedInfo, error){
-        if(!error && (format==1 || format==2 || format==3) && !feedInfo)
+        if(!error && format!=0 && await this.actions.protocolChanges.isEnabled('EXACT_INTEGER_WIRE_FIELDS', data['BLOCK_INDEX'])){
+            for(let field of ['FEED_ACTION_INDEX', 'OUTCOME', 'ALLOW_LIST', 'BLOCK_LIST']){
+                if(!this.util.isNull(data[field]) && !this.util.isExactInteger(data[field])){
+                    error = 'invalid: ' + field + ' (format)';
+                    break;
+                }
+            }
+        }
+
+        if(!error && (format==1 || format==2 || format==3 || format==4) && !feedInfo)
             error = 'invalid: FEED_ACTION_INDEX (unknown)';
 
-        // Owner-only formats (cancel / resolve)
-        if(!error && (format==1 || format==3) && data['SOURCE']!=feedInfo['SOURCE'])
+        // Owner-only formats (cancel / resolve / edit lists)
+        if(!error && (format==1 || format==3 || format==4) && data['SOURCE']!=feedInfo['SOURCE'])
             error = 'invalid: SOURCE (not owner)';
 
         // Cancel / resolve require a live (open or closed) feed. Cancel deliberately
@@ -36,6 +45,11 @@ module.exports = {
         // pass has not reached yet (cancel and expiry are refund-identical; only the
         // terminal status differs). Do NOT "fix" this with a clock check.
         if(!error && (format==1 || format==3) && !['open','closed'].includes(feedInfo['FEED_STATUS']))
+            error = 'invalid: FEED_ACTION_INDEX (feed not open)';
+
+        // Membership gates affect only future entries, so they stop changing as soon
+        // as the feed's open latch closes.
+        if(!error && format==4 && feedInfo['FEED_STATUS']!='open')
             error = 'invalid: FEED_ACTION_INDEX (feed not open)';
 
         return error;

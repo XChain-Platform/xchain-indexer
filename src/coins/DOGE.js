@@ -218,7 +218,7 @@ module.exports = {
 
     GAS_PRICE:                        '0.00001',
     UNIFIED_EXPIRATION_FEE_FREE_DAYS: 90,
-    FEE_PAYMENT_MODE:                 'native', // DOGE: native-only; informational, not read at runtime
+    FEE_PAYMENT_MODE:                 'native', // DOGE: native-only; declared mode, classified by coin in the indexer and pinned by a registry test
     FEE_TOLERANCE_MIN:                '0.95',
     FEE_TOLERANCE_MAX:                '1.10',
     ORACLE_MAX_PRICE_AGE_SECONDS:     1800,

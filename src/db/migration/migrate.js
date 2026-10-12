@@ -159,6 +159,12 @@ async function reportStatus(db, dbName, json){
     catch(_){ files = []; }
 
     const applied = await readAppliedLedger(db);
+    // Re-key renamed files the way the runner does, in memory only (no UPDATE), so a
+    // ledger still holding an old name reports the renamed file applied, not PENDING.
+    for(const { from, to } of Database.planLedgerRenames([...applied.keys()])){
+        applied.set(to, applied.get(from));
+        applied.delete(from);
+    }
     const rows = files.map(file => {
         const record = applied.get(file);
         return record

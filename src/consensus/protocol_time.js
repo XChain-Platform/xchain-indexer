@@ -95,26 +95,23 @@ function isProtocolTimeMtpActive(network){
 
 // The median of the previous MEDIAN_TIME_SPAN block timestamps, Bitcoin-style.
 //
-// `previousBlockTimes` is the timestamps of the blocks BELOW the one being
-// resolved, in any order; only the newest MEDIAN_TIME_SPAN of them are used, so
-// callers may hand over a longer window. Genesis and the blocks just above it
-// have fewer than a full span available: Bitcoin medians whatever exists rather
-// than failing, and so do we, because refusing would stall a fresh chain.
+// NEWEST-FIRST CONTRACT: `previousBlockTimes` must be ordered by height descending.
+// Only its first 11 entries may participate, even when an older block has a higher
+// timestamp. Genesis and the blocks just above it have fewer than a full span
+// available: Bitcoin medians whatever exists rather than failing, and so do we,
+// because refusing would stall a fresh chain.
 //
 // Returns null when nothing usable is supplied, so callers fail closed onto the
 // raw stamp rather than medianing to NaN and comparing every barrier against it.
 function medianTimePast(previousBlockTimes){
     if(!Array.isArray(previousBlockTimes)) return null;
     let times = previousBlockTimes
+                    .slice(0, MEDIAN_TIME_SPAN)
                     .map(Number)
                     .filter((t) => Number.isFinite(t) && t > 0);
     if(times.length === 0) return null;
-    // Newest MEDIAN_TIME_SPAN first, then median by value. Sorting by value
-    // alone would median the wrong set once a caller passes a longer window.
-    times.sort((a, b) => b - a);
-    let span = times.slice(0, MEDIAN_TIME_SPAN);
-    span.sort((a, b) => a - b);
-    return span[Math.floor(span.length / 2)];
+    times.sort((a, b) => a - b);
+    return times[Math.floor(times.length / 2)];
 }
 
 // The instant a block's time-keyed protocol reads and barriers should use.

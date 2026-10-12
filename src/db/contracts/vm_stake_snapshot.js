@@ -21,6 +21,8 @@
  *
  ********************************************************************/
 
+const { stakeSnapshotStrings } = require('./stake_snapshot_strings.js');
+
 module.exports = {
 
     // Snapshot the contract's stake state at blockIndex into an in-memory accessor
@@ -43,11 +45,11 @@ module.exports = {
     // contract_delegations in HERE instead would hand the contract a key the SLASH path cannot
     // find, and the emitted punishment would silently no-op at the zero-slashed guard in
     // processSlashEmission (actions/execute/slash_emission.js).
-    async getContractStakeDataForVM(targetContractIndex, blockIndex){
+    async getContractStakeDataForVM(targetContractIndex, blockIndex, slashWindowActive, decimalStringsActive){
         let valid_id = await this.getStatusId('valid');
         let stakes = [];
         if(valid_id !== null){
-            let query = `SELECT cs.signing_pubkey_id, ip.pubkey AS pubkey, cs.tick_id, t.tick AS tick, cs.amount,
+            let query = `SELECT cs.action_index, cs.signing_pubkey_id, ip.pubkey AS pubkey, cs.tick_id, t.tick AS tick, cs.amount,
                                 cs.activation_block, cs.deactivation_block
                          FROM contract_stakes cs
                              LEFT JOIN index_pubkeys ip ON (ip.id = cs.signing_pubkey_id)
@@ -56,6 +58,8 @@ module.exports = {
                            AND cs.activation_block <= ?
                            AND (cs.deactivation_block IS NULL OR cs.deactivation_block > ?)`;
             stakes = await this.doQuery(query, [Number(targetContractIndex), valid_id, blockIndex, blockIndex]);
+            if(slashWindowActive === true)
+                stakes = await slashWindow.capInWindowRows(this, stakes, Number(targetContractIndex), valid_id, blockIndex);
         }
         // Aggregate (pubkey, tick) → amount; also build per-tick stakers map for getStakers/getTotalStaked.
         let perPubkeyTick = new Map();      // key: pubkey + '|' + tick → string amount
@@ -85,12 +89,109 @@ module.exports = {
         }
         // Return a SERIALIZABLE snapshot (plain data), not closures: the VM runs
         // in a forked worker and the read-only data must cross the IPC boundary.
-        // xchain-vm/src/readonly_accessors.js rebuilds the sync getStake/
+        // xchain-vm/src/readonly-accessors.js rebuilds the sync getStake/
         // getTotalStaked/getStakers accessors from this shape inside the worker.
-        return snapshotShape.serialize(util, perPubkeyTick, perTickStakers, tickDecimals);
+        let snapshot = snapshotShape.serialize(util, perPubkeyTick, perTickStakers, tickDecimals);
+        return decimalStringsActive === true ? stakeSnapshotStrings(util, snapshot) : snapshot;
     },
 
 };
+
+// Slash-window flag day. A row carrying a deactivation_block
+// is mid-UNSTAKE: its stake sits in contract_unstakes, which is where SLASH debits it, while
+// the contract_stakes row keeps its full amount until the block-end sweep. Once armed, the
+// snapshot counts a (pubkey, tick)'s in-window rows only up to what that pair's open
+// cooldown rows still hold, so a slash is visible to the contract that issued it.
+//
+// Each window is capped only by the cooldown row of the UNSTAKE that opened it: that UNSTAKE
+// ran at deactivation_block minus the activation delay, so an older cooldown still running
+// never props up a newer window. A partial UNSTAKE's residual row shares the UNSTAKE's
+// action_index and is counted at its current amount while it waits to activate, so the
+// unslashed figure matches the unarmed one and a slash on either part shows.
+//
+// The callers decide activation with ProtocolChanges.isEnabled('STAKE_SNAPSHOT_SLASH_WINDOW')
+// at the block being processed, which reads the decoder DB's time for it. This DB cannot
+// answer that: its blocks row for the current height is written only by finalizeBlock.
+const slashWindow = {
+
+    async capInWindowRows(db, stakes, targetContractIndex, valid_id, blockIndex){
+        if(!stakes.some(inWindow)) return stakes;
+        let held = await slashWindow.heldByWindow(db, targetContractIndex, valid_id);
+        let groups = new Map();
+        for(let r of stakes){
+            if(!inWindow(r)) continue;
+            let k = windowKey(r.signing_pubkey_id, r.tick_id, r.deactivation_block);
+            if(!groups.has(k)) groups.set(k, []);
+            groups.get(k).push(r);
+        }
+        for(let [k, rows] of groups){
+            let budget = held.get(k) || '0';
+            rows.sort((a, b) => Number(a.action_index) - Number(b.action_index));
+            for(let r of rows){
+                let take = db.util.bcgte(budget, r.amount) ? r.amount : budget;
+                budget = db.util.bcsub(budget, take, 18);
+                r.amount = take;
+            }
+        }
+        return stakes.concat(await slashWindow.pendingResiduals(db, targetContractIndex, valid_id, blockIndex));
+    },
+
+    // Sum the open cooldown rows per (pubkey, tick, window end), where the window end is the
+    // deactivation_block the UNSTAKE stamped on the rows it swept.
+    async heldByWindow(db, targetContractIndex, valid_id){
+        let delay = activationDelay(db);
+        let pendingId = await db.getStatusId('pending');
+        let ids = [valid_id];
+        if(pendingId !== null) ids.push(pendingId);
+        let cooldownRows = await db.doQuery(
+            `SELECT cu.signing_pubkey_id, cu.tick_id, cu.block_index, cu.amount
+             FROM contract_unstakes cu
+             WHERE cu.target_contract_index=? AND cu.status_id IN (${ids.map(() => '?').join(',')})`,
+            [targetContractIndex, ...ids]);
+        let held = new Map();
+        for(let c of cooldownRows){
+            let k = windowKey(c.signing_pubkey_id, c.tick_id, Number(c.block_index) + delay);
+            held.set(k, db.util.bcadd(held.get(k) || '0', c.amount, 18));
+        }
+        return held;
+    },
+
+    // Load the residual rows partial UNSTAKEs re-staked that have not activated yet. A fresh
+    // STAKE has no contract_unstakes row under its action_index, so it stays hidden.
+    async pendingResiduals(db, targetContractIndex, valid_id, blockIndex){
+        return db.doQuery(
+            `SELECT cs.action_index, cs.signing_pubkey_id, ip.pubkey AS pubkey, cs.tick_id, t.tick AS tick, cs.amount,
+                    cs.activation_block, cs.deactivation_block
+             FROM contract_stakes cs
+                 JOIN contract_unstakes cu ON (cu.action_index = cs.action_index)
+                 LEFT JOIN index_pubkeys ip ON (ip.id = cs.signing_pubkey_id)
+                 LEFT JOIN index_tickers t  ON (t.id  = cs.tick_id)
+             WHERE cs.target_contract_index=? AND cs.status_id=?
+               AND cs.activation_block > ? AND cs.deactivation_block IS NULL`,
+            [targetContractIndex, valid_id, blockIndex]);
+    },
+
+};
+
+// Report whether a stake row is mid-UNSTAKE (its deactivation_block is set).
+function inWindow(r){
+    return r.deactivation_block !== null && r.deactivation_block !== undefined;
+}
+
+// Key one UNSTAKE window: the staker, the token and the block its swept rows deactivate.
+function windowKey(pubkeyId, tickId, windowEnd){
+    return String(pubkeyId) + '|' + String(tickId) + '|' + String(Number(windowEnd));
+}
+
+// Read the activation delay UNSTAKE v1 applied when it stamped deactivation_block; a wrong value would
+// mis-pair windows with cooldowns, so a missing one throws instead of defaulting.
+function activationDelay(db){
+    let staking = db.config['STAKING'];
+    let delay = Number((staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : db.config['ACTIVATION_DELAY_BLOCKS']);
+    if(!Number.isInteger(delay) || delay < 1)
+        throw new Error('getContractStakeDataForVM: ACTIVATION_DELAY_BLOCKS is not a positive integer');
+    return delay;
+}
 
 // The serialization step of getContractStakeDataForVM, kept off the exported object so
 // Database.prototype gains no method. Turns the aggregated maps into plain objects, each

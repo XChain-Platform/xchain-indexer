@@ -39,14 +39,16 @@
  * as a SOURCE assertion that every query names state_key_bin, and structurally
  * by the spec precondition that Stage A may not arm below the collation height.
  *
- * TWIN PAIR: this ENTRY file and xchain-sync/test/unit/contractStateSubtree.test.js
+ * TWIN PAIR: this ENTRY file and xchain-sync/test/unit/contract_state_subtree.test.js
  * are kept BYTE-IDENTICAL apart from the src/<feature>/ depth of their requires.
  * Locked equal by the cross-repo twin loop in
- * xchain-sync/test/unit/rollback-coverage.test.js. The suite outgrew the
+ * xchain-sync/test/unit/rollback_coverage.test.js. The suite outgrew the
  * file-length limit, so the frozen-mapping tail, key derivation, incremental,
  * shadow-window, arming-boundary and strict-read blocks now sit beside it in
- * contract_state_subtree.test/. That parts directory is NOT in the twin registry,
- * so a change there reaches the sync half only by hand or reconcile-twins.sh.
+ * contract_state_subtree.test/. Every part file there is in the twin registry too,
+ * and the same rollback_coverage.test.js walks the whole directory on both sides,
+ * so a part added, dropped or edited in one repo alone fails there;
+ * reconcile-twins.sh copies the indexer half across.
  *
  ********************************************************************/
 

@@ -16,7 +16,7 @@
  *
  * MEMBERSHIP IS THE REGISTRY. Since the carriers became shims, every table
  * the process applies is a registry row, and the manifest is rows() plus the
- * twelve VM mirror rows. What this guard has to catch is the one way a table
+ * fifteen VM mirror rows. What this guard has to catch is the one way a table
  * can escape that: a map literal declared somewhere under src/ instead of in
  * a registry part file. So the scan that used to check "declared, therefore
  * listed" now fails on ANY declaration outside src/protocol_changes/, and the
@@ -124,7 +124,8 @@ describe('armed_map/manifest: completeness guard', function () {
         // A row nobody exports is read only through activeAt() by its literal
         // key: that is exactly the W4 census plus the registry-only rows, one row
         // per stem, and a new row that no module and no list names still reds here.
-        const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS, ['price_landed_strict_activation']);
+        const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS,
+            ['price_landed_strict_activation', 'anchor_preactivation_status_activation']);
         const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.') && !exported.has(k));
         const replaced = [...keys].filter((k) => stems.includes(k.slice(0, k.lastIndexOf('.'))));
         assert.strictEqual(replaced.length, stems.length + 1,
@@ -137,19 +138,19 @@ describe('armed_map/manifest: completeness guard', function () {
 
 describe('armed_map/manifest: the row list', function () {
 
-    it('carries the registry rows first, in registry order, then the twelve VM mirror rows', function () {
+    it('carries the registry rows first, in registry order, then the VM mirror rows', function () {
         const registryKeys = ProtocolChanges.rows().map(([k]) => k);
         const keys = manifest.ENTRIES.map((e) => e[0]);
         assert.deepStrictEqual(keys.slice(0, registryKeys.length), registryKeys);
-        assert.deepStrictEqual(keys.slice(registryKeys.length), manifest.VM_EXPORT_NAMES.map((n) => 'xchain-vm.' + n));
-        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 12);
+        assert.deepStrictEqual(keys.slice(registryKeys.length), manifest.VM_EXPORT_NAMES.concat(manifest.VM_ACCESSORS_EXPORT_NAMES).map((n) => 'xchain-vm.' + n));
+        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 15);
+        assert.deepStrictEqual(manifest.VM_ACCESSORS_EXPORT_NAMES, ['ACCESSOR_OWN_KEY_ACTIVATION']);
     });
 
     it('carries exactly the ProtocolChanges table as protocol_changes.changes.* rows', function () {
         const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes).sort();
         const rows = [...rowKeys()].filter((k) => k.startsWith('protocol_changes.changes.')).map((k) => k.slice('protocol_changes.changes.'.length)).sort();
         assert.deepStrictEqual(rows, table);
-        assert.strictEqual(table.length, 101);
     });
 
     it('never lists a key twice and never enumerates the file system', function () {
@@ -166,6 +167,22 @@ describe('armed_map/manifest: the row list', function () {
     });
 });
 
+// The v0.23.0 cut armed these gates on testnet. The armed values are read from the
+// registry rather than repeated here, so the cases grade the manifest against the row and
+// pin only the shape the arming train writes: mainnet and the bare testnet fallback on the
+// sentinel for a height gate, one sized height per testnet chain, regtest at genesis.
+function assertSizedTestnetSlot(value, label) {
+    assert.ok(Number.isInteger(value) && value > 1 && value < ProtocolChanges.UNARMED,
+        label + ' is not a sized testnet activation: ' + value);
+}
+
+function assertArmedHeightRow(row) {
+    assert.strictEqual(row.mainnet, ProtocolChanges.UNARMED);
+    assert.strictEqual(row.testnet, ProtocolChanges.UNARMED, 'the bare testnet fallback stays on the sentinel');
+    assert.strictEqual(row.regtest, 0);
+    for (const coin of ['BTC', 'LTC', 'DOGE']) assertSizedTestnetSlot(row[coin + ':testnet'], coin + ':testnet');
+}
+
 describe('armed_map/manifest: collectRows', function () {
 
     it('resolves every entry to a serialisable value, in manifest order', function () {
@@ -173,23 +190,84 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 354);
+        // Counted from the registry and the VM mirror lists, never a literal: a
+        // literal moved with every registry row, so two rows built side by side
+        // always conflicted on this line.
+        assert.strictEqual(res.rows.length,
+            ProtocolChanges.rows().length + manifest.VM_EXPORT_NAMES.length + manifest.VM_ACCESSORS_EXPORT_NAMES.length);
+    });
+
+    it('carries the relay-response deadline time gate', function () {
+        const key = 'attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION';
+        const byKey = new Map(manifest.collectRows().rows);
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.deepStrictEqual(Object.keys(row).sort(),
+            ['BTC:testnet', 'DOGE:testnet', 'LTC:testnet', 'mainnet', 'regtest', 'testnet']);
+        assert.strictEqual(row.mainnet, ProtocolChanges.UNARMED);
+        assert.strictEqual(row.regtest, 0);
+        // A time gate arms one instant for the whole network, so the bare fallback carries
+        // it too and every chain agrees.
+        assertSizedTestnetSlot(row.testnet, 'testnet');
+        for (const coin of ['BTC', 'LTC', 'DOGE']) assert.strictEqual(row[coin + ':testnet'], row.testnet, coin);
+        assert.strictEqual(ProtocolChanges.registry.unitOf(key), 'time');
+    });
+
+    it('carries the cross-chain remote-token gate heights', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        const key = 'cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION';
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.strictEqual(Object.keys(row).length, 6);
+        assertArmedHeightRow(row);
     });
 
     it('carries the three row families the design names', function () {
         const keys = rowKeys();
         assert.ok(keys.has('state_commitment_activation.STATE_COMMITMENT_ACTIVATION'), 'an activation map');
+        assert.ok(keys.has('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION'), 'the anchor archive fold-term activation map');
         assert.ok(keys.has('protocol/constants.XBRIDGE_MAX_PER_BLOCK'), 'a fixed-carrier constant');
         assert.ok(keys.has('stateHash.DEACTIVATION_TABLES'), 'a fixed-carrier array');
         assert.ok(keys.has('protocol_changes.changes.SEND'), 'a ProtocolChanges row');
         assert.ok(keys.has('protocol_changes.CONSENSUS_VERSION'), 'the registry\'s own constant');
         assert.ok(keys.has('mirror_admission_activation.CHAIN_CODE_RE'), 'a RegExp row');
+        assert.ok(keys.has('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION'), 'the chain-margin activation');
+        assert.ok(keys.has('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS'), 'the chain-margin table');
+    });
+
+    it('carries the DOGE mirror-admission chain margins and activation', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        const key = 'mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION';
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.deepStrictEqual(Object.keys(row).sort(), ['DOGE:mainnet', 'DOGE:testnet', 'mainnet', 'regtest']);
+        assert.strictEqual(row.mainnet, null);
+        assert.strictEqual(row['DOGE:mainnet'], null);
+        assertSizedTestnetSlot(row['DOGE:testnet'], 'DOGE:testnet');
+        assert.strictEqual(row.regtest, 0);
+        assert.deepStrictEqual(byKey.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS').DOGE, {
+            bridge_transfers: 14,
+            cross_chain_calls: 14,
+            cross_chain_matches: 14,
+            list_snapshots: 14,
+            policy_snapshots: 14,
+            price_snapshots: 16,
+        });
+    });
+
+    it('carries the anchor archive fold-term heights', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        const key = 'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.strictEqual(Object.keys(row).length, 6);
+        assertArmedHeightRow(row);
     });
 
     it('carries the per-chain LIST owner testnet heights', function () {
         const byKey = new Map(manifest.collectRows().rows);
         assert.deepStrictEqual(byKey.get('list_owner_activation.LIST_OWNER_ACTIVATION'), {
-            mainnet: 9999999999,
+            mainnet: 0,
             'BTC:testnet': 155001,
             'LTC:testnet': 4906040,
             'DOGE:testnet': 67962387,
@@ -198,7 +276,7 @@ describe('armed_map/manifest: collectRows', function () {
         });
     });
 
-    it('appends the twelve VM mirror rows with the VM values', function () {
+    it('appends the VM mirror rows with the VM values', function () {
         const vm = require('xchain-vm');
         const res = manifest.collectRows();
         assert.strictEqual(res.ok, true, res.reason);
@@ -206,6 +284,10 @@ describe('armed_map/manifest: collectRows', function () {
         for (const name of manifest.VM_EXPORT_NAMES) {
             assert.ok(byKey.has('xchain-vm.' + name), name);
             assert.strictEqual(canonicalValue(byKey.get('xchain-vm.' + name)), canonicalValue(vm[name]), name);
+        }
+        const accessors = require('xchain-vm/src/readonly-accessors.js');
+        for (const name of manifest.VM_ACCESSORS_EXPORT_NAMES) {
+            assert.strictEqual(canonicalValue(byKey.get('xchain-vm.' + name)), canonicalValue(accessors[name]), name);
         }
     });
 

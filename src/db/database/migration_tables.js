@@ -36,6 +36,27 @@ const { MIGRATION_CHECKSUM_REBASELINES } = require('../migration/checksum_rebase
 // `node src/db/migration/migrate.js`, and a targeted `--file` rollout), since all three funnel through
 // this loop. Mirrors xchain-decoder/src/db.js.
 const MIGRATION_PRECONDITIONS = {
+    '2026-06-10-mirror-id-autoincrement-repair.sql': {
+        sql: "SELECT TABLE_NAME AS name, COLUMN_TYPE AS type, EXTRA AS extra FROM information_schema.columns " +
+             "WHERE table_schema = ? AND column_name = 'id' AND table_name IN " +
+             "('price_snapshots', 'cross_chain_matches', 'capability_snapshots', 'state_checkpoints')",
+        skipWhen: (rows) => {
+            if(!Array.isArray(rows)) return null;
+            const expected = ['price_snapshots', 'cross_chain_matches', 'capability_snapshots', 'state_checkpoints'];
+            const live = new Map(rows.map(row => [
+                String((row && row.name) || '').toLowerCase(),
+                {
+                    type: String((row && row.type) || '').toLowerCase(),
+                    extra: String((row && row.extra) || '').toLowerCase(),
+                },
+            ]));
+            if(!expected.every(table => {
+                const column = live.get(table);
+                return column && /^bigint\b/.test(column.type) && /\bauto_increment\b/.test(column.extra);
+            })) return null;
+            return 'all four mirror id cursors already carry AUTO_INCREMENT, so there is no stripped attribute to repair.';
+        }
+    },
     // Widens pubkeys.pubkey to hold an uncompressed key (130 hex chars). It is
     // mode=manual, so it stays PENDING on a database created from the current
     // src/sql/pubkeys.sql (already VARCHAR(130) or wider) - and a fresh install never

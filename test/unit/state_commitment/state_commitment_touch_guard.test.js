@@ -122,8 +122,8 @@ describe('touched-set guard @regression', function(){
     it('runs on the incremental branch only', function(){
         // The full-rebuild branch derives from the entire ledger and cannot skip
         // a key, so guarding it would cost a query for no possible finding.
-        assert.ok(/await enforceTouchedSet\(db, blockIndex, touched\);/.test(SRC));
-        const guardCall = SRC.indexOf('await enforceTouchedSet(db, blockIndex, touched)');
+        assert.ok(/await enforceTouchedSet\(db, blockIndex, touched, ledgerKeys\);/.test(SRC));
+        const guardCall = SRC.indexOf('await enforceTouchedSet(db, blockIndex, touched, ledgerKeys)');
         const fullBuild = SRC.indexOf('balancesRoot = await buildFullBalancesRoot(db, chain, network, blockIndex);');
         assert.ok(guardCall > fullBuild,
             'the guard belongs after the incremental branch, not on the full-rebuild path');
@@ -178,8 +178,10 @@ function makeBlockRoute({ nodes, persisted, calls, ledgerKeys, nets, priorRoot }
                     nodes.set(params[i], { left_hash: params[i + 1], right_hash: params[i + 2] });
             return [];
         }
-        if(/UNION ALL/.test(sql) && /INNER JOIN actions/.test(sql))
+        if(/UNION ALL/.test(sql) && /INNER JOIN actions/.test(sql)){
+            calls.keyReads++;
             return (ledgerKeys || []).map(k => ({ address: k[0], tick: k[1] }));
+        }
         if(/AS cr/.test(sql)){
             calls.netReads++;
             const key  = params[0] + '\t' + params[1];
@@ -203,7 +205,7 @@ function makeBlockRoute({ nodes, persisted, calls, ledgerKeys, nets, priorRoot }
 function makeBlockMockDb({ ledgerKeys, touched, nets, seedLeaves }){
     const nodes     = new Map();
     const persisted = {};
-    const calls     = { netReads: 0, descents: 0 };
+    const calls     = { netReads: 0, descents: 0, keyReads: 0 };
     let priorRoot = SC.EMPTY_ROOT_HEX;
     const route = makeBlockRoute({ nodes, persisted, calls, ledgerKeys, nets,
         priorRoot: () => priorRoot });
@@ -298,6 +300,8 @@ describe('leaf-presence assertion @regression', function(){
         assert.strictEqual(h.calls.netReads, 1,
             'the net is read once by the commit loop; the assertion defers its own read ' +
             'until a leaf is actually absent, so a healthy block pays no extra history scan');
+        assert.strictEqual(h.calls.keyReads, 1,
+            'the block ledger keys are read once and shared by both guards');
     });
 
     it('catches the key the commitment applied under the WRONG name (the reproduced cache fault)', async function(){
@@ -364,7 +368,7 @@ describe('leaf-presence assertion @regression', function(){
         // The full-rebuild branch derives from the whole ledger and cannot drop a
         // key, and the value proved has to be the value written, so the call site
         // matters as much as the check.
-        const assertCall = SRC.indexOf('await assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRoot);');
+        const assertCall = SRC.indexOf('await assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRoot, ledgerKeys);');
         const finalRoot  = SRC.indexOf('balancesRoot = root;');
         // The row write is db/state_commitment/roots.js storeStateTreeRoots; the
         // entry's call to it is the point the row leaves this file.

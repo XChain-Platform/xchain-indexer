@@ -32,16 +32,17 @@
  * whenever a validator's stake activated or deactivated inside the buried window
  * (H - CANONICAL_REORG_BUFFER, H]:
  *
- *   - xchain-indexer/src/actions/attest.js  (ATTEST v1 responsible-set + capability gate)
- *   - xchain-indexer/src/recovery.js        (archive `_verifyStakes` / `_verifyCompleteness`)
- *   - xchain-sdk/src/light.js               (SPV `followForward` signer-set proof)
+ *   - xchain-indexer/src/actions/attest/  (ATTEST v1 responsible-set + capability gate)
+ *   - xchain-indexer/bin/recovery.js      (archive `_verifyStakes` / `verifyCompleteness`)
+ *   - xchain-sdk/src/protocol/light_client/validator_set_follow.js
+ *                                         (SPV `followForward` signer-set proof)
  *
  * A deactivation inside that window made an honest archive unrecoverable
  * ("has no on-chain stake at block N (fabricated set?)"); an activation inside it
  * dropped a qualifying source; on the attestation path the same gap rejected
  * deterministic responses or stalled rounds. Proposal A (operator ruling,
  * 2026-08-11): teach every verifier to bury by this one shared constant and leave
- * the on-wire shape, and the hub-MIRRORED reads in xchain-indexer/src/db.js that
+ * the on-wire shape, and the hub-MIRRORED reads in xchain-indexer/src/db/ that
  * are self-consistent with the declared label, untouched.
  *
  * WHY THIS IS FLAG-DAY GATED. Burying changes ACCEPTANCE: bytes an un-upgraded
@@ -56,10 +57,10 @@
  *
  * PLANE. The gate is keyed on the BTC-anchored declared snapshot_block, the same
  * plane (and the same call site) as `equivocation_header.isEquivHeaderActive`, NOT
- * on a local chain height. attest.js evaluates it against the request's own
- * block_index exactly as it already evaluates the EQUIV gate there; see
- * attest_admission_activation.js for why the two planes differ and why the
- * difference must not be "corrected" without its own flag-day.
+ * on a local chain height. attest/attest_response_verify.js evaluates it against
+ * the request's own block_index exactly as it already evaluates the EQUIV gate
+ * there; see the attest_admission_activation registry row for why the two planes
+ * differ and why the difference must not be "corrected" without its own flag-day.
  *
  * The canonical source of record is
  * xchain-indexer/src/consensus/snapshot_reorg_buffer.js; it is vendored
@@ -67,7 +68,7 @@
  * xchain-documentation/protocol/reference-impl/consensus/snapshot_reorg_buffer.js.
  * Edit the indexer copy only and re-run reconcile-twins.sh to re-vendor every
  * other copy; never edit a vendored copy. The cross-service conformance suite
- * (ConsensusPrimitiveConformance.test.js) runs in every one of those repos and
+ * (consensus_primitive_conformance.test.js) runs in every one of those repos and
  * asserts byte-identity of the local copy to the xchain-documentation copy, so
  * an unmirrored edit fails CI everywhere.
  *

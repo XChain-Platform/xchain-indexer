@@ -136,6 +136,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('cross-chain order (GET_COIN != COIN) is accepted when CROSS_CHAIN_DEX is enabled and does NOT match locally', async function () {
+            indexer.indexerDb.mirrorDb = () => ({ getPinnedRemoteToken: sinon.stub().resolves({ decimals: 0 }) });
             // Cross-chain ORDER: the GIVE side escrows locally; matching + settlement are federation-driven,
             // so the local ORDER_MATCH path is skipped (the counterparty lives on another chain).
             const params = makeParams(`0|BTC|RAREPEPE|1||LTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);

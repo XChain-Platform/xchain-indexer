@@ -140,7 +140,7 @@ function providerMinStakeAt(providerId, blockIndex, network, genesisFloor, overr
 // src/utility.js). It is deliberately NOT mathjs.largerEq / cmpAmount: those apply
 // mathjs's ~1e-12 relative comparison epsilon, so two amounts a hair apart compare
 // EQUAL, and a consensus predicate that rounds is a fork surface. Reimplemented
-// here rather than taken from utility.js because rollback.js and actions/attest.js
+// here rather than taken from utility.js because rollback.js and actions/attest/
 // must apply the identical rule and only one of them holds a Utility instance.
 function meetsProviderFloor(weight, minStake){
     let floor = normalizeFloor(minStake);

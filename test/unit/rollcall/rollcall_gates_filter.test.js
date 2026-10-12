@@ -10,7 +10,7 @@
 //
 // The rules-aware attestation capability filter, part of the attest zero-confirmation flip,
 // and the two call sites that use it:
-// the v0 admission reason literal in actions/attest.js and the
+// the v0 admission reason literal in actions/attest/request.js and the
 // getcapabilityvalidators RPC's height reconstruction in api.js.
 //
 // ARMING. ROLLCALL_GATES_ACTIVATION resolves XC_ROLLCALL_GATES_REGTEST_ACTIVATION
@@ -27,7 +27,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 
-const FILTER_PATH = require.resolve('../../../src/actions/attest/rollcall_gates_filter.js');
+const FILTER_PATH = require.resolve('../../../src/actions/attest/gates/rollcall_gates_filter.js');
 const ACTIV_PATH  = require.resolve('../../../src/consensus/gates/rollcall_gates_gate.js');
 const ENV_KEY     = 'XC_ROLLCALL_GATES_REGTEST_ACTIVATION';
 

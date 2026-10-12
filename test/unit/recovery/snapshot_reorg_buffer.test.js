@@ -19,7 +19,7 @@
 // validator whose stake ACTIVATES or DEACTIVATES inside (N - 6, N] must be
 // resolved IDENTICALLY, for the same declared snapshot_block N, by
 //   1. the hub signer            (xchain-hub CapabilitySnapshot.buriedBlockIndex)
-//   2. the attestation verifier  (xchain-indexer actions/attest.js)
+//   2. the attestation verifier  (xchain-indexer actions/attest/attest_response_verify.js)
 //   3. archive recovery          (xchain-indexer recovery.js)
 //   4. the SDK light client      (xchain-sdk light.js followForward)
 // Parties 1 and 4 live in sibling repos; those blocks skip when the sibling is

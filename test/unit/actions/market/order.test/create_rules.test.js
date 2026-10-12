@@ -23,6 +23,7 @@ const { OWNER_ADDR, OTHER_ADDR, BLOCK_TIME, EXPIRATION, makeParams, makeOrderCon
 const gateRegistry = require('../../../../../src/consensus/gate_registry');
 
 const MAKER_POLICY_ADMISSION_KEY = 'order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION';
+const REMOTE_TOKEN_KEY = 'cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION';
 const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
 
 let indexer;
@@ -32,6 +33,12 @@ let order;
 // Each test starts from its own mock indexer and ORDER handler.
 function freshOrder() {
     ({ indexer, actionsCtx, order } = makeOrderContext());
+}
+
+function setRemoteTokenGate(active) {
+    const activeAt = gateRegistry.activeAt;
+    sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...args) =>
+        key === REMOTE_TOKEN_KEY ? active : activeAt(key, ...args));
 }
 
 function disablePayoutPolicy() {
@@ -263,6 +270,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('cross-chain order is exempt from the local positive-GET_AMOUNT check', async function () {
+            setRemoteTokenGate(false);
             // GET amount for a cross-chain leg is validated by the xchain-hub federation,
             // so an empty local GET_AMOUNT must not be rejected here.
             const params = makeParams(`0|BTC|RAREPEPE|1||LTC|PEPECASH|||${OWNER_ADDR}|${EXPIRATION}|||`);
@@ -273,6 +281,29 @@ describe('Order action handler @regression @tier2', function () {
             // Not rejected for GET_AMOUNT (cross-chain leg escrows locally and settles via federation)
             assert.ok(!data['STATUS'].includes('GET_AMOUNT'),
                 `Cross-chain order should not hit the GET_AMOUNT check, got "${data['STATUS']}"`);
+        });
+
+        it('cross-chain order with an unpinned non-native GET token is invalid once the remote token gate is active', async function () {
+            setRemoteTokenGate(true);
+            indexer.indexerDb.mirrorDb = () => ({ getPinnedRemoteToken: sinon.stub().resolves(null) });
+            const params = makeParams(`0|BTC|RAREPEPE|1||LTC|PEPECASH|5||${OWNER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.ok(data['STATUS'].includes('no pinned remote token'),
+                `Expected a pinned remote token error, got "${data['STATUS']}"`);
+        });
+
+        it('cross-chain order with a pinned GET token is not rejected for the remote token', async function () {
+            setRemoteTokenGate(true);
+            indexer.indexerDb.mirrorDb = () => ({ getPinnedRemoteToken: sinon.stub().resolves({ decimals: 0 }) });
+            const params = makeParams(`0|BTC|RAREPEPE|1||LTC|PEPECASH|5||${OWNER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.ok(!data['STATUS'].includes('pinned remote token'), `got "${data['STATUS']}"`);
         });
     });
 });

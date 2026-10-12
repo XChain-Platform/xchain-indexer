@@ -22,7 +22,7 @@
 
 const gateRegistry = require('../../consensus/gate_registry');
 const aaq  = require('./anchor_action_query.js');
-const { reportArchiveFailure } = require('./archive_verdict.js');
+const { reportArchiveFailure } = require('./archive/archive_verdict.js');
 
 const FOLD_GATE = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const VERDICT_GATE = 'archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION';

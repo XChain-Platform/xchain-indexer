@@ -79,9 +79,10 @@ async function validateExecuteFields(ctx, params){
     // use): at/after it a non-canonical wire index ('007') or one past the safe-integer
     // range is rejected here. The VM hashes Number(contractIndex) into the attestation
     // request_id preimage (xchain-vm/gateway.js) while the host re-hashes the raw EMITTER
-    // string (attest.js), so a non-canonical index makes the two disagree and the host
-    // rejects an ATTEST the VM already accepted. Below the flag-day the legacy /^\d+$/ is
-    // preserved so historical blocks replay byte-identically.
+    // string (actions/attest/index.js requestIdDerivationError), so a non-canonical index
+    // makes the two disagree and the host rejects an ATTEST the VM already accepted.
+    // Below the flag-day the legacy /^\d+$/ is preserved so historical blocks replay
+    // byte-identically.
     if(!ctx.error){
         let idxRaw    = String(data['CONTRACT_ACTION_INDEX']);
         let canonical = await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX']);

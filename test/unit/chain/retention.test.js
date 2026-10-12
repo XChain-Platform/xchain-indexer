@@ -324,3 +324,161 @@ describe('retention: full sweep', () => {
         assert.deepStrictEqual(db.nodes.map(n => n.node_hash).sort(), [A, B].sort());
     });
 });
+
+describe('retention: sweep interval bounds', () => {
+    const on = extra => R.parseRetentionConfig(Object.assign({ STATE_ROOT_RETENTION_BLOCKS: '50' }, extra));
+
+    it('keeps the 6h default, unflagged, when the interval is unset', () => {
+        const cfg = on({});
+        assert.strictEqual(cfg.intervalMs, 21600000);
+        assert.strictEqual(cfg.intervalAdjusted, false);
+    });
+
+    it('falls back to 6h for zero, negative or unparseable values, and flags it', () => {
+        for(const raw of ['0', '-1', 'abc']){
+            const cfg = on({ STATE_RETENTION_INTERVAL_MS: raw });
+            assert.strictEqual(cfg.intervalMs, 21600000, raw);
+            assert.strictEqual(cfg.intervalAdjusted, true, raw);
+        }
+    });
+
+    it('raises a sub-minute value to the 60s floor', () => {
+        for(const raw of ['1', '59999']){
+            const cfg = on({ STATE_RETENTION_INTERVAL_MS: raw });
+            assert.strictEqual(cfg.intervalMs, R.MIN_SWEEP_INTERVAL_MS, raw);
+            assert.strictEqual(cfg.intervalAdjusted, true, raw);
+        }
+        assert.strictEqual(R.MIN_SWEEP_INTERVAL_MS, 60000);
+    });
+
+    it('caps a value setInterval would overflow back to 1ms', () => {
+        const cfg = on({ STATE_RETENTION_INTERVAL_MS: '3000000000' });
+        assert.strictEqual(cfg.intervalMs, 2147483647);
+        assert.strictEqual(cfg.intervalAdjusted, true);
+    });
+
+    it('passes an in-range value through unchanged', () => {
+        for(const [raw, want] of [['60000', 60000], ['3600000', 3600000]]){
+            const cfg = on({ STATE_RETENTION_INTERVAL_MS: raw });
+            assert.strictEqual(cfg.intervalMs, want);
+            assert.strictEqual(cfg.intervalAdjusted, false);
+        }
+    });
+});
+
+describe('retention: reorg-safe floor on the root window', () => {
+    it('raises N=1 to 126 on a standard chain and records the request', () => {
+        const cfg = R.applyReorgSafeFloor(R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '1' }), 'BTC', 'mainnet');
+        assert.strictEqual(cfg.rootKeepBlocks, 126);
+        assert.strictEqual(cfg.requestedRootKeepBlocks, 1);
+        assert.strictEqual(cfg.floorApplied, true);
+    });
+
+    it('uses 5006 on Litecoin testnet only, whatever the case', () => {
+        const base = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '1' });
+        for(const [coin, net] of [['LTC', 'testnet'], ['ltc', 'TESTNET']])
+            assert.strictEqual(R.applyReorgSafeFloor(base, coin, net).rootKeepBlocks, 5006);
+        assert.strictEqual(R.applyReorgSafeFloor(base, 'LTC', 'mainnet').rootKeepBlocks, 126);
+        assert.strictEqual(R.applyReorgSafeFloor(base, 'DOGE', 'testnet').rootKeepBlocks, 126);
+    });
+
+    it('passes a window at or above the floor through unchanged', () => {
+        for(const n of [126, 500]){
+            const cfg = R.applyReorgSafeFloor(R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: String(n) }), 'BTC', 'mainnet');
+            assert.strictEqual(cfg.rootKeepBlocks, n);
+            assert.strictEqual(cfg.floorApplied, false);
+        }
+    });
+
+    it('returns a disabled config untouched and never mutates its input', () => {
+        const off = R.parseRetentionConfig({});
+        assert.strictEqual(R.applyReorgSafeFloor(off, 'BTC', 'mainnet'), off);
+        const input = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '7' });
+        const snapshot = JSON.stringify(input);
+        R.applyReorgSafeFloor(input, 'BTC', 'mainnet');
+        assert.strictEqual(JSON.stringify(input), snapshot);
+    });
+
+    it('never lets the local floors fall below the decoder safe depths', () => {
+        assert.ok(R.ROOT_RETENTION_REORG_FLOOR >= 126);
+        assert.ok(R.LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR >= 5006);
+    });
+});
+
+// Read the decoder's own reorg-safe depth instead of trusting the literals above, so a
+// decoder depth raise reddens this suite until the indexer floor is raised to match.
+describe('retention: floor conforms to the decoder reorg-safe depth (sibling read)', function(){
+    const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+    const path = require('path');
+    const DECODER_CONSTANTS = process.env.XCHAIN_DECODER_DIR
+        ? path.join(process.env.XCHAIN_DECODER_DIR, 'src', 'XChainDecoder', 'constants.js')
+        : path.join(__dirname, '..', '..', '..', '..', 'xchain-decoder', 'src', 'XChainDecoder', 'constants.js');
+    const COINS = ['BTC', 'LTC', 'DOGE', 'ltc', 'Ltc'];
+    const NETWORKS = ['mainnet', 'testnet', 'regtest', 'TESTNET', 'Testnet'];
+    let decoder = null;
+
+    // Skip without the decoder checkout, or fail when the run declared siblings supplied.
+    before(function(){
+        const verdict = siblingCheckout(__dirname, DECODER_CONSTANTS);
+        if(!skipOrFail(this, verdict, 'the retention floor conformance to the decoder depth')) return;
+        delete require.cache[require.resolve(DECODER_CONSTANTS)];
+        decoder = require(DECODER_CONSTANTS);
+    });
+
+    it('finds the decoder depth resolver and standard depth by name', () => {
+        assert.strictEqual(typeof decoder.resolveDispenserExpireSafeDepth, 'function',
+            'xchain-decoder constants.js must export resolveDispenserExpireSafeDepth');
+        assert.strictEqual(typeof decoder.DISPENSER_EXPIRE_SAFE_DEPTH, 'number',
+            'xchain-decoder constants.js must export DISPENSER_EXPIRE_SAFE_DEPTH');
+        assert.ok(R.ROOT_RETENTION_REORG_FLOOR >= decoder.DISPENSER_EXPIRE_SAFE_DEPTH);
+    });
+
+    it('keeps every chain floor at or above the decoder depth for that chain', () => {
+        for(const coin of COINS) for(const net of NETWORKS){
+            const floor = R.resolveRootRetentionFloor(coin, net);
+            const depth = decoder.resolveDispenserExpireSafeDepth(coin, net);
+            assert.ok(floor >= depth, `${coin}/${net}: indexer floor ${floor} is below the decoder depth ${depth}; raise the indexer floor`);
+        }
+    });
+
+    it('raises a one-block window to at least the decoder depth for every chain', () => {
+        const tiny = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '1' });
+        for(const coin of COINS) for(const net of NETWORKS){
+            const kept = R.applyReorgSafeFloor(tiny, coin, net).rootKeepBlocks;
+            const depth = decoder.resolveDispenserExpireSafeDepth(coin, net);
+            assert.ok(kept >= depth, `${coin}/${net}: applied window ${kept} is below the decoder depth ${depth}`);
+        }
+    });
+});
+
+describe('retention: startStateRetention arms the bounded config', () => {
+    const jobs = require('../../../src/XChainIndexer/background_jobs.js');
+    const { getLogger } = require('../../../src/observability/index.js');
+
+    it('sweeps with the floored window on a clamped cadence and warns about both', async () => {
+        const saved = { parse: R.parseRetentionConfig, sweep: R.runSweep, setInterval: global.setInterval,
+                        warn: getLogger().warn, info: getLogger().info };
+        const warnings = [];
+        let armedDelay = null, armedFn = null, sweptCfg = null;
+        R.parseRetentionConfig = () => saved.parse({ STATE_ROOT_RETENTION_BLOCKS: '1', STATE_RETENTION_INTERVAL_MS: '0' });
+        R.runSweep = async (db, coin, network, cfg) => { sweptCfg = cfg; return { roots: {}, nodes: {} }; };
+        global.setInterval = (fn, ms) => { armedFn = fn; armedDelay = ms; return { unref(){} }; };
+        getLogger().warn = msg => { warnings.push(String(msg)); };
+        getLogger().info = () => {};
+        try {
+            const host = { config: { COIN: 'BTC', NETWORK: 'mainnet' }, indexerDb: {} };
+            jobs.startStateRetention.call(host);
+            assert.strictEqual(armedDelay, 60000 * 360);   // 0 falls back to the 6h default
+            await armedFn();
+            assert.strictEqual(sweptCfg.rootKeepBlocks, 126);
+            assert.ok(warnings.some(w => /STATE_ROOT_RETENTION_BLOCKS=1 is below the reorg-safe floor 126/.test(w)), warnings.join('\n'));
+            assert.ok(warnings.some(w => /sweeping every 21600000ms instead/.test(w)), warnings.join('\n'));
+        } finally {
+            R.parseRetentionConfig = saved.parse;
+            R.runSweep = saved.sweep;
+            global.setInterval = saved.setInterval;
+            getLogger().warn = saved.warn;
+            getLogger().info = saved.info;
+        }
+    });
+});

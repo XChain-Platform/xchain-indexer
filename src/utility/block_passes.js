@@ -67,13 +67,13 @@ module.exports = {
     //
     // Gated by CONTRACT_DELEGATION_MATERIALIZE: below the flag-day this is a no-op and history
     // replays byte-identically, because before it a rotation existed only in
-    // contract_delegations and nothing that reads stake ownership ever looked there. The gate is
-    // evaluated once per block here (never inside db.materializeContractDelegations), so there
-    // is exactly one place a node can decide the rotation is live.
+    // contract_delegations and nothing that reads stake ownership ever looked there.
+    // DELEGATION_ROTATE_IN_WINDOW separately gates rows inside their deactivation delay.
     async processContractDelegationMaterializations(actions, db, block_index){
         if(!(await actions.protocolChanges.isEnabled('CONTRACT_DELEGATION_MATERIALIZE', block_index)))
             return [];
-        return await db.materializeContractDelegations(block_index);
+        let rotateInWindow = await actions.protocolChanges.isEnabled('DELEGATION_ROTATE_IN_WINDOW', block_index);
+        return await db.materializeContractDelegations(block_index, undefined, rotateInWindow);
     },
 
     // Process any orders, swaps, or dispensers which are past expiration
@@ -204,7 +204,7 @@ module.exports = {
     // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
     // TODO: Revisit this code and handle calculating block time more elegantly
     async processCancellations(actions, db, block_index, block_time){
-        let cancels = await db.findCancelledDispensers(block_time);
+        let cancels = await db.findCancelledDispensers(block_time, block_index);
         for(let action_index of cancels){
             // Define basic ACTION transaction data object
             let action = 'DISPENSER_CLOSE';

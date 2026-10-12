@@ -122,6 +122,8 @@ module.exports = {
         return new Promise((resolve, reject) => {
             let waiter = { ts: blockTime, bound: horizonBound, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(() => {
+                this.releaseAnchorAttestWaiters();
+                if (this.anchorAttestSyncSatisfied(blockTime, horizonBound, blockHeight)) return;
                 this._anchorAttestWaiters = this._anchorAttestWaiters.filter(w => w !== waiter);
                 // The prefix through `block_time <t>` is byte-identical to what it has always
                 // been: two unit tests and an operator's grep both key on it. The horizon
@@ -209,6 +211,8 @@ module.exports = {
         return new Promise((resolve, reject) => {
             let waiter = { ts: blockTime, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(() => {
+                this.releaseAttestResponseWaiters();
+                if (this.attestResponseSyncSatisfied(blockTime, blockHeight)) return;
                 this._attestResponseWaiters = this._attestResponseWaiters.filter(w => w !== waiter);
                 reject(new Error('attestation response mirror barrier timed out after ' + ms +
                                  'ms waiting for block_time ' + blockTime +

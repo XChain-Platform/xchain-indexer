@@ -63,7 +63,7 @@ function validateLockedEdits(ctx){
 // The CALLBACK fields a wire ISSUE carries: CALLBACK_BLOCK in the future, and none of
 // the three changed once supply is distributed; then the ALLOW/BLOCK list references.
 async function validateCallbackAndListFields(ctx){
-    let { data, issue, tokenInfo, isDistributed } = ctx;
+    let { data, issue, tokenInfo, distributionProbe } = ctx;
     let error = ctx.error;
 
     // Verify CALLBACK_BLOCK is greater than current block index
@@ -71,15 +71,15 @@ async function validateCallbackAndListFields(ctx){
         error = 'invalid: CALLBACK_BLOCK (block index)';
 
     // Verify CALLBACK_BLOCK can not be changed if supply is distributed
-    if(!error && !this.util.isNull(issue['CALLBACK_BLOCK']) && tokenInfo && String(data['CALLBACK_BLOCK']) != String(tokenInfo['CALLBACK_BLOCK']) && isDistributed)
+    if(!error && !this.util.isNull(issue['CALLBACK_BLOCK']) && tokenInfo && String(data['CALLBACK_BLOCK']) != String(tokenInfo['CALLBACK_BLOCK']) && await distributionProbe())
         error = 'invalid: CALLBACK_BLOCK (supply distributed)';
 
     // Verify CALLBACK_TICK can not be changed if supply is distributed
-    if(!error && !this.util.isNull(issue['CALLBACK_TICK']) && tokenInfo && data['CALLBACK_TICK'] != tokenInfo['CALLBACK_TICK'] && isDistributed)
+    if(!error && !this.util.isNull(issue['CALLBACK_TICK']) && tokenInfo && data['CALLBACK_TICK'] != tokenInfo['CALLBACK_TICK'] && await distributionProbe())
         error = 'invalid: CALLBACK_TICK (supply distributed)';
 
     // // Verify CALLBACK_AMOUNT can not be changed if supply is distributed
-    if(!error && !this.util.isNull(issue['CALLBACK_AMOUNT']) && tokenInfo && data['CALLBACK_AMOUNT'] != tokenInfo['CALLBACK_AMOUNT'] && isDistributed)
+    if(!error && !this.util.isNull(issue['CALLBACK_AMOUNT']) && tokenInfo && data['CALLBACK_AMOUNT'] != tokenInfo['CALLBACK_AMOUNT'] && await distributionProbe())
         error = 'invalid: CALLBACK_AMOUNT (supply distributed)';
 
     // Verify ALLOW_LIST is a valid list of addresses

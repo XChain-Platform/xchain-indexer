@@ -79,8 +79,19 @@ module.exports = {
     startStateRetention(){
         if(this._stateRetentionTimer) return;
         // config.js's load-time snapshot, which carries every key parseRetentionConfig reads.
-        const cfg = retention.parseRetentionConfig(CONFIG_ENV);
-        if(!cfg.enabled) return;   // policy off: no timer, nothing prunes
+        const parsed = retention.parseRetentionConfig(CONFIG_ENV);
+        if(!parsed.enabled) return;   // policy off: no timer, nothing prunes
+        const chainLabel = this.config['COIN'] + '/' + this.config['NETWORK'];
+        // Never keep fewer roots than the deepest reorg the chain can roll back.
+        const cfg = retention.applyReorgSafeFloor(parsed, this.config['COIN'], this.config['NETWORK']);
+        if(cfg.floorApplied)
+            getLogger().warn('XChainIndexer: STATE_ROOT_RETENTION_BLOCKS=' + cfg.requestedRootKeepBlocks +
+                ' is below the reorg-safe floor ' + cfg.rootKeepBlocks + ' for ' + chainLabel +
+                '; keeping ' + cfg.rootKeepBlocks + ' root-blocks instead');
+        // Warn when the sweep cadence was replaced, so a bad setting is visible in the log.
+        if(cfg.intervalAdjusted)
+            getLogger().warn('XChainIndexer: STATE_RETENTION_INTERVAL_MS=' + CONFIG_ENV.STATE_RETENTION_INTERVAL_MS +
+                ' is outside the accepted range for ' + chainLabel + '; sweeping every ' + cfg.intervalMs + 'ms instead');
         const runExclusive = async (fn) => {
             // Hold the same mutex block processing acquires in beginTransaction so
             // the mark+delete never interleaves with a forward block-root insert.

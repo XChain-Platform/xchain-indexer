@@ -21,7 +21,7 @@
 
 'use strict';
 
-const gatesFilter = require('../actions/attest/rollcall_gates_filter.js');
+const gatesFilter = require('../actions/attest/gates/rollcall_gates_filter.js');
 const { getLogger } = require('../observability/index.js');
 
 // Validate request fields in API error-precedence order and normalize the block.

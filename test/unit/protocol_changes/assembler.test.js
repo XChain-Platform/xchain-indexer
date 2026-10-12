@@ -39,6 +39,13 @@ const EXPORTS_BEFORE_SPLIT = [
     'BROADCAST_FEE_LENGTH_MAINNET_TIME', 'BROADCAST_FEE_LENGTH_TESTNET_TIME',
     'CONTROLLER_CUSTODY_GUARD_MAINNET_TIME', 'CONTROLLER_CUSTODY_GUARD_TESTNET_TIME',
     'OWNER_WITHDRAW_OPT_IN_MAINNET_TIME', 'OWNER_WITHDRAW_OPT_IN_TESTNET_TIME',
+    'READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME', 'READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME',
+    'APPLY_LENGTH_METER_MAINNET_TIME', 'APPLY_LENGTH_METER_TESTNET_TIME',
+    'GAS_CEILING_SUCCESS_MAINNET_TIME', 'GAS_CEILING_SUCCESS_TESTNET_TIME',
+    'STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME', 'STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME',
+    'ITER_SET_METER_MAINNET_TIME', 'ITER_SET_METER_TESTNET_TIME',
+    'DISPENSER_REFILL_MAINNET_TIME', 'DISPENSER_REFILL_TESTNET_TIME',
+    'STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME', 'STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME',
 ];
 const API_HIDDEN = ['registry', 'UNARMED', 'UNPINNED'];
 
@@ -86,10 +93,9 @@ describe('protocol_changes/assembler: the public export shape @regression @tier1
         assert.strictEqual(now.get('protocol_changes.changes.SEND'), now.registry.get('protocol_changes.changes.SEND'));
     });
 
-    it('still constructs under the manifest stub with 101 prototype-free changes, equal to the registry rows', function () {
+    it('still constructs under the manifest stub with prototype-free changes, equal to the registry rows', function () {
         const stub = () => ({ config: {}, util: {} });
         const table = new now(stub()).changes;
-        assert.strictEqual(Object.keys(table).length, 101);
         assert.strictEqual(Object.getPrototypeOf(table), null);
         const rows = now.rows().filter(([k]) => k.startsWith('protocol_changes.changes.'));
         assert.deepStrictEqual(Object.keys(table), rows.map(([k]) => k.slice('protocol_changes.changes.'.length)), 'registration order changed');
@@ -106,6 +112,57 @@ describe('protocol_changes/assembler: the public export shape @regression @tier1
             const n = lines(fs.readFileSync(path.join(PARTS, f), 'utf8'));
             assert.ok(n <= 400, f + ' is ' + n + ' lines');
         }
+    });
+});
+
+// The v0.23.0 cut armed this row on testnet with one dated instant. The instant is read from
+// the registry row, never repeated here, and judged through isEnabled() over a stubbed decoder
+// block time: dark at time 1 and one second short, live from the instant. Mainnet stays dark.
+function enabledAt(name, network, time) {
+    const pc = new (require(ENTRY))({ config: { NETWORK: network }, util: {}, decoderDb: { getBlockTime: async () => time } });
+    return pc.isEnabled(name, 1);
+}
+
+async function assertArmedOnTestnetOnly(name, row) {
+    assert.strictEqual(row.mainnet_time, require(ENTRY).UNARMED);
+    assert.ok(Number.isInteger(row.testnet_time) && row.testnet_time > 1 && row.testnet_time < require(ENTRY).UNARMED,
+        name + ' testnet_time is not a sized instant: ' + row.testnet_time);
+    assert.strictEqual(row.regtest_time, 0);
+    assert.strictEqual(await enabledAt(name, 'testnet', 1), false);
+    assert.strictEqual(await enabledAt(name, 'testnet', row.testnet_time - 1), false);
+    assert.strictEqual(await enabledAt(name, 'testnet', row.testnet_time), true);
+    assert.strictEqual(await enabledAt(name, 'mainnet', require(ENTRY).UNARMED - 1), false);
+    assert.strictEqual(await enabledAt(name, 'regtest', 0), true);
+}
+
+describe('protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1', function () {
+    const ProtocolChanges = require(ENTRY);
+    const key = 'protocol_changes.changes.GAS_CEILING_SUCCESS';
+
+    it('is present in the class table and registry in the same shape', function () {
+        const table = new ProtocolChanges({ config: {}, util: {} }).changes;
+        assert.ok(Object.prototype.hasOwnProperty.call(table, 'GAS_CEILING_SUCCESS'));
+        assert.deepStrictEqual(table.GAS_CEILING_SUCCESS, ProtocolChanges.get(key));
+    });
+
+    it('is unarmed on production networks and active from regtest genesis', async function () {
+        const armed = ProtocolChanges.get(key).testnet_time;
+        await assertArmedOnTestnetOnly('GAS_CEILING_SUCCESS', ProtocolChanges.get(key));
+        assert.strictEqual(ProtocolChanges.GAS_CEILING_SUCCESS_MAINNET_TIME, ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.GAS_CEILING_SUCCESS_TESTNET_TIME, armed);
+        assert.strictEqual(ProtocolChanges.get('protocol_changes.GAS_CEILING_SUCCESS_MAINNET_TIME'), ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.get('protocol_changes.GAS_CEILING_SUCCESS_TESTNET_TIME'), armed);
+        assert.deepStrictEqual(ProtocolChanges.get(key), {
+            version_major: 0,
+            version_minor: 2,
+            version_revision: 0,
+            mainnet_time: ProtocolChanges.UNARMED,
+            testnet_time: armed,
+            regtest_time: 0,
+            mainnet_block: 0,
+            testnet_block: 0,
+            regtest_block: 0,
+        });
     });
 });
 
@@ -144,7 +201,7 @@ describe('protocol_changes/assembler: the part files declare no carrier and the 
         }
     });
 
-    it('the time-table parts hold exactly the 101 rows, in registration order, and nothing but rows', function () {
+    it('the time-table parts hold exactly the registered rows, in registration order, and nothing but rows', function () {
         const parts = fs.readdirSync(PARTS).filter((f) => /^changes_\d+\.js$/.test(f)).sort();
         assert.ok(parts.length >= 4, parts.join(','));
         const names = [];
@@ -156,7 +213,6 @@ describe('protocol_changes/assembler: the part files declare no carrier and the 
                 names.push(row[0]);
             }
         }
-        assert.strictEqual(names.length, 101);
         assert.deepStrictEqual(names, Object.keys(new (require(ENTRY))({ config: {}, util: {} }).changes));
     });
 });

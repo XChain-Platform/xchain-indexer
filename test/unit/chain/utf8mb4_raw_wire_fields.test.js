@@ -390,3 +390,37 @@ describe('the grammar-constrained raw wire columns hold a 4-byte character @regr
         });
     });
 });
+
+describe('list_metas holds a 4-byte character in name and description @regression', function () {
+
+    afterEach(restoreSinon);
+
+    const COLUMNS = ['name', 'description'];
+
+    it('list_metas.sql declares name and description CHARACTER SET utf8mb4', function () {
+        const defs = definitionColumns('list_metas');
+        for (const column of COLUMNS)
+            assert.ok(declaresUtf8mb4(defs[column]), 'list_metas.' + column + ' is not utf8mb4 in the definition');
+    });
+
+    it('the list_metas migration declares the same column specs as the definition', function () {
+        const raw = stripComments(fs.readFileSync(path.join(MIG_DIR, '2026-10-01-list-metas.sql'), 'utf8'));
+        const defs = definitionColumns('list_metas');
+        for (const column of COLUMNS) {
+            const m = new RegExp('^\\s*' + column + '\\s+(.*?),?\\s*$', 'im').exec(raw);
+            assert.ok(m, 'migration does not declare list_metas.' + column);
+            assert.ok(declaresUtf8mb4(m[1]), 'migration list_metas.' + column + ' is not utf8mb4');
+            const want = normalizeSpec(String(defs[column]).replace(new RegExp('^\\s*`?' + column + '`?\\s*', 'i'), ''));
+            assert.strictEqual(normalizeSpec(m[1]), want);
+        }
+    });
+
+    it('createListMeta stores a 4-byte name and description against the strict server', async function () {
+        const { db, doQuery } = makeDb();
+        await db.createListMeta({ ACTION: 'LIST', ACTION_INDEX: 9, LIST_ACTION_INDEX: 8, STATUS: 'valid' },
+                                'n' + EMOJI, 'd' + EMOJI);
+        const hit = astralColumns(doQuery, 'list_metas');
+        for (const column of COLUMNS)
+            assert.ok(hit.has(column), 'the 4-byte character never reached list_metas.' + column);
+    });
+});

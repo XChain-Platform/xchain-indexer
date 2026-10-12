@@ -23,11 +23,11 @@
 
 // The admission gate is a registry row read by literal key (W4).
 const gateRegistry = require('../../consensus/gate_registry');
-const attestRequestCap = require('./attest_request_cap_gate.js');
+const attestRequestCap = require('./gates/attest_request_cap_gate.js');
 // The rules-aware capability filter: drops a validator whose last rolled ROLLCALL
 // gate list does not cover the gates active at the request block. Inert on every
 // network whose ROLLCALL_GATES_ACTIVATION is null, where it never queries.
-const rgf     = require('./rollcall_gates_filter.js');
+const rgf     = require('./gates/rollcall_gates_filter.js');
 const { getLogger } = require('../../observability/index.js');
 const { HOME_CHAIN } = require('./constants.js');
 

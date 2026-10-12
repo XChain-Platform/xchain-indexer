@@ -102,9 +102,6 @@ class Destroy {
          * DEBUGGING - Force params
          ****************************************************************/
         // Example payloads by FORMAT version:
-        // let str = '0|BRRR|1|foo';
-        // let str = '1|BRRR|1|GAS|10|bar';
-        // let str = '2|BRRR|1|foo|GAS|10|bar';
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 

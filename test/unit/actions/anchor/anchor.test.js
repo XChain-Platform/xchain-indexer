@@ -43,19 +43,13 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
     });
 
     // ── the bundle reward ────────────────────────────────────────────────────────────
-    it('v0 with a valid publisher attestation DERIVES exactly ONE anchor_bundle reward', async function () {
+    it('v0 with a valid publisher attestation is valid and the DOGE side writes no bundle reward', async function () {
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
         await handler.parse(v0Params({ sections: THREE_CHAINS }), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
         assert.strictEqual(data['PUBLISHER'], PUBKEY_A);
-        assert.ok(indexer.indexerDb.createValidatorReward.calledOnce,
-            'ONE reward per bundle, not one per section');
-        // (pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert,
-        // deriveBlockIndex, roundQualifier) - frozen amount, NOT wire. round_reference is
-        // SNAPSHOT_BLOCK, a height that only advances, so the qualifier stays 0.
-        assert.deepStrictEqual(indexer.indexerDb.createValidatorReward.firstCall.args,
-            [PUBKEY_A, 100, 'anchor_bundle', '10.00000000', 100, true, null, 0]);
-        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.calledOnceWith(100, 'anchor_bundle'));
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
     });
 
     it('at/above the derive-relocation gate the DOGE-side write is SKIPPED (relocated to BTC), bundle still valid', async function () {
@@ -114,34 +108,27 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.strictEqual(expected.split('||')[1].split('|')[3], '100');
     });
 
-    it('determinism: two independent parses of identical v0 bytes derive the identical reward row', async function () {
+    it('determinism: two independent parses of identical v0 bytes agree and write no reward', async function () {
         let h2 = new Anchor(indexer);
         let d1 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
         let d2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
         await handler.parse(v0Params({ sections: THREE_CHAINS }), d1, null);
-        let firstArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
         await h2.parse(v0Params({ sections: THREE_CHAINS }), d2, null);
-        let secondArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
-        assert.deepStrictEqual(firstArgs, secondArgs);
+        assert.strictEqual(d1['STATUS'], d2['STATUS']);
+        assert.strictEqual(d1['PUBLISHER'], d2['PUBLISHER']);
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
     });
 
     // ── v1: the archive head, its publisher tail and anchor_archive reward derivation ──
-    it('v1 with a valid publisher attestation is valid, stores the archive, and DERIVES the anchor_archive reward', async function () {
+    it('v1 with a valid publisher attestation is valid, stores the archive, and the DOGE side writes no archive reward', async function () {
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
         await handler.parse(v1Params(ARCHIVE_JSON), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
         assert.strictEqual(data['PUBLISHER'], PUBKEY_A);
         assert.strictEqual(data['MATCH_BATCH_SEQ'], '0');
         assert.strictEqual(data['ARCHIVE_B64'], gz64(ARCHIVE_JSON));
-        assert.ok(indexer.indexerDb.createValidatorReward.calledOnce);
-        // (pubkeyHex, roundReference=MATCH_BATCH_SEQ, rewardType, amount, blockIndex, upsert,
-        // deriveBlockIndex, roundQualifier) - frozen ARCHIVE amount, NOT wire. The archive leg
-        // IS qualified: MATCH_BATCH_SEQ is a dense hub counter a wipe-and-replay rebase
-        // reissues, so SNAPSHOT_BLOCK (100 here, the same height block_index carries) is what
-        // keeps two genuinely distinct archive anchors from collapsing onto one reward row.
-        assert.deepStrictEqual(indexer.indexerDb.createValidatorReward.firstCall.args,
-            [PUBKEY_A, 0, 'anchor_archive', '10.00000000', 100, true, null, 100]);
-        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.calledOnceWith(0, 'anchor_archive'));
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
     });
 
     it('v1 wrapper sigs verify over the archive canonical (batch-extended, EQUIV-wrapped)', async function () {

@@ -14,14 +14,24 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 
 const { codeIdentity } = require('../../../bin/consensus-identity.js');
-const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+const { siblingCheckout } = require('../../helpers/sibling_checkout.js');
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
 const BIN = path.join(REPO, 'bin', 'consensus-identity.js');
 const PIN = path.join(REPO, 'bin', 'pins', 'at1-consensus-identity.json');
+const SHARED_ROWS = path.join(REPO, 'src', 'protocol_changes', 'shared_rows_5.js');
+const HUB_SHARED_ROWS = 'src/consensus/gate_registry/shared_rows_5.js';
+const HUB_PIN = 'bin/pins/at1-consensus-identity.json';
+
+function hubFileAtCommit(hubRoot, commit, file) {
+    return execFileSync('git', ['-C', hubRoot, 'show', commit + ':' + file], {
+        encoding: file.endsWith('.json') ? 'utf8' : null,
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+}
 
 function run(args) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'consensus-identity-stdout-'));
@@ -35,8 +45,8 @@ function run(args) {
             encoding: 'utf8',
             env: childEnv(),
             stdio: ['ignore', stdoutFd, 'pipe'],
-            // A cold comparison measured 1.2s; 10s leaves CI headroom while bounding a wedged child.
-            timeout: 10000,
+            // A cold comparison is quick, but loaded CI hosts can take over 30s to scan the carriers.
+            timeout: 60000,
         });
         fs.closeSync(stdoutFd);
         stdoutFd = undefined;
@@ -49,10 +59,10 @@ function run(args) {
 }
 
 // The variables the child is allowed to see. A regtest venue arms gate rows from
-// the environment (src/protocol_changes/shared_rows.js REGTEST_ARMING), and the
-// pin selects its armed block only when EVERY lever of the pair matches, so a
-// process holding one of them answers to neither block: the fingerprint and the
-// digest read armed while the comparison runs against the bare pin. A suite that
+// the environment (src/protocol_changes/shared_rows.js REGTEST_ARMING), and
+// --compare selects a pin block only when the WHOLE arming environment matches it,
+// refusing (exit 2) otherwise, so a process holding one stray lever answers to
+// neither block. A suite that
 // throws between arming a lever and restoring it leaves exactly that state, and
 // an inherited environment would carry it into this guard and red it for a reason
 // that is not drift. The list is closed rather than a subtraction of known levers,
@@ -68,12 +78,60 @@ function childEnv() {
 }
 
 describe('consensus identity GATES field and pin comparison', function () {
-    it('matches the hub pinned GATES field hash', function () {
+    it('pins activeGatesAt unit filtering as identity-neutral', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND';
+        assert.match(pin.active_gates_unit_aware_note, /constant rows/);
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.strictEqual(pin[block].consensus_rules_gates[key],
+                '{"mainnet":9999999999,"regtest":0,"testnet":5082}', block);
+            assert.strictEqual(pin[block].gate_key_count, 45, block);
+            assert.strictEqual(pin[block].gates_field_hash,
+                'ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a', block);
+        }
+    });
+
+    it('pins both merged registry-only rows in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const keys = [
+            'bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION',
+            'vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION',
+        ];
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            for (const key of keys) {
+                assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, `${block}: ${key}`);
+            }
+        }
+    });
+
+    it('pins the relay-response deadline row in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION';
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
+    it('pins the dispatched-only action admission row in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY';
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
+    it('matches the hub shared-row bytes and pinned GATES field hash', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
         const hubRoot = process.env.XCHAIN_HUB_DIR || path.resolve(REPO, '..', 'xchain-hub');
-        const candidate = path.join(hubRoot, 'bin', 'pins', 'at1-consensus-identity.json');
+        const candidate = path.join(hubRoot, HUB_PIN);
         const sibling = siblingCheckout(REPO, candidate, { ownRoot: REPO });
-        if (!sibling.usable) return skipOrFail(this, sibling, 'the hub GATES field hash guard');
-        const hubPin = JSON.parse(fs.readFileSync(sibling.path, 'utf8'));
+        const hubRows = sibling.usable
+            ? fs.readFileSync(path.join(hubRoot, HUB_SHARED_ROWS))
+            : hubFileAtCommit(hubRoot, pin.hub_shared_rows_commit, HUB_SHARED_ROWS);
+        const hubPin = JSON.parse(sibling.usable
+            ? fs.readFileSync(sibling.path, 'utf8')
+            : hubFileAtCommit(hubRoot, pin.hub_shared_rows_commit, HUB_PIN));
+        assert.deepStrictEqual(fs.readFileSync(SHARED_ROWS), hubRows);
         assert.strictEqual(codeIdentity('regtest').gates_field_hash, hubPin.gates_field_hash);
     });
 
@@ -84,8 +142,8 @@ describe('consensus identity GATES field and pin comparison', function () {
     });
 
     it('exits zero with an arming lever left set in this process', function () {
-        // A cold comparison measured 1.2s; 10s allows for a loaded CI host while keeping the case bounded.
-        this.timeout(10000);
+        // Keep Mocha's bound above the child-process bound so cleanup and assertions can finish.
+        this.timeout(70000);
         // One lever of the pair, which is what a hook that throws between arming and
         // restoring leaves behind. The child must not see it.
         const key = 'XC_ROLLCALL_REGTEST_ACTIVATION';

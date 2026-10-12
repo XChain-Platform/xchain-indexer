@@ -56,13 +56,12 @@ module.exports = {
                 // Loop through ISSUE transactions for the given ticker
                 for(let row of results)
                     issueReplay.foldRow(this, data, issueReplay.rowValues(this, row, tick_id));
-                // The `bridged` bit is NOT an issues field and is not replayed: it is a
-                // tokens-table bit the first applied XBRIDGE v3 lock sets and nothing clears
-                // in milestone 1, so it is current state read straight off the row rather
-                // than folded across the issue history. Taken outside the loop above so the
-                // empty-means-unchanged and lock rules there cannot touch it, and normalized
-                // to 0/1 so a caller can compare it without knowing the column type.
-                data['BRIDGED'] = (Number(results[0].bridged) === 1) ? 1 : 0;
+                // The `bridged` bit is not an issues field. It is derived from the xbridges
+                // rows, which a rollback purges by action_index and a replay rewrites, so the
+                // answer matches a fresh replay of the same chain. The tokens.bridged column
+                // is a write-time cache and is never read.
+                // Read the bit as of the same block_index / action_index point as the replay.
+                data['BRIDGED'] = (await issueReplay.hasAppliedLock(this, tick_id, block_index, action_index)) ? 1 : 0;
             }
         }
         // Get token supply at the given action_index
@@ -73,11 +72,34 @@ module.exports = {
 
 };
 
-// The three steps of getTokenInfo's replay, kept off the exported object so
+// The steps of getTokenInfo's replay and bridge-bit derivation, kept off the exported object so
 // Database.prototype gains no method: the statement over one tick's valid ISSUE rows,
 // one row's values keyed as the token-info fields, and the fold of those values into
 // the running token state.
 const issueReplay = {
+
+    // True when an applied XBRIDGE v3 lock exists for the native tick. An orphaned first
+    // lock takes its xbridges row with it, so the bit falls back to 0 on rollback.
+    // The optional bounds match the ISSUE replay's, so an as-of read sees only earlier locks.
+    async hasAppliedLock(db, tick_id, block_index, action_index){
+        let sql  = '',
+            args = [tick_id];
+        // Only count locks mined at or before the given block_index
+        if(!db.util.isNull(block_index) && db.util.isNumeric(block_index)){
+            sql += ' AND x.block_index <= ?';
+            args.push(parseInt(block_index));
+        }
+        // Only count locks recorded before the given action_index
+        if(!db.util.isNull(action_index) && db.util.isNumeric(action_index)){
+            sql += ' AND x.action_index < ?';
+            args.push(parseInt(action_index));
+        }
+        let rows = await db.doQuery(`SELECT 1 FROM xbridges x
+                        INNER JOIN index_statuses s ON (s.id=x.status_id)
+                    WHERE x.tick_id=? AND x.version=3 AND s.status='valid'` + sql + `
+                    LIMIT 1`, args);
+        return rows.length > 0;
+    },
 
     // `sql` carries the optional block_index / action_index bounds, appended after the
     // tick_id filter so the caller's argument order matches the placeholders.
@@ -109,8 +131,7 @@ const issueReplay = {
                             t2.tick,
                             t3.tick as callback_tick,
                             a2.address as owner,
-                            a3.address as transfer,
-                            tk.bridged as bridged
+                            a3.address as transfer
                         FROM
                             issues i
                             INNER JOIN actions            a1 ON (a1.action_index=i.action_index)
@@ -120,7 +141,6 @@ const issueReplay = {
                             INNER JOIN index_statuses     s1 ON (s1.id=i.status_id)
                             LEFT  JOIN index_addresses    a3 ON (a3.id=i.transfer_id)
                             LEFT  JOIN index_tickers      t3 ON (t3.id=i.callback_tick_id)
-                            LEFT  JOIN tokens             tk ON (tk.tick_id=i.tick_id)
                         WHERE
                             s1.status='valid' AND
                             i.tick_id=?` + sql + `

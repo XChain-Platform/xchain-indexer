@@ -30,6 +30,7 @@
 // and every mixin read the same instance of each.
 const { opensBackslashEscape } = require('../shared.js');
 const { retypeLedgerAppliedAt } = require('./ledger_retype.js');
+const { stripBlockComments } = require('./migration_live_schema_guard.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -60,6 +61,13 @@ const Database = require('../index.js');
         return false;
     };
 
+// True for the only session SETs an auto file may carry: SET NAMES and a single UTC time_zone,
+// the zone the pool is configured for (timezone 'Z'), so neither can relax a strict-mode check.
+function autoEligibleSet(stmt){
+    if(/^SET\s+NAMES\s+['"]?\w+['"]?(?:\s+COLLATE\s+['"]?\w+['"]?)?$/i.test(stmt)) return true;
+    return /^SET\s+(?:SESSION\s+|LOCAL\s+|@@SESSION\.|@@LOCAL\.|@@)?time_zone\s*=\s*'\+00:00'$/i.test(stmt);
+}
+
 // destructiveAutoStatement, the statement-prefix keyword checks: true when the statement
 // itself can lose, rewrite or smuggle data past the classifier.
 function keywordDestroys(self, stmt){
@@ -69,12 +77,17 @@ function keywordDestroys(self, stmt){
     // or a `CALL proc()` whose body the scanner cannot see. None of these are used
     // by any committed auto migration, so treat them as non-auto-eligible. SET of a
     // user variable (`SET @s = ...`) exists to stage dynamic SQL for PREPARE, so
-    // flag it too - but NOT system-variable SETs (`SET NAMES ...`, `SET sql_mode
-    // = ...`, `SET @@session...`), which are benign and stay auto-eligible.
+    // flag it too.
     if(/^PREPARE\b/i.test(stmt))                         return true;
     if(/^EXECUTE\b/i.test(stmt))                         return true;
     if(/^CALL\b/i.test(stmt))                            return true;
     if(/^SET\s+@(?!@)/i.test(stmt))                      return true;
+    // Any other SET is an allow-list, not a deny-list: only SET NAMES and a single
+    // UTC time_zone stay auto-eligible. A SET sql_mode (or foreign_key_checks, ...) turns
+    // off the strict-mode backstop, so a later narrowing MODIFY in the same file truncates
+    // silently instead of failing; and SET STATEMENT v=x FOR <stmt> hides a statement
+    // behind the SET keyword from every check below.
+    if(/^SET\b/i.test(stmt) && !autoEligibleSet(stmt))   return true;
     if(/^DROP\s+(TABLE|DATABASE|SCHEMA)\b/i.test(stmt))  return true;
     // CREATE OR REPLACE TABLE is an atomic DROP TABLE IF EXISTS + CREATE: it destroys
     // every existing row. Plain CREATE TABLE / CREATE TABLE IF NOT EXISTS are additive
@@ -113,14 +126,38 @@ function keywordDestroys(self, stmt){
     return false;
 }
 
-// destructiveAutoStatement, the CREATE allow-list: true for any CREATE other than a table or
-// an index. A trigger, event, routine or view carries SQL this classifier never reads, and the
-// server runs it later (a trigger on every row write), the same blind spot as CALL above.
+// destructiveAutoStatement, the CREATE TABLE engine check: true when any ENGINE option names
+// an engine other than InnoDB. MEMORY loses every row on restart, and MyISAM or Aria sit
+// outside the transaction a reorg rollback undoes.
+function createNamesNonInnoDb(stmt){
+    const engineRe = /\bENGINE\b\s*=?\s*[`'"]?(\w*)/gi;
+    let m;
+    while((m = engineRe.exec(stmt)) !== null){
+        if(m[1].toLowerCase() !== 'innodb') return true;
+    }
+    return false;
+}
+
+// destructiveAutoStatement, the CREATE allow-list: true for any CREATE other than an InnoDB
+// table or an index. A trigger, event, routine or view carries SQL this classifier never reads,
+// and the server runs it later (a trigger on every row write), the same blind spot as CALL above.
 function createOutsideAllowList(stmt){
     if(!/^CREATE\b/i.test(stmt))                                      return false;
     // Allow the additive forms committed auto migrations use: [TEMPORARY] TABLE and INDEX.
-    if(/^CREATE\s+(?:TEMPORARY\s+)?TABLE\b/i.test(stmt))              return false;
+    if(/^CREATE\s+(?:TEMPORARY\s+)?TABLE\b/i.test(stmt))              return createNamesNonInnoDb(stmt);
     return !/^CREATE\s+(?:(?:UNIQUE|FULLTEXT|SPATIAL)\s+)?INDEX\b/i.test(stmt);
+}
+
+// destructiveAutoStatement, the ALTER TABLE DROP check: true unless every DROP is followed by a
+// bare, unquoted metadata keyword. A quoted name is always a column to the server, a word that
+// only starts with a keyword (key1) is a column, and a token the scan cannot read is not safe.
+function dropTargetDestroys(stmt, safeDrop){
+    const dropRe = /\bDROP\b/gi;
+    while(dropRe.exec(stmt) !== null){
+        const next = /^\s+([A-Za-z_]+)(?=[\s,;()`]|$)/.exec(stmt.slice(dropRe.lastIndex));
+        if(!next || !safeDrop.has(next[1].toUpperCase())) return true;
+    }
+    return false;
 }
 
 // destructiveAutoStatement, the ALTER TABLE clause checks: true when any clause can lose or
@@ -135,18 +172,19 @@ function alterTableDestroys(stmt){
     // so the whole class is non-auto-eligible - re-tag mode=manual to run one.
     if(/\bPARTITION(?:ING)?\b/i.test(stmt))          return true;
     if(/\bTABLESPACE\b/i.test(stmt))                 return true;
+    // Any ENGINE option rebuilds the whole table by copy, and a non-InnoDB engine loses rows on
+    // restart (MEMORY) or escapes the reorg rollback (MyISAM, Aria), so it runs manual only.
+    if(/\bENGINE\b/i.test(stmt))                     return true;
     // Every DROP inside the ALTER must target a safe (metadata-only) object.
-    let m;
-    const dropRe = /\bDROP\s+([A-Za-z_]+|`[^`]+`)/gi;
-    while((m = dropRe.exec(stmt)) !== null){
-        const target = m[1].replace(/`/g, '').toUpperCase();
-        if(!SAFE_ALTER_DROP.has(target)) return true;
-    }
+    if(dropTargetDestroys(stmt, SAFE_ALTER_DROP))    return true;
     // RENAME TO / RENAME COLUMN / bare RENAME lose the old name; only
     // RENAME INDEX/KEY is a metadata-only rename.
     if(/\bRENAME\b(?!\s+(INDEX|KEY)\b)/i.test(stmt)) return true;
     // CHANGE [COLUMN] renames and retypes in one clause - manual only.
     if(/\bCHANGE\b/i.test(stmt))                     return true;
+    // CONVERT TO CHARACTER SET rewrites every text column of the table and can truncate or
+    // re-encode row data.
+    if(/\bCONVERT\s+TO\b/i.test(stmt))               return true;
     // MODIFY that adds NOT NULL narrows the column domain - except an
     // AUTO_INCREMENT attribute repair: an AUTO_INCREMENT column is
     // definitionally NOT NULL, so no domain is narrowed (see the
@@ -166,6 +204,10 @@ function alterTableDestroys(stmt){
     mClauses.push(stmt.slice(mStart));
     for(const clause of mClauses){
         if(/\bMODIFY\b[\s\S]*\bNOT\s+NULL\b/i.test(clause) &&
+           !/\bAUTO_INCREMENT\b/i.test(clause))      return true;
+        // A MODIFY restates the whole column, so restating id without AUTO_INCREMENT strips
+        // the attribute and every later insert loses its generated key.
+        if(/^\s*(?:ALTER\s+(?:ONLINE\s+)?TABLE\s+(?:`[^`]+`|[A-Za-z0-9_$.]+)\s+)?MODIFY\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?`?id`?(?=[\s,]|$)/i.test(clause) &&
            !/\bAUTO_INCREMENT\b/i.test(clause))      return true;
     }
     return false;
@@ -214,15 +256,18 @@ module.exports = {
     // ALTER TABLE ... RENAME (except RENAME INDEX/KEY), ALTER TABLE ... CHANGE
     // (rename+retype), MODIFY ... NOT NULL (the statically detectable
     // narrowing; a width reduction cannot be seen without the live schema and
-    // stays covered by the manual-tag convention), any ALTER TABLE PARTITION or
-    // TABLESPACE clause, ALTER IGNORE TABLE (deletes duplicate-key rows), any other
-    // ALTER than ALTER [ONLINE] TABLE, and any CREATE other than [TEMPORARY] TABLE and
+    // stays covered by the manual-tag convention), any ALTER TABLE PARTITION,
+    // TABLESPACE or ENGINE clause, ALTER IGNORE TABLE (deletes duplicate-key rows), any other
+    // ALTER than ALTER [ONLINE] TABLE, a CREATE TABLE naming an engine other than InnoDB,
+    // and any CREATE other than [TEMPORARY] TABLE and
     // [UNIQUE|FULLTEXT|SPATIAL] INDEX (triggers, events, routines and views run SQL
-    // the scanner cannot read).
+    // the scanner cannot read), and any SET other than SET NAMES or a single UTC
+    // time_zone (session variables relax strict mode; SET STATEMENT ... FOR hides a statement).
     //
     // Deliberately NOT flagged (legitimate existing auto patterns): DROP INDEX/KEY,
-    // DROP FOREIGN KEY/CONSTRAINT/CHECK/DEFAULT/PRIMARY KEY (structural, no row
-    // data lost), ADD ..., plain CREATE TABLE / CREATE TABLE IF NOT EXISTS (additive;
+    // DROP FOREIGN KEY/CONSTRAINT/CHECK/DEFAULT/PRIMARY KEY with the keyword bare and
+    // unquoted (structural, no row data lost), ADD ..., plain InnoDB or engine-less
+    // CREATE TABLE / CREATE TABLE IF NOT EXISTS (additive;
     // but CREATE OR REPLACE TABLE IS flagged - it is an atomic DROP+CREATE), CREATE
     // [UNIQUE] INDEX, MODIFY that widens/nullables a column, and ALTER ONLINE TABLE
     // under the same clause rules as plain ALTER TABLE.
@@ -238,8 +283,10 @@ module.exports = {
             // uses one, so treat any statement carrying one as non-auto-eligible.
             if(/\/\*(?:!|M!)/i.test(String(raw)))                return raw;
             // Belt-and-braces: strip /* */ block comments (line comments are already
-            // gone) so a keyword inside comment prose never triggers or hides a hit.
-            const stmt = String(raw).replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
+            // gone) so a keyword inside comment prose never triggers or hides a hit. The
+            // strip is quote-aware: a regex one deletes real clauses sitting between a
+            // '/*' literal and a later '*/' literal, which the server still runs.
+            const stmt = stripBlockComments(raw).trim();
             if(!stmt) continue;
             // Second layer behind stripSqlLineComments: MariaDB/MySQL honour `#` to
             // end-of-line as a comment, so `# note\nDROP TABLE balances` is a DROP every

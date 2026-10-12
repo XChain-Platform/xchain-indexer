@@ -59,10 +59,6 @@ class Message {
          * DEBUGGING - Force params
          ****************************************************************/
         // Example payloads by FORMAT version:
-        // let str = "0|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|PUBLIC_KEY_GOES_HERE";
-        // let str = "1|1Donatet2LrNpuWByAnH8gc9Wh9zSzZuLC|1|PUBLIC_KEY_GOES_HERE";
-        // let str = "2|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|ENCRYPTED_MESSAGE_GOES_HERE;
-        // let str = "3|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Hello";
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 

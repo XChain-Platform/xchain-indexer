@@ -63,8 +63,9 @@ const ATTESTED_VERSIONS = [0, 1, 3, 4, 5, 6, 7];
 // identically, and the deterministic-invalid filter in judge drops the row as evidence.
 //
 // The fold wire (3) joins the bundle family only: a fold-era archive head earns no reward
-// (reward_family.rewardTypeFor), and isBundleSectionRow below keeps a fold's archive row
-// from standing in for one of its chain sections.
+// once the archive fold-term gate arms (the indexer proof client's archiveRowTerminated and
+// the BTC derive's rowGatesActive enforce it), and isBundleSectionRow below keeps a fold's
+// archive row from standing in for one of its chain sections.
 const REWARD_FAMILY_VERSIONS = {
     archive: [1, 6],
     bundle:  [0, 3, 7]
@@ -174,10 +175,11 @@ function isRewardCandidateRow(a, network, publisher){
 // publisher under a node-class-dependent status, which is why identity is the fix and
 // this is the fallback.
 //
-// Consensus note: this changes which rewards derive, so it is deployed like the other
-// pre-arming remedies in anchor_reward_activation.js - remedy in code while
-// ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet is inert (null), with the operator ratifying
-// a height only once the whole fleet carries it. It needs no gate of its own.
+// Consensus note: this decides which rewards derive, and the derive path is LIVE.
+// ANCHOR_REWARD_DERIVE_ACTIVATION is armed at 0 on mainnet, testnet and regtest (its row
+// in src/protocol_changes/shared_rows_1.js, read through src/consensus/gates/anchor_reward_gate.js),
+// so there is no inert window left: any change to what bundleHeaderBlocks or bindsToTuple
+// accept or reject is a consensus change and ships behind its own activation row.
 //
 // Returns { byAction: Map(action_index -> header block), filtered: old-peer maximum or null }.
 function bundleHeaderBlocks(anchors, network, publisher){

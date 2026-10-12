@@ -101,7 +101,7 @@
  *               needed (typically: a deterministic projection of hashed
  *               actions, where any divergence surfaces through the ledger/
  *               actions/contracts hashes of the affected blocks on replay).
- *   anchorRecovery  full-parse recovery policy for a quorum-class hub mirror:
+ *   anchorRecovery  full-parse recovery policy, required on every hub mirror:
  *                 'archive' rebuilt from the on-chain ANCHOR archive
  *                 'none'    intentionally not rebuilt by anchor recovery
  *   anchorRecoveryNote  required rationale when anchorRecovery is 'none'
@@ -162,8 +162,9 @@ const ORPHAN_SWEEPS = [
 //
 // This block is the coverage contract. The guards bind it to the code:
 // xchain-sync test/unit/table_content_parity.test.js (every replicated table is
-// committed by something) and this repo's test/unit/hub/hash_coverage.test.js (the
-// carve-outs stay pinned to the operator ruling).
+// in the window or in one of the exclusions below) and this repo's
+// test/unit/hub/hash_coverage.test.js (the carve-outs stay pinned to the
+// operator ruling).
 //
 // There are exactly TWO exclusion classes, and a table outside both is covered:
 //
@@ -180,15 +181,20 @@ const ORPHAN_SWEEPS = [
 //      later block M, so "the content of blocks [a..b]" is not a stable
 //      quantity: a source one block ahead of the follower legitimately carries
 //      the later edit inside the same window and would read as a divergence.
-//      They are excluded here because they are ALREADY committed, by the
-//      enforced (halting) state_hash fourth hash that exists for precisely this
-//      mutation class. So the exclusion narrows coverage by nothing: every
-//      replicated table is committed by one mechanism or the other.
+//      The whole table leaves the window, but the halting state_hash fourth hash
+//      commits only the columns its section reads (tokens: tick and supply;
+//      attests: the v0 request_status and the gated v5 batch-head status), so
+//      window parity no longer checks the rest of these rows. The tokens columns
+//      ISSUE re-derives in place (token_refold.FOLD_COLUMNS: owner, locks,
+//      callback, lists, mint window, bridge) are in no consensus hash; only the
+//      opt-in, never-halting TOKEN_FOLD_PARITY_CHECK digest in xchain-sync
+//      watches them. Outside these two classes, only the in-place COLUMNS in
+//      CONTENT_PARITY_IN_PLACE_COLUMNS below leave the window.
 const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
     Object.freeze({ table: 'markets', dbType: 'indexer',
         reason: 'Derived full-snapshot OHLCV aggregate with no clean block bound (operator ruling 2026-08-11); converges through the snapshot upsert.' }),
     Object.freeze({ table: 'dispensers', dbType: 'decoder',
-        reason: 'Decoder in-place UPDATEs (soft-expire, un-expire, expiration extend) plus reorg and deferred hard-purge DELETEs ride no per-block channel (operator ruling 2026-08-11); converges through the periodic full-table reconcile.' }),
+        reason: 'Decoder in-place UPDATEs (soft-expire, un-expire, expiration extend, and the reorg rewind of expiration and expired_block_index through dispenser_extension_undo) plus reorg and deferred hard-purge DELETEs ride no per-block channel (operator ruling 2026-08-11); converges through the periodic full-table reconcile.' }),
 ]);
 
 // Columns dropped from the content-parity preimage because the follower is not
@@ -196,7 +202,8 @@ const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
 // xchain-sync ClientApplier: `blocks.id` is the local AUTO_INCREMENT surrogate
 // the applier strips before insert (localSurrogateIdTables), so the two sides
 // legitimately disagree on it, and `contract_state.state_key_bin` is a
-// database-GENERATED column the applier never names (generatedColumns.js).
+// database-GENERATED column the applier never names (xchain-sync
+// src/schema/generated_columns.js).
 // `sync_meta.id` and `sync_meta.logged_at` are the same class: ServerPoller
 // builds the streamed sync_meta row by hand from the block hashes and omits
 // both, so the follower auto-assigns its own id and stamps its own insert
@@ -231,6 +238,20 @@ const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({
     contract_state:     Object.freeze(['state_key_bin']),
     sync_meta:          Object.freeze(['id', 'logged_at']),
     validator_rewards:  Object.freeze(['id']),
+});
+
+// Columns a LATER block edits in place on a table that is otherwise append-only.
+// They leave only the window preimage: a source one block ahead legitimately holds
+// the later value inside a window it already published. Unlike the map above, the
+// follower DOES converge on them, so they stay out of CONTENT_PARITY_EXCLUDED_COLUMNS,
+// which the end-to-end byte oracle also reads and must keep comparing at rest.
+// `order_matches.status_id` is promoted 'pending_coinpay' -> 'valid' by the COINPAY
+// that settles the match (every later-block UPDATE of order_matches sets status_id
+// alone; createOrderMatch only re-writes its own action's row), carried to followers
+// as updated-rows class 8 and re-derived on reorg. No hash commits it yet; a gated
+// state_hash term would, and would retire this entry.
+const CONTENT_PARITY_IN_PLACE_COLUMNS = Object.freeze({
+    order_matches: Object.freeze(['status_id']),
 });
 
 // ── Derivation helpers ──────────────────────────────────────────────────
@@ -339,16 +360,19 @@ function contentParityCarveOut(table, dbType){
 }
 
 // Tables the source mutates in place after the block that wrote them, which is
-// the same set that declares the state_hash class (that hash exists to commit
-// exactly these mutations). Derived, never hand-listed, so a new mutation class
-// joins both the hash and this exclusion in one registry edit.
+// the same set that declares the state_hash class (that hash commits these
+// mutations, but only the columns each section reads). Derived, never
+// hand-listed, so a new mutation class joins both the hash and this exclusion
+// in one registry edit.
 function contentParityMutableTables(){
     return hashClassTables('state_hash');
 }
 
-// Columns excluded from the content-parity preimage for a table (empty for most).
+// Columns excluded from the content-parity preimage for a table (empty for most),
+// covering both the by-design differences and the in-place edited columns.
 function contentParityExcludedColumns(table){
-    return (CONTENT_PARITY_EXCLUDED_COLUMNS[table] || []).slice();
+    return (CONTENT_PARITY_EXCLUDED_COLUMNS[table] || [])
+        .concat(CONTENT_PARITY_IN_PLACE_COLUMNS[table] || []);
 }
 
 // How a stream:index lookup is bounded for content parity: 'block' for the two
@@ -365,6 +389,7 @@ function contentParityLookupBound(table, dbType){
 module.exports = {
     TABLES, ORPHAN_SWEEPS,
     CONTENT_PARITY_CARVE_OUTS, CONTENT_PARITY_EXCLUDED_COLUMNS,
+    CONTENT_PARITY_IN_PLACE_COLUMNS,
     allTables, entry, tablesWhere,
     rollbackTables, replicaRollbackTables, streamTopology, blockKey,
     rollbackBuckets, replicaRollbackBuckets, hashClassTables,

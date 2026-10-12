@@ -26,13 +26,15 @@ const Utility = require('../../../../src/utility.js');
 const fs      = require('fs');
 const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checkout.js');
 
+// Read the epoch from the boot gate's own constant so this CI check and the running
+// validator's refusal cannot disagree. That pin and the digests below are ONE unit;
+// bumping the epoch alone makes every assertion under it vacuous.
 // Epoch 4: REST_PATTERN_METER added the `banned-rest` deploy rule VM-side, and a
-// CONSENSUS_RULES change moves the epoch. This pin and the digests below are ONE
-// unit; bumping the integer alone makes every assertion under it vacuous.
+// CONSENSUS_RULES change moves the epoch.
 // Epoch 5: JSON_STRINGIFY_HOOK closes the JSON.stringify value-hook depth
 // bypass (a toJSON/replacer/getter presenting a shallow value to the native
 // depth guard and a deep one to the serializer); see the coupling check below.
-const EXPECTED_VM_CONSENSUS_VERSION = '5';
+const { EXPECTED_VM_CONSENSUS_VERSION } = require('../../../../src/actions/actions_class/vm_runtime.js');
 // Frozen digest of the bundled VM's deploy/execution contract surface, asserted in
 // lockstep with the version above. Any change to the sandbox strip set or the deploy
 // validator's CONSENSUS_RULES must bump EXPECTED_VM_CONSENSUS_VERSION (and the VM's
@@ -51,9 +53,11 @@ const EXPECTED_VM_STRIPPED_GLOBAL_NAMES = [
 // `banned-rest` is the epoch-4 addition: the deploy validator refuses the four rest
 // positions with no source expression to wrap, which the allocator meter cannot
 // reach and which therefore copy O(n) elements for a flat 1 gas.
+// `nesting-depth` is the epoch-7 addition: delimiter nesting above 64 is refused before parsing.
 const EXPECTED_VM_CONSENSUS_RULES = [
     'banned-async', 'banned-generator', 'banned-literal', 'banned-math',
-    'banned-rest', 'banned-wasm', 'invalid-type', 'reserved-identifier',
+    'banned-rest', 'banned-wasm', 'banned-with', 'invalid-type', 'nesting-depth',
+    'reserved-identifier',
     'unsupported-syntax'
 ];
 // The sandbox neuters more than the global strip set: prototype-method strips
@@ -86,16 +90,14 @@ function resolveVmConsensus(){
     // degraded to the fallback, so a dropped export reddens rather than skips.
     try { return { vm: require('xchain-vm'), full: true, pkgErr: null }; }
     catch(e){
-        // Two spellings, post-rename first: the VM renamed src/consensus-runtime.js
-        // to src/consensus_runtime.js with nothing left behind, and a sibling can
-        // sit on either side of that rename. Pinning one would send this guard to
-        // the vm:null branch, which SKIPS, against the other.
+        // Prefer the current canonical name while preserving compatibility with
+        // sibling branches that still carry the legacy underscore spelling.
         // A spelling counts only when its sibling may be trusted. The refusal carried out
         // names why nothing loaded, preferring a present-but-refused spelling (a lane
         // symlink into a live main checkout) over one that is simply absent.
         let refused = null;
-        for (const spelling of ['../../../../../xchain-vm/src/consensus_runtime.js',
-                                '../../../../../xchain-vm/src/consensus-runtime.js']) {
+        for (const spelling of ['../../../../../xchain-vm/src/consensus-runtime.js',
+                                '../../../../../xchain-vm/src/consensus_runtime.js']) {
             const verdict = siblingCheckout(__dirname, spelling);
             if (!verdict.usable){
                 if (!refused || fs.existsSync(verdict.path)) refused = verdict;
@@ -248,6 +250,78 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         assert.strictEqual(gate.mainnet, row.mainnet_time, 'mainnet_time');
         assert.strictEqual(gate.testnet, row.testnet_time, 'testnet_time');
         assert.strictEqual(gate.regtest, row.regtest_time, 'regtest_time');
+    });
+
+    it('the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        if(!vm || !full){
+            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present') + (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+            this.skip(); return;
+        }
+        const { ACCESSOR_OWN_KEY_ACTIVATION: gate } = require('xchain-vm/src/readonly-accessors.js');
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not declare ACCESSOR_OWN_KEY_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.READONLY_ACCESSOR_OWN_KEY');
+        // The VM spells an unarmed network null; the indexer spells it UNARMED.
+        const asRow = (t) => (t === null ? pc.UNARMED : t);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
+    });
+
+    it('the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        if(!vm || !full){
+            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present') + (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+            this.skip(); return;
+        }
+        const gate = vm.APPLY_LENGTH_METER_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export APPLY_LENGTH_METER_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.APPLY_LENGTH_METER');
+        const asRow = (t) => (t === null ? pc.UNARMED : t);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
+    });
+
+    it('the bundled VM GAS_CEILING_SUCCESS_ACTIVATION matches the indexer GAS_CEILING_SUCCESS row per network', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        if(!vm || !full){
+            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present') + (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+            this.skip(); return;
+        }
+        const gate = vm.GAS_CEILING_SUCCESS_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export GAS_CEILING_SUCCESS_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.GAS_CEILING_SUCCESS');
+        const asRow = (t) => (t === null ? pc.UNARMED : t);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
+    });
+
+    it('the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        assert.ok(vm && full,
+            'ITER_SET_METER coupling requires the full xchain-vm package surface: ' +
+            (pkgErr ? String(pkgErr.message) : 'package not present') +
+            (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+        const gate = vm.ITER_SET_METER_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export ITER_SET_METER_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.ITER_SET_METER');
+        const asRow = (t) => (t === null ? pc.UNARMED : t);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
     });
 
     it('the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp', function(){

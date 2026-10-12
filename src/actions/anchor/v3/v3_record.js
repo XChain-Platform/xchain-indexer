@@ -15,7 +15,7 @@
 'use strict';
 
 const diag = require('../diagnostic_events.js');
-const { foldActionRows } = require('../v3_rows.js');
+const { foldActionRows } = require('./v3_rows.js');
 const { getLogger } = require('../../../observability/index.js');
 
 function failureEvent(data, sections){

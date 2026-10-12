@@ -48,7 +48,8 @@ module.exports = {
     // the NOT IN subqueries never short-circuit on a NULL.) Mirrors the icons orphan
     // sweep above.
     async sweepDanglingIndexReferences(){
-        this.recordSweepStats(await sweepSql.sweepDanglingIndexReferences(this.indexerDb, Database.MARKET_NATIVE_TICK_ID));
+        let bounds = await sweepSql.readDanglingIndexReferenceBounds(this.indexerDb);
+        this.recordSweepStats(await sweepSql.sweepDanglingIndexReferences(this.indexerDb, Database.MARKET_NATIVE_TICK_ID, bounds));
     },
 
     // Keep each sweep's { table, ms, rows } for logRollbackSummary; runRollbackTransaction resets the list.
@@ -130,7 +131,7 @@ module.exports = {
     // is a harmless no-op. cross_chain_matches is two-sided: a match drops when
     // EITHER leg on this chain was rolled back. Predicates are byte-identical to
     // client/rollback.js (drift-guarded by the markers below), and deliberately NOT
-    // to hub_db_sync.js _applyRetraction: that path additionally carries the bounded
+    // to applyRetraction (src/hub/hub_db_sync/retractions.js): that path additionally carries the bounded
     // to_action_index clause and the item-5308 push_generation fence, and for these
     // two quorum-class tables the fence is MANDATORY (an unfenced retraction is
     // refused outright), so its emitted SQL is always stricter than this one.

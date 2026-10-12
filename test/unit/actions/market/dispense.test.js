@@ -69,6 +69,23 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.strictEqual(dispenseRecord['STATUS'], 'valid');
     });
 
+    it('loads dispenser state with the current block index', async function () {
+        const data = createBaseData({
+            ACTION:      'DISPENSE',
+            SOURCE:      BUYER_ADDR,
+            COIN_AMOUNT: '0.01',
+            BLOCK_INDEX: 321,
+            BLOCK_TIME,
+        });
+
+        await dispense.parse([], data, false);
+
+        sinon.assert.calledWithExactly(
+            indexer.indexerDb.getDispenserInfo,
+            'BTC', 10, BLOCK_TIME, 321
+        );
+    });
+
     it('give_amount calculated from multiplier (2x payment)', async function () {
         const data = createBaseData({
             ACTION:      'DISPENSE',

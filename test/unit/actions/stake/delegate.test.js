@@ -49,7 +49,7 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
         it('rejects on non-BTC chain', async function () {
             const data = delegateData({ FORMAT: 0, COIN: 'LTC' });
             await handler.parse(['0', VALID_PUBKEY], data, null);
-            assert.ok(String(data['STATUS']).includes('BTC only'));
+            assert.strictEqual(data['STATUS'], 'invalid: ACTION (BTC only)');
         });
 
         it('rejects when SIGNING_PUBKEY is missing', async function () {

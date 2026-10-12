@@ -48,7 +48,8 @@
 // which the SDK and the wallet read as the same map when they decide whether to offer
 // an edit form.
 const gateRegistry = require('../consensus/gate_registry');
-const { getOpenOrdersByList, getOpenSwapsByList } = require('../db/lists/rematch.js');
+const { getOpenOrdersByList, getOpenSwapsByList,
+        getOpenMarketsByTokenList } = require('../db/lists/rematch.js');
 const { planListRematch } = require('../consensus/list_rematch/plan.js');
 
 const addressRefPart = require('./list/address_ref.js');
@@ -122,17 +123,21 @@ class List {
 
     // Handle parsing the LIST transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // Example payloads by FORMAT version:
-        // let str = "0|1|JDOG|BRRR|TEST";
-        // let str = "0|2|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8";
-        // let str = "1|2|860dc04b2b59657005a0955f282043c04bc9d5520562d317119722956043ffee|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs";
-        // let str = "1|1|b21f92568cf4f892fdf9adf432bfe1900ec41f16a1514c851b54926bd2828950|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs|1FwkKA9cqpNRFTpVaokdRjT9Xamvebrwcu|bc1q50kxp76j9l0k9jgwasvcz4mcz0v03fv2y5pdxx|1Lfm6jXgCQi8LvjpgFHa2F4hdr1uJVa5t4";
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+        let parsed = this.prepareParse(params, data, error);
+        data = parsed.data;
+        error = parsed.error;
+        let format = parsed.format;
 
+        let validated = await this.validateParse(data, format, error);
+        error = validated.error;
+
+        let changed = await this.applyListChanges(data, format, params, validated.list, error);
+        error = await this.validateResult(data, format, validated.list, changed.changes, error);
+
+        await this.finalizeParse(data, format, error, validated.list, changed);
+    }
+
+    prepareParse(params, data, error){
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && !this.isFormatActive(format, data))
@@ -151,36 +156,32 @@ class List {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // Define some placeholders
-        let edit    = {};
-        let list    = [];
-        let invalid = {};
+        return { data, error, format };
+    }
 
-        // Load the list this action edits, which also decides TYPE and the stored index
+    async validateParse(data, format, error){
         let loaded = await this.validateAndLoadList(data, format, error);
         error = loaded.error;
-        list  = loaded.list;
 
         error = await this.validateEditAuthority(data, format, error);
-
         error = await this.validateFields(data, error);
+        error = await this.validateFormatRules(data, format, loaded.list, error);
+        return { error, list: loaded.list };
+    }
 
-        error = await this.validateFormatRules(data, format, list, error);
-
+    async applyListChanges(data, format, params, list, error){
+        let edit = {};
+        let invalid = {};
         let changes = 0;
-
-        // Handle building out some data arrays using list items
         if(!error && (this.isCreateFormat(format) || this.isEditFormat(format))){
-
             await this.collectEditItems(data, format, params, edit);
-
             changes = this.applyEditItems(data, format, edit, list, invalid);
-
         }
+        return { edit, invalid, changes };
+    }
 
-        error = await this.validateResult(data, format, list, changes, error);
-
-        let fee = await this.chargeFee(data, format, changes, error);
+    async finalizeParse(data, format, error, list, changed){
+        let fee = await this.chargeFee(data, format, changed.changes, error);
         error = fee.error;
         fee = fee.fees;
 
@@ -191,10 +192,8 @@ class List {
         // Print status message
         getLogger().info("\t LIST : " + data['STATUS']);
 
-        await this.storeList(data, status, edit, list, invalid, fee);
-
+        await this.storeList(data, status, changed.edit, list, changed.invalid, fee);
         await this.rematchMarkets(data, format, status);
-
     }
 
     async rematchMarkets(data, format, status){
@@ -202,12 +201,16 @@ class List {
            status!='valid' || data['TYPE']!=2 ||
            !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
             return;
-
         let listRoot = this.isCreateFormat(format) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];
-        let orderIndexes = await getOpenOrdersByList(this.indexerDb, listRoot);
-        let swapIndexes = await getOpenSwapsByList(this.indexerDb, listRoot);
-        let plan = planListRematch(data, orderIndexes, swapIndexes);
-        for(let step of plan)
+        let orders = [...new Set([
+            ...await getOpenOrdersByList(this.indexerDb, listRoot),
+            ...await getOpenMarketsByTokenList(this.indexerDb, listRoot, 'order')
+        ])];
+        let swaps = [...new Set([
+            ...await getOpenSwapsByList(this.indexerDb, listRoot),
+            ...await getOpenMarketsByTokenList(this.indexerDb, listRoot, 'swap')
+        ])];
+        for(let step of planListRematch(data, orders, swaps))
             await this.actions.processAction(step.action, null, step.data, null);
     }
 

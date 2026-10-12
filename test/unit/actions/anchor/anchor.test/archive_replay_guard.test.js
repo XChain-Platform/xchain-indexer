@@ -9,7 +9,7 @@
 // contact legal@dankest.llc.
 //
 // ANCHOR v1 replay guards: the match batch seq and checkpoint seq watermarks,
-// a batch seq restarted by a rebase, and archive reward determinism. Part of
+// a batch seq restarted by a rebase. Part of
 // the ANCHOR suite; see ../anchor.test.js.
 
 process.env.INDEXER_COIN = 'BTC';
@@ -85,23 +85,26 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         disarmAnchor({ verifyStub, swqStub, deriveGateStub });
     });
 
-    it('v1 replay guard: the reward rail rides the same exemption, so a restarted batch still derives its reward', async function () {
+    it('v1 replay guard: a restarted batch stays valid without a DOGE-side reward write', async function () {
         indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 900000 });
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
         await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '0', seq: '961000' }), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
-        assert.ok(indexer.indexerDb.createValidatorReward.called);
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
     });
 
-    it('determinism: two independent parses of identical v1 bytes derive the identical archive reward row', async function () {
+    it('determinism: two independent parses of identical v1 bytes agree and write no reward', async function () {
         let h2 = new Anchor(indexer);
         let d1 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
         let d2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
         await handler.parse(v1Params(ARCHIVE_JSON), d1, null);
-        let firstArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
         await h2.parse(v1Params(ARCHIVE_JSON), d2, null);
-        let secondArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
-        assert.deepStrictEqual(firstArgs, secondArgs);
+        assert.strictEqual(d1['STATUS'], d2['STATUS']);
+        assert.strictEqual(d1['PUBLISHER'], d2['PUBLISHER']);
+        assert.strictEqual(d1['MATCH_BATCH_SEQ'], d2['MATCH_BATCH_SEQ']);
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
     });
 
     it('replay guard: a checkpoint_seq below the recorded max is stale; equal is allowed (a v0 section and its v1 archive share a seq)', async function () {

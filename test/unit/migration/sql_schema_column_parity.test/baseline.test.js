@@ -29,11 +29,24 @@ const {
     collectDefinitionColumns, collectMigrationColumns, collectMigrationCreatedTables,
     collectMigrationModifies, stripInlineKeys,
 } = require('./helpers/column_ledger.js');
+const {
+    auditRetiredAnchorEntries, collectDefinedTables, collectMigrationDrops,
+} = require('../helpers/schema_retirements.js');
 
 // The immutable anchor the re-freeze guard measures against, plus the sha256 that
 // makes editing it a deliberate act. See the re-freeze case at the bottom of this file.
 const ORIGIN_BASELINE        = path.join(__dirname, '..', '..', '..', 'fixtures', 'schema-baseline-origin.json');
 const ORIGIN_BASELINE_SHA256 = 'b9f13cbbf4d6c8c746a1ba15fb56eb20934b46d269d3194370c3852839515c45';
+
+// Split a table's baselined columns into those its definition still declares and those it
+// retired, so a removal is reported as a retirement instead of as a reorder of its siblings.
+function splitBaselined(frozen, cols) {
+    const declared = new Set(cols.map(c => c.name.toLowerCase()));
+    return {
+        kept:    frozen.filter(e => declared.has(String(e.name).toLowerCase())),
+        retired: frozen.filter(e => !declared.has(String(e.name).toLowerCase())),
+    };
+}
 
 describe('SQL schema column parity (definition path vs ledger path) @regression', function () {
     // The three cases above all run ledger->definition (every migration-added
@@ -101,11 +114,12 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
         const reordered = [];
         for (const [table, frozen] of Object.entries(baseline.baseline || {})) {
             const cols = defs[table] || [];
-            const want = new Map(frozen.map(e => [String(e.name).toLowerCase(), e]));
+            const { kept } = splitBaselined(frozen, cols);
+            const want = new Map(kept.map(e => [String(e.name).toLowerCase(), e]));
             const live = cols.filter(c => want.has(c.name.toLowerCase()));
 
             const liveOrder   = live.map(c => c.name.toLowerCase()).join(',');
-            const frozenOrder = frozen.map(e => String(e.name).toLowerCase()).join(',');
+            const frozenOrder = kept.map(e => String(e.name).toLowerCase()).join(',');
             if (liveOrder !== frozenOrder)
                 reordered.push(`  ${table}: definition order [${liveOrder}] vs baseline [${frozenOrder}]`);
 
@@ -131,6 +145,25 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             'contract_state.state_key_bin diverged). Restore the declared order, or - if the move is ' +
             'deliberate and carried by a dated migration - re-freeze test/fixtures/schema-baseline.json in ' +
             'the same commit:\n' + reordered.join('\n'));
+    });
+});
+
+describe('SQL schema column parity (definition path vs ledger path) @regression', function () {
+    // Report a baselined column whose definition dropped it as a retirement: the shape case above
+    // leaves it out of its order check, so this is the one place a definition-only removal fails.
+    it('a baselined column removed from its definition is reported as retired, not reordered @regression', function () {
+        const baseline = JSON.parse(fs.readFileSync(
+            path.join(__dirname, '..', '..', '..', 'fixtures', 'schema-baseline.json'), 'utf8'));
+        const defs     = collectDefinitionColumns();
+        const retired  = Object.entries(baseline.baseline || {}).flatMap(([table, frozen]) =>
+            splitBaselined(frozen, defs[table] || []).retired.map(e => `  ${table}.${e.name}`));
+
+        assert.deepStrictEqual(retired, [],
+            'These pre-ledger columns are still in test/fixtures/schema-baseline.json but their ' +
+            'src/sql/<table>.sql definition no longer declares them. Boot never drops a column ' +
+            '(alterTableForDrift only adds), so every aged DB keeps it while fresh installs lack it. Ship a ' +
+            'dated migration (ALTER TABLE <t> DROP COLUMN IF EXISTS <c>;) AND remove the entry from ' +
+            'test/fixtures/schema-baseline.json in the SAME commit:\n' + retired.join('\n'));
     });
 });
 
@@ -230,8 +263,8 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             if (anchor.length === 0) continue;                     // a wholly new table: the minted case owns it
             const anchorSet = new Set(anchor);
             const nowSet    = new Set(frozen.map(e => String(e.name).toLowerCase()));
-            // Compare only the columns BOTH lists carry: a legitimately removed or added entry
-            // is adjudicated by the cases above, and must not be read here as a reorder.
+            // Compare only the columns BOTH lists carry: an added entry is adjudicated by the
+            // minted check above and a removed one by the retired-column case below, never as a reorder.
             const nowOrder    = frozen.map(e => String(e.name).toLowerCase()).filter(n => anchorSet.has(n)).join(',');
             const anchorOrder = anchor.filter(n => nowSet.has(n)).join(',');
             if (nowOrder !== anchorOrder)
@@ -244,6 +277,38 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             'place, so a re-freeze here quiets the relative-position guard above while every aged DB keeps ' +
             'the original order and the two schema paths stop producing a byte-identical SHOW CREATE TABLE. ' +
             'Restore the declared order in src/sql/<table>.sql and the fixture together:\n' + reordered.join('\n'));
+    });
+});
+
+describe('SQL schema column parity (definition path vs ledger path) @regression', function () {
+    // Close the removal direction against the pinned anchor: deleting a column from its definition
+    // AND its baseline entry leaves every case above green, while aged DBs keep the column forever.
+    it('a pre-ledger column retired from its definition is dropped by a dated migration @regression', function () {
+        const origin   = loadPinnedOriginFixture(ORIGIN_BASELINE, ORIGIN_BASELINE_SHA256,
+                                                 'test/unit/migration/sql_schema_column_parity.test.js');
+        const baseline = JSON.parse(fs.readFileSync(
+            path.join(__dirname, '..', '..', '..', 'fixtures', 'schema-baseline.json'), 'utf8'));
+        const defs     = collectDefinitionColumns();
+
+        const { missing, unguarded } = auditRetiredAnchorEntries({
+            kind: 'column', origin: origin.baseline, baseline: baseline.baseline,
+            isDeclared: (table, name) => (defs[table] || []).some(c => c.name.toLowerCase() === name),
+            drops: collectMigrationDrops(), definedTables: collectDefinedTables(),
+        });
+
+        assert.deepStrictEqual(missing, [],
+            'These columns are in test/fixtures/schema-baseline-origin.json but gone from both ' +
+            'test/fixtures/schema-baseline.json and their src/sql/<table>.sql definition, and no dated ' +
+            'migration drops them. alterTableForDrift never drops a column, so every aged DB keeps it ' +
+            'forever while fresh installs lack it. Ship a dated migration (ALTER TABLE <t> DROP COLUMN IF ' +
+            'EXISTS <c>;, or DROP TABLE IF EXISTS <t>; once the whole definition is gone). Editing ' +
+            'schema-baseline-origin.json or its sha256 pin is not a fix:\n  ' + missing.join('\n  '));
+
+        assert.deepStrictEqual(unguarded, [],
+            'A dated migration drops these retired columns without IF EXISTS, so it fails on any database ' +
+            'that no longer has the column (a hand-repaired host, a re-run after a partial apply). Write ' +
+            'the drop as DROP COLUMN IF EXISTS, in a new dated migration if the bare one already ' +
+            'shipped:\n  ' + unguarded.join('\n  '));
     });
 });
 

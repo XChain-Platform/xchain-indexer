@@ -1,0 +1,11 @@
+# Tools the CI gate checks for on a venue before it runs this suite.
+#
+# The list is DERIVED from the suite by ci-gate.sh (it reads the spawn calls in
+# test/ and reports the binaries it believes are needed). This file only
+# CORRECTS that derivation: a bare name adds a tool the scan cannot see, a
+# leading `-` drops a false positive.
+#
+# DELETE and UPDATE are SQL verbs that rollback tests match against captured
+# query text, not binaries the suite runs.
+-DELETE
+-UPDATE

@@ -31,6 +31,7 @@
 # Usage:
 #   bin/vendor-vm.sh           # refresh ./xchain-vm from the sibling, then verify
 #   bin/vendor-vm.sh fix       # same as above (explicit)
+#   bin/vendor-vm.sh stage     # refresh sources without installing dependencies
 #   bin/vendor-vm.sh check     # verify version + src/ content match; non-zero exit on drift
 #
 # `check` writes in exactly one case: no vendored SRC tree exists, which every
@@ -53,12 +54,20 @@ SRC="${XCHAIN_VM_SOURCE:-$INDEXER_ROOT/../xchain-vm}"
 DEST="$INDEXER_ROOT/xchain-vm"
 MODE="${1:-fix}"
 
+case "$MODE" in
+    fix|stage|check) ;;
+    *)
+        echo "vendor-vm: unknown mode '$MODE' (expected fix, stage, or check)" >&2
+        exit 2
+        ;;
+esac
+
 # Fail closed off-Linux: the npm install in the WRITE path compiles isolated-vm
 # for the HOST platform, so a Mac-side run poisons the vendored tree with Mach-O
 # binaries the Linux runtime cannot load. Run that on a Linux host instead.
 #
-# `check` is exempt, and the distinction matters more than it looks. It runs no
-# npm install and never loads isolated-vm: it greps CONSENSUS_VERSION out of the
+# Source-only modes are exempt. They run no npm install and never load
+# isolated-vm: they grep CONSENSUS_VERSION out of the
 # frozen export and sha1s src/**, so nothing host-specific can enter the tree even
 # on the one path where it stages an ABSENT copy (source files only, node_modules
 # excluded). The hashing helper below already falls back to
@@ -74,7 +83,7 @@ MODE="${1:-fix}"
 # TIME and whose real drift once shipped two missing consensus gates under an
 # identical version string. A guard that cries wolf on the primary dev machine
 # is a guard people learn to route around.
-if [ "$MODE" != "check" ] && [ "$(uname -s)" != "Linux" ]; then
+if [ "$MODE" = "fix" ] && [ "$(uname -s)" != "Linux" ]; then
     echo "vendor-vm: refusing to $MODE on $(uname -s): npm install would build a non-Linux isolated-vm into the vendored tree." >&2
     # The Linux host this points at can reach the SAME tree under a DIFFERENT
     # absolute path than this machine, so only the path relative to $HOME is
@@ -92,13 +101,10 @@ fi
 
 # Read CONSENSUS_VERSION straight from the frozen export so the check never needs to
 # load isolated-vm. Empty if the file/const is missing.
-# Two spellings, post-rename first. The VM renamed src/consensus-runtime.js to
-# src/consensus_runtime.js and left nothing at the old path, and an EMPTY read here
-# is indistinguishable from "no parseable const", which stages fail-open (see the
-# note below). So a single spelling would let a pre-rename canonical sibling stage
-# silently over a drifted tree instead of naming the drift.
+# Prefer the current canonical name while retaining the legacy underscore spelling
+# for sibling branches that have not caught up with the rename.
 vm_version() {
-    for f in "$1/src/consensus_runtime.js" "$1/src/consensus-runtime.js"; do
+    for f in "$1/src/consensus-runtime.js" "$1/src/consensus_runtime.js"; do
         if [ -f "$f" ]; then
             grep -oE "CONSENSUS_VERSION = '[^']+'" "$f" 2>/dev/null \
                 | grep -oE "'[^']+'" | tr -d "'" || true
@@ -115,6 +121,16 @@ vm_version() {
 if command -v sha1sum >/dev/null 2>&1; then SHA1=sha1sum; else SHA1="shasum -a 1"; fi
 tree_manifest() {
     ( cd "$1" && { find src -type f; echo package.json; } | LC_ALL=C sort | xargs $SHA1 )
+}
+
+stage_sources() {
+    rsync -a --delete \
+        --exclude 'node_modules' \
+        --exclude '.git' \
+        --exclude 'test' \
+        --exclude 'bench' \
+        --exclude 'reports' \
+        "$SRC/" "$DEST/"
 }
 
 if [ ! -d "$SRC/src" ]; then
@@ -146,20 +162,14 @@ if [ "$MODE" = "check" ]; then
     # copy EXISTS (every dev tree), version + manifest still verify below.
     #
     # Keyed on the TREE, not on the version string. An empty $DEST_VER means three
-    # different things (no tree, no consensus_runtime.js, no parseable const), and
+    # different things (no tree, no consensus-runtime.js, no parseable const), and
     # spending the staging rsync on the latter two is what made this guard fail
     # OPEN: the rsync has no --delete, so it overwrote a drifted tree's files with
     # canonical ones and then reported the freshly-repaired tree as in sync,
     # concealing exactly the drift the guard exists to name.
     if [ ! -d "$DEST/src" ]; then
         echo "vendor-vm: no vendored copy at $DEST; staging src from canonical sibling."
-        rsync -a \
-            --exclude 'node_modules' \
-            --exclude '.git' \
-            --exclude 'test' \
-            --exclude 'bench' \
-            --exclude 'reports' \
-            "$SRC/" "$DEST/"
+        stage_sources
         DEST_VER="$(vm_version "$DEST")"
     fi
     # A tree that is present but whose version cannot be read is DRIFT, not a
@@ -189,19 +199,25 @@ if [ "$MODE" = "check" ]; then
     exit 0
 fi
 
+if [ "$MODE" = "stage" ]; then
+    echo "vendor-vm: staging sources from $SRC (canonical CONSENSUS_VERSION=${SRC_VER:-<none>})"
+    stage_sources
+    DEST_VER="$(vm_version "$DEST")"
+    if [ "$DEST_VER" != "$SRC_VER" ] || [ "$(tree_manifest "$DEST")" != "$(tree_manifest "$SRC")" ]; then
+        echo "vendor-vm: ERROR - staged source does not match canonical" >&2
+        exit 1
+    fi
+    echo "vendor-vm: staged CONSENSUS_VERSION=$DEST_VER (src/ content verified)"
+    exit 0
+fi
+
 echo "vendor-vm: refreshing $DEST from $SRC (canonical CONSENSUS_VERSION=${SRC_VER:-<none>})"
 
 # Mirror the canonical source over the vendored copy. Exclude the same dirs xchain-node
 # strips when staging (node_modules/.git/test/bench/reports). node_modules is preserved
 # in DEST via the exclude so an already-built isolated-vm is reused when deps are
 # unchanged; the npm install below reconciles it if package.json moved.
-rsync -a --delete \
-    --exclude 'node_modules' \
-    --exclude '.git' \
-    --exclude 'test' \
-    --exclude 'bench' \
-    --exclude 'reports' \
-    "$SRC/" "$DEST/"
+stage_sources
 
 echo "vendor-vm: reconciling dependencies (rebuilds isolated-vm only if changed)..."
 ( cd "$DEST" && npm install --no-audit --no-fund )

@@ -27,7 +27,7 @@ const Attest  = require('../../../../../../src/actions/attest/index.js');
 const avr     = require('../../../../../../src/actions/attest/attest_response_verify.js');
 const swq     = require('../../../../../../src/consensus/stake_weighted_quorum.js');
 const { stubActiveAt } = require('../../../../../helpers/gate_modules.js');
-const attestBcastFee  = require('../../../../../../src/actions/attest/attest_broadcast_fee_gate.js');
+const attestBcastFee  = require('../../../../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 // Same module instance the handler (and the extracted verifier) hold: wrapping
 // `verify` here observes the exact canonical Buffer both are handed.
 const ed25519 = require('../../../../../../src/consensus/ed25519.js');

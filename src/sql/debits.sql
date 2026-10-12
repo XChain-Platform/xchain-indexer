@@ -23,3 +23,4 @@ CREATE TABLE debits (
 CREATE INDEX action_index ON debits (action_index);
 CREATE INDEX address_id   ON debits (address_id);
 CREATE INDEX tick_id      ON debits (tick_id);
+CREATE INDEX debits_tick_action_amount ON debits (tick_id, action_index, amount);

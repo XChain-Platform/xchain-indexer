@@ -126,10 +126,10 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         assert.ok(destructiveOf(statementsOf(raw)));
     });
 
-    it('does NOT flag benign system-variable SETs (SET NAMES / SET sql_mode / SET @@)', function () {
+    it('does NOT flag the allow-listed session SETs (SET NAMES / a single UTC time_zone)', function () {
         assert.strictEqual(destructiveOf(['SET NAMES utf8mb4']), null);
-        assert.strictEqual(destructiveOf(['SET sql_mode = "STRICT_ALL_TABLES"']), null);
-        assert.strictEqual(destructiveOf(['SET @@session.foreign_key_checks = 0']), null);
+        assert.strictEqual(destructiveOf(["SET time_zone = '+00:00'"]), null);
+        assert.strictEqual(destructiveOf(["SET @@session.time_zone = '+00:00'"]), null);
     });
 
     // ── allowed: legitimate existing auto patterns must NOT be flagged ───

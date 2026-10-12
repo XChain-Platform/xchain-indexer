@@ -85,10 +85,7 @@ function screenListMetaWithDeps(deps, row, snapshotBlock, network, fields){
     return { fields: Object.assign(fields, screened.fields) };
 }
 
-function screenListSnapshotWithDeps(deps, row, ctx){
-    row = row && typeof row === 'object' ? row : {};
-    ctx = ctx && typeof ctx === 'object' ? ctx : {};
-
+function screenSnapshotIdentity(row, ctx){
     const snapshotBlock = integer(row.snapshot_block);
     if(snapshotBlock === null) return halt('snapshot_block');
     const homeListIndex = integer(row.home_list_index);
@@ -126,25 +123,7 @@ function screenListSnapshotWithDeps(deps, row, ctx){
     if(kind !== (seq === 1 ? 'full' : 'delta'))
         return halt('kind');
 
-    const added = parseMembership(row.added);
-    if(added === false) return halt('added');
-    const removed = parseMembership(row.removed);
-    if(removed === false) return halt('removed');
-    if(!verifyMembershipOrder(added)) return halt('added_order');
-    if(!verifyMembershipOrder(removed)) return halt('removed_order');
-    if(seq === 1 && removed !== null && removed.length !== 0)
-        return halt('removed_seq_1');
-
-    let admitBlocks;
-    try {
-        admitBlocks = deps.ah.columnsAdmitBlocks(row);
-    } catch(error) {
-        return halt('admit_block_' + String(ctx.coin || '').toLowerCase());
-    }
-    if(!admitBlocks || !Object.prototype.hasOwnProperty.call(admitBlocks, ctx.coin))
-        return halt('admit_block_' + String(ctx.coin || '').toLowerCase());
-
-    return screenListMetaWithDeps(deps, row, snapshotBlock, network, {
+    return { network, fields: {
         snapshot_id: snapshotId,
         snapshot_block: snapshotBlock,
         home_chain: homeChain,
@@ -153,9 +132,47 @@ function screenListSnapshotWithDeps(deps, row, ctx){
         seq,
         kind,
         origin_block: originBlock,
-        added,
-        removed,
-    });
+    } };
+}
+
+function screenSnapshotMembership(row, seq){
+    const added = parseMembership(row.added);
+    if(added === false) return halt('added');
+    const removed = parseMembership(row.removed);
+    if(removed === false) return halt('removed');
+    if(!verifyMembershipOrder(added)) return halt('added_order');
+    if(!verifyMembershipOrder(removed)) return halt('removed_order');
+    if(seq === 1 && removed !== null && removed.length !== 0)
+        return halt('removed_seq_1');
+    return { added, removed };
+}
+
+function screenSnapshotAdmission(deps, row, ctx){
+    const reason = 'admit_block_' + String(ctx.coin || '').toLowerCase();
+    let admitBlocks;
+    try {
+        admitBlocks = deps.ah.columnsAdmitBlocks(row);
+    } catch(error) {
+        return halt(reason);
+    }
+    if(!admitBlocks || !Object.prototype.hasOwnProperty.call(admitBlocks, ctx.coin))
+        return halt(reason);
+    return null;
+}
+
+function screenListSnapshotWithDeps(deps, row, ctx){
+    row = row && typeof row === 'object' ? row : {};
+    ctx = ctx && typeof ctx === 'object' ? ctx : {};
+
+    const identity = screenSnapshotIdentity(row, ctx);
+    if(identity.halt) return identity;
+    const membership = screenSnapshotMembership(row, identity.fields.seq);
+    if(membership.halt) return membership;
+    const admission = screenSnapshotAdmission(deps, row, ctx);
+    if(admission) return admission;
+
+    return screenListMetaWithDeps(deps, row, identity.fields.snapshot_block, identity.network,
+        Object.assign(identity.fields, membership));
 }
 
 function screenListSnapshot(row, ctx){

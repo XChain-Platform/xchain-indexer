@@ -11,6 +11,55 @@ function metaField(value){
     return typeof value === 'string' && value.length ? value : null;
 }
 
+function planCreateListLeg({ listType, added, metaActive, meta }){
+    const name = meta && typeof meta.name === 'string' ? meta.name : '';
+    const description = meta && typeof meta.description === 'string' ? meta.description : '';
+    const fields = metaActive && (name.length || description.length)
+        ? ['LIST', LIST_SHARE_LEG_FORMAT.CREATE_WITH_META,
+            String(listType), name, description, ''].concat(added)
+        : ['LIST', LIST_SHARE_LEG_FORMAT.CREATE, String(listType), ''].concat(added);
+    return [{
+        fields,
+        ordinal: LIST_SHARE_LEG_ORDINAL.CREATE_OR_REMOVE,
+    }];
+}
+
+function appendListEditLegs(legs, { mirrorIndex, added, removed }){
+    if(removed.length){
+        legs.push({
+            fields: ['LIST', LIST_SHARE_LEG_FORMAT.EDIT,
+                LIST_EDIT_REMOVE, String(mirrorIndex), ''].concat(removed),
+            ordinal: LIST_SHARE_LEG_ORDINAL.CREATE_OR_REMOVE,
+        });
+    }
+    if(added.length){
+        legs.push({
+            fields: ['LIST', LIST_SHARE_LEG_FORMAT.EDIT,
+                LIST_EDIT_ADD, String(mirrorIndex), ''].concat(added),
+            ordinal: LIST_SHARE_LEG_ORDINAL.ADD,
+        });
+    }
+}
+
+function appendListMetaLeg(legs, { mirrorIndex, meta, currentMeta }){
+    const name = metaField(meta.name);
+    const description = metaField(meta.description);
+    const currentName = metaField(currentMeta && currentMeta.name);
+    const currentDescription = metaField(currentMeta && currentMeta.description);
+    if(name === currentName && description === currentDescription) return;
+    legs.push({
+        fields: [
+            'LIST',
+            LIST_SHARE_LEG_FORMAT.META,
+            String(mirrorIndex),
+            name || '-',
+            description || '-',
+            '',
+        ],
+        ordinal: LIST_SHARE_LEG_ORDINAL.META,
+    });
+}
+
 function planListShareLegs(options){
     const {
         seq,
@@ -28,56 +77,15 @@ function planListShareLegs(options){
     if(!Array.isArray(added)) throw new TypeError('added must be an array');
     if(!Array.isArray(removed)) throw new TypeError('removed must be an array');
 
-    if(seq === 1){
-        const name = meta && typeof meta.name === 'string' ? meta.name : '';
-        const description = meta && typeof meta.description === 'string' ? meta.description : '';
-        const fields = metaActive && (name.length || description.length)
-            ? ['LIST', LIST_SHARE_LEG_FORMAT.CREATE_WITH_META,
-                String(listType), name, description, ''].concat(added)
-            : ['LIST', LIST_SHARE_LEG_FORMAT.CREATE, String(listType), ''].concat(added);
-        return [{
-            fields,
-            ordinal: LIST_SHARE_LEG_ORDINAL.CREATE_OR_REMOVE,
-        }];
-    }
+    if(seq === 1) return planCreateListLeg({ listType, added, metaActive, meta });
 
     if(!Number.isSafeInteger(mirrorIndex) || mirrorIndex <= 0)
         throw new TypeError('mirrorIndex must be a positive safe integer after seq 1');
 
     const legs = [];
-    if(removed.length){
-        legs.push({
-            fields: ['LIST', LIST_SHARE_LEG_FORMAT.EDIT,
-                LIST_EDIT_REMOVE, String(mirrorIndex), ''].concat(removed),
-            ordinal: LIST_SHARE_LEG_ORDINAL.CREATE_OR_REMOVE,
-        });
-    }
-    if(added.length){
-        legs.push({
-            fields: ['LIST', LIST_SHARE_LEG_FORMAT.EDIT,
-                LIST_EDIT_ADD, String(mirrorIndex), ''].concat(added),
-            ordinal: LIST_SHARE_LEG_ORDINAL.ADD,
-        });
-    }
-    if(seq > 1 && hasCurrentMeta && metaActive && meta !== null){
-        const name = metaField(meta.name);
-        const description = metaField(meta.description);
-        const currentName = metaField(currentMeta && currentMeta.name);
-        const currentDescription = metaField(currentMeta && currentMeta.description);
-        if(name !== currentName || description !== currentDescription){
-            legs.push({
-                fields: [
-                    'LIST',
-                    LIST_SHARE_LEG_FORMAT.META,
-                    String(mirrorIndex),
-                    name || '-',
-                    description || '-',
-                    '',
-                ],
-                ordinal: LIST_SHARE_LEG_ORDINAL.META,
-            });
-        }
-    }
+    appendListEditLegs(legs, { mirrorIndex, added, removed });
+    if(hasCurrentMeta && metaActive && meta !== null)
+        appendListMetaLeg(legs, { mirrorIndex, meta, currentMeta });
     return legs;
 }
 

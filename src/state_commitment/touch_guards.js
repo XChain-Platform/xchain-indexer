@@ -81,8 +81,10 @@ const { readEnvNow } = require('../config.js'); // per call, never a load-time s
 // INDEXER_TOUCH_GUARD=warn downgrades to a log. That is an operational safety
 // valve, not a tuning knob: a node running with it committed a balances_root it
 // knows is incomplete, and will diverge from any node that full-rebuilds.
-async function enforceTouchedSet(db, blockIndex, touched){
-    const expected = await ledgerKeysForBlock(db, blockIndex);
+// ledgerKeys (optional): the block's ledger keys, already read by the caller so both
+// guards share one read; omitted, the guard reads them itself.
+async function enforceTouchedSet(db, blockIndex, touched, ledgerKeys){
+    const expected = ledgerKeys || await ledgerKeysForBlock(db, blockIndex);
     if(!expected.size) return;
 
     const applied = new Set(touched);
@@ -146,8 +148,8 @@ async function enforceTouchedSet(db, blockIndex, touched){
 // cost an O(history) net scan per moved key on every block to re-check a value
 // this same block wrote from that same query, while the fault class being closed
 // is absence.
-async function assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRootHex){
-    const expected = await ledgerKeysForBlock(db, blockIndex);
+async function assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRootHex, ledgerKeys){
+    const expected = ledgerKeys || await ledgerKeysForBlock(db, blockIndex);
     if(!expected.size) return;
 
     const absent = [];

@@ -14,16 +14,16 @@
  *
  * The SHARED block, part 1 of 5: anchor_bundle_order_activation to attest_responsible_widening_activation
  *
- * One SHARED block part. The region between the two marker lines is
- * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
- * and xchain-sdk: each consumer keeps the same bytes and replaces only the
- * require line below with its own queue module. What may live between the
- * markers: `addGate(key, unit, table)` calls with LITERAL values (a table, a
- * number, a string or literals joined by +, a RegExp, an array), one call per
- * row, at column zero, and comments. No require, no computed value, nothing
- * from outside the block but addGate, UNARMED and UNPINNED. A regtest entry a
- * venue arms from its environment is written UNPINNED here and armed by the
- * wrapper at registration (shared_rows.js), so the block stays data.
+ * This file is a whole-file byte twin copied unchanged into five consumers:
+ * xchain-indexer, xchain-sync, xchain-hub, xchain-explorer and xchain-sdk.
+ * The identical bytes include the header, queue require, markers and rows.
+ * Between the markers may live `addGate(key, unit, table)` calls with LITERAL
+ * values (a table, a number, a string or literals joined by +, a RegExp, an
+ * array), one call per row, at column zero, and comments. No require, no
+ * computed value, nothing from outside the block but addGate, UNARMED and
+ * UNPINNED. A regtest entry a venue arms from its environment is written
+ * UNPINNED here and armed by the wrapper at registration (shared_rows.js), so
+ * the marker-delimited body stays data.
  *
  * Rows are grouped by module stem in alphabetical order; a stem's rows keep
  * the order the module declared them. Keys never change (I4).
@@ -67,11 +67,11 @@ addGate('anchor_reward_activation.ANCHOR_REWARD_AMOUNT', 'constant', '10.0000000
 // restart, which always carries the PUBLISHER|ATTEST_SIG_COUNT|... tail; the
 // retired v6 was that tail bolted onto a tail-less v1), attested
 // over an 'anchor_archive' XANCPUB canonical) and the indexer derives the
-// anchor_archive reward from those bytes; the key-authenticated
-// pushvalidatorrewards rail is rejected for anchor_archive, closing the
-// insider-with-key forge surface the per-chain flag-day left open. Below the
-// threshold the legacy tail-less archive wire and the push path stand, and a
-// publisher-bearing archive head is rejected.
+// anchor_archive reward from those bytes; the retired key-authenticated
+// hub rail no longer feeds anchor_archive, closing the insider-with-key forge
+// surface the per-chain flag-day left open. Below the threshold the legacy
+// tail-less archive wire applies, and a publisher-bearing archive head is
+// rejected.
 addGate('anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION', 'height', {
     mainnet: 963000,      // ARMED 2026-07-16, RE-PINNED 2026-08-12 off block 969500 onto the mainnet pre-freeze deploy-train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this height
     testnet: 0,
@@ -319,7 +319,7 @@ addGate('anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION', 'height', {
 addGate('archive_rollback_author_scope_activation.ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION', 'height', {
     mainnet: 0,            // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 archive chunks, measured 2026-09-09), and ARCHIVE_BATCH_AUTHOR is 0 there too, so the precondition holds
     testnet: 67915000,     // testnet runs a public chain with live history, so 0 would be retroactive rather than a flag day; TDOGE tip 67881714 on 2026-09-09 + 33286 blocks @1440/day = ~23 days, to ride the v0.17.0 train
-    regtest: 9999999999,   // INERT sentinel: keeps the flag-day-off control path drivable on a throwaway stack
+    regtest: UNARMED,   // INERT sentinel: keeps the flag-day-off control path drivable on a throwaway stack
 });
 
 // The joins that bind an orphaned chunk to its own head's author. Spliced into

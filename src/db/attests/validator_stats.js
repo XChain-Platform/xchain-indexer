@@ -35,7 +35,7 @@ module.exports = {
     // rows last touched in the orphaned range and rebuilds them from surviving
     // signatures (fulfilled) + expired requests (missed), matching a from-genesis
     // replay. This keeps the counters consensus-safe across reorgs so Phase 4
-    // slashing can consume them. See src/rollback.js.
+    // slashing can consume them. See src/rollback/attestation_stats.js.
     //
     // Spec: external attestation framework §10 (validator stat accounting).
     async incrementAttestationValidatorStat(validatorPubkey, providerId, field, blockIndex){

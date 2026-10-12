@@ -28,7 +28,7 @@ const { createBaseData } = require('../../../../fixtures/mocks');
 
 const { stubActiveAt } = require('../../../../helpers/gate_modules.js');
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
-const attestBcastFee  = require('../../../../../src/actions/attest/attest_broadcast_fee_gate.js');
+const attestBcastFee  = require('../../../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 
 const { PUBKEY_A, SIG_A, REQ_ID, BODY, BLOCK_TIME, requestRow } = require('./helpers/rows.js');
 const { applyData, setupEffects } = require('./helpers/effects_fixture.js');
@@ -39,7 +39,7 @@ const { applyData, setupEffects } = require('./helpers/effects_fixture.js');
 describe('ATTEST hub-mirror response applier @regression @tier3', function () {
     let indexer, handler, executeStub;
 
-    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+    describe('§4.4 effects (attest/mirror_apply.js applyMirroredResponse)', function () {
         beforeEach(function () { ({ indexer, handler, executeStub } = setupEffects()); });
 
         afterEach(function () { sinon.restore(); });
@@ -71,7 +71,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
 describe('ATTEST hub-mirror response applier @regression @tier3', function () {
     let indexer, handler, executeStub;
 
-    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+    describe('§4.4 effects (attest/mirror_apply.js applyMirroredResponse)', function () {
         beforeEach(function () { ({ indexer, handler, executeStub } = setupEffects()); });
 
         afterEach(function () { sinon.restore(); });
@@ -103,7 +103,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
 describe('ATTEST hub-mirror response applier @regression @tier3', function () {
     let indexer, handler, executeStub;
 
-    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+    describe('§4.4 effects (attest/mirror_apply.js applyMirroredResponse)', function () {
         beforeEach(function () { ({ indexer, handler, executeStub } = setupEffects()); });
 
         afterEach(function () { sinon.restore(); });
@@ -145,7 +145,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
 describe('ATTEST hub-mirror response applier @regression @tier3', function () {
     let indexer, handler, executeStub;
 
-    describe('§4.4 effects (attest.js _applyMirroredResponse)', function () {
+    describe('§4.4 effects (attest/mirror_apply.js applyMirroredResponse)', function () {
         beforeEach(function () { ({ indexer, handler, executeStub } = setupEffects()); });
 
         afterEach(function () { sinon.restore(); });

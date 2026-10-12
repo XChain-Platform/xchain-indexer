@@ -20,6 +20,7 @@ const assert = require('assert');
 
 const ARMED_MODULES = [
     '../../../../src/consensus/gates/mirror_admission_gate.js',
+    '../../../../src/consensus/gates/mirror_admission_margin_gate.js',
     '../../../../src/hub/hub_db_sync/watermarks.js',
     '../../../../src/hub/hub_db_sync.js'
 ];

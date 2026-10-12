@@ -10,18 +10,9 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// Predicate parity (activation-registry D69): at W3 every module keeps its own
-// predicate body and reads its table through the registry; W4 replaced the
-// predicate-only modules with the one generic activeAt(). This suite was the
-// proof that the replacement is behaviour-preserving, row by row, BEFORE it
-// happened, and it stays the proof for every predicate that survives: each one
-// against activeAt() at the neighbours of every committed threshold, at the
-// UNARMED sentinel, on a null (UNPINNED) entry and on an unknown network.
-//
-// A predicate that differs is a FINDING, not an edit: it says which predicate
-// has to stay a module. The findings are pinned below, so a new divergence and
-// a resolved one both surface here. The rows W4 replaced are listed too, and
-// the suite proves no module for them is left in src/ for a caller to reach.
+// Compare each surviving predicate with activeAt() at committed boundaries,
+// sentinels and unknown networks. Pinned divergences identify predicates that
+// cannot become generic activeAt() calls. Replaced rows must have no module.
 
 const assert = require('assert');
 const fs = require('fs');
@@ -29,6 +20,8 @@ const path = require('path');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 const { TABLE, compareAll } = require('./helpers/predicate_parity.js');
 const { SRC, REPLACED_STEMS, REGISTRY_ONLY_STEMS, modulePathFor } = require('../../helpers/gate_modules.js');
+
+const ANCHOR_ARCHIVE_FOLD_TERM = 'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
 
 // The rows whose predicate W4 (row 18) and W5 (row 21) replaced with activeAt()
 // itself: the callers spell the key at the call site, so there is no predicate
@@ -45,6 +38,10 @@ const SKIPPED = {
         'no boolean predicate: widenSlots(atBlock, requestBlock, deadlineBlock, network) returns a slot count',
     'train_activation.TRAIN_ACTIVATION':
         'ruleset unit: resolveRuleSet(height, network) returns a version and activeAt() throws unsupported unit; W4 needs a ruleSetAt() reader',
+    'anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION':
+        'registry-only row read through activeAt() at the parse call site, no predicate module',
+    'vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION':
+        'registry-only row read through activeAt() in the deploy lint flags, no predicate module',
     // Each mirror row's value is held to its gate row by activations/activation_constants_parity.test/mirror_rows.test.js.
     'protocol/constants.STAKE_WEIGHTED_QUORUM_ACTIVATION': 'documentation mirror row, no predicate in that file',
     'protocol/constants.EQUIV_HEADER_ACTIVATION': 'documentation mirror row, no predicate in that file',
@@ -87,7 +84,11 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
         assert.strictEqual(REPLACED.size, 38, 'the W4 census of 25 predicate-only shims plus the 13 predicate-only twins of W5');
-        assert.strictEqual(REGISTRY_ONLY.size, 32, 'the registry-only gate census moved');
+        assert.strictEqual(REGISTRY_ONLY.size, 53, 'the registry-only gate census moved');
+        assert.ok(REGISTRY_ONLY.has('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'),
+            'the cross-chain remote-token gate is registry-only');
+        assert.ok(REGISTRY_ONLY.has('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION'),
+            'the VM lint destructure gate is registry-only');
         for (const key of [...REPLACED, ...REGISTRY_ONLY]) {
             assert.ok(['height', 'time', 'constant'].includes(ProtocolChanges.registry.unitOf(key)),
                 key + ' is a height, time or constant row');
@@ -122,5 +123,20 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
 
     it('activeAt() refuses the ruleset row rather than guessing a version', function () {
         assert.throws(() => ProtocolChanges.activeAt('train_activation.TRAIN_ACTIVATION', 'mainnet', null, 0, 0), /unsupported unit ruleset/);
+    });
+
+    it('keeps anchor archive folding inactive on live networks and active at regtest genesis', function () {
+        // The v0.23.0 cut armed the fold term on each testnet chain: dark at 1 and one block
+        // short of the chain's own height (read from the registry), live from it.
+        const row = ProtocolChanges.get(ANCHOR_ARCHIVE_FOLD_TERM);
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            const h = row[coin + ':testnet'];
+            assert.ok(Number.isInteger(h) && h > 1 && h < ProtocolChanges.UNARMED, coin + ':testnet is not a sized height: ' + h);
+            assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'testnet', coin, 1, null), false);
+            assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'testnet', coin, h - 1, null), false);
+            assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'testnet', coin, h, null), true);
+        }
+        assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'mainnet', 'BTC', 9999999998, null), false);
+        assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'regtest', 'BTC', 0, null), true);
     });
 });

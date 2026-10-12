@@ -206,6 +206,8 @@ module.exports = {
         // Insert the reward (idempotent via UNIQUE INDEX on
         // source_id+signing_pubkey_id+reward_type+round_reference+round_qualifier).
         // Deterministic writers upsert so their amount/block_index always win.
+        // deriveBlockIndex comes from the three materialize-later writers: the anchor/archive
+        // derivation, recovery-restored rewards and rollcall_publish.
         let derive_block_index = (deriveBlockIndex === undefined || deriveBlockIndex === null)
             ? null : Number(deriveBlockIndex);
         // NEVER NULL. MariaDB treats NULLs as distinct in a UNIQUE index, so a nullable
@@ -245,7 +247,7 @@ module.exports = {
     //
     // RB-ANCHOR: before the DELETE, pre-image each loser row into
     // anchor_reward_reconcile_log so a reorg that orphans THIS reconcile (the
-    // ANCHOR action's block) can restore the deleted losers. The losers sit in
+    // BTC block whose derive pass ran it) can restore the deleted losers. The losers sit in
     // EARLIER surviving blocks (block_index = the checkpoint's SNAPSHOT_BLOCK),
     // so the generic block delete never touches them and a from-genesis replay
     // to reorg_block-1 (where the orphaned ANCHOR never re-ran the reconcile)

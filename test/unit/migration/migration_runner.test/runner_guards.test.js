@@ -281,3 +281,59 @@ describe('runMigrations() --file / opts.only scoping @regression @tier1', functi
             'the default path must remain apply-everything');
     });
 });
+
+describe("runMigrations() live-schema MODIFY guard @regression @tier1", function () {
+    const FILE = "2026-07-05-contract-index-columns-nullable.sql";
+
+    async function runWithLive(live) {
+        const ledger = ledgerOfAll();
+        ledger.delete(FILE);
+        const executed = [];
+        const applied = [];
+        const conn = {
+            async query(sql, params) {
+                if (/GET_LOCK/i.test(sql))                                     return [{ l: 1 }];
+                if (/RELEASE_LOCK/i.test(sql))                                 return [];
+                if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
+                if (/information_schema\.COLUMNS/.test(sql) && /COLUMN_TYPE, COLUMN_DEFAULT/.test(sql)) {
+                    return params[0] === "deposits" && params[1] === "contract_index" ? [live] : [];
+                }
+                if (BRIDGE_TABLES_PROBE.test(sql))                             return bridgeTablesPresent();
+                if (LIST_SHARE_TABLES_PROBE.test(sql))                         return listShareTablesPresent();
+                if (/^INSERT INTO schema_migrations/i.test(sql.trim()))        { applied.push(params[0]); return []; }
+                if (/^ALTER/i.test(sql.trim()))                                executed.push(sql);
+                return [];
+            },
+            async release() {},
+        };
+        const db = Object.create(Database.prototype);
+        db.dbName = "fake_indexer";
+        db.transactionConnection = null;
+        db.getConnection = async () => conn;
+        db.ensureMigrationsLedger = async () => {};
+        const realLog = console.log, realErr = console.error, realWarn = console.warn;
+        console.log = console.error = console.warn = () => {};
+        try { await db.runMigrations({ only: FILE }); return { threw: null, executed, applied }; }
+        catch (err) { return { threw: err, executed, applied }; }
+        finally { console.log = realLog; console.error = realErr; console.warn = realWarn; }
+    }
+
+    const base = { COLUMN_TYPE: "bigint(20) unsigned", COLUMN_DEFAULT: null, EXTRA: "", COLUMN_COMMENT: "",
+                   GENERATION_EXPRESSION: "", CHARACTER_SET_NAME: null };
+
+    it("refuses an auto file whose MODIFY would strip a live DEFAULT, running no DDL and recording nothing", async function () {
+        const { threw, executed, applied } = await runWithLive(Object.assign({}, base, { COLUMN_DEFAULT: "7" }));
+        assert.ok(threw, "the runner must refuse at apply time");
+        assert.match(threw.message, /would damage the live column/);
+        assert.ok(threw.message.includes(FILE));
+        assert.deepStrictEqual(executed, []);
+        assert.deepStrictEqual(applied, []);
+    });
+
+    it("applies the same file when the live column carries nothing the MODIFY would strip", async function () {
+        const { threw, executed, applied } = await runWithLive(base);
+        assert.strictEqual(threw, null, threw && threw.message);
+        assert.strictEqual(executed.length, 5);
+        assert.deepStrictEqual(applied, [FILE]);
+    });
+});

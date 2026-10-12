@@ -123,6 +123,39 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         assert.strictEqual(data['TX_HASH'],
             crypto.createHash('sha256').update('XCALL:regtest:BTC:' + CALL_ID, 'utf8').digest('hex'));
     });
+
+    it('builds the injected EXECUTE context field for field as the hand-built context did', function () {
+        // Pins every value the pre-builder context carried, so routing through the shared
+        // builder cannot move a consensus-visible field.
+        const ctxObj = handler.buildExecutionContext(makeDispatch(),
+            { BLOCK_INDEX: 200, BLOCK_TIME: 1700000100, ACTION_INDEX: 77 }, 'BTC', 600);
+        assert.deepStrictEqual(ctxObj, {
+            ACTION_INDEX: 600,
+            SOURCE:       'C:DOGE:5',
+            FEE_PAYER:    'C:DOGE:5',
+            BLOCK_INDEX:  200,
+            BLOCK_TIME:   1700000100,
+            TX_HASH:      crypto.createHash('sha256').update('XCALL:regtest:BTC:' + CALL_ID, 'utf8').digest('hex'),
+            FORMAT:       0,
+            IS_EMISSION:  true,
+            EMITTER:      77,
+            CALL_DEPTH:   0,
+            VM_GAS_LIMIT: 50000,
+            CROSS_HOPS:   1,
+            IS_CROSS_CALL: true,
+            ISSUANCE_LIMIT_LEDGER: { topLevel: 0 },
+        });
+    });
+
+    it('keeps the stringified identity of a row with a null contract index or hop count', function () {
+        // The hand-built context never threw on a degenerate mirrored row; it stringified.
+        const ctxObj = handler.buildExecutionContext(
+            makeDispatch({ source_contract_index: null, cross_hops: null }),
+            { BLOCK_INDEX: 200, BLOCK_TIME: 1700000100, ACTION_INDEX: 77 }, 'BTC', 600);
+        assert.strictEqual(ctxObj.SOURCE, 'C:DOGE:null');
+        assert.strictEqual(ctxObj.FEE_PAYER, 'C:DOGE:null');
+        assert.strictEqual(ctxObj.CROSS_HOPS, 0);
+    });
 });
 
 describe('Xexec (XEXEC) @regression @tier3', function () {

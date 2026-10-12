@@ -27,6 +27,29 @@ const { requireStakeWeight } = require('../shared.js');
 // back into the one method set db/index.js installs, at the position those methods held here.
 const effectiveStake = require('./effective_stake.js');
 
+function validatorQueryLimit(config){
+    let limit = Number(config['VALIDATOR_QUERY_LIMIT']);
+    if(!Number.isSafeInteger(limit) || limit < 1)
+        throw new Error('VALIDATOR_QUERY_LIMIT must be a positive safe integer');
+    return limit;
+}
+
+/*
+ * Stake-change processing profile, MariaDB 12.3.2, 262,144 rows in one
+ * (snapshot_block, capability) group:
+ *
+ *   legacy idx_cap_block + filesort: 262,144 rows examined, 280.812 ms
+ *   uq_cap_snap + LIMIT 1000:          1,000 rows examined,   0.625 ms
+ *
+ * The legacy mirrored validator-set materialization is the growth-sensitive
+ * query path. The current plan is bounded by VALIDATOR_QUERY_LIMIT, independent
+ * of capability_snapshots history and per-snapshot cardinality. At the frozen
+ * limit of 1,000, the measured query uses 0.00021% of the default 300,000 ms
+ * BLOCK_PROCESS_TIMEOUT. The paired price_snapshots latest-price selectors were
+ * also profiled at 262,144 historical rows: each examined 145 rows and completed
+ * in 0.097 ms or less, so table history was not the scaling path in this profile.
+ */
+
 module.exports = {
 
     // Create record in `reward_claims` table
@@ -114,17 +137,22 @@ module.exports = {
     // distinct. Exactly one ordering is therefore valid, and it is computed from
     // mirrored natural-key columns that every node holds identically. The unique
     // key and this ORDER BY are compared under the same table collation, so the
-    // pair cannot tie here while being accepted as distinct by the index.
+    // pair cannot tie here while being accepted as distinct by the index. FORCE
+    // that key: idx_cap_block can win the cost estimate, but it does not carry the
+    // requested order and makes MariaDB filesort the whole matching snapshot before
+    // applying LIMIT. uq_cap_snap can stop after the bounded ordered prefix.
     async getCapabilitySnapshotWeights(capability, snapshotBlock){
+        let limit = validatorQueryLimit(this.config);
         let query = `SELECT signing_pubkey AS pubkey, source, amount AS weight
-                     FROM capability_snapshots
+                     FROM capability_snapshots FORCE INDEX (uq_cap_snap)
                      WHERE capability = ? AND snapshot_block = ?
-                     ORDER BY signing_pubkey ASC, source ASC`;
+                     ORDER BY signing_pubkey ASC, source ASC
+                     LIMIT ${limit}`;
         // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
         // holds a transaction, so doQuery turns a transient DB fault into an empty weight set,
         // collapsing the stake-weighted quorum denominator S to 0 on this node alone.
         let rows = await this.mirrorDb().doQueryStrict(query, [capability, snapshotBlock]);
-        return rows.map(r => ({
+        let result = rows.map(r => ({
             pubkey: String(r.pubkey),
             source: r.source == null ? '' : String(r.source),
             // The query aliases `amount AS weight`, so the value lands on r.weight -
@@ -136,6 +164,11 @@ module.exports = {
             // map with no stake and quietly shrink the quorum denominator S.
             weight: requireStakeWeight(r.weight, 'getCapabilitySnapshotWeights(' + capability + ')')
         }));
+        // Match the local stake-weight reader's conservative boundary: a full page may
+        // have omitted another natural-key row. The quorum consumer fails closed when
+        // this flag is set instead of computing S from a partial snapshot.
+        if(rows.length >= limit) result.truncated = true;
+        return result;
     },
 
     // Read the hub-mirrored qualifying validator set for a capability at a BTC-anchored
@@ -148,10 +181,12 @@ module.exports = {
     // even though it is not selected: a pubkey delegated by two sources produces two
     // rows here, so pubkey alone is not a total order.
     async getCapabilitySnapshotValidators(capability, snapshotBlock){
+        let limit = validatorQueryLimit(this.config);
         let query = `SELECT signing_pubkey AS pubkey, amount
-                     FROM capability_snapshots
+                     FROM capability_snapshots FORCE INDEX (uq_cap_snap)
                      WHERE capability = ? AND snapshot_block = ?
-                     ORDER BY signing_pubkey ASC, source ASC`;
+                     ORDER BY signing_pubkey ASC, source ASC
+                     LIMIT ${limit}`;
         // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
         // holds a transaction, so doQuery turns a transient DB fault into an empty capable set
         // on this node alone, and its quorum verdict stops matching the fleet's.
@@ -160,7 +195,11 @@ module.exports = {
         // identically: the sibling getCapabilitySnapshotWeights (r.weight == null ?
         // '0') and the BTC local path both coerce NULL to '0'; without this an
         // unguarded NULL would surface as the literal string 'null'.
-        return rows.map(r => ({ pubkey: String(r.pubkey), amount: r.amount == null ? '0' : String(r.amount) }));
+        let result = rows.map(r => ({ pubkey: String(r.pubkey), amount: r.amount == null ? '0' : String(r.amount) }));
+        // Callers already fall back to indexed per-signer membership reads when the
+        // local validator query truncates. Surface the same signal for the mirror path.
+        if(rows.length >= limit) result.truncated = true;
+        return result;
     },
 
     // How many DISTINCT signing keys the mirrored snapshot holds for a capability at a

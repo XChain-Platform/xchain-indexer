@@ -18,7 +18,7 @@
 'use strict';
 
 const assert = require('assert');
-const abf    = require('../../../src/actions/attest/attest_broadcast_fee_gate.js');
+const abf    = require('../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 
 describe('ATTEST broadcast-fee activation (spec §11) @regression', function () {
 

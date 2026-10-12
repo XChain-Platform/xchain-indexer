@@ -53,8 +53,11 @@ module.exports = {
         // so ledger, balances+escrows and tokens.supply still agree; see that
         // module for why round(C)-round(D)+round(E) != round(C-D+E) is the whole
         // reason the legacy write-side rounding was load-bearing.
+        //
+        // Skip the tick-decimals query once the exact rule is live: ledgerWriteScale
+        // ignores the decimals there, so the lookup was a wasted round-trip per row.
         let decimals = ledgerPrecision.ledgerWriteScale(
-            await this.getTokenDecimalPrecision(tick_id),
+            ledgerPrecision.isLedgerAmountPrecisionActive(this.blockIndex, this.config['NETWORK'], this.config['COIN']) ? null : await this.getTokenDecimalPrecision(tick_id),
             this.blockIndex, this.config['NETWORK'], this.config['COIN']);
         amount = this.util.bcadd(amount, 0, decimals);
         // Convert any BigNumber amount to a plain decimal string before inserting.

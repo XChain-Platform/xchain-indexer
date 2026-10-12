@@ -30,7 +30,7 @@ function betFeedsRpc({ indexer }){
     return {
         // BET parimutuel betting reads (raw reads for ops
         // tooling and e2e; the PUBLIC surface is the explorer REST layer). Paged
-        // listing of betting feeds.
+        // listing of betting feeds with effective list references.
         // Body: { status?, source?, tick?, limit?, after_action_index? }
         async getbetfeeds({status, source, tick, limit, after_action_index}){
             if(!indexer.indexerDb)
@@ -56,7 +56,8 @@ function betFeedsRpc({ indexer }){
             }
         },
 
-        // One betting feed + its per-outcome open pools.
+        // One betting feed, including its effective list references, + its
+        // per-outcome open pools.
         // Body: { action_index }
         async getbetfeed({action_index}){
             if(!indexer.indexerDb)

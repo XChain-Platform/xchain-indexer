@@ -59,7 +59,7 @@ async function chargeGasFee(ctx){
 
     // Validate gas fee payment (native coin or XCHAIN balance).
     // System-injected EXECUTEs (e.g. attestation callbacks injected by
-    // attest.js:injectCallbackExecute) skip fee accounting: those run against
+    // attest/callbacks.js injectCallbackExecute) skip fee accounting: those run against
     // the request's gas_escrow, not the synthetic SOURCE's wallet. Fee deduction
     // from gas_escrow on the request row is not currently wired.
     ctx.feePaymentMode = 2; // default: xchain balance

@@ -116,16 +116,18 @@ describe('rollcall_activation', function () {
                 if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') throw e;
                 return this.skip();
             }
-            const TWIN_REF = /xchain-\S+\/src\/rollcall_activation\.js/;
-            const norm = (p) => fs.readFileSync(p, 'utf8')
-                .split(/\r?\n/)
-                .map(l => TWIN_REF.test(l) ? '<TWIN-REF>' : l)
-                .join('\n');
-            assert.strictEqual(
-                norm(path.join(__dirname, '../../../src/consensus/gates/rollcall_gate.js')),
-                norm(hub.file),
-                'rollcall_activation.js drifted between hub and indexer (only the twin-reference line may differ)'
-            );
+            // Compare raw bytes with no exempt line: the shared header names "the same path"
+            // in both copies by design, so the twins carry no per-copy line at all.
+            const GATE_REL = 'src/consensus/gates/rollcall_gate.js';
+            const mine   = fs.readFileSync(path.join(__dirname, '../../../', GATE_REL), 'utf8').split('\n');
+            const theirs = fs.readFileSync(hub.file, 'utf8').split('\n');
+            assert.strictEqual(mine.length, theirs.length,
+                GATE_REL + ' differs in line count between hub and indexer; something was added on one side only');
+            // Report the differing line numbers, so a drift names where it is.
+            const differing = [];
+            for (let i = 0; i < mine.length; i++) if (mine[i] !== theirs[i]) differing.push(i + 1);
+            assert.deepStrictEqual(differing, [],
+                GATE_REL + ' drifted between hub and indexer; regenerate the hub copy from the indexer copy, never hand-edit it');
         });
 
     });

@@ -24,23 +24,24 @@
 'use strict';
 
 const { CONFIG_ENV } = require('../../config.js');
+const { withPinnedSqlMode } = require('../shared.js');
 
 // The direct-connection parameters (verifyDatabase and createDatabase build their own,
 // without the database name, because the database may not exist yet).
 function connectionParams(self){
-    return {
+    return withPinnedSqlMode({
         host:     self.host,
         user:     self.user,
         password: self.pass,
         database: self.dbName,
         port:     self.port,
         timezone: 'Z'
-    };
+    });
 }
 
 // The pool parameters: the same credentials plus the pool's own connection options.
 function connectionPoolParams(self){
-    return {
+    return withPinnedSqlMode({
         host:     self.host,
         user:     self.user,
         password: self.pass,
@@ -61,12 +62,16 @@ function connectionPoolParams(self){
         // on res.json() with `TypeError: Do not know how to serialize a
         // BigInt` (xchain-hub polls getlatestblock/getactivevalidators/
         // getownstake on a loop, so the crash window is always open).
-        // Matches xchain-hub and xchain-sync; all indexer BIGINT columns
-        // are within Number.MAX_SAFE_INTEGER for any realistic chain.
+        // Matches xchain-hub and xchain-sync. Chain-bounded BIGINT columns
+        // (heights, indexes, times) stay within Number.MAX_SAFE_INTEGER, but
+        // the user-chosen u64 wire fields (EXPIRATION, DEADLINE, ALLOW_LIST
+        // and the rest bounded at U64_MAX in config/wire_fields.js) are not:
+        // a stored value above 2^53 reads back rounded here, and is
+        // replicated rounded, until those reads move to an exact form.
         bigIntAsNumber:       true,
         minDelayValidation:   3000,
         queryTimeout:         parseInt(CONFIG_ENV.DB_QUERY_TIMEOUT) || 30000
-    };
+    });
 }
 
 // The block context and the dense index-id guards that ride on it.

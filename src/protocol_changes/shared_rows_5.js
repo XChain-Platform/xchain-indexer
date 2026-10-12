@@ -16,16 +16,16 @@
  * xchain_bridge_activation, then anchor_fold_activation and
  * archive_section_verdict_activation
  *
- * One SHARED block part. The region between the two marker lines is
- * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
- * and xchain-sdk: each consumer keeps the same bytes and replaces only the
- * require line below with its own queue module. What may live between the
- * markers: `addGate(key, unit, table)` calls with LITERAL values (a table, a
- * number, a string or literals joined by +, a RegExp, an array), one call per
- * row, at column zero, and comments. No require, no computed value, nothing
- * from outside the block but addGate, UNARMED and UNPINNED. A regtest entry a
- * venue arms from its environment is written UNPINNED here and armed by the
- * wrapper at registration (shared_rows.js), so the block stays data.
+ * This file is a whole-file byte twin copied unchanged into five consumers:
+ * xchain-indexer, xchain-sync, xchain-hub, xchain-explorer and xchain-sdk.
+ * The identical bytes include the header, queue require, markers and rows.
+ * Between the markers may live `addGate(key, unit, table)` calls with LITERAL
+ * values (a table, a number, a string or literals joined by +, a RegExp, an
+ * array), one call per row, at column zero, and comments. No require, no
+ * computed value, nothing from outside the block but addGate, UNARMED and
+ * UNPINNED. A regtest entry a venue arms from its environment is written
+ * UNPINNED here and armed by the wrapper at registration (shared_rows.js), so
+ * the marker-delimited body stays data.
  *
  * Rows are grouped by module stem in alphabetical order; a stem's rows keep
  * the order the module declared them. Keys never change (I4).
@@ -38,7 +38,7 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 
 // SHARED-GATES BEGIN
 // token_policy_activation
-// TOKEN_POLICY_INHERITANCE_ACTIVATION: the height (per network) on the chain being
+// TOKEN_POLICY_INHERITANCE_ACTIVATION: the height (keyed <COIN>:<network>, bare network as fallback) on the chain being
 // parsed at/above which policy inheritance is in effect. Keyed on the chain's OWN
 // block_index, never on a snapshot's snapshot_block or origin_block, because what it
 // gates is the verdict of an action mined here.
@@ -54,25 +54,25 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 // Below it every milestone-1 verdict stands unchanged, so the replay corpus is
 // hash-identical on every chain with this code present.
 //
-// Mainnet and testnet are the house sentinel 9999999999: this rides the same MAJOR
+// Mainnet is the house sentinel 9999999999 and each testnet chain is armed below: this rides the same MAJOR
 // train as the two bridges and the operator sizes the dated instant at the cut. A
 // height in the map ahead of the fleet's deploy tip is the operator's act, not a
 // build's. Regtest is 0 so the e2e rail exercises the armed rule from genesis.
 //
 // TWO ORDERING INVARIANTS, asserted by test/unit/activationConstantsParity.test.js
 // over the canonical constants.js rather than over this copy:
-//   - >= TOKEN_BRIDGE_ACTIVATION per network. Inheritance has nothing to inherit onto
+//   - >= TOKEN_BRIDGE_ACTIVATION per coin and network. Inheritance has nothing to inherit onto
 //     before bridged copies can exist.
 //   - >= LIST_EDIT_RESOLUTION_ACTIVATION per chain and network. The snapshot read
 //     resolves a list AS OF origin_block through getListAtBlock, which walks the edit
 //     chain; below that gate the legacy create-index read runs and the membership the
 //     federation signs would not be the membership the chain actually held.
 addGate('token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION', 'height', {
-    mainnet: 9999999999,
+    mainnet: UNARMED,
     'BTC:testnet': 154567, // set by the v0.21.0 freeze height plan
     'LTC:testnet': 4903068, // set by the v0.21.0 freeze height plan
     'DOGE:testnet': 67951140, // set by the v0.21.0 freeze height plan
-    testnet: 9999999999,
+    testnet: UNARMED,
     regtest: 0,
 });
 
@@ -101,7 +101,7 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
     // fleet roll must finish inside (over 6x the 90 minute roll budget), and every testnet
     // bridge height below sits above it on the same BTC clock, so a node lacking this rule
     // set halts before it can grade a bridge action.
-    '0.19.0': { mainnet: 9999999999, testnet: 152787, regtest: 0 },
+    '0.19.0': { mainnet: UNARMED, testnet: 152787, regtest: 0 },
     // The mirror-admission rule set, armed at the v0.20.0 cut: the producer and consumer
     // admission maps and the anchor-attest barrier replace the effective_time binding, so a
     // node without them grades an admission-stamped row under the rule it replaced. Mainnet
@@ -122,8 +122,8 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
     // mirror-admission family below re-slides onto the same instant plus its own 17 h and 6 h
     // offsets. LTC:testnet mirror admission ships disabled on this train and is
     // untouched by this reslide; it arms on a later train.
-    '0.20.0': { mainnet: 9999999999, testnet: 154074, regtest: 0 },
-    '0.21.0': { mainnet: 9999999999, testnet: 154566, regtest: 0 },
+    '0.20.0': { mainnet: UNARMED, testnet: 154074, regtest: 0 },
+    '0.21.0': { mainnet: UNARMED, testnet: 154566, regtest: 0 },
 });
 
 // xchain_bridge_activation
@@ -160,31 +160,90 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
 // action. Regtest is 0 and stays bare, because one regtest number fits every chain and the
 // e2e rail exercises the armed rule from genesis.
 addGate('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION', 'height', {
-    'BTC:mainnet':  9999999999,
-    'LTC:mainnet':  9999999999,
-    'DOGE:mainnet': 9999999999,
-    mainnet:        9999999999,   // fallback for a coin with no entry above
+    'BTC:mainnet':  UNARMED,
+    'LTC:mainnet':  UNARMED,
+    'DOGE:mainnet': UNARMED,
+    mainnet:        UNARMED,   // fallback for a coin with no entry above
     'BTC:testnet':  152929,       // SIZED 2026-09-16, re-cut 16:33Z: chain_tip 152,716 + 213 (30 h at 508.8 s/blk), about 30.1 h, the origin, last
     'LTC:testnet':  4887898,      // SIZED 2026-09-16, re-cut 16:33Z: chain_tip 4,887,644 + 254 (10 h at 141.8 s/blk), about 10.0 h
     'DOGE:testnet': 67902062,     // SIZED 2026-09-16, re-cut 16:33Z: chain_tip 67,900,748 + 1314 (10 h at 27.4 s/blk), about 10.0 h
-    testnet:        9999999999,   // fallback: a testnet coin with no entry above stays dark
+    testnet:        UNARMED,   // fallback: a testnet coin with no entry above stays dark
     regtest:        0,            // genesis-active so the e2e rail exercises the armed rule
 });
 // Part 5 holds these earlier rows because parts 1 to 4 are near their line limit and have concurrent additions.
+// anchor_empty_fold_reject_activation
+addGate('anchor_empty_fold_reject_activation.ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+// cooldown_maturity_escrow_reversal_activation
+// A reorg that orphans a legacy cooldown maturity deletes the refund credit; from this
+// height it also deletes the paired negative escrow release, which otherwise survives and
+// is written a second time when the cooldown re-matures. Keyed on the rollback's own target
+// block. Gated because the delete moves the supply a reorged node hashes afterwards, so
+// the fleet needs one switch height per network.
+addGate('cooldown_maturity_escrow_reversal_activation.COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+// dispenser_refill_policy_activation
+// A format-2 DISPENSER edit that adds GIVE_ESCROW moves the give token into escrow, the same
+// movement a create makes. From this height the refill is refused while the token sleeps or
+// while its allow and block lists exclude the refilling SOURCE, as a create and a SEND are.
+// Keyed on the edit's own block. Gated because the refusal turns a refill every node
+// accepted into an invalid one, so the fleet needs one switch height per network.
+addGate('dispenser_refill_policy_activation.DISPENSER_REFILL_POLICY_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
 // anchor_fold_activation
 addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
 // archive_section_verdict_activation
 addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
+// attest_relay_response_deadline_activation: relay responses landing on an origin
+// chain after the request's deadline are rejected. The flag day is the landing
+// block's consensus timestamp; the deadline comparison itself stays in that
+// chain's block-height plane.
+addGate('attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION', 'time', {
+    mainnet: UNARMED,
+    'BTC:testnet': 1791804379,
+    'LTC:testnet': 1791804379,
+    'DOGE:testnet': 1791804379,
+    testnet: 1791804379,
+    regtest: 0,
+});
+// bridge_row_fields_terminal_activation: malformed transfer rows stop consuming
+// bridge settle cap slots after the flag day.
+addGate('bridge_row_fields_terminal_activation.BRIDGE_ROW_FIELDS_TERMINAL_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
 // list_share_producer_activation: the hub snapshot plane begins producing shared-list versions.
 addGate('list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION', 'height', {
-    mainnet: 9999999999,
+    mainnet: UNARMED,
     testnet: 154777,
     regtest: 0,
 });
 // list_share_consumer_activation: each chain begins applying shared-list versions and references.
 addGate('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION', 'height', {
-    mainnet: 9999999999,
-    testnet: 9999999999,
+    mainnet: UNARMED,
+    testnet: UNARMED,
     'BTC:testnet': 154777,
     'LTC:testnet': 4905004,
     'DOGE:testnet': 67956922,
@@ -192,12 +251,30 @@ addGate('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION', 'height
 });
 // list_meta_activation: the hub reads it with coin BTC at snapshot_block.
 addGate('list_meta_activation.LIST_META_ACTIVATION', 'height', {
-    mainnet: 9999999999,
-    testnet: 9999999999,
+    mainnet: UNARMED,
+    testnet: UNARMED,
     'BTC:testnet': 155001,
     'LTC:testnet': 4906040,
     'DOGE:testnet': 67962387,
     regtest: 0,
+});
+// mirror_admission_margin_activation: per-chain margins that replace a table's
+// legacy admission margin at the named chain height.
+addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS', 'constant', {
+    DOGE: {
+        bridge_transfers:    14,
+        cross_chain_calls:   14,
+        cross_chain_matches: 14,
+        list_snapshots:      14,
+        policy_snapshots:    14,
+        price_snapshots:     16,
+    },
+});
+addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION', 'height', {
+    mainnet:        UNPINNED,
+    'DOGE:mainnet': UNPINNED,
+    'DOGE:testnet': 67989993,
+    regtest:        0,
 });
 // oracle_price_age_hourly_activation: gates the hourly price-snapshot age limit
 // for fee pricing, fee views, attest settlement and VM oracle data.
@@ -224,6 +301,16 @@ addGate('oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION', 'height', {
     'BTC:testnet': 155158,
     'LTC:testnet': 4907593,
     'DOGE:testnet': 67966647,
+    regtest: 0,
+});
+// stateHash: the state_hash class for the batch-completion stamp on a surviving v5 attest head.
+// Inert on mainnet and testnet until a flag day is sized; regtest is armed from genesis.
+addGate('stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
     regtest: 0,
 });
 // SHARED-GATES END

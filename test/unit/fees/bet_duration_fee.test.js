@@ -20,12 +20,128 @@ process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert  = require('assert');
+const sinon   = require('sinon');
 const Utility = require('../../../src/utility');
+const Bet     = require('../../../src/actions/bet');
+const gateRegistry = require('../../../src/consensus/gate_registry');
+const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
+const { ORACLE, ALICE, feedInfo } = require('../actions/bridge/bet.test/helpers/bet_fixtures.js');
 
 const util = new Utility();
 const T0 = 1800000000;
+const EDIT_GATE = 'bet_feed_list_edit_activation.BET_FEED_LIST_EDIT_ACTIVATION';
+
+function betEditHarness(feedOverrides = {}, listType = 2) {
+    const indexer = createMockIndexer();
+    const handler = new Bet({
+        config: indexer.config,
+        util: indexer.util,
+        mapper: indexer.mapper,
+        decoderDb: indexer.decoderDb,
+        indexerDb: indexer.indexerDb,
+        protocolChanges: indexer.protocolChanges,
+        processAction: sinon.stub().resolves(),
+    });
+    indexer.util.resetLists();
+    indexer.indexerDb.getBetFeedInfo.resolves(feedInfo(feedOverrides));
+    indexer.indexerDb.getListType.resolves(listType);
+    indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+    sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+    return { indexer, handler };
+}
+
+async function parseBetEdit(options = {}) {
+    const { feed = {}, source = ORACLE, allow = '', block = '', listType = 2 } = options;
+    const { indexer, handler } = betEditHarness(feed, listType);
+    const data = createBaseData({ ACTION: 'BET', FORMAT: 4, SOURCE: source });
+    await handler.parse(['4', '5', allow, block, ''], data, null);
+    return { data, indexer, handler };
+}
+
+describe('BET format 4 parse and validation @regression @tier2', function () {
+    afterEach(() => sinon.restore());
+
+    it('recognizes the wire format and rejects it below the activation gate', async function () {
+        const real = gateRegistry.activeAt;
+        const activeAt = sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...rest) =>
+            key === EDIT_GATE ? false : real(key, ...rest));
+        const { data, handler, indexer } = await parseBetEdit({ allow: '9' });
+        assert.strictEqual(handler.formats[4], 'VERSION|FEED_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|MEMO');
+        assert.strictEqual(data['STATUS'], 'invalid: VERSION (unknown)');
+        sinon.assert.calledWith(activeAt, EDIT_GATE, 'regtest', 'BTC', data['BLOCK_INDEX'], null);
+        sinon.assert.notCalled(indexer.indexerDb.getListType);
+    });
+
+    it('allows the owner to retain one list and replace the other on an open feed', async function () {
+        const { data, indexer } = await parseBetEdit({
+            feed: { ALLOW_LIST: 7, BLOCK_LIST: 8 },
+            block: '9',
+        });
+        assert.strictEqual(data['STATUS'], 'valid');
+        sinon.assert.calledOnceWithExactly(indexer.indexerDb.getListType, '9', data['BLOCK_INDEX']);
+    });
+
+    it('treats zero as detach without looking up a list', async function () {
+        const { data, indexer } = await parseBetEdit({
+            feed: { ALLOW_LIST: 7, BLOCK_LIST: 8 },
+            allow: '0',
+        });
+        assert.strictEqual(data['STATUS'], 'valid');
+        sinon.assert.notCalled(indexer.indexerDb.getListType);
+    });
+
+    it('rejects an edit with both list fields blank', async function () {
+        const { data } = await parseBetEdit();
+        assert.strictEqual(data['STATUS'], 'invalid: ALLOW_LIST/BLOCK_LIST (empty)');
+    });
+
+    it('requires an existing open feed owned by the source', async function () {
+        let result = await parseBetEdit({ source: ALICE, allow: '9' });
+        assert.strictEqual(result.data['STATUS'], 'invalid: SOURCE (not owner)');
+        sinon.restore();
+
+        result = await parseBetEdit({ feed: { FEED_STATUS: 'closed' }, allow: '9' });
+        assert.strictEqual(result.data['STATUS'], 'invalid: FEED_ACTION_INDEX (feed not open)');
+        sinon.restore();
+
+        const { indexer, handler } = betEditHarness();
+        indexer.indexerDb.getBetFeedInfo.resolves(false);
+        const data = createBaseData({ ACTION: 'BET', FORMAT: 4, SOURCE: ORACLE });
+        await handler.parse(['4', '404', '9', '', ''], data, null);
+        assert.strictEqual(data['STATUS'], 'invalid: FEED_ACTION_INDEX (unknown)');
+    });
+
+    it('rejects malformed, unknown, and unsupported list references', async function () {
+        let result = await parseBetEdit({ allow: '-1' });
+        assert.strictEqual(result.data['STATUS'], 'invalid: ALLOW_LIST (format)');
+        sinon.restore();
+
+        result = await parseBetEdit({ allow: '9', listType: false });
+        assert.strictEqual(result.data['STATUS'], 'invalid: ALLOW_LIST (unknown)');
+        sinon.restore();
+
+        result = await parseBetEdit({ block: '9', listType: 1 });
+        assert.strictEqual(result.data['STATUS'], 'invalid: BLOCK_LIST (unsupported)');
+    });
+
+    it('rejects equal effective allow and block list references', async function () {
+        const { data } = await parseBetEdit({
+            feed: { ALLOW_LIST: 7, BLOCK_LIST: 8 },
+            block: '7',
+        });
+        assert.strictEqual(data['STATUS'], 'invalid: BLOCK_LIST (same as ALLOW_LIST)');
+    });
+});
 
 describe('BET decision-F fee arithmetic @regression @tier2', function () {
+    it('keeps list edits free like cancel and resolve', async function () {
+        const fees = { AMOUNT: '9' };
+        const applyFees = require('../../../src/actions/bet/fees.js').applyFees;
+        const error = await applyFees.call({ util }, {}, 4, fees, {}, null, null);
+        assert.strictEqual(error, null);
+        assert.strictEqual(String(fees.AMOUNT), '0');
+    });
+
     it('shares the ORDER duration arithmetic exactly across the free-window boundary', function () {
         for (const days of [1, 14, 44, 89, 90, 90.4, 90.5, 90.6, 91, 120, 365, 730]) {
             const until = T0 + Math.round(days * 86400);

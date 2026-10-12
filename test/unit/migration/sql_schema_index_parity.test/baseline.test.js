@@ -25,6 +25,7 @@ const path   = require('path');
 
 const { loadPinnedOriginFixture } = require('../../../helpers/pinnedOriginFixture');
 const { INDEX_BASELINE, PRIMARY_INDEX, collectDeclaredIndexes, collectMigrationIndexes } = require('./helpers/index_ledger.js');
+const { auditRetiredAnchorEntries, collectDefinedTables, collectMigrationDrops } = require('../helpers/schema_retirements.js');
 
 // The immutable anchor the re-freeze guard measures against, plus the sha256 that
 // makes editing it a deliberate act. See the re-freeze case at the bottom of this file.
@@ -56,8 +57,9 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             }
 
         assert.deepStrictEqual(stale, [],
-            'These baseline entries name an index no src/sql/<table>.sql declares any more. Remove them ' +
-            'from test/fixtures/schema-index-baseline.json:\n' + stale.join('\n'));
+            'These baseline entries name an index no src/sql/<table>.sql declares any more. Boot never drops an ' +
+            'undeclared index, so aged databases keep it: ship a dated migration (ALTER TABLE <t> DROP INDEX IF ' +
+            'EXISTS <name>;) and remove the entries from test/fixtures/schema-index-baseline.json in the same change:\n' + stale.join('\n'));
     });
 
     // The index twin of the column-shape guard. The inverse guard above exempts a
@@ -173,6 +175,37 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'exempts an index from needing a migration forever, so a replay-only replica never gets it. ' +
             'Ship a dated CREATE INDEX migration instead, or list it under known_unledgered while its ' +
             'migration is owed:\n' + minted.join('\n'));
+    });
+});
+
+describe('SQL schema index parity (definition path vs ledger path) @regression', function(){
+    // Close the removal direction against the pinned anchor: deleting an index from its definition
+    // AND its baseline entry clears the stale-entry check, while aged DBs keep the index forever.
+    it('a pre-ledger index retired from its definition is dropped by a dated migration @regression', function(){
+        const origin   = loadPinnedOriginFixture(ORIGIN_INDEX_BASELINE, ORIGIN_INDEX_BASELINE_SHA256,
+                                                 'test/unit/migration/sql_schema_index_parity.test.js');
+        const fixture  = JSON.parse(fs.readFileSync(INDEX_BASELINE, 'utf8'));
+        const declared = collectDeclaredIndexes();
+
+        const { missing, unguarded } = auditRetiredAnchorEntries({
+            kind: 'index', origin: origin.baseline, baseline: fixture.baseline,
+            isDeclared: (table, index) => !!(declared[table] && declared[table].has(index)),
+            drops: collectMigrationDrops(), definedTables: collectDefinedTables(),
+        });
+
+        assert.deepStrictEqual(missing, [],
+            'These indexes are in test/fixtures/schema-index-baseline-origin.json but gone from both ' +
+            'test/fixtures/schema-index-baseline.json and their src/sql/<table>.sql definition, and no ' +
+            'dated migration drops them. reconcileTableIndexes never drops an undeclared index, so every aged ' +
+            'DB keeps it forever while fresh installs lack it. Ship a dated migration (ALTER TABLE <t> DROP INDEX IF ' +
+            'EXISTS <name>;, or DROP TABLE IF EXISTS <t>; once the whole definition is gone). Editing ' +
+            'schema-index-baseline-origin.json or its sha256 pin is not a fix:\n  ' + missing.join('\n  '));
+
+        assert.deepStrictEqual(unguarded, [],
+            'A dated migration drops these retired indexes without IF EXISTS, so it fails on any database ' +
+            'that no longer has the index (a hand-repaired host, a re-run after a partial apply). Write the ' +
+            'drop as DROP INDEX IF EXISTS, in a new dated migration if the bare one already shipped:\n  ' +
+            unguarded.join('\n  '));
     });
 });
 

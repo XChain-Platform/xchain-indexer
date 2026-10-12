@@ -175,7 +175,7 @@ module.exports = {
     // the same chunk set forward assembly accepted (db.getAttestBatchChunks) and nothing
     // less. A batch key is sha256 over the window its head declares, so anyone can derive
     // it and file rows under it: A BATCH'S IDENTITY IS (KEY, AUTHOR), NEVER THE KEY ALONE
-    // (actions/attest.js authoredBy). Joining on the key alone let a row that is no part
+    // (actions/attest/batch.js authoredBy). Joining on the key alone let a row that is no part
     // of the batch un-land it - a rejected duplicate, or a foreign publisher's chunk, sitting
     // anywhere in the orphaned range pulled in a SURVIVING head and queued a retraction that
     // cleared a live batch's hub links. The hub cannot catch that: the retraction names a

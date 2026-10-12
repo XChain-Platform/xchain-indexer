@@ -27,7 +27,7 @@ const srb     = require('../../consensus/snapshot_reorg_buffer.js');
 // The rules-aware capability filter: drops a validator whose last rolled ROLLCALL
 // gate list does not cover the gates active at the request block. Inert on every
 // network whose ROLLCALL_GATES_ACTIVATION is null, where it never queries.
-const rgf     = require('./rollcall_gates_filter.js');
+const rgf     = require('./gates/rollcall_gates_filter.js');
 const pmsh    = require('../../attestation/providerMinStakeHistory.js');
 const { getLogger } = require('../../observability/index.js');
 
@@ -209,5 +209,31 @@ module.exports = {
             let parsed = JSON.parse(json);
             return Array.isArray(parsed) ? parsed.map(p => String(p).toLowerCase()) : null;
         } catch(_) { return null; }
+    },
+
+    // The canonical signer set of a response: the first `redundancy` verified signers
+    // taken in responsible-set rank order, returned sorted by pubkey ascending. Two
+    // nodes holding different supersets of the same verified signatures therefore agree
+    // on one set. Pubkeys compare lower-cased, a repeated pubkey counts once at its first
+    // entry, a pubkey outside `responsible` is dropped, and fewer come back when fewer
+    // qualify. Pure: returns new objects and mutates neither input.
+    canonicalSignerSet(verifiedSigs, responsible, redundancy){
+        let first = new Map();
+        for(let entry of (verifiedSigs || [])){
+            let pk = String(entry.pubkey).toLowerCase();
+            if(!first.has(pk)) first.set(pk, entry.sig);
+        }
+        let limit = Math.max(0, Math.floor(Number(redundancy)) || 0);
+        let picked = [];
+        let taken = new Set();
+        for(let r of (responsible || [])){
+            if(picked.length >= limit) break;
+            let pk = String(r).toLowerCase();
+            if(taken.has(pk) || !first.has(pk)) continue;
+            taken.add(pk);
+            picked.push({ pubkey: pk, sig: first.get(pk) });
+        }
+        picked.sort((a, b) => (a.pubkey < b.pubkey) ? -1 : (a.pubkey > b.pubkey ? 1 : 0));
+        return picked;
     }
 };

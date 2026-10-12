@@ -52,7 +52,7 @@
  * it. Pinning the collation on ONE side IS the fork this gate exists to
  * prevent, which is why this file is a byte-identical twin in both repos and
  * is listed in the cross-repo twin guard
- * (xchain-sync/test/unit/rollback-coverage.test.js). BOTH fleets must deploy
+ * (xchain-sync/test/unit/rollback_coverage.test.js). BOTH fleets must deploy
  * before any height is armed.
  *
  * The schema expectations the startup check enforces live here too, rather
@@ -68,9 +68,10 @@ const STAKE_WEIGHT_COLLATION = copy('stake_weight_collation_activation.STAKE_WEI
 const STAKE_WEIGHT_COLLATION_ACTIVATION = copy('stake_weight_collation_activation.STAKE_WEIGHT_COLLATION_ACTIVATION');
 
 // Per-chain threshold with a network-wide fallback, byte-for-byte the lookup
-// state_key_collation_activation.js uses. A coin-less caller (unit fixtures,
-// and xchain-sync when it has no per-chain context) falls through to the bare
-// network key and stays inert on mainnet/testnet, which is the safe side.
+// shape used for the state_key_collation_activation registry row. A coin-less
+// caller (unit fixtures, and xchain-sync when it has no per-chain context) falls
+// through to the bare network key and stays inert on mainnet/testnet, which is
+// the safe side.
 function _activationThreshold(network, coin){
     if(coin != null && STAKE_WEIGHT_COLLATION_ACTIVATION[coin + ':' + network] !== undefined)
         return STAKE_WEIGHT_COLLATION_ACTIVATION[coin + ':' + network];

@@ -111,12 +111,6 @@ module.exports = {
         fees['AMOUNT'] = this.util.feeForAction(fees['AMOUNT'], data);
 
         // DEBUG
-        // console.log('source=',data['SOURCE']);
-        // console.log('balances=',balances);
-        // console.log('ownerships=',ownerships);
-        // console.log('preferences=',preferences);
-        // console.log('db_hits=',db_hits);
-        // console.log('fees=',fees);
         // Validate fee payment (native coin or XCHAIN balance)
         if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
             let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);

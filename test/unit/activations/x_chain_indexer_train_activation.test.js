@@ -53,6 +53,13 @@ function armed(version, heights){
 
 describe('train activation: resolution @regression', function () {
 
+    it('lets reached train activations supersede the launch floor', function () {
+        assert.strictEqual(ta.resolveRuleSet(152786, 'testnet'), '1.0.0');
+        assert.strictEqual(ta.resolveRuleSet(152787, 'testnet'), '0.19.0');
+        assert.strictEqual(ta.resolveRuleSet(154073, 'testnet'), '0.19.0');
+        assert.strictEqual(ta.resolveRuleSet(154074, 'testnet'), '0.20.0');
+    });
+
     it('resolves the greatest entry at or below the height among the entries the build carries', function () {
         assert.strictEqual(ta.resolveRuleSet(969999, 'mainnet', TWO_ARM), '1.0.0');
         assert.strictEqual(ta.resolveRuleSet(970000, 'mainnet', TWO_ARM), '2.0.0');

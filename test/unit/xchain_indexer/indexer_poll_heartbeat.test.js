@@ -33,6 +33,7 @@
 
 const assert = require('assert');
 const fs     = require('fs');
+const sinon  = require('sinon');
 
 const XChainIndexer = require('../../../src/XChainIndexer.js');
 const { buildHealthResponse } = require('../../../src/api/health');
@@ -52,11 +53,18 @@ describe('XChainIndexer#isPollSilent()', function () {
     });
 
     it('is false at the window edge and true past it', function () {
-        const indexer = new XChainIndexer();
-        indexer.lastPollAt = Date.now() - indexer.pollSilentMs;
-        assert.strictEqual(indexer.isPollSilent(), false, 'the edge is not yet silent');
-        indexer.lastPollAt = Date.now() - (indexer.pollSilentMs + 1000);
-        assert.strictEqual(indexer.isPollSilent(), true);
+        const now     = Date.now();
+        const dateNow = sinon.stub(Date, 'now').returns(now);
+
+        try {
+            const indexer = new XChainIndexer();
+            indexer.lastPollAt = Date.now() - indexer.pollSilentMs;
+            assert.strictEqual(indexer.isPollSilent(), false, 'the edge is not yet silent');
+            indexer.lastPollAt = Date.now() - (indexer.pollSilentMs + 1000);
+            assert.strictEqual(indexer.isPollSilent(), true);
+        } finally {
+            dateNow.restore();
+        }
     });
 
     it('sizes the window well above one barrier-timeout cycle', function () {
@@ -166,13 +174,19 @@ describe('GET /status reports loop liveness for the fleet watcher, without gatin
             verdict: statusVerdict(XChainIndexer, indexer), hubMirror: { configured: false } });
     }
 
-    it('carries pollSilent and lastPollAt as the last keys, after every key monitors already read', function () {
+    it('keeps pollSilent and lastPollAt after every older key monitors already read', function () {
         const indexer = new XChainIndexer();
         indexer.lastPollAt = Date.now() - (indexer.pollSilentMs + 1000);
         const res = body(indexer);
         assert.strictEqual(res.pollSilent, true);
         assert.strictEqual(res.lastPollAt, indexer.lastPollAt);
-        assert.deepStrictEqual(Object.keys(res).slice(-3), ['hubMirror', 'pollSilent', 'lastPollAt']);
+        assert.deepStrictEqual(Object.keys(res).slice(-5), [
+            'hubMirror',
+            'pollSilent',
+            'lastPollAt',
+            'hubConsensusHashMismatch',
+            'hubConsensusHashMismatchDetail'
+        ]);
     });
 
     it('reads a booting indexer as not silent, with no stamp yet', function () {

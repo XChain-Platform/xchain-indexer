@@ -20,7 +20,7 @@ const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 const Attest          = require('../../src/actions/attest/index.js');
 const swq             = require('../../src/consensus/stake_weighted_quorum.js');
 const { stubActiveAt } = require('./gate_modules.js');
-const attestBcastFee  = require('../../src/actions/attest/attest_broadcast_fee_gate.js');
+const attestBcastFee  = require('../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 // The response-mirror flag day is a registry row (W5); its key, for the stubs below.
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 // Same module instance Attest holds a reference to (Node module cache); stubbing
@@ -50,18 +50,18 @@ const deriveReqId = (txHash, rootActionIndex, emitterPath, contractIndex, positi
         .digest('hex');
 
 // Cross-repo golden pin for the request_id preimage. This is the checked-in
-// (input tuple -> expected hex) vector from xchain-vm/src/gateway_emit.js
+// (input tuple -> expected hex) vector from xchain-vm/src/gateway-emit.js
 // (GOLDEN_VECTORS.requestId). It is a LITERAL constant on purpose: asserting the
 // REAL attest handler against it (below) catches a lockstep field-reorder that
 // would otherwise pass because the local deriveReqId copy was reordered too. Keep
-// in sync with xchain-vm/src/gateway_emit.js; a mismatch is a genuine fleet fork.
+// in sync with xchain-vm/src/gateway-emit.js; a mismatch is a genuine fleet fork.
 const GOLDEN_REQUEST_ID = {
     input: { txHash: 'abc123', rootActionIndex: 100, emitterPath: '', contractIndex: 7, emitterPosition: 0 },
     // sha256('abc123:100::7:0')
     expected: 'b770a548716259f767c3eb6e9e1e5eb0e3878c9ec3d6bbd68a7e1ab8221fffb7'
 };
 
-// Extend the default mock DB with the attestation-specific methods attest.js calls.
+// Extend the default mock DB with the attestation-specific methods the actions/attest/ modules call.
 function addAttestationDbStubs(db) {
     db.getContract                       = sinon.stub().resolves({ contract_index: 5 });
     db.createAttestationRequest          = sinon.stub().resolves();
@@ -74,6 +74,7 @@ function addAttestationDbStubs(db) {
     db.setAttestationResponseCallbackIndex = sinon.stub().resolves();
     db.getValidatorsByCapability         = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
     db.getStakeWeightsByCapability       = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
+    db.getCapabilitySnapshotWeights      = sinon.stub().resolves([]);
     db.createValidatorReward             = sinon.stub().resolves(true);
     db.createSavepoint                   = sinon.stub().resolves('sp1');
     db.releaseSavepoint                  = sinon.stub().resolves();

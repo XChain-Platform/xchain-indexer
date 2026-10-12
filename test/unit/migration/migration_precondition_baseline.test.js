@@ -54,6 +54,30 @@ const BRIDGE_TABLES_PROBE = /information_schema\.tables[\s\S]*bridge_transfers/i
 const BRIDGE_TABLE_ROWS   = Object.freeze(['bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges']);
 const bridgeTablesPresent = () => BRIDGE_TABLE_ROWS.map((name) => ({ name }));
 
+const MIRROR_ID_REPAIR_FILE = '2026-06-10-mirror-id-autoincrement-repair.sql';
+
+describe('Database.MIGRATION_PRECONDITIONS[mirror id repair] @regression @tier1', function () {
+    const pre = Database.MIGRATION_PRECONDITIONS[MIRROR_ID_REPAIR_FILE];
+    const converged = [
+        'price_snapshots', 'cross_chain_matches', 'capability_snapshots', 'state_checkpoints',
+    ].map(name => ({ name, type: 'bigint(20) unsigned', extra: 'auto_increment' }));
+
+    it('reads the four exact id columns with one database-name parameter', function () {
+        assert.ok(pre, MIRROR_ID_REPAIR_FILE + ' must have a MIGRATION_PRECONDITIONS entry');
+        assert.strictEqual((pre.sql.match(/\?/g) || []).length, 1);
+        assert.match(pre.sql, /column_name = 'id'/);
+        for(const table of converged.map(row => row.name)) assert.ok(pre.sql.includes("'" + table + "'"));
+    });
+
+    it('baselines only when every cursor already carries AUTO_INCREMENT', function () {
+        assert.match(pre.skipWhen(converged), /already carry AUTO_INCREMENT/);
+        assert.strictEqual(pre.skipWhen(converged.slice(1)), null);
+        assert.strictEqual(pre.skipWhen(converged.map((row, index) => index === 2 ? { ...row, extra: '' } : row)), null);
+        assert.strictEqual(pre.skipWhen(converged.map((row, index) => index === 1 ? { ...row, type: 'int(11)' } : row)), null);
+        assert.strictEqual(pre.skipWhen([]), null);
+    });
+});
+
 describe('Database.MIGRATION_PRECONDITIONS[pubkeys widen] @regression @tier1', function () {
 
     const pre = Database.MIGRATION_PRECONDITIONS[FILE];

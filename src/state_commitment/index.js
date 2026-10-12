@@ -47,7 +47,7 @@ const { gatherStakeEntries, buildStakesRoot, resetStakesMemo } = require('./stak
 const { assembleStateRoot, extraSubRootColumn, computeBlockMerkleRoot } = require('./state_root.js');
 const FULL = require('./full_balances_root.js');
 const { enforceTouchedSet, assertCommittedLeaves } = require('./touch_guards.js');
-const { getNetBalance } = require('../db/state_commitment/ledger_reads.js');
+const { getNetBalance, ledgerKeysForBlock } = require('../db/state_commitment/ledger_reads.js');
 const { getPriorBalancesRoot, storeStateTreeRoots } = require('../db/state_commitment/roots.js');
 const PSMT = require('./persistent_smt.js');
 const { EMPTY_ROOT_HEX, DbNodeStore, MemoryNodeStore, PersistentSMT, reportOrphanStats } = PSMT;
@@ -248,13 +248,16 @@ async function threadBalancesRoot(db, smt, chain, network, blockIndex, priorRoot
         root = await ESC.applyEscrowLeaves(db, smt, root, chain, network, blockIndex);
     }
     const balancesRoot = root;
-    await enforceTouchedSet(db, blockIndex, touched);
+    // Both guards judge the same ledger keys, so read them once: nothing between the two
+    // guards writes credits or debits.
+    const ledgerKeys = await ledgerKeysForBlock(db, blockIndex);
+    await enforceTouchedSet(db, blockIndex, touched, ledgerKeys);
     // Set membership cannot see a leaf that never landed, so the
     // block's own ledger keys are proved against the root that is about to
     // be committed. It runs AFTER the escrow leaves, on the exact value that
     // goes into the row, because a root nobody proved against is the thing
     // that made this fault class silent for three investigations.
-    await assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRoot);
+    await assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRoot, ledgerKeys);
     return { balancesRoot, shadowBalanceUpdates };
 }
 

@@ -55,6 +55,16 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(conCreditDel, 'expected a contract maturity-credit delete joined to contract_unstakes');
         assert.deepStrictEqual(conCreditDel.args[1], [1, 100, 100]);
 
+        // The matching negative escrow releases use the same legacy action/address/tick keys.
+        const capEscrowDel = calls.find(c => /DELETE e FROM escrows AS e/.test(c.args[0]) &&
+            /JOIN unstakes u/.test(c.args[0]));
+        const conEscrowDel = calls.find(c => /DELETE e FROM escrows AS e/.test(c.args[0]) &&
+            /JOIN contract_unstakes cu/.test(c.args[0]));
+        assert.ok(capEscrowDel, 'expected a capability maturity-escrow delete joined to unstakes');
+        assert.ok(conEscrowDel, 'expected a contract maturity-escrow delete joined to contract_unstakes');
+        assert.deepStrictEqual(capEscrowDel.args[1], ['XCHAIN', 1, 100, 100]);
+        assert.deepStrictEqual(conEscrowDel.args[1], [1, 100, 100]);
+
         // Status flips back to 'valid' on both tables so the sweep re-matures the cooldown.
         const capStatusReset = calls.find(c => /UPDATE unstakes SET status_id/.test(c.args[0]) && c.args[0].includes('cooldown_end_block'));
         const conStatusReset = calls.find(c => /UPDATE contract_unstakes SET status_id/.test(c.args[0]) && c.args[0].includes('cooldown_end_block') && !c.args[0].includes('contract_slash_debits'));
@@ -64,8 +74,11 @@ describe('Rollback @regression @tier3', function () {
         // The credit deletes must run BEFORE the generic credits delete and BEFORE updateBalances,
         // or a surviving-action_index refund would be re-counted into the rolled-back balance.
         const capCreditIdx = calls.indexOf(capCreditDel);
+        const capEscrowIdx = calls.indexOf(capEscrowDel);
         const genCreditDelIdx = calls.findIndex(c => /DELETE FROM credits WHERE action_index/.test(c.args[0]));
         assert.ok(capCreditIdx >= 0 && genCreditDelIdx >= 0 && capCreditIdx < genCreditDelIdx, 'maturity-credit delete must precede the generic credits delete');
+        assert.ok(capEscrowIdx >= 0 && genCreditDelIdx >= 0 && capEscrowIdx < genCreditDelIdx,
+            'maturity-escrow delete must precede the generic credits delete');
         assert.ok(indexer.indexerDb.updateBalances.notCalled || capCreditIdx >= 0, 'maturity-credit delete must precede updateBalances');
     });
 });

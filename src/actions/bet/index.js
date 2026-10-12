@@ -50,12 +50,15 @@ const { getLogger } = require('../../observability/index.js');
  * - 1 = Cancel Feed
  * - 2 = Place Bet
  * - 3 = Resolve Feed
+ * - 4 = Edit Feed Lists
  *
  ********************************************************************/
 
 // The handler's phases, grouped by concern and installed onto Bet.prototype below
 const createFeedPart = require('./create_feed.js');
 const validatePart   = require('./validate.js');
+const editListsPart  = require('./edit_lists_validate.js');
+const editApplyPart  = require('./edit_lists_apply.js');
 const feesPart       = require('./fees.js');
 const settlePart     = require('./settle.js');
 
@@ -77,6 +80,7 @@ class Bet {
         this.formats[1] = 'VERSION|FEED_ACTION_INDEX|MEMO';
         this.formats[2] = 'VERSION|FEED_ACTION_INDEX|OUTCOME|AMOUNT|MEMO';
         this.formats[3] = 'VERSION|FEED_ACTION_INDEX|OUTCOME|MEMO';
+        this.formats[4] = 'VERSION|FEED_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|MEMO';
 
         // Supported list types for ALLOW_LIST/BLOCK_LIST: 2=Address only.
         this.listTypes = [2];
@@ -106,7 +110,11 @@ class Bet {
 
         error = await this.validateCreateFeed(data, format, tokenInfo, outcomeLabels, error);
 
+        error = await this.validateEditListsGate(data, format, error);
+
         error = await this.validateFeedState(data, format, feedInfo, error);
+
+        error = await this.validateEditLists(data, format, feedInfo, error);
 
         error = await this.validatePlaceBet(data, format, feedInfo, feedTokenInfo, error);
 
@@ -135,15 +143,15 @@ class Bet {
         if(format==0 && !this.util.isNull(data['TICK']))
             tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Get information on the feed by its action_index (cancel / place / resolve)
+        // Get information on the feed by its action_index (cancel / place / resolve / edit)
         let feedInfo = false;
-        if(format==1 || format==2 || format==3)
+        if(format==1 || format==2 || format==3 || format==4)
             feedInfo = await this.indexerDb.getBetFeedInfo(data['FEED_ACTION_INDEX']);
 
         // The feed's wager token info (place validates AMOUNT at its DECIMALS;
         // settlement floors at its DECIMALS)
         let feedTokenInfo = false;
-        if(feedInfo)
+        if(feedInfo && format!=4)
             feedTokenInfo = await this.indexerDb.getTokenInfo(feedInfo['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Get source address balances and preferences
@@ -157,10 +165,7 @@ class Bet {
     }
 
     // Canonical stored values, the final status, and the typed row every format writes
-    async storeBetRows(data, format, feedInfo, outcomeLabels, error){
-        /*****************************************************************
-         * Storage + ledger changes
-         ****************************************************************/
+    prepareBetRow(data, format, feedInfo, outcomeLabels, error){
         // Canonical stored values (create): trimmed labels joined with a single
         // comma, defaulted refund window, materialized expire_at
         if(format==0 && !error)
@@ -182,6 +187,10 @@ class Bet {
             bet['TICK'] = feedInfo ? feedInfo['TICK'] : null; // denormalized feed tick
         }
 
+        return { status, bet };
+    }
+
+    logBetRow(data, format, feedInfo){
         // Print status message
         if(format==0)
             getLogger().info("\t BET_FEED : " + this.config['COIN'] + ' : ' + data['LABEL'] + ' : ' + data['STATUS']);
@@ -191,7 +200,11 @@ class Bet {
             getLogger().info("\t BET : " + this.util.logAmount(data['AMOUNT']) + ' ' + (feedInfo ? feedInfo['TICK'] : '?') + ' on ' + data['OUTCOME'] + ' @ ' + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' : ' + data['STATUS']);
         if(format==3)
             getLogger().info("\t BET_RESOLVE : " + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' -> ' + data['OUTCOME'] + ' : ' + data['STATUS']);
+        if(format==4)
+            getLogger().info("\t BET_EDIT : " + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' : ' + data['STATUS']);
+    }
 
+    async storeTypedBetRow(bet, format){
         // Every format stores its own typed row, whatever the status (house
         // convention). The cancel/resolve rows are what make a REJECTED cancel or
         // resolve reportable at all: those legs used to write nothing but a
@@ -208,12 +221,27 @@ class Bet {
             await this.indexerDb.createBet(bet);
         if(format==3)
             await this.indexerDb.createBetResolve(bet);
+        await this.applyEditLists(bet, format);
+    }
 
+    addBetAddressTicker(data, feedInfo, format){
         // Store the SOURCE and wagered TICK in addresses list
         if(format==0)
             this.util.addAddressTicker(data['SOURCE'], data['TICK']);
         if(feedInfo)
             this.util.addAddressTicker(data['SOURCE'], feedInfo['TICK']);
+    }
+
+    // Canonical stored values, the final status, and the typed row every format writes
+    async storeBetRows(data, format, feedInfo, outcomeLabels, error){
+        /*****************************************************************
+         * Storage + ledger changes
+         ****************************************************************/
+        const { status, bet } = this.prepareBetRow(data, format, feedInfo, outcomeLabels, error);
+
+        this.logBetRow(data, format, feedInfo);
+        await this.storeTypedBetRow(bet, format);
+        this.addBetAddressTicker(data, feedInfo, format);
 
         return status;
     }
@@ -223,7 +251,7 @@ class Bet {
 // from produced: parse() reaches them as this.<method>, suites can stub them through
 // Bet.prototype, and for-in over a handler stays empty. Same install as db/index.js uses
 // for its query mixins.
-for(const part of [createFeedPart, validatePart, feesPart, settlePart]){
+for(const part of [createFeedPart, validatePart, editListsPart, editApplyPart, feesPart, settlePart]){
     const descriptors = Object.getOwnPropertyDescriptors(part);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
     Object.defineProperties(Bet.prototype, descriptors);

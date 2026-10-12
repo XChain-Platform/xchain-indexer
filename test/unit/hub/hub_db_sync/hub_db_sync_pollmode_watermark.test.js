@@ -46,7 +46,7 @@ describe('HubDbSync poll-mode watermark fail-closed (ITEM 2476) @regression @tie
             warn.restore();
         }
         // (a) rows still mirrored: every mirrored table was bootstrapped.
-        assert.strictEqual(bootstrapTable.callCount, 11, 'all eleven mirrored tables still bootstrap in poll mode');
+        assert.strictEqual(bootstrapTable.callCount, 12, 'all twelve mirrored tables still bootstrap in poll mode');
         assert.strictEqual(sync._bootstrapDrained, true, 'a clean drain still marks the mirror drained');
         // (b) watermark must NOT advance in poll mode.
         assert.strictEqual(sync.streamWatermark, 0, 'poll mode must NOT advance the stream watermark');
@@ -65,6 +65,7 @@ describe('HubDbSync poll-mode watermark fail-closed (ITEM 2476) @regression @tie
             cross_chain_calls: 915, capability_snapshots: 905, state_checkpoints: 920,
             anchor_reward_attestations: 925, attestation_responses: 930,
             bridge_transfers: 935, policy_snapshots: 940, list_snapshots: 945,
+            remote_token_snapshots: 950,
         };
         sinon.stub(sync, 'bootstrapTable').callsFake(async (table) => marks[table]);
         await sync.bootstrapAll();

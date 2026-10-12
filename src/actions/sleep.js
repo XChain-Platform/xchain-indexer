@@ -52,8 +52,6 @@ class Sleep {
          * DEBUGGING - Force params
          ****************************************************************/
         // Example payloads by FORMAT version:
-        // let str = "0|791495|Pausing actions until block 791495";
-        // let str = "1|791495|JDOG|Pausing actions on JDOG until block 791495";
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 

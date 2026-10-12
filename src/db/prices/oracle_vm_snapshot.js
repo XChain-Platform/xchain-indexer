@@ -27,6 +27,7 @@
 // key (W4); the age key is the marker bin/check-flagday-deploy.sh greps this file for.
 const gateRegistry = require('../../consensus/gate_registry');
 const preloadCausality = require('./oracle_preload_causality_gate');
+const ageSeconds = require('./oracle_snapshot_age_seconds');
 const { getLogger } = require('../../observability/index.js');
 const { ORACLE_VM_ROUND_WINDOW,
         ORACLE_VM_MAX_ROWS } = require('../../protocol/constants.js');
@@ -55,17 +56,18 @@ function preloadWindow(db, blockIndex, refTime){
     // only shrink. The reference chain is carved out inside the module: its
     // height cap is exact, and a time bound there would admit rounds anchored
     // after a forward-skewed block. Execution-path gate, indexer-only.
-    let timeCausal = preloadCausality.isOraclePreloadCausalityActive(
-        blockIndex, db.config['NETWORK'], db.config['COIN']) && Number.isFinite(refTime);
+    // In the admission era the bound is the round's signed admission height instead
+    // (see the gate module); the clause carries its own bindings.
+    let bound = preloadCausality.oraclePreloadBound(
+        blockIndex, refTime, db.config['NETWORK'], db.config['COIN']);
     // Empty below the height, so every query string and argument list stays
     // byte-identical to the pre-gate one and historical replay is unchanged.
-    let timeBound = timeCausal ? ' AND block_timestamp <= ?' : '';
-    return { blockCap, refTime, timeCausal, timeBound };
+    return { blockCap, refTime, timeCausal: bound.sql !== '', timeBound: bound.sql, timeArgs: bound.args };
 }
 
 // Blocks since the latest finalized snapshot, MAX_SAFE_INTEGER when there is none.
 async function readSnapshotAge(db, blockIndex, win){
-    const { blockCap, refTime, timeCausal, timeBound } = win;
+    const { blockCap, timeBound, timeArgs } = win;
     // Pre-load the latest finalized snapshot age (blocks since last snapshot).
     // Snapshot-age causality gate (the oracle_snapshot_age_causality_activation row in src/protocol_changes/):
     // the legacy age query has NO block cap, unlike every sibling below, so a
@@ -86,7 +88,7 @@ async function readSnapshotAge(db, blockIndex, win){
     // pre-gate call.
     let ageArgs = [];
     if(ageCausal)  ageArgs.push(blockCap);
-    if(timeCausal) ageArgs.push(refTime);
+    ageArgs.push(...timeArgs);
     // Strict reads throughout this preload (M-17, same rationale as getLatestPrice):
     // the oracle reads run on the hub-DB instance, which never opens a transaction,
     // so doQuery would collapse a driver error into [] - indistinguishable from
@@ -101,7 +103,7 @@ async function readSnapshotAge(db, blockIndex, win){
 
 // The `prices` map behind getPrice(), keyed by coin pair.
 async function loadLatestPrices(db, blockIndex, win, isStale){
-    const { blockCap, refTime, timeCausal, timeBound } = win;
+    const { blockCap, timeBound, timeArgs } = win;
     // getPrice(): latest finalized price per coin_pair at/<= block, one row
     // per pair (GROUP BY guarantees correctness), staleness-applied.
     let prices = {};
@@ -120,7 +122,7 @@ async function loadLatestPrices(db, blockIndex, win, isStale){
     // The bound belongs in the subquery that picks the round: the outer join
     // resolves to that same row through the (round_number, coin_pair) unique
     // key, so bounding it twice would filter nothing further.
-    let latestRows = await db.doQueryStrict(latestQuery, timeCausal ? [blockCap, refTime] : [blockCap]);
+    let latestRows = await db.doQueryStrict(latestQuery, [blockCap, ...timeArgs]);
     // Stale-round visibility gate (the oracle_stale_round_visibility_activation row in src/protocol_changes/).
     // Below the height a stale tip is dropped from `prices` entirely, so
     // getPrice() returns null while getPriceAtRound() still carries the very
@@ -185,7 +187,7 @@ async function loadLatestPrices(db, blockIndex, win, isStale){
 //
 // readRoundFloor and loadRounds below are that read's two steps.
 async function readRoundFloor(db, win){
-    const { blockCap, refTime, timeCausal, timeBound } = win;
+    const { blockCap, timeBound, timeArgs } = win;
     // Step one: which rounds does the window cover? DISTINCT rounds, newest
     // first, so the answer does not move when a pair is added or a pair misses a
     // round. Fewer rounds than the window means nothing was evicted at all, and
@@ -198,7 +200,7 @@ async function readRoundFloor(db, win){
              FROM price_snapshots
              WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?${timeBound}
              ORDER BY round_number DESC
-             LIMIT ${ORACLE_VM_ROUND_WINDOW}`, timeCausal ? [blockCap, refTime] : [blockCap]);
+             LIMIT ${ORACLE_VM_ROUND_WINDOW}`, [blockCap, ...timeArgs]);
     return (windowRows.length >= ORACLE_VM_ROUND_WINDOW)
         ? Number(windowRows[windowRows.length - 1].round_number)
         : 0;
@@ -207,7 +209,7 @@ async function readRoundFloor(db, win){
 // The `rounds` map behind getPriceAtRound(), keyed by coin pair then round, with the
 // floor the guarantee starts at (raised when the row ceiling bites).
 async function loadRounds(db, blockIndex, win, roundFloor){
-    const { blockCap, refTime, timeCausal, timeBound } = win;
+    const { blockCap, timeBound, timeArgs } = win;
     let rounds = {};
     // Step two: every row at or above the floor, under a hard payload ceiling.
     // Continuation lines at the original method-body indentation: the query bytes are unchanged.
@@ -218,7 +220,7 @@ async function loadRounds(db, blockIndex, win, roundFloor){
                           ORDER BY round_number DESC
                           LIMIT ${ORACLE_VM_MAX_ROWS}`;
     let roundRows = await db.doQueryStrict(roundQuery,
-        timeCausal ? [blockCap, refTime, roundFloor] : [blockCap, roundFloor]);
+        [blockCap, ...timeArgs, roundFloor]);
 
     // The ceiling truncates newest-first, so the OLDEST loaded round is the one
     // that may be missing pairs. Claiming it is covered would hand a contract the
@@ -268,7 +270,9 @@ module.exports = {
         let refTime = parseInt(blockTime);
         let maxAge  = parseInt(maxAgeSeconds);
         let win = preloadWindow(this, blockIndex, refTime);
-        let snapshotAge = await readSnapshotAge(this, blockIndex, win);
+        let snapshotAge = ageSeconds.secondsBasisActive(this, blockIndex)
+            ? await ageSeconds.readAgeSeconds(this, blockIndex, refTime, win)
+            : await readSnapshotAge(this, blockIndex, win);
 
         // True when a snapshot is older than the configured max age relative to the
         // block being processed (stale ⇒ treated as no price). A future-stamped row
@@ -283,7 +287,7 @@ module.exports = {
 
         // ── Build a SERIALIZABLE oracle snapshot (plain data) ───────────────
         // The VM runs in a forked worker; read-only data must cross the IPC
-        // boundary, so we PRE-LOAD here and let xchain-vm/src/readonly_accessors.js
+        // boundary, so we PRE-LOAD here and let xchain-vm/src/readonly-accessors.js
         // rebuild the synchronous getPrice/getPriceAtRound/getSnapshotAge accessors
         // inside the worker. (These were previously async DB closures - incompatible
         // with the VM's synchronous applySync bridge, so oracle reads silently

@@ -47,9 +47,10 @@ function height(v){
 }
 
 /**
- * Rebuild the XCHECKPOINT v0 canonical for a mirrored state_checkpoints row. One of six
+ * Rebuild the XCHECKPOINT v0 canonical for a mirrored state_checkpoints row. One of seven
  * checkpoint-family copies: the hub's canonical_forms.js canonicalCheckpoint, the SDK's and
- * sync's checkpoint.js canonicalCheckpoint and the explorer's canonicalCheckpointString gate
+ * sync's checkpoint.js canonicalCheckpoint, the explorer's canonicalCheckpointString and
+ * bin/recovery.js checkpointCanonical (pinned to this copy by its own parity test) gate
  * the root suffix on CHECKPOINT_COMMITMENT at snapshot_block; this file and actions/anchor
  * `canonical` (FORMAT 0) append it UNCONDITIONALLY. The archive family (actions/anchor FORMAT 1,
  * bin/recovery.js wrapperCanonical, the hub's archiveCanonical) is rootless and separate.
@@ -147,6 +148,7 @@ async function verifyCheckpointQuorum(cp, indexerDb){
  * @returns {Promise<Object|null>} the checkpoint envelope member
  *          { chain, network, block_index, checkpoint_seq, snapshot_block, state_root,
  *            state_root_version, source }, or null when none is held locally (STALL)
+ * @throws {Error} any source read fault, unchanged, so the block is retried rather than decided
  */
 async function selectCheckpoint(row, ctx){
     const chain     = String(row.src_chain || '');
@@ -161,14 +163,11 @@ async function selectCheckpoint(row, ctx){
     // time. status 'valid' ONLY: 'unverified' means this node had no capability snapshot and
     // stored the row without checking a signature, which is exactly the unverified checkpoint
     // the check must never be handed.
-    let anchors = [];
-    try {
-        anchors = await db.getEarliestValidAnchorCheckpoint(
-            ANCHOR_SECTION_VERSION, chain, network, atOrAfter);
-    } catch(e){
-        // An unreadable table is an absence, which stalls. It is never a refusal.
-        anchors = [];
-    }
+    // Only a SUCCESSFUL empty read is an absence, which stalls. A read fault propagates, the
+    // block is not committed and is retried, so a fault on one source never shrinks the
+    // candidate set into a pick a healthy peer holding the same rows would not make.
+    const anchors = await db.getEarliestValidAnchorCheckpoint(
+        ANCHOR_SECTION_VERSION, chain, network, atOrAfter);
     for(const a of anchors)
         candidates.push({ chain: a.chain, network: a.network, block_index: height(a.block_index),
                           checkpoint_seq: height(a.checkpoint_seq), snapshot_block: height(a.snapshot_block),
@@ -178,13 +177,9 @@ async function selectCheckpoint(row, ctx){
     // Source 2: the hub-mirrored state_checkpoints copy, re-verified here. More than one row is
     // read because the LOWEST qualifying height is what the rule wants and a row at that height
     // may fail re-verification, in which case the next candidate up is the honest pick rather
-    // than a stall. Bounded, because this runs inside the block loop.
-    let mirrored = [];
-    try {
-        mirrored = await db.getMirroredStateCheckpointCandidates(chain, network, atOrAfter);
-    } catch(e){
-        mirrored = [];
-    }
+    // than a stall. Bounded, because this runs inside the block loop. A read fault here
+    // propagates for the same reason as Source 1's.
+    const mirrored = await db.getMirroredStateCheckpointCandidates(chain, network, atOrAfter);
     for(const m of mirrored){
         if(!await verifyCheckpointQuorum(m, db)) continue;
         candidates.push({ chain: m.chain, network: m.network, block_index: height(m.block_index),

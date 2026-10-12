@@ -33,17 +33,6 @@ module.exports = {
          * DEBUGGING - Force params
          ****************************************************************/
         // Example payloads by FORMAT version:
-        // let str = '0|JDOG|1|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
-        // let str = '0|JDOG|1|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Testing Memos';
-        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
-        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|Testing Memos2';
-        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8';
-        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8|Testing Memos3';
-        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
-        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|Testing Memos4';
-        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|BACON|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8';
-        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|BACON|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8|Testing Memos5';
-        // let str = '3|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Testing Memos1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Testing Memos11|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|Testing Memos2|BACON|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8|Testing Memos3';
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
@@ -109,6 +98,11 @@ module.exports = {
     // DESTINATION chosen to spell a held-out leg's key cannot collide with one. Prefixing every
     // key uniformly leaves insertion order (and so the emitted record order) unchanged.
     consolidateSendLegs(sends, ticks, data){
+        // Preserve the action-wide totals before literal TICK spellings are consolidated.
+        // Below the activation boundary, avoid even introducing the new arithmetic.
+        let totalTickIdRule = gateRegistry.activeAt('send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
+        this._gatedActionTotals = totalTickIdRule ? this.gatedTotalsByTickId(sends, ticks, data) : null;
+
         let legAmountRule = gateRegistry.activeAt('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
         let keys = {};
         for(let idx in sends){
@@ -128,5 +122,27 @@ module.exports = {
         for(let key in keys)
             sends.push(keys[key]);
         return sends;
+    },
+
+    // Total resolved ticks by recipient without changing the legs or prefetched token map.
+    gatedTotalsByTickId(sends, ticks, data){
+        let totals = {};
+        if(!Array.isArray(sends))
+            return totals;
+
+        for(const [tick, amount, destination] of sends){
+            let tokenInfo = ticks && ticks[tick];
+            if(!tokenInfo || tokenInfo['TICK_ID'] === null || tokenInfo['TICK_ID'] === undefined)
+                continue;
+            if(!this.util.isValidAmountFormat(tokenInfo['DECIMALS'], amount, data && data['BLOCK_TIME']))
+                continue;
+
+            let tickId = tokenInfo['TICK_ID'];
+            if(!totals[destination])
+                totals[destination] = {};
+            let prior = totals[destination][tickId] || 0;
+            totals[destination][tickId] = this.util.bcadd(prior, amount, tokenInfo['DECIMALS']);
+        }
+        return totals;
     }
 };

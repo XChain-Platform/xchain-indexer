@@ -82,20 +82,22 @@ const responsePart       = require('./response.js');
 const mirrorApplyPart    = require('./mirror_apply.js');
 const expirePart         = require('./expire.js');
 const batchPart          = require('./batch.js');
-const batchAbsorbPart    = require('./batch_absorb.js');
+const batchAbsorbPart    = require('./batch/batch_absorb.js');
 const responsibleSetPart = require('./responsible_set.js');
-const relayPart          = require('./relay.js');
-const relayRequestPart   = require('./relay_request.js');
-const relayResponsePart  = require('./relay_response.js');
+const relayPart          = require('./relay/relay.js');
+const relayFeeCarvePart  = require('./relay/relay_fee_carve.js');
+const relayRequestPart   = require('./relay/relay_request.js');
+const relayResponsePart  = require('./relay/relay_response.js');
 const settlePart         = require('./settle.js');
 const callbacksPart      = require('./callbacks.js');
 
 class Attest {
 
     // The action's constants, read off the class by requirers that predate constants.js
-    // (utility.js reads the mirror-apply cap; suites read the stamp and the preimage
-    // fields). constants.js is their home and these are the same bindings, carried as
-    // statics so the module's one export is the class itself.
+    // (unit suites read the mirror-apply cap and the stamp off the class, while the applier
+    // pass in utility/attest_mirror/attest_mirror.js and utility/attest_mirror/attest_mirror_select.js imports the cap
+    // from constants.js itself). constants.js is their home and these are the same
+    // bindings, carried as statics so the module's one export is the class itself.
     static REQUEST_ID_PREIMAGE_FIELDS          = REQUEST_ID_PREIMAGE_FIELDS;
     static ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK = ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
     static ATTEST_BATCH_COMPLETION_STAMP       = ATTEST_BATCH_COMPLETION_STAMP;
@@ -221,8 +223,8 @@ class Attest {
 // silently add a method to the handler.
 const PARTS = [
     requestPart, feesPart, responsePart, mirrorApplyPart, expirePart, batchPart,
-    batchAbsorbPart, responsibleSetPart, relayPart, relayRequestPart, relayResponsePart,
-    settlePart, callbacksPart
+    batchAbsorbPart, responsibleSetPart, relayPart, relayFeeCarvePart, relayRequestPart,
+    relayResponsePart, settlePart, callbacksPart
 ];
 
 // Installed NON-ENUMERABLE, which is what the class body they came from produced: an

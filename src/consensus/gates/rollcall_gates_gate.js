@@ -57,10 +57,11 @@ const ROLLCALL_GATES_REGTEST_ARMED_HEIGHT = copy('rollcall_gates_activation.ROLL
 
 const ROLLCALL_GATES_REGTEST_ENV = copy('rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ENV');
 
-// Same grammar as rollcall_activation.resolveRegtestActivation, read ONCE at
-// require time: armed | genesis | on | true | yes arm at genesis, a non-negative
-// integer arms at that height, unset | '' | off | inert | false | no | none stay
-// inert, anything else fails CLOSED to inert and says so.
+// Mirror regtest_env.regtestHeight's grammar for reference only; no runtime path calls
+// this: the registry applies regtestHeight to the env when the row below is read.
+// armed | genesis | on | true | yes arm at genesis, an integer >= 0 arms at that height,
+// unset | '' | off | inert | false | no | none stay inert, anything else fails CLOSED
+// to inert and says so.
 function resolveRegtestGatesActivation(env){
     let raw = (env || {})[ROLLCALL_GATES_REGTEST_ENV];
     if(raw === undefined || raw === null) return null;

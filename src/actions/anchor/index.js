@@ -68,22 +68,26 @@ const gateRegistry = require('../../consensus/gate_registry');
 
 // The wire families and their shared steps, one part file each.
 const validate     = require('./validate.js');
-const archiveHead  = require('./archive_head.js');
+const archiveHead  = require('./archive/archive_head.js');
 const bundle       = require('./bundle.js');
-const archiveChunk = require('./archive_chunk.js');
+const archiveChunk = require('./archive/archive_chunk.js');
 const quorum       = require('./quorum.js');
-const settle       = require('./settle.js');
 const reassembly   = require('./reassembly.js');
-const { splitV3Wire } = require('./v3_wire.js');
-const { walkFoldSections } = require('./v3_sections.js');
-const { foldArchiveReason } = require('./v3_archive_check.js');
+const { splitV3Wire } = require('./v3/v3_wire.js');
+const { walkFoldSections } = require('./v3/v3_sections.js');
+const { foldArchiveReason } = require('./v3/v3_archive_check.js');
 const { canonicalBatchCrc, signsExtendedCanonical, extendSectionCanonicalBase } = require('./v3_canonical.js');
 const { recordFoldAction } = require('./v3/v3_record.js');
 function foldHeaderReason(config, data, error){
     if(error) return error;
     if(String(data['NETWORK']) !== String(config['NETWORK'] || '')) return 'invalid: NETWORK (not this network)';
     if(!/^[0-9]+$/.test(String(data['SNAPSHOT_BLOCK']))) return 'invalid: SNAPSHOT_BLOCK (format)';
-    return /^[0-9]+$/.test(String(data['SECTION_COUNT'])) ? error : 'invalid: SECTION_COUNT (format)';
+    if(!/^[0-9]+$/.test(String(data['SECTION_COUNT']))) return 'invalid: SECTION_COUNT (format)';
+    if(Number(data['SECTION_COUNT']) === 0 && gateRegistry.activeAt(
+        'anchor_empty_fold_reject_activation.ANCHOR_EMPTY_FOLD_REJECT_ACTIVATION',
+        config['NETWORK'], config['COIN'], Number(data['BLOCK_INDEX']), null))
+        return 'invalid: SECTION_COUNT (empty fold)';
+    return null;
 }
 async function checkFoldSeqs(handler, sections, archive, error){
     if(error) return error;
@@ -115,7 +119,6 @@ function foldOrderReason(handler, data, sections, error){
 }
 
 class Anchor {
-
     constructor(action){
         this.actions   = action;
         this.config    = action.config;
@@ -172,9 +175,9 @@ class Anchor {
                     canonicalBatchCrc(d['BATCH_CRC32']) + '|' + String(d['TOTAL_CHUNKS']);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
         } else if(Number(d['FORMAT']) === 0){
-            // Append the root suffix UNCONDITIONALLY. Of the six checkpoint-family
+            // Append the root suffix UNCONDITIONALLY. Of the seven checkpoint-family
             // builders, this one and bridge_proof_client/checkpoint_source.js do; the hub
-            // (checkpointRootSuffix), SDK, sync and explorer gate it on
+            // (checkpointRootSuffix), SDK, sync, explorer and bin/recovery.js gate it on
             // CHECKPOINT_COMMITMENT. The divergence is deliberate: the roots this parse
             // stores are then always inside the signed bytes.
             //
@@ -257,8 +260,8 @@ class Anchor {
         // checkpointed height, which belong to other chains. activeAt fails closed on
         // a non-numeric height or an unknown network.
         if(!error && !gateRegistry.activeAt('anchor_activation.ANCHOR_ACTIVATION', this.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null))
-            error = 'invalid: ANCHOR before activation';
-
+            error = gateRegistry.activeAt('anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION',
+                this.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null) ? 'unverified' : 'invalid: ANCHOR before activation';
         let foldActive = format === 3 && gateRegistry.activeAt(
             'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', this.config['NETWORK'],
             this.config['COIN'], Number(data['BLOCK_INDEX']), null);
@@ -322,11 +325,6 @@ class Anchor {
         let verdict = await quorum.verifySections(this, data, sections, oracleSetFor, error);
         for(let section of sections) delete section.FOLD_ARCHIVE;
         error = verdict.error;
-
-        if(!error && sections.length > 0 && verdict.bundleSet && verdict.bundleSet.oracleN > 0){
-            let met = quorum.bundleAttestationMet(this, data, verdict.bundleSet, publisherSigs);
-            await settle.creditBundleReward(this, data, met, verdict.bundleSet);
-        }
 
         await recordFoldAction(this, data, sections, archive, publisherSigs, error);
         if(archive !== null){

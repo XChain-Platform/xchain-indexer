@@ -52,7 +52,11 @@ const { TXID_RE, normalizeVersion } = require('./action_query.js');
 //
 // Every ANCHOR version is served: the SQL below filters none, so the caller can
 // positively DETECT a version mismatch rather than see an empty answer for one and
-// have to guess. The attestation-bearing versions are v0 and v1.
+// have to guess. Which versions are attestation-bearing, and which reward family each
+// can prove, is owned by the client: ATTESTED_VERSIONS and REWARD_FAMILY_VERSIONS in
+// src/consensus/doge_peer_clients/anchor_proof_client/binding.js. A new ANCHOR wire
+// version that carries a PUBLISHER must be added there, or a reward attested against it
+// can never be proven and its block defers.
 //
 // BOUNDED AND PAGED, not merely bounded. The cap on the checkpoint-identity read above is
 // justified by "the caller filters those by txid/version, so fetch the (tiny) candidate

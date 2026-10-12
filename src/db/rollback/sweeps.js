@@ -32,17 +32,30 @@ async function timedSweep(db, table, query, args){
     return { table: table, ms: Date.now() - startedAt, rows: rows };
 }
 
+function maxId(rows){
+    return rows && rows[0] && rows[0].max_id != null ? rows[0].max_id : 0;
+}
+
+async function readDanglingIndexReferenceBounds(db){
+    let addressRows = await db.doQuery(`SELECT MAX(id) AS max_id FROM index_addresses`, []);
+    let tickerRows  = await db.doQuery(`SELECT MAX(id) AS max_id FROM index_tickers`, []);
+    return { addressId: maxId(addressRows), tickerId: maxId(tickerRows) };
+}
+
 module.exports = {
 
     timedSweep,
+    readDanglingIndexReferenceBounds,
 
     // balances, markets and pubkeys rows whose index id no longer resolves, timed per table.
-    async sweepDanglingIndexReferences(db, nativeTickId){
+    async sweepDanglingIndexReferences(db, nativeTickId, bounds){
+        bounds = bounds || await readDanglingIndexReferenceBounds(db);
         let stats = [];
         stats.push(await timedSweep(db, 'balances',
             `DELETE FROM balances
-             WHERE address_id NOT IN (SELECT id FROM index_addresses)
-                OR tick_id    NOT IN (SELECT id FROM index_tickers)`, []));
+             WHERE (address_id > ? AND address_id NOT IN (SELECT id FROM index_addresses))
+                OR (tick_id > ? AND tick_id NOT IN (SELECT id FROM index_tickers))`,
+            [bounds.addressId, bounds.tickerId]));
 
         // Same orphan-sweep for the other two derived tables that reference a rolled-back
         // index id but are NOT removed by the action_index / block_index delete loops
@@ -66,12 +79,13 @@ module.exports = {
         // and matching it here deleted every token/native market on the first reorg.
         stats.push(await timedSweep(db, 'markets',
             `DELETE FROM markets
-             WHERE (tick1_id <> ? AND tick1_id NOT IN (SELECT id FROM index_tickers))
-                OR (tick2_id <> ? AND tick2_id NOT IN (SELECT id FROM index_tickers))`,
-            [nativeTickId, nativeTickId]));
+             WHERE (tick1_id <> ? AND tick1_id > ? AND tick1_id NOT IN (SELECT id FROM index_tickers))
+                OR (tick2_id <> ? AND tick2_id > ? AND tick2_id NOT IN (SELECT id FROM index_tickers))`,
+            [nativeTickId, bounds.tickerId, nativeTickId, bounds.tickerId]));
         stats.push(await timedSweep(db, 'pubkeys',
             `DELETE FROM pubkeys
-             WHERE address_id NOT IN (SELECT id FROM index_addresses)`, []));
+             WHERE address_id > ? AND address_id NOT IN (SELECT id FROM index_addresses)`,
+            [bounds.addressId]));
         return stats;
     },
 
@@ -132,10 +146,11 @@ module.exports = {
         // or v1 burn named by src_chain/src_action_index) is reorged away, so one column pair
         // names the range. The spelling is src_chain/src_action_index, not the older
         // source_chain/source_action_index, because that is what the DDL carries (direction is
-        // derived from src_chain and never stored); hub_db_sync.js _applyRetraction reads the
-        // same pair out of RETRACTION_CHAIN_COLUMNS / RETRACTION_COLUMNS, so the two predicates
-        // remove exactly the same rows apart from that path's bounded to_action_index clause
-        // and its mandatory push_generation fence, which the asymmetry note above explains.
+        // derived from src_chain and never stored); applyRetraction (src/hub/hub_db_sync/
+        // retractions.js) reads the same pair out of RETRACTION_CHAIN_COLUMNS / RETRACTION_COLUMNS,
+        // so the two predicates remove exactly the same rows apart from that path's bounded
+        // to_action_index clause and its mandatory push_generation fence, which the asymmetry
+        // note on purgeCrossChainMirrors in src/rollback/sweeps.js explains.
         // An APPLIED bridge leg is not unwound here: its bridge_settlements row is rollback
         // 'action' and drops with the orphaned block, so replay re-applies the transfer.
         query = `DELETE FROM bridge_transfers WHERE src_chain = ? AND src_action_index >= ?`;

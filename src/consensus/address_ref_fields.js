@@ -27,9 +27,12 @@
  *
  * BYTE-TWIN carried by two repos, xchain-indexer/src/consensus/address_ref_fields.js
  * and xchain-sdk/src/addressRefFields.js, with a conformance test on each side that
- * diffs the two. The SDK only COMPACTS the unconditional single-value fields (see
- * SDK_COMPACTABLE), a strict subset, while the indexer must register ids for the
- * FULL set (including multi-value SEND destinations and type-gated LIST items).
+ * diffs the two. The SDK's general path COMPACTS only the unconditional single-value
+ * fields (see SDK_COMPACTABLE), a strict subset; type-gated LIST items compact only
+ * on the SDK resolver's separate LIST path, which applies the same TYPE 2 and
+ * list_address_ref activation gates the indexer applies before resolving a ^id item.
+ * The indexer must register ids for the FULL set (including multi-value SEND
+ * destinations and type-gated LIST items).
  * The invariant is that the SDK-compacted set stays a subset of the
  * indexer-assigned set: the SDK must never emit a ^id the indexer would not
  * recognise.
@@ -69,7 +72,8 @@
 // Per-ACTION address-bearing fields. `multi:true` marks a field that can repeat
 // (multi-recipient SEND); `listType:true` marks LIST.ITEM, which holds addresses
 // only when the list's TYPE denotes an address list (the indexer gates on the
-// same TYPE the LIST handler uses; the SDK does not compact it). `noCompact:true`
+// same TYPE the LIST handler uses; the SDK compacts it only on its gated LIST
+// path, never through SDK_COMPACTABLE). `noCompact:true`
 // marks a single-value field the indexer still assigns an id for but the SDK must
 // NOT emit in `^<id>` form: DISPENSER.GET_ADDRESS and DISPENSER.ORACLE_ADDRESS
 // (see the consensus note above).
@@ -88,8 +92,9 @@ const ADDRESS_REF_FIELDS = {
 
 // The single-value fields the SDK may compact to ^id, as a flat field-name set
 // (the union across actions, IGNORING per-action `noCompact` exemptions). Excludes
-// multi-value (array) and type-gated (LIST.ITEM) fields, which the SDK leaves as
-// full addresses. This flat set documents the eligible field names and is the
+// multi-value (array) and type-gated (LIST.ITEM) fields; the SDK leaves multi-value
+// fields as full addresses and compacts LIST.ITEM only on its separate gated LIST
+// path. This flat set documents the eligible field names and is the
 // consensus-drift guard; the ACTION-AWARE gate the resolver actually applies is
 // SDK_COMPACTABLE_BY_ACTION below.
 const SDK_COMPACTABLE = (() => {

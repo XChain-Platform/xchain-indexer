@@ -2,13 +2,13 @@
   "version": 1,
   "entries": {
     "amount_representability_activation": {
-      "path": "src/utility/amount_representability_gate.js",
+      "path": "src/utility/validation/amount_representability_gate.js",
       "hash": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
       "twins": []
     },
     "anchor_reward_activation": {
       "path": "src/consensus/gates/anchor_reward_gate.js",
-      "hash": "86edade703c3228672bf43770ec9c2e79d0f933654a0ce6d851b04e970bb7462",
+      "hash": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
       "twins": [
         "xchain-hub"
       ]
@@ -21,12 +21,12 @@
       ]
     },
     "attest_broadcast_fee_activation": {
-      "path": "src/actions/attest/attest_broadcast_fee_gate.js",
-      "hash": "e904e6dafb4783b370a46837e75338dfc389d9825c82d14a7f8b7bc308b07d60",
+      "path": "src/actions/attest/gates/attest_broadcast_fee_gate.js",
+      "hash": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
       "twins": []
     },
     "attest_request_cap_activation": {
-      "path": "src/actions/attest/attest_request_cap_gate.js",
+      "path": "src/actions/attest/gates/attest_request_cap_gate.js",
       "hash": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
       "twins": []
     },
@@ -59,7 +59,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "260da1c6f73a0778d12d7c29c2922067be53559d28bd019e754a6fa2ee601080",
+      "hash": "4de1110b4bcdcc39f62664dfa843501536fec6065a585eeda60825dab1d26245",
       "twins": [
         "xchain-hub"
       ]
@@ -94,9 +94,16 @@
         "xchain-hub"
       ]
     },
+    "mirror_admission_margin_activation": {
+      "path": "src/consensus/gates/mirror_admission_margin_gate.js",
+      "hash": "38facb6199e5cd9f0f2a1b30b2c4eeb1319db0a41dda191adaa3daca6a816fb9",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
     "oracle_preload_causality_activation": {
       "path": "src/db/prices/oracle_preload_causality_gate.js",
-      "hash": "7ec32753dd425897a23dd2bc471324c75576a1b14738353db0024aca36b690e5",
+      "hash": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
       "twins": []
     },
     "price_batching_floor_activation": {
@@ -130,8 +137,9 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "620591ddfdc77d2bef26bab8efe5293db8ea6a4299c190bdff50b6778da827ac",
-      "twins": []
+      "hash": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
+      "twins": [],
+      "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
     "rollcall_activation": {
       "path": "src/consensus/gates/rollcall_gate.js",
@@ -168,7 +176,7 @@
     },
     "stake_weighted_quorum": {
       "path": "src/consensus/stake_weighted_quorum.js",
-      "hash": "afaee5777e8d909eace7a7106b294797014f74929fc4302c50a2ec31ac77a847",
+      "hash": "667f90202114618e33f1a29788fd51a21e508f207a3143b8c285aef4c079a25d",
       "twins": [
         "xchain-hub",
         "xchain-sync"
@@ -176,7 +184,7 @@
     },
     "stateHash": {
       "path": "src/consensus/state_hash.js",
-      "hash": "ab592efeee1c1791a7c684db0fc0e53c640cda600433adcfcc8386d189759776",
+      "hash": "5ac03b6746c93bc0615d0a4d857f5eb4861c44aa5890ee60e922794ed29bc785",
       "twins": [
         "xchain-sync"
       ]
@@ -204,7 +212,7 @@
     },
     "train_activation": {
       "path": "src/consensus/gates/train_gate.js",
-      "hash": "0e52179db25e4ef767aa8f695604b37a4a8d7c2dcc70afafadbd40b5760ca9eb",
+      "hash": "ce3a9989904471c34cc525539c736cdec90687009cde9abdfbb475994c9a970f",
       "twins": [
         "xchain-sync"
       ]
@@ -1397,7 +1405,7 @@
       "to": "e904e6dafb4783b370a46837e75338dfc389d9825c82d14a7f8b7bc308b07d60",
       "path": {
         "from": "src/attest_broadcast_fee_activation.js",
-        "to": "src/actions/attest/attest_broadcast_fee_gate.js"
+        "to": "src/actions/attest/gates/attest_broadcast_fee_gate.js"
       },
       "date": "2026-09-16",
       "reason": "W4 consolidation (row 18)"
@@ -1932,6 +1940,164 @@
       "to": "260da1c6f73a0778d12d7c29c2922067be53559d28bd019e754a6fa2ee601080",
       "reason": "oracle round time gate",
       "date": "2026-10-04"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "620591ddfdc77d2bef26bab8efe5293db8ea6a4299c190bdff50b6778da827ac",
+      "to": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
+      "reason": "route the protocol error log through the one logger, text unchanged",
+      "date": "2026-10-05"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
+      "to": "91eecda92a5961138e245106b2ecd67c5014d7dc1048d1c495bdd71c36f6d69f",
+      "reason": "readonly accessor own key time-table row",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "stake_weighted_quorum",
+      "from": "afaee5777e8d909eace7a7106b294797014f74929fc4302c50a2ec31ac77a847",
+      "to": "667f90202114618e33f1a29788fd51a21e508f207a3143b8c285aef4c079a25d",
+      "reason": "split meetsStakeThreshold into named helpers, logic unchanged",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "stateHash",
+      "from": "ab592efeee1c1791a7c684db0fc0e53c640cda600433adcfcc8386d189759776",
+      "to": "3b5cb6a37f58cb40b0020e2c0440d34e21810b9b316c3e71a5b0c2861a18eb21",
+      "reason": "split the state hash into section collectors, logic unchanged",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "oracle_preload_causality_activation",
+      "from": "7ec32753dd425897a23dd2bc471324c75576a1b14738353db0024aca36b690e5",
+      "to": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
+      "reason": "bind the LTC and DOGE preload and price barrier on the signed admission height once the mirror admission consumer gate is armed",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "amount_representability_activation",
+      "from": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
+      "to": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
+      "path": {
+        "from": "src/utility/amount_representability_gate.js",
+        "to": "src/utility/validation/amount_representability_gate.js"
+      },
+      "date": "2026-10-06",
+      "reason": "move into utility/validation"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
+      "to": "51c6cc00bb5242a160f933af173977fca6a49f2a7d8b0ee3d5e6d16d4c63e9b2",
+      "reason": "DISPENSER_REFILL registry row, unarmed on mainnet and testnet",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "91eecda92a5961138e245106b2ecd67c5014d7dc1048d1c495bdd71c36f6d69f",
+      "to": "ebb3851ccbf61b5b3571fe83a95b191eb7ecdfa4ea6f1dfb3bc68c07699dde07",
+      "reason": "DISPENSER_REFILL registry row, unarmed on mainnet and testnet, joined with the readonly accessor and slash rows",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "anchor_reward_activation",
+      "from": "86edade703c3228672bf43770ec9c2e79d0f933654a0ce6d851b04e970bb7462",
+      "to": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
+      "reason": "null threshold guard on the anchor and archive reward gates",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "attest_broadcast_fee_activation",
+      "from": "e904e6dafb4783b370a46837e75338dfc389d9825c82d14a7f8b7bc308b07d60",
+      "to": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
+      "reason": "rename two private helpers, logic unchanged",
+      "date": "2026-10-07"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "ebb3851ccbf61b5b3571fe83a95b191eb7ecdfa4ea6f1dfb3bc68c07699dde07",
+      "to": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
+      "reason": "add APPLY_LENGTH_METER registry row and VM-aligned flag times",
+      "date": "2026-10-07"
+    },
+    {
+      "id": "stateHash",
+      "from": "3b5cb6a37f58cb40b0020e2c0440d34e21810b9b316c3e71a5b0c2861a18eb21",
+      "to": "5ac03b6746c93bc0615d0a4d857f5eb4861c44aa5890ee60e922794ed29bc785",
+      "reason": "state_hash attest_batch_head class behind its own flag day",
+      "date": "2026-10-07"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
+      "to": "88b00386768cb815fc0c3749c087cd9e73576b9e37d692ea96fc5ea8b731f586",
+      "reason": "register the gas ceiling success protocol row",
+      "date": "2026-10-08"
+    },
+    {
+      "id": "mirror_admission_margin_activation",
+      "from": null,
+      "to": "38facb6199e5cd9f0f2a1b30b2c4eeb1319db0a41dda191adaa3daca6a816fb9",
+      "reason": "chain-specific mirror admission margin gate",
+      "date": "2026-10-08"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "260da1c6f73a0778d12d7c29c2922067be53559d28bd019e754a6fa2ee601080",
+      "to": "2847f3f69ac4280baa67d70562c63f210cc6c3d27b1713bf92cbfb4601994c91",
+      "reason": "add chain-specific mirror admission margin rows",
+      "date": "2026-10-08"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
+      "to": "8366a1bd6c70b422f8d01976e8814b00389acd92f166912a19b29d95f71962d3",
+      "reason": "register ITER_SET_METER twin",
+      "date": "2026-10-09"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "8366a1bd6c70b422f8d01976e8814b00389acd92f166912a19b29d95f71962d3",
+      "to": "3e1fb88ee52bc053396c6a5d4c4d32cac366bbfae9a65aa3931bf5a89266ceb2",
+      "reason": "add stake snapshot decimal strings registry row and flag times",
+      "date": "2026-10-09"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "88b00386768cb815fc0c3749c087cd9e73576b9e37d692ea96fc5ea8b731f586",
+      "to": "4bf3fd9ee0f13631ff8ba31ee0f55ece0ea97499d6092cb4eaa8c3a3ddcd6775",
+      "reason": "merge gas ceiling success with current registry rows",
+      "date": "2026-10-09"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "4bf3fd9ee0f13631ff8ba31ee0f55ece0ea97499d6092cb4eaa8c3a3ddcd6775",
+      "to": "56bcc99834e44db67b997941a74b94f641a47a0a8e1abcd2f84ffd52031c11ef",
+      "reason": "merge delegated signing key with current registry rows",
+      "date": "2026-10-09"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "4bf3fd9ee0f13631ff8ba31ee0f55ece0ea97499d6092cb4eaa8c3a3ddcd6775",
+      "to": "b382b3597c59a785e5bf4fdf6128e63e47014ad5c7b3bf4b3023ceba54664817",
+      "reason": "fail armed finite time gates closed on unusable block times",
+      "date": "2026-10-09"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "b382b3597c59a785e5bf4fdf6128e63e47014ad5c7b3bf4b3023ceba54664817",
+      "to": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
+      "reason": "merge delegated signing key with unusable block-time handling",
+      "date": "2026-10-10"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "2847f3f69ac4280baa67d70562c63f210cc6c3d27b1713bf92cbfb4601994c91",
+      "to": "4de1110b4bcdcc39f62664dfa843501536fec6065a585eeda60825dab1d26245",
+      "reason": "admit only unit-bearing registry rows into the active gate set",
+      "date": "2026-10-11"
     }
   ]
 }

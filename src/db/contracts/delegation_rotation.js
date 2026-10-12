@@ -23,9 +23,9 @@
 
 module.exports = {
 
-    // Materialize matured DELEGATE v1 signing-key rotations onto contract_stakes (#4366,
-    // gated by CONTRACT_DELEGATION_MATERIALIZE; the caller,
-    // utility.processContractDelegationMaterializations, owns the gate).
+    // Materialize matured DELEGATE v1 signing-key rotations onto contract_stakes,
+    // gated by CONTRACT_DELEGATION_MATERIALIZE; the caller also supplies the
+    // DELEGATION_ROTATE_IN_WINDOW decision).
     //
     // WHY THIS EXISTS. DELEGATE v1 wrote contract_delegations and stopped there, but all THREE
     // contract-stake lookup surfaces key on contract_stakes.signing_pubkey_id:
@@ -46,9 +46,9 @@ module.exports = {
     // delegation with the greatest (activation_block, action_index). Selecting all matured
     // delegations instead would let two live delegations rewrite the same rows in opposite
     // directions on every block forever. Its key is written to every valid, never-unstaked
-    // contract_stakes row on that slot, INCLUDING rows still inside their activation delay: a
-    // pending top-up left on the old key would surface as a second, phantom staker under the old
-    // pubkey the moment it activates.
+    // contract_stakes row on that slot, INCLUDING rows still inside their activation delay. Once
+    // DELEGATION_ROTATE_IN_WINDOW is active, rows inside their deactivation delay are eligible
+    // until their deactivation block as well.
     //
     // BOTH STAKE TABLES. The still-slashable contract_unstakes rows on the slot rotate too, even
     // though nothing shows them to a contract. slashContractStake Pass 2 finds cooldown-locked
@@ -71,11 +71,15 @@ module.exports = {
     // DETERMINISM. Every ordering key is replay-stable (block_index, activation_block,
     // action_index); the AUTO_INCREMENT journal id is never ordered on. Returns the applied
     // rotations (audit/tests); an empty array is the common case.
-    async materializeContractDelegations(currentBlock){
+    async materializeContractDelegations(currentBlock, rejectHeldKey, rotateInWindow = false){
         let applied  = [];
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return applied;
         let block = Number(currentBlock);
+        if(rejectHeldKey === undefined)
+            rejectHeldKey = await delegatedSigningKeyGateActive(this, block);
+        else
+            rejectHeldKey = rejectHeldKey === true;
 
         // 1. Governing delegations: matured, not revoked as-of this block, and the LATEST such
         //    delegation for their (target, source, tick) slot.
@@ -106,9 +110,13 @@ module.exports = {
         let unstakeStatusIds = (pending_id === null) ? [valid_id] : [valid_id, pending_id];
 
         // Slots under an active delegation; the revert pass below must leave these alone.
-        let governedSlots = await rotationPasses.rotateGoverned(this, governing, valid_id, unstakeStatusIds, block, applied);
+        let governedSlots = await rotationPasses.rotateGoverned(
+            this, governing, valid_id, unstakeStatusIds, block,
+            rotateInWindow === true, applied, rejectHeldKey);
 
-        await rotationPasses.revertUngoverned(this, governedSlots, valid_id, unstakeStatusIds, block, applied);
+        await rotationPasses.revertUngoverned(
+            this, governedSlots, valid_id, unstakeStatusIds, block,
+            rotateInWindow === true, applied, rejectHeldKey);
         return applied;
     },
 
@@ -116,20 +124,38 @@ module.exports = {
     // or by any active contract delegation. Guards the revert pass: handing a slot back its
     // original key while someone else holds that key would merge two owners into one staker
     // entry in the VM snapshot.
-    async contractPubkeyClaimedElsewhere(pubkeyId, slotRow, validStatusId){
-        let stakeRows = await this.doQuery(
-            `SELECT 1 FROM contract_stakes
-             WHERE signing_pubkey_id=? AND status_id=?
-               AND NOT (target_contract_index=? AND source_id=? AND tick_id=?)
+    async contractPubkeyClaimedElsewhere(pubkeyId, slotRow, validStatusId, blockIndex, mergedSlotQuery){
+        if(!mergedSlotQuery){
+            let stakeRows = await this.doQuery(
+                `SELECT 1 FROM contract_stakes
+                 WHERE signing_pubkey_id=? AND status_id=?
+                   AND NOT (target_contract_index=? AND source_id=? AND tick_id=?)
+                 LIMIT 1`,
+                [pubkeyId, validStatusId, Number(slotRow.target_contract_index), slotRow.source_id, slotRow.tick_id]);
+            if(stakeRows.length > 0) return true;
+            let delegationRows = await this.doQuery(
+                `SELECT 1 FROM contract_delegations
+                 WHERE signing_pubkey_id=? AND status_id=? AND deactivation_block IS NULL
+                 LIMIT 1`,
+                [pubkeyId, validStatusId]);
+            return delegationRows.length > 0;
+        }
+        let rows = await this.doQuery(
+            `SELECT 1 FROM (
+                 SELECT source_id, target_contract_index, tick_id
+                 FROM contract_stakes
+                 WHERE signing_pubkey_id=? AND status_id=? AND deactivation_block IS NULL
+                 UNION ALL
+                 SELECT source_id, target_contract_index, tick_id
+                 FROM contract_delegations
+                 WHERE signing_pubkey_id=? AND status_id=?
+                   AND (deactivation_block IS NULL OR deactivation_block > ?)
+             ) AS claims
+             WHERE NOT (target_contract_index=? AND source_id=? AND tick_id=?)
              LIMIT 1`,
-            [pubkeyId, validStatusId, Number(slotRow.target_contract_index), slotRow.source_id, slotRow.tick_id]);
-        if(stakeRows.length > 0) return true;
-        let delegationRows = await this.doQuery(
-            `SELECT 1 FROM contract_delegations
-             WHERE signing_pubkey_id=? AND status_id=? AND deactivation_block IS NULL
-             LIMIT 1`,
-            [pubkeyId, validStatusId]);
-        return delegationRows.length > 0;
+            [pubkeyId, validStatusId, pubkeyId, validStatusId, blockIndex,
+                Number(slotRow.target_contract_index), slotRow.source_id, slotRow.tick_id]);
+        return rows.length > 0;
     },
 
     // Append a signing-key rotation to the reorg-restore journal. Mirrors
@@ -152,20 +178,27 @@ const rotationPasses = {
 
     // Step 1, per governing delegation: rotate its slot's stake and cooldown rows onto the
     // delegated key. Returns the governed slot keys the revert pass must leave alone.
-    async rotateGoverned(db, governing, valid_id, unstakeStatusIds, block, applied){
+    async rotateGoverned(db, governing, valid_id, unstakeStatusIds, block, rotateInWindow, applied, rejectHeldKey){
         let unstakePlace     = unstakeStatusIds.map(() => '?').join(',');
+        let stakeWindow      = rotateInWindow
+            ? 'AND (deactivation_block IS NULL OR deactivation_block > ?)'
+            : 'AND deactivation_block IS NULL';
         let governedSlots = new Set();
         for(let d of governing){
             governedSlots.add(String(d.target_contract_index) + '|' + String(d.source_id) + '|' + String(d.tick_id));
+            if(rejectHeldKey && await db.contractPubkeyClaimedElsewhere(
+                d.signing_pubkey_id, d, valid_id, block, true))
+                continue;
             // Rows that already carry the delegated key are skipped, so a materialized rotation
             // is a no-op on every later block (and writes no further journal rows).
             let stakeRows = await db.doQuery(
                 `SELECT action_index, signing_pubkey_id FROM contract_stakes
                  WHERE target_contract_index=? AND source_id=? AND tick_id=? AND status_id=?
-                   AND deactivation_block IS NULL
+                   ${stakeWindow}
                    AND signing_pubkey_id<>?
                  ORDER BY action_index ASC`,
-                [Number(d.target_contract_index), d.source_id, d.tick_id, valid_id, d.signing_pubkey_id]);
+                [Number(d.target_contract_index), d.source_id, d.tick_id, valid_id,
+                    ...(rotateInWindow ? [block] : []), d.signing_pubkey_id]);
             for(let row of stakeRows)
                 applied.push(await db.rotateContractStakeKey('contract_stakes', row, d.action_index, d.signing_pubkey_id, block));
             let unstakeRows = await db.doQuery(
@@ -181,13 +214,17 @@ const rotationPasses = {
         return governedSlots;
     },
 
-    async revertUngoverned(db, governedSlots, valid_id, unstakeStatusIds, block, applied){
+    async revertUngoverned(db, governedSlots, valid_id, unstakeStatusIds, block, rotateInWindow, applied, mergedSlotQuery){
         // 2. Revert pass: rows whose slot no longer has a governing delegation but that still
         //    carry a delegated key. The FIRST journal row per (table, row) carries the
         //    pre-rotation (original) key in prev_signing_pubkey_id; (block_index,
         //    delegation_action_index) is the deterministic order (at most one journal row per
         //    row per block, so the tiebreak is defensive).
-        for(let spec of [{ table: 'contract_stakes',   extra: 'AND t.deactivation_block IS NULL', args: [valid_id] },
+        let stakeWindow = rotateInWindow
+            ? 'AND (t.deactivation_block IS NULL OR t.deactivation_block > ?)'
+            : 'AND t.deactivation_block IS NULL';
+        for(let spec of [{ table: 'contract_stakes',   extra: stakeWindow,
+                           args: rotateInWindow ? [valid_id, block] : [valid_id] },
                          { table: 'contract_unstakes', extra: '', args: unstakeStatusIds }]){
             let statusPredicate = (spec.table === 'contract_stakes')
                 ? 't.status_id=?'
@@ -213,7 +250,8 @@ const rotationPasses = {
                 let slot = String(row.target_contract_index) + '|' + String(row.source_id) + '|' + String(row.tick_id);
                 if(governedSlots.has(slot)) continue;
                 if(String(row.current_pubkey_id) === String(row.original_pubkey_id)) continue;
-                if(await db.contractPubkeyClaimedElsewhere(row.original_pubkey_id, row, valid_id)) continue;
+                if(await db.contractPubkeyClaimedElsewhere(
+                    row.original_pubkey_id, row, valid_id, block, mergedSlotQuery)) continue;
                 applied.push(await db.rotateContractStakeKey(spec.table,
                     { action_index: row.stake_action_index, signing_pubkey_id: row.current_pubkey_id },
                     row.delegation_action_index, row.original_pubkey_id, block));
@@ -222,3 +260,11 @@ const rotationPasses = {
     },
 
 };
+
+async function delegatedSigningKeyGateActive(db, block){
+    let indexer = db.indexer;
+    let actions = indexer && indexer.actions;
+    let protocolChanges = actions && actions.protocolChanges;
+    if(!protocolChanges || typeof protocolChanges.isEnabled !== 'function') return false;
+    return await protocolChanges.isEnabled('STAKE_DELEGATED_SIGNING_KEY', block);
+}

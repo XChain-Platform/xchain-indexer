@@ -100,6 +100,16 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             '. Edit xchain-documentation/protocol/action-manifest.json + re-vendor, or wire src/actions/actions_class/dispatch.js.');
     });
 
+    it('settlement anchors are present and remain render-only', function () {
+        const anchors = Object.entries(MANIFEST.actions)
+            .filter(([, action]) => action.category === 'settlement-anchor')
+            .map(([name, action]) => ({ name, action }));
+        assert.deepStrictEqual(anchors, [
+            { name: 'LIST_SHARE', action: { category: 'settlement-anchor', explorerRender: true } },
+            { name: 'XPOLICY', action: { category: 'settlement-anchor', explorerRender: true } },
+        ]);
+    });
+
     // The manifest's `aliases` map is expanded to canonical names before any gate
     // (indexer ACTION_ALIASES module constant in src/actions/index.js; the constructor
     // copies it into this.actionAliases via Object.assign). It was copied into

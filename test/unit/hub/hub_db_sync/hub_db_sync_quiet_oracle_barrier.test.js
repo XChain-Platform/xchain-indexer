@@ -2,10 +2,17 @@
 
 const assert = require('assert');
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
+const { consumerTargetHeight } = require('../../../../src/consensus/gates/mirror_admission_margin_gate.js');
 
 const BLOCK_HEIGHT = 68000000;
 const BLOCK_TIME = 1791060000;
 const LAST_ORACLE_PRICE = 1790549561;
+
+// One block short of the target the registry selects for this table at BLOCK_HEIGHT, so the
+// published heights stay stale whatever chain margin a release cut arms for DOGE testnet.
+function staleHeight(table) {
+    return consumerTargetHeight(table, 'DOGE', 'testnet', BLOCK_HEIGHT) - 1;
+}
 
 function makeQuietSync() {
     const sync = new HubDbSync({ doQuery: async () => [] }, {
@@ -20,9 +27,9 @@ function makeQuietSync() {
     sync.oracleSyncTimestamp = LAST_ORACLE_PRICE;
     sync.matchSyncTimestamp = LAST_ORACLE_PRICE;
     sync.noteHeights({
-        price_snapshots: { DOGE: BLOCK_HEIGHT - 5 },
-        oracle_prices: { DOGE: BLOCK_HEIGHT - 2 },
-        cross_chain_matches: { DOGE: BLOCK_HEIGHT - 5 }
+        price_snapshots: { DOGE: staleHeight('price_snapshots') },
+        oracle_prices: { DOGE: staleHeight('oracle_prices') },
+        cross_chain_matches: { DOGE: staleHeight('cross_chain_matches') }
     });
     return sync;
 }

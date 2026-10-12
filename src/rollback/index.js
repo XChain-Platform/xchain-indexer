@@ -50,7 +50,7 @@ class Rollback {
         // Parse in indexer configuration
         this.config    = indexer.config;
 
-        // Same effective provider map actions/attest.js builds (DEFAULTS overlaid with
+        // Same effective provider map actions/attest/index.js builds (DEFAULTS overlaid with
         // config.ATTESTATION.PROVIDERS), so the reorg recompute of missed_count resolves
         // the identical provider stake floor the live expiry path did.
         this.providerRegistry = new ProviderRegistry(this.config);
@@ -95,9 +95,9 @@ class Rollback {
         // single unambiguous height to hand it: the rolled-back tip, the target block and the
         // block a restored row was earned in all differ. A handle here is therefore a footgun,
         // not a convenience, so it is left off the surface rather than left present-and-unread.
-        // Rollback's flag-day gating goes through the snapshot-anchored twin predicates instead
-        // (swq.isStakeWeightedQuorumActive above, keyed on the row's OWN snapshot block), which
-        // is the only reading a re-derivation can make without inventing a height.
+        // Rollback's flag-day gates instead take an explicit height at each call site: the attestation
+        // recompute (attestation_stats.js capabilitySnapshotForBlock) uses the request's DECLARED block,
+        // as responsible_set.js does; purge.js and db/rollback/batch_heads.js use the rollback's target block.
 
         this.initRollbackTableLists();
 
@@ -179,7 +179,8 @@ class Rollback {
 
     // The atomic part of the reorg: every delete, reset and re-derive, plus the hub
     // retractions written ahead of the commit so they survive a crash. A throw anywhere
-    // inside leaves the database untouched, and the caller re-detects the reorg and retries.
+    // inside leaves the database untouched; it ends the poll pass and the process (runBlockLoop
+    // has no catch), and the restarted indexer re-detects the reorg and retries.
     async runRollbackTransaction(block_index, scope, markets, addresses, tickers){
         let { firstActionIndex, lastActionIndex, unlandedAttestBatches } = scope;
         let staged = null;
@@ -219,15 +220,15 @@ class Rollback {
 
             await this.refreshDerivedProjections(block_index, addresses, tickers, markets);
 
-                staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches);
+            staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches);
 
             await this.commitAndInvalidateCaches();
 
         } catch(e) {
             // Roll back so the DB is left untouched rather than in a partial rollback state
             await this.indexerDb.rollbackTransaction();
-            // Clear the reorg marker on failure too so it can't stick; the caller re-detects
-            // the reorg and retries, re-arming it on the next attempt (#1812).
+            // Clear the reorg marker on failure too so it can't stick; the next pass (after the
+            // restart this throw causes) re-detects the reorg and retries, re-arming it (#1812).
             if(this.indexer) this.indexer.stallReason = null;
             throw e;
         }

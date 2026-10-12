@@ -12,6 +12,11 @@
 
 'use strict';
 
+// The ATTEST batch wire versions, taken from the codec rather than written as literals
+// here, so this completeness read and the parser cannot disagree about which versions
+// are a batch head and its chunks.
+const abw = require('../../actions/attest/attest_batch_wire.js');
+
 module.exports = {
     async getCompleteAttestBatchesByWindowStart(windowStartFrom, windowStartTo, limit) {
         let query = `SELECT h.batch_window_start, h.batch_window_end, h.batch_row_count,
@@ -21,7 +26,7 @@ module.exports = {
                      LEFT JOIN actions ha ON ha.action_index = h.action_index
                      LEFT JOIN transactions ht ON ht.tx_index = ha.tx_index
                      LEFT JOIN index_transactions it ON it.id = ht.tx_hash_id
-                     WHERE h.version = 5
+                     WHERE h.version = ${abw.ATTEST_BATCH_HEAD_VERSION}
                        AND hs.status = 'valid'
                        AND h.batch_window_start BETWEEN ? AND ?
                        AND h.batch_total_chunks IS NOT NULL
@@ -36,7 +41,7 @@ module.exports = {
                                    JOIN index_statuses cs ON cs.id = c.status_id
                                    LEFT JOIN actions ca ON ca.action_index = c.action_index
                                    WHERE c.request_id = h.request_id
-                                     AND c.version IN (5, 6)
+                                     AND c.version IN (${abw.ATTEST_BATCH_HEAD_VERSION}, ${abw.ATTEST_BATCH_CONTINUATION_VERSION})
                                      AND cs.status = 'valid'
                                      AND ca.source_id = ha.source_id
                                      AND c.batch_total_chunks = h.batch_total_chunks

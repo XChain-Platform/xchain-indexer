@@ -101,8 +101,10 @@ async function processSlashEmission(emission, data, slashPosition, slashLedger){
     let { contractIndex, pubkey, token, amount, contractInfo, pubkeyId, tickId } = target;
 
     // Deduct (returns actual slashed total; may be less than requested if balance lower).
-    // Pass BLOCK_INDEX so Pass 1 slashes only still-active stake; unstaked-but-cooling tokens are
-    // slashed from contract_unstakes (Pass 2), preventing the double-count / supply inflation.
+    // BLOCK_INDEX picks the slash-grid flag-day and keys the contract_slash_debits rows a reorg
+    // restores; it does NOT filter Pass 1. Pass 1 skips unstaking rows by `deactivation_block IS
+    // NULL` (Pass 2 slashes cooling tokens from contract_unstakes), and that is what prevents the
+    // double-count / supply inflation; see the Pass 1 note in src/db/contracts/slash.js.
     let deduction = await this.indexerDb.slashContractStake(contractIndex, pubkeyId, tickId, amount, parseInt(data['BLOCK_INDEX']), data['ACTION_INDEX'], slashPosition);
     let slashed   = deduction.total;
     if(!this.util.bcgt(slashed, '0')){

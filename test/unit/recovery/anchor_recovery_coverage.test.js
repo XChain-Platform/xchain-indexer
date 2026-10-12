@@ -22,6 +22,20 @@ function quorumHubMirrors(registry){
         row.hashed.classes.includes('quorum'));
 }
 
+// Every hub mirror, hashed or not: a mirror that feeds consensus without being
+// in a hash preimage still has to state whether recovery rebuilds it.
+function hubMirrors(registry){
+    return registry.allTables().filter(row => row.replication === 'hub-mirror');
+}
+
+// The rows whose recovery policy is missing, invalid, or 'none' without a note.
+function policyViolations(rows){
+    return rows.filter(row => !VALID_POLICIES.has(row.anchorRecovery) ||
+        (row.anchorRecovery === 'none' &&
+            !(typeof row.anchorRecoveryNote === 'string' && row.anchorRecoveryNote.trim())))
+        .map(row => row.table);
+}
+
 function recoverySources(){
     const parts = fs.readdirSync(path.join(ROOT, 'bin', 'recovery'))
         .filter(name => name.endsWith('.js'))
@@ -51,8 +65,25 @@ describe('anchor archive recovery registry coverage @regression @tier1', functio
         }
     });
 
+    it('classifies every hub mirror with a valid recovery policy, hashed or not', function () {
+        const rows = hubMirrors(lifecycle);
+        assert.ok(rows.length >= quorumHubMirrors(lifecycle).length && rows.length > 0,
+            'the hub-mirror selection must not be vacuous or narrower than the quorum class');
+        assert.deepStrictEqual(policyViolations(rows), []);
+    });
+
+    it('reports an unhashed hub mirror that declares no recovery policy', function () {
+        const fake = { allTables: () => [
+            { table: 'fake_unhashed_mirror', replication: 'hub-mirror', hashed: { classes: [] } },
+            { table: 'fake_noted_mirror', replication: 'hub-mirror', hashed: { classes: [] },
+                anchorRecovery: 'none', anchorRecoveryNote: 'rebuilt only by the hub re-mirror' },
+            { table: 'fake_local', replication: 'local', hashed: { classes: [] } },
+        ] };
+        assert.deepStrictEqual(policyViolations(hubMirrors(fake)), ['fake_unhashed_mirror']);
+    });
+
     it('exports the archive policy rows through anchorRecoveryTables()', function () {
-        const declared = quorumHubMirrors(lifecycle)
+        const declared = hubMirrors(lifecycle)
             .filter(row => row.anchorRecovery === 'archive')
             .map(row => row.table);
         assert.deepStrictEqual(lifecycle.anchorRecoveryTables(), declared);
@@ -89,7 +120,7 @@ describe('anchor archive recovery registry coverage @regression @tier1', functio
         }
 
         const syncLifecycle = require(syncRegistryPath);
-        for(const row of quorumHubMirrors(lifecycle)){
+        for(const row of hubMirrors(lifecycle)){
             const twin = syncLifecycle.entry(row.table);
             assert.ok(twin, row.table + ' is absent from the xchain-sync lifecycle registry');
             assert.strictEqual(twin.anchorRecovery, row.anchorRecovery,

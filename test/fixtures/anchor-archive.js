@@ -40,6 +40,11 @@ const MATCH_KEYS = ['match_id', 'snapshot_block', 'network',
     'a_chain', 'a_action_index', 'a_kind', 'a_tick', 'a_amount', 'a_filled_before', 'a_ownership', 'a_payout_addr', 'a_payout_legs',
     'b_chain', 'b_action_index', 'b_kind', 'b_tick', 'b_amount', 'b_filled_before', 'b_ownership', 'b_payout_addr', 'b_payout_legs',
     'effective_time', 'finalizing_view', 'validator_signatures', 'status'];
+const ADMIT_KEYS = ['admit_block_btc', 'admit_block_ltc', 'admit_block_doge'];
+function withAdmitBlocks(out, row) {
+    for (let k of ADMIT_KEYS) if (row[k] != null) out[k] = Number(row[k]);
+    return out;
+}
 function serializeMatch(m) {
     let out = {};
     for (let k of MATCH_KEYS) {
@@ -51,7 +56,7 @@ function serializeMatch(m) {
         else if (k === 'a_payout_legs' || k === 'b_payout_legs') { if (v != null) out[k] = String(v); }  // omit-when-null (hub parity)
         else out[k] = String(v == null ? '' : v);
     }
-    return out;
+    return withAdmitBlocks(out, m);
 }
 function matchCanonical(m) {
     let raw = ['XMATCH', m.match_id, String(m.snapshot_block),
@@ -88,7 +93,7 @@ function serializeCall(c) {
         else
             out[k] = String(v == null ? '' : v);
     }
-    return out;
+    return withAdmitBlocks(out, c);
 }
 
 const BRIDGE_KEYS = ['id', 'transfer_id', 'snapshot_block', 'network',

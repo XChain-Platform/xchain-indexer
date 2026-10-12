@@ -14,16 +14,16 @@
  *
  * The SHARED block, part 4 of 5: stateHash to token_bridge_activation
  *
- * One SHARED block part. The region between the two marker lines is
- * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
- * and xchain-sdk: each consumer keeps the same bytes and replaces only the
- * require line below with its own queue module. What may live between the
- * markers: `addGate(key, unit, table)` calls with LITERAL values (a table, a
- * number, a string or literals joined by +, a RegExp, an array), one call per
- * row, at column zero, and comments. No require, no computed value, nothing
- * from outside the block but addGate, UNARMED and UNPINNED. A regtest entry a
- * venue arms from its environment is written UNPINNED here and armed by the
- * wrapper at registration (shared_rows.js), so the block stays data.
+ * This file is a whole-file byte twin copied unchanged into five consumers:
+ * xchain-indexer, xchain-sync, xchain-hub, xchain-explorer and xchain-sdk.
+ * The identical bytes include the header, queue require, markers and rows.
+ * Between the markers may live `addGate(key, unit, table)` calls with LITERAL
+ * values (a table, a number, a string or literals joined by +, a RegExp, an
+ * array), one call per row, at column zero, and comments. No require, no
+ * computed value, nothing from outside the block but addGate, UNARMED and
+ * UNPINNED. A regtest entry a venue arms from its environment is written
+ * UNPINNED here and armed by the wrapper at registration (shared_rows.js), so
+ * the marker-delimited body stays data.
  *
  * Rows are grouped by module stem in alphabetical order; a stem's rows keep
  * the order the module declared them. Keys never change (I4).
@@ -163,7 +163,8 @@ addGate('state_subtree_activation.RESERVED_SUBTREES', 'constant', ['ownership_ro
 // The ordering rule is satisfied at 0: a slot must never arm below its chain's
 // state_key_collation_activation height, or the SMT is built over a
 // collation-FOLDED key set and forks. All three testnets are genesis-active
-// there too (see state_key_collation_activation.js), so nothing precedes it.
+// there too (see the state_key_collation_activation row above), so nothing
+// precedes it.
 //
 // Everything else is still inert, on every chain and network. MAINNET IS UNARMED
 // for every slot.
@@ -376,11 +377,11 @@ addGate('swq_source_cap_activation.SWQ_SOURCE_CAP_ACTIVATION', 'height', {
 // slot because snapshot_block is a BTC height, so an arming cut must size BTC to arm LAST in
 // wall clock. Regtest is 0 so the e2e rail exercises the armed rule from genesis.
 addGate('token_bridge_activation.TOKEN_BRIDGE_ACTIVATION', 'height', {
-    mainnet: 9999999999,
+    mainnet: UNARMED,
     'BTC:testnet': 154567, // set by the v0.21.0 freeze height plan
     'LTC:testnet': 4903068, // set by the v0.21.0 freeze height plan
     'DOGE:testnet': 67951140, // set by the v0.21.0 freeze height plan
-    testnet: 9999999999,
+    testnet: UNARMED,
     regtest: 0,
 });
 // SHARED-GATES END

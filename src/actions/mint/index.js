@@ -54,14 +54,6 @@ class Mint {
 
     // Handle parsing the MINT transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // Example payloads by FORMAT version:
-        // let str    = "0|JDOG|1|";
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // Wire parse: the FORMAT gate, PARAMS, number formats and the ^<id> DESTINATION
         ({ data, error } = await validate.parseWire.call(this, params, data, error));
 

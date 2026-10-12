@@ -22,6 +22,7 @@
 
 const { buildHealthResponse, committedView, inFlightBlockIndex } = require('../health');
 const { chainBlockHash } = require('../chain_block_hash');           // decoder-side hash for the block-hash triple
+const { clearBlock } = require('../../chain/price_landing_clear');
 const merkle        = require('../../consensus/merkle');
 const stateSubtree  = require('../../consensus/gates/state_subtree_gate');
 const { getLogger } = require('../../observability/index.js');
@@ -102,6 +103,7 @@ function latestBlockRpc({ indexer }){
                 let inFlight    = inFlightBlockIndex(indexer.indexerDb);
                 let block_index = await committedView(indexer.indexerDb).getLatestBlockIndex();
                 if(inFlight != null && inFlight <= block_index) inFlight = null;
+                let delivered = await hubPushDelivered(indexer, block_index);
                 return {
                     block_index,
                     in_flight_block: inFlight,
@@ -109,7 +111,8 @@ function latestBlockRpc({ indexer }){
                     lag: indexer.lastDecoderBlock != null
                         ? indexer.lastDecoderBlock - block_index
                         : null,
-                    hub_push_delivered: await hubPushDelivered(indexer, block_index),
+                    hub_push_delivered: delivered,
+                    price_landing_clear: await priceLandingClear(indexer, delivered),
                 };
             } catch (err) {
                 getLogger().error('getlatestblock error:', err);
@@ -138,6 +141,26 @@ async function hubPushDelivered(indexer, tip){
         return { block, protocol_time: Number(time) };
     } catch (err) {
         getLogger().error('hub_push_delivered read failed:', err);
+        return null;
+    }
+}
+
+// The highest decoder block past the delivered frontier with no PRICE action between, with its
+// protocol time. Null when the delivered frontier or the decoder tip is unknown, or any read
+// fails, so unknown is never published as clear.
+async function priceLandingClear(indexer, delivered){
+    try {
+        if(!delivered || indexer.lastDecoderBlock == null || !indexer.decoderDb) return null;
+        let decoderDb = committedView(indexer.decoderDb);
+        let tip       = Number(indexer.lastDecoderBlock);
+        let first     = await decoderDb.getFirstPriceBlockAfter(delivered.block, tip);
+        let block     = clearBlock({ delivered: delivered.block, decoderTip: tip, firstPriceBlock: first });
+        if(block == null) return null;
+        let time = await decoderDb.getBlockTime(block);
+        if(time === false || time == null) return null;
+        return { block, protocol_time: Number(time) };
+    } catch (err) {
+        getLogger().error('price_landing_clear read failed:', err);
         return null;
     }
 }

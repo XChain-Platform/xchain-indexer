@@ -10,6 +10,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
+const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
 
 function makeSync() {
     const queries = [];
@@ -83,7 +84,7 @@ describe('HubDbSync per-connection drain positions @regression @tier1', function
         sinon.stub(sync, 'localColumns').resolves(new Set(['id', 'chain']));
         sinon.stub(sync, 'mirrorNetworkScope').resolves(null);
         sinon.stub(sync, 'applyRow').resolves();
-        const httpGet = sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 3, chain: 'BTC' }], watermark: 9 });
+        const httpGet = sinon.stub(sync, 'httpGet').resolves({ schema_version: HUB_SCHEMA_VERSION, rows: [{ id: 3, chain: 'BTC' }], watermark: 9 });
 
         assert.strictEqual(await sync.bootstrapTable('state_checkpoints'), 9);
         assert.match(httpGet.firstCall.args[0], /since_id=0/);

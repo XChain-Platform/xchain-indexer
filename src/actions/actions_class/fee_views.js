@@ -20,7 +20,7 @@
  *
  ********************************************************************/
 
-const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
 
 // Which database the fee schedule's price read came out of. Resolved exactly the way
 // util.getFeeOraclePrices resolves it, so the disclosure cannot drift from the

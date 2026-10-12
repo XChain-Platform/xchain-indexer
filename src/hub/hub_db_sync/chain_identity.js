@@ -102,8 +102,17 @@ module.exports = {
     async purgeForeignChainIdRows(previous) {
         let expected = this._expectedBtcChainId;
         if (!expected) return 0;
-        let total = 0, refreshMatches = false, refreshCalls = false, refreshBridge = false,
-            refreshPolicy = false, refreshListShare = false;
+        let scoped = await this.purgeChainScopedTables(expected, previous);
+        let total = scoped.total;
+        // These quorum-signed tables predate btc_chain_id on their row shape. A change
+        // in the followed Bitcoin identity invalidates the whole local network slice.
+        if (previous) total += await this.purgeLegacyChainTables();
+        await this.refreshPurgedBarriers(scoped.refresh);
+        return total;
+    },
+
+    async purgeChainScopedTables(expected, previous) {
+        let total = 0, refresh = { matches: false, calls: false, bridge: false, policy: false, listShare: false };
         for (let table of CROSS_CHAIN_TABLES) {
             let result;
             try {
@@ -127,47 +136,51 @@ module.exports = {
             total += removed;
             getLogger().warn('HubDbSync: purged ' + removed + ' ' + table + ' row(s) from ' +
                 (previous ? ('chain ' + previous) : 'another chain'));
-            if (table === 'cross_chain_matches') refreshMatches = true;
-            if (table === 'cross_chain_calls')   refreshCalls   = true;
-            if (table === 'bridge_transfers')    refreshBridge  = true;
-            if (table === 'policy_snapshots')    refreshPolicy  = true;
-            if (table === 'list_snapshots')      refreshListShare = true;
+            if (table === 'cross_chain_matches') refresh.matches = true;
+            if (table === 'cross_chain_calls')   refresh.calls   = true;
+            if (table === 'bridge_transfers')    refresh.bridge  = true;
+            if (table === 'policy_snapshots')    refresh.policy  = true;
+            if (table === 'list_snapshots')      refresh.listShare = true;
         }
-        // These quorum-signed tables predate btc_chain_id on their row shape. A change
-        // in the followed Bitcoin identity invalidates the whole local network slice.
-        if (previous) {
-            for (let table of ['state_checkpoints', 'anchor_reward_attestations']) {
-                let result;
-                try {
-                    let scoped = typeof this.network === 'string' && this.network !== '';
-                    result = await this.hubDb.doQuery('DELETE FROM ' + table + (scoped ? ' WHERE network = ?' : ''),
-                                                      scoped ? [this.network] : undefined);
-                } catch (e) {
-                    getLogger().warn('HubDbSync: could not clear rows from ' + table + ' after btc_chain_id changed:', e);
-                    continue;
-                }
-                let removed = Number(result && result.affectedRows);
-                if (!Number.isFinite(removed)) {
-                    getLogger().warn('HubDbSync: btc_chain_id change purge of ' + table + ' reported no result');
-                    continue;
-                }
-                if (removed > 0) total += removed;
+        return { total: total, refresh: refresh };
+    },
+
+    async purgeLegacyChainTables() {
+        let total = 0;
+        for (let table of ['state_checkpoints', 'anchor_reward_attestations']) {
+            let result;
+            try {
+                let scoped = typeof this.network === 'string' && this.network !== '';
+                result = await this.hubDb.doQuery('DELETE FROM ' + table + (scoped ? ' WHERE network = ?' : ''),
+                                                  scoped ? [this.network] : undefined);
+            } catch (e) {
+                getLogger().warn('HubDbSync: could not clear rows from ' + table + ' after btc_chain_id changed:', e);
+                continue;
             }
+            let removed = Number(result && result.affectedRows);
+            if (!Number.isFinite(removed)) {
+                getLogger().warn('HubDbSync: btc_chain_id change purge of ' + table + ' reported no result');
+                continue;
+            }
+            if (removed > 0) total += removed;
         }
+        return total;
+    },
+
+    async refreshPurgedBarriers(refresh) {
         // Re-read every affected barrier after the purge. The clock-keyed barriers may
         // have cached a removed maximum; the height-keyed list barrier must re-probe the
         // table and re-evaluate its waiters over the cleaned mirror.
         try {
-            if (refreshMatches) await this.refreshMatchSyncTimestamp();
-            if (refreshCalls)   await this.refreshCallSyncTimestamp();
-            if (refreshBridge)  await this.refreshBridgeSyncTimestamp();
-            if (refreshPolicy)  await this.refreshPolicySyncTimestamp();
-            if (refreshListShare) await this.refreshListShareSyncState();
-            if (refreshMatches || refreshCalls) await this.releaseSnapshotWaiters();
+            if (refresh.matches) await this.refreshMatchSyncTimestamp();
+            if (refresh.calls)   await this.refreshCallSyncTimestamp();
+            if (refresh.bridge)  await this.refreshBridgeSyncTimestamp();
+            if (refresh.policy)  await this.refreshPolicySyncTimestamp();
+            if (refresh.listShare) await this.refreshListShareSyncState();
+            if (refresh.matches || refresh.calls) await this.releaseSnapshotWaiters();
         } catch (e) {
             getLogger().warn('HubDbSync: could not refresh the sync barriers after a foreign-chain purge:', e);
         }
-        return total;
     },
 
     // True when this row belongs to a Bitcoin chain other than the one this mirror follows,

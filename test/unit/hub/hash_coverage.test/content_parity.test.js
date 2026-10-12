@@ -147,3 +147,45 @@ describe('Hash coverage guard @regression', function () {
         });
     });
 });
+
+describe('Hash coverage guard @regression', function () {
+    describe('content-parity coverage declaration', function () {
+        it('in-place parity columns stay declared apart and match every order_matches UPDATE', function () {
+            // Kept out of the by-design map so the end-to-end byte oracle still compares them.
+            assert.deepStrictEqual(Object.keys(lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS), ['order_matches']);
+            assert.ok(!lifecycle.CONTENT_PARITY_EXCLUDED_COLUMNS.order_matches);
+            assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('order_matches'), ['status_id']);
+            const updates = orderMatchUpdateColumns();
+            // createOrderMatch re-writes its own action's row, so it stays in the writing block.
+            const rewrites = updates.filter((cols) => cols.length > 1);
+            assert.strictEqual(rewrites.length, 1, 'only createOrderMatch may write several match columns: ' +
+                JSON.stringify(rewrites));
+            assert.ok(rewrites[0].includes('settlement_type') && rewrites[0].includes('give_amount'));
+            const later = updates.filter((cols) => cols.length === 1);
+            assert.ok(later.length >= 3, 'found too few status UPDATEs; the source scan is broken');
+            assert.deepStrictEqual([...new Set(later.flat())], ['status_id'],
+                'an order_matches UPDATE now writes another column in place; declare it in ' +
+                'CONTENT_PARITY_IN_PLACE_COLUMNS or content parity raises a false alarm');
+        });
+    });
+});
+
+// The assigned columns of every `UPDATE order_matches SET ...` under src/, one list per statement.
+function orderMatchUpdateColumns() {
+    const root = path.join(__dirname, '../../../../src');
+    const out = [];
+    const walk = (dir) => {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            const p = path.join(dir, e.name);
+            if (e.isDirectory()) walk(p);
+            else if (e.name.endsWith('.js')) collectSetColumns(fs.readFileSync(p, 'utf8'), out);
+        }
+    };
+    walk(root);
+    return out;
+}
+
+function collectSetColumns(text, out) {
+    for (const m of text.matchAll(/UPDATE\s+`?order_matches`?\s+(?:\w+\s+)?SET\s+([\s\S]*?)\s+WHERE\b/gi))
+        out.push([...m[1].matchAll(/(?:^|,)\s*(?:\w+\.)?`?(\w+)`?\s*=/g)].map((c) => c[1]));
+}

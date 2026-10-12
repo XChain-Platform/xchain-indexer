@@ -79,7 +79,8 @@ module.exports = {
             case 'SWEEP_OWNERSHIP':  return 'ownership';
             case 'ORDER_CREATE':
             case 'SWAP_CREATE':
-            case 'DISPENSER_CREATE': return 'trade';
+            case 'DISPENSER_CREATE':
+            case 'DISPENSER_REFILL': return 'trade';
             case 'DESTROY':          return 'burn';
             // Both are wired and gating today: mint.js runs the guard on supply creation, stake.js
             // on the v3 contract-targeted path only (v1/v2 capability stakes are never gated).
@@ -264,6 +265,9 @@ module.exports = {
         let guard = await actions.actionExecute.runControllerGuard(controllerGuardRequest(this, controllerIndex, opts, data));
         if(!guard.allow)
             return { error: guard.reason, guardFee: 0, payoutLegs: null };
-        return { error: null, guardFee: this.bcmul(guard.gasBilled, db.config['GAS_PRICE'], 8), payoutLegs: guard.payoutLegs || null };
+        let guardFee = this.bcmul(guard.gasBilled, db.config['GAS_PRICE'], 8);
+        if(!this.isGuardGasReserved(data))
+            guardFee = this.clampGuardFeeToBalance(opts.gasBalances, opts.gasInfo ? opts.gasInfo['TICK_ID'] : null, guardFee);
+        return { error: null, guardFee: guardFee, payoutLegs: guard.payoutLegs || null };
     }
 };

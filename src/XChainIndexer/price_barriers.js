@@ -173,10 +173,22 @@ module.exports = {
             } catch(err){
                 getLogger().warn('Deferring block ' + blockToParse + ' (price landing): ', err);
                 this.markPriceSyncHold();
+                this.stallClearsAt = this.landingClearsAt(blockToParse, blockTime);
                 return true;
             }
         }
         return false;
+    },
+
+    // A time shortfall opens only once the other landing chains' landed time passes this
+    // block's time, which a future-stamped block cannot see before wall clock gets there, so
+    // that instant is the wait's clear time. A block-unit shortfall, or a needed time already
+    // past, has no such instant and stays null so a real stall still accrues its hold.
+    landingClearsAt(blockHeight, blockTime){
+        const s = this.hubDbSync.priceLandingShortfall(blockHeight, blockTime);
+        if(!s || s.unit !== 'time' || !Number.isFinite(s.need)) return null;
+        const clearsAtMs = s.need * 1000;
+        return clearsAtMs > Date.now() ? clearsAtMs : null;
     },
 
     // Oracle-price sync barrier (ALL chains): FIAT dispenser settlement

@@ -175,5 +175,5 @@ function collectMigrationIndexes(){
 module.exports = {
     SQL_DIR, MIG_DIR, INDEX_BASELINE, PRIMARY_INDEX,
     collectLedgerCreatedTables, collectDeclaredIndexes, collectMigrationIndexes,
-    parseAlterTableIndexes, parseStandaloneCreateIndexes,
+    parseAlterTableIndexes, parseStandaloneCreateIndexes, splitTopLevelClauses,
 };

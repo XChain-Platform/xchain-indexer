@@ -31,9 +31,9 @@
  * the touched set is one indexed query with one answer on both twins, rollback
  * needs no repair pass, and as-of-height reads are the latest row at or below H.
  *
- * BYTE-IDENTICAL TWIN: xchain-indexer/src/consensus/escrowLeafSubtree.js (SOURCE) and
- * xchain-sync/src/escrowLeafSubtree.js (FOLLOWER), drift-guarded by the
- * cross-repo twin loop in xchain-sync/test/unit/rollback-coverage.test.js. The
+ * BYTE-IDENTICAL TWIN: xchain-indexer/src/consensus/escrow_leaf_subtree.js (SOURCE) and
+ * xchain-sync/src/escrow_leaf_subtree.js (FOLLOWER), drift-guarded by the
+ * cross-repo twin loop in xchain-sync/test/unit/rollback_coverage.test.js. The
  * follower recomputes balances_root and HALTs on divergence, so drift here is a
  * fleet halt rather than a fork.
  *

@@ -206,6 +206,33 @@ addGate('vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION', 'hei
     regtest: 0,
 });
 
+// Per-chain deploy-lint `with` ban, unarmed on public networks.
+// MUST equal xchain-vm LINT_BANNED_WITH_ACTIVATION; VM null is UNARMED here.
+addGate('vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// vm_lint_nesting_depth_activation
+// Height on the processing chain's own block_index. Public networks remain
+// unarmed until release heights are chosen.
+addGate('vm_lint_nesting_depth_activation.VM_LINT_NESTING_DEPTH_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
 // swap_edit_rematch_activation
 // At or above this height a SWAP edit looks for matches against the resting
 // swap it updates. Below it the lookup retains the edit action index.
@@ -310,6 +337,64 @@ addGate('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', 'height
     'BTC:testnet': 155001,
     'LTC:testnet': 4906040,
     'DOGE:testnet': 67962387,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// bet_feed_list_edit_activation
+// At or above this height BET format 4 may edit an open feed's allow and
+// block list references. Production networks remain inert until a release
+// names per-chain activation heights.
+addGate('bet_feed_list_edit_activation.BET_FEED_LIST_EDIT_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('cross_chain_offer_list_export_activation.CROSS_CHAIN_OFFER_LIST_EXPORT', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
     testnet: UNARMED,
     regtest: 0,
 });

@@ -14,18 +14,18 @@
  *
  * The gate-row queue: the wrapper every row part file writes into.
  *
- * The rows themselves live in the part files beside this one. shared_rows_N.js
- * hold the SHARED block, the gate rows every consumer of this platform judges:
- * the region between their `// SHARED-GATES BEGIN` and `// SHARED-GATES END`
- * markers is BYTE-TWINNED into the registry of xchain-sync, xchain-hub,
- * xchain-explorer and xchain-sdk, each of which wraps the same bytes in its own
- * copy of this queue and replaces only the require line above the markers.
- * gates_N.js hold the rows no other repo twins. Every part file calls
+ * This file is a whole-file byte twin copied unchanged into five consumers:
+ * xchain-indexer, xchain-sync, xchain-hub, xchain-explorer and xchain-sdk.
+ * The rows live in shared_rows_N.js beside it, which are whole-file twins too.
+ * They hold the SHARED gate rows every consumer of this platform judges;
+ * gates_N.js hold the rows no other repo twins. Every shared part file calls
  * `addGate(key, unit, table)` at column zero, with literal values only, so the
  * calls are queued here as the parts load and replayed into the registry the
  * assembler hands registerRows(); a function body around 300 rows would grow
- * past the readability limit, and column-zero bytes are what the consumers
- * can twin without a shared receiver name.
+ * past the readability limit. The common receiver name and queue module let
+ * every consumer keep the complete files byte-identical, including headers,
+ * queue requires, marker lines and rows. The marker-delimited body remains
+ * data only so every consumer judges the same literal gate declarations.
  *
  * REGTEST ARMING. Selected rows let a regtest venue arm their regtest entry from
  * an environment variable (the modules' own resolvers document the grammar;

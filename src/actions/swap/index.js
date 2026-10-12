@@ -73,14 +73,6 @@ class Swap {
 
     // Handle parsing the SWAP transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // Example payloads by FORMAT version:
-        // let str    = "0|JDOG|1|";
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // VERSION, wire params and the GET_ADDRESS reference, then the tokens, sides and records
         let st = await readParams(this, params, data, error);
         await loadTokens(this, st);

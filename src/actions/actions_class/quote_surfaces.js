@@ -27,6 +27,7 @@ const dryRunSupport = require('./dry_run_support.js');
 const quoteAnswers  = require('./quote_answers.js');
 const { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome } = dryRunSupport;
 const { normalizeQuoteRequest, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, dryRunVerdictQuote } = quoteAnswers;
+const { malformedActionAnswer } = quoteAnswers;
 const { resolvePreflightFeeMode, preflightGateAnswer, preflightLockBusy, preflightResult } = quoteAnswers;
 
 // How long a public read-only dry-run waits for the block-processing transaction mutex before
@@ -139,6 +140,9 @@ async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestin
 // supplied output below the band's minimum, or an input the handler rejects before the VM),
 // and those stay valid:false because they are computed, not assumed.
 async function staticFeeQuote(policy, base, action, params, feeOutputSats){
+    // Refuse a name dispatch would re-split into another action (the classifier denies it)
+    let malformed = malformedActionAnswer(base, action, false);
+    if(malformed) return malformed;
     if(!policy.FEE_QUOTE_STATIC.has(action))
         return Object.assign(base, { supported: false, valid: false, denied: true,
             error: 'native fee pre-flight not supported for ' + action +

@@ -33,8 +33,9 @@
  * scoped to the networks that have one. A regtest chain is private: no two
  * regtest venues validate the same blocks, so a height one venue pins for itself
  * cannot fork anybody, and refusing it only meant AT1-AT10 had nowhere to run.
- * Regtest therefore takes its arming height from the environment, documented at
- * ROLLCALL_REGTEST_ARMED_HEIGHT below. mainnet and testnet stay literal and are
+ * Regtest therefore takes its arming height from the environment: the registry
+ * applies regtest_env.regtestHeight when the ROLLCALL_ACTIVATION row is read, in the
+ * grammar resolveRegtestActivation documents below. mainnet and testnet stay literal and are
  * not reachable from env by any path in this file.
  *
  * A HALF-ARMED regtest venue is visible rather than silent: ROLLCALL_ACTIVATION
@@ -80,8 +81,8 @@ const ROLLCALL_REGTEST_ENV = copy('rollcall_activation.ROLLCALL_REGTEST_ENV');
  * Anything else fails CLOSED to null and says so on stderr, because a typo that
  * silently armed a venue would produce closes nobody meant to drive.
  *
- * Read ONCE, at require time, on purpose: an activation height that could change
- * under a running process is not an activation height.
+ * Reference only; no runtime path calls this: the registry applies
+ * regtest_env.regtestHeight, the same grammar, to the env when the row is read.
  *
  * @param {object} env the process environment, or a stand-in
  * @returns {number|null}
@@ -102,6 +103,8 @@ function resolveRegtestActivation(env){
     return null;
 }
 
+// Read ONCE, at require time, on purpose: an activation height that could change
+// under a running process is not an activation height.
 const ROLLCALL_ACTIVATION = copy('rollcall_activation.ROLLCALL_ACTIVATION');
 
 const ROLLCALL_INTERVAL_BLOCKS = copy('rollcall_activation.ROLLCALL_INTERVAL_BLOCKS');

@@ -30,7 +30,8 @@ function actionCounters(indexer){
                 : null;
 }
 
-// Reorg/rollback observability: total processed reorgs and the block index +
+// Reorg/rollback observability: total processed REORG markers (one per orphaned
+// block, not one per reorg) and the block index +
 // epoch-ms timestamp of the most recent one, so the dashboard can meter the
 // decoder->indexer reorg handshake instead of a frequently-reorging chain
 // presenting as an ordinary healthy indexer. Null when the API server did not

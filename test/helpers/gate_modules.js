@@ -36,9 +36,9 @@ const SRC = path.resolve(__dirname, '..', '..', 'src');
 // Registry key stem -> the module's path under src/. The stem is still the id
 // the logic pin and the v2 fingerprint know the module by; only the file moved.
 const GATE_MODULE_PATHS = Object.freeze({
-    amount_representability_activation: 'utility/amount_representability_gate.js',
-    attest_broadcast_fee_activation: 'actions/attest/attest_broadcast_fee_gate.js',
-    attest_request_cap_activation: 'actions/attest/attest_request_cap_gate.js',
+    amount_representability_activation: 'utility/validation/amount_representability_gate.js',
+    attest_broadcast_fee_activation: 'actions/attest/gates/attest_broadcast_fee_gate.js',
+    attest_request_cap_activation: 'actions/attest/gates/attest_request_cap_gate.js',
     caret_ref_strict_activation: 'db/database/caret_ref_strict_gate.js',
     dispense_payment_tally_scale_activation: 'actions/dispense/dispense_payment_tally_scale_gate.js',
     dispenser_send_amount_compare_activation: 'db/dispensers/dispenser_send_amount_compare_gate.js',
@@ -52,6 +52,7 @@ const GATE_MODULE_PATHS = Object.freeze({
     archive_rollback_author_scope_activation: 'consensus/gates/archive_rollback_author_scope_gate.js',
     attest_responsible_widening_activation: 'consensus/gates/attest_responsible_widening_gate.js',
     mirror_admission_activation: 'consensus/gates/mirror_admission_gate.js',
+    mirror_admission_margin_activation: 'consensus/gates/mirror_admission_margin_gate.js',
     price_batching_floor_activation: 'consensus/gates/price_batching_floor_gate.js',
     price_pair_activation: 'consensus/gates/price_pair_gate.js',
     price_scale_activation: 'consensus/gates/price_scale_gate.js',
@@ -117,6 +118,10 @@ const REPLACED_STEMS = Object.freeze([
 // callers read the row through activeAt() by its literal key from the start.
 // Kept apart from REPLACED_STEMS so that list stays the W4 and W5 census.
 const REGISTRY_ONLY_STEMS = Object.freeze([
+    'anchor_archive_fold_term_activation',
+    'anchor_empty_fold_reject_activation',
+    'cooldown_maturity_escrow_reversal_activation',
+    'dispenser_refill_policy_activation',
     'dispenser_settlement_price_activation',
     'dispenser_freshness_proven_use_activation',
     'empty_allow_list_denies_activation',
@@ -134,7 +139,12 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'anchor_fold_activation',
     'archive_section_verdict_activation',
     'bridge_policy_detach_activation',
+    'bridge_row_fields_terminal_activation',
     'vm_lint_optional_chain_heights',
+    'bigint_surface_strip_heights',
+    'vm_lint_banned_with_heights',
+    'vm_lint_nesting_depth_activation',
+    'vm_lint_destructure_heights',
     'swap_edit_rematch_activation',
     'market_list_source_activation',
     'list_change_rematch_activation',
@@ -149,6 +159,18 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'oracle_price_age_hourly_activation',
     'oracle_hourly_window_activation',
     'oracle_round_time_activation',
+    'send_caret_pack_key_activation',
+    'dispenser_delay_protocol_time_activation',
+    'bridge_policy_refusal_record_activation',
+    'price_wire_trailing_activation',
+    'oracle_snapshot_age_seconds_activation',
+    'attest_relay_fee_activation',
+    'attest_relay_response_deadline_activation',
+    'bet_feed_list_edit_activation',
+    'cross_chain_offer_list_export_activation',
+    'cross_chain_remote_token_activation',
+    'send_gated_total_tick_id_activation',
+    'action_admission_dispatched_only',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

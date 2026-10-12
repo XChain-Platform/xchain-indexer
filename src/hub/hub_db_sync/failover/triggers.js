@@ -9,6 +9,25 @@ function candidateCount(sync) {
     return Array.isArray(status.candidates) ? status.candidates.length : 0;
 }
 
+function noteNotCaughtUpAnswer(sync, address) {
+    if (!address) return;
+    if (!sync._notCaughtUpAnswers) sync._notCaughtUpAnswers = new Set();
+    sync._notCaughtUpAnswers.add(address);
+}
+
+function clearNotCaughtUpAnswers(sync) {
+    if (sync._notCaughtUpAnswers) sync._notCaughtUpAnswers.clear();
+}
+
+// True once every candidate has answered not caught up since the last caught-up
+// ready frame; moving on would only reset the mirror with nowhere better to go.
+function allCandidatesNotCaughtUp(sync) {
+    if (!sync._notCaughtUpAnswers || !sync.selector || typeof sync.selector.status !== 'function') return false;
+    const candidates = sync.selector.status().candidates;
+    if (!Array.isArray(candidates) || candidates.length < 2) return false;
+    return candidates.every((address) => sync._notCaughtUpAnswers.has(address));
+}
+
 function moveHub(sync, reason) {
     if (!sync.selector || typeof sync.selector.advance !== 'function') return false;
     const previous = sync.selector.current();
@@ -27,12 +46,13 @@ function moveHub(sync, reason) {
 function uncaughtUpBlocks(sync, nowMs = Date.now()) {
     if (sync._readyCaughtUp !== false) {
         if (sync._readyCaughtUp === true) {
+            clearNotCaughtUpAnswers(sync);
             sync._notCaughtUpSince = null;
             sync._notCaughtUpWarned = false;
         }
         return false;
     }
-    if (candidateCount(sync) >= 2) return true;
+    if (candidateCount(sync) >= 2 && !allCandidatesNotCaughtUp(sync)) return true;
     if (sync._notCaughtUpSince === null) sync._notCaughtUpSince = nowMs;
     if (nowMs - sync._notCaughtUpSince < sync._notCaughtUpGraceMs) return true;
     if (!sync._notCaughtUpWarned) {
@@ -53,6 +73,8 @@ function noteConnected(sync) {
 
 function noteHubNotCaughtUp(sync) {
     if (candidateCount(sync) < 2) return false;
+    noteNotCaughtUpAnswer(sync, sync.selector.current());
+    if (allCandidatesNotCaughtUp(sync)) return false;
     return moveHub(sync, 'hub not caught up');
 }
 
@@ -79,9 +101,11 @@ function stallFailoverAction(sync) {
 }
 
 module.exports = {
+    allCandidatesNotCaughtUp,
     moveHub,
     noteConnectFailure,
     noteConnected,
+    noteNotCaughtUpAnswer,
     rejectUncaughtUpReadyFrame,
     stallFailoverAction,
     uncaughtUpBlocks

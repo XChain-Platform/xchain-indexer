@@ -127,12 +127,12 @@ module.exports = {
     // reverted (contract-controlled) and failed (deterministic runtime throw) stay distinct;
     // they are not host-timing races.
     //
-    // The family regex MUST stay identical to the gas-clamp regex in actions/execute.js and
-    // actions/deploy.js so the status mapping and the fee clamp can never drift to different
-    // family definitions.
+    // The family regex MUST stay identical to the gas-clamp regexes in actions/execute/settle.js
+    // (clampVmGas) and actions/deploy/constructor_run.js (settleConstructorOutcome) so the status
+    // mapping and the fee clamp can never drift to different family definitions.
     //
     // FROZEN VOCABULARY: the returned tokens are the closed set
-    // xchain-vm/src/consensus_runtime.js CONSENSUS_STATUS_TOKENS. Adding/splitting a token is a
+    // xchain-vm/src/consensus-runtime.js CONSENSUS_STATUS_TOKENS. Adding/splitting a token is a
     // consensus change (bump CONSENSUS_VERSION). Guarded by test/unit/consensus/consensus_params.test.js.
     vmFailureStatus(vmError){
         let msg = String(vmError || '');

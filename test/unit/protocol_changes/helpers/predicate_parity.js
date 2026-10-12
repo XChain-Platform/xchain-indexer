@@ -51,6 +51,7 @@ const TABLE = [
     ['ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION', 'isLedgerAmountPrecisionActive', ['height', 'network', 'coin']],
     ['mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION', 'isMirrorAdmissionProducerActive', ['coin', 'network', 'height']],
     ['mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION', 'isMirrorAdmissionConsumerActive', ['coin', 'network', 'height']],
+    ['mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION', 'isChainMarginActive', ['coin', 'network', 'height']],
     ['oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_ACTIVATION', 'isOraclePreloadCausalityActive', ['height', 'network', 'coin']],
     ['price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION', 'isPriceBarrierRequired', ['time', 'network', 'coin']],
     ['price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION', 'landingActiveAt', ['height']],
@@ -67,6 +68,7 @@ const TABLE = [
     ['stake_weighted_quorum.STAKE_WEIGHTED_QUORUM_ACTIVATION', 'isStakeWeightedQuorumActive', ['height', 'network']],
     ['stateHash.ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION', 'isArchiveInvalidHeightKeyActive', ['height', 'network', 'coin']],
     ['stateHash.ARCHIVE_INVALID_STATE_HASH_ACTIVATION', 'isArchiveInvalidStateHashActive', ['height', 'network', 'coin']],
+    ['stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION', 'isAttestBatchHeadStateHashActive', ['height', 'network', 'coin']],
     ['stateHash.BET_STATUS_STATE_HASH_ACTIVATION', 'isBetStatusStateHashActive', ['height', 'network', 'coin']],
     ['stateHash.INDEX_MAP_STATE_HASH_ACTIVATION', 'isIndexMapStateHashActive', ['height', 'network']],
     ['stateHash.POLL_FINALIZE_STATE_HASH_ACTIVATION', 'isPollFinalizeStateHashActive', ['height', 'network', 'coin']],
@@ -114,9 +116,12 @@ function compareRow([key, predicate, args]) {
     const stem = key.slice(0, key.lastIndexOf('.'));
     const priceLanding = key === 'price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION' ||
         key === 'price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION';
-    const mod = priceLanding
-        ? require(path.join(SRC, 'hub/hub_db_sync/barriers/price_landing.js'))
-        : require(modulePathFor(stem));
+    let modulePath = modulePathFor(stem);
+    if (stem === 'mirror_admission_margin_activation')
+        modulePath = path.join(SRC, 'consensus/gates/mirror_admission_margin_gate.js');
+    const mod = require(priceLanding
+        ? path.join(SRC, 'hub/hub_db_sync/barriers/price_landing.js')
+        : modulePath);
     const fn = mod[predicate];
     if (typeof fn !== 'function') throw new Error(stem + ' does not export ' + predicate);
     const unit = unitOf(key);

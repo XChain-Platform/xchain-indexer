@@ -57,11 +57,9 @@ class Broadcast {
         /*****************************************************************
          * DEBUGGING - Force params
          ****************************************************************/
-        // Example payloads by FORMAT version:
-        // let str = "0|This is a test";
-        // let str = "1|BTC-USD|84860|0.01|BTC Price on Sat Apr 12 2025 14:35:36 UTC";
-        // let str = "2|https://oracle-betting-site.com/superbowl-2025.json|1|Bet on the 2025 Superbowl!;
-        // let str = "3|1234|2|Superbowl Results on Tue Aug 19 2025 01:55:00 UTC";
+        // Lists VERSION formats 0 to 3 in this.formats, each keyed by its leading VERSION field.
+        // Expects params already split on the pipe delimiter and FORMAT already resolved, so the
+        // lines below only matter when forcing a sample string by hand.
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 

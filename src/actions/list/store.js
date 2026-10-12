@@ -25,6 +25,22 @@ module.exports = {
         }
     },
 
+    async writeListRows(data, edit, list, invalid){
+        let db = this.indexerDb;
+        if(typeof db.createListItems === 'function'){
+            await db.createListEdits(data, edit);
+            await db.createListItems(data, list);
+            await db.createListItemsInvalid(data, invalid);
+            return;
+        }
+        for(let item in edit)
+            await db.createListEdit(data, item, edit[item]);
+        for(let item of list)
+            await db.createListItem(data, item);
+        for(let item in invalid)
+            await db.createListItemInvalid(data, item, invalid[item]);
+    },
+
     async storeList(data, status, edit, list, invalid, fee){
         if(data['FORMAT']==5 && this.isFormatActive(5, data)){
             await this.storeMeta(data, status);
@@ -37,12 +53,7 @@ module.exports = {
         await this.indexerDb.createList(data);
         this.util.addAddressTicker(data['SOURCE']);
         if(status=='valid'){
-            for(let item in edit)
-                await this.indexerDb.createListEdit(data, item, edit[item]);
-            for(let item of list)
-                await this.indexerDb.createListItem(data, item);
-            for(let item in invalid)
-                await this.indexerDb.createListItemInvalid(data, item, invalid[item]);
+            await this.writeListRows(data, edit, list, invalid);
             await this.storeShare(data);
             await this.storeTransfer(data);
             await this.settleFee(data, fee);

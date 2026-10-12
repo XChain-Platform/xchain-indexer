@@ -42,9 +42,9 @@ module.exports = {
             // Gated on the dispenser not having settled already: GIVE_REMAINING is derived and no
             // close/expire reduces it, so a re-settlement would refund it twice
             // (util.isDispenserSettled). Both live entry statuses still refund: 'cancelling' from
-            // processCancellations, and 'open' from the dispense.js auto-closes ('empty' and the
-            // MAX_DISPENSES cap), which settle a dispenser findMatchingDispensers matched under
-            // its own `status IN ('open','cancelling')` filter.
+            // processCancellations, and 'open' or 'cancelling' from the dispense.js auto-closes
+            // ('empty' and the MAX_DISPENSES cap), which settle a dispenser findMatchingDispensers
+            // matched under its own `status IN ('open','cancelling')` filter.
             //
             // Negate via bcsub, not JS unary minus: -GIVE_REMAINING coerces the 64-precision
             // bignumber string to a float and silently loses digits past ~15 sig figs, de-syncing
@@ -54,7 +54,8 @@ module.exports = {
             credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], destination]);
         }
 
-        // Add SOURCE and GET_ADDRESS addresses and GET_TICK to addresses list
+        // Add GET_ADDRESS and the refund destination to the GIVE_TICK refresh list
+        // (destination, not SOURCE, is whose escrow and credit moved above)
         this.util.addAddressTicker(dispenser['GET_ADDRESS'], dispenser['GIVE_TICK']);
         this.util.addAddressTicker(destination,              dispenser['GIVE_TICK']);
 

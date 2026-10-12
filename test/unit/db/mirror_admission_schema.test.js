@@ -154,7 +154,7 @@ describe('mirror admission schema: the manifest against the hub DDL (sibling)', 
         for(const t of Object.keys(M.HUB_ONLY_ADMISSION_COLUMNS)) expected[t] = [...M.HUB_ONLY_ADMISSION_COLUMNS[t]];
         assert.deepStrictEqual(map, expected);
         // The oracle rail is migrated by its own single-column call, outside the map.
-        assert.ok(/migrateAddNullableColumn\('oracle_prices',\s*'admit_block',\s*'BIGINT UNSIGNED DEFAULT NULL'\)/
+        assert.ok(/migrateAddNullableColumn\('oracle_prices',\s*'admit_block',\s*'BIGINT UNSIGNED DEFAULT NULL'(?:,\s*true)?\)/
             .test(fs.readFileSync(HUB_COLUMNS, 'utf8')), 'oracle_prices.admit_block is not migrated by the hub helper');
     });
 });

@@ -68,8 +68,9 @@ module.exports = {
         }
         // Ticker ids are consensus state. Keep caller order so each MAX(id)+1 reservation
         // is inserted before the next token reads the dense counter.
+        const rebuildNow = rollback === true || (type === 'boolean' && tickers === true);
         for(const tick of tokens)
-            await this.updateTokenInfo(tick);
+            await this.updateTokenInfo(tick, rebuildNow);
     },
 
     // Mark a token's ownership as held in escrow by an ORDER/SWAP/DISPENSER action.
@@ -103,6 +104,10 @@ module.exports = {
     },
 
     ...sanityCheck,
+
+    async refreshTokenSuppliesForBlock(block_index){
+        return await sanityCheck.refreshTokenSuppliesForBlock.call(this, block_index);
+    },
 
     // Get tokens owned by a given address. Ticks whose ownership is currently
     // escrowed by an open ORDER/SWAP/DISPENSER (escrow_action_index set) are in
@@ -146,10 +151,9 @@ module.exports = {
      * binding while copies are outstanding on another chain. `bridged=0` in the WHERE
      * makes the write a no-op for every later lock of the same tick.
      *
-     * `block_index` is the applying block. It is not stored: the bit carries no height
-     * because nothing in milestone 1 reads "when", and a reorg of the first lock
-     * deliberately leaves the bit set (the conservative direction, since the copies it
-     * refuses policy binding for may still exist on the destination chain).
+     * The column is a write-time cache: getTokenInfo derives BRIDGED from the applied v3
+     * rows in xbridges, so a rollback that orphans the first lock cannot leave a stale
+     * bit behind. `block_index` is logged, not stored.
      *
      * @param {string} tick        - the NATIVE tick being locked (never the rooted form)
      * @param {number} block_index - the block the lock applied at; logged, not stored

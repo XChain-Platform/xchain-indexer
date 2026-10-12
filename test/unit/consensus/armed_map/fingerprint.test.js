@@ -25,10 +25,12 @@ const { spawnSync } = require('child_process');
 
 const REPO = path.resolve(__dirname, '..', '..', '..', '..');
 const V2_PATH = path.join(REPO, 'src', 'consensus', 'armed_map', 'fingerprint.js');
+const processFingerprintEnv = Object.assign({}, process.env);
 
 const v2 = require('../../../../src/consensus/armed_map/fingerprint.js');
 const manifest = require('../../../../src/consensus/armed_map/manifest.js');
 const { fingerprint } = require('../../../../src/consensus/armed_map/canonical.js');
+const processBaseline = v2.computeArmedMapFingerprintV2();
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -42,7 +44,9 @@ describe('armed_map/fingerprint: the running process', function () {
         assert.strictEqual(out.count, manifest.ENTRIES.length);
         assert.deepStrictEqual(out.rows, expected.rows);
         assert.strictEqual(out.rows['list_owner_activation.LIST_OWNER_ACTIVATION'],
-            'de491f1800ecbafef8565ee3faa8b87707092505a441c8a970593c9025d9923d');
+            'fcc08a9502c12cda2dbd29452342101310d6f2c7c947e596315eb73b1bf7be11');
+        assert.strictEqual(out.rows['cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'],
+            '813f95010af2ab02a8d76a1ab03feb8fe4c0542e6251f34a2530737c312234b9');
     });
 
     it('is memoized per process', function () {
@@ -102,10 +106,10 @@ describe('armed_map/fingerprint: the published surfaces (W3, alias dropped at W5
 
     it('is published by consensus-identity --json as the legacy field, version 2, the row map and count, and the logic digest', function () {
         const res = spawnSync(process.execPath, [path.join(REPO, 'bin', 'consensus-identity.js'), '--json'],
-            { cwd: REPO, encoding: 'utf8' });
+            { cwd: REPO, encoding: 'utf8', env: childEnv() });
         assert.strictEqual(res.status, 0, res.stderr);
         const identity = JSON.parse(res.stdout);
-        assert.strictEqual(identity.armed_map_fingerprint, v2.computeArmedMapFingerprintV2().hex);
+        assert.strictEqual(identity.armed_map_fingerprint, processBaseline.hex);
         assert.strictEqual(identity.armed_map_fingerprint_version, 2);
         assert.ok(!Object.prototype.hasOwnProperty.call(identity, 'armed_map_fingerprint_v2'), 'the _v2 alias must not be printed');
         // row 6: armed_map_rows is the per-key hash map (so a mismatch names the row) and the count sits beside it
@@ -173,7 +177,7 @@ const READ_SCRIPT = [
 ].join('\n');
 
 function childEnv() {
-    const env = Object.assign({}, process.env);
+    const env = Object.assign({}, processFingerprintEnv);
     delete env.NODE_PATH;
     return env;
 }
@@ -253,6 +257,17 @@ describe('armed_map/fingerprint: temp-tree falsification of armed values (design
     it('a committed height change moves v2', function () {
         const dir = makeTree();
         editFile(dir, STATE_COMMITMENT_PART, "'BTC:testnet':  145000,", "'BTC:testnet':  145001,");
+        const r = readTree(dir);
+        assert.strictEqual(r.status, 0, r.stderr);
+        assert.match(r.out.hex, HEX64, r.out.reason);
+        assert.notStrictEqual(r.out.hex, baseline.hex);
+    });
+
+    it('arming the cross-chain remote-token gate moves v2', function () {
+        const dir = makeTree();
+        editFile(dir, partDeclaring('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'),
+            "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION', 'height', { mainnet: UNARMED,",
+            "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION', 'height', { mainnet: 1,");
         const r = readTree(dir);
         assert.strictEqual(r.status, 0, r.stderr);
         assert.match(r.out.hex, HEX64, r.out.reason);

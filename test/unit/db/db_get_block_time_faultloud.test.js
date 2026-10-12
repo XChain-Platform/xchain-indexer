@@ -133,3 +133,22 @@ describe('getRawBlockTime() missing decoder row (#9597)', function () {
         assert.strictEqual(await db.getBlockTime(501), 1700000300);
     });
 });
+
+describe('protocolTimeForStoredBlock() fail-loud fault handling', function () {
+
+    afterEach(() => sinon.restore());
+
+    it('rethrows an infrastructure fault and re-reads the stored block on retry', async function () {
+        const db = makeDb();
+        const stub = sinon.stub(db, 'doQueryStrict');
+        stub.onFirstCall().rejects(faultWith(1205));
+        stub.onSecondCall().resolves([{ block_time: 1700000400 }]);
+        const memo = { block_index: 600, block_time: 1700000500 };
+        db._protocolTimeCache = memo;
+
+        await assert.rejects(() => db.protocolTimeForStoredBlock(500), /injected db fault/);
+        assert.strictEqual(await db.protocolTimeForStoredBlock(500), 1700000400);
+        assert.strictEqual(stub.callCount, 2);
+        assert.strictEqual(db._protocolTimeCache, memo);
+    });
+});

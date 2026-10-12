@@ -69,7 +69,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await handler.parse(v0Params({ requestId: GOLDEN_REQUEST_ID.expected }), data, null);
             assert.strictEqual(data['STATUS'], 'valid',
                 'real handler must accept the checked-in golden REQUEST_ID; a rejection means the ' +
-                'indexer preimage drifted from xchain-vm/src/gateway_emit.js GOLDEN_VECTORS.requestId');
+                'indexer preimage drifted from xchain-vm/src/gateway-emit.js GOLDEN_VECTORS.requestId');
         });
 
         it('ATT-RECOMP-1: pins the responsible set AS-OF the request block for a valid request', async function () {

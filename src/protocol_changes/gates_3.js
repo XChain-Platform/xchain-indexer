@@ -53,9 +53,9 @@ addGate('protocol/constants.EQUIV_HEADER_ACTIVATION', 'height', {
 // the xchain-sync follower recomputes and HALTS on if they diverge. UNLIKE the two maps above,
 // this gates on the chain's OWN local block_index (each chain starts committing its own per-block
 // root at its own height); the Phase 2 checkpoint/ANCHOR extension that SIGNS these roots gates on
-// snapshot_block. Kept byte-identical to the local copies in xchain-indexer/src/
-// state_commitment_activation.js + xchain-sync/src/state_commitment_activation.js (and xchain-hub
-// at Phase 2) by the cross-service regression suite. ARMED MID-CHAIN 2026-07-07 with per-chain
+// snapshot_block. Kept byte-identical to the local copy, the state_commitment_activation row in
+// shared_rows_4.js that src/consensus/gates/state_commitment_gate.js reads in xchain-indexer and
+// xchain-sync (and xchain-hub at Phase 2), by the cross-service regression suite. ARMED MID-CHAIN 2026-07-07 with per-chain
 // '<COIN>:<network>' keys (one shared height cannot fit BTC ~957k and DOGE ~6.28M at once; bare
 // network key remains for regtest; coin-less mainnet/testnet lookups stay inert). Same heights
 // as the two state-hash gate maps, so ONE deploy-by date governs all Cohort-C flips; each height
@@ -96,12 +96,12 @@ addGate('protocol/constants.CHECKPOINT_COMMITMENT_ACTIVATION', 'height', {
 });
 
 // ANCHOR_REWARD_ACTIVATION (anchor-reward re-derivation): the flag-day at/above which the validator
-// anchor reward stops being TRUSTED from the hub's `pushvalidatorrewards` JSON-RPC and is instead
+// anchor reward stops being TRUSTED from the hub over a key-authenticated JSON-RPC (since retired) and is instead
 // DERIVED by every indexer from the on-chain ANCHOR bytes. Post-flag-day the hub emits a publisher-
-// bearing ANCHOR (v4 rootless / v5 root-bearing) carrying the elected publisher pubkey plus a 2f+1
+// bearing ANCHOR checkpoint bundle (v0 of the restarted wire set) carrying the elected publisher pubkey plus a 2f+1
 // `oracle_publish` attestation (XANCPUB) over the reward tuple; the indexer verifies that quorum and
 // credits the publisher with ANCHOR_REWARD_AMOUNT (a frozen consensus constant, NEVER from the wire).
-// Below the flag-day the old push path stands and v4/v5 anchors are rejected. Consensus-relevant (the
+// Below the flag-day the legacy anchor wire applies and an anchor's PUBLISHER tail earns no derived credit. Consensus-relevant (the
 // credited reward becomes a COLLECT-spendable per-block ledger row), so it must deploy hub + ALL
 // indexers atomically. Like CHECKPOINT_COMMITMENT_ACTIVATION / STAKE_WEIGHTED_QUORUM_ACTIVATION it gates
 // on the BTC-anchored `snapshot_block` carried by every ANCHOR canonical. Kept equal to the local
@@ -120,12 +120,13 @@ addGate('protocol/constants.ANCHOR_REWARD_ACTIVATION', 'height', {
 addGate('protocol/constants.ANCHOR_REWARD_AMOUNT', 'constant', '10.00000000');
 
 // ARCHIVE_REWARD_ACTIVATION (archive-reward re-derivation): the flag-day at/above which the
-// anchor_archive reward stops riding the key-authenticated `pushvalidatorrewards` rail and is instead
-// DERIVED by every indexer from the on-chain ANCHOR v6 bytes (the v1 archive anchor plus the same
-// PUBLISHER + 2f+1 XANCPUB attestation tail as v4/v5, attested over an 'anchor_archive' canonical
-// keyed on MATCH_BATCH_SEQ). This retires the last insider-with-key reward-forge surface the
-// per-chain ANCHOR_REWARD flag-day left open. Below the flag-day the legacy v1 + push path stands
-// and v6 anchors are rejected. Consensus-relevant, same deploy rules and snapshot_block gating as
+// anchor_archive reward stops riding the key-authenticated hub JSON-RPC rail (since retired) and is instead
+// DERIVED by every indexer from the on-chain ANCHOR archive-head bytes (v1 of the restarted wire set,
+// carrying the same PUBLISHER + 2f+1 XANCPUB attestation tail the v0 bundle carries, attested over an
+// 'anchor_archive' canonical keyed on MATCH_BATCH_SEQ). This retires the last insider-with-key
+// reward-forge surface the per-chain ANCHOR_REWARD flag-day left open. Below the flag-day the legacy
+// tail-less archive wire applies and an archive head's PUBLISHER tail earns no derived credit.
+// Consensus-relevant, same deploy rules and snapshot_block gating as
 // ANCHOR_REWARD_ACTIVATION; kept equal to the local anchor_reward_activation.* rows of the
 // registry part shared_rows_1.js (hub and indexer) by the activation-constants parity suite.
 addGate('protocol/constants.ARCHIVE_REWARD_ACTIVATION', 'height', {
@@ -228,6 +229,17 @@ addGate('protocol/constants.ORACLE_VM_ROUND_WINDOW', 'constant', 1200);
 // payload does not have.
 addGate('protocol/constants.ORACLE_VM_MAX_ROWS', 'constant', 50000);
 
+// send_caret_pack_key_activation
+// Per-network activation, interpreted against the block's consensus timestamp
+// (data['BLOCK_TIME']). At/after it a caret-id SEND looks up the gated packs of the tick
+// the id resolves to, so it needs the key handoff like a named-tick SEND. Mainnet stays
+// unarmed until the replay is measured.
+addGate('send_caret_pack_key_activation.SEND_CARET_PACK_KEY_ACTIVATION', 'time', {
+    mainnet: null,
+    testnet: 0,
+    regtest: 0,
+});
+
 // slash_grid_activation
 // Scale the per-row deduction runs at once the rule is live. 18 is
 // MAX_TOKEN_DECIMALS (src/config/token_limits.js), the finest precision any tick can be
@@ -243,8 +255,8 @@ addGate('slash_grid_activation.SLASH_GRID_ACTIVATION', 'height', {
     'BTC:mainnet':  0,
     'LTC:mainnet':  0,
     'DOGE:mainnet': 0,
-    // Unpinned: testnet carries stake history, so its heights are pinned at
-    // flag-day assembly with the replay evidence that step requires.
+    // ARMED by the v0.21.3 cut at these heights rather than at genesis, because testnet
+    // carries stake history; testnet blocks below them keep the legacy arithmetic.
     'BTC:testnet':  155001,
     'LTC:testnet':  4906040,
     'DOGE:testnet': 67962387,
@@ -261,8 +273,9 @@ addGate('slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVA
     'BTC:mainnet':  0,
     'LTC:mainnet':  0,
     'DOGE:mainnet': 0,
-    // Unpinned: testnet carries stake history, so its heights are pinned at
-    // flag-day assembly with the replay evidence that step requires.
+    // ARMED by the v0.21.3 cut at these heights rather than at genesis, because testnet
+    // carries stake history; testnet blocks below them keep the legacy per-emission
+    // overwrite.
     'BTC:testnet':  155001,
     'LTC:testnet':  4906040,
     'DOGE:testnet': 67962387,
@@ -279,9 +292,9 @@ addGate('stake_key_reuse_activation.STAKE_KEY_REUSE_ACTIVATION', 'height', {
     'LTC:mainnet':  null,         // INERT: capability STAKE is BTC-only; carried for shape
     'DOGE:mainnet': null,         // INERT: capability STAKE is BTC-only; carried for shape
     mainnet:        null,         // INERT: a coin with no entry above inherits the unarmed posture
-    'BTC:testnet':  156000,       // SIZED 2026-09-11: chain_tip 151,991 + 3,024 (21d @144/day) = 155,015, rounded up
-    'LTC:testnet':  4897000,      // SIZED 2026-09-11: chain_tip 4,883,971 + 12,096 (21d @576/day) = 4,896,067, rounded up
-    'DOGE:testnet': 67920000,     // SIZED 2026-09-11: chain_tip 67,887,900 + 30,240 (21d @1440/day) = 67,918,140, rounded up
+    'BTC:testnet':  156000,       // SIZED 2026-09-11 from chain_tip 151,991
+    'LTC:testnet':  4897000,      // SIZED 2026-09-11 from chain_tip 4,883,971
+    'DOGE:testnet': 67920000,     // SIZED 2026-09-11 from chain_tip 67,887,900
     testnet:        null,         // INERT: a testnet coin with no entry above stays on the legacy refusal
     regtest:        0,            // genesis-active so the e2e venue exercises the armed rule
 });
@@ -296,9 +309,9 @@ addGate('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION', 'height', {
     'LTC:mainnet':  null,         // INERT: operator-owned, sized above the deploy tip on the arming train
     'DOGE:mainnet': null,         // INERT: operator-owned, sized above the deploy tip on the arming train
     mainnet:        null,         // INERT: a coin with no entry above inherits the unarmed posture
-    'BTC:testnet':  156000,       // SIZED 2026-09-11: chain_tip 151,994 + 3,024 (21d @144/day) = 155,018, rounded up; shared with STAKE_KEY_REUSE_ACTIVATION
-    'LTC:testnet':  4897000,      // SIZED 2026-09-11: chain_tip 4,883,984 + 12,096 (21d @576/day) = 4,896,080, rounded up; shared with STAKE_KEY_REUSE_ACTIVATION
-    'DOGE:testnet': 67920000,     // SIZED 2026-09-11: chain_tip 67,888,041 + 30,240 (21d @1440/day) = 67,918,281, rounded up; shared with STAKE_KEY_REUSE_ACTIVATION
+    'BTC:testnet':  156000,       // SIZED 2026-09-11 from chain_tip 151,994; shared with STAKE_KEY_REUSE_ACTIVATION
+    'LTC:testnet':  4897000,      // SIZED 2026-09-11 from chain_tip 4,883,984; shared with STAKE_KEY_REUSE_ACTIVATION
+    'DOGE:testnet': 67920000,     // SIZED 2026-09-11 from chain_tip 67,888,041; shared with STAKE_KEY_REUSE_ACTIVATION
     testnet:        null,         // INERT: a testnet coin with no entry above keeps writing the legs
     regtest:        0,            // genesis-active so the e2e venue exercises the armed rule
 });
@@ -314,17 +327,17 @@ addGate('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION', 'height', {
 // exists there (XCP appears only in unit-test mocks, and every scenario ticker is four
 // characters or longer).
 //
-// Testnet holds at the house sentinel until the train that arms it sizes a dated instant
-// above the fleet's deploy tip. Mainnet is a genesis-arm candidate under the genesis-arm
+// Testnet BTC, LTC and DOGE are pinned at the heights the v0.21.0 freeze height plan set;
+// only the bare `testnet` fallback, for a coin with no entry, stays at the sentinel. Mainnet is a genesis-arm candidate under the genesis-arm
 // method and stays at the sentinel until the mainnet replicas measure zero mined
 // ISSUEs of a short or listed name, valid OR invalid: an armed height below a real one
 // would re-verdict it and move that chain's hashes.
 addGate('tick_namespace_activation.TICK_NAMESPACE_ACTIVATION', 'height', {
-    mainnet: 9999999999,
+    mainnet: UNARMED,
     'BTC:testnet': 154567, // set by the v0.21.0 freeze height plan
     'LTC:testnet': 4903068, // set by the v0.21.0 freeze height plan
     'DOGE:testnet': 67951140, // set by the v0.21.0 freeze height plan
-    testnet: 9999999999,
+    testnet: UNARMED,
     regtest: 0,
 });
 
@@ -332,7 +345,7 @@ addGate('tick_namespace_activation.TICK_NAMESPACE_ACTIVATION', 'height', {
 // Per-chain activation height, interpreted as the processing chain's OWN block_index.
 // At/after the height the deploy-lint generator + wasm bans block; below it they are
 // dropped from the deploy-blocking set (historical accepted verdict preserved).
-// Mirrors xchain-vm/src/index.js PKG3_SANDBOX_ACTIVATION.
+// Mirrors xchain-vm/src/index/runtime/activation_heights.js PKG3_SANDBOX_ACTIVATION.
 addGate('vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION', 'height', {
     'BTC:mainnet':  961000,
     'LTC:mainnet':  3154250,
@@ -346,7 +359,7 @@ addGate('vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION', 'height
 // At/after the height the VM re-lints stored contract code on every EXECUTE and fails
 // the execution when a now-banned construct is present; below it there is no check and
 // no gas charge (byte-identical replay).
-// MUST equal xchain-vm/src/index.js EXEC_LINT_ACTIVATION.
+// MUST equal xchain-vm/src/index/runtime/activation_heights.js EXEC_LINT_ACTIVATION.
 addGate('vm_exec_lint_activation.VM_EXEC_LINT_ACTIVATION', 'height', {
     'BTC:mainnet':  0,   // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 contracts, 0 DEPLOY, 0 EXECUTE, measured 2026-09-09)
     'LTC:mainnet':  0,
@@ -360,11 +373,26 @@ addGate('vm_exec_lint_activation.VM_EXEC_LINT_ACTIVATION', 'height', {
 // At/after the height the deploy-lint banned-async / banned-wasm / banned-math rules
 // also match sloppy-mode `this` and the globalThis self-reference chain; below it they
 // resolve as they historically did (byte-identical replay).
-// MUST equal xchain-vm/src/index.js LINT_GLOBAL_ALIAS_ACTIVATION.
+// MUST equal xchain-vm/src/index/runtime/activation_heights.js LINT_GLOBAL_ALIAS_ACTIVATION.
 addGate('vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION', 'height', {
     'BTC:mainnet':  0,   // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 contracts, 0 DEPLOY, measured 2026-09-09)
     'LTC:mainnet':  0,
     'DOGE:mainnet': 0,
     testnet: 0,
     regtest: 0,
+});
+
+addGate('bigint_surface_strip_heights.BIGINT_SURFACE_STRIP_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': 156230,
+    'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY', 'height', {
+    mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984, 'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0,
 });

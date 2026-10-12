@@ -29,6 +29,7 @@
 const { getLogger } = require('../../../observability/index.js');
 const { HUB_SCHEMA_VERSION } = require('../../hub_schema_version');
 const { CROSS_CHAIN_TABLES } = require('../mirror_tables.js');
+const { hasExpectedSchemaVersion, schemaVersionLabel } = require('../schema_version_check.js');
 const { sanitizeHeights } = require('../watermark_config.js');
 
 const PAGE_LIMIT = 10000;
@@ -124,10 +125,17 @@ module.exports = {
             lastId = 0;
             this._drainPositions[table] = 0;
         }
-        let readyCeiling = (this._readyMaxIds && this._readyMaxIds[table] != null)
-            ? Number(this._readyMaxIds[table]) : NaN;
+        let readyCeiling = this.readyCeilingFor(table);
         lastId = await this.restartCursorAboveHubCeiling(table, scope, lastId, readyCeiling);
         return { lastId: lastId, readyCeiling: readyCeiling };
+    },
+
+    // The ceiling the hub advertised for a table in its ready frame, or NaN when it named
+    // none that can be trusted. Only a non-negative integer counts: a null, a string, a
+    // boolean or a negative number must not coerce to a real id and reposition a drain.
+    readyCeilingFor(table) {
+        let ceiling = this._readyMaxIds ? this._readyMaxIds[table] : undefined;
+        return (typeof ceiling === 'number' && Number.isInteger(ceiling) && ceiling >= 0) ? ceiling : NaN;
     },
 
     // A position above the source's advertised ceiling cannot belong to its current id
@@ -255,7 +263,7 @@ module.exports = {
         if ((now - drain.lastProgressAt) < this.bootstrapProgressMs) return;   // short drains stay silent
         drain.lastProgressAt = now;
         let elapsedS = Math.max(1, Math.round((now - drain.drainStartedAt) / 1000));
-        let ceiling  = Number(this._readyMaxIds && this._readyMaxIds[drain.table]);
+        let ceiling  = this.readyCeilingFor(drain.table);
         let share    = (Number.isFinite(ceiling) && ceiling > 0 && drain.lastId > 0)
                          ? ' (~' + Math.min(99, Math.floor((drain.lastId / ceiling) * 100)) + '% of the hub id space)'
                          : '';
@@ -273,7 +281,7 @@ module.exports = {
         // One line up front for a table big enough to take a while, so a cold start shows
         // the drain BEGINNING rather than only its result. The counter above then reports
         // every bootstrapProgressMs until it lands.
-        let announcedCeiling = Number(this._readyMaxIds && this._readyMaxIds[table]);
+        let announcedCeiling = this.readyCeilingFor(table);
         if (Number.isFinite(announcedCeiling) && announcedCeiling > PAGE_LIMIT)
             getLogger().info('HubDbSync: draining ' + table + ' from id ' + drain.lastId +
                 ' (the hub reports ' + announcedCeiling + ' as its highest id)');
@@ -285,7 +293,10 @@ module.exports = {
             let result = await this.httpGet(path);
             if (drain.connectionEpoch !== this._wsEpoch ||
                 drain.selectorRevision !== this._selectorRevision) return false;
-            if (!result || !Array.isArray(result.rows)) return false;
+            if (!result || !Array.isArray(result.rows)) {
+                this.reportRowlessPage(table, path, result);
+                return false;
+            }
             if (!(await this.acceptSnapshotPage(table, result))) return false;
 
             drain.pagesFetched++;
@@ -316,6 +327,26 @@ module.exports = {
         return true;
     },
 
+    // A page with no rows array leaves the table undrained and the heartbeat gate shut, so
+    // say which table and what came back. A hub that predates a mirrored table answers its
+    // snapshot route through the pathless JSON-RPC router with HTTP 200 and an error body;
+    // unnamed, that stalled a regtest indexer for ten hours behind a log about other tables.
+    reportRowlessPage(table, path, result) {
+        let shape;
+        let hint = '';
+        if (result && result.error) {
+            let err = result.error;
+            shape = 'an error body: ' + ((err && err.message) ? String(err.message) : JSON.stringify(err));
+            hint = '; a hub that does not serve ' + table + ' answers this way, so check the hub build';
+        } else if (result && typeof result === 'object') {
+            shape = 'keys [' + Object.keys(result).slice(0, 8).join(', ') + ']';
+        } else {
+            shape = String(result);
+        }
+        getLogger().warn('HubDbSync: ' + table + ' snapshot page from ' + path + ' carried no rows array (' +
+            shape + '); the table stays undrained' + hint);
+    },
+
     // The two handshakes every snapshot page passes before a row of it is applied. False
     // refuses the page (and the drain) on a schema version this build does not mirror.
     async acceptSnapshotPage(table, result) {
@@ -325,9 +356,8 @@ module.exports = {
         // consensus-relevant column and fork the ledger. Fail closed: return "not
         // drained" without applying, so bootstrapAll retries and the barrier stays
         // shut, deferring blocks rather than settling against mismatched mirror data.
-        // The != null guard keeps older hubs that send no version working unchanged.
-        if (result.schema_version != null && result.schema_version !== HUB_SCHEMA_VERSION) {
-            getLogger().error('HubDbSync: hub snapshot schema_version ' + result.schema_version +
+        if (!hasExpectedSchemaVersion(result.schema_version)) {
+            getLogger().error('HubDbSync: hub snapshot schema_version ' + schemaVersionLabel(result.schema_version) +
                 ' != local ' + HUB_SCHEMA_VERSION + ' for ' + table +
                 '; refusing to bootstrap. Restart this indexer after upgrading the hub.');
             return false;

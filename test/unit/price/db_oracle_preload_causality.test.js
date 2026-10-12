@@ -40,6 +40,7 @@ const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
 const pca               = require('../../../src/db/prices/oracle_preload_causality_gate.js');
+const { holdSecondsBasisInert } = require('../../helpers/oracle_age_basis');
 
 // Two finalized rounds for one pair. Round 2 is anchored 10 BTC blocks later and
 // carries a consensus timestamp AFTER the block under test: it is the future
@@ -128,6 +129,9 @@ function callFor(db, which){
     return hit;
 }
 
+// The age read graded here is the block-count one, which production networks run
+// until the seconds basis is armed; regtest arms it from genesis, so hold it inert.
+const blockCountAge = () => beforeEach(function(){ holdSecondsBasisInert(sinon); });
 afterEach(function(){ sinon.restore(); });
 
 // Mainnet is armed at genesis by the 2026-09-09 ruling, so the network name alone
@@ -144,6 +148,7 @@ async function belowFlag(fn){
 }
 
 describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tier1', function(){
+    blockCountAge();
     describe('behaviour: does the preload admit a round finalized after the block', function(){
         it('INERT arm (LTC mainnet, key pinned inert): the future round reaches the VM, which is the defect', async function(){
             const db  = dbFor('mainnet', 'LTC');
@@ -199,6 +204,7 @@ describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tie
 });
 
 describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tier1', function(){
+    blockCountAge();
     describe('behaviour: does the preload admit a round finalized after the block', function(){
         it('BTC is unchanged: the exact height cap already excludes the later round', async function(){
             const db  = dbFor('regtest', 'BTC');
@@ -216,6 +222,7 @@ describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tie
 });
 
 describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tier1', function(){
+    blockCountAge();
     describe('gate: which SQL each of the four reads emits', function(){
 
         it('armed: ALL FOUR reads carry the time bound, with the block time bound to it', async function(){

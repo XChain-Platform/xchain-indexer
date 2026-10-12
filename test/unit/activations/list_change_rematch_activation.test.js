@@ -65,6 +65,7 @@ function setup(armed){
         if(sql.includes('FROM lists')) return [];
         // The transfer-aware owner lookup (LS-14): no transfer, so ownership falls back to the source.
         if(sql.includes('FROM list_transfers')) return [];
+        if(sql.includes('INNER JOIN tokens tk')) return [];
         if(sql.includes('FROM\n                    orders o'))
             return [{ action_index: 10, allow_list: LIST_ROOT, block_list: null }];
         if(sql.includes('FROM\n                    swaps s'))
@@ -172,7 +173,7 @@ describe('LIST change rematch activation @regression @tier2', function () {
 
         const create = createBaseData({ ACTION: 'LIST', ACTION_INDEX: LIST_ROOT, BLOCK_INDEX: 200, FORMAT: 0, SOURCE });
         await handler.parse(['0', '2', '', ADDR1], create, null);
-        assert.strictEqual(indexer.indexerDb.doQuery.callCount, 4);
+        assert.strictEqual(indexer.indexerDb.doQuery.callCount, 6);
 
         indexer.indexerDb.doQuery.resetHistory();
         const tokenList = createBaseData({ ACTION: 'LIST', ACTION_INDEX: LIST_ROOT + 1, BLOCK_INDEX: 200, FORMAT: 0, SOURCE });

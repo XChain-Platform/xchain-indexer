@@ -25,7 +25,16 @@
 
 const { timedSweep } = require('./sweeps.js');
 
+function maxId(rows){
+    return rows && rows[0] && rows[0].max_id != null ? rows[0].max_id : 0;
+}
+
 module.exports = {
+
+    async readOrphanedIconBound(db){
+        let rows = await db.doQuery(`SELECT MAX(id) AS max_id FROM tokens`, []);
+        return maxId(rows);
+    },
 
     // Every dataTables row at or above the first orphaned action, sparing retraction write-aheads.
     async purgeActionScopedTables(db, dataTables, firstActionIndex){
@@ -51,10 +60,11 @@ module.exports = {
     },
 
     // icons rows whose token is gone, timed.
-    async sweepOrphanedIcons(db){
+    async sweepOrphanedIcons(db, maxTokenId){
+        if(maxTokenId == null) maxTokenId = await module.exports.readOrphanedIconBound(db);
         let query;
-        query = `DELETE FROM icons WHERE token_id NOT IN (SELECT id FROM tokens)`;
-        return timedSweep(db, 'icons', query, []);
+        query = `DELETE FROM icons WHERE token_id > ? AND token_id NOT IN (SELECT id FROM tokens)`;
+        return timedSweep(db, 'icons', query, [maxTokenId]);
     },
 
     // tokens.escrow_action_index re-derived from the surviving open GIVE_OWNERSHIP offers.

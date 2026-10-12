@@ -67,6 +67,13 @@ module.exports = {
          WHERE kind = 'policy' AND transfer_id IN (${ids.map(() => '?').join(',')})`, ids);
     },
 
+    // LOCAL. Which policy snapshot ids this chain has permanently refused.
+    async getRecordedPolicyRefusalIds(ids){
+        return await this.doQuery(
+            `SELECT transfer_id FROM bridge_settlements
+         WHERE kind = 'refused' AND transfer_id IN (${ids.map(() => '?').join(',')})`, ids);
+    },
+
     // LOCAL. Source legs this chain has already settled, within the candidate chains and
     // indexes. Two IN lists select the CROSS PRODUCT of chains and indexes, so the caller
     // matches the pair itself rather than trusting the query: without that, an applied leg on

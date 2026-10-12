@@ -30,9 +30,8 @@
  *      tick_id, source_id, dest_chain, dest_address_id (v0/v3) or origin_address_id
  *      (v1/v4), amount, decimals, min_depth, memo, status_id, block_index.
  *   2. `Database.setTokenBridged(tick, blockIndex)` for the token spec's `tokens.bridged`
- *      bit, set by the first applied v3 lock. `createToken` derives every
- *      tokens column from the issues rows and this one is not derivable from an ISSUE,
- *      so it needs its own setter.
+ *      bit cache, written by the first applied v3 lock. getTokenInfo derives BRIDGED from
+ *      the applied v3 rows in xbridges instead, so a rollback of the first lock clears it.
  *
  * One action name, one handler with a version switch, one manifest entry, one decoder
  * name, one doc page. The version decides who may broadcast it and on which chain -

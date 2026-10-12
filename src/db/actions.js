@@ -228,7 +228,8 @@ module.exports = {
     },
 
     // Contract state (latest value per key written in this block).
-    // state_key collation is flag-day gated (state_key_collation_activation.js):
+    // state_key collation is flag-day gated (the state_key_collation_activation
+    // registry row in src/protocol_changes/shared_rows_4.js):
     // contract_state is utf8_general_ci (case/accent-folding), so the legacy
     // GROUP BY/ORDER BY treat distinct keys like "Key"/"key" as EQUAL - the
     // folding GROUP BY collapses them to one MAX(id) row, silently dropping the

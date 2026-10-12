@@ -25,7 +25,7 @@ const protocolChanges = require('../protocol_changes.js');
 const { getLogger } = require('../observability/index.js');
 const { CONFIG_ENV } = require('../config.js');
 const { findFeeOutput } = require('./fee_output.js');
-const { maxPriceAgeSecondsAt } = require('./oracle_price_age.js');
+const { maxPriceAgeSecondsAt } = require('./price_age/oracle_price_age.js');
 
 // Batch-cumulative native-fee accounting (BATCH_ISSUANCE_LIMITS).
 //

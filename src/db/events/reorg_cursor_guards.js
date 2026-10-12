@@ -49,8 +49,9 @@ async function assertCursorWitness(db, afterId, cursorWitness){
 // id can only mean the decoder DB was rebuilt or restored out-of-band (AUTO_INCREMENT
 // reset). With the old behavior that stranded cursor made this query return [] forever,
 // silently disabling every future rollback while the indexer kept committing blocks.
-// Fail loud instead: the throw aborts the pass with no block committed (same contract
-// as a read fault above), so the incoherence pages the operator rather than rotting.
+// Fail loud instead: the throw aborts the pass with no block committed and, like a read
+// fault above, ends the process (runBlockLoop has no catch), so the incoherence pages
+// the operator rather than rotting; a restart hits the same throw until the rebuild.
 // Called only when the id>afterId read came back empty.
 async function assertCursorNotAboveNewest(db, afterId){
     let maxRow = await db.doQueryStrict(`SELECT MAX(id) AS max_id FROM events WHERE code='REORG'`);
