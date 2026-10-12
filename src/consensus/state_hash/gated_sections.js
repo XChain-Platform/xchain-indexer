@@ -108,10 +108,11 @@ async function collectBetStatus(db, B){
 // in an earlier block, so no action-scoped hash sees the flip. The completing
 // continuation is the author's last valid chunk, the same author and validity
 // scope restoreStampedAttestHeads resets by; the status is hashed as its resolved
-// string, never its surrogate id, and action_index is a total order.
+// string, never its surrogate id, and action_index is a total order. Each stamp is
+// bound to the batch it completes by the head's declared chunk total and body crc32.
 function collectAttestBatchHead(db, B){
     return tolerantQuery(db,
-        "SELECT p.action_index, s.status AS status FROM attests p " +
+        "SELECT p.action_index, s.status AS status, p.batch_total_chunks AS total_chunks, p.batch_crc32 AS crc32 FROM attests p " +
         "JOIN index_statuses s ON s.id = p.status_id AND s.status LIKE ? " +
         "JOIN actions pa ON pa.action_index = p.action_index " +
         "WHERE p.version = ? AND p.batch_chunk_index = 0 AND ( " +
@@ -119,6 +120,7 @@ function collectAttestBatchHead(db, B){
             "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
             "JOIN actions ca ON ca.action_index = c.action_index AND ca.source_id = pa.source_id " +
             "WHERE c.request_id = p.request_id AND c.version = ? AND c.batch_chunk_index IS NOT NULL " +
+            "AND c.batch_total_chunks = p.batch_total_chunks AND c.batch_crc32 = p.batch_crc32 " +
             "ORDER BY c.action_index DESC LIMIT 1 " +
         ") = ? ORDER BY p.action_index ASC",
         ['%' + ATTEST_BATCH_COMPLETION_STAMP, ATTEST_BATCH_HEAD_VERSION, ATTEST_BATCH_CONTINUATION_VERSION, B]);
