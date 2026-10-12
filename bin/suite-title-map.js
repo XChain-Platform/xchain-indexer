@@ -242,10 +242,26 @@ function runSelfTest() {
             'test:smoke': { error: `cannot load ${path.join(REPO_ROOT, 'test', 'smoke.test.js')}` },
         },
     };
-    const refusal = outputCollectionError(map, path.join(REPO_ROOT, 'tmp', 'pin.json'));
-    assert.strictEqual(refusal, 'refusing --out: collection failed for test:smoke, test:unit');
-    assert.strictEqual(refusal.includes(REPO_ROOT), false);
-    assert.strictEqual(outputCollectionError(map), null);
+    const tempRoot = fs.mkdtempSync(path.join(REPO_ROOT, 'tmp', 'suite-title-map-self-test-'));
+    const pin = path.join(tempRoot, 'pin.json');
+    const errors = [];
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    try {
+        console.error = (message) => errors.push(String(message));
+        process.exitCode = undefined;
+        main(['--out', pin], () => map);
+        assert.strictEqual(fs.existsSync(pin), false);
+        assert.strictEqual(process.exitCode, 1);
+        assert.deepStrictEqual(errors, [
+            'refusing --out: collection failed for test:smoke, test:unit',
+        ]);
+        assert.strictEqual(errors[0].includes(REPO_ROOT), false);
+    } finally {
+        console.error = originalError;
+        process.exitCode = originalExitCode;
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
     console.log('ok - --out refuses collection errors without reporting host paths');
 }
 
@@ -352,8 +368,8 @@ function parseArgs(argv) {
     return opts;
 }
 
-function main() {
-    const opts = parseArgs(process.argv.slice(2));
+function main(argv = process.argv.slice(2), collectMap = buildMap) {
+    const opts = parseArgs(argv);
     if (opts.help) {
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         return;
@@ -362,7 +378,7 @@ function main() {
         runSelfTest();
         return;
     }
-    let map = buildMap(opts.script);
+    let map = collectMap(opts.script);
 
     if (opts.compare) {
         const pin = JSON.parse(fs.readFileSync(opts.compare, 'utf8'));
