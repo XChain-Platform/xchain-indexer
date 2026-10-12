@@ -229,6 +229,18 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
         assert.strictEqual(sync.watermarkIntervalMs, 10000, 'interval unchanged');
         assert.strictEqual(sync.watermarkTimeoutMs, 30000, 'timeout unchanged (env-seeded fallback intact)');
     });
+
+    it('clamps an adopted interval to the 1000 ms floor and the 300000 ms ceiling', function () {
+        const sync = makeWatchdogSync();
+        assert.strictEqual(sync.adoptHubWatermarkInterval(600000), true, 'an over-ceiling interval is still adopted');
+        assert.strictEqual(sync.watermarkIntervalMs, 300000, 'clamped to the ceiling');
+        assert.strictEqual(sync.watermarkTimeoutMs, 900000, 'timeout is 3x the clamped interval');
+        sync.adoptHubWatermarkInterval(299999);
+        assert.strictEqual(sync.watermarkIntervalMs, 299999, 'just under the ceiling is adopted unclamped');
+        assert.strictEqual(sync.adoptHubWatermarkInterval(500), true, 'an under-floor interval is still adopted');
+        assert.strictEqual(sync.watermarkIntervalMs, 1000, 'clamped to the floor');
+        assert.strictEqual(sync.watermarkTimeoutMs, 3000, 'timeout is 3x the floor');
+    });
 });
 
 describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () {

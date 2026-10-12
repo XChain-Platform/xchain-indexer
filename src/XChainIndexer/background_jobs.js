@@ -26,6 +26,40 @@ const retention       = require('../chain/retention.js');
 const { CONFIG_ENV }  = require('../config.js');
 const { getLogger }   = require('../observability/index.js');
 
+// Report phase 2 of one sweep with node reclaim on. A skip (reclaimOrphanNodes's
+// too_many_nodes cap) warns once on entering that state and logs one line when
+// reclaim runs again, so an opted-in reclaim never stops without a word; every
+// sweep also emits a [METRIC] line carrying the skip state and the counts.
+function reportNodeReclaim(host, cfg, nodes, sweepDurationMs){
+    const chainLabel = host.config['COIN'] + '/' + host.config['NETWORK'];
+    nodes = nodes || {};
+    const skipReason = nodes.skipped ? (nodes.reason || 'unknown') : null;
+    if(skipReason){
+        host._stateReclaimSkips = (host._stateReclaimSkips || 0) + 1;
+        if(host._stateReclaimSkipReason !== skipReason)
+            getLogger().warn('XChainIndexer: node reclaim is not running for ' + chainLabel + ' (' + skipReason +
+                '): state_tree_nodes holds ' + nodes.totalNodes + ' nodes, above STATE_TREE_METRIC_MAX_NODES=' +
+                cfg.maxNodes + '; the table keeps growing and phase-1 root prune still runs');
+        host._stateReclaimSkipReason = skipReason;
+    } else {
+        if(host._stateReclaimSkipReason)
+            getLogger().info('XChainIndexer: node reclaim resumed for ' + chainLabel + ' after ' +
+                host._stateReclaimSkips + ' skipped sweep(s)');
+        host._stateReclaimSkipReason = null;
+        host._stateReclaimSkips = 0;
+    }
+    getLogger().info('[METRIC] ' + JSON.stringify({
+        metric: 'state_retention_node_reclaim', component: 'indexer',
+        chain: host.config['COIN'], network: host.config['NETWORK'],
+        skipped: !!skipReason, reason: skipReason,
+        total_nodes: Number.isFinite(nodes.totalNodes) ? nodes.totalNodes : null,
+        reachable_nodes: Number.isFinite(nodes.reachable) ? nodes.reachable : null,
+        max_nodes: cfg.maxNodes, deleted: nodes.deleted || 0,
+        sweep_duration_ms: sweepDurationMs, consecutive_skips: host._stateReclaimSkips,
+        ts: Date.now()
+    }));
+}
+
 module.exports = {
 
     // Periodically emit a read-only orphan-count metric for the COW state_tree_nodes store so
@@ -104,9 +138,11 @@ module.exports = {
             if(this._stateRetentionRunning) return;   // a prior slow sweep is still running
             this._stateRetentionRunning = true;
             try {
+                const sweepStart = Date.now();
                 const result = await retention.runSweep(
                     this.indexerDb, this.config['COIN'], this.config['NETWORK'], cfg,
                     { runExclusive });
+                if(cfg.nodeReclaimEnabled) reportNodeReclaim(this, cfg, result.nodes, Date.now() - sweepStart);
                 const rootsDeleted = result.roots && result.roots.deleted ? result.roots.deleted : 0;
                 const nodesDeleted = result.nodes && result.nodes.deleted ? result.nodes.deleted : 0;
                 if(rootsDeleted > 0 || nodesDeleted > 0){

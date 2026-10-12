@@ -252,8 +252,8 @@ const STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME = 1791804379;
 const ITER_SET_METER_MAINNET_TIME = UNARMED;
 const ITER_SET_METER_TESTNET_TIME = 1791804379;
 // DISPENSER_REFILL: a refill that adds escrow to a dispenser consults the token's trade
-// controller (actions/dispenser/controller_guard.js). Inert on every network until a
-// release cut arms it; mainnet in particular stays null until the operator arms it.
+// controller (actions/dispenser/controller_guard.js). Mainnet stays UNARMED until the
+// operator arms it; testnet is armed at the instant below.
 const DISPENSER_REFILL_MAINNET_TIME = UNARMED;
 const DISPENSER_REFILL_TESTNET_TIME = 1791804379;
 const STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME = UNARMED;

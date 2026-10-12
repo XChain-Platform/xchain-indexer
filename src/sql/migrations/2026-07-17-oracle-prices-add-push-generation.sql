@@ -9,12 +9,14 @@
 -- migration ledgers it. The startup drift reconciler adds it (NOT NULL + DEFAULT
 -- is add-eligible) on indexer-booted nodes, so schema-from-definitions converges;
 -- a DB converged by replaying the dated migrations alone (operator-managed /
--- rebuilt replica) keeps the pre-fence shape -- its mirror rows are never
--- generation-fenced and the item-5308 reorg-retraction semantics silently do not
--- apply. hub_db_sync already guards for the column's absence
--- (`cols.includes('push_generation')`, `fenced ? ' AND push_generation <= ?' : ''`),
--- which is exactly the divergence this ledgers away. Same class as
--- capability_snapshots.source (2026-06-14).
+-- rebuilt replica) keeps the pre-fence shape. hub_db_sync guards for the column's
+-- absence only on the row UPSERT (`cols.includes('push_generation')` in
+-- row_upserts.js). The retraction DELETE has no such guard: `fenced` comes from the
+-- incoming event's retraction_generation alone and the fenced DELETE appends
+-- `AND push_generation <= ?` unconditionally, so on a table missing the column every
+-- fenced retraction fails with ER_BAD_FIELD_ERROR and the price row stays mirrored;
+-- it never degrades to an unfenced delete. That divergence is what this ledgers away.
+-- Same class as capability_snapshots.source (2026-06-14).
 --
 -- Additive + idempotent: ADD COLUMN IF NOT EXISTS re-runs as a no-op; the spec
 -- and AFTER anchor (action_index) match oracle_prices.sql exactly.

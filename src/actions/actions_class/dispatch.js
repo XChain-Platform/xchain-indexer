@@ -142,11 +142,11 @@ module.exports = {
         if((action == 'ORDER_MATCH' || action == 'SWAP_MATCH') && data && this._primaryVerdict == null)
             this._primaryVerdict = { status: data['STATUS'], actionIndex: data['ACTION_INDEX'] };
 
-        // Deterministic index-id pre-pass: register the NEW wire-field addresses this
-        // action introduces, in byte-sorted VALUE order, BEFORE the handler runs. This
-        // pins each new address's index id to the VALUE it carries rather than to the
-        // order the handler happens to intern it, so the wire ^<id> address form resolves
-        // identically on every node and across code refactors. Runs after createActionIndex
+        // Deterministic index-id pre-pass: for the fixed-layout actions setActionParamHandler
+        // maps, register the NEW wire-field addresses in byte-sorted VALUE order BEFORE the
+        // handler runs, pinning each id to the VALUE rather than to the handler's interning
+        // order (other actions keep that fixed handler order). Either way the wire ^<id>
+        // address form resolves identically on every node. Runs after createActionIndex
         // (which already registered SOURCE first) and covers the BATCH path too, since
         // batch.js dispatches each sub-action back through processAction.
         await this.assignActionAddressIds(action, params, data, error);

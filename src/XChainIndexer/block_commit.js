@@ -161,8 +161,16 @@ module.exports = {
     // `lastIndexerBlock` is the loop's cursor at the fault: the previous block, or this
     // one when it had committed and a post-commit step threw.
     async abandonBlock(error, lastIndexerBlock){
-        // Roll back all writes for this block so the DB stays at the end of the previous block
-        await this.indexerDb.rollbackTransaction();
+        // Roll back all writes for this block so the DB stays at the end of the previous block.
+        // A failed rollback is held until the block fault is recorded, then rethrown.
+        let rollbackErr = null;
+        try {
+            await this.indexerDb.rollbackTransaction();
+        } catch(e) {
+            rollbackErr = e;
+            getLogger().error('Rollback after a block fault at cursor ' + lastIndexerBlock + ' failed: ' +
+                ((e && e.message) || e) + '; block error: ' + ((error && error.message) || error));
+        }
 
         // The block is no longer in flight, so no read can be attributed
         // to it. priceBarrierForceBlock is deliberately NOT cleared here: when
@@ -171,5 +179,6 @@ module.exports = {
         this.priceBarrierSkipped = false;
 
         this.noteBlockFault(error, lastIndexerBlock);
+        if(rollbackErr) throw rollbackErr;
     }
 };

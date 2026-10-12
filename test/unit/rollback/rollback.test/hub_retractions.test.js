@@ -220,7 +220,7 @@ describe('Rollback @regression @tier3', function () {
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         idx.indexerDb.enqueueHubPush = sinon.stub().resolves();
-        idx.hubPushQueue = hubPushQueue;   // captured by the Rollback constructor
+        idx.hubPushQueue = hubPushQueue;   // read from the indexer when the retraction block runs
         const rb = new Rollback(idx);
         idx.util.resetLists();
         idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);

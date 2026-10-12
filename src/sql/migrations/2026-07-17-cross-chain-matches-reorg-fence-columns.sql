@@ -11,11 +11,15 @@
 -- The startup drift reconciler adds all three (they carry DEFAULTs) on
 -- indexer-booted nodes, so schema-from-definitions converges; a DB converged by
 -- replaying the dated migrations alone (operator-managed / rebuilt replica) never
--- gains them, so the generation-fenced retraction they exist for silently
--- degrades there -- hub_db_sync fences deletes conditionally on column presence
--- (`... WHERE a_push_generation ...`, `fenced ? ' AND push_generation <= ?' : ''`),
--- so the fence just no-ops on a table missing the column. Same
--- definition-without-ledger class as the sibling 2026-06-09 partial-fill and
+-- gains them, and the generation-fenced retraction they exist for FAILS there:
+-- hub_db_sync derives `fenced` from the incoming event's retraction_generation
+-- alone, never from local column presence, and the fenced DELETE names
+-- a_push_generation / b_push_generation unconditionally. On a table missing the
+-- columns that DELETE fails with ER_BAD_FIELD_ERROR and the match stays mirrored;
+-- it never degrades to an unfenced delete. cross_chain_matches is quorum-class,
+-- so hub_db_sync refuses unfenced retractions of it outright and every retraction
+-- it accepts hits the error. Skipping this migration on such a replica is not
+-- harmless. Same definition-without-ledger class as the sibling 2026-06-09 partial-fill and
 -- 2026-07-07 payout-legs migrations for this table.
 --
 -- Additive + idempotent: ADD COLUMN IF NOT EXISTS re-runs as a no-op; the specs

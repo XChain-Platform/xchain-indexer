@@ -157,7 +157,9 @@ module.exports = {
     // they sit here rather than at the end of rollback(), where a throw would skip them.
     // Commit: the rollback is now atomically applied
     async commitAndInvalidateCaches(){
-        await this.indexerDb.commitTransaction();
+        // False means no reorg transaction was open to commit; throw into the unwind path.
+        if((await this.indexerDb.commitTransaction()) === false)
+            throw new Error('reorg rollback: no open transaction at commit; nothing was committed');
 
         // Invalidate the height-keyed getBlockTime() memo on BOTH DB instances. This reorg
         // just changed the content of every height >= block_index: the decoder re-inserted
@@ -231,9 +233,11 @@ module.exports = {
     // 5297); resume() is in the finally so the queue always restarts even if a delivery throws.
     async deliverStagedRetractions(firstActionIndex, retractionGeneration, stagedRetractions){
         if(stagedRetractions.length > 0){
-            // await: pause() now waits for any in-flight drain to finish (HUB-RETRACT-3), so a
-            // pre-fetched stale forward push cannot land on the hub after our retraction below.
-            if(this.hubPushQueue) await this.hubPushQueue.pause();
+            // Read the queue from the indexer at use; it is created after Rollback is built.
+            // pause() waits for any in-flight drain, so a pre-fetched stale forward push
+            // cannot land on the hub after our retraction below.
+            let queue = this.hubPushQueue || (this.indexer && this.indexer.hubPushQueue) || null;
+            if(queue) await queue.pause();
             try {
                 let coin       = this.config['COIN'];
                 let liveByType = {
@@ -249,7 +253,7 @@ module.exports = {
                 };
                 // A success settles the row rather than dropping it: with an unpinned hub set the
                 // other candidates still need the (closed-range) retraction from the queue.
-                let live = AddressRetry.liveFacade(this.hubPushQueue || (this.indexer && this.indexer.hubPushQueue));
+                let live = AddressRetry.liveFacade(queue);
                 for(let r of stagedRetractions){
                     let target = live ? live.liveDeliveryTarget(this.hubClient) : { client: this.hubClient, address: null };
                     try {
@@ -267,7 +271,7 @@ module.exports = {
                     }
                 }
             } finally {
-                if(this.hubPushQueue) this.hubPushQueue.resume();
+                if(queue) queue.resume();
             }
         }
     },

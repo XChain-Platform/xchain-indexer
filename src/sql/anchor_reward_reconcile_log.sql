@@ -16,8 +16,8 @@ DROP TABLE IF EXISTS anchor_reward_reconcile_log;
 CREATE TABLE anchor_reward_reconcile_log (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     anchor_action_index BIGINT UNSIGNED,                  -- audit slot for a triggering ANCHOR wire action_index; always NULL today, because the only writer is the BTC-side derive (consensus/anchor_reward_derive.js), whose rows arrive via the mirror and carry no wire action
-    reward_type         VARCHAR(20) NOT NULL,             -- the deleted loser row's reward_type ('anchor_<chain>' / 'anchor_archive')
-    round_reference     BIGINT UNSIGNED,                  -- the deleted loser row's round_reference (CHECKPOINT_SEQ for the per-chain legs, MATCH_BATCH_SEQ for 'anchor_archive')
+    reward_type         VARCHAR(20) NOT NULL,             -- the deleted loser row's reward_type ('anchor_bundle' / 'anchor_archive', or a retired 'anchor_<chain>')
+    round_reference     BIGINT UNSIGNED,                  -- the deleted loser row's round_reference (SNAPSHOT_BLOCK for 'anchor_bundle', MATCH_BATCH_SEQ for 'anchor_archive', CHECKPOINT_SEQ for the retired per-chain legs)
     round_qualifier     BIGINT UNSIGNED NOT NULL DEFAULT 0, -- the deleted loser row's validator_rewards.round_qualifier: snapshot_block for 'anchor_archive' (whose MATCH_BATCH_SEQ round_reference is a reissuable dense counter), 0 for every other reward type. Part of the reward's UNIQUE identity, so the reorg restore and xchain-sync's replica-side mirror of the collapse both need it: keyed on the four older columns alone, a restore or a mirrored DELETE would reach the OTHER snapshot's row for a reissued seq.
     source_id           BIGINT UNSIGNED NOT NULL,         -- deleted row pre-image: staking address
     signing_pubkey_id   BIGINT UNSIGNED NOT NULL,         -- deleted row pre-image: FK to index_pubkeys
