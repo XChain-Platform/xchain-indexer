@@ -954,6 +954,14 @@
       "installMethods @regression @tier3 keeps writable false",
       "installMethods @regression @tier3 lets a later part overwrite an earlier one without throwing"
     ],
+    "1430f668b647634f": [
+      "assertConsensusDependencies fails closed when the VM dependency checker is unavailable",
+      "assertConsensusDependencies has no bypass: env flags do not change the outcome",
+      "assertConsensusDependencies is exported as a function",
+      "assertConsensusDependencies passes only the VM-owned dependency result",
+      "assertConsensusDependencies refuses the mismatch with the VM-owned diagnostic",
+      "assertConsensusDependencies runs after the epoch gate and before VM construction"
+    ],
     "144c10625486ea84": [
       "Attest (ATTEST) @regression @tier3 E1: request fees \u00a711: leader broadcast-fee reimbursement a feeless request pays no reimbursement (nothing is escrowed to carve from)",
       "Attest (ATTEST) @regression @tier3 E1: request fees \u00a711: leader broadcast-fee reimbursement a missing/stale oracle price reimburses 0 and never wedges the settle",
@@ -15530,8 +15538,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1269,
-      "titleCount": 12989,
+      "fileCount": 1270,
+      "titleCount": 12995,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15886,6 +15894,7 @@
         "test/unit/actions/token/uncapped_max_supply.test.js": "40d8afc9cd271bab",
         "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js": "2d0e6bd90f6953d4",
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
+        "test/unit/actions/vm_runtime_dependencies.test.js": "1430f668b647634f",
         "test/unit/actions/vote_binding_dry_run_refusal.test.js": "03383d47d43bb92e",
         "test/unit/actions/xcall.test.js": "cdaf976c3205a143",
         "test/unit/actions/xcall.test/process_result.test.js": "23c7c709347d6c2b",
