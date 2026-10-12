@@ -150,9 +150,42 @@ describe('Hash coverage guard @regression', function () {
 
 describe('Hash coverage guard @regression', function () {
     describe('content-parity coverage declaration', function () {
-        it('in-place parity columns stay declared apart and match every order_matches UPDATE', function () {
+        it('declares every state-hash table and its later-block mutation columns', function () {
+            assert.deepStrictEqual(lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS, {
+                anchor_actions:       ['status_id'],
+                attests:              ['request_status', 'resolved_block', 'callback_execute_action_index',
+                                       'batch_action_index', 'status_id'],
+                bet_feeds:            ['feed_status_id', 'closed_block', 'terminal_block'],
+                bets:                 ['bet_status_id', 'settled_block'],
+                contract_delegations: ['deactivation_block'],
+                contract_stakes:      ['amount', 'deactivation_block'],
+                contract_unstakes:    ['amount', 'status_id'],
+                credits:              [],
+                delegations:          ['deactivation_block'],
+                order_matches:        ['status_id'],
+                polls:                ['poll_status', 'winning_option', 'total_weight', 'total_voters',
+                                       'quorum_met', 'min_voters_met', 'fail_reason', 'decided_early',
+                                       'effective_close_block', 'finalized_action_index', 'resolved_block',
+                                       'deposit_resolved', 'callback_execute_action_index', 'callback_due_block'],
+                stakes:               ['amount', 'deactivation_block'],
+                tokens:               ['max_supply', 'max_mint', 'decimals', 'description',
+                                       'lock_max_supply', 'lock_mint', 'lock_mint_supply', 'lock_max_mint',
+                                       'lock_description', 'lock_sleep', 'lock_callback', 'callback_block',
+                                       'callback_tick_id', 'callback_amount', 'allow_list', 'block_list',
+                                       'mint_address_max', 'mint_start_block', 'mint_stop_block',
+                                       'bridge_chains', 'min_depth', 'lock_bridge', 'supply', 'owner_id',
+                                       'last_action_index', 'escrow_action_index', 'bridged'],
+                unstakes:             ['amount', 'status_id'],
+                xcalls:               ['request_status', 'result_status', 'result_payload', 'resolved_block',
+                                       'callback_action_index'],
+            });
+            assert.deepStrictEqual(
+                lifecycle.contentParityMutableTables().filter(t => !(t in lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS)),
+                []);
+        });
+
+        it('keeps order_matches parity columns apart and matches every UPDATE', function () {
             // Kept out of the by-design map so the end-to-end byte oracle still compares them.
-            assert.deepStrictEqual(Object.keys(lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS), ['order_matches']);
             assert.ok(!lifecycle.CONTENT_PARITY_EXCLUDED_COLUMNS.order_matches);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('order_matches'), ['status_id']);
             const updates = orderMatchUpdateColumns();

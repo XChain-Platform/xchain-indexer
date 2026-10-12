@@ -245,13 +245,40 @@ const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({
 // the later value inside a window it already published. Unlike the map above, the
 // follower DOES converge on them, so they stay out of CONTENT_PARITY_EXCLUDED_COLUMNS,
 // which the end-to-end byte oracle also reads and must keep comparing at rest.
+// Every state_hash table has an entry; an empty list means its mutation class adds
+// rows rather than editing their columns in place.
 // `order_matches.status_id` is promoted 'pending_coinpay' -> 'valid' by the COINPAY
 // that settles the match (every later-block UPDATE of order_matches sets status_id
 // alone; createOrderMatch only re-writes its own action's row), carried to followers
 // as updated-rows class 8 and re-derived on reorg. No hash commits it yet; a gated
 // state_hash term would, and would retire this entry.
 const CONTENT_PARITY_IN_PLACE_COLUMNS = Object.freeze({
-    order_matches: Object.freeze(['status_id']),
+    anchor_actions:       Object.freeze(['status_id']),
+    attests:              Object.freeze(['request_status', 'resolved_block', 'callback_execute_action_index',
+                                         'batch_action_index', 'status_id']),
+    bet_feeds:            Object.freeze(['feed_status_id', 'closed_block', 'terminal_block']),
+    bets:                 Object.freeze(['bet_status_id', 'settled_block']),
+    contract_delegations: Object.freeze(['deactivation_block']),
+    contract_stakes:      Object.freeze(['amount', 'deactivation_block']),
+    contract_unstakes:    Object.freeze(['amount', 'status_id']),
+    credits:              Object.freeze([]),
+    delegations:          Object.freeze(['deactivation_block']),
+    order_matches:        Object.freeze(['status_id']),
+    polls:                Object.freeze(['poll_status', 'winning_option', 'total_weight', 'total_voters',
+                                         'quorum_met', 'min_voters_met', 'fail_reason', 'decided_early',
+                                         'effective_close_block', 'finalized_action_index', 'resolved_block',
+                                         'deposit_resolved', 'callback_execute_action_index', 'callback_due_block']),
+    stakes:               Object.freeze(['amount', 'deactivation_block']),
+    tokens:               Object.freeze(['max_supply', 'max_mint', 'decimals', 'description',
+                                         'lock_max_supply', 'lock_mint', 'lock_mint_supply', 'lock_max_mint',
+                                         'lock_description', 'lock_sleep', 'lock_callback', 'callback_block',
+                                         'callback_tick_id', 'callback_amount', 'allow_list', 'block_list',
+                                         'mint_address_max', 'mint_start_block', 'mint_stop_block',
+                                         'bridge_chains', 'min_depth', 'lock_bridge', 'supply', 'owner_id',
+                                         'last_action_index', 'escrow_action_index', 'bridged']),
+    unstakes:             Object.freeze(['amount', 'status_id']),
+    xcalls:               Object.freeze(['request_status', 'result_status', 'result_payload', 'resolved_block',
+                                         'callback_action_index']),
 });
 
 // ── Derivation helpers ──────────────────────────────────────────────────
