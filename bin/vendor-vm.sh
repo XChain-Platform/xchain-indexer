@@ -124,12 +124,17 @@ tree_manifest() {
 }
 
 stage_sources() {
+    if [ -L "$DEST" ]; then
+        rm -- "$DEST"
+        mkdir -p "$DEST"
+    fi
     rsync -a --delete \
         --exclude 'node_modules' \
         --exclude '.git' \
         --exclude 'test' \
         --exclude 'bench' \
         --exclude 'reports' \
+        --exclude '/tmp' \
         "$SRC/" "$DEST/"
 }
 
