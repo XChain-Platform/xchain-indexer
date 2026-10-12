@@ -228,12 +228,23 @@ function expand(map, scriptName) {
 }
 
 /** Replace one collected script without discarding the rest of an existing map. */
-function mergeScriptMap(existing, fresh, scriptName) {
+function mergeScriptMap(existing, fresh, scriptName, expectedScripts) {
     if (!existing || !existing.scripts || !existing.titleSets) {
         throw new Error('the existing output is not a suite-title map');
     }
     if (!fresh || !fresh.scripts || !Object.prototype.hasOwnProperty.call(fresh.scripts, scriptName)) {
         throw new Error(`the fresh map does not contain ${scriptName}`);
+    }
+    if (expectedScripts) {
+        const existingNames = Object.keys(existing.scripts);
+        const missing = expectedScripts.filter((name) => !existingNames.includes(name));
+        const stale = existingNames.filter((name) => !expectedScripts.includes(name));
+        if (missing.length || stale.length) {
+            const details = [];
+            if (missing.length) details.push(`missing ${missing.join(', ')}`);
+            if (stale.length) details.push(`stale ${stale.join(', ')}`);
+            throw new Error(`the existing output is not a full current suite-title map (${details.join('; ')})`);
+        }
     }
 
     const scripts = {};
@@ -344,7 +355,14 @@ function main() {
             return;
         }
         try {
-            map = mergeScriptMap(JSON.parse(fs.readFileSync(opts.out, 'utf8')), map, opts.script);
+            const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'));
+            const expectedScripts = Object.keys(pkg.scripts || {}).filter((name) => name.startsWith('test')).sort();
+            map = mergeScriptMap(
+                JSON.parse(fs.readFileSync(opts.out, 'utf8')),
+                map,
+                opts.script,
+                expectedScripts
+            );
         } catch (e) {
             console.error(`cannot refresh ${opts.script} in ${path.relative(REPO_ROOT, opts.out)}: ${e.message}`);
             process.exitCode = 1;
