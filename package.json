@@ -10,7 +10,7 @@
     "url": "https://github.com/XChain-Platform/xchain-indexer.git"
   },
   "dependencies": {
-    "acorn": "8.18.0",
+    "acorn": "8.16.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^5.2.1",
