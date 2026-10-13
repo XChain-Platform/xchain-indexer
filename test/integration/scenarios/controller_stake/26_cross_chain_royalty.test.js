@@ -144,7 +144,19 @@ async function setupRoyaltyRail() {
             { source: OWNER, data: `DEPLOY|0|${b64(SEGLEG)}|300000|` },
         ]);
         indexer = await initIndexer();
+        // The fixture validators back only the pinned remote token row (snapshot 1200);
+        // the injected match settles against the validator seeded in capability_snapshots,
+        // so every other snapshot block falls through to the real readers.
+        const realValidators = indexer.indexerDb.getValidatorsByCapability.bind(indexer.indexerDb);
+        const realWeights = indexer.indexerDb.getStakeWeightsByCapability.bind(indexer.indexerDb);
         stubRemoteTokenValidators(indexer.indexerDb);
+        const fixtureValidators = indexer.indexerDb.getValidatorsByCapability;
+        const fixtureWeights = indexer.indexerDb.getStakeWeightsByCapability;
+        const PINNED_SNAPSHOT = signedRemoteTokenRow().snapshot_block;
+        indexer.indexerDb.getValidatorsByCapability = (cap, block) =>
+            Number(block) === PINNED_SNAPSHOT ? fixtureValidators(cap, block) : realValidators(cap, block);
+        indexer.indexerDb.getStakeWeightsByCapability = (cap, block) =>
+            Number(block) === PINNED_SNAPSHOT ? fixtureWeights(cap, block) : realWeights(cap, block);
         const realMirrorDb = indexer.indexerDb.mirrorDb.bind(indexer.indexerDb);
         indexer.indexerDb.mirrorDb = () => Object.create(realMirrorDb(), {
             // A seeded remote_token_snapshots row will replace this accessor stub;
