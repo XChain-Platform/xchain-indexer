@@ -2427,6 +2427,14 @@
       "ATTEST v5 batch head: the reorg reset is scoped to the head's own encoding @regression against a real SQL engine an orphaned chunk of a republished encoding leaves the stamped head stamped",
       "ATTEST v5 batch head: the reorg reset is scoped to the head's own encoding @regression against a real SQL engine an orphaned chunk of the head's own encoding still restores it beside a republish"
     ],
+    "2a1a8710a1fdeb21": [
+      "rewardFamilyVersions drops bytes 6 and 7 when legacyDropped is true",
+      "rewardFamilyVersions keeps bytes 6 and 7 for a legacyDropped that is not exactly true",
+      "rewardFamilyVersions leaves 6 and 7 in ATTESTED_VERSIONS",
+      "rewardFamilyVersions returns a copy that can be mutated without changing the map",
+      "rewardFamilyVersions returns null for an unknown or inherited family name",
+      "rewardFamilyVersions returns the full list for each family by default"
+    ],
     "2a48ae7712d6f6d1": [
       "ANCHOR DOGE attestation pass removal @regression @tier3 keeps reward settlement and publisher-attestation quorum code absent"
     ],
@@ -16883,8 +16891,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1284,
-      "titleCount": 13069,
+      "fileCount": 1285,
+      "titleCount": 13075,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17300,6 +17308,7 @@
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_2.test.js": "3bcad7510fb96ba4",
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_3.test.js": "8f46a41dad0c30a9",
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_v3_fold_binding.test.js": "172d465274d6a2b5",
+        "test/unit/anchor/anchor_proof_client.test/reward_family_versions.test.js": "2a1a8710a1fdeb21",
         "test/unit/anchor/anchor_reward_activation_parity.test.js": "ca92890f8ba59712",
         "test/unit/anchor/anchor_reward_canonical_golden.test.js": "8ac980aa3b54b80e",
         "test/unit/anchor/anchor_reward_derive.test.js": "7dcecc08d3d94927",
