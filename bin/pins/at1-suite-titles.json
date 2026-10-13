@@ -12962,6 +12962,13 @@
       "slashContractStake active-first gate @regression @tier1 is armed on regtest and at the per-chain testnet cut, while mainnet stays inert",
       "slashContractStake active-first gate @regression @tier1 legacy: keeps action-index LIFO and therefore debits pending stake first"
     ],
+    "c1dd57bac53e1487": [
+      "rollback contract_stakes deactivation reset also matches the stake by target contract and tick",
+      "rollback contract_stakes deactivation reset clears only the exact orphaned stamp",
+      "rollback contract_stakes deactivation reset does not join on the signing key",
+      "rollback contract_stakes deactivation reset joins contract_unstakes on source_id",
+      "rollback contract_stakes deactivation reset runs the four resets in order, contract_stakes third"
+    ],
     "c1df08e38339ad37": [
       "ANCHOR v3 empty fold rejection keeps a one-section fold valid",
       "ANCHOR v3 empty fold rejection preserves the historical empty-fold verdict below activation",
@@ -16875,8 +16882,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1283,
-      "titleCount": 13063,
+      "fileCount": 1284,
+      "titleCount": 13068,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17690,6 +17697,7 @@
         "test/unit/db/prices/landed_bound_clause.test.js": "d5f3085637164b79",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/remote_token_snapshots.test.js": "533ef9b6b35e6789",
+        "test/unit/db/rollback/in_place_flips_contract_stakes_reset.test.js": "c1dd57bac53e1487",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
         "test/unit/db/sql_datetime_hub_mirrors.test.js": "5b7db85e6d2fb689",
