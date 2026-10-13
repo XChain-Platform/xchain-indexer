@@ -28,8 +28,13 @@ describe('LEGACY_ANCHOR_REWARD_PIN', function(){
     it('is declared unarmed on every network', function(){
         let row = CHANGES.find((c) => c[0] === 'LEGACY_ANCHOR_REWARD_PIN');
         assert.ok(row);
-        assert.strictEqual(row[2], row[3]);
-        assert.strictEqual(row[2], require('../../../src/protocol_changes/core.js').UNARMED);
+        let { UNARMED } = require('../../../src/protocol_changes/core.js');
+        // row = [name, version, mainnet_time, testnet_time, regtest_time, mainnet_block, testnet_block, regtest_block]
+        assert.strictEqual(row.length, 8);
+        assert.strictEqual(row[2], UNARMED);
+        assert.strictEqual(row[3], UNARMED);
+        assert.strictEqual(row[4], UNARMED);
+        assert.deepStrictEqual(row.slice(5), [0, 0, 0]);
     });
     it('mints a pinned tuple while the gate is off', async function(){
         let d = db();
