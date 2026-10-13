@@ -4,6 +4,7 @@
 
 const assert = require('assert');
 const { FEE_DEST, makeUtil, makeDb, makeCtx, BTC_PRICES } = require('../fees/fee_quote.test/helpers/quote_ctx.js');
+const Actions = require('../../../src/actions/index.js');
 const { exemptFeeQuote } = require('../../../src/actions/actions_class/quote_answers.js');
 
 describe('requiredFeeSatsExact', function () {
@@ -33,8 +34,10 @@ describe('requiredFeeSatsExact', function () {
     it('dry-run raw view mirrors the priced string', async function () {
         let util = makeUtil('BTC', FEE_DEST);
         let { ctx } = makeCtx(util, makeDb({ prices: BTC_PRICES }));
-        let q = await ctx.computeFeeQuote.call(ctx, { action: 'send', params: {} }).catch(() => null);
-        if(q && q.requiredFeeSats !== undefined && q.requiredFeeSats !== null)
-            assert.strictEqual(q.requiredFeeSatsExact, String(q.requiredFeeSats));
+        ctx.computeFeeQuoteDryRun = Actions.prototype.computeFeeQuoteDryRun;
+        let q = await ctx.computeFeeQuoteDryRun.call(ctx, { action: 'send', params: ['0', 'FOO', '1', 'dest'], source: 'src' });
+        assert.strictEqual(q.feeSupported, true);
+        assert.strictEqual(q.requiredFeeSats, 2000);
+        assert.strictEqual(q.requiredFeeSatsExact, '2000');
     });
 });
