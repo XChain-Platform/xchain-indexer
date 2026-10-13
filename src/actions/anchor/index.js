@@ -89,7 +89,7 @@ function foldHeaderReason(config, data, error){
         return 'invalid: SECTION_COUNT (empty fold)';
     return null;
 }
-async function checkFoldSeqs(handler, sections, archive, error){
+async function checkFoldSeqs(handler, data, sections, archive, error){
     if(error) return error;
     for(let section of sections){
         let maximum = await handler.indexerDb.getMaxAnchorCheckpointSeq(section.CHAIN, section.NETWORK);
@@ -99,7 +99,9 @@ async function checkFoldSeqs(handler, sections, archive, error){
     }
     if(archive === null) return null;
     let wrapper = sections[Number(archive.WRAPPER_SECTION_INDEX)];
-    let watermark = await handler.indexerDb.getArchiveReplayWatermarks();
+    let wrapperRows = await handler.actions.protocolChanges.isEnabled(
+        'ARCHIVE_REPLAY_WRAPPER_WATERMARK', Number(data['BLOCK_INDEX']));
+    let watermark = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows);
     let batchStale = watermark.batchSeq !== null && Number(archive.MATCH_BATCH_SEQ) < watermark.batchSeq;
     let checkpointStale = watermark.checkpointSeq !== null && Number(wrapper.CHECKPOINT_SEQ) < watermark.checkpointSeq;
     return batchStale && checkpointStale ?
@@ -316,7 +318,7 @@ class Anchor {
         error = tail.error;
 
         if(!error) error = foldArchiveReason(this, archive, data);
-        error = await checkFoldSeqs(this, sections, archive, error);
+        error = await checkFoldSeqs(this, data, sections, archive, error);
         error = await archiveHead.checkFoldArchiveReissue(this, data, archive, error);
         for(let section of sections)
             Object.defineProperty(section, 'FOLD_ARCHIVE', { value: archive, configurable: true });

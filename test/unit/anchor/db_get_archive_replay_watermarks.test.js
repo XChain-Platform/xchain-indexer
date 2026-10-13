@@ -101,6 +101,18 @@ describe('getArchiveReplayWatermarks()', function () {
         // ANCHOR 'unverified'; excluding that status would fork the watermark.
         assert.ok(/status\s+IN\s*\(\s*'valid'\s*,\s*'unverified'\s*\)/i.test(query),
                   "status filter must admit both 'valid' and 'unverified'");
+
+        // ARCHIVE_REPLAY_WRAPPER_WATERMARK: the wrapper chain row of a v3 archive joins the
+        // same single statement only when the caller passes the gate; off, nothing changes.
+        stub.resetHistory();
+        await db.getArchiveReplayWatermarks(false);
+        assert.ok(!/a\.version\s*=\s*3/i.test(stub.firstCall.args[0]), 'no wrapper term below the flag');
+        stub.resetHistory();
+        await db.getArchiveReplayWatermarks(true);
+        assert.strictEqual(stub.callCount, 1);
+        assert.ok(/a\.version\s*=\s*3\s+AND\s+a\.chain\s+IS\s+NOT\s+NULL\s+AND\s+a\.total_chunks\s+IS\s+NOT\s+NULL/i.test(stub.firstCall.args[0]),
+                  'wrapper chain row of a v3 archive must feed the checkpoint watermark');
+        assert.deepStrictEqual(stub.firstCall.args[1], ARCHIVE_HEAD_VERSIONS);
     });
 
     it('returns nulls when no archive row exists, leaving the guard inert', async function () {
