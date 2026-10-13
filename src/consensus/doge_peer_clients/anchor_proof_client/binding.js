@@ -98,11 +98,12 @@ function rewardFamily(rewardType){
 // Anchor statuses that are NOT fleet-uniform, so they are evidence of nothing here.
 //
 // judge's whole licence to memoize a permanent 'rejected' is that the status is chain
-// data every honest DOGE node computes identically. Three values in actions/anchor.js
-// break that, and they break it in OPPOSITE directions on the same anchor:
+// data every honest DOGE node computes identically. Four values in the parser under
+// src/actions/anchor/ break that, and they break it in OPPOSITE directions on the same
+// anchor:
 //   'unverified'            - the node holds no mirrored oracle_publish snapshot
-//                             (anchor.js oracleN === 0), so it declines to judge the
-//                             root quorum at all.
+//                             (src/actions/anchor/quorum.js oracleN === 0), so it
+//                             declines to judge the root quorum at all.
 //   'invalid: insufficient  - only a node that DOES mirror the snapshot can produce this
 //    signer stake|valid       verdict for the SAME anchor the unmirrored node stamped
 //    signatures (n/m)'        'unverified'.
@@ -121,8 +122,9 @@ function rewardFamily(rewardType){
 // only on fields that are node-class-independent (version, chain, network, publisher,
 // snapshot_block, seq, confirmations). The publisher-attestation quorum is not lost with
 // them: anchor_reward_derive.verifyAttestation re-runs it BTC-side before proveMined.
-// Every other 'invalid: ...' anchor.js writes is decided from the wire bytes plus
-// replayed DOGE chain state, so it stays a deterministic reject.
+// Every other 'invalid: ...' status the parser under src/actions/anchor/ writes is
+// decided from the wire bytes plus replayed DOGE chain state, so it stays a
+// deterministic reject.
 const NODE_CLASS_DEPENDENT_STATUS =
     /^(?:unverified|invalid: insufficient|invalid: SECTION \d+ insufficient|invalid_archive)/i;
 
