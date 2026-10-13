@@ -2963,6 +2963,13 @@
       "bridge_settle: the XBRIDGE settle pass the refusal and deferral paths refuses a row signed on another network",
       "bridge_settle: the XBRIDGE settle pass the refusal and deferral paths refuses a row whose destination is another chain"
     ],
+    "32f3fe58c6f25b6e": [
+      "runMigrations() registered utf8mb4-column assertion @regression @tier1 halts with every present registered column that regressed to utf8mb3",
+      "runMigrations() registered utf8mb4-column assertion @regression @tier1 ignores unregistered metadata rows and accepts absent registered columns",
+      "runMigrations() registered utf8mb4-column assertion @regression @tier1 passes through when the metadata answer is unreadable",
+      "runMigrations() registered utf8mb4-column assertion @regression @tier1 passes when every registered column is still utf8mb4",
+      "runMigrations() registered utf8mb4-column assertion @regression @tier1 runs after a lock-skipped migration pass"
+    ],
     "32f9210a602929f8": [
       "bridge_checkpoint_check: D2 escrow cross-check falsification: one broken binding at a time applies nothing refuses a compressed proof carrying surplus siblings without throwing out of the block loop",
       "bridge_checkpoint_check: D2 escrow cross-check falsification: one broken binding at a time applies nothing refuses a sibling at one depth swapped for another hash",
@@ -16735,8 +16742,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1271,
-      "titleCount": 12997,
+      "fileCount": 1272,
+      "titleCount": 13002,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17767,6 +17774,7 @@
         "test/unit/migration/migration_runner.test/runner_guards.test.js": "af768b97a8636398",
         "test/unit/migration/migration_runner.test/schema_assertions.test.js": "59609cbe4c7bfed4",
         "test/unit/migration/migration_runner.test/sql_split_and_frontier.test.js": "91731579dbd690c7",
+        "test/unit/migration/migration_runner.test/utf8mb4_columns_assertion.test.js": "32f3fe58c6f25b6e",
         "test/unit/migration/migration_runner.test/v017_renames.test.js": "bd472a94ee891986",
         "test/unit/migration/schema_drift_column_order.test.js": "7ea4c8c89c5481c5",
         "test/unit/migration/schema_retirements.test.js": "d815c99115a1d97e",
