@@ -4444,6 +4444,12 @@
       "genesis.injectProtocolToken and the bridged row creation @regression the wire string the helper builds keeps the fields past MINT_START_BLOCK when a later one is set",
       "genesis.injectProtocolToken and the bridged row creation @regression the wire string the helper builds never emits a TRANSFER: an injected row is created owned by its final owner"
     ],
+    "4aed6d7e717233e4": [
+      "validator wire actions @regression @tier1 admits only the validator wire formats",
+      "validator wire actions @regression @tier1 reads the name and format like the dispatcher",
+      "validator wire actions @regression @tier1 rejects non-string and empty data",
+      "validator wire actions @regression @tier1 rejects user actions"
+    ],
     "4b148378640ac7fa": [
       "price age at block falls back for a null config at activation",
       "price age at block falls back when the hourly key is missing at activation",
@@ -6991,6 +6997,9 @@
       "PRICE v1 canonical bound with no BLOCK_TIME falls back to the legacy rule testnet accepts leading-zero FEE",
       "PRICE v1 canonical bound with no BLOCK_TIME falls back to the legacy rule testnet accepts leading-zero VALUE",
       "PRICE v1 canonical bound with no BLOCK_TIME falls back to the legacy rule testnet accepts very long VALUE and FEE"
+    ],
+    "700df125e4858874": [
+      "block admission filters block transactions through an admission predicate"
     ],
     "7031d8538423084e": [
       "HubDbSync bootstrap timer guards does not re-arm once the mirror has drained or stopped",
@@ -17026,8 +17035,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1292,
-      "titleCount": 13126,
+      "fileCount": 1294,
+      "titleCount": 13131,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17035,6 +17044,7 @@
         "test/security/http-surface/auth_gate.test.js": "55856394f174fcb5",
         "test/security/http-surface/auth_gate.test/rate_limit_headers.test.js": "c62e802a0e07ff21",
         "test/security/http_surface_security.test.js": "72ce3f8a125828f4",
+        "test/unit/XChainIndexer/block_admission.test.js": "700df125e4858874",
         "test/unit/XChainIndexer/hub_config_poll.test.js": "3a74a7a67892c521",
         "test/unit/action_dispatch/action_formats.test.js": "66540a53e698b285",
         "test/unit/action_dispatch/action_index_names_manifest.test.js": "da3771c61bf790fc",
@@ -17671,6 +17681,7 @@
         "test/unit/consensus/gates/mirror_admission_margin_boundary.test.js": "5ad6c4b0c28cb058",
         "test/unit/consensus/gates/mirror_admission_margin_cross_repo.test.js": "ed6f0e05cd4ccaef",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
+        "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/list_rematch/plan.test.js": "15d8cc2e94c0564c",
         "test/unit/consensus/list_share/list_meta_hash.test.js": "50ed779f04dda399",
         "test/unit/consensus/list_share/list_share_engine_tag.test.js": "3eebd9d73e50d1ab",
