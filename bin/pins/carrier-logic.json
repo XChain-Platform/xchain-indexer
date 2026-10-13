@@ -59,7 +59,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "4de1110b4bcdcc39f62664dfa843501536fec6065a585eeda60825dab1d26245",
+      "hash": "5727511efdf8497853838f2b0608f2d6ac33caabccc483d650987f9944802e1a",
       "twins": [
         "xchain-hub"
       ]
@@ -2091,6 +2091,13 @@
       "to": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
       "reason": "merge delegated signing key with unusable block-time handling",
       "date": "2026-10-10"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "4de1110b4bcdcc39f62664dfa843501536fec6065a585eeda60825dab1d26245",
+      "to": "5727511efdf8497853838f2b0608f2d6ac33caabccc483d650987f9944802e1a",
+      "reason": "Apply the activeGatesAt unit filter only at or above ACTIVE_GATES_UNIT_FILTER_HEIGHTS",
+      "date": "2026-10-13"
     },
     {
       "id": "consensus_rules_digest",

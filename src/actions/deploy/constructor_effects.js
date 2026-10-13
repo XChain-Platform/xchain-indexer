@@ -28,6 +28,7 @@ const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 // the module object, not destructured, so the call below resolves the export at call
 // time and a suite can substitute the writer at that one seam.
 const slashEmission = require('../execute/slash_emission.js');
+const { boundedAt, bankUnusedGas } = require('../execute/nested_gas_sum.js');
 
 /**
  * Apply a successful constructor's state and emissions under a savepoint.
@@ -147,6 +148,7 @@ async function processConstructorEmissions(deploy, run){
     let data = run.data;
     let constructorResult = run.constructorResult;
     let emissionContext = constructorEmissionContext(run);
+    let nestedGasBounded = boundedAt(deploy.config, data);
     for(let i = 0; i < constructorResult.emittedActions.length; i++){
         let emission = constructorResult.emittedActions[i];
 
@@ -163,7 +165,7 @@ async function processConstructorEmissions(deploy, run){
             // Bank a cross-contract callee's unused reservation for
             // the fee settlement below.
             if(emission.action === 'EXECUTE')
-                run.nestedGasUnused += Number(emission.gasUnusedSubtree) || 0;
+                run.nestedGasUnused = bankUnusedGas(run.nestedGasUnused, emission, nestedGasBounded, run.totalGas);
         }
 
         await deploy.indexerDb.createContractEmission({

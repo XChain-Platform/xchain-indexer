@@ -152,6 +152,25 @@ const ABSENT = '<absent>';
 
 const ACTIVE_GATES_UNIT_AWARE_ACTIVATION = Object.freeze(['height', 'time', 'epoch']);
 
+// The height at or above which activeGatesAt applies the activation-unit filter, per network or
+// 'COIN:network'. Below it the pre-filter answer stands, so a node replaying older history
+// derives the same responsible set it did then. A network with no entry always filters.
+const ACTIVE_GATES_UNIT_FILTER_HEIGHTS = Object.freeze({
+    'mainnet': 0,
+    'BTC:testnet': 156140,
+    'LTC:testnet': 4912553,
+    'DOGE:testnet': 67988245
+});
+
+function unitFilterHeight(network, coin){
+    const H = ACTIVE_GATES_UNIT_FILTER_HEIGHTS;
+    if (coin !== undefined && coin !== null && H[coin + ':' + network] !== undefined) return H[coin + ':' + network];
+    if (H[network] !== undefined) return H[network];
+    const suffix = ':' + network;
+    const coined = Object.keys(H).filter((k) => k.endsWith(suffix)).map((k) => H[k]);
+    return coined.length ? Math.min(...coined) : 0;
+}
+
 // Canonical JSON with object keys sorted, so two builds that spell the same map
 // with its networks in a different order still digest alike. JSON.stringify's
 // insertion order is not a property either repo should be forced to preserve.
@@ -313,10 +332,11 @@ function activeGatesAt(height, network, coin){
     if (!Number.isFinite(h)) return [];
     const values = loadGateValues();
     const out = [];
+    const filterUnits = h >= unitFilterHeight(network, coin);
     for (const key of Object.keys(values)) {
         const v = values[key];
         if (v === ABSENT || v === null || typeof v !== 'object' || Array.isArray(v)) continue;
-        if (!hasActivationUnit(key)) continue;
+        if (filterUnits && !hasActivationUnit(key)) continue;
         const at = networkActivationHeight(v, network, coin);
         if (at === undefined) continue;
         if (!Number.isFinite(at) || at >= FAR_FUTURE_HEIGHT_SENTINEL) continue;
@@ -346,5 +366,6 @@ module.exports = {
     computeConsensusRulesDigest,
     knownGateKeys,
     activeGatesAt,
+    ACTIVE_GATES_UNIT_FILTER_HEIGHTS,
     diffGates
 };
