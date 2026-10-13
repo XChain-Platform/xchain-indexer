@@ -47,4 +47,87 @@ describe('actions/execute/nested_gas_sum: the bounded nested refund sum @regress
         stubGate(sinon, KEY, false);
         assert.strictEqual(boundedAt({ NETWORK: 'regtest', COIN: 'BTC' }, { BLOCK_INDEX: 1 }), false);
     });
+
+    describe('production call sites', function () {
+        const { runVmExecution } = require('../../../../src/actions/execute/run_vm.js');
+        const { applyConstructorEffects } = require('../../../../src/actions/deploy/constructor_effects.js');
+
+        const EMITTED = [
+            { action: 'EXECUTE', gasUnusedSubtree: 70, resultActionIndex: 11 },
+            { action: 'EXECUTE', gasUnusedSubtree: 70, resultActionIndex: 12 },
+        ];
+
+        function vmHandler(network) {
+            return {
+                config: { NETWORK: network, CHAIN: 'BTC', COIN: 'BTC' },
+                actions: {
+                    vm: { execute: async () => ({ success: true, gasUsed: 100, returnValue: null, stateChanges: [], stateDeletes: [], emittedActions: EMITTED }) },
+                    protocolChanges: { isEnabled: async () => false },
+                },
+                indexerDb: {
+                    getContractState: async () => ({}),
+                    getOracleDataForVM: async () => ({}),
+                    getCrossChainDataForVM: async () => ({}),
+                    getPollResultsForVM: async () => ({}),
+                    getContractStakeDataForVM: async () => ({}),
+                    createSavepoint: async (n) => n,
+                    releaseSavepoint: async () => {},
+                    rollbackToSavepoint: async () => {},
+                    createContractEmission: async () => {},
+                },
+                providerDeadlineWindows: null,
+                processEmission: async () => {},
+                processSlashEmission: async () => {},
+            };
+        }
+
+        function vmCtx(blockIndex) {
+            return {
+                error: null,
+                gasCost: 0,
+                contractInfo: { code: 'module.exports=function(){};' },
+                data: { METHOD: 'default', SOURCE: 's', CONTRACT_ACTION_INDEX: 1, ACTION_INDEX: 1, TX_HASH: 'h', TX_VOUT: 0, BLOCK_INDEX: blockIndex, BLOCK_TIME: 1 },
+            };
+        }
+
+        it('run_vm banks the capped refund on regtest and the plain sum on mainnet', async function () {
+            const armed = vmCtx(0);
+            await runVmExecution.call(vmHandler('regtest'), armed, { GAS_CEILING: 1000000 });
+            assert.strictEqual(armed.nestedGasUnused, 100);
+            const legacy = vmCtx(900000);
+            await runVmExecution.call(vmHandler('mainnet'), legacy, { GAS_CEILING: 1000000 });
+            assert.strictEqual(legacy.nestedGasUnused, 140);
+        });
+
+        function deployHandler(network) {
+            return {
+                config: { NETWORK: network, CHAIN: 'BTC', COIN: 'BTC' },
+                actions: { actionExecute: { processEmission: async () => {} } },
+                indexerDb: {
+                    createSavepoint: async (n) => n,
+                    releaseSavepoint: async () => {},
+                    rollbackToSavepoint: async () => {},
+                    createContractState: async () => {},
+                    createContractEmission: async () => {},
+                },
+            };
+        }
+
+        function deployRun(blockIndex) {
+            return {
+                data: { ACTION_INDEX: 5, BLOCK_INDEX: blockIndex, BLOCK_TIME: 1 },
+                totalGas: 100,
+                constructorResult: { success: true, stateChanges: [], stateDeletes: [], emittedActions: EMITTED },
+            };
+        }
+
+        it('constructor_effects banks the capped refund on regtest and the plain sum on mainnet', async function () {
+            const armed = deployRun(0);
+            await applyConstructorEffects(deployHandler('regtest'), armed);
+            assert.strictEqual(armed.nestedGasUnused, 100);
+            const legacy = deployRun(900000);
+            await applyConstructorEffects(deployHandler('mainnet'), legacy);
+            assert.strictEqual(legacy.nestedGasUnused, 140);
+        });
+    });
 });

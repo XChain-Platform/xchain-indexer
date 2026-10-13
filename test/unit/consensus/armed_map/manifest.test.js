@@ -264,6 +264,27 @@ describe('armed_map/manifest: collectRows', function () {
         assertArmedHeightRow(row);
     });
 
+    it('carries the nested EXECUTE gas-sum height row, armed on regtest only', function () {
+        const key = 'nested_execute_gas_sum_activation.NESTED_EXECUTE_GAS_SUM_ACTIVATION';
+        // Resolved through the manifest entry itself, so the case does not depend on
+        // the VM mirror rows collectRows() also loads.
+        const entry = manifest.ENTRIES.find((e) => e[0] === key);
+        assert.ok(entry, 'the manifest lists the row');
+        const row = entry[1]();
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.deepStrictEqual(Object.keys(row).sort(),
+            ['BTC:mainnet', 'BTC:testnet', 'DOGE:mainnet', 'DOGE:testnet', 'LTC:mainnet', 'LTC:testnet', 'regtest', 'testnet']);
+        assert.strictEqual(row.regtest, 0);
+        for (const k of Object.keys(row)) if (k !== 'regtest') assert.strictEqual(row[k], ProtocolChanges.UNARMED, k);
+        assert.strictEqual(ProtocolChanges.registry.unitOf(key), 'height');
+        // The fingerprint covers the row: it is hashed as its own v2 row digest.
+        const { fingerprint } = require('../../../../src/consensus/armed_map/canonical.js');
+        const rowsOnly = fingerprint([[key, row]]);
+        assert.match(rowsOnly.rows[key], /^[0-9a-f]{64}$/);
+        const moved = fingerprint([[key, { ...row, regtest: 1 }]]);
+        assert.notStrictEqual(moved.rows[key], rowsOnly.rows[key], 'arming the row moves its digest');
+    });
+
     it('carries the per-chain LIST owner testnet heights', function () {
         const byKey = new Map(manifest.collectRows().rows);
         assert.deepStrictEqual(byKey.get('list_owner_activation.LIST_OWNER_ACTIVATION'), {
