@@ -1,0 +1,40 @@
+# Fails any pull request into master that does not come from this repository's
+# own develop, release/* or hotfix/* branch. master is what production runs, so
+# outside contributions land on develop first and reach master only in a release
+# merge (hotfix/* is the documented emergency path, see the release process).
+# master's branch protection requires this check, so a fork pull request aimed
+# at master cannot be merged by mistake.
+#
+# pull_request_target reads this file from the repository's own branch, never
+# from the pull request, so a pull request cannot edit the guard away. The job
+# reads only event metadata and never checks out pull request code.
+name: Base branch guard
+
+on:
+  pull_request_target:
+    branches: [master]
+    # edited fires when an open pull request is retargeted onto master.
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+jobs:
+  base-branch-guard:
+    name: base-branch guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require develop, release/* or hotfix/* from this repository
+        # Event fields go through env, never inline, so a branch name cannot inject shell.
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REPO" != "$THIS_REPO" ]; then
+            echo "::error::Pull requests from forks go to develop, not master. Change the base branch to develop."
+            exit 1
+          fi
+          case "$HEAD_REF" in
+            develop|release/*|hotfix/*) echo "ok: $HEAD_REF into master" ;;
+            *) echo "::error::master only accepts develop, release/* or hotfix/*; retarget $HEAD_REF to develop."; exit 1 ;;
+          esac
