@@ -19,6 +19,7 @@ const assert = require('assert');
 const XChainVM = require('xchain-vm');
 const manifest = require('../../../../src/consensus/armed_map/manifest.js');
 const ProtocolChanges = require('../../../../src/protocol_changes.js');
+const { UNARMED } = require('../../../../src/protocol_changes/shared_rows.js');
 
 const VM_GATE_NAME = /(?:_ACTIVATION|_GATE_BLOCK_TIME)$/;
 
@@ -96,6 +97,19 @@ describe('armed_map/vm_gate_coverage: every public VM gate is classified', funct
             assert.ok(XChainVM[name], 'xchain-vm no longer exports ' + name);
             assert.ok(ProtocolChanges.get(key), name + ' names a missing registry twin ' + key);
             assert.ok(keys.has(key), name + ' registry twin is absent from the armed-map manifest');
+
+            const vmValue = XChainVM[name];
+            const twin = ProtocolChanges.get(key);
+            assert.ok(vmValue && typeof vmValue === 'object', name + ' VM export is not a per-network map');
+            const slots = Object.keys(vmValue);
+            assert.ok(slots.length > 0, name + ' VM export has no activation slots');
+            for (const slot of slots) {
+                const vmHeight = vmValue[slot];
+                const expected = vmHeight === null ? UNARMED : vmHeight;
+                assert.ok(slot in twin, name + ' slot ' + slot + ' is missing from registry twin ' + key);
+                assert.strictEqual(twin[slot], expected,
+                    name + ' slot ' + slot + ' differs from registry twin ' + key);
+            }
         }
     });
 
