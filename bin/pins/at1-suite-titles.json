@@ -5816,6 +5816,12 @@
       "CORS_ORIGIN allowlist parsing what a caller actually receives refuses an unlisted origin server-side once the value is a list",
       "CORS_ORIGIN allowlist parsing what a caller actually receives resolves CORS_ORIGIN `*` to the parser sentinel that cors() treats as \"any origin\""
     ],
+    "60d21d0609afbfb4": [
+      "EMISSION_DEPTH_EXECUTE_ONLY: emission CALL_DEPTH ruling @regression @tier1 gate off: a non-EXECUTE emission is still stamped depth + 1",
+      "EMISSION_DEPTH_EXECUTE_ONLY: emission CALL_DEPTH ruling @regression @tier1 gate on: a non-EXECUTE emission keeps the emitter depth",
+      "EMISSION_DEPTH_EXECUTE_ONLY: emission CALL_DEPTH ruling @regression @tier1 is declared unarmed on every network",
+      "EMISSION_DEPTH_EXECUTE_ONLY: emission CALL_DEPTH ruling @regression @tier1 stamps depth + 1 on EXECUTE with the gate on or off"
+    ],
     "60e8dc05507d400b": [
       "HubClient: a thrown hub rejection is classified like an in-result one terminal: -32602 resolves so the queued row is dropped classifies the retraction rails on the same code",
       "HubClient: a thrown hub rejection is classified like an in-result one terminal: -32602 resolves so the queued row is dropped honours a numeric `code` when `rpcCode` is absent",
@@ -16939,8 +16945,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1288,
-      "titleCount": 13096,
+      "fileCount": 1289,
+      "titleCount": 13100,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17634,6 +17640,7 @@
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
         "test/unit/contracts/delegate_rotation_unstake_window.test.js": "032507a4392ad944",
         "test/unit/contracts/emission_bounds_vm_parity.test.js": "275cd1720c6c0c1f",
+        "test/unit/contracts/emission_guard_call_depth_composed.test.js": "60d21d0609afbfb4",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
