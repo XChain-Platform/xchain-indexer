@@ -51,4 +51,17 @@ describe('LEGACY_ANCHOR_REWARD_PIN', function(){
         assert.ok(r);
         assert.strictEqual(d.calls.length, 1);
     });
+    it('evaluates the gate through protocolChanges at the deriving block', async function(){
+        let seen = [];
+        let pc = { isEnabled: async (name, block) => { seen.push([name, block]); return block >= 20; } };
+        let d = db();
+        let r = await mintProvenRow(d, ROW, { blockIndex: 19, proof, minConfirmations: 1, amount: 5,
+            protocolChanges: pc, legacyRewardPins: PINS });
+        assert.ok(r);
+        let r2 = await mintProvenRow(d, ROW, { blockIndex: 20, proof, minConfirmations: 1, amount: 5,
+            protocolChanges: pc, legacyRewardPins: PINS });
+        assert.strictEqual(r2, false);
+        assert.strictEqual(d.calls.length, 1);
+        assert.deepStrictEqual(seen, [['LEGACY_ANCHOR_REWARD_PIN', 19], ['LEGACY_ANCHOR_REWARD_PIN', 20]]);
+    });
 });

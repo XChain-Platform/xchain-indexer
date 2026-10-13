@@ -37,12 +37,21 @@ class AnchorProofUnavailableError extends Error {
 // Prove one gated, re-verified row's DOGE anchor mined, then mint its reward. `m` carries
 // the BTC block being processed (blockIndex), the AnchorProofClient (proof, which may be
 // absent), the burial depth (minConfirmations) and the amount the reward family pays
-// (amount). `m.legacyAnchorRewardPin` is the LEGACY_ANCHOR_REWARD_PIN gate result at
-// blockIndex; absent or false leaves the mint unchanged. Returns what createValidatorReward returned, or false when the proof is
+// (amount). The LEGACY_ANCHOR_REWARD_PIN gate is evaluated here at blockIndex through
+// `m.protocolChanges.isEnabled`; an explicit boolean `m.legacyAnchorRewardPin` overrides it.
+// With neither supplied the gate reads as off and the mint is unchanged. Returns what createValidatorReward returned, or false when the proof is
 // rejected; throws AnchorProofUnavailableError when it cannot be decided.
+async function legacyPinGateOn(m){
+    if(typeof m.legacyAnchorRewardPin === 'boolean'){ return m.legacyAnchorRewardPin; }
+    if(m.protocolChanges && typeof m.protocolChanges.isEnabled === 'function'){
+        return (await m.protocolChanges.isEnabled('LEGACY_ANCHOR_REWARD_PIN', Number(m.blockIndex))) === true;
+    }
+    return false;
+}
+
 async function mintProvenRow(indexerDb, row, m){
     // LEGACY_ANCHOR_REWARD_PIN: a tuple pinned from the pre-restart chain is not minted again.
-    if(m.legacyAnchorRewardPin && isLegacyRewardPinned({
+    if(await legacyPinGateOn(m) && isLegacyRewardPinned({
         reward_type: row.reward_type, round_reference: row.round_reference,
         snapshot_block: row.snapshot_block, publisher: String(row.publisher).toLowerCase(),
         txid: row.doge_anchor_txid
