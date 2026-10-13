@@ -111,11 +111,13 @@ module.exports = {
         // bridge_transfers joins the quorum class: its rows are federation-co-signed and a
         // deletion mints value out of existence on the destination chain the same way a
         // forged match would, so an unfenced or unsigned deletion must be refused rather
-        // than applied. policy_snapshots and list_snapshots are absent because they are never
+        // than applied. remote_token_snapshots joins for the same reason: its rows are signed token
+        // facts and a forged deletion would make a remote token vanish from the mirror, so an
+        // unfenced or unsigned deletion is refused. policy_snapshots and list_snapshots are absent because they are never
         // retracted (no RETRACTION_COLUMNS entry, so the generic path below skips them); giving
         // either one a RETRACTION_COLUMNS entry also requires adding it to this list.
         let quorumClass = (event.table === 'cross_chain_calls' || event.table === 'cross_chain_matches' ||
-                           event.table === 'bridge_transfers');
+                           event.table === 'bridge_transfers' || event.table === 'remote_token_snapshots');
         let ownChain = !!(this.coin && event.source_chain === this.coin && this.getOwnRollbackGeneration);
         if (!(await this.acceptRetractionFences(event, range, quorumClass, ownChain))) return;
         if (quorumClass && this.network && !(await this.acceptRetractionSignatures(event, range))) return;
