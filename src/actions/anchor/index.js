@@ -258,7 +258,8 @@ class Anchor {
         // version bytes belonged to the pre-restart wire set, so no shape check on these
         // bytes means anything and no ANCHOR down there is parsed whatever it decodes
         // to: the verdict is 'unverified' where ANCHOR_PREACTIVATION_STATUS_ACTIVATION is
-        // active at the same height and 'invalid: ANCHOR before activation' below it. Keyed on the anchor's OWN DOGE mined height (data['BLOCK_INDEX'], the same
+        // active at the same height and 'invalid: ANCHOR before activation' below it.
+        // Keyed on the anchor's OWN DOGE mined height (data['BLOCK_INDEX'], the same
         // key the unverified-head gate in reassembly.js reads), never on SNAPSHOT_BLOCK or the
         // checkpointed height, which belong to other chains. activeAt fails closed on
         // a non-numeric height or an unknown network.
