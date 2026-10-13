@@ -43,6 +43,16 @@ const {
     DISPENSER_REFILL_TESTNET_TIME,
     STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,
     STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME,
+    EXACT_INTEGER_WIRE_FIELDS_MAINNET_TIME,
+    EXACT_INTEGER_WIRE_FIELDS_TESTNET_TIME,
+    SLASH_XANCPUB_PUBLISHER_PAIR_MAINNET_TIME,
+    SLASH_XANCPUB_PUBLISHER_PAIR_TESTNET_TIME,
+    STAKE_SNAPSHOT_SLASH_WINDOW_MAINNET_TIME,
+    STAKE_SNAPSHOT_SLASH_WINDOW_TESTNET_TIME,
+    DELEGATION_ROTATE_IN_WINDOW_MAINNET_TIME,
+    DELEGATION_ROTATE_IN_WINDOW_TESTNET_TIME,
+    SLASH_ATTEST_MULTIROUND_EXEMPT_MAINNET_TIME,
+    SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -58,7 +68,7 @@ function exactIntegerWireRegtestTime() {
 const CHANGES = [
     // EXACT_INTEGER_WIRE_FIELDS: regtest stays unarmed unless a venue sets
     // EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME.
-    ['EXACT_INTEGER_WIRE_FIELDS', '0.2.0', UNARMED, 1791804379,
+    ['EXACT_INTEGER_WIRE_FIELDS', '0.2.0', EXACT_INTEGER_WIRE_FIELDS_MAINNET_TIME, EXACT_INTEGER_WIRE_FIELDS_TESTNET_TIME,
         exactIntegerWireRegtestTime, 0, 0, 0],
     ['ITER_SET_METER','0.2.0', ITER_SET_METER_MAINNET_TIME,
         ITER_SET_METER_TESTNET_TIME, 0, 0, 0, 0],
@@ -80,7 +90,7 @@ const CHANGES = [
     // Below the flag the legacy rule reads the snapshot block alone. Judged by the
     // block that carries the SLASH. Mainnet is unarmed, testnet is armed at the instant
     // in its row, and regtest is genesis-active.
-    ['SLASH_XANCPUB_PUBLISHER_PAIR', '0.2.0', UNARMED, 1791804379, 0, 0, 0, 0],
+    ['SLASH_XANCPUB_PUBLISHER_PAIR', '0.2.0', SLASH_XANCPUB_PUBLISHER_PAIR_MAINNET_TIME, SLASH_XANCPUB_PUBLISHER_PAIR_TESTNET_TIME, 0, 0, 0, 0],
 
     // STAKE_SNAPSHOT_SLASH_WINDOW: from the flag day the VM stake snapshot caps a (pubkey, tick)'s
     // mid-UNSTAKE contract_stakes rows at what its open contract_unstakes rows still hold, the
@@ -88,9 +98,9 @@ const CHANGES = [
     // This rule and DELEGATION_ROTATE_IN_WINDOW below: mainnet is UNARMED, testnet is armed at
     // the instant in each row, and regtest is inert unless a venue sets the row's
     // *_REGTEST_TIME override.
-    ['STAKE_SNAPSHOT_SLASH_WINDOW', '0.2.0', UNARMED, 1791804379,
+    ['STAKE_SNAPSHOT_SLASH_WINDOW', '0.2.0', STAKE_SNAPSHOT_SLASH_WINDOW_MAINNET_TIME, STAKE_SNAPSHOT_SLASH_WINDOW_TESTNET_TIME,
         () => regtestTimeOverride('STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME')() || UNARMED, 0, 0, 0],
-    ['DELEGATION_ROTATE_IN_WINDOW', '0.2.0', UNARMED, 1791804379,
+    ['DELEGATION_ROTATE_IN_WINDOW', '0.2.0', DELEGATION_ROTATE_IN_WINDOW_MAINNET_TIME, DELEGATION_ROTATE_IN_WINDOW_TESTNET_TIME,
         () => regtestTimeOverride('DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME')() || UNARMED, 0, 0, 0],
 
     // SLASH_ATTEST_MULTIROUND_EXEMPT: an XATTEST base-leg pair is no longer slashable,
@@ -99,7 +109,7 @@ const CHANGES = [
     // proofs burn a bond is a consensus acceptance rule, so it is gated. Mainnet is
     // unarmed until a release cut pins an instant, testnet is armed at the instant in its
     // row, and regtest is genesis-active.
-    ['SLASH_ATTEST_MULTIROUND_EXEMPT', '0.2.0', UNARMED, 1791804379, 0, 0, 0, 0],
+    ['SLASH_ATTEST_MULTIROUND_EXEMPT', '0.2.0', SLASH_ATTEST_MULTIROUND_EXEMPT_MAINNET_TIME, SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME, 0, 0, 0, 0],
 
     // READONLY_ACCESSOR_OWN_KEY: mirrors xchain-vm's ACCESSOR_OWN_KEY_ACTIVATION (testnet and regtest
     // active from genesis, mainnet unarmed); a readonly accessor resolves a snapshot
@@ -133,6 +143,11 @@ const CHANGES = [
     // A v3 archive head row carries no checkpoint_seq, so below the flag the watermark only
     // ever sees v1 heads. Judged by the block that carries the ANCHOR. Unarmed on every network.
     ['ARCHIVE_REPLAY_WRAPPER_WATERMARK', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
+
+    // LEGACY_ANCHOR_REWARD_PIN: below the flag the anchor reward mint ignores the legacy
+    // pin list. At or above it, a reward tuple pinned in legacy_reward_pins.json is not
+    // minted again. Judged by the BTC block that derives the reward. Unarmed on every network.
+    ['LEGACY_ANCHOR_REWARD_PIN', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
 
     // GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS: the controller-guard stake snapshot
     // (actions/execute/controller_guard.js) hands the VM decimal strings, as the primary
