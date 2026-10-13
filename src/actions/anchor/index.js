@@ -43,11 +43,14 @@
  *
  * ACTIVATION. The version set RESTARTS at 0 at ANCHOR_ACTIVATION (see
  * the anchor_activation row in src/protocol_changes/), so the first check in parse() is the anchor's own
- * DOGE mined height: below the threshold EVERY ANCHOR of EVERY version is
- * 'invalid: ANCHOR before activation', because the same byte meant something
- * else on the pre-restart wire and no parser can tell the two apart from the
- * bytes alone. At/above it this table is the whole wire set, so any other
- * version byte falls out of the unknown-version check below.
+ * DOGE mined height: below the threshold no ANCHOR of any version is parsed,
+ * because the same byte meant something else on the pre-restart wire and no
+ * parser can tell the two apart from the bytes alone. The verdict there is
+ * 'unverified' where anchor_preactivation_status_activation.
+ * ANCHOR_PREACTIVATION_STATUS_ACTIVATION is active at that same height, and
+ * 'invalid: ANCHOR before activation' below that gate. At/above the threshold
+ * this table is the whole wire set, so any other version byte falls out of
+ * the unknown-version check below.
  *
  * The pre-restart versions (the per-chain anchors, the tail-less archive head
  * and the old bundle/archive-head bytes) are RETIRED, not deprecated: their
@@ -255,8 +258,10 @@ class Anchor {
 
         // Activation FIRST, ahead of the version table: below ANCHOR_ACTIVATION the same
         // version bytes belonged to the pre-restart wire set, so no shape check on these
-        // bytes means anything and every ANCHOR down there is invalid whatever it decodes
-        // to. Keyed on the anchor's OWN DOGE mined height (data['BLOCK_INDEX'], the same
+        // bytes means anything and no ANCHOR down there is parsed whatever it decodes
+        // to: the verdict is 'unverified' where ANCHOR_PREACTIVATION_STATUS_ACTIVATION is
+        // active at the same height and 'invalid: ANCHOR before activation' below it.
+        // Keyed on the anchor's OWN DOGE mined height (data['BLOCK_INDEX'], the same
         // key the unverified-head gate in reassembly.js reads), never on SNAPSHOT_BLOCK or the
         // checkpointed height, which belong to other chains. activeAt fails closed on
         // a non-numeric height or an unknown network.
