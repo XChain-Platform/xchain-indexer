@@ -9,10 +9,15 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const { openingPassesContext } = require('./opening_passes.test/helpers/opening_passes_context.js');
+const { openingPassesContext: baseContext } = require('./opening_passes.test/helpers/opening_passes_context.js');
 
 const BLOCK = 9;
 const TIME = 1700000000;
+
+// regtest is an open network, so the launch gate admits every transaction here.
+function openingPassesContext(opts = {}){
+    return baseContext({ network: 'regtest', ...opts });
+}
 
 function threeTransactions(){
     return [{ tx_hash: 'a' }, { tx_hash: 'b' }, { tx_hash: 'c' }];
