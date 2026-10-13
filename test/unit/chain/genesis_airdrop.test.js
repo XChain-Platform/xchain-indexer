@@ -80,7 +80,7 @@ function setHash(airdrop){
             hash:   (airdrop.hashes || [])[i] || 'unpinned',
             amount: airdrop.amounts[i],
         }))
-        .sort((a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0))
+        .sort((a, b) => Buffer.compare(Buffer.from(a.name, 'utf8'), Buffer.from(b.name, 'utf8')))
         .map(b => b.name + ':' + b.hash + ':' + b.amount);
     return crypto.createHash('sha256').update(lines.join('\n')).digest('hex');
 }
@@ -311,12 +311,12 @@ describe('genesis airdrop pass', function(){
 });
 
 describe('genesis airdrop pass', function(){
-    it('orders bucket names by UTF-16 code unit, where it differs from UTF-8 byte order', function(){
-        // U+1D400 sorts before U+FF21 by code unit (0xD835 < 0xFF21) but after it by UTF-8 bytes.
+    it('orders bucket names by UTF-8 byte order, where it differs from UTF-16 code unit order', function(){
+        // U+FF21 sorts before U+1D400 by UTF-8 bytes, though after it by code unit (0xD835 < 0xFF21).
         let bold = '\u{1D400}', wide = '\uFF21';
         for(let order of [[wide, bold], [bold, wide]]){
             let { genesis } = build({ paths: order.map(n => '/airdrops/' + n + '.csv'), hashes: ['', ''], amounts: ['1', '1'] });
-            assert.deepStrictEqual(genesis.airdropBuckets().map(b => b.name), [bold, wide]);
+            assert.deepStrictEqual(genesis.airdropBuckets().map(b => b.name), [wide, bold]);
         }
     });
 
