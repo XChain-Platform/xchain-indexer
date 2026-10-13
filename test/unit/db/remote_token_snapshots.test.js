@@ -124,13 +124,24 @@ describe('remote_token_snapshots mirror contract', function () {
         await sync.applyRetraction({
             table: 'remote_token_snapshots',
             source_chain: 'DOGE',
-            from_action_index: 91
+            from_action_index: 91,
+            retraction_generation: 3
         });
         assert.strictEqual(await reader.getPinnedRemoteToken('regtest', 'DOGE', 'FUFU'), null);
         const deletion = store.calls.find(call => /^DELETE FROM remote_token_snapshots /.test(call.sql));
         assert.deepStrictEqual(deletion, {
-            sql: 'DELETE FROM remote_token_snapshots WHERE coin = ? AND source_action_index >= ?',
-            args: ['DOGE', 91]
+            sql: 'DELETE FROM remote_token_snapshots WHERE coin = ? AND source_action_index >= ? AND push_generation <= ?',
+            args: ['DOGE', 91, 3]
         });
+    });
+});
+
+describe('remote_token_snapshots quorum-class retraction', function () {
+    it('refuses an unfenced deletion', async function () {
+        const calls = [];
+        const sync = new HubDbSync({ doQuery: async (sql, args) => { calls.push({ sql, args }); return []; } },
+            { hubUrl: 'http://hub.test' });
+        await sync.applyRetraction({ table: 'remote_token_snapshots', source_chain: 'DOGE', from_action_index: 91 });
+        assert.strictEqual(calls.filter(c => /^DELETE/.test(c.sql)).length, 0);
     });
 });
