@@ -75,8 +75,11 @@ async function checkFoldArchiveReissue(handler, data, archive, error){
         handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
     if(!active || typeof handler.indexerDb.getArchiveHeadsByAuthorAndSeq !== 'function')
         return error;
+    let sourceAuthor = gateRegistry.activeAt(
+        'anchor_fold_reissue_source_author_activation.ANCHOR_FOLD_REISSUE_SOURCE_AUTHOR_ACTIVATION',
+        handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
     return await archiveReissueRefusal(handler.indexerDb, {
-        author: data['PUBLISHER'],
+        author: sourceAuthor ? data['SOURCE'] : data['PUBLISHER'],
         batchSeq: Number(archive['MATCH_BATCH_SEQ']),
         batchCrc32: archive['BATCH_CRC32'],
         matchCount: Number(archive['MATCH_COUNT'])

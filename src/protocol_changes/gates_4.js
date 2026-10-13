@@ -391,10 +391,10 @@ addGate('bet_feed_list_edit_activation.BET_FEED_LIST_EDIT_ACTIVATION', 'height',
 });
 
 addGate('cross_chain_offer_list_export_activation.CROSS_CHAIN_OFFER_LIST_EXPORT', 'height', {
-    mainnet: UNARMED,
-    'BTC:testnet': 156230,
-    'LTC:testnet': 4912984,
-    'DOGE:testnet': 67989993,
-    testnet: UNARMED,
-    regtest: 0,
+    mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0,
+});
+addGate('anchor_fold_reissue_source_author_activation.ANCHOR_FOLD_REISSUE_SOURCE_AUTHOR_ACTIVATION', 'height', {
+    mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984,
+    'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0,
 });

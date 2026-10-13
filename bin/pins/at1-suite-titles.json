@@ -2933,6 +2933,11 @@
       "ANCHOR order reason helpers flags a pubkey that sorts before its predecessor",
       "ANCHOR order reason helpers never flags the first section"
     ],
+    "32ad0982d2cf20c4": [
+      "ANCHOR v3 fold reissue SOURCE author accepts an exact duplicate found under the DOGE SOURCE address",
+      "ANCHOR v3 fold reissue SOURCE author rejects a conflicting archive found under the DOGE SOURCE address",
+      "ANCHOR v3 fold reissue SOURCE author retains the publisher pubkey lookup before activation"
+    ],
     "32b91e3ceb72e5c2": [
       "dispense payment tally scale: activation @regression @tier1 an unknown network or an unparseable time stays on the legacy scale",
       "dispense payment tally scale: activation @regression @tier1 mainnet is ARMED AT GENESIS by the 2026-09-09 ruling",
@@ -2957,13 +2962,6 @@
       "bridge_settle: the XBRIDGE settle pass the refusal and deferral paths refuses a row carrying a foreign btc_chain_id (a re-genesised rail)",
       "bridge_settle: the XBRIDGE settle pass the refusal and deferral paths refuses a row signed on another network",
       "bridge_settle: the XBRIDGE settle pass the refusal and deferral paths refuses a row whose destination is another chain"
-    ],
-    "32f3fe58c6f25b6e": [
-      "runMigrations() registered utf8mb4-column assertion @regression @tier1 halts with every present registered column that regressed to utf8mb3",
-      "runMigrations() registered utf8mb4-column assertion @regression @tier1 ignores unregistered metadata rows and accepts absent registered columns",
-      "runMigrations() registered utf8mb4-column assertion @regression @tier1 passes through when the metadata answer is unreadable",
-      "runMigrations() registered utf8mb4-column assertion @regression @tier1 passes when every registered column is still utf8mb4",
-      "runMigrations() registered utf8mb4-column assertion @regression @tier1 runs after a lock-skipped migration pass"
     ],
     "32f9210a602929f8": [
       "bridge_checkpoint_check: D2 escrow cross-check falsification: one broken binding at a time applies nothing refuses a compressed proof carrying surplus siblings without throwing out of the block loop",
@@ -16738,7 +16736,7 @@
   "scripts": {
     "test": {
       "fileCount": 1271,
-      "titleCount": 12999,
+      "titleCount": 12997,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17162,6 +17160,7 @@
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
         "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "c1df08e38339ad37",
         "test/unit/anchor/anchor_v3_fold_parse.test.js": "6ea2607d7bbbc413",
+        "test/unit/anchor/anchor_v3_fold_reissue_source_author.test.js": "32ad0982d2cf20c4",
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
         "test/unit/anchor/archive_anchor_content_query.test.js": "383eb974c61ae810",
@@ -17768,7 +17767,6 @@
         "test/unit/migration/migration_runner.test/runner_guards.test.js": "af768b97a8636398",
         "test/unit/migration/migration_runner.test/schema_assertions.test.js": "59609cbe4c7bfed4",
         "test/unit/migration/migration_runner.test/sql_split_and_frontier.test.js": "91731579dbd690c7",
-        "test/unit/migration/migration_runner.test/utf8mb4_columns_assertion.test.js": "32f3fe58c6f25b6e",
         "test/unit/migration/migration_runner.test/v017_renames.test.js": "bd472a94ee891986",
         "test/unit/migration/schema_drift_column_order.test.js": "7ea4c8c89c5481c5",
         "test/unit/migration/schema_retirements.test.js": "d815c99115a1d97e",
