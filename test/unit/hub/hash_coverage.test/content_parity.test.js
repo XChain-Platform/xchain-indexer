@@ -151,8 +151,38 @@ describe('Hash coverage guard @regression', function () {
 describe('Hash coverage guard @regression', function () {
     describe('content-parity coverage declaration', function () {
         it('in-place parity columns stay declared apart and match every order_matches UPDATE', function () {
+            assert.deepStrictEqual(lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS, {
+                anchor_actions:       ['status_id'],
+                attests:              ['request_status', 'resolved_block', 'callback_execute_action_index',
+                                       'batch_action_index', 'status_id'],
+                bet_feeds:            ['feed_status_id', 'closed_block', 'terminal_block'],
+                bets:                 ['bet_status_id', 'settled_block'],
+                contract_delegations: ['deactivation_block'],
+                contract_stakes:      ['amount', 'deactivation_block'],
+                contract_unstakes:    ['amount', 'status_id'],
+                credits:              [],
+                delegations:          ['deactivation_block'],
+                order_matches:        ['status_id'],
+                polls:                ['poll_status', 'winning_option', 'total_weight', 'total_voters',
+                                       'quorum_met', 'min_voters_met', 'fail_reason', 'decided_early',
+                                       'effective_close_block', 'finalized_action_index', 'resolved_block',
+                                       'deposit_resolved', 'callback_execute_action_index', 'callback_due_block'],
+                stakes:               ['amount', 'deactivation_block'],
+                tokens:               ['max_supply', 'max_mint', 'decimals', 'description',
+                                       'lock_max_supply', 'lock_mint', 'lock_mint_supply', 'lock_max_mint',
+                                       'lock_description', 'lock_sleep', 'lock_callback', 'callback_block',
+                                       'callback_tick_id', 'callback_amount', 'allow_list', 'block_list',
+                                       'mint_address_max', 'mint_start_block', 'mint_stop_block',
+                                       'bridge_chains', 'min_depth', 'lock_bridge', 'supply', 'owner_id',
+                                       'last_action_index', 'escrow_action_index', 'bridged'],
+                unstakes:             ['amount', 'status_id'],
+                xcalls:               ['request_status', 'result_status', 'result_payload', 'resolved_block',
+                                       'callback_action_index'],
+            });
+            assert.deepStrictEqual(
+                lifecycle.contentParityMutableTables().filter(t => !(t in lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS)),
+                []);
             // Kept out of the by-design map so the end-to-end byte oracle still compares them.
-            assert.deepStrictEqual(Object.keys(lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS), ['order_matches']);
             assert.ok(!lifecycle.CONTENT_PARITY_EXCLUDED_COLUMNS.order_matches);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('order_matches'), ['status_id']);
             const updates = orderMatchUpdateColumns();
@@ -169,6 +199,44 @@ describe('Hash coverage guard @regression', function () {
         });
     });
 });
+
+describe('Hash coverage guard @regression', function () {
+    describe('content-parity coverage declaration', function () {
+        it('every declared in-place column is a real column of its table schema', function () {
+            // Key presence alone would pass a typo or a column dropped by a migration, which
+            // would silently leave the preimage hashing the very column that is meant to be
+            // excluded. Each declared name must be a column definition in src/sql/<table>.sql.
+            for (const [table, cols] of Object.entries(lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS)) {
+                const defined = schemaColumns(table);
+                assert.ok(defined.size > 0, `no column definitions parsed from src/sql/${table}.sql`);
+                for (const c of cols)
+                    assert.ok(defined.has(c), `${table}.${c} is declared in-place but is not a column in src/sql/${table}.sql`);
+                assert.strictEqual(new Set(cols).size, cols.length, `${table} declares a column twice`);
+            }
+        });
+
+        it('the in-place columns leave the preimage and never overlap the by-design exclusions', function () {
+            for (const t of lifecycle.contentParityMutableTables()) {
+                const inPlace = lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS[t];
+                const byDesign = lifecycle.CONTENT_PARITY_EXCLUDED_COLUMNS[t] || [];
+                assert.deepStrictEqual(lifecycle.contentParityExcludedColumns(t), byDesign.concat(inPlace));
+                assert.deepStrictEqual(inPlace.filter((c) => byDesign.includes(c)), [],
+                    `${t} lists a column as both by-design excluded and in-place`);
+            }
+        });
+    });
+});
+
+// Column names defined by the CREATE TABLE in src/sql/<table>.sql (key and constraint lines skipped).
+function schemaColumns(table) {
+    const sql = fs.readFileSync(path.join(__dirname, '../../../../src/sql', table + '.sql'), 'utf8');
+    const cols = new Set();
+    for (const line of sql.split('\n')) {
+        const m = line.match(/^\s*`?([a-z_][a-z0-9_]*)`?\s+(?:TINYINT|SMALLINT|MEDIUMINT|INT|BIGINT|DECIMAL|VARCHAR|CHAR|TEXT|MEDIUMTEXT|LONGTEXT|BLOB|MEDIUMBLOB|LONGBLOB|VARBINARY|BINARY|JSON|ENUM|BOOLEAN|BIT|DOUBLE|FLOAT|DATETIME|TIMESTAMP|DATE)\b/i);
+        if (m) cols.add(m[1]);
+    }
+    return cols;
+}
 
 // The assigned columns of every `UPDATE order_matches SET ...` under src/, one list per statement.
 function orderMatchUpdateColumns() {
