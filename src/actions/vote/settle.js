@@ -36,10 +36,13 @@ async function settleCreatePoll(data, error, deposit){
 
     getLogger().info("\t VOTE create : " + data['TICK'] + ' : ' + data['STATUS']);
 
-    // Persist the poll only when valid; an invalid create writes no poll row
-    // (the action itself is still recorded in `actions` with its status)
+    // A valid create writes the live poll row. A refused create writes an inert one (status
+    // only, no window, no escrow, no callback) so a reader of the poll id reports the
+    // refusal instead of a null status the SDK assumes valid.
     if(!error)
         await this.indexerDb.createPoll(data);
+    else
+        await this.indexerDb.createPoll(data, { inert: true });
 
     // Escrow the creator's locked GAS (deposit + any binding-poll gas_escrow)
     // at this v0 action_index; released by VOTE v2 finalize. One combined escrow
