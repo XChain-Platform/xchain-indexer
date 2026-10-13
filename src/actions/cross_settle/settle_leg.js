@@ -295,7 +295,7 @@ async function proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, 
     let info = await this.indexerDb.getTokenInfo(giveTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
     if(info && !this.util.isNull(info['DECIMALS']))
         dec = parseInt(info['DECIMALS']);
-    return this.util.applyProceedsSplit(giveTick, giveAmount, payoutAddr, reencoded, dec, parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']));
+    return this.util.applyProceedsSplit(giveTick, giveAmount, payoutAddr, reencoded, dec);
 }
 
 /**
