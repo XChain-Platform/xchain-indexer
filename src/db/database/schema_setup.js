@@ -323,6 +323,9 @@ module.exports = {
     // body throws it is already failing loudly, so the assertion is skipped.
     async runMigrations(opts = {}){
         const result = await this.runMigrationsInner(opts);
+        // Resolve through the prototype so a partial runner harness cannot omit the
+        // registry-wide charset contract by leaving the method off its own shape.
+        await Database.prototype.assertRegisteredUtf8mb4ColumnsStayWide.call(this);
         await this.assertPubkeyColumnIsUncompressedWide();
         await this.assertStakeWeightOrderingCollation();
         // Invoked through the prototype rather than `this`: the reward-identity assertion is
