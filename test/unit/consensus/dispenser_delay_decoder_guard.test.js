@@ -31,6 +31,7 @@ const sinon  = require('sinon');
 const dispensers   = require('../../../src/db/dispensers/index.js');
 const gateRegistry = require('../../../src/consensus/gate_registry');
 const protocolTime = require('../../../src/consensus/protocol_time');
+const blockParse   = require('../../../src/XChainIndexer/block_parse.js');
 
 const GATE = 'dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION';
 const COIN_ARM = { 'BTC:testnet': 156230, 'LTC:testnet': 4912984, 'DOGE:testnet': 67989993 };
@@ -118,5 +119,57 @@ describe('dispenser delay decoder coupling guard @regression @tier1', function (
         const untouched = [{ tx_index: 3, block_time: RAW_STAMP }];
         assert.strictEqual(protocolTime.stampProtocolTime(untouched, false), 0);
         assert.strictEqual(untouched[0].block_time, RAW_STAMP);
+    });
+
+    it('re-stamps decoder rows through the readBlockInputs entry seam before any delay read', async function () {
+        const decoderRows = [{ tx_index: 1, block_time: RAW_STAMP }, { tx_index: 2, block_time: RAW_STAMP }];
+        const indexer = {
+            decoderDb: {
+                getDecoderBlockData: sinon.stub().resolves(decoderRows),
+                getBlockTime: sinon.stub().resolves(PROTOCOL_STAMP),
+                getRawBlockTime: sinon.stub().resolves(RAW_STAMP),
+            },
+            protocolChanges: { isEnabled: sinon.stub().resolves(true) },
+            util: { logError: sinon.stub() },
+            anchorAttestHorizonBound: sinon.stub().resolves(null),
+        };
+
+        const inputs = await blockParse.readBlockInputs.call(indexer, 7);
+
+        // The rows the action path receives carry protocol time, never the raw stamp.
+        assert.ok(inputs.blockTransactions.length > 0);
+        for (const tx of inputs.blockTransactions) assert.strictEqual(tx.block_time, PROTOCOL_STAMP);
+        assert.strictEqual(inputs.blockTime, PROTOCOL_STAMP);
+        assert.strictEqual(inputs.rawBlockTime, RAW_STAMP);
+
+        // A row produced by the seam drives the list delay on protocol time.
+        const rows = [{ expiration: null, allow_list: 5, block_list: null, block_time: inputs.blockTransactions[0].block_time, block_index: 7 }];
+        const db = dbFor(rows, index => (index === 7 ? inputs.blockTransactions[0].block_time : null));
+        const edit = await dispensers.getDispenserEdits.call(db, 1, 700, 20);
+        assert.strictEqual(edit.allow_list, 5);
+    });
+
+    it('fails the seam test if readBlockInputs stops stamping protocol time', async function () {
+        const stamp = sinon.stub(protocolTime, 'stampProtocolTime').returns(0);
+        try {
+            const decoderRows = [{ tx_index: 1, block_time: RAW_STAMP }];
+            const indexer = {
+                decoderDb: {
+                    getDecoderBlockData: sinon.stub().resolves(decoderRows),
+                    getBlockTime: sinon.stub().resolves(PROTOCOL_STAMP),
+                    getRawBlockTime: sinon.stub().resolves(RAW_STAMP),
+                },
+                protocolChanges: { isEnabled: sinon.stub().resolves(true) },
+                util: { logError: sinon.stub() },
+                anchorAttestHorizonBound: sinon.stub().resolves(null),
+            };
+            const inputs = await blockParse.readBlockInputs.call(indexer, 7);
+            sinon.assert.calledOnce(stamp);
+            sinon.assert.calledWith(stamp, sinon.match.array, PROTOCOL_STAMP);
+            // Detects a regression: with stamping bypassed the raw stamp survives.
+            assert.strictEqual(inputs.blockTransactions[0].block_time, RAW_STAMP);
+        } finally {
+            stamp.restore();
+        }
     });
 });
