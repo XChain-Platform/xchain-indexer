@@ -16737,7 +16737,7 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1270,
+      "fileCount": 1271,
       "titleCount": 12999,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
