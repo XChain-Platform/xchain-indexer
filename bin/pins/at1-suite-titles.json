@@ -11588,6 +11588,13 @@
       "Indexer cross-node determinism baseline @regression @tier1 hash chain matches the committed baseline (no consensus drift)",
       "Indexer cross-node determinism baseline @regression @tier1 re-deriving the corpus from a clean DB yields the identical hash chain (determinism)"
     ],
+    "ac93d3fca252ee43": [
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 arms from genesis on a value of 0 instead of treating it as unarmed",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 arms regtest from the variable and leaves the other networks alone",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 fails closed to unarmed on a non-numeric value",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 ships unarmed on regtest when the variable is unset",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 stays unarmed on an empty value"
+    ],
     "ac9b353b9d7d511b": [
       "XBRIDGE action handler @regression @tier3 v4 burn (a bridged copy on the chain holding it) debits the copy and names the origin chain, with no bridged bit to set",
       "XBRIDGE action handler @regression @tier3 v4 burn (a bridged copy on the chain holding it) reaches the same row and the same verdict for a lower-case root",
@@ -12328,6 +12335,12 @@
       "capability_snapshots stake set memo @regression @tier2 re-derives when the local tip moves",
       "capability_snapshots stake set memo @regression @tier2 runs one aggregate for many rows of one snapshot",
       "capability_snapshots stake set memo @regression @tier2 shares one query across concurrent rows"
+    ],
+    "b968b2a96f3d5ffc": [
+      "HubDbSync chain-id purge retry @regression @tier2 keeps the purge pending when a DELETE emptys, and retries on a restated id",
+      "HubDbSync chain-id purge retry @regression @tier2 keeps the purge pending when a DELETE throws, and retries on a restated id",
+      "HubDbSync chain-id purge retry @regression @tier2 stays pending while the retry keeps failing",
+      "HubDbSync chain-id purge retry @regression @tier2 still owes the legacy-table purge on retry after a chain change"
     ],
     "b97d2027d5c02535": [
       "JSON-RPC fee family @regression @tier1 feequote, preflight, feeschedule and feequotedryrun delegate to the actions engine",
@@ -16802,8 +16815,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1276,
-      "titleCount": 13021,
+      "fileCount": 1278,
+      "titleCount": 13030,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17701,6 +17714,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
+        "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/barriers_and_watchdog.test.js": "df782ac6be187400",
@@ -17909,6 +17923,7 @@
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
+        "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "ac93d3fca252ee43",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
