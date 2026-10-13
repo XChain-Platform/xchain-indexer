@@ -11280,6 +11280,11 @@
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 vector: PARTIALLY unstaked owner stake burns only what remains",
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 zero-amount rows are skipped rather than re-burned"
     ],
+    "a78ec428de5411cc": [
+      "Stored payout legs are applied as recorded at match applies a stored split of 6000 bps without any current-cap argument",
+      "Stored payout legs are applied as recorded at match settle handlers no longer read CONTROLLER_MAX_TAKE_BPS",
+      "Stored payout legs are applied as recorded at match still conserves proceeds and fails closed above 10000 bps"
+    ],
     "a7b9a30696b4da72": [
       "cooldown maturity escrow release reversal @regression @tier3 deletes each legacy refund credit together with its paired negative escrow release",
       "cooldown maturity escrow release reversal @regression @tier3 keeps both escrow releases and still deletes the credits and resets the status when the delete is off",
@@ -16846,8 +16851,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1279,
-      "titleCount": 13042,
+      "fileCount": 1280,
+      "titleCount": 13045,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -18101,6 +18106,7 @@
         "test/unit/utility/list_tick_airdrop_holders.test.js": "2987ec28ce152583",
         "test/unit/utility/price_age_at.test.js": "4b148378640ac7fa",
         "test/unit/utility/price_age_pick.test.js": "74c09b94fc5293c9",
+        "test/unit/utility/proceeds_split_stored_legs.test.js": "a78ec428de5411cc",
         "test/unit/utility/utility.test.js": "4f9a9190b0431827",
         "test/unit/utility/utility.test/bignumber.test.js": "9c413eb2335154fc",
         "test/unit/utility/utility.test/block_loop.test.js": "b0736fe3615f59a3",
