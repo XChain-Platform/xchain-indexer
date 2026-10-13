@@ -1,5 +1,9 @@
 <!-- Thanks for contributing to XChain Platform. -->
 
+## Base branch
+
+- [ ] This pull request targets `develop`. `master` only takes release merges, and a pull request into it from a fork cannot be merged.
+
 ## What this changes
 
 <!-- One or two sentences on what changed and why. Link an issue if there is one. -->

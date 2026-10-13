@@ -96,7 +96,7 @@ Run the no-external-services tiers before every commit (`npm run check:consensus
 
 Match the existing log style: a concise subject line, then a short body explaining what changed and why.
 
-- Branch off `master` and keep history linear (rebase, don't merge).
+- Fork the repository, branch off `develop`, and open your pull request against `develop`. Keep history linear (rebase, don't merge). `master` is what production runs and only ever receives release merges from `develop`; a pull request into `master` from a fork or any other branch fails the `base-branch guard` check and cannot be merged.
 - One logical change per commit; don't batch unrelated work.
 - **No `Co-Authored-By` trailers.** This is a project policy.
 - **Never `--no-verify`.** If a hook fails, fix the cause; don't bypass it.
