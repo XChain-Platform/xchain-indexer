@@ -52,7 +52,7 @@ describe('price landing future-stamped block wait @regression @tier1', function 
         sinon.useFakeTimers({ now: now, toFake: ['Date'] });
         const ix = makeIndexer();
         assert.strictEqual(await ix.deferOnPriceLandingSync(HEIGHT, BLOCK_TIME, true), true);
-        assert.strictEqual(ix.stallReason, 'price_sync_barrier');
+        assert.strictEqual(ix.stallReason, 'price_landing_barrier');
         assert.strictEqual(ix.stallClearsAt, (BLOCK_TIME + 1) * 1000);
         assert.strictEqual(waitingOnFutureBlock(ix.stallReason, ix.stallClearsAt, now), true);
         assert.strictEqual(stallClassOf(ix.stallReason, now - 3600000, GRACE_MS, now, ix.stallClearsAt), 'future_block_wait');

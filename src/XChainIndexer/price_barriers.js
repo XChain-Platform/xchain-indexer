@@ -172,7 +172,7 @@ module.exports = {
                 await this.hubDbSync.waitForPriceLandingSync(blockToParse, blockTime, this.priceSyncTimeoutMs);
             } catch(err){
                 getLogger().warn('Deferring block ' + blockToParse + ' (price landing): ', err);
-                this.markPriceSyncHold();
+                this.stallReason = 'price_landing_barrier';
                 this.stallClearsAt = this.landingClearsAt(blockToParse, blockTime);
                 return true;
             }

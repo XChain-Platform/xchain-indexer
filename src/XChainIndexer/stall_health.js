@@ -22,6 +22,17 @@
  ********************************************************************/
 
 const BRIDGE_PROOF_BARRIER = 'bridge_proof_barrier';
+const PRICE_LANDING_BARRIER = 'price_landing_barrier';
+
+// The no-progress window a stall is judged against. The price-landing barrier waits on
+// the OTHER landing chains' published landed times, which move on their own cadence, so
+// it carries its own window (priceLandingGraceMs) instead of the generic stall grace.
+// Any other reason, or an unusable priceLandingGraceMs, falls back to graceMs.
+function graceFor(stallReason, graceMs, priceLandingGraceMs){
+    if(stallReason === PRICE_LANDING_BARRIER && Number.isFinite(priceLandingGraceMs) && priceLandingGraceMs > 0)
+        return priceLandingGraceMs;
+    return graceMs;
+}
 
 // Discriminate a genuinely WEDGED indexer from one that is merely deferring the
 // newest block behind a sync barrier that is itself advancing. A set stallReason
@@ -47,12 +58,12 @@ const BRIDGE_PROOF_BARRIER = 'bridge_proof_barrier';
 // clock passes it and the stall persists, the mirror really is stuck and the normal
 // grace-window verdict applies again. This is a HEALTH verdict only: it changes no
 // hashed value and no barrier waits any differently for it.
-function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
+function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null){
     if(!stallReason) return false;
     if(stallReason === BRIDGE_PROOF_BARRIER) return false;
     if(lastBlockCommittedAt == null) return false;
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
-    return (now - lastBlockCommittedAt) > graceMs;
+    return (now - lastBlockCommittedAt) > graceFor(stallReason, graceMs, priceLandingGraceMs);
 }
 
 // True when the current stall is nothing but a wait for WALL CLOCK to reach a
@@ -82,16 +93,19 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 //                         with stallClearsAt naming the instant it can first move.
 //   dedicated proof-wait class - waiting for a quorum-established bridge checkpoint
 //                                or proof.
+//   'price_landing_wait' - waiting on the other landing chains' landed times, judged
+//                         against its own priceLandingGraceMs; wedged once that passes.
 //   'barrier_defer'     - a real barrier defer (mirror behind, host fault), still
 //                         advancing inside the grace window.
 //   'wedged'            - stalled with no commit for longer than the grace window.
 // 'future_block_wait' and 'wedged' cannot collide: stallWedged() already declines to
 // wedge a stall whose clear instant is still ahead.
-function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
+function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null){
     if(!stallReason) return 'none';
     if(stallReason === BRIDGE_PROOF_BARRIER) return 'bridge_proof_wait';
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
-    if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs)) return 'wedged';
+    if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs, priceLandingGraceMs)) return 'wedged';
+    if(stallReason === PRICE_LANDING_BARRIER) return 'price_landing_wait';
     return 'barrier_defer';
 }
 

@@ -163,6 +163,12 @@ function initBarrierTiming(indexer){
     indexer.healthStallGraceMs = parseInt(CONFIG_ENV.INDEXER_HEALTH_STALL_GRACE_MS
                                        || String(Math.max(2 * indexer.priceSyncTimeoutMs, 120000)), 10);
 
+    // Own no-progress window (ms) for the price-landing wait (stall class price_landing_wait).
+    // That barrier waits on the other landing chains' landed times rather than the local
+    // mirror, so it is judged against this field, not healthStallGraceMs. Twice the generic
+    // window by default. Purely operational, NOT a consensus parameter.
+    indexer.priceLandingGraceMs = 2 * indexer.healthStallGraceMs;
+
     // Window (ms) the block-poll loop may go without completing an ITERATION before
     // isPollSilent() calls it dead. Sized off healthStallGraceMs, which is already at
     // least two barrier-timeout cycles, and doubled again on top: one block can hold a
