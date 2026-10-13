@@ -7245,6 +7245,13 @@
       "LIST reference validity gate ordering @regression @tier1 regtest: never activates before token policy reads carry block context",
       "LIST reference validity gate ordering @regression @tier1 testnet: never activates before token policy reads carry block context"
     ],
+    "758b3f698abbb764": [
+      "price_landing_wait grace wiring @regression /status verdict passes priceLandingGraceMs",
+      "price_landing_wait grace wiring @regression advanceFields passes priceLandingGraceMs",
+      "price_landing_wait grace wiring @regression classifies a landing stall inside its own grace as price_landing_wait",
+      "price_landing_wait grace wiring @regression leaves other reasons on the generic grace",
+      "price_landing_wait grace wiring @regression wedges a landing stall only past priceLandingGraceMs"
+    ],
     "75c1e0031337ed39": [
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 activation plane v3 rejects a SNAPSHOT_BLOCK ahead of its own block (no future-snapshot pinning)",
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 activation plane v3 stays inert below the flag-day even carrying a SNAPSHOT_BLOCK past it",
@@ -16858,8 +16865,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1281,
-      "titleCount": 13050,
+      "fileCount": 1282,
+      "titleCount": 13055,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17317,6 +17324,7 @@
         "test/unit/api/health/health_train_activation.test.js": "bce604b98b5b940c",
         "test/unit/api/health/hub_consensus_hash_mismatch.test.js": "2d2977d7cebb17c1",
         "test/unit/api/health/indexer_metrics.test.js": "fabee4ab4b425a8a",
+        "test/unit/api/health/price_landing_grace_wiring.test.js": "758b3f698abbb764",
         "test/unit/api/health/reorg_health_stats_null.test.js": "5caf6af9f6bed1d6",
         "test/unit/api/health/shutdown.test.js": "9f1e3a4773262edd",
         "test/unit/api/health/stall_fields.test.js": "fb5344c11f961c86",
