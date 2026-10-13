@@ -9954,6 +9954,24 @@
       "Rollback hub-push queue resolved at use @regression @tier3 pauses and resumes a queue the indexer attaches after Rollback is constructed",
       "Rollback hub-push queue resolved at use @regression @tier3 still attempts live retraction delivery when no queue is ever attached"
     ],
+    "928a3b458b1abf59": [
+      "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) a pre-guard (v1.x) node treats it as not-yet-active; guard stays off",
+      "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) is registered as a v2.0.0 change keyed on block_time, not block_index",
+      "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) mainnet: DISABLED one second below the flag-day (guard is a strict no-op)",
+      "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) mainnet: ENABLED above the flag-day",
+      "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) mainnet: ENABLED at exactly the flag-day boundary",
+      "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) regtest: enabled from genesis (guard runs)",
+      "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) testnet: enabled from genesis",
+      "ProtocolChanges @regression @tier3 GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS registry row is a v0.2.0 time-keyed row, unarmed on mainnet and testnet",
+      "ProtocolChanges @regression @tier3 GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS registry row stays disabled on mainnet, testnet and regtest",
+      "ProtocolChanges @regression @tier3 LOCK_NULL_PRIOR_UNSET is ungated (redesign) carries no activation time or block on any network",
+      "ProtocolChanges @regression @tier3 LOCK_NULL_PRIOR_UNSET is ungated (redesign) retired the v1 train constant rather than leaving it dangling",
+      "ProtocolChanges @regression @tier3 consensus version pin (#3087) is a compiled constant equal to the package version",
+      "ProtocolChanges @regression @tier3 consensus version pin (#3087) no-op proof passes on a matching host and throws on a drifted npm_package_version",
+      "ProtocolChanges @regression @tier3 consensus version pin (#3087) rejects a malformed explicit override instead of falling back to the pin",
+      "ProtocolChanges @regression @tier3 consensus version pin (#3087) resolves from the compiled pin, ignoring npm_package_version entirely",
+      "ProtocolChanges @regression @tier3 contract-era flag-day cohort single-source-of-truth (consensus) all five coupled gates share one mainnet_time equal to VM_BANNED_ASYNC_MAINNET_TIME"
+    ],
     "929048c81769242e": [
       "Execution fee: formula + token-decimal masking @regression @tier1 0-decimal gas token (e2e XCHAIN): sub-0.5 fees round to 0 (effectively free)",
       "Execution fee: formula + token-decimal masking @regression @tier1 8-decimal gas token: fractional fees are charged in full (no masking)",
@@ -12446,6 +12464,13 @@
       "the ATTEST response mirror holds every body the on-chain path holds @regression a dated mode=auto migration widens every provider-byte column",
       "the ATTEST response mirror holds every body the on-chain path holds @regression every provider-byte mirror column declares its on-chain twin's charset",
       "the ATTEST response mirror holds every body the on-chain path holds @regression sanity: the fixture character really is 4 bytes and the twin columns are utf8mb4"
+    ],
+    "ba7b121aaa69a4ca": [
+      "controller guard stake snapshot decimal gate @regression @tier1 asks the registry about the host block",
+      "controller guard stake snapshot decimal gate @regression @tier1 does not follow the primary-path STAKE_SNAPSHOT_DECIMAL_STRINGS flag",
+      "controller guard stake snapshot decimal gate @regression @tier1 keeps the slash-window flag independent",
+      "controller guard stake snapshot decimal gate @regression @tier1 passes false while GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS is off",
+      "controller guard stake snapshot decimal gate @regression @tier1 passes true once GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS is on"
     ],
     "bab7aa50ea9ce11a": [
       "Controller: AIRDROP/DIVIDEND/SWEEP gated by the transfer controller (real DB + real VM) @phaseE a transfer-class ALLOW commits a DIVIDEND and the block passes the supply sanity check",
@@ -16901,8 +16926,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1286,
-      "titleCount": 13083,
+      "fileCount": 1287,
+      "titleCount": 13090,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17590,6 +17615,7 @@
         "test/unit/contracts/controller_guard_emission_hash.test.js": "b0ff748112af56ad",
         "test/unit/contracts/controller_guard_leg_savepoints.test.js": "bd2af3559cf5f2c6",
         "test/unit/contracts/controller_guard_returnvalue.test.js": "1734825922f9caa5",
+        "test/unit/contracts/controller_guard_stake_snapshot_gate.test.js": "ba7b121aaa69a4ca",
         "test/unit/contracts/controller_policy_layer.test.js": "8fabcde2ac147e88",
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
         "test/unit/contracts/delegate_rotation_unstake_window.test.js": "032507a4392ad944",
@@ -18003,7 +18029,7 @@
         "test/unit/protocol/price_time_gate.test.js": "3ba5b094789a13b1",
         "test/unit/protocol/protocol_change_registry_prototype.test.js": "9227d0e83b5535c1",
         "test/unit/protocol/protocol_changes.test.js": "dfed60b0be0a5889",
-        "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "89da9b102e2aa560",
+        "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "928a3b458b1abf59",
         "test/unit/protocol/protocol_changes.test/unusable_block_time.test.js": "cb3e0ef54d91ff54",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
         "test/unit/protocol_changes/anchor/anchor_bundle_order_row.test.js": "332212f43d474164",
