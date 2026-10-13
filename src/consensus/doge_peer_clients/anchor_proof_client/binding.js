@@ -95,6 +95,13 @@ function rewardFamily(rewardType){
     return null;
 }
 
+// The dropped form is for use above the legacy reward pin gate; 6 and 7 stay in ATTESTED_VERSIONS.
+function rewardFamilyVersions(family, { legacyDropped = false } = {}){
+    if(!Object.prototype.hasOwnProperty.call(REWARD_FAMILY_VERSIONS, family)) return null;
+    let list = REWARD_FAMILY_VERSIONS[family].slice();
+    return legacyDropped === true ? list.filter(v => v !== 6 && v !== 7) : list;
+}
+
 // Anchor statuses that are NOT fleet-uniform, so they are evidence of nothing here.
 //
 // judge's whole licence to memoize a permanent 'rejected' is that the status is chain
@@ -273,7 +280,7 @@ function judgeAnchors(anchors, e){
         snapshot:  Number(e.snapshotBlock),
         family:    family,
         isArchive: family === 'archive',
-        versions:  REWARD_FAMILY_VERSIONS[family]
+        versions:  rewardFamilyVersions(family)
     };
     let headers = (family === 'bundle') ? bundleHeaderBlocks(anchors, t.network, t.publisher) : null;
     let sawAttested = false;
@@ -295,6 +302,6 @@ function judgeAnchors(anchors, e){
 
 module.exports = {
     ATTESTED_VERSIONS, REWARD_FAMILY_VERSIONS, NODE_CLASS_DEPENDENT_STATUS,
-    rewardFamily, isRewardCandidateRow, isBundleSectionRow, bundleHeaderBlocks, bindsToTuple,
+    rewardFamily, rewardFamilyVersions, isRewardCandidateRow, isBundleSectionRow, bundleHeaderBlocks, bindsToTuple,
     judgeAnchors
 };
