@@ -90,7 +90,7 @@ module.exports = {
                 let mInfo = await this.indexerDb.getTokenInfo(matchInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
                 mDec = (mInfo && !this.util.isNull(mInfo['DECIMALS'])) ? parseInt(mInfo['DECIMALS']) : 0;
             }
-            for(let c of this.util.applyProceedsSplit(matchInfo['GET_TICK'], matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS'], matchInfo['PAYOUT_LEGS'], mDec, parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']))){
+            for(let c of this.util.applyProceedsSplit(matchInfo['GET_TICK'], matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS'], matchInfo['PAYOUT_LEGS'], mDec)){
                 credits.push(c);
                 this.util.addAddressTicker(c[2], c[0]);
             }
@@ -110,7 +110,7 @@ module.exports = {
                 let sInfo = await this.indexerDb.getTokenInfo(swapInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
                 sDec = (sInfo && !this.util.isNull(sInfo['DECIMALS'])) ? parseInt(sInfo['DECIMALS']) : 0;
             }
-            for(let c of this.util.applyProceedsSplit(swapInfo['GET_TICK'], swapInfo['GET_AMOUNT'], swapInfo['GET_ADDRESS'], swapInfo['PAYOUT_LEGS'], sDec, parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']))){
+            for(let c of this.util.applyProceedsSplit(swapInfo['GET_TICK'], swapInfo['GET_AMOUNT'], swapInfo['GET_ADDRESS'], swapInfo['PAYOUT_LEGS'], sDec)){
                 credits.push(c);
                 this.util.addAddressTicker(c[2], c[0]);
             }

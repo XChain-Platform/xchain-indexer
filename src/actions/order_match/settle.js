@@ -204,7 +204,7 @@ module.exports = {
                 let mInfo = await this.indexerDb.getTokenInfo(matchInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
                 mDec = (mInfo && !this.util.isNull(mInfo['DECIMALS'])) ? parseInt(mInfo['DECIMALS']) : 0;
             }
-            for(let c of this.util.applyProceedsSplit(matchInfo['GET_TICK'], give_amount, matchInfo['GET_ADDRESS'], matchInfo['PAYOUT_LEGS'], mDec, parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']))){
+            for(let c of this.util.applyProceedsSplit(matchInfo['GET_TICK'], give_amount, matchInfo['GET_ADDRESS'], matchInfo['PAYOUT_LEGS'], mDec)){
                 credits.push(c);
                 this.util.addAddressTicker(c[2], c[0]);
             }
@@ -225,7 +225,7 @@ module.exports = {
                 let oInfo = await this.indexerDb.getTokenInfo(orderInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
                 oDec = (oInfo && !this.util.isNull(oInfo['DECIMALS'])) ? parseInt(oInfo['DECIMALS']) : 0;
             }
-            for(let c of this.util.applyProceedsSplit(orderInfo['GET_TICK'], get_amount, orderInfo['GET_ADDRESS'], orderInfo['PAYOUT_LEGS'], oDec, parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']))){
+            for(let c of this.util.applyProceedsSplit(orderInfo['GET_TICK'], get_amount, orderInfo['GET_ADDRESS'], orderInfo['PAYOUT_LEGS'], oDec)){
                 credits.push(c);
                 this.util.addAddressTicker(c[2], c[0]);
             }
