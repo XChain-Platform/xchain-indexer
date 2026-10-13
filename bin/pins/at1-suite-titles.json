@@ -5234,6 +5234,11 @@
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 the two roots COLLIDE with the gate OFF, which is the history replay must reproduce",
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 the two roots derive DISTINCT request_ids with the gate ON"
     ],
+    "56e445f383ed3021": [
+      "VOTE v0 refused create status @regression @tier1 a refused create writes an inert row carrying the refusal",
+      "VOTE v0 refused create status @regression @tier1 a valid create writes the live row",
+      "VOTE v0 refused create status @regression @tier1 createPoll inert stores no window, deposit or callback and skips the ticker"
+    ],
     "5760ac49e2afb048": [
       "user-text columns hold a 4-byte character @regression a dated migration MODIFYs every one of them to utf8mb4",
       "user-text columns hold a 4-byte character @regression sanity: the fixture character really is 4 bytes (utf8mb3 cannot hold it)",
@@ -11626,6 +11631,23 @@
       "Genesis Ledger Bootstrap @regression records a valid ISSUE/TRANSFER chain of custody and no balances",
       "Genesis Ledger Bootstrap @regression treats the genesis block as a rollback floor"
     ],
+    "aa7188891f17a98e": [
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 flag-day registration VOTE_RESPECTS_SLEEP is registered as a 0.2.0 gate on the ratified 2026-08-07 anchor",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 gate ACTIVE: a sleeping SOURCE is rejected on every user-broadcast version an awake SOURCE stays valid on all three versions",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 gate ACTIVE: a sleeping SOURCE is rejected on every user-broadcast version the gate consults isActionAllowed(SOURCE, null, BLOCK_INDEX)",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 gate ACTIVE: a sleeping SOURCE is rejected on every user-broadcast version v0 create \u2192 invalid, inert poll row only, no escrow",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 gate ACTIVE: a sleeping SOURCE is rejected on every user-broadcast version v1 ballot \u2192 invalid, no ballot row",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 gate ACTIVE: a sleeping SOURCE is rejected on every user-broadcast version v3 delegate \u2192 invalid, no delegation row",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 gate INACTIVE: legacy acceptance preserved (byte-identical replay) v0 create from a sleeping SOURCE stays valid below the flag-day",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 gate INACTIVE: legacy acceptance preserved (byte-identical replay) v1 ballot and v3 delegate from a sleeping SOURCE stay valid below the flag-day",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 v2 finalize is system-synthesized and exempt from the sleep gate finalize never consults isActionAllowed",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 v3 DELEGATE_TO isCryptoAddress validation (same activation) gate ACTIVE: blank DELEGATE_TO still clears (format check only applies when set)",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 v3 DELEGATE_TO isCryptoAddress validation (same activation) gate ACTIVE: malformed DELEGATE_TO \u2192 invalid, no delegation row",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 v3 DELEGATE_TO isCryptoAddress validation (same activation) gate ACTIVE: valid regtest DELEGATE_TO \u2192 valid, delegation written",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 v3 DELEGATE_TO isCryptoAddress validation (same activation) gate ACTIVE: wrong-network DELEGATE_TO (mainnet addr on regtest) \u2192 invalid",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 v3 DELEGATE_TO isCryptoAddress validation (same activation) gate INACTIVE: malformed DELEGATE_TO stays valid (legacy tally-time no-holder behaviour)",
+      "VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1 v3 DELEGATE_TO isCryptoAddress validation (same activation) self-delegation is still rejected ahead of the format check"
+    ],
     "aaa1f7acb927f744": [
       "Chaos: Circuit Breaker CB-01: starts in closed state",
       "Chaos: Circuit Breaker CB-02: successful connection resets failure count",
@@ -17004,8 +17026,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1291,
-      "titleCount": 13123,
+      "fileCount": 1292,
+      "titleCount": 13126,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17294,7 +17316,8 @@
         "test/unit/actions/stake/vote_invariants.test/callback_timelock.test.js": "21b214062cb737f9",
         "test/unit/actions/stake/vote_invariants.test/poll_callback_wire.test.js": "61996ee0381ed3e0",
         "test/unit/actions/stake/vote_invariants.test/poll_tick_visible.test.js": "41c899fc2a22e77f",
-        "test/unit/actions/stake/vote_sleep_gate.test.js": "aa2e38b295d41c9c",
+        "test/unit/actions/stake/vote_invariants.test/refused_create_status.test.js": "56e445f383ed3021",
+        "test/unit/actions/stake/vote_sleep_gate.test.js": "aa7188891f17a98e",
         "test/unit/actions/stake/withdraw.test.js": "25db2339c8df14dc",
         "test/unit/actions/stake/withdraw.test/amount_and_ledger.test.js": "b0c0ade6236d90f4",
         "test/unit/actions/stake/withdraw.test/custody_bypass_witness.test.js": "7e5ad9b78be748e3",
