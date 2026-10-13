@@ -25,6 +25,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { boundedAt, bankUnusedGas } = require('./nested_gas_sum.js');
 
 // Per-root discriminator for the ATTEST request_id / XCALL call_id preimages. One
 // helper for all three root-bearing sites here (top-level EXECUTE, controller guard,
@@ -199,6 +200,7 @@ async function writeVmStateChanges(ctx, vmResult){
 
 async function applyVmEmissions(ctx, vmResult, slashLedger){
     let data = ctx.data;
+    let nestedGasBounded = boundedAt(this.config, data);
     // Process emitted actions through existing handlers
     for(let i = 0; i < vmResult.emittedActions.length; i++){
         let emission = vmResult.emittedActions[i];
@@ -214,7 +216,7 @@ async function applyVmEmissions(ctx, vmResult, slashLedger){
             // reservation (gasLimit - billed, including its own
             // subtree's refunds) for this run's fee settlement.
             if(emission.action === 'EXECUTE')
-                ctx.nestedGasUnused += Number(emission.gasUnusedSubtree) || 0;
+                ctx.nestedGasUnused = bankUnusedGas(ctx.nestedGasUnused, emission, nestedGasBounded, ctx.gasUsed);
         }
 
         // Record emission link (SLASH rows carry no resultActionIndex)
