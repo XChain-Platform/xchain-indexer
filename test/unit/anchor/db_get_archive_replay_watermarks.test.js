@@ -113,6 +113,25 @@ describe('getArchiveReplayWatermarks()', function () {
         assert.ok(/a\.version\s*=\s*3\s+AND\s+a\.chain\s+IS\s+NOT\s+NULL\s+AND\s+a\.total_chunks\s+IS\s+NOT\s+NULL/i.test(stub.firstCall.args[0]),
                   'wrapper chain row of a v3 archive must feed the checkpoint watermark');
         assert.deepStrictEqual(stub.firstCall.args[1], ARCHIVE_HEAD_VERSIONS);
+
+        // Precedence: the status filter must AND with the WHOLE row set, wrapper term
+        // included, so one group opens right after WHERE and closes right before it.
+        for (const gate of [false, true]) {
+            stub.resetHistory();
+            await db.getArchiveReplayWatermarks(gate);
+            const q = stub.firstCall.args[0].replace(/\s+/g, ' ');
+            const m = q.match(/WHERE (\(.*\)) AND s\.status IN/i);
+            assert.ok(m, 'row set must be one group followed by the status filter');
+            let depth = 0;
+            for (let i = 0; i < m[1].length; i++) {
+                if (m[1][i] === '(') depth++;
+                if (m[1][i] === ')') depth--;
+                assert.ok(depth > 0 || i === m[1].length - 1,
+                          'the opening paren must stay open across the whole row set');
+            }
+            assert.strictEqual(/a\.version\s*=\s*3/i.test(m[1]), gate,
+                      'wrapper term lives inside the grouped row set, only when gated');
+        }
     });
 
     it('returns nulls when no archive row exists, leaving the guard inert', async function () {
