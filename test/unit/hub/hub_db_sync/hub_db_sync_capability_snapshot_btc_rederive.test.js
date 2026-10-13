@@ -283,7 +283,8 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
                 assert.strictEqual(v.verdict, 'refused', over.signing_pubkey + ': ' + v.reason);
                 assert.match(v.reason, new RegExp('block ' + later + ' \\(resolved at ' + SNAP_BLOCK + '\\)'));
             }
-            assert.deepStrictEqual(asked, [SNAP_BLOCK, SNAP_BLOCK]);
+            // Both rows share one capability and buried block, so the set is derived once.
+            assert.deepStrictEqual(asked, [SNAP_BLOCK]);
         });
 }); });
 

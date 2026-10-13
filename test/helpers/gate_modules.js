@@ -172,6 +172,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'cross_chain_remote_token_activation',
     'send_gated_total_tick_id_activation',
     'action_admission_dispatched_only',
+    'anchor_fold_reissue_source_author_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

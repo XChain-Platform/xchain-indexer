@@ -234,6 +234,23 @@ function assertVmConsensusEpoch(vmModule, expected = EXPECTED_VM_CONSENSUS_VERSI
             'deliberately moving epochs, bump EXPECTED_VM_CONSENSUS_VERSION with that coordinated release.');
 }
 
+// Consensus-dependency gate: ask the VM to compare every package that contributes to its
+// contract-observable behaviour with the VM-owned pins. The indexer must not copy that list:
+// the VM resolves nested packages such as decimal.js from the tree that actually executes them.
+// A missing checker is a stale vendored VM and therefore a boot refusal, never a compatibility
+// skip. There is no environment or configuration bypass.
+function assertConsensusDependencies(vmModule){
+    if(!vmModule || typeof vmModule.checkConsensusDependencies !== 'function' ||
+        typeof vmModule.describeDependencyMismatch !== 'function')
+        throw new Error('CONSENSUS DEPENDENCY CHECK UNAVAILABLE: the loaded xchain-vm does not expose ' +
+            'checkConsensusDependencies and describeDependencyMismatch. Refusing to execute contracts ' +
+            'without verifying their dependency versions. Re-vendor the VM (npm run vendor:vm).');
+
+    const result = vmModule.checkConsensusDependencies();
+    if(!result || result.ok !== true)
+        throw new Error(vmModule.describeDependencyMismatch(result));
+}
+
 module.exports = {
     bindingObjectFormat,
     bindingPathFromError,
@@ -242,5 +259,6 @@ module.exports = {
     assertVmRuntimeLoadable,
     assertConsensusRuntime,
     EXPECTED_VM_CONSENSUS_VERSION,
-    assertVmConsensusEpoch
+    assertVmConsensusEpoch,
+    assertConsensusDependencies
 };

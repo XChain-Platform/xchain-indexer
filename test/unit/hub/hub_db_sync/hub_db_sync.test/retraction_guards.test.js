@@ -93,7 +93,7 @@ function registerRetractionGuardGroup9(makeApply) { it('gen-fenced PER-LEG delet
         assert.deepStrictEqual(calls[0].args, ['BTC', 10, 20, 4, 'BTC', 10, 20, 4]);
     }); }
 
-describe('HubDbSync._applyRetraction closed-range parity @regression @tier3', function () {
+describe('HubDbSync applyRetraction closed-range parity @regression @tier3', function () {
     function makeApply() {
         const calls = [];
         const doQuery = sinon.stub().callsFake(async (sql, args) => { calls.push({ sql, args }); return []; });
@@ -139,7 +139,7 @@ const deletes = (calls) => calls.filter(c => /^DELETE/.test(c.sql));
 // OUR OWN chain are checked against our own push_generations authority, and
 // per-chain generation monotonicity drops stale replays.
 // ---------------------------------------------------------------------------
-describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', function () {
+describe('HubDbSync applyRetraction receive-side guards @regression @tier1', function () {
     it('accepts an own-chain retraction whose fence is below our rollback generation', async function () {
         const { sync, calls } = makeApply(async () => 6);
         await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, retraction_generation: 5 });
@@ -192,7 +192,7 @@ describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', fu
     });
 });
 
-describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', function () {
+describe('HubDbSync applyRetraction receive-side guards @regression @tier1', function () {
     it('without the hook (explorer vendored mirror) other-chain legacy behavior is unchanged', async function () {
         const { sync, calls } = makeApply();
         await sync.applyRetraction({ table: 'oracle_prices', source_chain: 'LTC', from_action_index: 1 });
