@@ -14150,6 +14150,16 @@
       "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION is active from regtest genesis without an environment arming lever",
       "CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION stays unarmed on mainnet and is active on each testnet chain from its armed height"
     ],
+    "d6d1c2ce9ac6de6a": [
+      "Hash coverage guard @regression content-parity coverage declaration every declared in-place column is a real column of its table schema",
+      "Hash coverage guard @regression content-parity coverage declaration every streamed table is content-parity covered unless it is in one of the two declared classes",
+      "Hash coverage guard @regression content-parity coverage declaration excluded columns name real, deliberately-unreplicated values",
+      "Hash coverage guard @regression content-parity coverage declaration in-place parity columns stay declared apart and match every order_matches UPDATE",
+      "Hash coverage guard @regression content-parity coverage declaration the in-place columns leave the preimage and never overlap the by-design exclusions",
+      "Hash coverage guard @regression content-parity coverage declaration the mutable exclusion class is derived from the state_hash declarations, not hand-listed",
+      "Hash coverage guard @regression content-parity coverage declaration the operator carve-outs are exactly markets (indexer) and dispensers (decoder)",
+      "Hash coverage guard @regression content-parity coverage declaration the two reorg-scoped lookups bound by block; the inert ones bound by id"
+    ],
     "d6d993761e998d4a": [
       "the fee-quote dry run drops the SMT name memos it poisoned @regression a quote whose handler THROWS invalidates too (the teardown is in the finally)",
       "the fee-quote dry run drops the SMT name memos it poisoned @regression a quoted ISSUE leaves neither memo behind",
@@ -16816,7 +16826,7 @@
   "scripts": {
     "test": {
       "fileCount": 1278,
-      "titleCount": 13030,
+      "titleCount": 13032,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17697,7 +17707,7 @@
         "test/unit/hub/client/hub_rate_limit.test.js": "4bb859f5accff2bb",
         "test/unit/hub/client/hub_selector.test.js": "5eda3afa01cb5509",
         "test/unit/hub/hash_coverage.test.js": "74513e474bce99e9",
-        "test/unit/hub/hash_coverage.test/content_parity.test.js": "fffccbf23e9febd9",
+        "test/unit/hub/hash_coverage.test/content_parity.test.js": "d6d1c2ce9ac6de6a",
         "test/unit/hub/hub_client.test.js": "0b3279bc0c8312d7",
         "test/unit/hub/hub_client.test/address_source.test.js": "517182bfca3b695a",
         "test/unit/hub/hub_client.test/call_http.test.js": "a50f10fa61307bbf",
