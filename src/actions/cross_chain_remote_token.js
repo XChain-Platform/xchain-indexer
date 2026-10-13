@@ -22,6 +22,7 @@
 'use strict';
 
 const gateRegistry = require('../consensus/gate_registry');
+const { verifyCanonicalQuorum } = require('./cross_settle/quorum.js');
 
 const REMOTE_TOKEN_KEY = 'cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION';
 
@@ -33,6 +34,25 @@ function remoteTokenGateActive(handler, data){
             return false;
         throw error;
     }
+}
+
+const NO_PINNED = 'invalid: GET_TICK (no pinned remote token)';
+
+/**
+ * The signed content canonical of a remote token snapshot. MUST byte-match the hub's
+ * XREMOTE layout. Every field is String()-coerced, a null is an empty string, and the
+ * coin is upper-cased the way the hub signs it.
+ *
+ * @param {Object} row - a remote_token_snapshots row
+ * @returns {string}
+ */
+function remoteTokenCanonical(row){
+    let v = (x) => (x === null || x === undefined) ? '' : String(x);
+    return [
+        'XREMOTE', v(row.snapshot_id), String(row.finalizing_view != null ? row.finalizing_view : 0),
+        v(row.network), v(row.coin).toUpperCase(), v(row.tick), v(row.decimals),
+        v(row.owner), v(row.source_action_index), v(row.snapshot_block)
+    ].join('|');
 }
 
 // Returns an error string, or null when the create is accepted.
@@ -47,10 +67,22 @@ async function remoteTokenAcceptError(handler, st){
 
     let mirror = typeof handler.indexerDb.mirrorDb === 'function' ? handler.indexerDb.mirrorDb() : handler.indexerDb;
     if(!mirror || typeof mirror.getPinnedRemoteToken !== 'function')
-        return 'invalid: GET_TICK (no pinned remote token)';
+        return NO_PINNED;
 
     let pinned = await mirror.getPinnedRemoteToken(handler.config['NETWORK'], data['GET_COIN'], data['GET_TICK']);
-    return pinned ? null : 'invalid: GET_TICK (no pinned remote token)';
+    if(!pinned)
+        return NO_PINNED;
+
+    // Re-verify the pinned row's federation signatures: a row that reached the mirror
+    // without a quorum over its own canonical never gates an ORDER or SWAP leg.
+    let quorum;
+    try {
+        quorum = await verifyCanonicalQuorum(handler.indexerDb, remoteTokenCanonical(pinned),
+            pinned.validator_signatures, pinned.snapshot_block, handler.config['NETWORK']);
+    } catch(error){
+        return NO_PINNED;
+    }
+    return quorum.met ? null : NO_PINNED;
 }
 
-module.exports = { REMOTE_TOKEN_KEY, remoteTokenAcceptError };
+module.exports = { REMOTE_TOKEN_KEY, remoteTokenCanonical, remoteTokenAcceptError };

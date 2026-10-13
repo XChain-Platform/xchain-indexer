@@ -44,6 +44,7 @@ const { createDatabases, createDecoderSchema, decoderQuery, indexerQuery,
 const DecoderSeeder = require('../../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../../setup/indexer-launcher');
 const { seedGas } = require('../../setup/gas-seeder');
+const { signedRemoteTokenRow, stubRemoteTokenValidators } = require('../../../fixtures/mocks');
 
 const OWNER   = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // issues, binds, lists
 const LEGADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM'; // royalty leg recipient
@@ -143,11 +144,12 @@ async function setupRoyaltyRail() {
             { source: OWNER, data: `DEPLOY|0|${b64(SEGLEG)}|300000|` },
         ]);
         indexer = await initIndexer();
+        stubRemoteTokenValidators(indexer.indexerDb);
         const realMirrorDb = indexer.indexerDb.mirrorDb.bind(indexer.indexerDb);
         indexer.indexerDb.mirrorDb = () => Object.create(realMirrorDb(), {
             // A seeded remote_token_snapshots row will replace this accessor stub;
             // this scenario tests royalty legs, not remote token pinning.
-            getPinnedRemoteToken: { value: async () => ({ decimals: 0 }) }
+            getPinnedRemoteToken: { value: async () => signedRemoteTokenRow() }
         });
         // LTC is native-fee-only; this scenario is about royalty legs, not fee mode, so pin
         // the xchain-balance fee path (scenario 11's forceXchainFeeMode: a placeholder

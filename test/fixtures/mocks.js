@@ -436,7 +436,49 @@ function createTokenInfo(overrides = {}) {
     };
 }
 
+// A fixed four-validator cross_chain set; every fixture row is signed by three of them.
+const crypto = require('crypto');
+const REMOTE_TOKEN_KEYS = [0, 1, 2, 3].map(() => {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+    return { privateKey, pubkey: publicKey.export({ format: 'der', type: 'spki' }).slice(-32).toString('hex') };
+});
+
+/**
+ * A remote_token_snapshots row carrying real Ed25519 validator_signatures over its own
+ * XREMOTE canonical, the pinned-row shape getPinnedRemoteToken returns.
+ */
+function signedRemoteTokenRow(overrides = {}) {
+    const { remoteTokenCanonical } = require('../../src/actions/cross_chain_remote_token');
+    const row = {
+        snapshot_id: 'f90fc14ebe1f32e4140547e40be3f12e739fca4f8bcdfaf6534cdf33566d9682',
+        network: 'regtest', coin: 'LTC', tick: 'PEPECASH', decimals: 0,
+        owner: 'bcrt1qowner', source_action_index: 42, snapshot_block: 1200,
+        finalizing_view: 0, status: 'finalized',
+        ...overrides,
+    };
+    if (!('validator_signatures' in overrides)) {
+        const canonical = remoteTokenCanonical(row);
+        row.validator_signatures = JSON.stringify(REMOTE_TOKEN_KEYS.slice(0, 3).map(k => ({
+            pubkey: k.pubkey,
+            sig: crypto.sign(null, Buffer.from(canonical, 'utf8'), k.privateKey).toString('hex'),
+        })));
+    }
+    return row;
+}
+
+/**
+ * Install the fixed validator set on an indexerDb (count and stake-weighted readers).
+ */
+function stubRemoteTokenValidators(indexerDb) {
+    const rows = REMOTE_TOKEN_KEYS.map((k, i) => ({ pubkey: k.pubkey, source: 'src' + i, weight: '10' }));
+    indexerDb.getValidatorsByCapability = sinon.stub().resolves(rows);
+    indexerDb.getStakeWeightsByCapability = sinon.stub().resolves(rows);
+    return indexerDb;
+}
+
 module.exports = {
+    signedRemoteTokenRow,
+    stubRemoteTokenValidators,
     createMockDb,
     createMockIndexer,
     createBaseData,

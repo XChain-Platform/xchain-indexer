@@ -18,7 +18,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const { createBaseData } = require('../../../../fixtures/mocks');
+const { createBaseData, signedRemoteTokenRow, stubRemoteTokenValidators } = require('../../../../fixtures/mocks');
 const { OWNER_ADDR, OTHER_ADDR, BLOCK_TIME, EXPIRATION, makeParams, makeOrderContext } = require('./helpers/order_context.js');
 const gateRegistry = require('../../../../../src/consensus/gate_registry');
 
@@ -297,7 +297,8 @@ describe('Order action handler @regression @tier2', function () {
 
         it('cross-chain order with a pinned GET token is not rejected for the remote token', async function () {
             setRemoteTokenGate(true);
-            indexer.indexerDb.mirrorDb = () => ({ getPinnedRemoteToken: sinon.stub().resolves({ decimals: 0 }) });
+            stubRemoteTokenValidators(indexer.indexerDb);
+            indexer.indexerDb.mirrorDb = () => ({ getPinnedRemoteToken: sinon.stub().resolves(signedRemoteTokenRow()) });
             const params = makeParams(`0|BTC|RAREPEPE|1||LTC|PEPECASH|5||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 

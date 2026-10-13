@@ -17,6 +17,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const gateRegistry = require('../../../src/consensus/gate_registry');
 const { remoteTokenAcceptError, REMOTE_TOKEN_KEY } = require('../../../src/actions/cross_chain_remote_token');
+const { signedRemoteTokenRow, stubRemoteTokenValidators } = require('../../fixtures/mocks');
 const orderValidate = require('../../../src/actions/order/validate');
 const swapValidate  = require('../../../src/actions/swap/validate');
 
@@ -26,10 +27,10 @@ function makeHandler(pinned) {
         config: { NETWORK: 'regtest', COIN: 'BTC', MAX_MEMO_LENGTH: 80 },
         util: { isNull: (v) => v === undefined || v === null || v === '', bclte: () => false },
         actions: { protocolChanges: { isEnabled: sinon.stub().resolves(false) } },
-        indexerDb: {
+        indexerDb: stubRemoteTokenValidators({
             isActionAllowed: sinon.stub().resolves(true),
             mirrorDb: () => ({ getPinnedRemoteToken }),
-        },
+        }),
     };
     return { handler, getPinnedRemoteToken };
 }
@@ -72,7 +73,7 @@ describe('Cross-chain remote token accept check @regression @tier2', function ()
 
     it('accepts when a pinned row exists', async function () {
         stubGate(true);
-        const { handler } = makeHandler({ decimals: 8, owner: 'x' });
+        const { handler } = makeHandler(signedRemoteTokenRow());
         assert.strictEqual(await remoteTokenAcceptError(handler, makeState()), null);
     });
 
@@ -134,7 +135,7 @@ describe('Cross-chain remote token accept check @regression @tier2', function ()
 
         it(`${name} validateGeneral passes with a pinned row`, async function () {
             stubGate(true);
-            const { handler } = makeHandler({ decimals: 0 });
+            const { handler } = makeHandler(signedRemoteTokenRow());
             const st = makeState();
             await mod.validateGeneral(handler, st);
             assert.ok(!st.error);
