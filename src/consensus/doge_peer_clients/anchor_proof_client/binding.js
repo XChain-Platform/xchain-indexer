@@ -95,9 +95,7 @@ function rewardFamily(rewardType){
     return null;
 }
 
-// The wire versions that can prove a family, as a fresh copy. Only legacyDropped === true
-// removes the pre-restart bytes 6 and 7: that form is for use above the legacy reward pin
-// gate, while 6 and 7 stay in ATTESTED_VERSIONS. An unknown family returns null.
+// The dropped form is for use above the legacy reward pin gate; 6 and 7 stay in ATTESTED_VERSIONS.
 function rewardFamilyVersions(family, { legacyDropped = false } = {}){
     if(!Object.prototype.hasOwnProperty.call(REWARD_FAMILY_VERSIONS, family)) return null;
     let list = REWARD_FAMILY_VERSIONS[family].slice();
