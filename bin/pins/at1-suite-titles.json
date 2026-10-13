@@ -5898,6 +5898,16 @@
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 binding-poll callback wire matches its exported slot declaration no CALLBACK_PARAMS: the wire is the fixed slots plus the tick and nothing after",
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 binding-poll callback wire matches its exported slot declaration the declaration is a frozen list of distinct slot names, with the tick slot outside it"
     ],
+    "619e6106e9e87ab0": [
+      "legacy_reward_pins answers false for incomplete or non-object tuples",
+      "legacy_reward_pins answers false when any single field differs",
+      "legacy_reward_pins answers true for a pinned tuple",
+      "legacy_reward_pins does not collide across field boundaries",
+      "legacy_reward_pins matches numeric and string snapshot blocks alike",
+      "legacy_reward_pins rejects malformed pin lists",
+      "legacy_reward_pins supports the one-shot helper and an empty list",
+      "legacy_reward_pins treats a missing default file as no pins"
+    ],
     "61bff9365b5d2df3": [
       "stateCommitment: incremental stakes subtree updates @regression updates a changed leaf, removes a key, and rebuilds after a gap"
     ],
@@ -16865,8 +16875,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1282,
-      "titleCount": 13055,
+      "fileCount": 1283,
+      "titleCount": 13063,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17475,6 +17485,7 @@
         "test/unit/consensus/admission_binding.test/call_presence.test.js": "e5cbf116f2dffcb9",
         "test/unit/consensus/admission_binding.test/mirrored_selects.test.js": "fd03a37494ac54b9",
         "test/unit/consensus/anchor_reward_derive/archive_fold_term.test.js": "7b26338ac8262f8c",
+        "test/unit/consensus/anchor_reward_derive/legacy_reward_pins.test.js": "619e6106e9e87ab0",
         "test/unit/consensus/anchor_reward_derive/reward_groups.test.js": "67c89e84e7aba170",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
