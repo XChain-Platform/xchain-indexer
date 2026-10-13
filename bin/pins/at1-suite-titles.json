@@ -5732,6 +5732,35 @@
       "hub selector stops paging a table when the selector changes during a request",
       "hub selector uses crypto.randomInt to avoid always following the first configured seed"
     ],
+    "5ef99a2c3042bdaf": [
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple binds no chain on either live family",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple does not reject on a signature-verdict status, which is node-class-dependent",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple does not reject on invalid_archive, which only a chunk-holding node can stamp",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple drops a post-activation forgery on a legacy byte via its wire-determined status",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple keeps rejecting the deterministic invalid reasons a node computes from the wire",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple keeps the family exclusive across eras: v6 proves no bundle, v7 proves no archive",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple permanently rejects a reward_type naming no live family",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple picks the matching anchor when a transaction carries several",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple rejects (never defers on) a txid carrying only retired per-chain v4/v5 anchors",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple rejects a decoded-invalid anchor (it never anchored anything)",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple rejects a retired reward_type even on a transaction carrying no anchors at all",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple rejects a v0 bundle section offered as proof of an ARCHIVE reward",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple rejects a v1 archive head offered as proof of a BUNDLE reward",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple rejects an anchor crediting a different publisher",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple rejects an anchor for a different network",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple rejects an anchor for a different round",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple rejects an anchor whose snapshot_block differs (a different signing set)",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple returns unknown for a tuple-matching anchor that is not yet buried deep enough",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple returns unknown when the txid carries no attestation-bearing anchor at all",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple still treats unverified as non-evidence, matching the two statuses above",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple verifies a buried pre-restart v7 bundle against its anchor_bundle reward",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple verifies a buried, tuple-matching pre-restart v6 archive head (the 150456 shape)",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple verifies a buried, tuple-matching v1 archive head on its match_batch_seq",
+      "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: binding an on-chain anchor to the reward tuple verifies the v0 bundle leg against an anchor_bundle reward on its snapshot block",
+      "AnchorProofClient legacyDropped @regression @tier2 keys the memo on legacyDropped so one verdict never answers for the other",
+      "AnchorProofClient legacyDropped @regression @tier2 lets the pre-restart byte 6 prove an archive reward unless legacyDropped is exactly true",
+      "AnchorProofClient legacyDropped @regression @tier2 rejects byte 6 once legacyDropped is true"
+    ],
     "5f003062269c93ec": [
       "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 getOracleDataForVM rejects rather than handing the VM an empty oracle",
       "price-barrier-guarded reads fail loudly on a DB fault @regression @tier1 getOraclePrice rejects rather than reporting no effective oracle price",
@@ -14489,6 +14518,15 @@
       "middleware stack (src/api/middleware.js) @regression @tier1 leaves /metrics unregistered while METRICS_ENABLED is off",
       "middleware stack (src/api/middleware.js) @regression @tier1 mounts helmet, the JSON body parser, CORS from the parsed allowlist and the rate limit headers"
     ],
+    "d9f7625855f758b2": [
+      "deriveAnchorRewards per-row mint loop, pinned against the mint_row wiring @regression @tier1 counts a group once and reconciles once when its first row mints falsy and its second mints truthy",
+      "deriveAnchorRewards per-row mint loop, pinned against the mint_row wiring @regression @tier1 derives nothing and never reconciles when every mint call fails",
+      "deriveAnchorRewards per-row mint loop, pinned against the mint_row wiring @regression @tier1 mints both logical-reward groups and reconciles each once when every mint call succeeds",
+      "deriveAnchorRewards per-row mint loop, pinned against the mint_row wiring @regression @tier1 passes the loop blockIndex through to the stubbed mint call for every minted row",
+      "mintProvenRow hands the legacy pin gate to proveMined as legacyDropped @regression @tier1 sends legacyDropped false when the gate is off or unsupplied",
+      "mintProvenRow hands the legacy pin gate to proveMined as legacyDropped @regression @tier1 sends legacyDropped true on an explicit legacyAnchorRewardPin override",
+      "mintProvenRow hands the legacy pin gate to proveMined as legacyDropped @regression @tier1 sends legacyDropped true when the gate reads on from protocolChanges at blockIndex"
+    ],
     "da3771c61bf790fc": [
       "ACTION manifest conformance: indexer-written action names @regression a rename write the manifest category does not list is reported",
       "ACTION manifest conformance: indexer-written action names @regression every action name the indexer writes has a manifest entry",
@@ -16967,7 +17005,7 @@
   "scripts": {
     "test": {
       "fileCount": 1291,
-      "titleCount": 13117,
+      "titleCount": 13123,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17380,7 +17418,7 @@
         "test/unit/anchor/anchor_archive_section_verdict.test.js": "63cd3cc2b8b75cb9",
         "test/unit/anchor/anchor_archive_sql_columns.test.js": "bab9c054a0998db8",
         "test/unit/anchor/anchor_fold_sql_family.test.js": "20703ba8a82c0437",
-        "test/unit/anchor/anchor_proof_client.test.js": "479d08f09ed6ee89",
+        "test/unit/anchor/anchor_proof_client.test.js": "5ef99a2c3042bdaf",
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression.test.js": "c3487eec1e568310",
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_2.test.js": "3bcad7510fb96ba4",
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_3.test.js": "8f46a41dad0c30a9",
@@ -17392,7 +17430,7 @@
         "test/unit/anchor/anchor_reward_derive.test.js": "7dcecc08d3d94927",
         "test/unit/anchor/anchor_reward_derive.test/anchor_reward_derive_btc_side.test.js": "3f6c06fcb79de67d",
         "test/unit/anchor/anchor_reward_derive.test/anchor_reward_derive_set_is.test.js": "d78d32dbf545bfcd",
-        "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "5278429cef8904ee",
+        "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "d9f7625855f758b2",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_counter.test.js": "1c56af9b1dbd9f0c",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
         "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "c1df08e38339ad37",
