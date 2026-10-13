@@ -6964,6 +6964,15 @@
       "HubDbSync bootstrap timer guards re-arms the bootstrap retry when bootstrapAll rejects after a reconnect",
       "HubDbSync bootstrap timer guards re-arms the bootstrap retry when the height refresh rejects after a reconnect"
     ],
+    "7085b549944a31b5": [
+      "Pinned remote token signature re-verify @regression @tier2 accepts a row with a quorum of valid signatures",
+      "Pinned remote token signature re-verify @regression @tier2 builds the hub XREMOTE canonical",
+      "Pinned remote token signature re-verify @regression @tier2 rejects a row signed by keys outside the validator set",
+      "Pinned remote token signature re-verify @regression @tier2 rejects a row whose content was altered after signing",
+      "Pinned remote token signature re-verify @regression @tier2 rejects a row with no signatures or malformed JSON",
+      "Pinned remote token signature re-verify @regression @tier2 rejects a sub-quorum row",
+      "Pinned remote token signature re-verify @regression @tier2 rejects when the validator snapshot is not mirrored"
+    ],
     "70b517652d10a921": [
       "PRICE ADMIT_BLOCKS against the SHIPPED testnet admission height @regression @tier3 AT the height a canonical map is accepted and round-trips into the stored body",
       "PRICE ADMIT_BLOCKS against the SHIPPED testnet admission height @regression @tier3 AT the height the slot is REQUIRED: the same legacy bytes become invalid",
@@ -16957,8 +16966,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1290,
-      "titleCount": 13110,
+      "fileCount": 1291,
+      "titleCount": 13117,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17114,6 +17123,7 @@
         "test/unit/actions/contract/xcall_action_format_invariant.test.js": "4dc6ca50454deae6",
         "test/unit/actions/contract/xexec.test.js": "59b7b8fc88f1b6e2",
         "test/unit/actions/cross_chain_remote_token_accept.test.js": "cd1e44eb5d10c034",
+        "test/unit/actions/cross_chain_remote_token_signatures.test.js": "7085b549944a31b5",
         "test/unit/actions/deploy/wire_params.test.js": "0276c82b670c2f09",
         "test/unit/actions/execute.test.js": "7a6b77bff3698035",
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
