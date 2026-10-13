@@ -15,13 +15,16 @@
  **********************************************************************
  * Integration test: DELEGATE v1 rotation, in-window UNSTAKE, then reorg
  *
- * DB-backed against a real MariaDB. The real stake-ledger schema files are loaded, the
- * real materializeContractDelegations / rotateContractStakeKey run against them, and the
- * real rollback restore (src/db/rollback/stake_restores.js) plus the block-scoped deletes
- * undo the orphaned blocks. Each scenario compares the rolled-back ledger with the state
- * a from-genesis chain that never saw the orphaned blocks would hold.
+ * DB-backed against a real MariaDB. The real ledger schema files are loaded and every
+ * write goes through production code: STAKE and DELEGATE rows through the real Database
+ * createContractStake / createContractDelegation, UNSTAKE through the real
+ * Unstake.parseContractUnstake handler (src/actions/unstake), rotations through
+ * materializeContractDelegations, and the reorg through the real rollback restores
+ * (stake_restores.js, in_place_flips.clearOrphanedDeactivations) plus the block-scoped
+ * deletes. No ledger row is written or edited with hand-rolled SQL.
  *
- * No decoder schema and no VM are needed: the harness drives the ledger layer directly.
+ * Only the UNSTAKE settlement tail (empty credits and debits, mapper) and the sleep gate
+ * are stubbed; neither touches the stake or cooldown rows under test.
  */
 
 const assert = require('assert');
@@ -30,19 +33,25 @@ const path   = require('path');
 const {
     indexerQuery, createDatabases, closeAll,
 } = require('../setup/db-connection');
-const delegationRotation = require('../../../src/db/contracts/delegation_rotation.js');
-const controllersVm      = require('../../../src/db/database/controllers_vm.js');
-const indexTables        = require('../../../src/db/index_tables/index.js');
-const restoreSql         = require('../../../src/db/rollback/stake_restores.js');
+const Database    = require('../../../src/db/index.js');
+const Unstake     = require('../../../src/actions/unstake/index.js');
+const Utility     = require('../../../src/utility.js');
+const { getTestConfig } = require('../../fixtures/config');
+const restoreSql  = require('../../../src/db/rollback/stake_restores.js');
+const flipsSql    = require('../../../src/db/rollback/in_place_flips.js');
 
 const SQL_DIR = path.resolve(__dirname, '../../../src/sql');
 const TABLES = [
-    'index_statuses', 'contract_stakes', 'contract_unstakes',
-    'contract_delegations', 'contract_delegation_rotations',
+    'index_statuses', 'index_pubkeys', 'index_tickers', 'index_addresses', 'issues', 'contracts',
+    'stakes', 'unstakes', 'delegations',
+    'contract_stakes', 'contract_unstakes', 'contract_delegations', 'contract_delegation_rotations',
 ];
 
-const SOURCE = 7, CONTRACT = 50, TICK = 3;
-const KEY_A = 101, KEY_D = 202, KEY_D2 = 303;
+const SOURCE = 'bc1qsourceaddressforunstaketests', TICK = 'STAKETOK', CONTRACT = 50;
+const ACTIVATION_DELAY = 10;
+const PK_A  = 'a1'.repeat(32);
+const PK_D  = 'd2'.repeat(32);
+const PK_D2 = 'e3'.repeat(32);
 
 async function loadSchema() {
     for (const table of TABLES) {
@@ -54,55 +63,78 @@ async function loadSchema() {
     }
 }
 
-// The slice of Database the rotation code touches, backed by the real methods.
-function makeDb() {
-    const db = {
+// The real Database prototype over the test connection (no pool is opened).
+function makeDb(util, config) {
+    const db = Object.create(Database.prototype);
+    Object.assign(db, {
+        config, util, indexer: null, _internCache: null, transactionConnection: null,
+        suppressIndexIdCreation: false, deterministicIndexingStarted: false,
         doQuery: (sql, args) => indexerQuery(sql, args),
-        getStatusId: indexTables.getStatusId,
-        rotateContractStakeKey: controllersVm.rotateContractStakeKey,
-        createContractDelegationRotation: delegationRotation.createContractDelegationRotation,
-        contractPubkeyClaimedElsewhere: delegationRotation.contractPubkeyClaimedElsewhere,
-        materializeContractDelegations: delegationRotation.materializeContractDelegations,
-        indexer: null,
-    };
+        isActionAllowed: async () => true,
+    });
     return db;
 }
 
-let statusIds;
-
-async function insertStake(actionIndex, key, block, deactivation) {
-    await indexerQuery(
-        `INSERT INTO contract_stakes (action_index, source_id, signing_pubkey_id, target_contract_index,
-            tick_id, amount, status_id, block_index, activation_block, deactivation_block)
-         VALUES (?, ?, ?, ?, ?, '100', ?, ?, ?, ?)`,
-        [actionIndex, SOURCE, key, CONTRACT, TICK, statusIds.valid, block, block, deactivation]);
-}
-async function insertUnstake(actionIndex, key, block, status) {
-    await indexerQuery(
-        `INSERT INTO contract_unstakes (action_index, source_id, signing_pubkey_id, target_contract_index,
-            tick_id, cooldown_end_block, amount, status_id, block_index)
-         VALUES (?, ?, ?, ?, ?, ?, '100', ?, ?)`,
-        [actionIndex, SOURCE, key, CONTRACT, TICK, block + 50, statusIds[status], block]);
-}
-async function insertDelegation(actionIndex, key, block, activation) {
-    await indexerQuery(
-        `INSERT INTO contract_delegations (action_index, source_id, signing_pubkey_id, target_contract_index,
-            tick_id, status_id, block_index, activation_block)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [actionIndex, SOURCE, key, CONTRACT, TICK, statusIds.valid, block, activation]);
+// The real UNSTAKE handler wired to that Database.
+function makeUnstake(db, util, config) {
+    const unstake = new Unstake({
+        config, decoderDb: null, indexerDb: db, util,
+        mapper: { createMappings: async () => {} },
+        protocolChanges: { isEnabled: async () => false },
+    });
+    unstake.postLedgerChanges = async () => {};
+    return unstake;
 }
 
-// Reorg: restore in-place rotations first, then the block-scoped deletes (as rollback does).
-async function rollbackFrom(db, block) {
+let db, util, unstaker;
+let nextAction;
+
+async function stake(actionIndex, pubkey, block) {
+    await db.createContractStake({
+        STATUS: 'valid', SOURCE, SIGNING_PUBKEY: pubkey, TARGET_CONTRACT_INDEX: CONTRACT, TICK,
+        ACTION_INDEX: actionIndex, VERSION: 3, AMOUNT: '100', BLOCK_INDEX: block, ACTIVATION_BLOCK: block,
+    });
+}
+async function delegate(actionIndex, pubkey, block, activation) {
+    await db.createContractDelegation({
+        STATUS: 'valid', SOURCE, SIGNING_PUBKEY: pubkey, TARGET_CONTRACT_INDEX: CONTRACT, TICK,
+        ACTION_INDEX: actionIndex, BLOCK_INDEX: block, ACTIVATION_BLOCK: activation,
+    });
+}
+// UNSTAKE v1 through the production handler.
+async function unstake(actionIndex, pubkey, block) {
+    await unstaker.parse(['1', pubkey, String(CONTRACT), TICK], {
+        FORMAT: 1, SOURCE, COIN: 'BTC', ACTION_INDEX: actionIndex, BLOCK_INDEX: block,
+    }, null);
+}
+async function materialize(block, inWindow) {
+    return db.materializeContractDelegations(block, false, inWindow);
+}
+
+// Reorg: restore in-place rotations, re-NULL orphaned deactivation stamps, then the
+// block-scoped deletes (the order rollback runs them: the child rows must still exist).
+async function rollbackFrom(block) {
     await restoreSql.restoreDelegationRotations(db, block);
+    await flipsSql.clearOrphanedDeactivations(db, block, ACTIVATION_DELAY);
     for (const table of ['contract_delegation_rotations', 'contract_unstakes', 'contract_stakes', 'contract_delegations'])
         await indexerQuery(`DELETE FROM ${table} WHERE block_index >= ?`, [block]);
 }
 
+async function pk(pubkey) { return Number(await db.getPubkeyId(pubkey)); }
 async function keyOf(table, actionIndex) {
     const rows = await indexerQuery(`SELECT signing_pubkey_id FROM ${table} WHERE action_index=?`, [actionIndex]);
     assert.strictEqual(rows.length, 1, `${table} row ${actionIndex} should exist`);
     return Number(rows[0].signing_pubkey_id);
+}
+async function deactivationOf(actionIndex) {
+    const rows = await indexerQuery('SELECT deactivation_block FROM contract_stakes WHERE action_index=?', [actionIndex]);
+    return rows[0].deactivation_block === null ? null : Number(rows[0].deactivation_block);
+}
+async function statusOf(actionIndex) {
+    const rows = await indexerQuery(
+        `SELECT s.status FROM contract_unstakes u JOIN index_statuses s ON s.id=u.status_id WHERE u.action_index=?`,
+        [actionIndex]);
+    return rows[0].status;
 }
 async function count(table) {
     return Number((await indexerQuery(`SELECT COUNT(*) AS c FROM ${table}`))[0].c);
@@ -110,7 +142,6 @@ async function count(table) {
 
 describe('Contract unstake rotation reorg: DELEGATE then in-window UNSTAKE then reorg @regression @tier3', function () {
     this.timeout(60000);
-    let db;
 
     before(async function () {
         this.timeout(30000);
@@ -119,107 +150,134 @@ describe('Contract unstake rotation reorg: DELEGATE then in-window UNSTAKE then 
 
     beforeEach(async function () {
         await loadSchema();
-        for (const status of ['valid', 'pending', 'completed'])
-            await indexerQuery('INSERT INTO index_statuses (status) VALUES (?)', [status]);
-        const rows = await indexerQuery('SELECT id, status FROM index_statuses');
-        statusIds = {};
-        for (const r of rows) statusIds[r.status] = Number(r.id);
-        db = makeDb();
+        const config = Object.assign({}, getTestConfig(), {
+            ACTIVATION_DELAY_BLOCKS: ACTIVATION_DELAY, STAKING: undefined,
+        });
+        util = new Utility(config);
+        util.logError = () => {};
+        db = makeDb(util, config);
+        unstaker = makeUnstake(db, util, config);
+        // Seed the interned ids and the stakeable target contract
+        const sourceId = await db.createAddress(SOURCE, 1);
+        await db.createTicker(TICK, 1);
+        await db.createStatus('valid');
+        await indexerQuery(
+            `INSERT INTO contracts (action_index, source_id, code, code_hash, status_id, block_index, cooldown_blocks)
+             VALUES (?, ?, 'x', ?, ?, 1, 50)`,
+            [CONTRACT, sourceId, 'f'.repeat(64), await db.getStatusId('valid')]);
+        for (const key of [PK_A, PK_D, PK_D2]) await db.getOrCreatePubkeyId(key);
     });
 
     after(async function () {
         await closeAll();
     });
 
-    it('rotates the stake row and the pending cooldown row onto the delegated key', async function () {
-        await insertStake(1, KEY_A, 100, 130);          // unstaked in window: deactivation 130
-        await insertUnstake(2, KEY_A, 110, 'pending');
-        await insertDelegation(3, KEY_D, 112, 120);
-        const applied = await db.materializeContractDelegations(120, false, true);
+    it('rotates the stake row and the pending cooldown row of a real in-window UNSTAKE onto the delegated key', async function () {
+        await stake(1, PK_A, 100);
+        await unstake(2, PK_A, 110);                   // real handler: deactivation 120, cooldown row
+        assert.strictEqual(await deactivationOf(1), 110 + ACTIVATION_DELAY);
+        assert.strictEqual(await statusOf(2), 'valid');
+        await delegate(3, PK_D, 112, 115);
+        const applied = await materialize(115, true);  // 115 is inside the 110..120 window
         assert.strictEqual(applied.length, 2);
-        assert.strictEqual(await keyOf('contract_stakes', 1), KEY_D);
-        assert.strictEqual(await keyOf('contract_unstakes', 2), KEY_D);
+        assert.strictEqual(await keyOf('contract_stakes', 1), await pk(PK_D));
+        assert.strictEqual(await keyOf('contract_unstakes', 2), await pk(PK_D));
         assert.strictEqual(await count('contract_delegation_rotations'), 2);
     });
 
-    it('restores both keys when the reorg orphans the delegation activation block', async function () {
-        await insertStake(1, KEY_A, 100, 130);
-        await insertUnstake(2, KEY_A, 110, 'pending');
-        await insertDelegation(3, KEY_D, 120, 120);
-        await db.materializeContractDelegations(120, false, true);
-        await rollbackFrom(db, 120);
-        assert.strictEqual(await keyOf('contract_stakes', 1), KEY_A);
-        assert.strictEqual(await keyOf('contract_unstakes', 2), KEY_A);
+    it('restores both keys and keeps the UNSTAKE when the reorg orphans the delegation activation block', async function () {
+        await stake(1, PK_A, 100);
+        await unstake(2, PK_A, 110);
+        await delegate(3, PK_D, 115, 115);
+        await materialize(115, true);
+        await rollbackFrom(115);
+        assert.strictEqual(await keyOf('contract_stakes', 1), await pk(PK_A));
+        assert.strictEqual(await keyOf('contract_unstakes', 2), await pk(PK_A));
+        assert.strictEqual(await deactivationOf(1), 110 + ACTIVATION_DELAY, 'surviving UNSTAKE keeps its stamp');
         assert.strictEqual(await count('contract_delegation_rotations'), 0);
         assert.strictEqual(await count('contract_delegations'), 0);
     });
 
-    it('keeps the rotation when only a later in-window UNSTAKE block is orphaned', async function () {
-        await insertStake(1, KEY_A, 100, null);
-        await insertDelegation(2, KEY_D, 105, 110);
-        await db.materializeContractDelegations(110, false, true);
-        assert.strictEqual(await keyOf('contract_stakes', 1), KEY_D);
-        // UNSTAKE at 125 deactivates the stake and opens a cooldown row carrying the rotated key.
-        await indexerQuery('UPDATE contract_stakes SET deactivation_block=145 WHERE action_index=1');
-        await insertUnstake(3, KEY_D, 125, 'pending');
-        await rollbackFrom(db, 125);
+    it('keeps the rotation when only a later UNSTAKE by the rotated key is orphaned, and re-opens the stake', async function () {
+        await stake(1, PK_A, 100);
+        await delegate(2, PK_D, 105, 110);
+        await materialize(110, true);
+        assert.strictEqual(await keyOf('contract_stakes', 1), await pk(PK_D));
+        // The staker now names the rotated key; the real lookup must resolve it to the stake
+        await unstake(3, PK_D, 125);
+        assert.strictEqual(await statusOf(3), 'valid');
+        assert.strictEqual(await deactivationOf(1), 125 + ACTIVATION_DELAY);
+        assert.strictEqual(await keyOf('contract_unstakes', 3), await pk(PK_D));
+        await rollbackFrom(125);
         assert.strictEqual(await count('contract_unstakes'), 0, 'orphaned cooldown row removed');
-        assert.strictEqual(await keyOf('contract_stakes', 1), KEY_D, 'surviving rotation stays applied');
+        assert.strictEqual(await deactivationOf(1), null, 'orphaned deactivation stamp cleared');
+        assert.strictEqual(await keyOf('contract_stakes', 1), await pk(PK_D), 'surviving rotation stays applied');
         assert.strictEqual(await count('contract_delegation_rotations'), 1);
     });
 
     it('restores each key to the value before the earliest orphaned rotation, leaving survivors', async function () {
-        await insertStake(1, KEY_A, 100, null);
-        await insertDelegation(2, KEY_D, 105, 110);
-        await db.materializeContractDelegations(110, false, true);
-        await insertDelegation(3, KEY_D2, 125, 140);
-        await db.materializeContractDelegations(140, false, true);
-        assert.strictEqual(await keyOf('contract_stakes', 1), KEY_D2);
-        await rollbackFrom(db, 130);
-        assert.strictEqual(await keyOf('contract_stakes', 1), KEY_D, 'only the orphaned rotation reverts');
-        await rollbackFrom(db, 110);
-        assert.strictEqual(await keyOf('contract_stakes', 1), KEY_A, 'full reorg returns the original key');
+        await stake(1, PK_A, 100);
+        await delegate(2, PK_D, 105, 110);
+        await materialize(110, true);
+        await delegate(3, PK_D2, 125, 140);
+        await materialize(140, true);
+        assert.strictEqual(await keyOf('contract_stakes', 1), await pk(PK_D2));
+        await rollbackFrom(130);
+        assert.strictEqual(await keyOf('contract_stakes', 1), await pk(PK_D), 'only the orphaned rotation reverts');
+        await rollbackFrom(110);
+        assert.strictEqual(await keyOf('contract_stakes', 1), await pk(PK_A), 'full reorg returns the original key');
         assert.strictEqual(await count('contract_delegation_rotations'), 0);
     });
 
     it('does not rotate a completed cooldown row, and the reorg leaves it untouched', async function () {
-        await insertStake(1, KEY_A, 100, 130);
-        await insertUnstake(2, KEY_A, 105, 'completed');
-        await insertUnstake(3, KEY_A, 110, 'pending');
-        await insertDelegation(4, KEY_D, 115, 120);
-        await db.materializeContractDelegations(120, false, true);
-        assert.strictEqual(await keyOf('contract_unstakes', 2), KEY_A);
-        assert.strictEqual(await keyOf('contract_unstakes', 3), KEY_D);
-        await rollbackFrom(db, 115);
-        assert.strictEqual(await keyOf('contract_unstakes', 2), KEY_A);
-        assert.strictEqual(await keyOf('contract_unstakes', 3), KEY_A);
-        assert.strictEqual(await keyOf('contract_stakes', 1), KEY_A);
+        await stake(1, PK_A, 100);
+        await unstake(3, PK_A, 110);
+        // A cooldown row that already matured: completed by the sweep before the delegation
+        await indexerQuery(
+            `INSERT INTO contract_unstakes (action_index, source_id, signing_pubkey_id, target_contract_index,
+                tick_id, cooldown_end_block, amount, status_id, block_index)
+             SELECT 2, source_id, signing_pubkey_id, target_contract_index, tick_id, 105, amount,
+                    (SELECT id FROM index_statuses WHERE status='valid'), 101
+             FROM contract_unstakes WHERE action_index=3`);
+        await indexerQuery("INSERT INTO index_statuses (status) VALUES ('completed')");
+        await indexerQuery(
+            "UPDATE contract_unstakes SET status_id=(SELECT id FROM index_statuses WHERE status='completed') WHERE action_index=2");
+        await delegate(4, PK_D, 115, 115);
+        await materialize(115, true);
+        assert.strictEqual(await keyOf('contract_unstakes', 2), await pk(PK_A));
+        assert.strictEqual(await keyOf('contract_unstakes', 3), await pk(PK_D));
+        await rollbackFrom(115);
+        assert.strictEqual(await keyOf('contract_unstakes', 2), await pk(PK_A));
+        assert.strictEqual(await keyOf('contract_unstakes', 3), await pk(PK_A));
+        assert.strictEqual(await keyOf('contract_stakes', 1), await pk(PK_A));
     });
 
-    it('without in-window rotation the deactivating stake keeps its key but the cooldown row rotates', async function () {
-        await insertStake(1, KEY_A, 100, 130);
-        await insertUnstake(2, KEY_A, 110, 'pending');
-        await insertDelegation(3, KEY_D, 112, 120);
-        await db.materializeContractDelegations(120, false, false);
-        assert.strictEqual(await keyOf('contract_stakes', 1), KEY_A);
-        assert.strictEqual(await keyOf('contract_unstakes', 2), KEY_D);
-        await rollbackFrom(db, 112);
-        assert.strictEqual(await keyOf('contract_unstakes', 2), KEY_A);
+    it('without in-window rotation the deactivating stake keeps its key', async function () {
+        await stake(1, PK_A, 100);
+        await unstake(2, PK_A, 110);
+        await delegate(3, PK_D, 112, 115);
+        await materialize(115, false);
+        assert.strictEqual(await keyOf('contract_stakes', 1), await pk(PK_A));
+        await rollbackFrom(112);
+        assert.strictEqual(await keyOf('contract_stakes', 1), await pk(PK_A));
+        assert.strictEqual(await count('contract_delegation_rotations'), 0);
     });
 
     it('replaying the delegation after a reorg reproduces the pre-reorg ledger', async function () {
-        await insertStake(1, KEY_A, 100, 130);
-        await insertUnstake(2, KEY_A, 110, 'pending');
-        await insertDelegation(3, KEY_D, 115, 120);
-        await db.materializeContractDelegations(120, false, true);
-        const before = await indexerQuery(
-            'SELECT action_index, signing_pubkey_id FROM contract_unstakes ORDER BY action_index');
-        await rollbackFrom(db, 115);
-        await insertDelegation(3, KEY_D, 115, 120);
-        await db.materializeContractDelegations(120, false, true);
-        const after = await indexerQuery(
-            'SELECT action_index, signing_pubkey_id FROM contract_unstakes ORDER BY action_index');
-        assert.deepStrictEqual(after, before);
-        assert.strictEqual(await keyOf('contract_stakes', 1), KEY_D);
+        await stake(1, PK_A, 100);
+        await unstake(2, PK_A, 110);
+        await delegate(3, PK_D, 115, 115);
+        await materialize(115, true);
+        const snapshot = async () => indexerQuery(
+            `SELECT 'u' AS t, action_index, signing_pubkey_id, NULL AS deactivation_block FROM contract_unstakes
+             UNION ALL
+             SELECT 's', action_index, signing_pubkey_id, deactivation_block FROM contract_stakes
+             ORDER BY t, action_index`);
+        const before = await snapshot();
+        await rollbackFrom(115);
+        await delegate(3, PK_D, 115, 115);
+        await materialize(115, true);
+        assert.deepStrictEqual(await snapshot(), before);
+        assert.strictEqual(await keyOf('contract_stakes', 1), await pk(PK_D));
     });
 });
