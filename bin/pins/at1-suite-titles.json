@@ -4714,6 +4714,16 @@
       "XCALL action_format invariant (review item 2748) mirror result-delivery mint carries no FORMAT (or one XCALL declares)",
       "XCALL action_format invariant (review item 2748) sentinel: the invariant helper actually fails on a FORMAT value the handler does not declare"
     ],
+    "4de41283c9fb7d37": [
+      "dispenser delay decoder coupling guard @regression @tier1 arms testnet per chain and leaves mainnet inert",
+      "dispenser delay decoder coupling guard @regression @tier1 fails the seam test if readBlockInputs stops stamping protocol time",
+      "dispenser delay decoder coupling guard @regression @tier1 keeps the decoder raw stamp when the gate is not active at the height",
+      "dispenser delay decoder coupling guard @regression @tier1 measures the close delay from protocol time, not the decoder raw stamp",
+      "dispenser delay decoder coupling guard @regression @tier1 measures the list delay from protocol time, not the decoder raw stamp",
+      "dispenser delay decoder coupling guard @regression @tier1 re-stamps decoder rows through the readBlockInputs entry seam before any delay read",
+      "dispenser delay decoder coupling guard @regression @tier1 stamps decoder rows with the resolved protocol time at the one entry seam",
+      "dispenser delay decoder coupling guard @regression @tier1 treats an unresolvable stored block as not yet elapsed instead of falling back to the raw stamp"
+    ],
     "4df0f225c7a91ad2": [
       "Dividend @regression @tier2 allow/block list filtering ALLOW_LIST set but resolving empty still admits every holder",
       "Dividend @regression @tier2 allow/block list filtering holders on block list are excluded from recipients",
@@ -16827,8 +16837,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1278,
-      "titleCount": 13034,
+      "fileCount": 1279,
+      "titleCount": 13042,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17452,6 +17462,7 @@
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "e23f4b08d34e0b5a",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/consensus_rules_digest_twin_bytes.test.js": "c8d4c432d417022a",
+        "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/doge_peer_clients/rollcall_proof_client/reply_decision.test.js": "8fcf19004337f429",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
         "test/unit/consensus/equivocation/equiv_dex_canonical.test.js": "a51d31485dcfb511",
