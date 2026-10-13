@@ -116,7 +116,7 @@ describe('BTC price barrier covers time as well as height @regression @tier1', f
     it('all price barriers defer the block rather than processing it', function () {
         const block = priceBarrierBlock();
         const stalls = block.match(
-            /this\.(?:stallReason = 'price_sync_barrier'|markPriceSyncHold\(\))/g) || [];
+            /this\.(?:stallReason = 'price_(?:sync|landing)_barrier'|markPriceSyncHold\(\))/g) || [];
         assert.strictEqual(stalls.length, 3,
             'each barrier must break out of the loop without advancing lastIndexerBlock, ' +
             'so the block is retried rather than settled against a stale mirror');

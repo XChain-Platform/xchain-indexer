@@ -47,7 +47,8 @@ function advanceFields(indexer, now){
         // stallClass below are how the two are told apart.
         degraded:         !!indexer.stallReason
                             && !stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                            indexer.healthStallGraceMs, now, indexer.stallClearsAt),
+                                            indexer.healthStallGraceMs, now, indexer.stallClearsAt,
+                                            indexer.priceLandingGraceMs),
         // true when the stall is nothing but a wait for wall clock to reach a future-stamped
         // block. Healthy and self-clearing: consensus forbids committing that block yet, so the
         // indexer is already holding everything it is permitted to hold. A testnet4 miner
@@ -57,7 +58,8 @@ function advanceFields(indexer, now){
         // Single machine-readable verdict on the block counter, so a monitor reads one field
         // instead of joining three: 'none' | 'future_block_wait' | 'barrier_defer' | 'wedged'.
         stallClass:       stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                       indexer.healthStallGraceMs, now, indexer.stallClearsAt),
+                                       indexer.healthStallGraceMs, now, indexer.stallClearsAt,
+                                       indexer.priceLandingGraceMs),
         // true when every block consensus currently PERMITS this indexer to commit is
         // committed (level with the decoder tip, or the only blocker is a future-stamped
         // block). The "functionally caught up" signal: `synced` keeps its literal

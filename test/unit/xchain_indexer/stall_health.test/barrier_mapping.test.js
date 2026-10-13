@@ -104,6 +104,7 @@ function graceWiring() {
 const EXPECTED = [
     ['price_sync_barrier',              null,                          'null'],          // height case can clear early
     ['price_sync_barrier',              'priceWatermarkGraceS',        'height-aware'],
+    ['price_landing_barrier',           null,                          'null'],          // clears on other chains' landed time
     ['oracle_sync_barrier',             'oracleWatermarkGraceS',       'height-aware'],
     ['match_sync_barrier',              'matchWatermarkGraceS',        'height-aware'],
     ['call_sync_barrier',               'callWatermarkGraceS',         'height-aware'],

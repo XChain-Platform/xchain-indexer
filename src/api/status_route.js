@@ -75,12 +75,13 @@ function statusVerdict(XChainIndexer, indexer){
     let stalled   = !!indexer.stallReason;
     let wedged    = XChainIndexer.stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                               indexer.healthStallGraceMs, now,
-                                              indexer.stallClearsAt);
+                                              indexer.stallClearsAt, indexer.priceLandingGraceMs);
     // Discriminate the healthy future-stamped-block wait from real degradation. One
     // clock read for all three so the fields can never disagree with each other.
     let futureWait  = XChainIndexer.waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now);
     let stallClass  = XChainIndexer.stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                                 indexer.healthStallGraceMs, now, indexer.stallClearsAt);
+                                                 indexer.healthStallGraceMs, now, indexer.stallClearsAt,
+                                                 indexer.priceLandingGraceMs);
     return { now, stalled, wedged, futureWait, stallClass,
              lastHubConfigFetchAt, hubConfigAgeSeconds, hubConfigStale };
 }
