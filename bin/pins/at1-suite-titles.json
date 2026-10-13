@@ -14656,6 +14656,18 @@
       "native fee batch ledger @regression @tier1 paths that must consume nothing a rejected underpayment against a fresh pool consumes nothing",
       "native fee batch ledger @regression @tier1 paths that must consume nothing a zero-fee command (xchainAmount 0) consumes nothing from the pool"
     ],
+    "dce30a207a4671c5": [
+      "judgeAnchors legacyDropped archive head judges a buried v6 head rejected with the flag",
+      "judgeAnchors legacyDropped archive head judges a buried v6 head verified without the flag",
+      "judgeAnchors legacyDropped archive head keeps a v6 head verified under a non-true flag",
+      "judgeAnchors legacyDropped archive head still judges a v1 head verified with the flag",
+      "judgeAnchors legacyDropped bundle section judges a v7 section rejected with the flag",
+      "judgeAnchors legacyDropped bundle section judges a v7 section verified without the flag",
+      "judgeAnchors legacyDropped bundle section keeps a v7 section verified under a non-true flag",
+      "judgeAnchors legacyDropped bundle section still judges a v0 section verified with the flag",
+      "judgeAnchors legacyDropped old-peer bundle without action_index ignores the v7 sibling for the header maximum with the flag",
+      "judgeAnchors legacyDropped old-peer bundle without action_index lets a higher v7 sibling raise the header maximum without the flag"
+    ],
     "dcfce5b69fcedd79": [
       "capability-snapshot reorg burial @regression @tier1 party 1: the hub signer resolves at the SAME height the shared helper hands every verifier",
       "capability-snapshot reorg burial @regression @tier1 party 1: the hub signer shares ONE literal buffer with the verifiers (no vendored copy to drift)",
@@ -16945,8 +16957,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1289,
-      "titleCount": 13100,
+      "fileCount": 1290,
+      "titleCount": 13110,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17363,6 +17375,7 @@
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_2.test.js": "3bcad7510fb96ba4",
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_3.test.js": "8f46a41dad0c30a9",
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_v3_fold_binding.test.js": "172d465274d6a2b5",
+        "test/unit/anchor/anchor_proof_client.test/judge_legacy_dropped.test.js": "dce30a207a4671c5",
         "test/unit/anchor/anchor_proof_client.test/reward_family_versions.test.js": "2a1a8710a1fdeb21",
         "test/unit/anchor/anchor_reward_activation_parity.test.js": "ca92890f8ba59712",
         "test/unit/anchor/anchor_reward_canonical_golden.test.js": "8ac980aa3b54b80e",
