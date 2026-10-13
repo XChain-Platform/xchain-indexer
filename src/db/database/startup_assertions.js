@@ -29,8 +29,52 @@
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
+const utf8mb4Columns = require('../../chain/utf8mb4_columns.js');
 
 module.exports = {
+
+    // Every column in the raw-wire widen registry must stay utf8mb4 after the
+    // migration ledger says the widen has run. verifyTables cannot repair a
+    // charset regression, so detect it before a 4-byte wire value wedges ingest.
+    // Missing columns pass through because table creation and column presence have
+    // their own contracts, and a fresh database can reach this check before them.
+    async assertRegisteredUtf8mb4ColumnsStayWide(){
+        if(!this.dbName) return;
+        const entries = utf8mb4Columns.UTF8MB4_RAW_FIELD_COLUMNS;
+        const tables = Array.from(new Set(entries.map(entry => entry.table)));
+        const registered = new Map(entries.map(entry => [
+            (entry.table + '.' + entry.column).toLowerCase(), entry
+        ]));
+        let conn;
+        try {
+            conn = await this.getConnection();
+            const rows = await conn.query(
+                'SELECT table_name, column_name, character_set_name FROM information_schema.columns ' +
+                'WHERE table_schema = ? AND table_name IN (' + tables.map(() => '?').join(', ') + ')',
+                [this.dbName].concat(tables)
+            );
+            if(!rows) return;
+            const drifted = [];
+            for(const row of rows){
+                const table = String(row.table_name || row.TABLE_NAME || '');
+                const column = String(row.column_name || row.COLUMN_NAME || '');
+                const entry = registered.get((table + '.' + column).toLowerCase());
+                if(!entry || utf8mb4Columns.isAlreadyUtf8mb4(row)) continue;
+                const charset = row.character_set_name || row.CHARACTER_SET_NAME || 'non-character';
+                drifted.push(entry.table + '.' + entry.column + ' (' + charset + ')');
+            }
+            if(drifted.length){
+                throw new Error(
+                    'registered utf8mb4 columns drifted from utf8mb4: ' + drifted.sort().join(', ') +
+                    '. Restore the registered charset before starting the indexer.'
+                );
+            }
+        } finally {
+            if(conn && this.transactionConnection == null){
+                try { await conn.release(); } catch(_){}
+            }
+        }
+    },
 
     // Assert pubkeys.pubkey is wide enough for an UNCOMPRESSED key (130 hex chars).
     // 2026-07-24-pubkeys-widen-uncompressed.sql is mode=manual, so the startup drift
