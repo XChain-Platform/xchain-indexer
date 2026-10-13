@@ -12,6 +12,7 @@
 
 const assert = require('assert');
 const Module = require('module');
+const { requireWithFreshConfig } = require('../../../helpers/fresh_config.js');
 
 const startupPath = require.resolve('../../../../src/XChainIndexer/startup.js');
 
@@ -44,16 +45,14 @@ function loadStartup(){
         '../config.js': { CONFIG_ENV: { INDEXER_ALLOW_LOCAL_PRICE_SOURCE: 'true' } }
     };
 
-    delete require.cache[startupPath];
     Module._load = function(request){
         if(Object.prototype.hasOwnProperty.call(stubs, request)) return stubs[request];
         return originalLoad.apply(this, arguments);
     };
     try {
-        return require(startupPath);
+        return requireWithFreshConfig(startupPath);
     } finally {
         Module._load = originalLoad;
-        delete require.cache[startupPath];
     }
 }
 

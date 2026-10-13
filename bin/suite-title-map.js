@@ -58,6 +58,7 @@
  *                                                  commit's {old: [new, ...]}
  *                                                  files graded as one union
  *                                                  (bin/suite_title_map/split_map.js)
+ *   node bin/suite-title-map.js --self-test        test output error refusal
  *
  ********************************************************************/
 
@@ -218,6 +219,52 @@ function buildMap(only) {
     return { titleSets: sortedSets, scripts };
 }
 
+/** Script names whose mocha collection did not produce a title map. */
+function collectionErrorScripts(map) {
+    return Object.entries(map.scripts)
+        .filter(([, result]) => Object.prototype.hasOwnProperty.call(result, 'error'))
+        .map(([name]) => name)
+        .sort();
+}
+
+function outputCollectionError(map, out) {
+    if (!out) return null;
+    const errors = collectionErrorScripts(map);
+    return errors.length ? `refusing --out: collection failed for ${errors.join(', ')}` : null;
+}
+
+function runSelfTest() {
+    const assert = require('assert');
+    const map = {
+        titleSets: {},
+        scripts: {
+            'test:unit': { error: `spawn ${path.join(REPO_ROOT, 'node_modules', '.bin', 'mocha')} ENOENT` },
+            'test:smoke': { error: `cannot load ${path.join(REPO_ROOT, 'test', 'smoke.test.js')}` },
+        },
+    };
+    const tempRoot = fs.mkdtempSync(path.join(REPO_ROOT, 'tmp', 'suite-title-map-self-test-'));
+    const pin = path.join(tempRoot, 'pin.json');
+    const errors = [];
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    try {
+        console.error = (message) => errors.push(String(message));
+        process.exitCode = undefined;
+        main(['--out', pin], () => map);
+        assert.strictEqual(fs.existsSync(pin), false);
+        assert.strictEqual(process.exitCode, 1);
+        assert.deepStrictEqual(errors, [
+            'refusing --out: collection failed for test:smoke, test:unit',
+        ]);
+        assert.strictEqual(errors[0].includes(REPO_ROOT), false);
+    } finally {
+        console.error = originalError;
+        process.exitCode = originalExitCode;
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+    console.log('ok - --out refuses collection errors without reporting host paths');
+}
+
 /** The flat {file: [titles]} view of one script in a map, pin or fresh. */
 function expand(map, scriptName) {
     const s = map.scripts[scriptName];
@@ -284,6 +331,11 @@ function compare(pin, fresh, renames, only) {
         .filter((n) => !only || n === only)
         .sort();
     for (const name of names) {
+        const freshScript = fresh.scripts[name];
+        if (freshScript && freshScript.error) {
+            differences.push({ script: name, kind: 'collection_error', detail: freshScript.error });
+            continue;
+        }
         const before = expand(pin, name);
         const after = expand(fresh, name);
         if (!before && !after) continue;
@@ -315,18 +367,23 @@ function parseArgs(argv) {
         else if (argv[i] === '--compare') { opts.compare = path.resolve(argv[i + 1]); i += 1; }
         else if (argv[i] === '--rename-map') { opts.renameMap = path.resolve(argv[i + 1]); i += 1; }
         else if (argv[i] === '--split-map') { opts.splitMap = path.resolve(argv[i + 1]); i += 1; }
+        else if (argv[i] === '--self-test') opts.selfTest = true;
         else if (argv[i] === '--help' || argv[i] === '-h') opts.help = true;
     }
     return opts;
 }
 
-function main() {
-    const opts = parseArgs(process.argv.slice(2));
+function main(argv = process.argv.slice(2), collectMap = buildMap) {
+    const opts = parseArgs(argv);
     if (opts.help) {
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         return;
     }
-    let map = buildMap(opts.script);
+    if (opts.selfTest) {
+        runSelfTest();
+        return;
+    }
+    let map = collectMap(opts.script);
 
     if (opts.compare) {
         const pin = JSON.parse(fs.readFileSync(opts.compare, 'utf8'));
@@ -370,6 +427,13 @@ function main() {
         }
     }
 
+    const collectionError = outputCollectionError(map, opts.out);
+    if (collectionError) {
+        console.error(collectionError);
+        process.exitCode = 1;
+        return;
+    }
+
     // Escaped to pure ASCII on the way out. The titles are captured verbatim and
     // some of them carry characters the platform's prose rules keep out of
     // committed files; escaping changes the encoding and not one parsed
@@ -399,4 +463,14 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { buildMap, collect, mochaArgsFor, splitCommand, compare, expand, mergeScriptMap };
+module.exports = {
+    buildMap,
+    collect,
+    collectionErrorScripts,
+    outputCollectionError,
+    mochaArgsFor,
+    splitCommand,
+    compare,
+    expand,
+    mergeScriptMap,
+};
