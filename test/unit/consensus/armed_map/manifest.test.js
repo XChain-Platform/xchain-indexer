@@ -277,12 +277,22 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(row.regtest, 0);
         for (const k of Object.keys(row)) if (k !== 'regtest') assert.strictEqual(row[k], ProtocolChanges.UNARMED, k);
         assert.strictEqual(ProtocolChanges.registry.unitOf(key), 'height');
-        // The fingerprint covers the row: it is hashed as its own v2 row digest.
+        // The fingerprint covers the row: collectRows() is the production armed map, so the
+        // gate has to be in it and its digest has to come out of the fingerprint of that map.
         const { fingerprint } = require('../../../../src/consensus/armed_map/canonical.js');
-        const rowsOnly = fingerprint([[key, row]]);
-        assert.match(rowsOnly.rows[key], /^[0-9a-f]{64}$/);
-        const moved = fingerprint([[key, { ...row, regtest: 1 }]]);
-        assert.notStrictEqual(moved.rows[key], rowsOnly.rows[key], 'arming the row moves its digest');
+        const collected = manifest.collectRows();
+        assert.strictEqual(collected.ok, true, collected.reason);
+        const collectedRow = new Map(collected.rows).get(key);
+        assert.ok(collectedRow, 'collectRows() carries the gate in the production armed map');
+        assert.deepStrictEqual(collectedRow, row);
+        const full = fingerprint(collected.rows);
+        assert.match(full.rows[key], /^[0-9a-f]{64}$/);
+        const armed = collected.rows.map(([k, v]) => (k === key ? [k, { ...v, regtest: 1 }] : [k, v]));
+        const moved = fingerprint(armed);
+        assert.notStrictEqual(moved.rows[key], full.rows[key], 'arming the row moves its digest');
+        assert.notStrictEqual(moved.hex, full.hex, 'and the whole-map fingerprint');
+        const dropped = fingerprint(collected.rows.filter(([k]) => k !== key));
+        assert.ok(!(key in dropped.rows), 'omitting the gate removes its digest');
     });
 
     it('carries the per-chain LIST owner testnet heights', function () {
