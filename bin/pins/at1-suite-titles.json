@@ -512,6 +512,13 @@
       "shared-list due planning and membership steps @regression @tier1 requires canonical added members for version 1",
       "shared-list due planning and membership steps @regression @tier1 waits when the next row is not yet due"
     ],
+    "0b0450682f6877d6": [
+      "drives the opening passes against a recording context drops only the beginBlock entry when vm is false",
+      "drives the opening passes against a recording context propagates a processTransaction rejection with no later transaction recorded",
+      "drives the opening passes against a recording context records each transaction object itself in block order",
+      "drives the opening passes against a recording context records only the genesis and delegation entries for an empty block",
+      "drives the opening passes against a recording context records the exact call order for a three-transaction block"
+    ],
     "0b3279bc0c8312d7": [
       "HubClient constructor defaults the config endpoint to the feed endpoint when unset",
       "HubClient constructor falls back to env vars when constructor args missing",
@@ -17040,8 +17047,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1295,
-      "titleCount": 13134,
+      "fileCount": 1296,
+      "titleCount": 13139,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17051,6 +17058,7 @@
         "test/security/http_surface_security.test.js": "72ce3f8a125828f4",
         "test/unit/XChainIndexer/block_admission.test.js": "700df125e4858874",
         "test/unit/XChainIndexer/hub_config_poll.test.js": "3a74a7a67892c521",
+        "test/unit/XChainIndexer/opening_passes.test.js": "0b0450682f6877d6",
         "test/unit/action_dispatch/action_formats.test.js": "66540a53e698b285",
         "test/unit/action_dispatch/action_index_names_manifest.test.js": "da3771c61bf790fc",
         "test/unit/action_dispatch/action_manifest_conformance.test.js": "0d6a5c7e0ca3a674",
