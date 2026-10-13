@@ -191,13 +191,15 @@ function isRewardCandidateRow(a, network, publisher){
 // accept or reject is a consensus change and ships behind its own activation row.
 //
 // Returns { byAction: Map(action_index -> header block), filtered: old-peer maximum or null }.
-function bundleHeaderBlocks(anchors, network, publisher){
+function bundleHeaderBlocks(anchors, network, publisher, versions = REWARD_FAMILY_VERSIONS.bundle){
     let byAction = new Map();
     let filtered = null;
     for(let a of anchors){
         // Every era's bundle SECTION rows (v0, v3 fold sections, pre-restart v7) reconstruct
         // the header; one bundle is one era, so the eras never mix within an action.
-        if(!REWARD_FAMILY_VERSIONS.bundle.includes(Number(a.version))) continue;
+        // `versions` lets the caller drop the pre-restart wires, so a dropped v7 sibling
+        // cannot raise the header maximum either.
+        if(!versions.includes(Number(a.version))) continue;
         if(!isBundleSectionRow(a)) continue;
         let b = Number(a.snapshot_block);
         if(!Number.isFinite(b)) continue;
@@ -280,9 +282,10 @@ function judgeAnchors(anchors, e){
         snapshot:  Number(e.snapshotBlock),
         family:    family,
         isArchive: family === 'archive',
-        versions:  rewardFamilyVersions(family)
+        // Only an exact true drops the pre-restart wires; any other value changes nothing.
+        versions:  rewardFamilyVersions(family, { legacyDropped: e.legacyDropped === true })
     };
-    let headers = (family === 'bundle') ? bundleHeaderBlocks(anchors, t.network, t.publisher) : null;
+    let headers = (family === 'bundle') ? bundleHeaderBlocks(anchors, t.network, t.publisher, t.versions) : null;
     let sawAttested = false;
     for(let a of anchors){
         if(!ATTESTED_VERSIONS.includes(Number(a.version))) continue;   // a sibling anchor in the same tx, not our proof
