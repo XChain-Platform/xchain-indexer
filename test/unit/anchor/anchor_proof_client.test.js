@@ -291,3 +291,31 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
     });
     });
 });
+
+describe('AnchorProofClient legacyDropped (XC-5138) @regression @tier2', () => {
+    it('lets the pre-restart byte 6 prove an archive reward unless legacyDropped is exactly true', async function () {
+        const c = client();
+        c.fetch = async () => ({ exists: true, anchors: [anchor({ version: 6 })] });
+        assert.strictEqual(await c.proveMined(expectation()), 'verified');
+        assert.strictEqual(await c.proveMined(expectation({ legacyDropped: false })), 'verified');
+        assert.strictEqual(await c.proveMined(expectation({ legacyDropped: 'true' })), 'verified');
+    });
+
+    it('rejects byte 6 once legacyDropped is true', async function () {
+        const c = client();
+        c.fetch = async () => ({ exists: true, anchors: [anchor({ version: 6 })] });
+        assert.strictEqual(await c.proveMined(expectation({ legacyDropped: true })), 'rejected');
+    });
+
+    it('keys the memo on legacyDropped so one verdict never answers for the other', async function () {
+        const c = client();
+        let calls = 0;
+        c.fetch = async () => { calls++; return { exists: true, anchors: [anchor({ version: 6 })] }; };
+        assert.strictEqual(await c.proveMined(expectation()), 'verified');
+        assert.strictEqual(await c.proveMined(expectation({ legacyDropped: true })), 'rejected');
+        assert.strictEqual(await c.proveMined(expectation()), 'verified');
+        assert.strictEqual(await c.proveMined(expectation({ legacyDropped: true })), 'rejected');
+        assert.strictEqual(calls, 2, 'one DOGE read per legacyDropped value, then memoized');
+        assert.notStrictEqual(c.memoKey(TXID, expectation()), c.memoKey(TXID, expectation({ legacyDropped: true })));
+    });
+});

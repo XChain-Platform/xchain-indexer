@@ -171,6 +171,8 @@ class AnchorProofClient {
     //   expect.publisher       - the elected publisher pubkey being paid
     //   expect.network         - the reward's network
     //   expect.minConfirmations- required DOGE burial depth
+    //   expect.legacyDropped   - exactly true above the LEGACY_ANCHOR_REWARD_PIN gate: the
+    //                            pre-restart bytes 6 and 7 no longer prove a reward
     // Returns 'verified' | 'rejected' | 'unknown'.
     async proveMined(expect){
         let e = expect || {};
@@ -207,7 +209,9 @@ class AnchorProofClient {
     // unproven reward for another, and a 'rejected' suppress a legitimate one. Because the memo
     // is process-lifetime state, that leak also made the derived set restart-dependent, which
     // is a COLLECT-rail fork. Normalize exactly as judge does, or two spellings of one tuple
-    // miss each other. A field added to judge must be added here too. judge's chain term needs
+    // miss each other. A field added to judge must be added here too, legacyDropped
+    // included: it changes which versions bind, so a verdict reached under one value never
+    // answers for the other. judge's chain term needs
     // no entry of its own, and neither does the reward FAMILY or the round term it selects:
     // all three are derived from rewardType, which is already a term here.
     memoKey(txid, e){
@@ -217,7 +221,8 @@ class AnchorProofClient {
                 Number(e.snapshotBlock),
                 String(e.publisher || '').toLowerCase(),
                 String(e.network || ''),
-                Number(e.minConfirmations)].join('|');
+                Number(e.minConfirmations),
+                e.legacyDropped === true].join('|');
     }
 
     // Apply the indexer-only archive gate before the shared binding.

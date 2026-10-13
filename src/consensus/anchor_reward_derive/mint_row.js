@@ -34,13 +34,9 @@ class AnchorProofUnavailableError extends Error {
     constructor(message){ super(message); this.name = 'AnchorProofUnavailableError'; }
 }
 
-// Prove one gated, re-verified row's DOGE anchor mined, then mint its reward. `m` carries
-// the BTC block being processed (blockIndex), the AnchorProofClient (proof, which may be
-// absent), the burial depth (minConfirmations) and the amount the reward family pays
-// (amount). The LEGACY_ANCHOR_REWARD_PIN gate is evaluated here at blockIndex through
-// `m.protocolChanges.isEnabled`; an explicit boolean `m.legacyAnchorRewardPin` overrides it.
-// With neither supplied the gate reads as off and the mint is unchanged. Returns what createValidatorReward returned, or false when the proof is
-// rejected; throws AnchorProofUnavailableError when it cannot be decided.
+// Whether the LEGACY_ANCHOR_REWARD_PIN gate is on for this block. It is evaluated at
+// blockIndex through `m.protocolChanges.isEnabled`; an explicit boolean
+// `m.legacyAnchorRewardPin` overrides it. With neither supplied the gate reads as off.
 async function legacyPinGateOn(m){
     if(typeof m.legacyAnchorRewardPin === 'boolean'){ return m.legacyAnchorRewardPin; }
     if(m.protocolChanges && typeof m.protocolChanges.isEnabled === 'function'){
@@ -49,9 +45,17 @@ async function legacyPinGateOn(m){
     return false;
 }
 
+// Prove one gated, re-verified row's DOGE anchor mined, then mint its reward. `m` carries
+// the BTC block being processed (blockIndex), the AnchorProofClient (proof, which may be
+// absent), the burial depth (minConfirmations) and the amount the reward family pays
+// (amount). Above the LEGACY_ANCHOR_REWARD_PIN gate the pre-restart wire bytes 6 and 7
+// stop proving a reward: the gate's verdict is handed to proveMined as legacyDropped.
+// Returns what createValidatorReward returned, or false when the proof is rejected;
+// throws AnchorProofUnavailableError when it cannot be decided.
 async function mintProvenRow(indexerDb, row, m){
     // LEGACY_ANCHOR_REWARD_PIN: a tuple pinned from the pre-restart chain is not minted again.
-    if(await legacyPinGateOn(m) && isLegacyRewardPinned({
+    const legacyDropped = await legacyPinGateOn(m);
+    if(legacyDropped && isLegacyRewardPinned({
         reward_type: row.reward_type, round_reference: row.round_reference,
         snapshot_block: row.snapshot_block, publisher: String(row.publisher).toLowerCase(),
         txid: row.doge_anchor_txid
@@ -73,7 +77,8 @@ async function mintProvenRow(indexerDb, row, m){
         snapshotBlock:   Number(row.snapshot_block),
         publisher:       String(row.publisher).toLowerCase(),
         network:         String(row.network),
-        minConfirmations: m.minConfirmations
+        minConfirmations: m.minConfirmations,
+        legacyDropped:   legacyDropped
     }) : 'unknown');
     if(verdict === 'unknown')
         throw new AnchorProofUnavailableError(

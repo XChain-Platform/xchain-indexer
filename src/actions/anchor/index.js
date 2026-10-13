@@ -281,9 +281,13 @@ class Anchor {
         if(!error && String(this.config['COIN']) !== 'DOGE')
             error = 'invalid: ANCHOR only valid on DOGE';
 
-        // Dispatch by family. An unparseable version still lands on a body parser (carrying
-        // the error), and the archive-head parser is the fall-through, so a rejected action
-        // is recorded rather than dropped.
+        // Dispatch by family: 2 continuation, 3 fold (once armed), 0 bundle, and everything
+        // else on the archive-head parser. An unparseable version still lands on a body
+        // parser (carrying the error), and the archive-head parser is the fall-through, so a
+        // rejected action is recorded rather than dropped. That includes the retired
+        // pre-restart bytes 6 and 7: they are not in the version table, parse as
+        // 'invalid: VERSION (unknown)', and prove a reward only through the proof client's
+        // legacy alias, which LEGACY_ANCHOR_REWARD_PIN switches off (legacyDropped).
         if(format === 2) return await this.parseContinuation(params, data, error);
         if(format === 3 && foldActive) return await this.parseFold(params, data, error);
         if(format === 0) return await this.parseBundle(params, data, error);

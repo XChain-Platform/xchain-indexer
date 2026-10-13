@@ -152,3 +152,33 @@ describe('deriveAnchorRewards per-row mint loop, pinned against the mint_row wir
         for (const call of mintStub.getCalls()) assert.strictEqual(call.args[2].blockIndex, blockIndex);
     });
 });
+
+describe('mintProvenRow hands the legacy pin gate to proveMined as legacyDropped (XC-5138) @regression @tier1', function () {
+    const row = {
+        reward_type: 'anchor_archive', round_reference: 5, snapshot_block: 5,
+        publisher: 'aa'.repeat(32), network: 'regtest', doge_anchor_txid: 'a'.repeat(64)
+    };
+    function mint(extra) {
+        const proof = { proveMined: sinon.stub().resolves('verified') };
+        const db = { createValidatorReward: sinon.stub().resolves(true) };
+        const m = Object.assign({ blockIndex: 1000, proof, minConfirmations: 60, amount: '10.00000000' }, extra);
+        return realMintRow.mintProvenRow(db, row, m).then(() => proof.proveMined.firstCall.args[0]);
+    }
+
+    it('sends legacyDropped true when the gate reads on from protocolChanges at blockIndex', async function () {
+        const isEnabled = sinon.stub().resolves(true);
+        const asked = await mint({ protocolChanges: { isEnabled } });
+        assert.strictEqual(asked.legacyDropped, true);
+        assert.ok(isEnabled.calledWith('LEGACY_ANCHOR_REWARD_PIN', 1000));
+    });
+
+    it('sends legacyDropped true on an explicit legacyAnchorRewardPin override', async function () {
+        assert.strictEqual((await mint({ legacyAnchorRewardPin: true })).legacyDropped, true);
+    });
+
+    it('sends legacyDropped false when the gate is off or unsupplied', async function () {
+        assert.strictEqual((await mint({})).legacyDropped, false);
+        assert.strictEqual((await mint({ legacyAnchorRewardPin: false })).legacyDropped, false);
+        assert.strictEqual((await mint({ protocolChanges: { isEnabled: sinon.stub().resolves(false) } })).legacyDropped, false);
+    });
+});
