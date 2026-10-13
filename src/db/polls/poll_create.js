@@ -43,7 +43,13 @@ module.exports = {
     // which is the poll's id. OPTIONS are stored as a JSON array, index-addressed
     // by ballots. Defaults (max_selections=1, tally_mode=approval,
     // weight_mode=balance) are applied by the handler before this is called.
-    async createPoll(data){
+    //
+    // opts.inert marks a refused create: only the identity and the refusal status are stored.
+    // end_block, decide_threshold, deposit and callback columns stay null, so the finalization
+    // and early-decide sweeps never select the row and a ballot against it reads as closed.
+    async createPoll(data, opts){
+        if(opts && opts.inert)
+            return await this.createInertPoll(data);
         let action_index     = data['ACTION_INDEX'];
         let block_index      = data['BLOCK_INDEX'];
         let tick_id          = await this.createTicker(data['TICK']);
@@ -93,6 +99,18 @@ module.exports = {
                     decide_threshold, question, deposit_amount, deposit_addr_id,
                     cb_contract, cb_method, cb_params, cb_on, gas_escrow, cb_delay, status_id, action_index];
         await this.doQuery(query, args);
+    },
+
+    // Persist a refused VOTE v0 create as an inert poll row (see createPoll).
+    async createInertPoll(data){
+        let action_index = data['ACTION_INDEX'];
+        let status_id    = await this.createStatus(data['STATUS']);
+        let exists       = (await this.doQuery(`SELECT action_index FROM polls WHERE action_index=?`, [action_index])).length > 0;
+        let args = [data['BLOCK_INDEX'], null, null, '[]', null,
+                    null, null, null, null, null,
+                    null, null, '0', null,
+                    null, null, null, null, null, null, status_id, action_index];
+        await this.doQuery(exists ? POLL_UPDATE_SQL : POLL_INSERT_SQL, args);
     },
 
 };
