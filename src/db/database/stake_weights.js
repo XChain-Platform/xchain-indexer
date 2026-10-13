@@ -204,7 +204,7 @@ module.exports = {
             return { verdict: 'unknown', reason: 'local tip ' + tip + ' has not reached snapshot_block ' + block + ' (resolved at ' + at + ')' };
         let local;
         try {
-            local = await this.getStakeWeightsByCapability(capability, at, '0');
+            local = await this.stakeSetMemo(capability, at, tip);
         } catch(e) {
             return { verdict: 'unknown', reason: 'local stake re-derivation failed: ' + (e && e.message ? e.message : e) };
         }
@@ -231,6 +231,28 @@ module.exports = {
                              ' is locally ' + String(match.weight).slice(0, 32) + ', hub served ' +
                              String(row.amount).slice(0, 32) };
         return { verdict: 'verified' };
+    },
+
+    // Memo of the minStake '0' stake set verifyCapabilitySnapshotRow re-derives, keyed by
+    // (capability, buried block, local tip). A snapshot is mirrored as N rows that share a
+    // capability and snapshot_block, and the set is the same for all of them, so N rows
+    // run ONE aggregate instead of N. The tip is part of the key so any new block, and
+    // any reorg that moves the tip, starts a fresh derivation; the buried block is
+    // history, but the tip fence keeps a set read before a reorg from outliving it.
+    // The in-flight promise is stored, so rows verified concurrently share one query.
+    // A rejection is evicted at once (a failed read must never be pinned), and the map
+    // is bounded so a long sync cannot grow it without limit.
+    stakeSetMemo(capability, at, tip){
+        if(!this._stakeSetMemo) this._stakeSetMemo = new Map();
+        let memo = this._stakeSetMemo;
+        let key = capability + '|' + at + '|' + tip;
+        let hit = memo.get(key);
+        if(hit) return hit;
+        let pending = Promise.resolve().then(() => this.getStakeWeightsByCapability(capability, at, '0'));
+        memo.set(key, pending);
+        pending.catch(() => { if(memo.get(key) === pending) memo.delete(key); });
+        while(memo.size > 8) memo.delete(memo.keys().next().value);
+        return pending;
     },
 
     // Whether `capability` is present in this indexer's STAKING.CAPABILITIES config.
