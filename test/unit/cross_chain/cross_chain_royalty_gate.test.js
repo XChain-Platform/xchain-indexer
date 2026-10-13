@@ -21,7 +21,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
+const { createMockIndexer, createBaseData, createTokenInfo, signedRemoteTokenRow, stubRemoteTokenValidators } = require('../../fixtures/mocks');
 
 const Order = require('../../../src/actions/order/index.js');
 const Swap  = require('../../../src/actions/swap/index.js');
@@ -58,7 +58,8 @@ function makeActionsCtx(indexer, royaltyEnabled) {
 // stubbed to return `legs`, and return the parsed data object.
 async function runCreate(Handler, action, getCoin, legs, royaltyEnabled) {
     const indexer    = createMockIndexer();
-    indexer.indexerDb.mirrorDb = () => ({ getPinnedRemoteToken: sinon.stub().resolves({ decimals: 0 }) });
+    stubRemoteTokenValidators(indexer.indexerDb);
+    indexer.indexerDb.mirrorDb = () => ({ getPinnedRemoteToken: sinon.stub().resolves(signedRemoteTokenRow()) });
     const actionsCtx = makeActionsCtx(indexer, royaltyEnabled);
     const handler    = new Handler(actionsCtx);
 
