@@ -4201,6 +4201,11 @@
       "metered fee sum sums a numeric metered fee",
       "metered fee sum sums metered fees from multiple rows"
     ],
+    "4764414e4e169b31": [
+      "mainnet launch registry rows admits nothing extra from the empty map before launch",
+      "mainnet launch registry rows registers an empty prelaunch seed source map",
+      "mainnet launch registry rows registers the launch instant on mainnet only"
+    ],
     "47918a353044a5d4": [
       "archiveReissueRefusal() does not read when the author is missing",
       "archiveReissueRefusal() does not read when the sequence is negative",
@@ -17050,8 +17055,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1296,
-      "titleCount": 13142,
+      "fileCount": 1297,
+      "titleCount": 13145,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17694,6 +17699,7 @@
         "test/unit/consensus/equivocation/equiv_xcall_canonical.test.js": "93b9e527a571fc32",
         "test/unit/consensus/equivocation/equivocation_header.test.js": "3ad67665f530b06c",
         "test/unit/consensus/escrow_journal_release_before_lock.test.js": "fb66a40be5e24b51",
+        "test/unit/consensus/gates/mainnet_launch_rows.test.js": "4764414e4e169b31",
         "test/unit/consensus/gates/mirror_admission_margin_boundary.test.js": "5ad6c4b0c28cb058",
         "test/unit/consensus/gates/mirror_admission_margin_cross_repo.test.js": "ed6f0e05cd4ccaef",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",

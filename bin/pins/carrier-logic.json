@@ -137,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "54e0b58f9bb3445f186483e661b416a5a9be7ec887018408322ec22103b3c1cb",
+      "hash": "f8f6b6be115ac2b783107f3d4060511e1ca93e35b2d6252d6f2d2ee12408bda9",
       "twins": [],
       "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
@@ -2118,6 +2118,13 @@
       "from": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
       "to": "54e0b58f9bb3445f186483e661b416a5a9be7ec887018408322ec22103b3c1cb",
       "reason": "Five changes_5 rows export named MAINNET and TESTNET flag_times constants",
+      "date": "2026-10-13"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "54e0b58f9bb3445f186483e661b416a5a9be7ec887018408322ec22103b3c1cb",
+      "to": "f8f6b6be115ac2b783107f3d4060511e1ca93e35b2d6252d6f2d2ee12408bda9",
+      "reason": "Load gates_5.js, the mainnet launch rows, from the entry",
       "date": "2026-10-13"
     }
   ]
