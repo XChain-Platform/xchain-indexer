@@ -8,7 +8,7 @@
     },
     "anchor_reward_activation": {
       "path": "src/consensus/gates/anchor_reward_gate.js",
-      "hash": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
+      "hash": "7a99b4caa82fe705870a3c7d9dc1faeb4def1da1306e615bbfdaf850ba33947b",
       "twins": [
         "xchain-hub"
       ]
@@ -2098,6 +2098,13 @@
       "to": "4de1110b4bcdcc39f62664dfa843501536fec6065a585eeda60825dab1d26245",
       "reason": "admit only unit-bearing registry rows into the active gate set",
       "date": "2026-10-11"
+    },
+    {
+      "id": "anchor_reward_activation",
+      "from": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
+      "to": "7a99b4caa82fe705870a3c7d9dc1faeb4def1da1306e615bbfdaf850ba33947b",
+      "reason": "Dropped the unused activeAt and resolveMirrorAdmissionRegtest imports and reworded two rejected comments",
+      "date": "2026-10-13"
     }
   ]
 }
