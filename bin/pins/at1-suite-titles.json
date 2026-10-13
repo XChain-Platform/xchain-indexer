@@ -6567,6 +6567,12 @@
       "HubDbSync price bootstrap bound @regression @tier2 refuses to certify a drain that cut below the VM round window, and widens",
       "HubDbSync price bootstrap bound @regression @tier2 still bootstraps the whole table when no horizon is supplied"
     ],
+    "6b5c108f6abc2e20": [
+      "flag-day placeholder guard @regression @tier1 changes_5 rows carry named flag_times constants exports an unarmed mainnet and the shared testnet instant for each, and the table rows read them",
+      "flag-day placeholder guard @regression @tier1 sibling copies carry no placeholder regression xchain-documentation/protocol/constants.js pins ATTEST_RELAY_ACTIVATION and ARCHIVE_REWARD_ACTIVATION by named export",
+      "flag-day placeholder guard @regression @tier1 sibling copies carry no placeholder regression xchain-documentation/protocol/constants.js pins PRICE_SIG_TALLY_ACTIVATION by named export, value-equal to the local copy",
+      "flag-day placeholder guard @regression @tier1 sibling copies carry no placeholder regression xchain-hub/src/validators/governance.js declares GOV_SNAPSHOT_ACTIVATION at the cohort height"
+    ],
     "6ba9ff528d557453": [
       "Callback @regression @tier3 falls back to a generic message when native fee fails without error text",
       "Callback @regression @tier3 native-coin fee payment accepts a valid native-coin fee (PAYMENT_MODE native)",
@@ -16902,7 +16908,7 @@
   "scripts": {
     "test": {
       "fileCount": 1286,
-      "titleCount": 13083,
+      "titleCount": 13084,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17997,7 +18003,7 @@
         "test/unit/protocol/emission_issuance_limits.test.js": "fb2e2d5ab7b458cd",
         "test/unit/protocol/emission_issuance_limits.test/issue_budget.test.js": "9592166f557e1363",
         "test/unit/protocol/flagday_placeholder_guard.test.js": "e75df83e8ba00daa",
-        "test/unit/protocol/flagday_placeholder_guard.test/sibling_named_exports.test.js": "3d3ce2971cddb3da",
+        "test/unit/protocol/flagday_placeholder_guard.test/sibling_named_exports.test.js": "6b5c108f6abc2e20",
         "test/unit/protocol/issue_inherited_mint_window_gate.test.js": "6a831bac41f71da0",
         "test/unit/protocol/list_reference_validity_gate.test.js": "75196e85b9673333",
         "test/unit/protocol/price_time_gate.test.js": "3ba5b094789a13b1",
