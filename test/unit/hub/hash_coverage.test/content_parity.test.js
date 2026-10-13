@@ -200,6 +200,44 @@ describe('Hash coverage guard @regression', function () {
     });
 });
 
+describe('Hash coverage guard @regression', function () {
+    describe('content-parity coverage declaration', function () {
+        it('every declared in-place column is a real column of its table schema', function () {
+            // Key presence alone would pass a typo or a column dropped by a migration, which
+            // would silently leave the preimage hashing the very column that is meant to be
+            // excluded. Each declared name must be a column definition in src/sql/<table>.sql.
+            for (const [table, cols] of Object.entries(lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS)) {
+                const defined = schemaColumns(table);
+                assert.ok(defined.size > 0, `no column definitions parsed from src/sql/${table}.sql`);
+                for (const c of cols)
+                    assert.ok(defined.has(c), `${table}.${c} is declared in-place but is not a column in src/sql/${table}.sql`);
+                assert.strictEqual(new Set(cols).size, cols.length, `${table} declares a column twice`);
+            }
+        });
+
+        it('the in-place columns leave the preimage and never overlap the by-design exclusions', function () {
+            for (const t of lifecycle.contentParityMutableTables()) {
+                const inPlace = lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS[t];
+                const byDesign = lifecycle.CONTENT_PARITY_EXCLUDED_COLUMNS[t] || [];
+                assert.deepStrictEqual(lifecycle.contentParityExcludedColumns(t), byDesign.concat(inPlace));
+                assert.deepStrictEqual(inPlace.filter((c) => byDesign.includes(c)), [],
+                    `${t} lists a column as both by-design excluded and in-place`);
+            }
+        });
+    });
+});
+
+// Column names defined by the CREATE TABLE in src/sql/<table>.sql (key and constraint lines skipped).
+function schemaColumns(table) {
+    const sql = fs.readFileSync(path.join(__dirname, '../../../../src/sql', table + '.sql'), 'utf8');
+    const cols = new Set();
+    for (const line of sql.split('\n')) {
+        const m = line.match(/^\s*`?([a-z_][a-z0-9_]*)`?\s+(?:TINYINT|SMALLINT|MEDIUMINT|INT|BIGINT|DECIMAL|VARCHAR|CHAR|TEXT|MEDIUMTEXT|LONGTEXT|BLOB|MEDIUMBLOB|LONGBLOB|VARBINARY|BINARY|JSON|ENUM|BOOLEAN|BIT|DOUBLE|FLOAT|DATETIME|TIMESTAMP|DATE)\b/i);
+        if (m) cols.add(m[1]);
+    }
+    return cols;
+}
+
 // The assigned columns of every `UPDATE order_matches SET ...` under src/, one list per statement.
 function orderMatchUpdateColumns() {
     const root = path.join(__dirname, '../../../../src');
