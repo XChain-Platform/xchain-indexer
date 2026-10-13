@@ -50,4 +50,14 @@ describe('protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression 
         process.env[ENV] = 'not-a-time';
         assert.strictEqual(build().regtest_time, ProtocolChanges.UNARMED);
     });
+
+    it('arms from genesis on a value of 0 instead of treating it as unarmed', function () {
+        process.env[ENV] = '0';
+        assert.strictEqual(build().regtest_time, 0);
+    });
+
+    it('stays unarmed on an empty value', function () {
+        process.env[ENV] = '';
+        assert.strictEqual(build().regtest_time, ProtocolChanges.UNARMED);
+    });
 });
