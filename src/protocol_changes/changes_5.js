@@ -133,6 +133,13 @@ const CHANGES = [
     // A v3 archive head row carries no checkpoint_seq, so below the flag the watermark only
     // ever sees v1 heads. Judged by the block that carries the ANCHOR. Unarmed on every network.
     ['ARCHIVE_REPLAY_WRAPPER_WATERMARK', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
+
+    // GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS: the controller-guard stake snapshot
+    // (actions/execute/controller_guard.js) hands the VM decimal strings, as the primary
+    // EXECUTE path does under STAKE_SNAPSHOT_DECIMAL_STRINGS. Unarmed on mainnet and
+    // testnet; regtest is inert unless a venue sets GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME.
+    ['GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS', '0.2.0', UNARMED, UNARMED,
+        () => regtestTimeOverride('GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME')() || UNARMED, 0, 0, 0],
 ];
 
 module.exports = CHANGES;
