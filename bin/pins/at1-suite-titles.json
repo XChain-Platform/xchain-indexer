@@ -3142,6 +3142,10 @@
       "preload bound is a monotone key in the admission era @regression @tier1 the legacy time bound is not monotone across the same blocks",
       "preload bound is a monotone key in the admission era @regression @tier1 the readable set only grows as the height rises, stamps notwithstanding"
     ],
+    "35e4f90c928ea8ef": [
+      "sweepOrphanedMarketPairs probe @regression @tier1 falls through to order_matches and deletes only when neither survives",
+      "sweepOrphanedMarketPairs probe @regression @tier1 matches each tick side index-friendly, never wrapping the column"
+    ],
     "3654541f666286e0": [
       "GET /status reports loop liveness for the fleet watcher, without gating on it keeps pollSilent and lastPollAt after every older key monitors already read",
       "GET /status reports loop liveness for the fleet watcher, without gating on it leaves the 503 inputs untouched: a silent loop alone is not wedged",
@@ -16758,8 +16762,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1274,
-      "titleCount": 13014,
+      "fileCount": 1275,
+      "titleCount": 13016,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17919,6 +17923,7 @@
         "test/unit/rollback/archive_reset_predicate.test.js": "dc2dd859a265cfae",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/db_is_reorg_halted.test.js": "f7df01ef630b4c84",
+        "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
         "test/unit/rollback/reorg_catchup_cursor.test.js": "694d08dca6dd0abb",
         "test/unit/rollback/reorg_resume_cursor_hole.test.js": "93e45958dfe95026",
         "test/unit/rollback/rollback.test.js": "147635c74f2bf70e",
