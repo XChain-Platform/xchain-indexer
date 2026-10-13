@@ -135,6 +135,9 @@ const CHANGES = [
     // genesis-active on regtest so fresh test chains exercise the corrected rule.
     ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', UNARMED,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 0, 0, 0, 0],
+    // EMISSION_DEPTH_EXECUTE_ONLY: only an EXECUTE emission stamps the incremented CALL_DEPTH;
+    // other emissions keep the emitter's depth. Unarmed on every network until a release cut pins an instant.
+    ['EMISSION_DEPTH_EXECUTE_ONLY', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
     ['STAKE_SNAPSHOT_DECIMAL_STRINGS','0.2.0', STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME,
         STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME, 0, 0, 0, 0],
 

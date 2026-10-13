@@ -92,12 +92,18 @@ function assertEmitterPosition(action, position){
 
 // Host-side re-validation of the call bounds the VM enforces at emit time, plus the
 // depth/hop/gas context the callee's own parse runs against.
-function validateEmissionBounds(action, params, executionData, limits){
+// EMISSION_DEPTH_EXECUTE_ONLY (unarmed gate): with it on, only an EXECUTE emission stamps the
+// incremented CALL_DEPTH; every other emission keeps the emitter's depth. Off, every emission
+// is stamped depth + 1 (the pre-gate behaviour).
+const EMISSION_DEPTH_EXECUTE_ONLY = 'EMISSION_DEPTH_EXECUTE_ONLY';
+
+function validateEmissionBounds(action, params, executionData, limits, depthExecuteOnly){
     // Cross-contract call emissions: re-validate depth + gasLimit HOST-side
     // (defense in depth; the VM enforces both at emit time, but an older or
     // compromised bundled VM must not be able to bypass them), then thread
     // the callee's depth + caller-funded ceiling through the emission data.
-    let callDepth = (Number(executionData['CALL_DEPTH']) || 0) + 1;
+    let emitterDepth = Number(executionData['CALL_DEPTH']) || 0;
+    let callDepth = (depthExecuteOnly && action !== 'EXECUTE') ? emitterDepth : emitterDepth + 1;
     let crossHops = Number(executionData['CROSS_HOPS']) || 0;
     let nestedGasLimit = null;
     if(action === 'EXECUTE'){
@@ -282,7 +288,10 @@ async function processEmission(emission, executionData, position, limits){
 
     await assertEmissionPermitted.call(this, executionData, action);
     assertEmitterPosition(action, position);
-    let bounds  = validateEmissionBounds(action, params, executionData, limits);
+    // EXECUTE is stamped depth + 1 either way, so the gate is only read for the other emissions.
+    let depthExecuteOnly = action !== 'EXECUTE' && await this.actions.protocolChanges.isEnabled(
+        EMISSION_DEPTH_EXECUTE_ONLY, executionData['BLOCK_INDEX']);
+    let bounds  = validateEmissionBounds(action, params, executionData, limits, depthExecuteOnly);
     let routing = await deriveEmissionRouting.call(this, executionData, position);
 
     let prepared = await prepareEmissionParams.call(this, action, params, executionData);
