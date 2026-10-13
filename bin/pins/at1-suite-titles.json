@@ -1007,14 +1007,6 @@
       "installMethods @regression @tier3 keeps writable false",
       "installMethods @regression @tier3 lets a later part overwrite an earlier one without throwing"
     ],
-    "1430f668b647634f": [
-      "assertConsensusDependencies fails closed when the VM dependency checker is unavailable",
-      "assertConsensusDependencies has no bypass: env flags do not change the outcome",
-      "assertConsensusDependencies is exported as a function",
-      "assertConsensusDependencies passes only the VM-owned dependency result",
-      "assertConsensusDependencies refuses the mismatch with the VM-owned diagnostic",
-      "assertConsensusDependencies runs after the epoch gate and before VM construction"
-    ],
     "144c10625486ea84": [
       "Attest (ATTEST) @regression @tier3 E1: request fees \u00a711: leader broadcast-fee reimbursement a feeless request pays no reimbursement (nothing is escrowed to carve from)",
       "Attest (ATTEST) @regression @tier3 E1: request fees \u00a711: leader broadcast-fee reimbursement a missing/stale oracle price reimburses 0 and never wedges the settle",
@@ -2940,11 +2932,6 @@
       "ANCHOR order reason helpers flags a CHAIN that sorts before its predecessor",
       "ANCHOR order reason helpers flags a pubkey that sorts before its predecessor",
       "ANCHOR order reason helpers never flags the first section"
-    ],
-    "32ad0982d2cf20c4": [
-      "ANCHOR v3 fold reissue SOURCE author accepts an exact duplicate found under the DOGE SOURCE address",
-      "ANCHOR v3 fold reissue SOURCE author rejects a conflicting archive found under the DOGE SOURCE address",
-      "ANCHOR v3 fold reissue SOURCE author retains the publisher pubkey lookup before activation"
     ],
     "32b91e3ceb72e5c2": [
       "dispense payment tally scale: activation @regression @tier1 an unknown network or an unparseable time stays on the legacy scale",
@@ -16651,6 +16638,14 @@
       "ADDRESS_PARAMS parity with the consensus-pinned coins registry LTC/testnet base58 prefixes + HRP equal the canonical net object",
       "ADDRESS_PARAMS parity with the consensus-pinned coins registry covers exactly the allowed coins and networks"
     ],
+    "fe8f001bb389e37d": [
+      "armed_map/vm_gate_coverage: every public VM gate is classified classifies every exported activation and gate time exactly once",
+      "armed_map/vm_gate_coverage: every public VM gate is classified pins every alias through its canonical VM mirror",
+      "armed_map/vm_gate_coverage: every public VM gate is classified pins every direct mirror as an xchain-vm armed-map row",
+      "armed_map/vm_gate_coverage: every public VM gate is classified pins every registry twin in the armed-map manifest",
+      "armed_map/vm_gate_coverage: every public VM gate is classified requires every known gap to state why it is not pinned",
+      "armed_map/vm_gate_coverage: every public VM gate is classified walks own and prototype statics"
+    ],
     "feadcd4727782c6d": [
       "relay-identity lookup against a real MariaDB @tier3 the origin_relay_identity migration applies to a POPULATED table without touching a row",
       "relay-identity lookup against a real MariaDB @tier3 the origin_relay_identity migration creates the index the definition declares, with the same shape",
@@ -16750,8 +16745,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1273,
-      "titleCount": 13008,
+      "fileCount": 1272,
+      "titleCount": 13005,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17106,7 +17101,6 @@
         "test/unit/actions/token/uncapped_max_supply.test.js": "40d8afc9cd271bab",
         "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js": "2d0e6bd90f6953d4",
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
-        "test/unit/actions/vm_runtime_dependencies.test.js": "1430f668b647634f",
         "test/unit/actions/vote_binding_dry_run_refusal.test.js": "03383d47d43bb92e",
         "test/unit/actions/xcall.test.js": "cdaf976c3205a143",
         "test/unit/actions/xcall.test/process_result.test.js": "23c7c709347d6c2b",
@@ -17176,7 +17170,6 @@
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
         "test/unit/anchor/anchor_v3_empty_fold_reject.test.js": "c1df08e38339ad37",
         "test/unit/anchor/anchor_v3_fold_parse.test.js": "6ea2607d7bbbc413",
-        "test/unit/anchor/anchor_v3_fold_reissue_source_author.test.js": "32ad0982d2cf20c4",
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
         "test/unit/anchor/archive_anchor_content_query.test.js": "383eb974c61ae810",
@@ -17362,6 +17355,7 @@
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
         "test/unit/consensus/armed_map/manifest.test.js": "65019f130fd744f9",
+        "test/unit/consensus/armed_map/vm_gate_coverage.test.js": "fe8f001bb389e37d",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
