@@ -11172,6 +11172,13 @@
       "Supply & amount boundary tests @regression @tier1 AMT-03: Issue token exceeding maximum supply MAX_SUPPLY = 10^21 + 1 exceeds MAX_TOKEN_SUPPLY \u2192 invalid",
       "Supply & amount boundary tests @regression @tier1 AMT-04: Issue token with zero supply MAX_SUPPLY = 0 bypasses MIN_TOKEN_SUPPLY check (bcgt guard short-circuits) \u2192 valid"
     ],
+    "a40520879b3078ae": [
+      "LEGACY_ANCHOR_REWARD_PIN evaluates the gate through protocolChanges at the deriving block",
+      "LEGACY_ANCHOR_REWARD_PIN is declared unarmed on every network",
+      "LEGACY_ANCHOR_REWARD_PIN mints a pinned tuple while the gate is off",
+      "LEGACY_ANCHOR_REWARD_PIN mints an unpinned tuple with the gate on",
+      "LEGACY_ANCHOR_REWARD_PIN skips a pinned tuple once the gate is on"
+    ],
     "a43841db7e6fd6b9": [
       "Database.slashContractStake() mid-cooldown double-count guard @regression @tier1 routes a mid-cooldown slash to contract_unstakes only (never the deactivated phantom)",
       "Database.slashContractStake() mid-cooldown double-count guard @regression @tier1 still slashes an active (never-unstaked) staker from contract_stakes (Pass 1)"
@@ -16907,8 +16914,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1286,
-      "titleCount": 13084,
+      "fileCount": 1287,
+      "titleCount": 13089,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17521,6 +17528,7 @@
         "test/unit/consensus/anchor_reward_derive/archive_fold_term.test.js": "7b26338ac8262f8c",
         "test/unit/consensus/anchor_reward_derive/legacy_reward_pins.test.js": "619e6106e9e87ab0",
         "test/unit/consensus/anchor_reward_derive/reward_groups.test.js": "67c89e84e7aba170",
+        "test/unit/consensus/anchor_reward_legacy_pins.test.js": "a40520879b3078ae",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
         "test/unit/consensus/armed_map/manifest.test.js": "f1a888ad0e0088f2",
