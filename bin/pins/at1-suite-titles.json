@@ -15329,6 +15329,13 @@
       "/status schemaReady stays false when migrations are lock-skipped",
       "/status schemaReady stays false when migrations fail"
     ],
+    "e635dc21a592569f": [
+      "requiredFeeSatsExact dry-run raw view mirrors the priced string",
+      "requiredFeeSatsExact exempt answer carries zero in both forms",
+      "requiredFeeSatsExact oraclefeequote RPC keeps the exact digits a Number would lose",
+      "requiredFeeSatsExact priceFeeQuote emits the string beside the unchanged Number",
+      "requiredFeeSatsExact stays exact above Number.MAX_SAFE_INTEGER"
+    ],
     "e6445f756586849c": [
       "setTokenBridged() - the sticky tokens.bridged bit @regression is a no-op for every later lock of the same token",
       "setTokenBridged() - the sticky tokens.bridged bit @regression sets the bit on the locked token and on nothing else",
@@ -16851,8 +16858,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1280,
-      "titleCount": 13045,
+      "fileCount": 1281,
+      "titleCount": 13050,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17018,6 +17025,7 @@
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/issue/settle_owner_history.test.js": "087297546f0ad980",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
