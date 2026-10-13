@@ -17,6 +17,7 @@
 const assert = require('assert');
 const {
     isPrelaunchSeedSource: admits,
+    admitsPrelaunch,
 } = require('../../../../src/consensus/gates/prelaunch_seed_sources.js');
 
 const SEEDS = {
@@ -58,5 +59,46 @@ describe('prelaunch seed sources', function(){
             admits('1Seed', 'BTC', Object.create({ 'BTC:mainnet': ['1Seed'] })),
             false
         );
+    });
+
+    it('admits a prelaunch transaction by network, launch, validator format or seed source', function(){
+        const bar = String.fromCharCode(124);
+        const wire = (...p) => p.join(bar);
+        const make = (network, data, source) =>
+            ({ network, coin: 'BTC', blockTime: 1700000000, data, source });
+        const user = wire('SEND', '0', 'x');
+        const off = { launchActive: false, seedSources: SEEDS };
+        assert.strictEqual(admitsPrelaunch(make('testnet', user, 'z'), off), true);
+        assert.strictEqual(admitsPrelaunch(make('regtest', user, 'z'), off), true);
+        assert.strictEqual(
+            admitsPrelaunch(make('mainnet', user, 'z'), { launchActive: true, seedSources: SEEDS }),
+            true
+        );
+        assert.strictEqual(admitsPrelaunch(make('mainnet', wire('PRICE', '0', 'x'), 'z'), off), true);
+        assert.strictEqual(admitsPrelaunch(make('mainnet', user, '1Seed'), off), true);
+        assert.strictEqual(admitsPrelaunch(make('mainnet', wire('PRICE', '1', 'x'), 'z'), off), false);
+        assert.strictEqual(admitsPrelaunch(make('mainnet', user, 'z'), off), false);
+    });
+
+    it('refuses a truthy non-true launch flag and a bad network', function(){
+        const make = (network) =>
+            ({ network, coin: 'BTC', blockTime: 1, data: 'SEND', source: 'z' });
+        const flag = (launchActive) => ({ launchActive, seedSources: SEEDS });
+        assert.strictEqual(admitsPrelaunch(make('mainnet'), flag(1)), false);
+        assert.strictEqual(admitsPrelaunch(make('mainnet'), flag('true')), false);
+        assert.strictEqual(admitsPrelaunch(make('MAINNET'), flag(false)), false);
+        assert.strictEqual(admitsPrelaunch(make('TESTNET'), flag(false)), false);
+        assert.strictEqual(admitsPrelaunch(make(undefined), flag(false)), false);
+        assert.strictEqual(admitsPrelaunch(make(''), flag(false)), false);
+        assert.strictEqual(admitsPrelaunch(make('signet'), flag(false)), false);
+    });
+
+    it('fails closed on a null seed map, missing options or a non-object input', function(){
+        const input = { network: 'mainnet', coin: 'BTC', blockTime: 1, data: 'SEND', source: '1Seed' };
+        assert.strictEqual(admitsPrelaunch(input, { launchActive: false, seedSources: null }), false);
+        assert.strictEqual(admitsPrelaunch(input), false);
+        assert.throws(() => admitsPrelaunch(null, { launchActive: true }), TypeError);
+        assert.throws(() => admitsPrelaunch('x', {}), TypeError);
+        assert.throws(() => admitsPrelaunch(undefined), TypeError);
     });
 });
