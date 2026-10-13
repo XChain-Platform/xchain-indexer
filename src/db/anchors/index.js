@@ -222,13 +222,25 @@ module.exports = {
     // watermark differ between mirrored and unmirrored nodes. Note the direction of
     // that exposure: a poisoned row can only push either watermark UP, which makes
     // the guard stricter, never more permissive.
-    async getArchiveReplayWatermarks(){
+    //
+    // `wrapperRows` (the ARCHIVE_REPLAY_WRAPPER_WATERMARK gate, read by the caller)
+    // widens the row set, still ONE statement, with the wrapper chain row of each v3
+    // archive: the folded action's chain row that carries the archive's total_chunks.
+    // A v3 archive head row stores no checkpoint_seq, so the wrapper row is the only
+    // place a v3 archive's post-fold checkpoint seq lives. It has no match_batch_seq,
+    // so the batch watermark is unchanged.
+    async getArchiveReplayWatermarks(wrapperRows){
         let versions = ARCHIVE_HEAD_VERSIONS;
+        let wrapper = wrapperRows
+            ? ` OR (a.version = 3 AND a.chain IS NOT NULL AND a.total_chunks IS NOT NULL)` : ``;
+        // Every branch is parenthesised and the whole row set is grouped once, so the
+        // status filter below applies to the wrapper branch exactly as to the others.
+        let rowSet = `(${archiveHeadPredicate('a')}) OR (a.version IN (${versions.map(() => '?').join(', ')}))${wrapper}`;
         let query = `SELECT MAX(a.match_batch_seq) AS max_batch_seq,
                             MAX(a.checkpoint_seq)  AS max_checkpoint_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
-                     WHERE (${archiveHeadPredicate('a')} OR a.version IN (${versions.map(() => '?').join(', ')}))
+                     WHERE (${rowSet})
                        AND s.status IN ('valid', 'unverified')`;
         let rows = await this.doQuery(query, versions);
         let row  = rows.length > 0 ? rows[0] : {};

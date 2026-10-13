@@ -60,7 +60,9 @@ async function checkReplayGuards(handler, data, error){
     // is signature-bound to identical content and can only produce a duplicate row, which
     // the archive-head pick is already required to handle deterministically.
     if(!error){
-        let wm = await handler.indexerDb.getArchiveReplayWatermarks();
+        let wrapperRows = await handler.actions.protocolChanges.isEnabled(
+            'ARCHIVE_REPLAY_WRAPPER_WATERMARK', Number(data['BLOCK_INDEX']));
+        let wm = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows);
         let batchStale      = (wm.batchSeq !== null && Number(data['MATCH_BATCH_SEQ']) < wm.batchSeq);
         let checkpointStale = (wm.checkpointSeq !== null && Number(data['CHECKPOINT_SEQ']) < wm.checkpointSeq);
         if(batchStale && checkpointStale)
