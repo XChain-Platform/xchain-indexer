@@ -260,7 +260,7 @@ describe('markets: the rollback collector agrees with the block path @regression
         await rollback.rollback(100);
         const probe = indexer.indexerDb.doQuery.getCalls().find(c => /SELECT 1 FROM orders o/.test(c.args[0]));
         assert.ok(probe, 'expected the per-pair survival probe');
-        assert.ok(/COALESCE\(o\.give_tick_id,0\)=\?/.test(probe.args[0]),
+        assert.ok(/\(o\.give_tick_id=\? OR \(o\.give_tick_id IS NULL AND \?=0\)\)/.test(probe.args[0]),
             'orders store NULL where markets stores the sentinel; a bare compare finds no survivor and deletes a live market');
         const zombieDelete = indexer.indexerDb.doQuery.getCalls().find(c =>
             /DELETE FROM markets WHERE \(tick1_id=\? AND tick2_id=\?\)/.test(c.args[0]));

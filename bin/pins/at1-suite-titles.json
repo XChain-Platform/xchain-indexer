@@ -442,6 +442,20 @@
       "bin/consensus-identity.js --compare against the committed pin and the arming env refuses a lever the pin did not arm, instead of reporting rules drift",
       "bin/consensus-identity.js --compare against the committed pin and the arming env refuses half of the pin's armed pair rather than falling back to the bare block"
     ],
+    "09cb76a93cf6d56e": [
+      "HubDbSync applyRetraction signed retractions @regression @tier1 APPLIES a correctly signed retraction (1-of-1 snapshot), proving canonical parity with the hub",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 REFUSES a signed set whose snapshot_block is itself below the gate era (no sub-gate minting)",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 REFUSES a signer outside the mirrored snapshot",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 REFUSES an unsigned quorum-class retraction once the local snapshot era passes the gate",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 REFUSES when no snapshot rows exist at the claimed snapshot_block",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 REFUSES when the wire generation is tampered after signing (fence is signature-bound)",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 an invalid signature alone still fails the quorum (verify gate is not weakened)",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 counts a snapshot member whose VALID signature is ordered AFTER a garbage one (verify-then-mark)",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 enforces the weighted 2/3 bar: 2 of 4 equal sources refused, 3 of 4 applied",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 legacy tier: pre-bootstrap mirror (no snapshot rows at all) applies unsigned events",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 legacy tier: without a wired network the fences stand alone and unsigned events apply",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 still counts a duplicated pubkey ONCE when both entries verify (dedupe intact)"
+    ],
     "09dab1f1abfabefd": [
       "XChainIndexer hub config overlay parseIntMin0 (BLOCK_CHECK_INTERVAL / BLOCK_PROCESS_TIMEOUT) falls back to the default for a negative value",
       "XChainIndexer hub config overlay parseIntMin0 (BLOCK_CHECK_INTERVAL / BLOCK_PROCESS_TIMEOUT) falls back to the default for a non-numeric value",
@@ -3141,6 +3155,10 @@
       "preload bound is a monotone key in the admission era @regression @tier1 rounds with a signed height are selected by height alone",
       "preload bound is a monotone key in the admission era @regression @tier1 the legacy time bound is not monotone across the same blocks",
       "preload bound is a monotone key in the admission era @regression @tier1 the readable set only grows as the height rises, stamps notwithstanding"
+    ],
+    "35e4f90c928ea8ef": [
+      "sweepOrphanedMarketPairs probe @regression @tier1 falls through to order_matches and deletes only when neither survives",
+      "sweepOrphanedMarketPairs probe @regression @tier1 matches each tick side index-friendly, never wrapping the column"
     ],
     "3654541f666286e0": [
       "GET /status reports loop liveness for the fleet watcher, without gating on it keeps pollSilent and lastPollAt after every older key monitors already read",
@@ -11570,6 +11588,13 @@
       "Indexer cross-node determinism baseline @regression @tier1 hash chain matches the committed baseline (no consensus drift)",
       "Indexer cross-node determinism baseline @regression @tier1 re-deriving the corpus from a clean DB yields the identical hash chain (determinism)"
     ],
+    "ac93d3fca252ee43": [
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 arms from genesis on a value of 0 instead of treating it as unarmed",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 arms regtest from the variable and leaves the other networks alone",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 fails closed to unarmed on a non-numeric value",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 ships unarmed on regtest when the variable is unset",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 stays unarmed on an empty value"
+    ],
     "ac9b353b9d7d511b": [
       "XBRIDGE action handler @regression @tier3 v4 burn (a bridged copy on the chain holding it) debits the copy and names the origin chain, with no bridged bit to set",
       "XBRIDGE action handler @regression @tier3 v4 burn (a bridged copy on the chain holding it) reaches the same row and the same verdict for a lower-case root",
@@ -12304,6 +12329,19 @@
       "Deferred chunked DEPLOY assembly @regression @tier2 R2: the assembler lands pays the base fee via a native output at the assembler, recording mode 1",
       "Deferred chunked DEPLOY assembly @regression @tier2 R2: the assembler lands rejects a second assembler while one is pending, and charges it nothing"
     ],
+    "b94434c87d719100": [
+      "capability_snapshots stake set memo @regression @tier2 does not pin a failed read",
+      "capability_snapshots stake set memo @regression @tier2 re-derives for a different snapshot block",
+      "capability_snapshots stake set memo @regression @tier2 re-derives when the local tip moves",
+      "capability_snapshots stake set memo @regression @tier2 runs one aggregate for many rows of one snapshot",
+      "capability_snapshots stake set memo @regression @tier2 shares one query across concurrent rows"
+    ],
+    "b968b2a96f3d5ffc": [
+      "HubDbSync chain-id purge retry @regression @tier2 keeps the purge pending when a DELETE emptys, and retries on a restated id",
+      "HubDbSync chain-id purge retry @regression @tier2 keeps the purge pending when a DELETE throws, and retries on a restated id",
+      "HubDbSync chain-id purge retry @regression @tier2 stays pending while the retry keeps failing",
+      "HubDbSync chain-id purge retry @regression @tier2 still owes the legacy-table purge on retry after a chain change"
+    ],
     "b97d2027d5c02535": [
       "JSON-RPC fee family @regression @tier1 feequote, preflight, feeschedule and feequotedryrun delegate to the actions engine",
       "JSON-RPC fee family @regression @tier1 reports engine throws generically, except the dry-run which surfaces the message",
@@ -12668,6 +12706,25 @@
       "GAS-tick open mint @regression @security subtokens are unaffected mints XCHAIN.FOO normally (a subtoken is not the GAS tick)",
       "GAS-tick open mint @regression @security supply bounds still enforced rejects a mint that would exceed MAX_SUPPLY",
       "GAS-tick open mint @regression @security supply bounds still enforced rejects a per-tx amount above MAX_MINT"
+    ],
+    "bdf7d418cf196406": [
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 REFUSES an unfenced delete for cross_chain_calls",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 REFUSES an unfenced delete for cross_chain_matches",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 bounded delete for oracle_prices keys on action_index",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 bounded delete for price_snapshots when to_action_index present",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 gen-fenced PER-LEG delete for cross_chain_matches (a_/b_push_generation)",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 gen-fenced delete for cross_chain_calls adds push_generation <= ?",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 gen-fenced delete for price_snapshots adds push_generation <= ?",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 gen-fenced open-ended delete for oracle_prices (gen but no to_action_index)",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 open-ended delete for price_snapshots when no to_action_index",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 REFUSES an own-chain retraction at/above our rollback generation (forged reorg)",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 REFUSES an own-chain retraction when never rolled back (generation 0)",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 REFUSES an unfenced own-chain retraction even for non-quorum tables",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 accepts an own-chain retraction whose fence is below our rollback generation",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 fails CLOSED when the own-generation read throws",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 monotonicity is tracked per (table, source_chain), not globally",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 other-chain retractions skip the own-generation check but track monotonicity",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 without the hook (explorer vendored mirror) other-chain legacy behavior is unchanged"
     ],
     "be80fa39c6a19cdf": [
       "consensus-primitive conformance: activation predicate vectors @regression every group this repo runs is a non-empty list",
@@ -16651,6 +16708,14 @@
       "ADDRESS_PARAMS parity with the consensus-pinned coins registry LTC/testnet base58 prefixes + HRP equal the canonical net object",
       "ADDRESS_PARAMS parity with the consensus-pinned coins registry covers exactly the allowed coins and networks"
     ],
+    "fe8f001bb389e37d": [
+      "armed_map/vm_gate_coverage: every public VM gate is classified classifies every exported activation and gate time exactly once",
+      "armed_map/vm_gate_coverage: every public VM gate is classified pins every alias through its canonical VM mirror",
+      "armed_map/vm_gate_coverage: every public VM gate is classified pins every direct mirror as an xchain-vm armed-map row",
+      "armed_map/vm_gate_coverage: every public VM gate is classified pins every registry twin in the armed-map manifest",
+      "armed_map/vm_gate_coverage: every public VM gate is classified requires every known gap to state why it is not pinned",
+      "armed_map/vm_gate_coverage: every public VM gate is classified walks own and prototype statics"
+    ],
     "feadcd4727782c6d": [
       "relay-identity lookup against a real MariaDB @tier3 the origin_relay_identity migration applies to a POPULATED table without touching a row",
       "relay-identity lookup against a real MariaDB @tier3 the origin_relay_identity migration creates the index the definition declares, with the same shape",
@@ -16750,8 +16815,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1273,
-      "titleCount": 13008,
+      "fileCount": 1278,
+      "titleCount": 13030,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17362,6 +17427,7 @@
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
         "test/unit/consensus/armed_map/manifest.test.js": "65019f130fd744f9",
+        "test/unit/consensus/armed_map/vm_gate_coverage.test.js": "fe8f001bb389e37d",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
@@ -17647,6 +17713,8 @@
         "test/unit/hub/hub_db_sync/barriers/bridge_policy_timeout_message.test.js": "0c5504ff31a9de9c",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
+        "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
+        "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/barriers_and_watchdog.test.js": "df782ac6be187400",
@@ -17661,9 +17729,9 @@
         "test/unit/hub/hub_db_sync/hub_db_sync.test/own_rollback_generation_wiring.test.js": "ed8c2bd1cc10406b",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/price_and_oracle_upgrades.test.js": "a3a9680a2521091d",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/resync_close_repages.test.js": "08779979a717f622",
-        "test/unit/hub/hub_db_sync/hub_db_sync.test/retraction_guards.test.js": "e5cd1cda0fbb8e49",
+        "test/unit/hub/hub_db_sync/hub_db_sync.test/retraction_guards.test.js": "bdf7d418cf196406",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/rowless_snapshot_page.test.js": "db68fb7aaa7e576a",
-        "test/unit/hub/hub_db_sync/hub_db_sync.test/signed_retractions.test.js": "410c1a526adef6ac",
+        "test/unit/hub/hub_db_sync/hub_db_sync.test/signed_retractions.test.js": "09cb76a93cf6d56e",
         "test/unit/hub/hub_db_sync/hub_db_sync_apply_failure_watermark.test.js": "a696a1a3bf2e3e82",
         "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test.js": "db5f0c16a6ea1616",
         "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test/status_and_grace.test.js": "1b71f6771e1b4730",
@@ -17855,6 +17923,7 @@
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
+        "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "ac93d3fca252ee43",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
@@ -17910,6 +17979,7 @@
         "test/unit/rollback/archive_reset_predicate.test.js": "dc2dd859a265cfae",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/db_is_reorg_halted.test.js": "f7df01ef630b4c84",
+        "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
         "test/unit/rollback/reorg_catchup_cursor.test.js": "694d08dca6dd0abb",
         "test/unit/rollback/reorg_resume_cursor_hole.test.js": "93e45958dfe95026",
         "test/unit/rollback/rollback.test.js": "147635c74f2bf70e",

@@ -74,7 +74,7 @@ function signedEvent(sigs, overrides) {
 // RetractionConsensus.test.js: a signature minted over the literal must verify
 // against this module's independent rebuild, proving producer/consumer parity.
 // ---------------------------------------------------------------------------
-describe('HubDbSync._applyRetraction signed retractions @regression @tier1', function () {
+describe('HubDbSync applyRetraction signed retractions @regression @tier1', function () {
     it('REFUSES an unsigned quorum-class retraction once the local snapshot era passes the gate', async function () {
         const s = makeSigner();
         const { sync, deletes } = makeSigned({ snapRows: [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }] });
@@ -133,7 +133,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
     });
 });
 
-describe('HubDbSync._applyRetraction signed retractions @regression @tier1', function () {
+describe('HubDbSync applyRetraction signed retractions @regression @tier1', function () {
     it('REFUSES a signed set whose snapshot_block is itself below the gate era (no sub-gate minting)', async function () {
         const s = makeSigner();
         // mainnet threshold 963000: local high-water past it, but the event claims an old era
@@ -189,7 +189,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
     });
 });
 
-describe('HubDbSync._applyRetraction signed retractions @regression @tier1', function () {
+describe('HubDbSync applyRetraction signed retractions @regression @tier1', function () {
     it('still counts a duplicated pubkey ONCE when both entries verify (dedupe intact)', async function () {
         const signers = [makeSigner(), makeSigner(), makeSigner(), makeSigner()];
         const snapRows = signers.map((s, i) => ({ signing_pubkey: s.pubkey, amount: '100', source: 'src' + i }));

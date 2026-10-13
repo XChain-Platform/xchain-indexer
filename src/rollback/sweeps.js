@@ -148,7 +148,7 @@ module.exports = {
     // to the pairs this rollback collected (`markets`), each is dropped only if NO surviving
     // orders/order_matches row references it in either orientation. markets is unhashed and
     // snapshot-replicated (no consensus reader), so this is a fresh-replay parity fix.
-    // COALESCE on the probes: the pair ids come from `markets`, where a tickerless
+    // NULL-aware probes: the pair ids come from `markets`, where a tickerless
     // side is 0, while orders/order_matches store NULL for it. Comparing the two
     // directly found no survivor for any token/native pair, so the delete below
     // dropped live markets on every reorg that touched one.
