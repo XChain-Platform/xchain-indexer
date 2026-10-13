@@ -385,12 +385,12 @@ describe('armed_map/manifest: collectRows', function () {
 });
 
 describe('armed_map/manifest: the registry part files', function () {
-    it('every row part file writes addGate() calls at column zero and holds at most 405 lines', function () {
+    it('every row part file writes addGate() calls at column zero and holds at most 400 lines', function () {
         const parts = fs.readdirSync(PARTS).filter((f) => /^(shared_rows_\d+|gates_\d+|gates_flag_times)\.js$/.test(f)).sort();
         assert.ok(parts.length >= 8, parts.join(','));
         for (const f of parts) {
             const text = fs.readFileSync(path.join(PARTS, f), 'utf8');
-            assert.ok(text.split('\n').length <= 406, f + ' is over 405 lines');
+            assert.ok(text.split('\n').length <= 401, f + ' is over 400 lines');
             assert.ok(/^addGate\('/m.test(text), f + ' registers nothing');
             assert.ok(!/^[ \t]+addGate\(/m.test(text), f + ' indents an addGate call');
         }
