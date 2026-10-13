@@ -28,6 +28,9 @@ const anchorRewardDerive = require('../consensus/anchor_reward_derive.js');
 const listShareSettle    = require('../consensus/list_share_settle.js');
 const bridgeSettle       = require('../consensus/bridge_settle.js');
 const rollcallClose      = require('../consensus/rollcall_close.js');
+const gateRegistry       = require('../consensus/gate_registry.js');
+const { prelaunchAdmits } = require('../consensus/gates/mainnet_launch_gate.js');
+const { admittedTransactions } = require('./block_admission.js');
 
 module.exports = {
 
@@ -65,8 +68,17 @@ module.exports = {
         // with no matured rotation. See utility.processContractDelegationMaterializations.
         await this.util.processContractDelegationMaterializations(this.actions, this.indexerDb, blockToParse);
 
-        // Loop through any block transactions and process them
-        for(const tx of blockTransactions)
+        // Mainnet launch gate: a transaction prelaunchAdmits refuses is skipped before
+        // processTransaction, so no address, tx-hash, tx index or action row is written for it.
+        // Every other network, and any block at or after the launch instant, admits all.
+        const network = this.config['NETWORK'];
+        const admitted = admittedTransactions(blockTransactions, (input) => prelaunchAdmits(input, {
+            launchTime:  gateRegistry.get('mainnet_launch_activation.MAINNET_LAUNCH_ACTIVATION')[network],
+            seedSources: gateRegistry.get('prelaunch_seed_sources.PRELAUNCH_SEED_SOURCES')
+        }), { network, coin: this.config['COIN'], blockTime });
+
+        // Loop through the admitted block transactions and process them
+        for(const tx of admitted)
             await this.actions.processTransaction(tx);
     },
 
