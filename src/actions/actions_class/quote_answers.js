@@ -72,6 +72,7 @@ function exemptFeeQuote(base, action){
         xchainFee:         '0.00000000',
         requiredFeeNative: '0.00000000',
         requiredFeeSats:   0,
+        requiredFeeSatsExact: '0',
         note:              action + ' carries no protocol fee (settlement/lifecycle action); no native fee output required'
     });
 }

@@ -27,7 +27,7 @@ const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_a
 function zeroFeeQuote(base){
     return Object.assign(base, {
         valid: true, error: null, oracleRound: 0,
-        requiredFeeNative: '0.00000000', requiredFeeSats: 0,
+        requiredFeeNative: '0.00000000', requiredFeeSats: 0, requiredFeeSatsExact: '0',
         expectedNative: '0.00000000', minAcceptable: '0.00000000', maxAcceptable: '0.00000000'
     });
 }
@@ -91,7 +91,8 @@ module.exports = {
         // Recommended output (what the client should pay). Satoshi rounding is dwarfed by the
         // tolerance band, so plain 8-dp formatting is safe (only under-MIN risks forfeiture).
         let requiredFeeNative = this.util.bcformat(band.expectedNative, 8);
-        let requiredFeeSats   = Number(this.util.bcformat(this.util.bcmul(band.expectedNative, 100000000, 0), 0));
+        let requiredFeeSatsExact = this.util.bcformat(this.util.bcmul(band.expectedNative, 100000000, 0), 0);
+        let requiredFeeSats   = Number(requiredFeeSatsExact);
 
         let { valid, error } = judgeFeeOutput(this.util, feeOutputSats, band);
 
@@ -105,7 +106,8 @@ module.exports = {
             minAcceptable:     this.util.bcformat(band.minAcceptable, 8),
             maxAcceptable:     this.util.bcformat(band.maxAcceptable, 8),
             requiredFeeNative: requiredFeeNative,
-            requiredFeeSats:   requiredFeeSats
+            requiredFeeSats:   requiredFeeSats,
+            requiredFeeSatsExact: requiredFeeSatsExact
         });
     },
 
