@@ -132,6 +132,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'list_head_follows_edit_chain',
     'callback_compensation_activation',
     'vote_callback_binding_activation',
+    'contract_slash_active_first_activation',
     'order_swap_payout_policy_activation',
     'issue_policy_list_detach',
     'archive_match_count_activation',
