@@ -5199,6 +5199,16 @@
       "Send handler: resolved tick totals gate off @regression @tier1 requires a handoff after identical spellings consolidate",
       "Send handler: resolved tick totals gate off @regression @tier1 resolves a lowercase spelling to the gated tick"
     ],
+    "56bc584145fa20ec": [
+      "hub-schema-version HUB_SCHEMA_VERSION is a positive safe integer",
+      "hub-schema-version exports exactly HUB_SCHEMA_VERSION and nothing else",
+      "hub-schema-version fail-closed version-mismatch contract (mirrors hub_db_sync gating) does equal itself, so a hub genuinely running the same schema is accepted",
+      "hub-schema-version fail-closed version-mismatch contract (mirrors hub_db_sync gating) does not equal a plausible-but-wrong next version",
+      "hub-schema-version fail-closed version-mismatch contract (mirrors hub_db_sync gating) does not equal an arbitrary mismatched wire value (mirrors the 999999 fixture)",
+      "hub-schema-version fail-closed version-mismatch contract (mirrors hub_db_sync gating) treats a null/undefined incoming version as \"no claim\", not a match",
+      "hub-schema-version is a stable primitive across re-require (frozen constant, no lazy init)",
+      "hub-schema-version: the v10 mirror contract is v10, so a v9 hub stream is refused and a v9 reader refuses this one"
+    ],
     "56d2189dafc1f3bf": [
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 a BATCH does NOT bound EXECUTE, so two of them really do reach the handler",
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 batch.js stamps each subcommand its own 0-based BATCH_POSITION",
@@ -9565,16 +9575,6 @@
       "the admission map rides the on-chain price wire one slot per round (rows 17 and 26) the on-chain batch action, driven through the real parser below the activation there is no slot: a trailing field still INVALIDATES the batch",
       "the admission map rides the on-chain price wire one slot per round (rows 17 and 26) the on-chain batch action, driven through the real parser the canonical uses legacy bytes in both directions of the version seam"
     ],
-    "90df55798af0a74b": [
-      "hub-schema-version HUB_SCHEMA_VERSION is a positive safe integer",
-      "hub-schema-version exports exactly HUB_SCHEMA_VERSION and nothing else",
-      "hub-schema-version fail-closed version-mismatch contract (mirrors hub_db_sync gating) does equal itself, so a hub genuinely running the same schema is accepted",
-      "hub-schema-version fail-closed version-mismatch contract (mirrors hub_db_sync gating) does not equal a plausible-but-wrong next version",
-      "hub-schema-version fail-closed version-mismatch contract (mirrors hub_db_sync gating) does not equal an arbitrary mismatched wire value (mirrors the 999999 fixture)",
-      "hub-schema-version fail-closed version-mismatch contract (mirrors hub_db_sync gating) treats a null/undefined incoming version as \"no claim\", not a match",
-      "hub-schema-version is a stable primitive across re-require (frozen constant, no lazy init)",
-      "hub-schema-version: the v9 list metadata mirror shape is v9, so a v8 hub stream is refused and a v8 reader refuses this one"
-    ],
     "910e33d9591666d2": [
       "list share apply metadata wiring keeps today's create leg and skips metadata reads below the gate",
       "list share apply metadata wiring keeps today's create leg and skips metadata reads without a reader",
@@ -10814,6 +10814,15 @@
     "9ea42ee3d549b330": [
       "assignActionAddressIds: pre-handler-error skip (#4888) @regression @tier1 does NOT intern any id when the action was rejected before the handler",
       "assignActionAddressIds: pre-handler-error skip (#4888) @regression @tier1 interns the fresh destination id when the action has NO pre-handler error"
+    ],
+    "9ed5ca24036c8305": [
+      "shared-list table contracts @regression @tier1 baselines only when both shared-list tables are present",
+      "shared-list table contracts @regression @tier1 classifies list snapshot admission heights as indexer mirror columns",
+      "shared-list table contracts @regression @tier1 keeps both migration CREATE blocks byte-consistent with fresh-build SQL",
+      "shared-list table contracts @regression @tier1 pins the append-only list_snapshots lifecycle row",
+      "shared-list table contracts @regression @tier1 pins the local list_share_mirrors lifecycle row",
+      "shared-list table contracts @regression @tier1 pins the shared-list mirror contract to hub schema version 10",
+      "shared-list table contracts @regression @tier1 registers the fail-closed startup assertion"
     ],
     "9edb73492cfca621": [
       "archive-head canonical pick fold gate binds the embedded author floor in the installed chunk read",
@@ -17807,7 +17816,7 @@
         "test/unit/hub/hub_push_queue.test/fanout_delivery.test.js": "42ad51cf8687bdd1",
         "test/unit/hub/hub_push_queue.test/live_delivery_fanout.test.js": "1976f46663d49963",
         "test/unit/hub/hub_push_queue.test/selector_retry.test.js": "194efb88500e20fc",
-        "test/unit/hub/hub_schema_version.test.js": "90df55798af0a74b",
+        "test/unit/hub/hub_schema_version.test.js": "56bc584145fa20ec",
         "test/unit/hub/oracle_sync_barrier_grace.test.js": "bc90c2ca64f06fcb",
         "test/unit/hub/pushvalidatorrewards_retired.test.js": "81e3a88cf8ac262a",
         "test/unit/hub/rollback_block_key_coverage.test.js": "f83b44a0732adc69",
@@ -17830,7 +17839,7 @@
         "test/unit/list_share/list_share_parts.test.js": "5522d1974ebdd47a",
         "test/unit/list_share/list_share_screen.test.js": "ae201d4dab2d511d",
         "test/unit/list_share/list_share_snapshot_id.test.js": "d54d063b8fd97bc5",
-        "test/unit/list_share/list_share_tables.test.js": "88d6102dd7170497",
+        "test/unit/list_share/list_share_tables.test.js": "9ed5ca24036c8305",
         "test/unit/list_share/list_share_ticker_fixture.test.js": "8cd03f55d50b185f",
         "test/unit/list_share/parts/list_share_apply_harness.test.js": "0c9c710c5df0a0a1",
         "test/unit/list_share/parts/list_share_canonical_meta.test.js": "8731dae92a6e667d",
