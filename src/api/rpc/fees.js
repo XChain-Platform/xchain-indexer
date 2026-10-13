@@ -134,13 +134,15 @@ function oracleFeeQuoteRpc({ indexer }){
                 if(!quote.valid)
                     return { valid: false, error: quote.error };
                 let native = indexer.util.bcformat(quote.expectedFee, 8);
+                let satsExact = indexer.util.bcformat(
+                                    indexer.util.bcmul(quote.expectedFee, '100000000', 0), 0);
                 return {
                     valid:             true,
                     oracleAddress:     oracleAddress,
                     blockTime:         ts,
                     requiredFeeNative: native,
-                    requiredFeeSats:   Number(indexer.util.bcformat(
-                                          indexer.util.bcmul(quote.expectedFee, '100000000', 0), 0)),
+                    requiredFeeSats:   Number(satsExact),
+                    requiredFeeSatsExact: satsExact,
                     belowDust:         !!quote.belowDust,
                     note:              quote.belowDust
                         ? 'fee is below the dust threshold; no output required'
