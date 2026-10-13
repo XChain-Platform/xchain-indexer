@@ -34,6 +34,8 @@ const REGISTRY_ONLY = new Set(REGISTRY_ONLY_STEMS.map(keyOf));
 
 // Gate rows the table cannot compare, and why.
 const SKIPPED = {
+    'mainnet_launch_activation.MAINNET_LAUNCH_ACTIVATION':
+        'registry-only time row with no predicate: admitsPrelaunch() takes launchActive from its caller, and testnet and regtest never consult it',
     'attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION':
         'no boolean predicate: widenSlots(atBlock, requestBlock, deadlineBlock, network) returns a slot count',
     'train_activation.TRAIN_ACTIVATION':
