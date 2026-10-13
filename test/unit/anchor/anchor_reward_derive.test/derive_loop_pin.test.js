@@ -153,7 +153,7 @@ describe('deriveAnchorRewards per-row mint loop, pinned against the mint_row wir
     });
 });
 
-describe('mintProvenRow hands the legacy pin gate to proveMined as legacyDropped (XC-5138) @regression @tier1', function () {
+describe('mintProvenRow hands the legacy pin gate to proveMined as legacyDropped @regression @tier1', function () {
     const row = {
         reward_type: 'anchor_archive', round_reference: 5, snapshot_block: 5,
         publisher: 'aa'.repeat(32), network: 'regtest', doge_anchor_txid: 'a'.repeat(64)

@@ -292,7 +292,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
     });
 });
 
-describe('AnchorProofClient legacyDropped (XC-5138) @regression @tier2', () => {
+describe('AnchorProofClient legacyDropped @regression @tier2', () => {
     it('lets the pre-restart byte 6 prove an archive reward unless legacyDropped is exactly true', async function () {
         const c = client();
         c.fetch = async () => ({ exists: true, anchors: [anchor({ version: 6 })] });
