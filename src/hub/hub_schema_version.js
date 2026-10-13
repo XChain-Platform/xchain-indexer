@@ -113,6 +113,11 @@
 // v9 ROLL: the v8 order stands. The hub rolls FIRST and stamps 9, then every
 // indexer and the explorer roll back to back behind it. The whole roll completes
 // BELOW every network's LIST_META_ACTIVATION height.
-const HUB_SCHEMA_VERSION = 9;
+//
+// v10: the hub mirror contract moves to schema version 10. Strict equality still
+// applies in both directions, so a v9 reader must reject the v10 stream and a v10
+// reader must reject a v9 hub. The hub rolls FIRST and stamps 10, then every
+// indexer and the explorer follow back to back, as for v8 and v9.
+const HUB_SCHEMA_VERSION = 10;
 
 module.exports = { HUB_SCHEMA_VERSION };
