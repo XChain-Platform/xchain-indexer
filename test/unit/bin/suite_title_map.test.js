@@ -135,6 +135,25 @@ function registerCompareFileTests(){
 function registerCompareTests(){
     registerCompareTitleTests();
     registerCompareFileTests();
+
+    it('reports a collection error instead of claiming the script was removed', function(){
+        const pin = {
+            titleSets: { old: ['suite title'] },
+            scripts: { test: { files: { 'test/example.test.js': 'old' } } },
+        };
+        const fresh = {
+            titleSets: {},
+            scripts: { test: { error: 'spawn mocha ENOENT' } },
+        };
+
+        assert.deepStrictEqual(compare(pin, fresh, {}), [
+            {
+                script: 'test',
+                kind: 'collection_error',
+                detail: 'spawn mocha ENOENT',
+            },
+        ]);
+    });
 }
 
 function registerExpandTests(){
