@@ -137,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
+      "hash": "54e0b58f9bb3445f186483e661b416a5a9be7ec887018408322ec22103b3c1cb",
       "twins": [],
       "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
@@ -2104,6 +2104,13 @@
       "from": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
       "to": "7a99b4caa82fe705870a3c7d9dc1faeb4def1da1306e615bbfdaf850ba33947b",
       "reason": "Dropped the unused activeAt and resolveMirrorAdmissionRegtest imports and reworded two rejected comments",
+      "date": "2026-10-13"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
+      "to": "54e0b58f9bb3445f186483e661b416a5a9be7ec887018408322ec22103b3c1cb",
+      "reason": "XC-5108: five changes_5 rows export named MAINNET and TESTNET flag_times constants",
       "date": "2026-10-13"
     }
   ]

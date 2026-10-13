@@ -108,3 +108,23 @@ describe('flag-day placeholder guard @regression @tier1', function () {
     });
 });
 
+
+describe('flag-day placeholder guard @regression @tier1', function () {
+    describe('changes_5 rows carry named flag_times constants', function () {
+        const NAMES = ['EXACT_INTEGER_WIRE_FIELDS', 'SLASH_XANCPUB_PUBLISHER_PAIR', 'STAKE_SNAPSHOT_SLASH_WINDOW',
+            'DELEGATION_ROTATE_IN_WINDOW', 'SLASH_ATTEST_MULTIROUND_EXEMPT'];
+        it('exports an unarmed mainnet and the shared testnet instant for each, and the table rows read them', function () {
+            const entry = require(path.join(SRC, 'protocol_changes.js'));
+            const changes5 = require(path.join(SRC, 'protocol_changes', 'changes_5.js'));
+            for (const n of NAMES) {
+                assert.strictEqual(entry[n + '_MAINNET_TIME'], entry.UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME, n + ' mainnet must stay unarmed');
+                assert.strictEqual(entry[n + '_TESTNET_TIME'], 1791804379, n + ' testnet instant drifted');
+                const row = changes5.find((r) => r[0] === n);
+                assert.ok(row, n + ' row missing');
+                assert.strictEqual(row[2], entry[n + '_MAINNET_TIME']);
+                assert.strictEqual(row[3], entry[n + '_TESTNET_TIME']);
+                assert.strictEqual(entry.get('protocol_changes.' + n + '_TESTNET_TIME'), 1791804379);
+            }
+        });
+    });
+});
