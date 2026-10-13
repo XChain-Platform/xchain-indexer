@@ -55,7 +55,9 @@ describe('legacy_reward_pins', function(){
             { reward_type: 'a', round_reference: 'b|c', snapshot_block: 1, publisher: 'p', txid: 't' }
         ]);
         assert.strictEqual(pins.isPinned(
-            { reward_type: 'a|b', round_reference: 'c', snapshot_block: 1, publisher: 'p', txid: 't' }), true);
+            { reward_type: 'a|b', round_reference: 'c', snapshot_block: 1, publisher: 'p', txid: 't' }), false);
+        assert.strictEqual(pins.isPinned(
+            { reward_type: 'a', round_reference: 'b|c', snapshot_block: 1, publisher: 'p', txid: 't' }), true);
     });
 
     it('supports the one-shot helper and an empty list', function(){

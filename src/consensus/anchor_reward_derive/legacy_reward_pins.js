@@ -21,7 +21,8 @@ function tupleKey(tuple){
     if(tuple === null || typeof tuple !== 'object'){ return null; }
     let parts = [tuple.reward_type, tuple.round_reference, tuple.snapshot_block, tuple.publisher, tuple.txid];
     if(parts.some((p) => p === undefined || p === null || p === '')){ return null; }
-    return parts.map((p) => String(p)).join('|');
+    // JSON encoding quotes and escapes each field, so no field value can shift a boundary.
+    return JSON.stringify(parts.map((p) => String(p)));
 }
 
 // Reads the default pin file. A missing file means no pins.
