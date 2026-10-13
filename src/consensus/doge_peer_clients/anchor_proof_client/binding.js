@@ -50,10 +50,10 @@ const ATTESTED_VERSIONS = [0, 1, 3, 4, 5, 6, 7];
 // The per-chain family is gone with the per-chain wires: those rewards were attested before
 // the version restart, are already recorded, and are never re-derived.
 //
-// Each family also admits its PRE-RESTART wire byte. The restart renumbered the same two
-// shapes rather than defining new ones - anchor.js's own dispatch reads wire byte 6
-// through the v1 archive branch and 7 through the v0 bundle branch - but a pre-restart
-// anchor ROW keeps the byte it was mined with, so a pre-restart-attested reward maturing
+// Each family also admits its PRE-RESTART wire byte. The parser table in
+// src/actions/anchor/index.js holds only versions 0 to 3, so bytes 6 and 7 never parse as
+// valid anchors in either era; the alias exists because a pre-restart anchor ROW keeps
+// the byte it was mined with, so a pre-restart-attested reward maturing
 // after the restart must find its anchor under the legacy byte or it can never be proven
 // (the BTC testnet halt at 150455/150456). The exclusivity the map exists for survives the
 // alias: 6 admits only into archive and 7 only into bundle, so a bundle section still
