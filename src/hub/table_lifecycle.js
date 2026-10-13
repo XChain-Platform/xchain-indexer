@@ -176,19 +176,21 @@ const ORPHAN_SWEEPS = [
 //      than detect. Both keep the convergence channel they already have (the
 //      snapshot upsert; ClientSync.reconcileDispensers' periodic replace).
 //
-//   2. IN-PLACE MUTATED tables: exactly the tables declaring the 'state_hash'
-//      class above. A row of theirs written in block N is edited again in a
+//   2. IN-PLACE MUTATED tables (exactly the tables declaring the 'state_hash'
+//      class above) are NOT excluded whole; only their edited columns are, via
+//      CONTENT_PARITY_IN_PLACE_COLUMNS. The reasoning below explains why those
+//      columns cannot be windowed. A row of theirs written in block N is edited again in a
 //      later block M, so "the content of blocks [a..b]" is not a stable
 //      quantity: a source one block ahead of the follower legitimately carries
 //      the later edit inside the same window and would read as a divergence.
-//      The whole table leaves the window, but the halting state_hash fourth hash
+//      The edited columns leave the preimage, and the halting state_hash fourth hash
 //      commits only the columns its section reads (tokens: tick and supply;
-//      attests: the v0 request_status and the gated v5 batch-head status), so
-//      window parity no longer checks the rest of these rows. The tokens columns
+//      attests: the v0 request_status and the gated v5 batch-head status), while
+//      window parity checks the remaining append-only columns of these rows. The tokens columns
 //      ISSUE re-derives in place (token_refold.FOLD_COLUMNS: owner, locks,
 //      callback, lists, mint window, bridge) are in no consensus hash; only the
 //      opt-in, never-halting TOKEN_FOLD_PARITY_CHECK digest in xchain-sync
-//      watches them. Outside these two classes, only the in-place COLUMNS in
+//      watches them. Outside the carve-outs, only the in-place COLUMNS in
 //      CONTENT_PARITY_IN_PLACE_COLUMNS below leave the window.
 const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
     Object.freeze({ table: 'markets', dbType: 'indexer',
