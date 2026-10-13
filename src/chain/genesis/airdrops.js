@@ -161,9 +161,9 @@ module.exports = {
             buckets.push({ name: name, file: paths[i], hash: hash, amount: amount });
         }
         // Canonical order: action_index is a hashed consensus field, so bucket iteration
-        // order must not follow the env-var CSV order. Sort by UTF-16 code-unit order on the
-        // unique names; moving to UTF-8 byte order would reorder some non-BMP names.
-        buckets.sort((a, b) => a.name < b.name ? -1 : (a.name > b.name ? 1 : 0));
+        // order must not follow the env-var CSV order. Sort by UTF-8 byte order on the
+        // unique names (the house comparator), not UTF-16 code-unit order, which differs for non-BMP names.
+        buckets.sort((a, b) => Buffer.compare(Buffer.from(a.name, 'utf8'), Buffer.from(b.name, 'utf8')));
         return buckets;
     },
 

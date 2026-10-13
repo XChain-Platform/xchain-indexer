@@ -11588,6 +11588,13 @@
       "Indexer cross-node determinism baseline @regression @tier1 hash chain matches the committed baseline (no consensus drift)",
       "Indexer cross-node determinism baseline @regression @tier1 re-deriving the corpus from a clean DB yields the identical hash chain (determinism)"
     ],
+    "ac93d3fca252ee43": [
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 arms from genesis on a value of 0 instead of treating it as unarmed",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 arms regtest from the variable and leaves the other networks alone",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 fails closed to unarmed on a non-numeric value",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 ships unarmed on regtest when the variable is unset",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 stays unarmed on an empty value"
+    ],
     "ac9b353b9d7d511b": [
       "XBRIDGE action handler @regression @tier3 v4 burn (a bridged copy on the chain holding it) debits the copy and names the origin chain, with no bridged bit to set",
       "XBRIDGE action handler @regression @tier3 v4 burn (a bridged copy on the chain holding it) reaches the same row and the same verdict for a lower-case root",
@@ -12328,6 +12335,12 @@
       "capability_snapshots stake set memo @regression @tier2 re-derives when the local tip moves",
       "capability_snapshots stake set memo @regression @tier2 runs one aggregate for many rows of one snapshot",
       "capability_snapshots stake set memo @regression @tier2 shares one query across concurrent rows"
+    ],
+    "b968b2a96f3d5ffc": [
+      "HubDbSync chain-id purge retry @regression @tier2 keeps the purge pending when a DELETE emptys, and retries on a restated id",
+      "HubDbSync chain-id purge retry @regression @tier2 keeps the purge pending when a DELETE throws, and retries on a restated id",
+      "HubDbSync chain-id purge retry @regression @tier2 stays pending while the retry keeps failing",
+      "HubDbSync chain-id purge retry @regression @tier2 still owes the legacy-table purge on retry after a chain change"
     ],
     "b97d2027d5c02535": [
       "JSON-RPC fee family @regression @tier1 feequote, preflight, feeschedule and feequotedryrun delegate to the actions engine",
@@ -16105,30 +16118,6 @@
       "Anchor v3 fixture builder changes only WRAPPER_SECTION_INDEX for its raw override",
       "Anchor v3 fixture builder supports an archive-only cycle"
     ],
-    "f57a6581150904ce": [
-      "genesis airdrop pass accepts a fully-pinned bucket set on mainnet",
-      "genesis airdrop pass accepts a matching set-hash pin, case-insensitively",
-      "genesis airdrop pass catches a dropped bucket (set membership decides the synthetic tx hashes)",
-      "genesis airdrop pass catches a re-funded bucket whose snapshot bytes are unchanged (the amount was pinned nowhere)",
-      "genesis airdrop pass credits buckets in canonical name order regardless of configured path order",
-      "genesis airdrop pass credits holders pro-rata, in file order, via ISSUE format 2 with MINT_SUPPLY + TRANSFER_SUPPLY",
-      "genesis airdrop pass fails closed on a pinned-hash mismatch BEFORE any credit is injected",
-      "genesis airdrop pass fails closed on an all-zero snapshot (no positive quantities)",
-      "genesis airdrop pass fails closed on mainnet when any airdrop bucket lacks a sha256 pin",
-      "genesis airdrop pass fails closed on mainnet when the bucket set carries no set-hash pin",
-      "genesis airdrop pass fails closed when a bucket amount is missing or invalid",
-      "genesis airdrop pass fails closed when an armed bucket snapshot file is missing",
-      "genesis airdrop pass floors each credit at 8 decimals so a bucket never over-mints",
-      "genesis airdrop pass halts on a set-hash mismatch BEFORE any credit is injected",
-      "genesis airdrop pass halts when a set-hash is pinned but no buckets are armed (the disarmed half of the same fork)",
-      "genesis airdrop pass is disabled by default: no buckets, no credit actions",
-      "genesis airdrop pass keeps the ASCII bucket order unchanged",
-      "genesis airdrop pass leaves an unarmed, unpinned mainnet genesis alone (the airdrop stays disabled)",
-      "genesis airdrop pass orders bucket names by UTF-16 code unit, where it differs from UTF-8 byte order",
-      "genesis airdrop pass rejects two buckets sharing a basename (tx-hash namespace collision)",
-      "genesis airdrop pass sums duplicate addresses and skips junk quantities",
-      "genesis airdrop pass supports multiple buckets with independent amounts and skips zero-floor credits"
-    ],
     "f59780a5cacf7da9": [
       "hub mirror ready-frame ceilings for bridge_transfers and policy_snapshots @regression @tier1 bridge_transfers accepts a zero ceiling for an empty hub table",
       "hub mirror ready-frame ceilings for bridge_transfers and policy_snapshots @regression @tier1 bridge_transfers adopts the ceiling the ready frame advertises",
@@ -16716,6 +16705,30 @@
       "Order_Match action handler @regression @tier2 native coin routing via GET_TICK null is rejected as mis-paired orderInfo GET_TICK null but matchInfo GIVES a real token (not coin) \u2192 skipped, no obligation",
       "Order_Match action handler @regression @tier2 skips a native match whose reverse leg is a real token, not native coin (, flag ON)"
     ],
+    "fed4df525e9a9c09": [
+      "genesis airdrop pass accepts a fully-pinned bucket set on mainnet",
+      "genesis airdrop pass accepts a matching set-hash pin, case-insensitively",
+      "genesis airdrop pass catches a dropped bucket (set membership decides the synthetic tx hashes)",
+      "genesis airdrop pass catches a re-funded bucket whose snapshot bytes are unchanged (the amount was pinned nowhere)",
+      "genesis airdrop pass credits buckets in canonical name order regardless of configured path order",
+      "genesis airdrop pass credits holders pro-rata, in file order, via ISSUE format 2 with MINT_SUPPLY + TRANSFER_SUPPLY",
+      "genesis airdrop pass fails closed on a pinned-hash mismatch BEFORE any credit is injected",
+      "genesis airdrop pass fails closed on an all-zero snapshot (no positive quantities)",
+      "genesis airdrop pass fails closed on mainnet when any airdrop bucket lacks a sha256 pin",
+      "genesis airdrop pass fails closed on mainnet when the bucket set carries no set-hash pin",
+      "genesis airdrop pass fails closed when a bucket amount is missing or invalid",
+      "genesis airdrop pass fails closed when an armed bucket snapshot file is missing",
+      "genesis airdrop pass floors each credit at 8 decimals so a bucket never over-mints",
+      "genesis airdrop pass halts on a set-hash mismatch BEFORE any credit is injected",
+      "genesis airdrop pass halts when a set-hash is pinned but no buckets are armed (the disarmed half of the same fork)",
+      "genesis airdrop pass is disabled by default: no buckets, no credit actions",
+      "genesis airdrop pass keeps the ASCII bucket order unchanged",
+      "genesis airdrop pass leaves an unarmed, unpinned mainnet genesis alone (the airdrop stays disabled)",
+      "genesis airdrop pass orders bucket names by UTF-8 byte order, where it differs from UTF-16 code unit order",
+      "genesis airdrop pass rejects two buckets sharing a basename (tx-hash namespace collision)",
+      "genesis airdrop pass sums duplicate addresses and skips junk quantities",
+      "genesis airdrop pass supports multiple buckets with independent amounts and skips zero-floor credits"
+    ],
     "fef4c3341aec5110": [
       "Price v2 (PRICE batch) @regression @tier3 straddle rule (step 3) accepts the same batch entirely below the gate, and entirely at or above it",
       "Price v2 (PRICE batch) @regression @tier3 straddle rule (step 3) an UNARMED gate straddles nothing",
@@ -16802,8 +16815,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1276,
-      "titleCount": 13021,
+      "fileCount": 1278,
+      "titleCount": 13030,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17369,7 +17382,7 @@
         "test/unit/bridge/stake_escrow_conservation.test.js": "68d56660eb166f48",
         "test/unit/bridge/token_gate_coin_keyed.test.js": "261b3951229adbf1",
         "test/unit/chain/gas_seeder_chain_shape.test.js": "4263b1fd459a70bf",
-        "test/unit/chain/genesis_airdrop.test.js": "f57a6581150904ce",
+        "test/unit/chain/genesis_airdrop.test.js": "fed4df525e9a9c09",
         "test/unit/chain/genesis_bridge_replay_pin.test.js": "00d1072d93378562",
         "test/unit/chain/genesis_dump.test.js": "20d80303d433525a",
         "test/unit/chain/harness_vm_block_rhythm.test.js": "c126f106c7f18f5a",
@@ -17701,6 +17714,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
+        "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/barriers_and_watchdog.test.js": "df782ac6be187400",
@@ -17909,6 +17923,7 @@
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
+        "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "ac93d3fca252ee43",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
