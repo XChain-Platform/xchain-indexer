@@ -22,6 +22,7 @@
 
 const arKey = require('../../actions/anchor/anchor_reward_key.js');
 const { getLogger } = require('../../observability/index.js');
+const { isLegacyRewardPinned } = require('./legacy_reward_pins.js');
 
 // Thrown when a matured reward cannot be PROVEN either way at this block (no DOGE
 // visibility, DOGE unreachable, or the anchor is not yet buried deep enough). The block
@@ -36,9 +37,29 @@ class AnchorProofUnavailableError extends Error {
 // Prove one gated, re-verified row's DOGE anchor mined, then mint its reward. `m` carries
 // the BTC block being processed (blockIndex), the AnchorProofClient (proof, which may be
 // absent), the burial depth (minConfirmations) and the amount the reward family pays
-// (amount). Returns what createValidatorReward returned, or false when the proof is
+// (amount). The LEGACY_ANCHOR_REWARD_PIN gate is evaluated here at blockIndex through
+// `m.protocolChanges.isEnabled`; an explicit boolean `m.legacyAnchorRewardPin` overrides it.
+// With neither supplied the gate reads as off and the mint is unchanged. Returns what createValidatorReward returned, or false when the proof is
 // rejected; throws AnchorProofUnavailableError when it cannot be decided.
+async function legacyPinGateOn(m){
+    if(typeof m.legacyAnchorRewardPin === 'boolean'){ return m.legacyAnchorRewardPin; }
+    if(m.protocolChanges && typeof m.protocolChanges.isEnabled === 'function'){
+        return (await m.protocolChanges.isEnabled('LEGACY_ANCHOR_REWARD_PIN', Number(m.blockIndex))) === true;
+    }
+    return false;
+}
+
 async function mintProvenRow(indexerDb, row, m){
+    // LEGACY_ANCHOR_REWARD_PIN: a tuple pinned from the pre-restart chain is not minted again.
+    if(await legacyPinGateOn(m) && isLegacyRewardPinned({
+        reward_type: row.reward_type, round_reference: row.round_reference,
+        snapshot_block: row.snapshot_block, publisher: String(row.publisher).toLowerCase(),
+        txid: row.doge_anchor_txid
+    }, m.legacyRewardPins)){
+        getLogger().warn('anchor reward ' + row.reward_type + '/' + row.round_reference + ' publisher ' +
+                     String(row.publisher).toLowerCase() + ' is a LEGACY_ANCHOR_REWARD_PIN tuple; no reward derived');
+        return false;
+    }
     // The mirror says this reward's anchor was mined. Prove it against DOGE
     // ourselves before minting: the mirror is transport, and the hub that wrote the
     // row is exactly the party the reward pays. 'rejected' is chain-determined and
