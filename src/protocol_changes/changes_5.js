@@ -133,6 +133,11 @@ const CHANGES = [
     // A v3 archive head row carries no checkpoint_seq, so below the flag the watermark only
     // ever sees v1 heads. Judged by the block that carries the ANCHOR. Unarmed on every network.
     ['ARCHIVE_REPLAY_WRAPPER_WATERMARK', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
+
+    // LEGACY_ANCHOR_REWARD_PIN: below the flag the anchor reward mint ignores the legacy
+    // pin list. At or above it, a reward tuple pinned in legacy_reward_pins.json is not
+    // minted again. Judged by the BTC block that derives the reward. Unarmed on every network.
+    ['LEGACY_ANCHOR_REWARD_PIN', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
 ];
 
 module.exports = CHANGES;
