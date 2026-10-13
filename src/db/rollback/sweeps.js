@@ -90,21 +90,28 @@ module.exports = {
     },
 
     // Each collected pair with no surviving order or match in either orientation.
+    // A tickerless side is 0 in `markets` but NULL in orders/order_matches. Each side is
+    // matched as (col=? OR (col IS NULL AND ?=0)) so the indexed column stays bare and
+    // the give/get tick indexes remain usable (COALESCE around it forced a scan).
     async sweepOrphanedMarketPairs(db, markets){
+        const side = (col) => `(${col}=? OR (${col} IS NULL AND ?=0))`;
+        const pairSql = (alias) =>
+            `(${side(alias + '.give_tick_id')} AND ${side(alias + '.get_tick_id')})
+                       OR (${side(alias + '.give_tick_id')} AND ${side(alias + '.get_tick_id')})`;
         for(let pair of markets){
+            const t1 = pair.tick1_id, t2 = pair.tick2_id;
+            const probeArgs = [t1, t1, t2, t2, t2, t2, t1, t1];
             let survives = await db.doQuery(
                 `SELECT 1 FROM orders o
-                    WHERE (COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?)
-                       OR (COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?)
+                    WHERE ${pairSql('o')}
                     LIMIT 1`,
-                [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
+                probeArgs);
             if(survives.length === 0){
                 survives = await db.doQuery(
                     `SELECT 1 FROM order_matches om
-                        WHERE (COALESCE(om.give_tick_id,0)=? AND COALESCE(om.get_tick_id,0)=?)
-                           OR (COALESCE(om.give_tick_id,0)=? AND COALESCE(om.get_tick_id,0)=?)
+                        WHERE ${pairSql('om')}
                         LIMIT 1`,
-                    [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
+                    probeArgs);
             }
             if(survives.length === 0){
                 await db.doQuery(
