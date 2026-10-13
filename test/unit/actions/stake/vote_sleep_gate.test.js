@@ -100,11 +100,12 @@ describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', fun
             indexer.indexerDb.isActionAllowed.resolves(false); // SOURCE is sleeping
         });
 
-        it('v0 create → invalid, no poll row, no escrow', async function () {
+        it('v0 create → invalid, inert poll row only, no escrow', async function () {
             const data = baseData({ FORMAT: 0 });
             await handler.parse(CREATE_PARAMS, data, null);
             assert.strictEqual(data.STATUS, 'invalid: SOURCE (sleeping)');
-            assert.ok(indexer.indexerDb.createPoll.notCalled, 'no poll row for a sleeping creator');
+            assert.ok(indexer.indexerDb.createPoll.calledOnce, 'the refusal is persisted');
+            assert.deepStrictEqual(indexer.indexerDb.createPoll.firstCall.args[1], { inert: true });
             assert.ok(indexer.indexerDb.createEscrow.notCalled, 'no GAS moves while the address is frozen');
         });
 

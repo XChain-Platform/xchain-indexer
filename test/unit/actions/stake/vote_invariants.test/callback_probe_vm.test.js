@@ -103,7 +103,9 @@ function registerCallbackRejectionTests(){
         assert.ok(vm.probeReadManifest.calledOnce);
         assert.strictEqual(vm.probeReadManifest.firstCall.args[0],
             callbackProbeVm.buildListingProbeCode(code));
-        assert.ok(indexer.indexerDb.createPoll.notCalled);
+        // a refused create persists only an inert row, never the live poll
+        assert.ok(indexer.indexerDb.createPoll.calledOnce);
+        assert.deepStrictEqual(indexer.indexerDb.createPoll.firstCall.args[1], { inert: true });
     });
 
     it('refuses stored code over the cap without constructing the probe', async function(){
@@ -196,7 +198,8 @@ function registerGuardInertDryRunTests(){
         assert.strictEqual(vm.probeInstances.length, 0);
         assert.ok(vm.probeReadManifest.notCalled);
         assert.ok(actionsCtx.getVoteCallbackProbeVm.notCalled);
-        assert.ok(indexer.indexerDb.createPoll.notCalled);
+        assert.ok(indexer.indexerDb.createPoll.calledOnce);
+        assert.deepStrictEqual(indexer.indexerDb.createPoll.firstCall.args[1], { inert: true });
     });
 
     it('keeps the real verdict for an inactive callback contract', async function(){
