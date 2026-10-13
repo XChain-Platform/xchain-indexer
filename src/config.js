@@ -247,6 +247,9 @@ function applyControllerPolicy(config){
     // returned payoutLegs sum to <= this at create (else the listing is denied); applyProceedsSplit
     // re-checks conservation at match. A contract's manifest may declare a TIGHTER maxTakeBps
     // (Phase E); this is the absolute cap. 10000 = conservation is the only binding constraint.
+    // The cap is enforced at create only: at match, stored payout legs are applied as recorded
+    // (no re-check against the current global cap), so a later change to this value never alters
+    // the split of an already-listed order or swap. applyProceedsSplit still conserves proceeds.
     config['CONTROLLER_MAX_TAKE_BPS'] = 10000;
 }
 
