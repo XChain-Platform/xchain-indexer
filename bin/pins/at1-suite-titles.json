@@ -165,6 +165,12 @@
       "protocol_changes CROSS_CHAIN_OFFER_LIST_EXPORT row @regression @tier1 registers a frozen height map that is unarmed on launched networks",
       "protocol_changes CROSS_CHAIN_OFFER_LIST_EXPORT row @regression @tier1 stays inactive below the sentinel and is active from regtest genesis"
     ],
+    "03bd4db7b3716430": [
+      "mainnet launch skip in the opening passes admits every transaction at the launch instant",
+      "mainnet launch skip in the opening passes admits every transaction on open networks before launch",
+      "mainnet launch skip in the opening passes skips refused mainnet transactions before launch and keeps validator wire actions",
+      "mainnet launch skip in the opening passes still runs the opening passes when every transaction is refused"
+    ],
     "03ce4f3a725593dd": [
       "ISSUE bridged copy policy detach @regression @tier1 detaches both policy lists on an injected copy update",
       "ISSUE bridged copy policy detach @regression @tier1 detaches one policy list and inherits the other",
@@ -17063,8 +17069,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1298,
-      "titleCount": 13151,
+      "fileCount": 1299,
+      "titleCount": 13155,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17074,6 +17080,7 @@
         "test/security/http_surface_security.test.js": "72ce3f8a125828f4",
         "test/unit/XChainIndexer/block_admission.test.js": "700df125e4858874",
         "test/unit/XChainIndexer/hub_config_poll.test.js": "3a74a7a67892c521",
+        "test/unit/XChainIndexer/mainnet_launch_skip.test.js": "03bd4db7b3716430",
         "test/unit/XChainIndexer/opening_passes.test.js": "0b0450682f6877d6",
         "test/unit/action_dispatch/action_formats.test.js": "66540a53e698b285",
         "test/unit/action_dispatch/action_index_names_manifest.test.js": "da3771c61bf790fc",
