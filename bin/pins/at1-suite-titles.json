@@ -442,6 +442,20 @@
       "bin/consensus-identity.js --compare against the committed pin and the arming env refuses a lever the pin did not arm, instead of reporting rules drift",
       "bin/consensus-identity.js --compare against the committed pin and the arming env refuses half of the pin's armed pair rather than falling back to the bare block"
     ],
+    "09cb76a93cf6d56e": [
+      "HubDbSync applyRetraction signed retractions @regression @tier1 APPLIES a correctly signed retraction (1-of-1 snapshot), proving canonical parity with the hub",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 REFUSES a signed set whose snapshot_block is itself below the gate era (no sub-gate minting)",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 REFUSES a signer outside the mirrored snapshot",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 REFUSES an unsigned quorum-class retraction once the local snapshot era passes the gate",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 REFUSES when no snapshot rows exist at the claimed snapshot_block",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 REFUSES when the wire generation is tampered after signing (fence is signature-bound)",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 an invalid signature alone still fails the quorum (verify gate is not weakened)",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 counts a snapshot member whose VALID signature is ordered AFTER a garbage one (verify-then-mark)",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 enforces the weighted 2/3 bar: 2 of 4 equal sources refused, 3 of 4 applied",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 legacy tier: pre-bootstrap mirror (no snapshot rows at all) applies unsigned events",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 legacy tier: without a wired network the fences stand alone and unsigned events apply",
+      "HubDbSync applyRetraction signed retractions @regression @tier1 still counts a duplicated pubkey ONCE when both entries verify (dedupe intact)"
+    ],
     "09dab1f1abfabefd": [
       "XChainIndexer hub config overlay parseIntMin0 (BLOCK_CHECK_INTERVAL / BLOCK_PROCESS_TIMEOUT) falls back to the default for a negative value",
       "XChainIndexer hub config overlay parseIntMin0 (BLOCK_CHECK_INTERVAL / BLOCK_PROCESS_TIMEOUT) falls back to the default for a non-numeric value",
@@ -12308,6 +12322,13 @@
       "Deferred chunked DEPLOY assembly @regression @tier2 R2: the assembler lands pays the base fee via a native output at the assembler, recording mode 1",
       "Deferred chunked DEPLOY assembly @regression @tier2 R2: the assembler lands rejects a second assembler while one is pending, and charges it nothing"
     ],
+    "b94434c87d719100": [
+      "capability_snapshots stake set memo @regression @tier2 does not pin a failed read",
+      "capability_snapshots stake set memo @regression @tier2 re-derives for a different snapshot block",
+      "capability_snapshots stake set memo @regression @tier2 re-derives when the local tip moves",
+      "capability_snapshots stake set memo @regression @tier2 runs one aggregate for many rows of one snapshot",
+      "capability_snapshots stake set memo @regression @tier2 shares one query across concurrent rows"
+    ],
     "b97d2027d5c02535": [
       "JSON-RPC fee family @regression @tier1 feequote, preflight, feeschedule and feequotedryrun delegate to the actions engine",
       "JSON-RPC fee family @regression @tier1 reports engine throws generically, except the dry-run which surfaces the message",
@@ -12672,6 +12693,25 @@
       "GAS-tick open mint @regression @security subtokens are unaffected mints XCHAIN.FOO normally (a subtoken is not the GAS tick)",
       "GAS-tick open mint @regression @security supply bounds still enforced rejects a mint that would exceed MAX_SUPPLY",
       "GAS-tick open mint @regression @security supply bounds still enforced rejects a per-tx amount above MAX_MINT"
+    ],
+    "bdf7d418cf196406": [
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 REFUSES an unfenced delete for cross_chain_calls",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 REFUSES an unfenced delete for cross_chain_matches",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 bounded delete for oracle_prices keys on action_index",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 bounded delete for price_snapshots when to_action_index present",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 gen-fenced PER-LEG delete for cross_chain_matches (a_/b_push_generation)",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 gen-fenced delete for cross_chain_calls adds push_generation <= ?",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 gen-fenced delete for price_snapshots adds push_generation <= ?",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 gen-fenced open-ended delete for oracle_prices (gen but no to_action_index)",
+      "HubDbSync applyRetraction closed-range parity @regression @tier3 open-ended delete for price_snapshots when no to_action_index",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 REFUSES an own-chain retraction at/above our rollback generation (forged reorg)",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 REFUSES an own-chain retraction when never rolled back (generation 0)",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 REFUSES an unfenced own-chain retraction even for non-quorum tables",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 accepts an own-chain retraction whose fence is below our rollback generation",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 fails CLOSED when the own-generation read throws",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 monotonicity is tracked per (table, source_chain), not globally",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 other-chain retractions skip the own-generation check but track monotonicity",
+      "HubDbSync applyRetraction receive-side guards @regression @tier1 without the hook (explorer vendored mirror) other-chain legacy behavior is unchanged"
     ],
     "be80fa39c6a19cdf": [
       "consensus-primitive conformance: activation predicate vectors @regression every group this repo runs is a non-empty list",
@@ -16762,8 +16802,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1275,
-      "titleCount": 13016,
+      "fileCount": 1276,
+      "titleCount": 13021,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17660,6 +17700,7 @@
         "test/unit/hub/hub_db_sync/barriers/bridge_policy_timeout_message.test.js": "0c5504ff31a9de9c",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
+        "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/barriers_and_watchdog.test.js": "df782ac6be187400",
@@ -17674,9 +17715,9 @@
         "test/unit/hub/hub_db_sync/hub_db_sync.test/own_rollback_generation_wiring.test.js": "ed8c2bd1cc10406b",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/price_and_oracle_upgrades.test.js": "a3a9680a2521091d",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/resync_close_repages.test.js": "08779979a717f622",
-        "test/unit/hub/hub_db_sync/hub_db_sync.test/retraction_guards.test.js": "e5cd1cda0fbb8e49",
+        "test/unit/hub/hub_db_sync/hub_db_sync.test/retraction_guards.test.js": "bdf7d418cf196406",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/rowless_snapshot_page.test.js": "db68fb7aaa7e576a",
-        "test/unit/hub/hub_db_sync/hub_db_sync.test/signed_retractions.test.js": "410c1a526adef6ac",
+        "test/unit/hub/hub_db_sync/hub_db_sync.test/signed_retractions.test.js": "09cb76a93cf6d56e",
         "test/unit/hub/hub_db_sync/hub_db_sync_apply_failure_watermark.test.js": "a696a1a3bf2e3e82",
         "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test.js": "db5f0c16a6ea1616",
         "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test/status_and_grace.test.js": "1b71f6771e1b4730",
