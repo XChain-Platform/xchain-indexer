@@ -220,11 +220,11 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
         });
 
         // The pre-restart era, in one place. The version restart renumbered the archive head
-        // 6 -> 1 and the bundle 7 -> 0 (anchor.js dispatch), so a pre-restart anchor row
-        // keeps its legacy wire byte while naming the same shape. A reward attested before
-        // the restart but maturing after it (BTC testnet 150456) must prove against that
-        // byte; the family exclusivity holds across eras; and the retired per-chain wires
-        // reject deterministically instead of deferring the block forever.
+        // 6 -> 1 and the bundle 7 -> 0, so a pre-restart anchor row keeps its legacy wire
+        // byte while naming the same shape. A reward attested before the restart but
+        // maturing after it (BTC testnet 150456) must prove against that byte; the family
+        // exclusivity holds across eras; and the retired per-chain wires reject
+        // deterministically instead of deferring the block forever.
         it('verifies a buried, tuple-matching pre-restart v6 archive head (the 150456 shape)', function () {
         assert.strictEqual(client().judge([anchor({ version: 6 })], expectation()), 'verified');
         });
