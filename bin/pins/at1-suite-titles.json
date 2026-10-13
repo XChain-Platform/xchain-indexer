@@ -851,6 +851,14 @@
       "SQL schema index parity (definition path vs ledger path) @regression sanity: the index baseline is neither empty nor stale (guard is not vacuous)",
       "SQL schema index parity (definition path vs ledger path) @regression sanity: the origin index anchor still differs from the live baseline (re-freeze guard is not vacuous)"
     ],
+    "11766bc999308929": [
+      "prelaunch seed sources admits a prelaunch transaction by network, launch, validator format or seed source",
+      "prelaunch seed sources admits only a pinned seed source",
+      "prelaunch seed sources fails closed on a malformed seed map",
+      "prelaunch seed sources fails closed on a malformed source or coin",
+      "prelaunch seed sources fails closed on a null seed map, missing options or a non-object input",
+      "prelaunch seed sources refuses a truthy non-true launch flag and a bad network"
+    ],
     "11f1e52cf591cb04": [
       "protocol_changes: amounts, price, and contracts regtest overlay @regression @tier1 leaves committed values in place when every variable is refused",
       "protocol_changes: amounts, price, and contracts regtest overlay @regression @tier1 leaves the four committed regtest values unchanged when all variables are unset",
@@ -3878,11 +3886,6 @@
       "actions/execute/nested_gas_sum: the bounded nested refund sum @regression @tier1 production call sites constructor_effects banks the capped refund on regtest and the plain sum on mainnet",
       "actions/execute/nested_gas_sum: the bounded nested refund sum @regression @tier1 production call sites run_vm banks the capped refund on regtest and the plain sum on mainnet",
       "actions/execute/nested_gas_sum: the bounded nested refund sum @regression @tier1 sums unbounded before the gate"
-    ],
-    "41ec5a617c238392": [
-      "prelaunch seed sources admits only a pinned seed source",
-      "prelaunch seed sources fails closed on a malformed seed map",
-      "prelaunch seed sources fails closed on a malformed source or coin"
     ],
     "4263b1fd459a70bf": [
       "gas seeder: chain-shaped preamble an unset INDEXER_COIN is BTC, the launcher default",
@@ -17048,7 +17051,7 @@
   "scripts": {
     "test": {
       "fileCount": 1296,
-      "titleCount": 13139,
+      "titleCount": 13142,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17694,7 +17697,7 @@
         "test/unit/consensus/gates/mirror_admission_margin_boundary.test.js": "5ad6c4b0c28cb058",
         "test/unit/consensus/gates/mirror_admission_margin_cross_repo.test.js": "ed6f0e05cd4ccaef",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
-        "test/unit/consensus/gates/prelaunch_seed_sources.test.js": "41ec5a617c238392",
+        "test/unit/consensus/gates/prelaunch_seed_sources.test.js": "11766bc999308929",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/list_rematch/plan.test.js": "15d8cc2e94c0564c",
         "test/unit/consensus/list_share/list_meta_hash.test.js": "50ed779f04dda399",
