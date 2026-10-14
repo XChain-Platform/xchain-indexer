@@ -27,6 +27,7 @@ const { assert, fs, path, Database, requireWithFreshConfig, DB_PATH, modeOf, BRI
 
 
 const crypto  = require('crypto');
+const { SQL_MODE_PROBE, pinnedSqlModeRows } = require('./helpers/migration_fixtures.js');
 const MIG_DIR = path.join(__dirname, '..', '..', '..', '..', 'src', 'sql', 'migrations');
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -41,6 +42,7 @@ const logged = [];
 const applied = [];
 const conn = {
     query: async function (sql, params) {
+        if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
         if (/GET_LOCK/i.test(sql))     return [{ l: 1 }];
         if (/RELEASE_LOCK/i.test(sql)) return [{}];
         if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {
@@ -178,6 +180,7 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
         const executed = [];
         const conn = {
             async query(sql, params) {
+                if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
                 if (/GET_LOCK/i.test(sql))                                         return [{ l: '1' }];
                 if (/RELEASE_LOCK/i.test(sql))                                     return [];
                 if (/CREATE TABLE (IF NOT EXISTS )?schema_migrations/i.test(sql))  return [];
@@ -292,6 +295,7 @@ describe("runMigrations() live-schema MODIFY guard @regression @tier1", function
         const applied = [];
         const conn = {
             async query(sql, params) {
+                if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
                 if (/GET_LOCK/i.test(sql))                                     return [{ l: 1 }];
                 if (/RELEASE_LOCK/i.test(sql))                                 return [];
                 if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));

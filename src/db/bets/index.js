@@ -21,8 +21,9 @@
 
 // The bets mixin is cut into parts by behaviour under bets/; this entry merges them
 // back into the one method set db/index.js installs, at the position those methods held here.
-const records  = require('./records.js');
-const listings = require('./listings.js');
+const records       = require('./records.js');
+const listings      = require('./listings.js');
+const terminalBatch = require('./terminal_batch.js');
 
 const BET_FEED_INFO_QUERY = `SELECT
                                 f.action_index,
@@ -218,6 +219,8 @@ module.exports = {
     },
 
     ...listings,
+
+    ...terminalBatch,
 
     // Feeds due to latch: `open` with DEADLINE reached, deadline ASC then
     // action_index ASC (the deterministic pass order), capped per block

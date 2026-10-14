@@ -27,6 +27,7 @@ const { assert, fs, path, Database, BRIDGE_TABLES_PROBE, bridgeTablesPresent,
 
 
 const crypto  = require('crypto');
+const { SQL_MODE_PROBE, pinnedSqlModeRows } = require('./helpers/migration_fixtures.js');
 const MIG_DIR = path.join(__dirname, '..', '..', '..', '..', 'src', 'sql', 'migrations');
 // The two legacy migrations that were renamed AND carry their own filename in
 // a HOW TO RUN comment: the rename edited that comment, the ledger rename heal carried
@@ -174,6 +175,7 @@ describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function 
         const logged  = [];
         const conn = {
             query: async function (sql, params) {
+                if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
                 if (/GET_LOCK/i.test(sql))     return [{ l: 1 }];
                 if (/RELEASE_LOCK/i.test(sql)) return [{}];
                 if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {

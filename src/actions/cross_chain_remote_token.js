@@ -22,6 +22,7 @@
 'use strict';
 
 const gateRegistry = require('../consensus/gate_registry');
+const { rethrowIfInfraFault } = require('../consensus/fault_guard.js');
 const { verifyCanonicalQuorum } = require('./cross_settle/quorum.js');
 
 const REMOTE_TOKEN_KEY = 'cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION';
@@ -80,6 +81,8 @@ async function remoteTokenAcceptError(handler, st){
         quorum = await verifyCanonicalQuorum(handler.indexerDb, remoteTokenCanonical(pinned),
             pinned.validator_signatures, pinned.snapshot_block, handler.config['NETWORK']);
     } catch(error){
+        // Halt on an infra fault (DB errno, executor code) so this node never commits a NO_PINNED its peers do not reach.
+        rethrowIfInfraFault(error);
         return NO_PINNED;
     }
     return quorum.met ? null : NO_PINNED;

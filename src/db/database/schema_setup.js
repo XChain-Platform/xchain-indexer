@@ -269,12 +269,16 @@ module.exports = {
         let columns = 0;
         let indexes = 0;
         let kinds   = 0;
+        let ordered = 0;
         for(const [table, entry] of store){
             const parts = [];
             const tableKinds = entry.indexKinds || [];
+            const tableOrder = entry.columnOrder || [];
             // A whole live table with no src/sql file: a fresh install of this release never has it.
             if((entry.tables || []).length){ tables++; parts.push('undeclared table (no src/sql/' + table + '.sql)'); }
             if(entry.columns.length){ columns += entry.columns.length; parts.push('columns ' + entry.columns.join(', ')); }
+            // A declared column held out of source order: present, just not where a fresh install puts it.
+            if(tableOrder.length){ ordered += tableOrder.length; parts.push('columns out of source order ' + tableOrder.join(', ')); }
             if(entry.indexes.length){ indexes += entry.indexes.length; parts.push('indexes ' + entry.indexes.map(i => i.name).join(', ')); }
             // A declared index whose live kind is stricter (UNIQUE or FULLTEXT) is drift too,
             // listed apart because it is declared, just not in the kind a fresh install builds.
@@ -286,7 +290,8 @@ module.exports = {
         }
         const counts = (tables ? tables + ' undeclared table(s), ' : '') + (kinds
             ? columns + ' undeclared column(s), ' + indexes + ' undeclared index(es) and ' + kinds + ' index(es) of a stricter kind than declared'
-            : columns + ' undeclared column(s) and ' + indexes + ' undeclared index(es)');
+            : columns + ' undeclared column(s) and ' + indexes + ' undeclared index(es)') +
+            (ordered ? ', with ' + ordered + ' declared column(s) out of source order' : '');
         return 'SCHEMA SHAPE DRIFT: ' + store.size + ' table(s) carry ' + counts +
                '; this DB does not match a fresh install of this release.\n' + lines.join('\n');
     },

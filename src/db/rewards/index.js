@@ -177,12 +177,12 @@ module.exports = {
     // upsert: deterministic block-processing writers pass true so their value
     //         always wins over any row already holding the same key - the
     //         derived row is the consensus row (replay produces it byte-equal)
-    // deriveBlockIndex: the block that MATERIALIZED the row, when that differs from the
-    // reward's earn-block (blockIndex). Only the BTC-side anchor/archive
-    //         derivation passes it: that path earns at the checkpoint's SNAPSHOT_BLOCK but
-    //         writes while processing a much later BTC block, so rollback needs the creating
-    // block to know the row must disappear. Every other writer earns and
-    //         writes in the same block and leaves it NULL.
+    // deriveBlockIndex: the block that MATERIALIZED the row. Rule: a writer whose blockIndex
+    //         (earn-block) is earlier than the block being processed MUST pass that block here,
+    //         or the reorg delete, xchain-sync's derived-reward channel and the replica rollback
+    //         all miss the row. A writer that earns and writes in one block leaves it NULL. The
+    //         anchor/archive derive mint and rollcall_publish stamp it today (recovery restore
+    //         stamps its own INSERT); the call-site census test pins each writer's choice.
     // roundQualifier: the remaining component of the reward's UNIQUE identity. It is
     //         snapshot_block for 'anchor_archive' and 0 for every other reward type, because the
     //         archive leg's round_reference is MATCH_BATCH_SEQ - a dense hub counter a

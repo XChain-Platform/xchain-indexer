@@ -324,6 +324,8 @@ module.exports = {
     // exactly the checkpoint a bridge proof must never be handed.
     async getEarliestValidAnchorCheckpoint(version, chain, network, atOrAfterBlock){
         // Strict: a consensus-input read, where a fault returned as [] would read as "no rows".
+        // End on the primary key so the pick is total: the replay guards admit an equal seq,
+        // so two valid rows can tie on (block_index, checkpoint_seq), and the first-anchored one wins.
         return await this.doQueryStrict(
             `SELECT a.chain, a.network, a.block_index, a.checkpoint_seq, a.snapshot_block,
                     a.state_root, a.state_root_version
@@ -331,7 +333,7 @@ module.exports = {
              JOIN index_statuses s ON s.id = a.status_id
              WHERE a.version = ? AND a.chain = ? AND a.network = ? AND a.block_index >= ?
                AND a.state_root IS NOT NULL AND s.status = 'valid'
-             ORDER BY a.block_index ASC, a.checkpoint_seq DESC
+             ORDER BY a.block_index ASC, a.checkpoint_seq DESC, a.action_index ASC, a.section_index ASC
              LIMIT 1`,
             [version, chain, network, atOrAfterBlock]);
     },

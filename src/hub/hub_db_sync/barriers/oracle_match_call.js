@@ -24,6 +24,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../../observability/index.js');
+const { strictHubRead } = require('../mirror_write.js');
 
 module.exports = {
 
@@ -35,7 +36,7 @@ module.exports = {
     async refreshOracleSyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
         try {
-            let rows = await this.hubDb.doQuery('SELECT MAX(effective_at) AS ts FROM oracle_prices');
+            let rows = await strictHubRead(this.hubDb, 'SELECT MAX(effective_at) AS ts FROM oracle_prices');
             if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
         } catch (e) {
             return;                                         // table not ready yet; leave state untouched
@@ -149,7 +150,7 @@ module.exports = {
             let where = "WHERE status = 'finalized'";
             let args  = [];
             if (this.coin) { where += " AND (a_chain = ? OR b_chain = ?)"; args = [this.coin, this.coin]; }
-            let rows = await this.hubDb.doQuery(
+            let rows = await strictHubRead(this.hubDb,
                 "SELECT MAX(effective_time) AS ts FROM cross_chain_matches " + where, args);
             if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
         } catch (e) {
@@ -246,7 +247,7 @@ module.exports = {
             let where = "WHERE status = 'finalized'";
             let args  = [];
             if (this.coin) { where += " AND (target_chain = ? OR source_chain = ?)"; args = [this.coin, this.coin]; }
-            let rows = await this.hubDb.doQuery(
+            let rows = await strictHubRead(this.hubDb,
                 "SELECT MAX(effective_time) AS ts FROM cross_chain_calls " + where, args);
             if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
         } catch (e) {

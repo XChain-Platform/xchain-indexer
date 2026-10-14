@@ -117,10 +117,11 @@ function readCommands(data, error){
 // The count test survives as a PRE-FILTER rather than being deleted, and it is load
 // bearing twice over. Every weight is >= 1 (see subCommandWeight), so a batch whose raw
 // count already exceeds the budget cannot possibly weigh in under it: rejecting it here
-// is exact, not conservative. And weighing is not free - the fan-out classes need an
-// as-of read per sub-command - so without this filter the envelope lane's ~35,000
-// sub-commands would each buy a database read BEFORE anything bounded them, which is
-// the denial-of-service the budget exists to close rather than open.
+// is exact, not conservative. And weighing still walks every sub-command (a string split
+// plus alias normalization), so the filter keeps the envelope lane's ~35,000 sub-commands
+// from being weighed BEFORE anything bounded them. Fan-out weights are flat today (no
+// database read); if a per-recipient weight ever adds one, this filter is what keeps it
+// from becoming a read per sub-command.
 async function commandCapError(commands, data, error, gates){
     let { normalize, limitsActive, weightsActive } = gates;
     if(!error && limitsActive){

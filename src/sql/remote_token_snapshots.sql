@@ -13,8 +13,8 @@
 --********************************************************************
 
 -- Federation-finalized token facts from a remote chain. Each version is keyed
--- by signed content; readers select the newest surviving snapshot and
--- retractions remove versions whose source action was rolled back.
+-- by signed content; readers select the newest finalized snapshot. The mirror
+-- never deletes a version, so a source-chain reorg does not remove one.
 CREATE TABLE remote_token_snapshots (
     id                   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     snapshot_id          CHAR(64) NOT NULL,

@@ -387,7 +387,7 @@ module.exports = [
     // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
     // carried by each settlement (so BTC/LTC/DOGE + the hub flip on the same
     // anchor). Registering it would invite a wrong isEnabled(localBlock) call.
-    // The gate + predicate live in src/stake_weighted_quorum.js
+    // The gate + predicate live in src/consensus/stake_weighted_quorum.js
     // (isStakeWeightedQuorumActive / meetsStakeThreshold). Canonical activation
     // height: xchain-documentation/protocol/constants.js.
 

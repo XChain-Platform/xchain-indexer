@@ -26,9 +26,12 @@
  *      action on the platform records its own row (sends, destroys, cross_chain_calls);
  *      the hub's CrossChainBridgeEngine polls the indexer's `getpendingbridgetransfers`
  *      for confirmed locks and burns, and that read has nothing to read
- *      without this table. The row needs: action_index, format (the version byte),
- *      tick_id, source_id, dest_chain, dest_address_id (v0/v3) or origin_address_id
- *      (v1/v4), amount, decimals, min_depth, memo, status_id, block_index.
+ *      without this table. The row holds: action_index, version (the format byte),
+ *      tick_id, dest_chain, dest_address_id, amount, decimals, min_depth, memo_id,
+ *      status_id, block_index. The one dest_address_id holds DEST_ADDRESS (v0/v3),
+ *      BTC_ADDRESS (v1) or ORIGIN_ADDRESS (v4). The source address, transaction hash,
+ *      verdict text and confirmations are joined at read time, not stored; the
+ *      reason is in src/sql/xbridges.sql.
  *   2. `Database.setTokenBridged(tick, blockIndex)` for the token spec's `tokens.bridged`
  *      bit cache, written by the first applied v3 lock. getTokenInfo derives BRIDGED from
  *      the applied v3 rows in xbridges instead, so a rollback of the first lock clears it.
@@ -61,7 +64,8 @@
  *
  * Two closures do NOT gate on either activation and hold on every non-BTC chain from the
  * commit that lands them: ISSUE of the GAS tick off BTC, and DESTROY of
- * the GAS tick off BTC. They live in issue.js and destroy.js, not here.
+ * the GAS tick off BTC. They live in ../issue/tick_rules.js and ../destroy/validate.js,
+ * not here.
  *
  * The coin bridge (v0 to v2) and the token bridge (v3 to v5) share one docs page;
  * see xchain-documentation/protocol/actions/xbridge.md.

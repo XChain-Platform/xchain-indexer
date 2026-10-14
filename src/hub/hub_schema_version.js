@@ -114,7 +114,14 @@
 // indexer and the explorer roll back to back behind it. The whole roll completes
 // BELOW every network's LIST_META_ACTIVATION height.
 //
-// v10: the hub mirror contract moves to schema version 10. Strict equality still
+// v10: the mirror set gained remote_token_snapshots, the validator-signed
+// remote-token records (tick, decimals and owner per source action). Like v3,
+// the table entered the mirror set under v9 without a bump of its own, so a v9
+// reader missing it was not refused; v10 restores the gate. A stale reader must
+// reject this stream until it has the table: an indexer gets it from the
+// 2026-10-09-remote-token-snapshots migration (mode=auto, applied at startup,
+// not a deploy precondition), and a vendored mirror client creates it from its
+// hub-mirror copy of the same table. Strict equality still
 // applies in both directions, so a v9 reader must reject the v10 stream and a v10
 // reader must reject a v9 hub. The hub rolls FIRST and stamps 10, then every
 // indexer and the explorer follow back to back, as for v8 and v9.

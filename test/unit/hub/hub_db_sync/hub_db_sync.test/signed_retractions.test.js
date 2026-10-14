@@ -214,16 +214,16 @@ describe('HubDbSync applyRetraction signed retractions @regression @tier1', func
         assert.strictEqual(deletes.length, 0, 'no verifying signature means no quorum, whatever the ordering');
     });
 
-    it('treats remote_token_snapshots as quorum-class: unsigned refused, signed applied', async function () {
+    it('never deletes remote_token_snapshots, signed or unsigned', async function () {
         const s = makeSigner();
         const canonical = 'XRETRACTV1|remote_token_snapshots|DOGE|42|99|7|5000';
         const snapRows = [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }];
         const refused = makeSigned({ snapRows });
         await refused.sync.applyRetraction(signedEvent([], { table: 'remote_token_snapshots' }));
-        assert.strictEqual(refused.deletes.length, 0, 'an unsigned remote token deletion must be refused');
-        const applied = makeSigned({ snapRows });
-        await applied.sync.applyRetraction(signedEvent([{ pubkey: s.pubkey, sig: s.sign(canonical) }], { table: 'remote_token_snapshots' }));
-        assert.strictEqual(applied.deletes.length, 1);
-        assert.match(applied.deletes[0].sql, /DELETE FROM remote_token_snapshots/);
+        assert.strictEqual(refused.deletes.length, 0, 'an unsigned remote token deletion must be skipped');
+        // A validly signed, fenced event is skipped too: the table has no push_generation column.
+        const signed = makeSigned({ snapRows });
+        await signed.sync.applyRetraction(signedEvent([{ pubkey: s.pubkey, sig: s.sign(canonical) }], { table: 'remote_token_snapshots' }));
+        assert.strictEqual(signed.deletes.length, 0, 'a signed remote token deletion must be skipped');
     });
 });

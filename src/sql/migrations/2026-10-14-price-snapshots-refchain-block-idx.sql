@@ -1,0 +1,29 @@
+-- xchain:migration mode=auto
+-- Migration: index price_snapshots (reference_chain, reference_block).
+--
+-- WHY
+-- ---
+-- The reorg rollback runs purgeOrphanedPriceSnapshots (src/db/rollback/sweeps.js):
+-- DELETE FROM price_snapshots WHERE reference_chain = 'BTC' AND reference_block >= ?.
+-- Every other key on the table leads on round_number, coin_pair, status or
+-- source_chain, and the one key holding reference_block puts status in front of it, so
+-- no index serves that predicate. Every reorg, a depth-1 reorg included, then scans and
+-- locks the whole oracle-round history inside the rollback transaction while
+-- hub_db_sync writes to the same table. This index makes the purge a range scan.
+--
+-- Non-unique: many pairs and rounds share one reference chain and block.
+--
+-- NOT consensus-visible. Index-only DDL on a mirrored projection table. It enters no
+-- block-hash preimage, and the delete predicate is untouched, so reorg semantics are
+-- unchanged; only the access path differs.
+--
+-- Additive + idempotent: CREATE INDEX IF NOT EXISTS, so it is a no-op on any install
+-- whose boot-time reconcileTableIndexes has already healed the index in from
+-- src/sql/price_snapshots.sql, and it back-fills a DB converged by replaying the dated
+-- migrations alone. The name and column list are byte-equal to the definition, which
+-- sql-schema-index-parity asserts in both directions.
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-10-14-price-snapshots-refchain-block-idx.sql
+
+CREATE INDEX IF NOT EXISTS idx_refchain_block ON price_snapshots (reference_chain, reference_block);

@@ -108,6 +108,27 @@ async function relaxNullability(db, table, exp, cur){
     }
 }
 
+// Name the declared live columns outside the longest run that follows source order (undeclared
+// ones ignored); on a tie the run ending earliest live is kept, so a tail block is the one named.
+function outOfOrderColumns(expected, live){
+    const rank = new Map(expected.map((c, i) => [c.name.toLowerCase(), i]));
+    // Read live order from ORDINAL_POSITION; a row without one keeps its array place (stable sort).
+    const ordered = live.slice().sort((a, b) => Number(a.ORDINAL_POSITION || 0) - Number(b.ORDINAL_POSITION || 0));
+    const declared = ordered.map(c => rank.get(String(c.COLUMN_NAME).toLowerCase())).filter(r => r !== undefined);
+    // Longest increasing run of source ranks, with a back-pointer per position to rebuild it.
+    const length = declared.map(() => 1);
+    const prev   = declared.map(() => -1);
+    for(let i = 0; i < declared.length; i++)
+        for(let j = 0; j < i; j++)
+            if(declared[j] < declared[i] && length[j] + 1 > length[i]){ length[i] = length[j] + 1; prev[i] = j; }
+    let end = -1;
+    for(let i = 0; i < declared.length; i++) if(end < 0 || length[i] > length[end]) end = i;
+    const kept = new Set();
+    for(let i = end; i >= 0; i = prev[i]) kept.add(i);
+    // Name the misplaced columns with the source's spelling, in live order.
+    return declared.filter((r, i) => !kept.has(i)).map(r => expected[r].name);
+}
+
 module.exports = {
 
     // Parse a CREATE TABLE statement to extract expected column nullability.
@@ -305,7 +326,8 @@ module.exports = {
             // COLUMN_DEFAULT / COLLATION_NAME / COLUMN_COMMENT / GENERATION_EXPRESSION are
             // read for the nullability branch below: a bare MODIFY drops every attribute it
             // does not restate, so the reconciler has to see them to know what it would lose.
-            "SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_TYPE, COLUMN_KEY, EXTRA, COLUMN_DEFAULT, COLLATION_NAME, COLUMN_COMMENT, GENERATION_EXPRESSION FROM information_schema.columns WHERE table_schema = ? AND table_name = ?",
+            // ORDINAL_POSITION is read for the column-order report at the end, which sorts by it.
+            "SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_TYPE, COLUMN_KEY, EXTRA, COLUMN_DEFAULT, COLLATION_NAME, COLUMN_COMMENT, GENERATION_EXPRESSION, ORDINAL_POSITION FROM information_schema.columns WHERE table_schema = ? AND table_name = ?",
             [this.dbName, table]
         );
         const liveByName = new Map(live.map(c => [c.COLUMN_NAME.toLowerCase(), c]));
@@ -330,6 +352,16 @@ module.exports = {
                 ' are declared by NO SQL source. Not auto-healed (never DROP a column we did not create); ' +
                 'converge with a dated migration via node src/db/migration/migrate.js, or restore the declaration to ' + file + '.');
             recordShapeDrift(this.schemaShapeDrift, table, 'columns', undeclared);
+        }
+        // Column position is part of the fresh-install shape (see the scope note above), so a
+        // declared column the live table holds out of source order is reported too. Never moved
+        // here: a MODIFY ... AFTER rebuilds the table, which belongs in a dated manual migration.
+        const misplaced = outOfOrderColumns(expected, live);
+        if(misplaced.length){
+            getLogger().warn('Schema shape drift on ' + table + ': column(s) ' + misplaced.join(', ') +
+                ' sit out of the order ' + file + ' declares. Not auto-healed (moving a column rebuilds the table); ' +
+                'converge with a dated mode=manual migration via node src/db/migration/migrate.js.');
+            recordShapeDrift(this.schemaShapeDrift, table, 'columnOrder', misplaced);
         }
     },
 

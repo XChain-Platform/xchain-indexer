@@ -32,8 +32,9 @@
 // before the restart. Which versions can PROVE which family stays the job of
 // REWARD_FAMILY_VERSIONS below; membership here only says "this is an attested anchor".
 //
-// 3 is the fold wire, which the DOGE parse credits as an anchor_bundle reward. Leaving it
-// out made a fold-era reward eternally 'unknown' (the same halt as 150456). A v3 row parsed
+// 3 is the fold wire, whose chain sections prove an anchor_bundle reward that the BTC-side
+// derive mints (DOGE-side handlers credit nothing). Leaving it out made a fold-era reward
+// eternally 'unknown' (the same halt as 150456). A v3 row parsed
 // before the fold is armed carries the deterministic 'invalid: VERSION (unknown)', so it
 // can only turn such a txid into 'rejected', never into 'verified'.
 const ATTESTED_VERSIONS = [0, 1, 3, 4, 5, 6, 7];

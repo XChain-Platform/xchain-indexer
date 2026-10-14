@@ -171,6 +171,7 @@ function createMockDb() {
         createBetStatus: sinon.stub().resolves(),
         setBetFeedTerminal: sinon.stub().resolves(),
         setBetSettled: sinon.stub().resolves(),
+        settleBetsBatch: sinon.stub().resolves(),
         latchBetFeedClosed: sinon.stub().resolves(),
         getBetFeedsDueLatch: sinon.stub().resolves([]),
         getBetFeedsDueExpiry: sinon.stub().resolves([]),

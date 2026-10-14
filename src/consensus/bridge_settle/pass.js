@@ -14,10 +14,11 @@
  *
  * XChain Platform - bridge settle pass: the end-of-block driver and its due sets.
  *
- * The pass driver, the proof fetch available to each transfer leg, and the two ordered,
- * capped due-set reads. The order inside the pass and the order inside each due set are
- * consensus-visible (they decide which action indexes exist at this block), so both are
- * spelled here exactly as they were.
+ * The pass driver, the proof fetch available to each transfer leg, and the two ordered
+ * due-set reads: the policy read is capped, the transfer read is not, because the transfer
+ * cap is a slot count inside the pass. The order inside the pass and the order inside each
+ * due set are consensus-visible (they decide which action indexes exist at this block), so
+ * both are spelled here exactly as they were.
  *
  * BUILT BY THE ENTRY (see the entry header and canonicals.js).
  *
@@ -171,18 +172,16 @@ async function processBridgeSettlePass(deps, ctx){
 }
 
 /**
- * The finalized, effective, unapplied transfers whose destination is THIS chain, in
- * (snapshot_block, transfer_id) order, capped.
+ * The finalized, effective, unapplied, non-deferred transfers whose destination is THIS chain,
+ * in (snapshot_block, transfer_id) order, UNCAPPED: exactly the list processBridgeSettlePass
+ * walks. The XBRIDGE_MAX_PER_BLOCK cap is applied only inside the pass, where a terminal
+ * refusal holds no slot, so no fixed prefix of this list is the set a block applies.
  *
  * ORDERED ON QUORUM-AGREED ROW CONTENT and never on the hub-assigned AUTO_INCREMENT `id`,
  * which is per-hub: two indexers mirroring different hubs must settle the same prefix, and an
  * id-ordered query would give them different ones. The same rule getEffectiveUnsettledMatches
  * follows, for the same reason.
  */
-async function dueBridgeTransfers(deps, ctx){
-    return (await unsettledBridgeTransfers(deps, ctx)).slice(0, XBRIDGE_MAX_PER_BLOCK || 25);
-}
-
 async function unsettledBridgeTransfers(deps, ctx){
     const db  = ctx.indexerDb;
     // Bound by height in the admission era and by the clock below it (mirrorBindClause).
@@ -297,7 +296,7 @@ module.exports = function createPass(deps){
     return {
         processBridgeSettlePass: (ctx) => processBridgeSettlePass(deps, ctx),
         fetchProofForTransfer,
-        dueBridgeTransfers:      (ctx) => dueBridgeTransfers(deps, ctx),
+        unsettledBridgeTransfers: (ctx) => unsettledBridgeTransfers(deps, ctx),
         duePolicySnapshots:      (ctx) => duePolicySnapshots(deps, ctx),
     };
 };

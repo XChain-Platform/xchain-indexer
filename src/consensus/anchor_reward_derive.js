@@ -175,6 +175,9 @@ function rowGatesActive(row){
     // known reward types instead would silently stop paying a family added later, which
     // is a worse failure than the one this closes.
     if(String(row.reward_type) === 'anchor_archive'){
+        // Judge both gates in the BTC domain, at the row's snapshot_block. The DOGE proof client
+        // (anchor_proof_client.js archiveRowTerminated) judges them at the anchor's block_index_doge
+        // and either refusal drops the reward, so termination is the union of the two domains.
         let network = String(row.network);
         let snapshotBlock = row.snapshot_block;
         let termActive = gateRegistry.activeAt(

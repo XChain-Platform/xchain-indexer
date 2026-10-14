@@ -28,6 +28,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../../observability/index.js');
+const { strictHubRead } = require('../mirror_write.js');
 
 // The two mirror tables this file reads a watermark from. Named as data because the
 // probe below asks information_schema for exactly these names: a consumer schema
@@ -76,7 +77,7 @@ async function mirrorTablePresent(sync, table) {
     if (memo && (memo.present || (Date.now() - memo.at) < MIRROR_TABLE_PROBE_TTL_MS)) return memo.present;
     let rows;
     try {
-        rows = await sync.hubDb.doQuery(
+        rows = await strictHubRead(sync.hubDb,
             "SELECT TABLE_NAME FROM information_schema.TABLES " +
             "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", [table]);
     } catch (e) {
@@ -125,7 +126,7 @@ module.exports = {
             let where = "WHERE status = 'finalized'";
             let args  = [];
             if (this.coin) { where += " AND (src_chain = ? OR dest_chain = ?)"; args = [this.coin, this.coin]; }
-            let rows = await this.hubDb.doQuery(
+            let rows = await strictHubRead(this.hubDb,
                 "SELECT MAX(effective_time) AS ts FROM bridge_transfers " + where, args);
             if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
         } catch (e) {
@@ -226,7 +227,7 @@ module.exports = {
             let where = "WHERE status = 'finalized'";
             let args  = [];
             if (this.coin) { where += " AND origin_chain <> ?"; args = [this.coin]; }
-            let rows = await this.hubDb.doQuery(
+            let rows = await strictHubRead(this.hubDb,
                 "SELECT MAX(effective_time) AS ts FROM policy_snapshots " + where, args);
             if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
         } catch (e) {
@@ -303,7 +304,7 @@ module.exports = {
     async refreshListShareSyncState(armBootstrap = this._bootstrapDrained) {
         if (!await mirrorTablePresent(this, LIST_SHARE_TABLE)) return;
         try {
-            let rows = await this.hubDb.doQuery("SELECT 1 FROM list_snapshots LIMIT 1");
+            let rows = await strictHubRead(this.hubDb, "SELECT 1 FROM list_snapshots LIMIT 1");
             this.listShareMirrorEmpty = rows.length === 0;
         } catch (e) {
             noteWatermarkReadFailure(this, LIST_SHARE_TABLE, e);

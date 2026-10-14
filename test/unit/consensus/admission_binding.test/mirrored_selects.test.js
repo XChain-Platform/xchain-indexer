@@ -70,7 +70,7 @@ describe('admission binding: the mirrored selects issue the C33 form above the a
                     const ctx = { indexerDb: { mirrorDb: () => bindSettlementReads({ doQuery: async (sql, args) => { captured.push({ sql, args }); return []; } }),
                                                doQuery: async () => [] },
                                   coin: 'DOGE', network: NETWORK, blockIndex: B, blockTime: T };
-                    await h.BS.dueBridgeTransfers(ctx);
+                    await h.BS.unsettledBridgeTransfers(ctx);
                     await h.BS.duePolicySnapshots(ctx);
                     assert.strictEqual(captured[0].sql, LEGACY_SQL.transfers);
                     assert.deepStrictEqual(captured[0].args, [NETWORK, T, 'DOGE']);
@@ -157,7 +157,7 @@ describe('admission binding: the mirrored selects issue the C33 form above the a
                     const ctx = { indexerDb: { mirrorDb: () => bindSettlementReads({ doQuery: async (sql, args) => { captured.push({ sql, args }); return []; } }),
                                                doQuery: async () => [] },
                                   coin: 'DOGE', network: NETWORK, blockIndex: B, blockTime: T };
-                    await h.BS.dueBridgeTransfers(ctx);
+                    await h.BS.unsettledBridgeTransfers(ctx);
                     await h.BS.duePolicySnapshots(ctx);
                     assert.strictEqual(captured[0].sql, LEGACY_SQL.transfers.replace('effective_time <= ?', c33('admit_block_doge')));
                     assert.deepStrictEqual(captured[0].args, [NETWORK, T, B, 'DOGE']);

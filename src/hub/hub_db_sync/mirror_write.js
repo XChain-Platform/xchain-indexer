@@ -86,8 +86,10 @@ function priceUpsertSql(cols, rowCount) {
 // wrote, which the VM oracle reads and the settlement barriers trust.
 // doQueryStrict is that same query with the swallow removed, and it already
 // carries every consensus-input read for this reason; writes belong on it too.
-// Reads deliberately stay on doQuery: an empty result is a legitimate answer
-// there and must not become a throw.
+// Barrier and watermark reads go through strictHubRead for the same reason:
+// doQueryStrict still returns [] for a genuinely empty result and throws only
+// on a query error, which would otherwise read as an empty mirror and open a
+// settlement barrier.
 //
 // Resolved per call rather than hard-coded because this module is vendored
 // byte-identical into xchain-explorer, where hubDb is HubMirrorPool: a minimal
@@ -100,4 +102,11 @@ async function applyMirrorWrite(hubDb, query, args) {
     return await hubDb.doQuery(query, args);
 }
 
-module.exports = { coerceMirrorValue, priceUpsertSql, applyMirrorWrite };
+// Read the hub mirror so a query error throws instead of returning [] (resolved like applyMirrorWrite).
+async function strictHubRead(hubDb, query, args) {
+    if (typeof hubDb.doQueryStrict === 'function')
+        return await hubDb.doQueryStrict(query, args);
+    return await hubDb.doQuery(query, args);
+}
+
+module.exports = { coerceMirrorValue, priceUpsertSql, applyMirrorWrite, strictHubRead };

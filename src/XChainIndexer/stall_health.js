@@ -21,7 +21,8 @@
  *
  ********************************************************************/
 
-const BRIDGE_PROOF_BARRIER = 'bridge_proof_barrier';
+// The bridge proof reason comes from the one place that raises it, so an exact-match test here cannot drift.
+const { BRIDGE_PROOF_BARRIER } = require('../consensus/bridge_proof_client/stall.js');
 const PRICE_LANDING_BARRIER = 'price_landing_barrier';
 const ROLLCALL_PROOF_REASON = 'rollcall_proof_unavailable';
 
@@ -101,8 +102,8 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 //   'none'              - advancing normally, no stall.
 //   'future_block_wait' - waiting out a future-stamped block; healthy and self-clearing,
 //                         with stallClearsAt naming the instant it can first move.
-//   dedicated proof-wait class - waiting for a quorum-established bridge checkpoint
-//                                or proof.
+//   'bridge_proof_wait' - waiting for a quorum-established bridge checkpoint or proof;
+//                         never graded wedged, and it builds no barrier hold.
 //   'price_landing_wait' - waiting on the other landing chains' landed times, judged
 //                         against its own priceLandingGraceMs; wedged once that passes.
 //   'barrier_defer'     - a real barrier defer (mirror behind, host fault), still

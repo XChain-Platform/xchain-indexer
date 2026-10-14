@@ -31,7 +31,7 @@ const path    = require('path');
 const { getLogger } = require('../../observability/index.js');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
-const { AUTO_DEDUP_TABLES, recordShapeDrift } = require('../shared.js');
+const { isAutoDedupAllowed, recordShapeDrift } = require('../shared.js');
 
 // reconcileTableIndexes, the live index shape of one table: every index by name with its
 // columns and prefix widths, the set of live names, and the indexes by column set.
@@ -155,12 +155,12 @@ async function addDeclaredIndex(self, db, table, idx, key){
     } catch(e){
         const dup = e && (Number(e.errno) === 1062 || /duplicate entry/i.test(e.message || ''));
         if(!dup){ getLogger().info('  could not add UNIQUE index ' + idx.name + ' on ' + table + ': ' + (e && e.message)); return; }
-        if(!AUTO_DEDUP_TABLES.has(table)){
-            getLogger().warn('  ' + table + '.' + idx.name + ': duplicate rows block the UNIQUE index, but ' + table + ' is NOT on the auto-dedup allow-list - skipping (no rows deleted). Apply a manual migration to resolve the duplicates.');
+        if(!isAutoDedupAllowed(table, idx.name, idx.columns, idx.prefixes)){
+            getLogger().warn('  ' + table + '.' + idx.name + ' (' + key + '): duplicate rows block the UNIQUE index, but the automatic dedupe is vetted only for the exact index and columns on the auto-dedup allow-list - skipping (no rows deleted). Apply a manual migration to resolve the duplicates.');
             return;
         }
         getLogger().info('  ' + table + '.' + idx.name + ': duplicate rows block the UNIQUE index - deduping (keep newest id per ' + key + ') then retrying.');
-        if(!(await self.dedupeForUniqueIndex(db, table, idx.columns))) return;
+        if(!(await self.dedupeForUniqueIndex(db, table, idx.columns, idx.name))) return;
         try {
             await db.query('ALTER TABLE `' + table + '` ADD UNIQUE INDEX `' + idx.name + '` (' + colList + ')');
             getLogger().info('  added ' + idx.name + ' after dedupe.');
@@ -246,8 +246,14 @@ module.exports = {
     // value, so the highest id is the live (correct) value and the older rows are stale.
     // Uses `=` (not `<=>`) so NULL tuples are left intact, matching UNIQUE semantics (a
     // UNIQUE index permits multiple NULLs). Requires a single `id` column to pick a
-    // survivor; skips with a warning if absent. Returns true if the table is now safe to index.
-    async dedupeForUniqueIndex(db, table, columns){
+    // survivor; skips with a warning if absent. Refuses any (table, indexName, columns) the
+    // auto-dedup allow-list does not name exactly. Returns true if the table is now safe to index.
+    async dedupeForUniqueIndex(db, table, columns, indexName){
+        if(!isAutoDedupAllowed(table, indexName, columns)){
+            getLogger().warn('  refusing to dedupe ' + table + ' on (' + (columns || []).join(',') + ') for index ' + indexName +
+                ': the automatic dedupe is vetted only for the exact index and columns on the auto-dedup allow-list (no rows deleted).');
+            return false;
+        }
         const hasId = (await db.query(
             "SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND COLUMN_NAME = 'id'",
             [this.dbName, table])).length > 0;
@@ -257,7 +263,7 @@ module.exports = {
         }
         const on  = columns.map(c => 't1.`' + c + '` = t2.`' + c + '`').join(' AND ');
         const res = await db.query('DELETE t1 FROM `' + table + '` t1 JOIN `' + table + '` t2 ON ' + on + ' AND t1.id < t2.id');
-        getLogger().info('  deduped ' + table + ': removed ' + (res && res.affectedRows != null ? res.affectedRows : '?') + ' stale duplicate row(s).');
+        getLogger().warn('  deduped ' + table + ': removed ' + (res && res.affectedRows != null ? res.affectedRows : '?') + ' stale duplicate row(s).');
         return true;
     },
 

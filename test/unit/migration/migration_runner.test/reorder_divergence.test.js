@@ -29,6 +29,7 @@ const { assert, fs, path, Database, requireWithFreshConfig, DB_PATH,
 const { migrationTouchedTables, reorderVerdict } = require('../../../../src/db/database/migration_reorder.js');
 
 const crypto  = require('crypto');
+const { SQL_MODE_PROBE, pinnedSqlModeRows } = require('./helpers/migration_fixtures.js');
 const MIG_DIR = path.join(__dirname, '..', '..', '..', '..', 'src', 'sql', 'migrations');
 
 const sha256     = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -46,6 +47,7 @@ async function runAgainst(ledger, opts, DatabaseClass = Database) {
     const applied = [];
     const conn = {
         query: async function (sql, params) {
+            if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
             if (/GET_LOCK/i.test(sql))     return [{ l: 1 }];
             if (/RELEASE_LOCK/i.test(sql)) return [{}];
             if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {

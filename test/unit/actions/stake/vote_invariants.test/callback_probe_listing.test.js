@@ -156,6 +156,21 @@ describe('VOTE callback method-independent listing probe', function(){
         assert.strictEqual(buildFallback.callCount, 1);
     });
 
+    it('halts on a VM host fault in the listing probe without running the fallback probe', async function(){
+        const fresh = freshVote();
+        const buildFallback = sinon.spy(callbackProbeVm, 'buildProbeCode');
+        const fault = Object.assign(new Error('executor down'), { code: 'EXECUTOR_UNAVAILABLE' });
+        fresh.vm.probeReadManifest.onFirstCall().rejects(fault);
+        fresh.vm.probeReadManifest.onSecondCall().resolves({
+            success: true, manifest: { hasInitialize: true }, error: null
+        });
+        await assert.rejects(handlerVerdict(
+            fresh, 'module.exports={onResult:function(){}};', 'onResult'
+        ), (e) => e === fault);
+        assert.strictEqual(fresh.vm.probeReadManifest.callCount, 1);
+        assert.strictEqual(buildFallback.callCount, 0);
+    });
+
 });
 
 describe('real XChainVM callback listing equivalence', function(){

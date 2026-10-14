@@ -24,6 +24,7 @@
 
 const { assert, fs, path, Database, modeOf } = require('./migration_runner.test/helpers/migration_fixtures.js');
 const crypto = require('crypto');
+const { SQL_MODE_PROBE, pinnedSqlModeRows } = require('./migration_runner.test/helpers/migration_fixtures.js');
 
 
 describe('Database._migrationMode() @regression @tier1', function () {
@@ -169,6 +170,7 @@ async function seedFreshSchemaMigrations(options = {}) {
     const connection = {
         async query(sql, params) {
             calls.push({ sql, params });
+            if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
             if(/GET_LOCK/i.test(sql)) return [{ l: options.lockResult === undefined ? 1 : options.lockResult }];
             if(/^INSERT INTO schema_migrations/i.test(sql)){
                 inserted++;

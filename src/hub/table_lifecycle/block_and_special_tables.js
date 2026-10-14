@@ -156,7 +156,7 @@ const TABLES = [
       anchorRecovery: 'none',
       anchorRecoveryNote: 'Not carried in the ANCHOR archive. The row returns through the hub mirror after a rebuild.',
       hashed: { classes: ['quorum'], note: 'Federation-signed remote-token facts; consumers select a finalized content-keyed version.' },
-      note: 'Hub-mirrored remote-chain state, not produced by local block processing. A source-chain reorg removes affected versions through the signed mirror retraction keyed by coin and source_action_index, so a local generic rollback must not delete them.' },
+      note: 'Hub-mirrored remote-chain state, not produced by local block processing. Never retracted: a newer version arrives as a new row, the table carries no hub_db_sync RETRACTION_COLUMNS entry, and a source-chain reorg does not remove a version. Block replay does not recreate the row, so a local generic rollback must not delete it.' },
     { table: 'anchor_reward_attestations', owner: 'indexer', replication: 'hub-mirror', rollback: 'exempt', replicaRollback: 'exempt',
       anchorRecovery: 'none',
       anchorRecoveryNote: 'The attestation rows are not rebuilt from the archive; they return only through the hub re-mirror. The value they carry is rebuilt indirectly: bin/recovery.js stages archived rewards into recovery_pending_rewards, and the BTC reindex drains them into validator_rewards (applyPendingRewardsDueAtBlock and the createAddress apply hook).',

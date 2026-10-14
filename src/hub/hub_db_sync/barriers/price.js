@@ -25,6 +25,7 @@
 
 const { getLogger } = require('../../../observability/index.js');
 const { isPreBatchEraFloor } = require('../../../consensus/gates/price_batching_floor_gate.js');
+const { strictHubRead } = require('../mirror_write.js');
 
 module.exports = {
 
@@ -62,10 +63,10 @@ module.exports = {
             // reference_block, idx_status_timestamp_round for block_timestamp - both defined
             // in src/sql/price_snapshots.sql) and MariaDB resolves it as a single index
             // lookup ("Select tables optimized away") instead of a table scan.
-            let hRow  = await this.hubDb.doQuery(
+            let hRow  = await strictHubRead(this.hubDb,
                 "SELECT MAX(reference_block) AS h FROM price_snapshots WHERE status = 'finalized'"
             );
-            let tsRow = await this.hubDb.doQuery(
+            let tsRow = await strictHubRead(this.hubDb,
                 "SELECT MAX(block_timestamp) AS ts FROM price_snapshots WHERE status = 'finalized'"
             );
             if (hRow.length  > 0 && hRow[0].h   != null) height = Number(hRow[0].h);

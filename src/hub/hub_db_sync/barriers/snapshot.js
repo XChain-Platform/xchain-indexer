@@ -24,6 +24,8 @@
  ********************************************************************/
 
 
+const { strictHubRead } = require('../mirror_write.js');
+
 module.exports = {
 
     // ── Cross-chain capability-snapshot presence barrier ───────────────────────
@@ -80,7 +82,7 @@ module.exports = {
             // optional: without it, fall back to a (safe) superset over all chains.
             let coinClause = this.coin ? 'AND (m.a_chain = ? OR m.b_chain = ?)' : '';
             let args = this.coin ? scopeArgs.concat([this.coin, this.coin]) : scopeArgs.slice();
-            let missing = await this.hubDb.doQuery(
+            let missing = await strictHubRead(this.hubDb,
                 "SELECT 1 FROM cross_chain_matches m " +
                 "WHERE m.status = 'finalized' AND (" + scope('m') + ") " + coinClause + " " +
                 "AND NOT EXISTS (SELECT 1 FROM capability_snapshots s " +
@@ -92,7 +94,7 @@ module.exports = {
             // xcall.processResult verify signatures against these snapshots.
             let callClause = this.coin ? 'AND (c.target_chain = ? OR c.source_chain = ?)' : '';
             let callArgs = this.coin ? scopeArgs.concat([this.coin, this.coin]) : scopeArgs.slice();
-            let missingCalls = await this.hubDb.doQuery(
+            let missingCalls = await strictHubRead(this.hubDb,
                 "SELECT 1 FROM cross_chain_calls c " +
                 "WHERE c.status = 'finalized' AND (" + scope('c') + ") " + callClause + " " +
                 "AND NOT EXISTS (SELECT 1 FROM capability_snapshots s " +

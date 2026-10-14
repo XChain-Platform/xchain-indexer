@@ -293,9 +293,15 @@ module.exports = {
                     ORDER BY m.action_index ASC`
         let results = await this.doQuery(query, args);
         let useProtocolTime = delayUsesProtocolTime(this, block_index);
+        // Resolve each distinct block's delay start once per call (rows share blocks; the
+        // read is pure over stored blocks, so a reused value equals a fresh one).
+        let delayByBlock = new Map();
         if(results.length > 0){
             for(let row of results){
-                let delayStart = await dispenserDelayStart(this, row, useProtocolTime);
+                let blockKey   = Number(row.block_index);
+                if(!delayByBlock.has(blockKey))
+                    delayByBlock.set(blockKey, await dispenserDelayStart(this, row, useProtocolTime));
+                let delayStart = delayByBlock.get(blockKey);
                 if(delayStart !== false && this.util.bcgt(block_time, this.util.bcadd(delayStart, this.config['DISPENSER_CLOSE_DELAY'])))
                     cancels.push(Number(row.action_index));
             }

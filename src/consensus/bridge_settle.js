@@ -152,7 +152,7 @@ module.exports = {
     verifyEscrowAgainstCheckpoint,
     processBridgeSettlePass: pass.processBridgeSettlePass,
     fetchProofForTransfer:   pass.fetchProofForTransfer,
-    dueBridgeTransfers:      pass.dueBridgeTransfers,
+    unsettledBridgeTransfers: pass.unsettledBridgeTransfers,
     duePolicySnapshots:      pass.duePolicySnapshots,
     transferCanonical:       canonicals.transferCanonical,
     policyCanonical:         canonicals.policyCanonical,

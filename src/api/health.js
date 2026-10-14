@@ -93,6 +93,8 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         // The future-stamped-block wait is excluded from the hold deliberately (it has its
         // own bound, the block's own stamp), so a non-zero value here is never miner clock
         // skew: it is a mirror barrier or a host fault, and stallReason says which.
+        // A bridge proof wait (stallClass 'bridge_proof_wait') is excluded too: no mirror
+        // resync can shorten it, so nextBarrierHold records no hold and this stays 0.
         barrierHoldMs:        barrierHoldMs(indexer.barrierHold, now),
         barrierHoldBlock:     (indexer.barrierHold && indexer.barrierHold.block != null)
                                 ? indexer.barrierHold.block : null,

@@ -79,4 +79,28 @@ describe('bridge_settle: refused transfers and the per-block cap', function(){
 
         assert.strictEqual(applied.transfers.length, XBRIDGE_MAX_PER_BLOCK);
     });
+
+    // Refusals at the head plus more good rows than the cap: the applied set is the first cap
+    // of GOOD rows, which is not any prefix of the unsettled list the pass walks.
+    it('applies exactly the first cap of good rows behind a full cap of quorum refusals', async function(){
+        stubGate(sinon, ROW_FIELDS_TERMINAL_KEY, false);
+        const keys = [makeKey(), makeKey(), makeKey()];
+        const good = [];
+        for(let i = 0; i < XBRIDGE_MAX_PER_BLOCK + 3; i++)
+            good.push(makeTransfer(keys, { transfer_id: 'f' + String(i).padStart(63, '0'), src_action_index: 9000 + i }));
+        const rows = refusedRows(keys, XBRIDGE_MAX_PER_BLOCK).concat(good);
+        const { ctx } = makeCtx({
+            coin: 'DOGE', validators: snapshotSet(keys), mirrorTransfers: rows,
+            tokens: { XCHAIN: { TICK_ID: 7, DECIMALS: 8, SUPPLY: '0' } }
+        });
+        const expected = good.slice(0, XBRIDGE_MAX_PER_BLOCK).map(r => r.transfer_id);
+
+        const unsettled = (await BS.unsettledBridgeTransfers(ctx)).map(r => r.transfer_id);
+        let applied;
+        await captureConsole(async () => { applied = await BS.processBridgeSettlePass(ctx); });
+
+        assert.deepStrictEqual(applied.transfers, expected);
+        assert.strictEqual(unsettled.length, 2 * XBRIDGE_MAX_PER_BLOCK + 3);
+        assert.notDeepStrictEqual(unsettled.slice(0, XBRIDGE_MAX_PER_BLOCK), expected);
+    });
 });

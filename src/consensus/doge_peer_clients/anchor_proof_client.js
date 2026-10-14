@@ -72,6 +72,9 @@ function archiveRowTerminated(a, e){
     let network = String(e.network || '');
     let publisher = String(e.publisher || '').toLowerCase();
     if(!isRewardCandidateRow(a, network, publisher)) return false;
+    // Judge both gates in the DOGE domain, at the anchor's own block_index_doge. BTC derive
+    // (anchor_reward_derive.js rowGatesActive) judges them at the row's BTC snapshot_block and
+    // either refusal drops the reward, so termination is the union of the two domains.
     let dogeHeight = a.block_index_doge;
     let termActive = gateRegistry.activeAt(
         ANCHOR_ARCHIVE_FOLD_TERM, network, 'DOGE', dogeHeight, null);

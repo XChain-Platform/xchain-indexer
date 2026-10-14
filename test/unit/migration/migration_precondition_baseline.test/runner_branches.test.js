@@ -20,6 +20,7 @@ const path   = require('path');
 const crypto = require('crypto');
 
 const Database = require('../../../../src/db');
+const { SQL_MODE_PROBE, pinnedSqlModeRows } = require('../migration_runner.test/helpers/migration_fixtures.js');
 
 const FILE = '2026-07-24-pubkeys-widen-uncompressed.sql';
 const QUALIFIER_FILE = '2026-08-24-validator-rewards-round-qualifier.sql';
@@ -107,6 +108,7 @@ async function runAgainst(pubkeyLen) {
 
     const conn = {
         query: async function (sql, params) {
+            if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
             if (/GET_LOCK/i.test(sql))     return [{ l: 1 }];
             if (/RELEASE_LOCK/i.test(sql)) return [{}];
             if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {
@@ -202,6 +204,7 @@ async function runAgainstShape(shape, assertRows = []) {
 
     const conn = {
         query: async function (sql, params) {
+            if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
             if (/GET_LOCK/i.test(sql))     return [{ l: 1 }];
             if (/RELEASE_LOCK/i.test(sql)) return [{}];
             if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {

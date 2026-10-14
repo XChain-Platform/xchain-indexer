@@ -10,7 +10,8 @@
  *
  **********************************************************************
  *
- * The due set's order and per-block cap (guard 4), the proof transport that stalls
+ * The unsettled set's order (the per-block cap, guard 4, is a slot count inside the pass and
+ * is proven in refused_transfers_cap_slot.test.js), the proof transport that stalls
  * rather than refuses on a missing checkpoint, and deterministic checkpoint selection
  * across the anchored and the mirrored sources.
  * Part of the XBRIDGE settle pass suite; see ../bridge_settle.test.js for what these
@@ -29,10 +30,10 @@ const gates  = require('../../../../src/consensus/gate_registry.js');
 const CKPT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
 
 describe('bridge_settle: the XBRIDGE settle pass', function(){
-    describe('the due set: order and the per-block cap', function(){
+    describe('the unsettled set: order, with the cap left to the pass', function(){
 
-        // GUARD 4 of 4: the per-block cap.
-        it('orders by (snapshot_block, transfer_id) and slices at XBRIDGE_MAX_PER_BLOCK', async function(){
+        // The read is uncapped: the pass alone counts slots, so no prefix here is the applied set.
+        it('orders the unsettled set by (snapshot_block, transfer_id) and leaves the cap to the pass', async function(){
             // Deliberately built in the WRONG order and with a mixed snapshot_block, so the
             // ordering is proven rather than inherited from the fixture's array order.
             const rows = [];
@@ -41,9 +42,9 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
                             dest_chain: 'DOGE', network: NETWORK, effective_time: 1, status: 'finalized' });
             rows.reverse();
             const { ctx } = makeCtx({ coin: 'DOGE', mirrorTransfers: rows });
-            const due = await BS.dueBridgeTransfers(ctx);
-            assert.strictEqual(due.length, XBRIDGE_MAX_PER_BLOCK,
-                'the cap must bound the slice: ' + due.length + ' of a cap of ' + XBRIDGE_MAX_PER_BLOCK);
+            const due = await BS.unsettledBridgeTransfers(ctx);
+            assert.strictEqual(due.length, XBRIDGE_MAX_PER_BLOCK + 3,
+                'the read must not slice at the cap: ' + due.length + ' of ' + (XBRIDGE_MAX_PER_BLOCK + 3));
             // Every even index carries snapshot_block 1 and sorts ahead of every odd one.
             for(let i = 1; i < due.length; i++){
                 const prev = due[i - 1], cur = due[i];
@@ -62,7 +63,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             const { ctx } = makeCtx({ coin: 'DOGE', mirrorTransfers: rows,
                                       settled: [String(0).padStart(64, '0') + '|transfer',
                                                 String(2).padStart(64, '0') + '|transfer'] });
-            const due = await BS.dueBridgeTransfers(ctx);
+            const due = await BS.unsettledBridgeTransfers(ctx);
             assert.deepStrictEqual(due.map(r => r.transfer_id),
                 [String(1).padStart(64, '0'), String(3).padStart(64, '0')]);
         });

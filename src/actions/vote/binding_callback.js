@@ -121,7 +121,11 @@ async function isCallbackMethodUsable(contract, method, data){
         if(!result || result.success !== true) return false;
         let verdict = callbackProbeVm.listingVerdict(result.manifest, method);
         if(verdict !== null) return verdict;
-    } catch(e) { result = null; }
+    } catch(e) {
+        // Halt on a VM host or DB fault so this node never takes its verdict from a different probe than its peers.
+        rethrowIfInfraFault(e);
+        result = null;
+    }
     result = await readCallbackManifest.call(
         this, probeVm, callbackProbeVm.buildProbeCode(code, method), contract, data
     );

@@ -63,5 +63,11 @@ const LIST_SHARE_TABLES_PROBE = /information_schema\.tables[\s\S]*list_snapshots
 const LIST_SHARE_TABLE_ROWS   = Object.freeze(['list_snapshots', 'list_share_mirrors']);
 const listShareTablesPresent  = () => LIST_SHARE_TABLE_ROWS.map((name) => ({ name }));
 
+// runMigrationsInner reads @@SESSION.sql_mode on its connection before taking the lock and
+// refuses a lax answer, an empty one included. Runner harnesses answer the pinned mode because
+// they test the runner, not the session guard; session_sql_mode_guard.test.js pins the refusal.
+const SQL_MODE_PROBE    = /@@SESSION\.sql_mode/i;
+const pinnedSqlModeRows = () => [{ mode: require('../../../../../src/db/shared.js').SESSION_SQL_MODE }];
+
 module.exports = { assert, fs, path, Database, requireWithFreshConfig, DB_PATH, modeOf, stripComments, destructiveOf, statementsOf, BRIDGE_TABLES_PROBE, BRIDGE_TABLE_ROWS, bridgeTablesPresent,
-    LIST_SHARE_TABLES_PROBE, LIST_SHARE_TABLE_ROWS, listShareTablesPresent };
+    LIST_SHARE_TABLES_PROBE, LIST_SHARE_TABLE_ROWS, listShareTablesPresent, SQL_MODE_PROBE, pinnedSqlModeRows };

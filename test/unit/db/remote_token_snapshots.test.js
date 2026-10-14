@@ -69,13 +69,14 @@ describe('remote_token_snapshots mirror contract', function () {
         assert.match(sql, /KEY idx_source_ref \(coin, source_action_index\)/);
     });
 
-    it('is bootstrapped, globally watermarked, locally keyed, and retractable by its source action', function () {
+    it('is bootstrapped, globally watermarked, locally keyed, and never retracted', function () {
         assert.ok(!mirrorTables.CROSS_CHAIN_TABLES.includes('remote_token_snapshots'));
         assert.ok(mirrorTables.HUB_STATE_TABLES.includes('remote_token_snapshots'));
         assert.ok(mirrorTables.MIRRORED_TABLES.includes('remote_token_snapshots'));
         assert.ok(mirrorTables.AUTO_INCREMENT_ID_TABLES.includes('remote_token_snapshots'));
-        assert.strictEqual(mirrorTables.RETRACTION_COLUMNS.remote_token_snapshots, 'source_action_index');
-        assert.strictEqual(mirrorTables.RETRACTION_CHAIN_COLUMNS.remote_token_snapshots, 'coin');
+        // No push_generation fence column exists on either side, so no retraction mapping either.
+        assert.strictEqual(mirrorTables.RETRACTION_COLUMNS.remote_token_snapshots, undefined);
+        assert.strictEqual(mirrorTables.RETRACTION_CHAIN_COLUMNS.remote_token_snapshots, undefined);
     });
 
     it('declares hub re-mirroring as its recovery policy', function () {
@@ -86,7 +87,7 @@ describe('remote_token_snapshots mirror contract', function () {
         assert.ok(!lifecycle.anchorRecoveryTables().includes('remote_token_snapshots'));
     });
 
-    it('round trips a finalized fixture and removes it on a source-chain retraction', async function () {
+    it('round trips a finalized fixture and keeps it through a fenced source-chain retraction', async function () {
         const store = fixtureStore();
         const columns = declaredColumns(sql).filter(c => c !== 'id');
         const sync = new HubDbSync(store, { hubUrl: 'http://hub.test' });
@@ -127,17 +128,14 @@ describe('remote_token_snapshots mirror contract', function () {
             from_action_index: 91,
             retraction_generation: 3
         });
-        assert.strictEqual(await reader.getPinnedRemoteToken('regtest', 'DOGE', 'FUFU'), null);
-        const deletion = store.calls.find(call => /^DELETE FROM remote_token_snapshots /.test(call.sql));
-        assert.deepStrictEqual(deletion, {
-            sql: 'DELETE FROM remote_token_snapshots WHERE coin = ? AND source_action_index >= ? AND push_generation <= ?',
-            args: ['DOGE', 91, 3]
-        });
+        // The fixture store would honour a DELETE, so a regression to deleting turns this red.
+        assert.deepStrictEqual(await reader.getPinnedRemoteToken('regtest', 'DOGE', 'FUFU'), expected);
+        assert.strictEqual(store.calls.filter(call => /^DELETE/i.test(call.sql)).length, 0);
     });
 });
 
-describe('remote_token_snapshots quorum-class retraction', function () {
-    it('refuses an unfenced deletion', async function () {
+describe('remote_token_snapshots never-retracted mirror', function () {
+    it('skips an unfenced deletion', async function () {
         const calls = [];
         const sync = new HubDbSync({ doQuery: async (sql, args) => { calls.push({ sql, args }); return []; } },
             { hubUrl: 'http://hub.test' });

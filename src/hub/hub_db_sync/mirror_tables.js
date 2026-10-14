@@ -32,7 +32,6 @@
 const RETRACTION_COLUMNS = {
     price_snapshots: 'source_action_index',
     oracle_prices:   'action_index',
-    remote_token_snapshots: 'source_action_index',
     // bridge_transfers is ONE-SIDED: a transfer is retracted when the single source leg
     // (the v0 lock or the v1 burn named by src_chain/src_action_index) is reorged away, so
     // one column names the range. cross_chain_matches is two-sided and has its own branch
@@ -43,6 +42,11 @@ const RETRACTION_COLUMNS = {
     // sequence, never as a deletion, and this map names a numeric source-chain action
     // index neither table carries. Absent from the map, applyRetraction skips any
     // deletion event naming either one.
+    //
+    // remote_token_snapshots has no entry either: neither its hub nor its indexer DDL has
+    // the push_generation fence column a quorum-class DELETE names, and no hub path emits a
+    // deletion for it, so a newer version arrives as a new row and a source-chain reorg
+    // does not remove an older one.
     bridge_transfers: 'src_action_index'
 };
 
@@ -55,8 +59,7 @@ const RETRACTION_COLUMNS = {
 // mirrored forever. Kept local, like RETRACTION_COLUMNS, so no column name ever comes
 // from the wire. A table absent from this map keeps `source_chain`.
 const RETRACTION_CHAIN_COLUMNS = {
-    bridge_transfers:       'src_chain',
-    remote_token_snapshots: 'coin'
+    bridge_transfers:       'src_chain'
 };
 
 // Tables mirrored for the cross-chain DEX + cross-chain contract calls.
@@ -95,8 +98,8 @@ const AUTO_INCREMENT_ID_TABLES = ['price_snapshots', 'oracle_prices', 'cross_cha
                                   'remote_token_snapshots', 'state_checkpoints', 'anchor_reward_attestations'];
 
 // Hub federation state tables. remote_token_snapshots has no dedicated block-loop
-// barrier, so it rides the global stream watermark while retaining its source-action
-// retraction mapping above. state_checkpoints carries quorum-signed per-chain
+// barrier, so it rides the global stream watermark, and it is never retracted (see
+// RETRACTION_COLUMNS above). state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
 // never retracted. A reorged height is superseded by a new row with a higher
 // checkpoint_seq. Not on any settlement-critical path (no block-loop barrier).

@@ -87,3 +87,36 @@ describe('Pinned remote token signature re-verify @regression @tier2', function 
         assert.strictEqual(await remoteTokenAcceptError(handler, state()), REJECT);
     });
 });
+
+// Fail the validator-set read with the given error on both quorum paths.
+function handlerWithFailingValidatorRead(error) {
+    const handler = makeHandler(signedRemoteTokenRow());
+    handler.indexerDb.getValidatorsByCapability = sinon.stub().rejects(error);
+    handler.indexerDb.getStakeWeightsByCapability = sinon.stub().rejects(error);
+    return handler;
+}
+
+describe('Pinned remote token signature re-verify @regression @tier2', function () {
+    beforeEach(() => {
+        const activeAt = gateRegistry.activeAt;
+        sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...args) =>
+            key === REMOTE_TOKEN_KEY ? true : activeAt(key, ...args));
+    });
+    afterEach(() => sinon.restore());
+
+    for (const errno of [1205, 1213]) {
+        it(`halts on a DB errno ${errno} during the quorum read instead of committing a reject`, async function () {
+            const fault = Object.assign(new Error('db fault'), { errno });
+            await assert.rejects(remoteTokenAcceptError(handlerWithFailingValidatorRead(fault), state()), (e) => e === fault);
+        });
+    }
+
+    it('halts on a price-barrier deferral during the quorum read', async function () {
+        const fault = Object.assign(new Error('deferred'), { code: 'PRICE_BARRIER_DEFERRED' });
+        await assert.rejects(remoteTokenAcceptError(handlerWithFailingValidatorRead(fault), state()), (e) => e === fault);
+    });
+
+    it('still rejects on a deterministic quorum-read error with no errno or code', async function () {
+        assert.strictEqual(await remoteTokenAcceptError(handlerWithFailingValidatorRead(new Error('boom')), state()), REJECT);
+    });
+});
