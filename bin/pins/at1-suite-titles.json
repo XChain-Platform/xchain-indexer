@@ -14291,6 +14291,18 @@
       "ATTEST batch chunk read: the publisher partition and its row limit (row 59) @regression reassembles a real multi-chunk batch read back through the bounded query",
       "ATTEST batch chunk read: the publisher partition and its row limit (row 59) @regression still hands a foreign publisher nothing of this batch"
     ],
+    "ea0a32519488ba6a": [
+      "Database.normalizeDataValues() ERROR_MESSAGE clip leaves fitting values alone @regression @tier1 ERROR_MESSAGE: does not mutate the caller object",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip leaves fitting values alone @regression @tier1 ERROR_MESSAGE: keeps a short value and a within-capacity lone surrogate unchanged",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip leaves fitting values alone @regression @tier1 ERROR_MESSAGE: keeps a value of exactly 65,535 bytes unchanged",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip leaves fitting values alone @regression @tier1 ERROR_MESSAGE: leaves null as null and clips the same input to the same value every time",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip to the TEXT byte capacity @regression @tier1 ERROR_MESSAGE: clips a 70,008-character ASCII revert reason to the 65,535-byte column capacity",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip to the TEXT byte capacity @regression @tier1 ERROR_MESSAGE: clips an 80,000-byte emoji revert reason on a character boundary",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip to the TEXT byte capacity @regression @tier1 ERROR_MESSAGE: steps back off 2- and 3-byte characters that straddle the cut",
+      "Database.normalizeDataValues() METHOD_NAME clip to the VARCHAR(250) character capacity @regression @tier1 METHOD_NAME: clips a 300-character method name to 250 characters",
+      "Database.normalizeDataValues() METHOD_NAME clip to the VARCHAR(250) character capacity @regression @tier1 METHOD_NAME: counts a 4-byte character as one and never splits it",
+      "Database.normalizeDataValues() METHOD_NAME clip to the VARCHAR(250) character capacity @regression @tier1 METHOD_NAME: keeps a 250-character name, a short name and null unchanged"
+    ],
     "ea62056189a4fc7e": [
       "protocol_changes BET feed list edit row @regression @tier1 is registry-only and keeps its registry part within the size limit",
       "protocol_changes BET feed list edit row @regression @tier1 registers an unarmed production height map with regtest active from genesis",
@@ -15450,8 +15462,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1258,
-      "titleCount": 12931,
+      "fileCount": 1259,
+      "titleCount": 12941,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16154,6 +16166,7 @@
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
+        "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
         "test/unit/db/db.test/get_block_index.test.js": "6acb53eca64ed20e",
         "test/unit/db/db.test/reorg_identity.test.js": "2394b1e6a050e4c7",
         "test/unit/db/db.test/validator_capabilities.test.js": "fc5d6e4ae9cfb50a",

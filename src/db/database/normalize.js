@@ -91,7 +91,50 @@ function boundIntegerLockAndDecimalFields(self, data){
         data['DECIMALS'] = null;
 }
 
-// Last pass: the per-ACTION text truncations and the MEMO cap.
+// contract_executions.error_message is TEXT: 65,535 bytes of utf8mb4. A contract's revert
+// or require reason reaches it verbatim with no length cap, and a strict sql_mode session
+// refuses an over-capacity value (errno 1406, or 1366 when the server's own byte cut would
+// land inside a character), so the value is clipped to the column's byte capacity here.
+// The limit is that exact capacity, so every value that ever fit is stored byte-for-byte
+// as before.
+const ERROR_MESSAGE_MAX_BYTES = 65535;
+
+// contract_executions.method_name is VARCHAR(250): 250 characters, counted the way the
+// server counts them (one per code point). A wire EXECUTE's METHOD reaches it unchecked.
+const METHOD_NAME_MAX_CHARS = 250;
+
+// Clip a string to at most maxBytes of UTF-8 without splitting a character. A value that
+// already fits is returned untouched. Otherwise the cut steps back off continuation bytes
+// (10xxxxxx) to the start of the straddling character. Measuring and cutting use the same
+// encoder the driver binds with, so a lone surrogate counts as the 3-byte U+FFFD it is
+// stored as, and the result is a pure function of the input on every node.
+function clipUtf8Bytes(value, maxBytes){
+    let s = String(value);
+    if(Buffer.byteLength(s, 'utf8') <= maxBytes) return s;
+    let buf = Buffer.from(s, 'utf8');
+    let end = maxBytes;
+    while(end > 0 && (buf[end] & 0xC0) === 0x80) end--;
+    return buf.toString('utf8', 0, end);
+}
+
+// Clip a string to at most maxChars code points without splitting a surrogate pair. A
+// UTF-16 length within the limit already fits (code units never undercount code points),
+// so only a longer string is walked.
+function clipCodePoints(value, maxChars){
+    let s = String(value);
+    if(s.length <= maxChars) return s;
+    let end = 0;
+    for(let count = 0; count < maxChars && end < s.length; count++){
+        let c = s.charCodeAt(end);
+        let pair = c >= 0xD800 && c <= 0xDBFF && end + 1 < s.length &&
+                   (s.charCodeAt(end + 1) & 0xFC00) === 0xDC00;
+        end += pair ? 2 : 1;
+    }
+    return s.substring(0, end);
+}
+
+// Last pass: the per-ACTION text truncations, the MEMO cap, and the contract execution
+// row's two contract- and wire-controlled text columns.
 function truncateTextFields(self, data){
     // Handle ACTION specific customizations
     let action = (!self.util.isNull(data['ACTION'])) ? data['ACTION'] : 'UNKNOWN';
@@ -124,6 +167,12 @@ function truncateTextFields(self, data){
     // Truncate MEMO  to 250 characters
     if(!self.util.isNull(data['MEMO']))
         data['MEMO'] = String(data['MEMO']).substring(0,250);
+    // Clip the contract execution row's error detail and method name to their columns.
+    // Neither enters a block-hash preimage, and both are no-ops for any value that fits.
+    if(!self.util.isNull(data['ERROR_MESSAGE']))
+        data['ERROR_MESSAGE'] = clipUtf8Bytes(data['ERROR_MESSAGE'], ERROR_MESSAGE_MAX_BYTES);
+    if(!self.util.isNull(data['METHOD_NAME']))
+        data['METHOD_NAME'] = clipCodePoints(data['METHOD_NAME'], METHOD_NAME_MAX_CHARS);
 }
 
 module.exports = {
