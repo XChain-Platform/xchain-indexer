@@ -134,3 +134,15 @@ addGate('native_stack_terminal_heights.NATIVE_STACK_TERMINAL_ACTIVATION', 'heigh
     testnet: UNARMED,
     regtest: 0,
 });
+
+// vote_settlement_exact_activation
+// Height on the chain's own block_index. From it a VOTE create refuses a DEPOSIT or GAS_ESCROW
+// past the 8 dp its escrow locks and releases at, a ballot needs its poll still open, and split
+// portions are floored to 18 dp with the remainder on the largest share (lowest index on a tie),
+// so they sum to the voter's weight. Create and ballot read their own block, the tally its measure
+// block. Below it all three replay as before. Unarmed on mainnet and testnet; regtest from genesis.
+addGate('vote_settlement_exact_activation.VOTE_SETTLEMENT_EXACT_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});

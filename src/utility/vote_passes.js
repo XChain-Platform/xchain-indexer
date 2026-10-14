@@ -21,6 +21,17 @@
 
 'use strict';
 
+const gateRegistry = require('../consensus/gate_registry');
+
+const SETTLEMENT_EXACT_KEY = 'vote_settlement_exact_activation.VOTE_SETTLEMENT_EXACT_ACTIVATION';
+
+// The split rounding rule is a tally input no row watermark sees, so from vote_settlement_exact_activation
+// the fingerprint carries it and every node re-tallies at the arming block whatever its cache holds.
+// Unarmed the suffix is empty, so the fingerprint is exactly the input-row watermark.
+function tallyRuleSuffix(db, block_index){
+    return gateRegistry.activeAt(SETTLEMENT_EXACT_KEY, db.config['NETWORK'], db.config['COIN'], Number(block_index), null) ? ':exact' : '';
+}
+
 // Step 2 of processVoteFinalizations for ONE armed poll: skip it when its tally inputs have
 // not changed since the last block tallied it, otherwise tally it at this block and, when the
 // leader crosses the decide threshold and the gates pass, inject the early-decide VOTE v2.
@@ -39,7 +50,7 @@ async function evaluateArmedPoll(util, actions, db, poll, block_index, block_tim
     // by a row-presence watermark; those polls always take the full tally, exactly as before.
     let watermark = null;
     if(poll.weight_mode !== 'time_weighted'){
-        watermark = await db.getPollTallyInputWatermark(pollIndex, poll.tick_id);
+        watermark = (await db.getPollTallyInputWatermark(pollIndex, poll.tick_id)) + tallyRuleSuffix(db, block_index);
         if(db.pollTallyWatermarkMatches(pollIndex, watermark))
             return;
     }

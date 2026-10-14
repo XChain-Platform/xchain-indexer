@@ -31,6 +31,7 @@ const gateRegistry = require('../../consensus/gate_registry.js');
 const { getLogger } = require('../../observability/index.js');
 const { MAX_CODE_SIZE } = require('../../protocol/constants.js');
 const callbackProbeVm = require('./callback_probe_vm.js');
+const { settlementExactAt, exceedsEscrowDecimals, ESCROW_DECIMALS } = require('./validate.js');
 
 const USABLE_CALLBACK_GATE = 'vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD';
 
@@ -198,6 +199,11 @@ async function validateCallbackEscrow(data, error, deposit){
     // Verify GAS_ESCROW is a non-negative amount
     if(!error && (!this.util.isNumeric(gasEscrow) || this.util.bclt(gasEscrow, 0)))
         error = 'invalid: GAS_ESCROW (non-negative amount)';
+    // From vote_settlement_exact_activation GAS_ESCROW shares the DEPOSIT precision rule:
+    // the combined escrow locks and releases at ESCROW_DECIMALS while its refund credit
+    // moves the amount as written.
+    if(!error && settlementExactAt(this, block_index) && exceedsEscrowDecimals(this.util, gasEscrow))
+        error = 'invalid: GAS_ESCROW (more than ' + ESCROW_DECIMALS + ' decimal places)';
     // Funding check covers DEPOSIT + GAS_ESCROW together (both in GAS).
     if(!error && this.util.bcgt(gasEscrow, 0)){
         let need     = this.util.bcadd(deposit, gasEscrow, 8);

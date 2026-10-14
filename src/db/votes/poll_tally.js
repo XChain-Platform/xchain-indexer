@@ -20,6 +20,10 @@
  *
  ********************************************************************/
 
+const gateRegistry = require('../../consensus/gate_registry');
+
+const SETTLEMENT_EXACT_KEY = 'vote_settlement_exact_activation.VOTE_SETTLEMENT_EXACT_ACTIVATION';
+
 // The voter's CURRENT ballot rows, text unchanged from the read getPollTally ran inline.
 const CURRENT_BALLOTS_SQL = `SELECT a.address AS address, v.choice AS choice, v.share AS share
                FROM votes v INNER JOIN index_addresses a ON (a.id=v.voter_address_id)
@@ -86,9 +90,29 @@ async function delegatedInbound(db, poll, measureBlock, byVoter, holders, weight
     return inbound;
 }
 
-// Per-option weight and voter counts over every current ballot, plus the counted weight
-// and the qualifying headcount the validity gates read. `t` carries byVoter, holders,
-// weightFor, inbound, minVoteBal, tally_mode and optionCount from getPollTally.
+// Split portions under vote_settlement_exact_activation, in picks order (null when out of range):
+// each is floor(weight * share / sumShares) at 18 dp, and the remainder goes to the largest share,
+// lowest option index on a tie, chosen by comparison since the ballot read fixes no row order.
+function exactSplitPortions(db, weight, picks, sumShares, optionCount){
+    let portions = picks.map(p => (p.choice < 0 || p.choice >= optionCount)
+        ? null : db.util.bcmuldivfloor(weight, p.share, sumShares, 18));
+    let given = '0', top = -1;
+    for(let i = 0; i < picks.length; i++){
+        if(portions[i] === null) continue;
+        given = db.util.bcadd(given, portions[i], 18);
+        let p = picks[i], best = (top < 0) ? null : picks[top];
+        if(best === null || db.util.bcgt(p.share, best.share)
+           || (!db.util.bcgt(best.share, p.share) && p.choice < best.choice))
+            top = i;
+    }
+    if(top >= 0)
+        portions[top] = db.util.bcadd(portions[top], db.util.bcsub(weight, given, 18), 18);
+    return portions;
+}
+
+// Per-option weight and voter counts over every current ballot, plus the counted weight and the
+// qualifying headcount the validity gates read. `t` carries byVoter, holders, weightFor, inbound,
+// minVoteBal, tally_mode, optionCount and exactSplit (the split rounding rule) from getPollTally.
 function countBallots(db, t){
     let totals = [];
     let optionVoters = [];
@@ -111,9 +135,13 @@ function countBallots(db, t){
             let sumShares = '0';
             for(let p of picks) sumShares = db.util.bcadd(sumShares, p.share, 18);
             if(!db.util.bcgt(sumShares, 0)) continue;
-            for(let p of picks){
+            // Below the activation each portion is rounded half-up on its own, so a ballot's
+            // portions can sum above or below the weight; from it they sum to it exactly.
+            let exact = t.exactSplit ? exactSplitPortions(db, weight, picks, sumShares, t.optionCount) : null;
+            for(let pi = 0; pi < picks.length; pi++){
+                let p = picks[pi];
                 if(p.choice < 0 || p.choice >= t.optionCount) continue;
-                let portion = db.util.bcmul(weight, db.util.bcdiv(p.share, sumShares, 18), 18);
+                let portion = exact ? exact[pi] : db.util.bcmul(weight, db.util.bcdiv(p.share, sumShares, 18), 18);
                 totals[p.choice] = db.util.bcadd(totals[p.choice], portion, 18);
                 optionVoters[p.choice]++;
             }
@@ -176,7 +204,10 @@ module.exports = {
         let byVoter   = await readCurrentBallots(this, pollIndex);
         let weightFor = weightFunction(this, weight_mode, twBalances);
         let inbound   = await delegatedInbound(this, poll, measureBlock, byVoter, holders, weightFor);
-        let counted   = countBallots(this, { byVoter, holders, weightFor, inbound, minVoteBal, tally_mode, optionCount });
+        // The split rounding rule is the one active at the measure block, which is the block
+        // the early-decide probe and the finalization both tally at.
+        let exactSplit = gateRegistry.activeAt(SETTLEMENT_EXACT_KEY, this.config['NETWORK'], this.config['COIN'], measureBlock, null);
+        let counted   = countBallots(this, { byVoter, holders, weightFor, inbound, minVoteBal, tally_mode, optionCount, exactSplit });
         let outcome   = decideOutcome(this, poll, counted, optionCount, supply);
         let { totals, optionVoters, totalCountedWeight, qualifyingVoters } = counted;
         let { winning_option, quorum_met, min_voters_met } = outcome;

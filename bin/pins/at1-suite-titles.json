@@ -11475,6 +11475,12 @@
       "list snapshot archive verification @regression @tier1 requires the injected canonical builder before reading any row",
       "list snapshot archive verification @regression @tier1 verifies a row against its archived cross_chain set"
     ],
+    "a3fbad53cad92755": [
+      "early-decide watermark across the vote settlement exact activation @regression @tier1 armed at a height a node that restarts between the height and a later block agrees on the close block",
+      "early-decide watermark across the vote settlement exact activation @regression @tier1 armed at a height a warm node and a cold node both close the split poll at the arming height",
+      "early-decide watermark across the vote settlement exact activation @regression @tier1 unarmed on mainnet: warm and cold nodes keep the poll open and cache the plain watermark",
+      "early-decide watermark across the vote settlement exact activation @regression @tier1 unarmed on testnet: warm and cold nodes keep the poll open and cache the plain watermark"
+    ],
     "a3ff598f6a613223": [
       "Supply & amount boundary tests @regression @tier1 AMT-01: Issue token with minimum supply MAX_SUPPLY = MIN_TOKEN_SUPPLY (10^-18) with DECIMALS=18 \u2192 valid",
       "Supply & amount boundary tests @regression @tier1 AMT-02: Issue token with maximum supply MAX_SUPPLY = MAX_TOKEN_SUPPLY (10^21) with DECIMALS=0 \u2192 valid",
@@ -15145,6 +15151,25 @@
       "Cross_Settle action handler @regression @tier1 ORDER leg (partial fills) settles the b leg order when this chain is the b side",
       "Cross_Settle action handler @regression @tier1 ORDER leg (partial fills) skips when the local order is not found"
     ],
+    "defa8d65cc78455d": [
+      "VOTE settlement exact activation: create and ballot @regression @tier1 activation height reads the ballot block: 149 accepts a ballot on a finalized poll, 150 refuses it",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 activation height reads the create block: 149 accepts a 9-dp DEPOSIT, 150 refuses it",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 armed (regtest from genesis) accepts a DEPOSIT whose digits past the 8th are zeros",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 armed (regtest from genesis) accepts a ballot on an open poll inside its window",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 armed (regtest from genesis) accepts an 8-dp DEPOSIT and locks it unchanged",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 armed (regtest from genesis) accepts an 8-dp GAS_ESCROW on a binding poll",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 armed (regtest from genesis) refuses a 9-dp DEPOSIT and locks nothing",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 armed (regtest from genesis) refuses a 9-dp GAS_ESCROW on a binding poll",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 armed (regtest from genesis) refuses a DEPOSIT whose exponent form carries a 9th decimal place",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 armed (regtest from genesis) refuses a ballot on a poll finalized early, before its END_BLOCK",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 armed (regtest from genesis) refuses a ballot on a poll that failed its gates early",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 unarmed (mainnet committed row) accepts a 9-dp DEPOSIT and locks it at 8 dp, as before the row",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 unarmed (mainnet committed row) accepts a 9-dp GAS_ESCROW on a binding poll, as before the row",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 unarmed (mainnet committed row) accepts a ballot on a poll finalized early, as before the row",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 unarmed (testnet committed row) accepts a 9-dp DEPOSIT and locks it at 8 dp, as before the row",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 unarmed (testnet committed row) accepts a 9-dp GAS_ESCROW on a binding poll, as before the row",
+      "VOTE settlement exact activation: create and ballot @regression @tier1 unarmed (testnet committed row) accepts a ballot on a poll finalized early, as before the row"
+    ],
     "df0ed3dae2767af5": [
       "static fee quote <-> handler acceptance fee parity @regression @tier1 no site recomputes the VM gas arithmetic no other file under src/ prices VM gas either",
       "static fee quote <-> handler acceptance fee parity @regression @tier1 no site recomputes the VM gas arithmetic utility.js is the single site that does"
@@ -16083,6 +16108,14 @@
       "getContractStakeDataForVM snapshot precision @regression @tier1 aggregates an 18-dp tick at full precision in the VM-visible snapshot",
       "slashContractStake precision @regression @tier1 slashes an 18-dp contract stake without truncating the residual",
       "slashContractStake precision @regression @tier1 widens the positivity filter so sub-1e-8 contract stakes stay slashable"
+    ],
+    "ebfbb476ed9bd920": [
+      "VOTE settlement exact activation: split tally @regression @tier1 activation height a tally measured at 299 rounds half-up and one measured at 300 floors with a remainder",
+      "VOTE settlement exact activation: split tally @regression @tier1 armed (regtest from genesis) gives the remainder of an even split to the lowest option index, whatever the row order",
+      "VOTE settlement exact activation: split tally @regression @tier1 armed (regtest from genesis) splits 1:1:4 of 100 into floors whose remainder goes to the largest share",
+      "VOTE settlement exact activation: split tally @regression @tier1 armed (regtest from genesis) sums exactly to the weight for every share triple up to 8 and three weights",
+      "VOTE settlement exact activation: split tally @regression @tier1 unarmed (mainnet committed row) keeps the half-up portions of a 1:1:4 split of 100, which sum above the weight",
+      "VOTE settlement exact activation: split tally @regression @tier1 unarmed (testnet committed row) keeps the half-up portions of a 1:1:4 split of 100, which sum above the weight"
     ],
     "ec0896fe79ded60b": [
       "migrate CLI --file targeting @regression --file scopes the run to the named migration (passes opts.only)",
@@ -17342,8 +17375,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1324,
-      "titleCount": 13354,
+      "fileCount": 1327,
+      "titleCount": 13381,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -17639,6 +17672,7 @@
         "test/unit/actions/stake/vote_invariants.test/poll_callback_wire.test.js": "61996ee0381ed3e0",
         "test/unit/actions/stake/vote_invariants.test/poll_tick_visible.test.js": "41c899fc2a22e77f",
         "test/unit/actions/stake/vote_invariants.test/refused_create_status.test.js": "56e445f383ed3021",
+        "test/unit/actions/stake/vote_invariants.test/settlement_exact.test.js": "defa8d65cc78455d",
         "test/unit/actions/stake/vote_sleep_gate.test.js": "aa7188891f17a98e",
         "test/unit/actions/stake/withdraw.test.js": "25db2339c8df14dc",
         "test/unit/actions/stake/withdraw.test/amount_and_ledger.test.js": "b0c0ade6236d90f4",
@@ -18207,6 +18241,7 @@
         "test/unit/db/stakes/db_weightless_stake_row.test.js": "df8d93eb9e7ece0b",
         "test/unit/db/stakes/sweepable_stake_order.test.js": "a7f6e2d898a60ee9",
         "test/unit/db/stakes/votes_append_only.test.js": "27e6dea0edfed7ae",
+        "test/unit/db/stakes/votes_split_exact.test.js": "ebfbb476ed9bd920",
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
         "test/unit/db/subtree/node_store_rows.test.js": "e0826acdcf60989c",
         "test/unit/db/subtree/orphan_stats_reads.test.js": "84a5bb8715a5c817",
@@ -18659,6 +18694,7 @@
         "test/unit/xchain_indexer/mirror_admission_legacy_progress.test.js": "4ee376dc5f1c5cb0",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
         "test/unit/xchain_indexer/parse_exception_wedge.test.js": "4056956385f780ce",
+        "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/poll_early_decide_watermark.test.js": "998eea1b7fd2bc86",
         "test/unit/xchain_indexer/readiness_verdict.test.js": "44ca5a03f9220589",
         "test/unit/xchain_indexer/resolve_btc_chain_id_midchain.test.js": "f8d27657ca37a414",
