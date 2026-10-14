@@ -95,9 +95,10 @@ module.exports = {
                     escrows = [];
 
                 if(Number(dispenser['GIVE_OWNERSHIP']||0) == 1){
-                    // Ownership dispense: clear the escrow gate and atomically transfer
-                    // ownership from the dispenser SOURCE to the buyer (data['SOURCE']).
-                    await this.util.transferTokenOwnership(this.indexerDb, this.mapper, dispense, dispense['GIVE_TICK'], dispenser['SOURCE'], dispense['DESTINATION']);
+                    // Ownership dispense: clear the escrow gate and atomically transfer ownership from the
+                    // dispenser SOURCE to the buyer (data['SOURCE']). The synthetic ISSUE takes BLOCK_INDEX, TX_INDEX
+                    // and BLOCK_TIME from the paying transaction's data, as every other caller does; the dispense row has none.
+                    await this.util.transferTokenOwnership(this.indexerDb, this.mapper, ctx.data, dispense['GIVE_TICK'], dispenser['SOURCE'], dispense['DESTINATION']);
                 } else if(this.util.bcgt(dispense['GIVE_AMOUNT'], 0)){
                     // Balance dispense: debit from escrow, credit buyer
                     // Negate via bcsub, not JS unary minus: -GIVE_AMOUNT coerces the

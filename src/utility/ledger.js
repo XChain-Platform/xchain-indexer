@@ -184,6 +184,12 @@ module.exports = {
     // re-derived by db.updateTokens(). Called by order_match / swap_match / dispense /
     // coinpay / sweep when an ownership offer settles or is closed with delivery routing.
     async transferTokenOwnership(db, mapper, data, tick, fromAddress, toAddress){
+        // Refuse before any write when `data` is not the triggering action's data: the ISSUE row needs
+        // BLOCK_INDEX (actions.block_index is NOT NULL) and BLOCK_TIME. TX_INDEX stays optional, since
+        // the block-level passes (COINPAY_EXPIRE, CROSS_SETTLE, a cancelled DISPENSER_CLOSE) have no transaction.
+        let missing = ['BLOCK_INDEX', 'BLOCK_TIME'].filter((key) => !data || this.isNull(data[key]));
+        if(missing.length > 0)
+            throw new Error('transferTokenOwnership(' + tick + '): action data is missing ' + missing.join(', ') + '; pass the triggering action data, not a derived row');
         await db.clearTokenEscrow(tick);
         let issue = {
             ACTION:       'ISSUE',
