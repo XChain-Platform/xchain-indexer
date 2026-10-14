@@ -13122,6 +13122,11 @@
       "GAS-tick open mint @regression @security supply bounds still enforced rejects a mint that would exceed MAX_SUPPLY",
       "GAS-tick open mint @regression @security supply bounds still enforced rejects a per-tx amount above MAX_MINT"
     ],
+    "bd9cc053b1689615": [
+      "reorg rollback stamps markets from the surviving tip @regression @tier3 ignores the orphaned block time a warm memo still holds",
+      "reorg rollback stamps markets from the surviving tip @regression @tier3 never stamps a row with an unresolvable time once the target row is gone",
+      "reorg rollback stamps markets from the surviving tip @regression @tier3 skips the refresh when no block survives below the target"
+    ],
     "bdf7d418cf196406": [
       "HubDbSync applyRetraction closed-range parity @regression @tier3 REFUSES an unfenced delete for cross_chain_calls",
       "HubDbSync applyRetraction closed-range parity @regression @tier3 REFUSES an unfenced delete for cross_chain_matches",
@@ -14950,6 +14955,10 @@
       "HubDbSync rowless snapshot page @regression @tier2 names a null hub reply too",
       "HubDbSync rowless snapshot page @regression @tier2 names the table and what the hub sent when a snapshot page carries no rows array",
       "HubDbSync rowless snapshot page @regression @tier2 the partial-bootstrap retry line names every table that did not drain"
+    ],
+    "db76d27633dfccde": [
+      "reorg rollback re-derives tokens.bridged from the surviving locks @regression @tier3 clears the bit an orphaned first lock set, and keeps every bit a surviving lock explains",
+      "reorg rollback re-derives tokens.bridged from the surviving locks @regression @tier3 leaves the bit alone when nothing was orphaned"
     ],
     "dbb6f593f551838f": [
       "Delegate (DELEGATE) @regression @tier2 v0: capability rotate calls mapper.createMappings after parse",
@@ -17010,6 +17019,11 @@
       "anchor-action-query: getanchorconfirmations the page cursor is validated, never coerced accepts an absent cursor as \"first page\"",
       "anchor-action-query: getanchorconfirmations the page cursor is validated, never coerced refuses a junk cursor rather than silently restarting the walk at page one"
     ],
+    "fb4c5f44823eb2cc": [
+      "reorg rollback writes are fenced to their transaction @regression @tier3 a market refresh that outlives a failed rollback writes nothing",
+      "reorg rollback writes are fenced to their transaction @regression @tier3 a write issued while the ROLLBACK is in flight is refused",
+      "reorg rollback writes are fenced to their transaction @regression @tier3 a write that fetched its connection as the teardown began is refused"
+    ],
     "fb5344c11f961c86": [
       "stallFields() stall attribution coerces the decoder reorg halt marker to a boolean",
       "stallFields() stall attribution reports the indexer stall reason or null",
@@ -17328,8 +17342,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1321,
-      "titleCount": 13346,
+      "fileCount": 1324,
+      "titleCount": 13354,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18533,6 +18547,9 @@
         "test/unit/rollback/archive_reset_predicate.test.js": "dc2dd859a265cfae",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/db_is_reorg_halted.test.js": "f7df01ef630b4c84",
+        "test/unit/rollback/derived_projections/market_stamp_surviving_tip.test.js": "bd9cc053b1689615",
+        "test/unit/rollback/derived_projections/token_bridged_rederive.test.js": "db76d27633dfccde",
+        "test/unit/rollback/derived_projections/tx_epoch_fence.test.js": "fb4c5f44823eb2cc",
         "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
         "test/unit/rollback/reorg_catchup_cursor.test.js": "694d08dca6dd0abb",
         "test/unit/rollback/reorg_resume_cursor_hole.test.js": "93e45958dfe95026",

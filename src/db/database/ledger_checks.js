@@ -269,9 +269,12 @@ module.exports = {
         return (row) ? row.id : null;
     },
 
-    // Handle finding and updating markets
+    // Refresh the given market pairs' stats as of block_index, a block that must still be
+    // stored. An unresolvable time skips the refresh rather than stamping the rows with 0.
     async updateMarkets(markets, block_index){
         let block_time = await this.getBlockTime(block_index);
+        if(block_time === false || block_time === null)
+            return;
         await Promise.all(markets.map(async (pair) => {
             let market_id = await this.getMarketId(pair.tick1_id, pair.tick2_id);
             if(market_id){

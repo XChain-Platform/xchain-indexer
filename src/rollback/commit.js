@@ -60,8 +60,9 @@ module.exports = {
             // Update token information
             await this.indexerDb.updateTokens(tickers, true);
 
-            // Update market information
-            await this.indexerDb.updateMarkets(markets, block_index);
+            // Update market information as of the surviving tip, the last block left after the
+            // delete. block_index itself is orphaned: its row is gone and its time memo is stale.
+            await this.indexerDb.updateMarkets(markets, block_index - 1);
 
             // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
             await this.indexerDb.sanityCheck(block_index);

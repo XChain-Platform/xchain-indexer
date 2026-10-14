@@ -97,6 +97,15 @@ module.exports = {
         }
     },
 
+    // Clear the bridged bit of every token left with no applied XBRIDGE v3 lock: the same
+    // predicate getTokenInfo derives BRIDGED from, read over the surviving xbridges rows.
+    async rederiveTokenBridged(db){
+        await db.doQuery(`UPDATE tokens SET bridged=0
+                          WHERE bridged=1 AND NOT EXISTS (
+                              SELECT 1 FROM xbridges x INNER JOIN index_statuses s ON (s.id=x.status_id)
+                              WHERE x.tick_id=tokens.tick_id AND x.version=3 AND s.status='valid')`, []);
+    },
+
     // COINPay match statuses re-derived from the surviving fulfilled payments.
     async rederiveCoinpayMatchStatus(db){
         //<COINPAY-MATCH-REDERIVE-SQL>

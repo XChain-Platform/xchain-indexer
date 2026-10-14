@@ -33,6 +33,9 @@ function createMockDb() {
         beginTransaction: sinon.stub().resolves(),
         commitTransaction: sinon.stub().resolves(true),
         rollbackTransaction: sinon.stub().resolves(),
+        // The epoch fence the block loop and the reorg run their writes under; a pass-through here.
+        currentTxEpoch: sinon.stub().returns(0),
+        runInTxEpoch: sinon.spy((epoch, fn) => fn()),
         doQuery: sinon.stub().resolves([]),
         verifyDatabase: sinon.stub().resolves(true),
         verifyTables: sinon.stub().resolves(true),

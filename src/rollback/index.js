@@ -178,48 +178,16 @@ class Rollback {
     // inside leaves the database untouched; it ends the poll pass and the process (runBlockLoop
     // has no catch), and the restarted indexer re-detects the reorg and retries.
     async runRollbackTransaction(block_index, scope, markets, addresses, tickers){
-        let { firstActionIndex, lastActionIndex, unlandedAttestBatches } = scope;
-        let staged = null;
         this.sweepStats = [];
         // Begin a transaction; all deletes and recalculations are atomic
         await this.indexerDb.beginTransaction();
+        // Fence every write to this transaction's epoch, as the block loop does: a sibling of a
+        // fanned-out step (updateMarkets, updateTokenInfo) that outlives the teardown in the catch
+        // below then carries a stale epoch and is refused instead of landing in autocommit.
+        let txEpoch = this.indexerDb.currentTxEpoch();
         try {
-
-            // Reverse any cooldown maturities orphaned by this reorg. Runs UNCONDITIONALLY (outside
-            // the firstActionIndex guard) and BEFORE the generic deletes: the legacy (pre-flag-day)
-            // maturity path writes the refund credit + 'completed' flip against a SURVIVING unstake
-            // row and mints NO actions row in the maturity block, so a reorg over an action-empty
-            // range leaves firstActionIndex null and would otherwise skip the reversal entirely,
-            // stranding the refund and forking the ledger vs a from-genesis replay. Keyed entirely
-            // on block_index / cooldown_end_block, so it is a no-op when nothing matured. Seeds the
-            // affected source addresses/ticks into the util lists captured above so the unconditional
-            // updateBalances/updateTokens below recompute them.
-            await this.reverseCooldownMaturities(block_index);
-
-            if(firstActionIndex !== null){
-                await this.deleteContractEmissions(firstActionIndex);
-            }
-
-            await this.restoreInPlaceFlips(block_index, firstActionIndex);
-
-            await this.purgeOrphanedTables(block_index, firstActionIndex, markets);
-
-            // Re-derive attest_validator_stats for the orphaned range. This is
-            // a monotone aggregate (fulfilled/missed/slashed counters per
-            // validator/provider) with no action_index or block FK, so neither
-            // generic delete loop above can touch it. A blanket delete would also
-            // drop increments earned in surviving blocks. Instead we drop only the
-            // rows whose most-recent touch is in the orphaned range and rebuild them
-            // from the surviving signatures + expired-request records, matching what
-            // a from-genesis replay to block_index-1 would produce.
-            await this.recomputeAttestationValidatorStats(block_index);
-
-            await this.refreshDerivedProjections(block_index, addresses, tickers, markets);
-
-            staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches);
-
-            await this.commitAndInvalidateCaches();
-
+            return await this.indexerDb.runInTxEpoch(txEpoch,
+                () => this.applyRollbackWrites(block_index, scope, markets, addresses, tickers));
         } catch(e) {
             // Roll back so the DB is left untouched rather than in a partial rollback state.
             // A rollback that throws too is logged here, so it never replaces `e`.
@@ -234,6 +202,47 @@ class Rollback {
             if(this.indexer) this.indexer.stallReason = null;
             throw e;
         }
+    }
+
+    // The writes of the reorg transaction, in order, ending with the commit. Returns the
+    // staged hub retractions for the post-commit delivery.
+    async applyRollbackWrites(block_index, scope, markets, addresses, tickers){
+        let { firstActionIndex, lastActionIndex, unlandedAttestBatches } = scope;
+        // Reverse any cooldown maturities orphaned by this reorg. Runs UNCONDITIONALLY (outside
+        // the firstActionIndex guard) and BEFORE the generic deletes: the legacy (pre-flag-day)
+        // maturity path writes the refund credit + 'completed' flip against a SURVIVING unstake
+        // row and mints NO actions row in the maturity block, so a reorg over an action-empty
+        // range leaves firstActionIndex null and would otherwise skip the reversal entirely,
+        // stranding the refund and forking the ledger vs a from-genesis replay. Keyed entirely
+        // on block_index / cooldown_end_block, so it is a no-op when nothing matured. Seeds the
+        // affected source addresses/ticks into the util lists captured above so the unconditional
+        // updateBalances/updateTokens below recompute them.
+        await this.reverseCooldownMaturities(block_index);
+
+        if(firstActionIndex !== null){
+            await this.deleteContractEmissions(firstActionIndex);
+        }
+
+        await this.restoreInPlaceFlips(block_index, firstActionIndex);
+
+        await this.purgeOrphanedTables(block_index, firstActionIndex, markets);
+
+        // Re-derive attest_validator_stats for the orphaned range. This is
+        // a monotone aggregate (fulfilled/missed/slashed counters per
+        // validator/provider) with no action_index or block FK, so neither
+        // generic delete loop above can touch it. A blanket delete would also
+        // drop increments earned in surviving blocks. Instead we drop only the
+        // rows whose most-recent touch is in the orphaned range and rebuild them
+        // from the surviving signatures + expired-request records, matching what
+        // a from-genesis replay to block_index-1 would produce.
+        await this.recomputeAttestationValidatorStats(block_index);
+
+        await this.refreshDerivedProjections(block_index, addresses, tickers, markets);
+
+        let staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches);
+
+        await this.commitAndInvalidateCaches();
+
         return staged;
     }
 
@@ -284,6 +293,8 @@ class Rollback {
             await this.sweepOrphanedIcons();
 
             await this.rederiveTokenEscrow();
+
+            await this.rederiveTokenBridged();
 
             await this.rederiveCoinpayMatchStatus();
         }
