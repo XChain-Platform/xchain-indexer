@@ -110,6 +110,8 @@
 // identical on both sides of the bump; the pin advances only to track the package.
 // 0.23.0 -> 0.23.1 is an indexer-only patch train that registers nothing new on
 // this ordinal; the pin advances only because it must track the package version.
-const CONSENSUS_VERSION = '0.23.1';
+// 0.23.1 -> 0.23.2 is an indexer-only patch train that registers nothing new on
+// this ordinal; the pin advances only because it must track the package version.
+const CONSENSUS_VERSION = '0.23.2';
 
 module.exports = { CONSENSUS_VERSION };

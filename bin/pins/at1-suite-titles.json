@@ -10058,6 +10058,13 @@
       "ANCHOR retired wires on a from-genesis replay @regression a v7 bundle below ANCHOR_ACTIVATION (three sections walked as one head) is recorded SQL-safe too",
       "ANCHOR retired wires on a from-genesis replay @regression the writer maps every non-numeric numeric-slot value to NULL and keeps real numbers"
     ],
+    "9e93cc1f907c0074": [
+      "[regression:p0] ownership dispense: the ownership-transfer ledger row carries its block fields @money @regression @tier1 a DISPENSE inside a BATCH writes the ISSUE with the BATCH transaction block fields",
+      "[regression:p0] ownership dispense: the ownership-transfer ledger row carries its block fields @money @regression @tier1 a block-level pass with no transaction still transfers, with a NULL tx_index",
+      "[regression:p0] ownership dispense: the ownership-transfer ledger row carries its block fields @money @regression @tier1 a native-coin payment writes the ISSUE with the paying transaction block fields",
+      "[regression:p0] ownership dispense: the ownership-transfer ledger row carries its block fields @money @regression @tier1 a token-priced SEND trigger writes the ISSUE with the SEND block fields",
+      "[regression:p0] ownership dispense: the ownership-transfer ledger row carries its block fields @money @regression @tier1 transferTokenOwnership refuses a row without block fields before it writes anything"
+    ],
     "9ea42ee3d549b330": [
       "assignActionAddressIds: pre-handler-error skip (#4888) @regression @tier1 does NOT intern any id when the action was rejected before the handler",
       "assignActionAddressIds: pre-handler-error skip (#4888) @regression @tier1 interns the fresh destination id when the action has NO pre-handler error"
@@ -15462,9 +15469,10 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1259,
-      "titleCount": 12941,
+      "fileCount": 1260,
+      "titleCount": 12946,
       "files": {
+        "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
