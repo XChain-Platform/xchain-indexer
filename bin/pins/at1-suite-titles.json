@@ -17072,8 +17072,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1299,
-      "titleCount": 13155,
+      "fileCount": 1300,
+      "titleCount": 13156,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
