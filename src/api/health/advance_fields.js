@@ -49,7 +49,8 @@ function advanceFields(indexer, now){
         degraded:         !!indexer.stallReason
                             && !stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                             indexer.healthStallGraceMs, now, indexer.stallClearsAt,
-                                            indexer.priceLandingGraceMs),
+                                            indexer.priceLandingGraceMs,
+                                            indexer.barrierHold && indexer.barrierHold.since),
         // true when the stall is nothing but a wait for wall clock to reach a future-stamped
         // block. Healthy and self-clearing: consensus forbids committing that block yet, so the
         // indexer is already holding everything it is permitted to hold. A testnet4 miner
@@ -63,7 +64,8 @@ function advanceFields(indexer, now){
         stallClass:       publishedStallClass(
                               stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
                                            indexer.healthStallGraceMs, now, indexer.stallClearsAt,
-                                           indexer.priceLandingGraceMs),
+                                           indexer.priceLandingGraceMs,
+                                           indexer.barrierHold && indexer.barrierHold.since),
                               indexer.stallReason,
                               { decoderReorgHalted: !!indexer.decoderReorgHalted,
                                 ceilingExceeded: barrierCeilingExceeded(indexer.barrierHold,

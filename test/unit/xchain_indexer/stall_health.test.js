@@ -222,3 +222,42 @@ describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', functio
         });
     });
 });
+
+/*
+ * A chain with ~20 minute blocks starts almost every barrier wait long after the previous
+ * commit. The no-progress window is measured from the later of the last commit and the
+ * instant the current block's barrier hold began, so a fresh wait gets its own grace while
+ * a barrier held past the grace with no progress still reads wedged.
+ */
+describe('stallWedged() window starts at the barrier hold', function () {
+    const GRACE  = 120000;
+    const NOW    = 1_000_000_000;
+    const MIN    = 60000;
+    const COMMIT = NOW - 20 * MIN - 60000;   // committed 21 min ago
+
+    it('a 20 minute commit gap followed by a 60 s barrier wait is not wedged', function () {
+        const holdSince = NOW - 60000;
+        assert.strictEqual(stallWedged('attest_response_sync_barrier', COMMIT, GRACE, NOW, null, null, holdSince), false);
+        assert.strictEqual(stallClassOf('attest_response_sync_barrier', COMMIT, GRACE, NOW, null, null, holdSince), 'barrier_defer');
+    });
+
+    it('a barrier held 5 minutes with no commit is wedged', function () {
+        const holdSince = NOW - 5 * MIN;
+        assert.strictEqual(stallWedged('attest_response_sync_barrier', COMMIT, GRACE, NOW, null, null, holdSince), true);
+        assert.strictEqual(stallClassOf('attest_response_sync_barrier', COMMIT, GRACE, NOW, null, null, holdSince), 'wedged');
+    });
+
+    it('the hold boundary is exclusive like the commit boundary', function () {
+        assert.strictEqual(stallWedged('price_sync_barrier', COMMIT, GRACE, NOW, null, null, NOW - GRACE), false);
+        assert.strictEqual(stallWedged('price_sync_barrier', COMMIT, GRACE, NOW, null, null, NOW - GRACE - 1), true);
+    });
+
+    it('a hold older than the last commit never shortens the window', function () {
+        // a stale hold instant from before the latest commit: the commit still anchors the window
+        assert.strictEqual(stallWedged('price_sync_barrier', NOW - 5000, GRACE, NOW, null, null, NOW - 10 * MIN), false);
+    });
+
+    it('no recorded hold falls back to the last commit', function () {
+        assert.strictEqual(stallWedged('price_sync_barrier', COMMIT, GRACE, NOW, null, null, null), true);
+    });
+});

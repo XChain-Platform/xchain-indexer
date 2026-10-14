@@ -59,12 +59,21 @@ function graceFor(stallReason, graceMs, priceLandingGraceMs){
 // clock passes it and the stall persists, the mirror really is stuck and the normal
 // grace-window verdict applies again. This is a HEALTH verdict only: it changes no
 // hashed value and no barrier waits any differently for it.
-function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null){
+//
+// `barrierHoldSinceMs` is the instant the current block first began waiting behind its
+// barrier (the hold record's `since`), or null when no hold is recorded. The no-progress
+// window starts at the LATER of the last commit and that instant. Measuring from the last
+// commit alone makes a slow chain flap: with ~20 minute blocks nearly every barrier wait
+// begins more than the grace after the previous commit, so a healthy indexer read wedged
+// (503, container unhealthy) the moment its wait began. A barrier held past the grace with
+// no progress still reads wedged, because the hold instant stops moving while it persists.
+function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null){
     if(!stallReason) return false;
     if(stallReason === BRIDGE_PROOF_BARRIER) return false;
     if(lastBlockCommittedAt == null) return false;
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
-    return (now - lastBlockCommittedAt) > graceFor(stallReason, graceMs, priceLandingGraceMs);
+    let windowStart = Number.isFinite(barrierHoldSinceMs) ? Math.max(lastBlockCommittedAt, barrierHoldSinceMs) : lastBlockCommittedAt;
+    return (now - windowStart) > graceFor(stallReason, graceMs, priceLandingGraceMs);
 }
 
 // True when the current stall is nothing but a wait for WALL CLOCK to reach a
@@ -101,11 +110,11 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 //   'wedged'            - stalled with no commit for longer than the grace window.
 // 'future_block_wait' and 'wedged' cannot collide: stallWedged() already declines to
 // wedge a stall whose clear instant is still ahead.
-function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null){
+function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null){
     if(!stallReason) return 'none';
     if(stallReason === BRIDGE_PROOF_BARRIER) return 'bridge_proof_wait';
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
-    if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs, priceLandingGraceMs)) return 'wedged';
+    if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs, priceLandingGraceMs, barrierHoldSinceMs)) return 'wedged';
     if(stallReason === PRICE_LANDING_BARRIER) return 'price_landing_wait';
     return 'barrier_defer';
 }
