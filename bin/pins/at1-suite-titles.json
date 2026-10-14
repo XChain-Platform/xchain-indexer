@@ -733,6 +733,9 @@
       "repair-validator-stats missed_count @regression an empty pin charges nobody",
       "repair-validator-stats missed_count @regression charges the pinned responsible set and never re-derives"
     ],
+    "0fb9ebffb6c5d0cd": [
+      "bridge_settle: terminal policy refusal follower parity mints identical action index and refused record on every follower"
+    ],
     "0ff526efc3f322da": [
       "API time memo isolation @regression @tier1 a deferred fee tip read cannot refill block-loop memos after a reorg clear"
     ],
@@ -17615,6 +17618,7 @@
         "test/unit/bridge/bridge_settle.test/refusal_logging.test.js": "aca73b0f37adfbac",
         "test/unit/bridge/bridge_settle.test/refusals.test.js": "32ded3574ceb5f61",
         "test/unit/bridge/bridge_settle.test/refused_policy_due_window.test.js": "6e3424428b660c0b",
+        "test/unit/bridge/bridge_settle.test/refused_policy_follower_parity.test.js": "0fb9ebffb6c5d0cd",
         "test/unit/bridge/bridge_settle.test/refused_transfers_cap_slot.test.js": "b98e631c246e04f9",
         "test/unit/bridge/bridge_settle.test/row_fields_terminal_cap_slot.test.js": "b85c12080a6c6211",
         "test/unit/bridge/bridge_settle.test/slash_and_pass_order.test.js": "44760e88af686de8",
