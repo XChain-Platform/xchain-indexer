@@ -18,6 +18,12 @@ const sinon  = require('sinon');
 const { createMockIndexer, createTokenInfo } = require('../../../../../fixtures/mocks');
 
 const Order_Match = require('../../../../../../src/actions/order_match/index.js');
+const { stubGate } = require('../../../../../helpers/gate_modules.js');
+
+// The price-cross row: these fixtures set GIVE_PRICE and GET_PRICE by hand, and the
+// cases that pin the legacy comparison judge them below its height.
+const PRICE_CROSS_KEY = 'order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION';
+function belowPriceCross() { return stubGate(sinon, PRICE_CROSS_KEY, false); }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -109,4 +115,4 @@ function useOrderMatchHarness(bind) {
     });
 }
 
-module.exports = { BLOCK_TIME, makeActionsCtx, makeOrderInfo, makeMatchInfo, useOrderMatchHarness };
+module.exports = { BLOCK_TIME, PRICE_CROSS_KEY, belowPriceCross, makeActionsCtx, makeOrderInfo, makeMatchInfo, useOrderMatchHarness };

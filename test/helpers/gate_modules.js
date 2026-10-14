@@ -181,6 +181,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'host_error_stack_strip_heights',
     'json_stringify_reentry_heights',
     'native_stack_terminal_heights',
+    'order_match_price_cross_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

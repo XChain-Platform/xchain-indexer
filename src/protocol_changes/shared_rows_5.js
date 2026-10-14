@@ -303,6 +303,21 @@ addGate('oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION', 'height', {
     'DOGE:testnet': 67966647,
     regtest: 0,
 });
+// order_match_price_cross_activation: the ORDER book price-cross test. With
+// GIVE_PRICE = GET_AMOUNT / GIVE_AMOUNT and GET_PRICE = GIVE_AMOUNT / GET_AMOUNT both
+// sides quote the same unit, so a resting order is fillable when the incoming order's
+// GIVE_PRICE (its ask) does not exceed the resting order's GET_PRICE (its bid). Below
+// this height the legacy test, which compares the two the other way, stands, so pairs
+// whose limits do not cross fill and pairs whose limits cross do not. The indexer reads
+// it with its own coin at the ORDER_MATCH block; the hub's cross-chain book reads the
+// bare network entry at the match's BTC snapshot_block, so a release that adds
+// <COIN>:<network> heights for the indexers also sizes the bare entry for the hub.
+// Unarmed on mainnet and testnet; regtest is armed from genesis.
+addGate('order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
 // stateHash: the state_hash class for the batch-completion stamp on a surviving v5 attest head.
 // Inert on mainnet and testnet until a flag day is sized; regtest is armed from genesis.
 addGate('stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION', 'height', {

@@ -18,7 +18,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const sinon  = require('sinon');
 const { createBaseData } = require('../../../../fixtures/mocks');
 const {
-    BLOCK_TIME, makeOrderInfo, makeMatchInfo, useOrderMatchHarness,
+    BLOCK_TIME, belowPriceCross, makeOrderInfo, makeMatchInfo, useOrderMatchHarness,
 } = require('./helpers/order_match_harness.js');
 
 // Each test gets a fresh harness from useOrderMatchHarness; bind() hands it to
@@ -69,6 +69,8 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         it('logs price mismatch skip in debug mode (lines 119-121)', async function () {
             orderMatch.debug = true;
+            // The legacy comparison's skip branch, below the price-cross height
+            belowPriceCross();
             indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ GIVE_PRICE: '5' }));
             indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GET_PRICE: '10' })]);
 

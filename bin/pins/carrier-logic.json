@@ -59,7 +59,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "5727511efdf8497853838f2b0608f2d6ac33caabccc483d650987f9944802e1a",
+      "hash": "4546074d3c270b3b497eee3ed7aa9ed973f8387dc8d4ae5e48478583db8600c1",
       "twins": [
         "xchain-hub"
       ]
@@ -2132,6 +2132,13 @@
       "from": "f8f6b6be115ac2b783107f3d4060511e1ca93e35b2d6252d6f2d2ee12408bda9",
       "to": "101cb384c5e074ee6686347333319a4be02024e2d8c179aff9f2d58f8bb7768f",
       "reason": "register the host-call bounds and per-element meter protocol rows mirroring the VM activations",
+      "date": "2026-10-14"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "5727511efdf8497853838f2b0608f2d6ac33caabccc483d650987f9944802e1a",
+      "to": "4546074d3c270b3b497eee3ed7aa9ed973f8387dc8d4ae5e48478583db8600c1",
+      "reason": "order_match_price_cross_activation appended to SHARED_GATES",
       "date": "2026-10-14"
     }
   ]

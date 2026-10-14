@@ -140,7 +140,11 @@ const SHARED_GATES = [
     // The per-chain admission margins decide which block a hub stamps and which watermark an
     // indexer accepts. Both the activation and the selected margins therefore belong in the
     // cross-process digest. Appended at the end to preserve every earlier preimage row.
-    ['mirror_admission_margin_activation',      ['ADMIT_CHAIN_MARGIN_ACTIVATION', 'ADMIT_CHAIN_MARGIN_BLOCKS']]
+    ['mirror_admission_margin_activation',      ['ADMIT_CHAIN_MARGIN_ACTIVATION', 'ADMIT_CHAIN_MARGIN_BLOCKS']],
+    // The ORDER book price-cross test: the indexer judges its own chain's ORDER_MATCH on
+    // it and the hub judges the cross-chain book on it, so a train that sizes it on one
+    // side only must report a rules mismatch. Appended at the end for the preimage order.
+    ['order_match_price_cross_activation',      ['ORDER_MATCH_PRICE_CROSS_ACTIVATION']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an
