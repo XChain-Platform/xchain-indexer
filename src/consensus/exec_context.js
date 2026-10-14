@@ -65,6 +65,11 @@ const SYNTH_TAGS = {
     XCALL_EXEC:             'XCALL',
 };
 
+// The context key that marks a framework-injected callback, and the gate under which
+// such a callback runs with its argument array intact instead of a '|' join and split.
+const FRAMEWORK_CALLBACK  = 'IS_FRAMEWORK_CALLBACK';
+const CALLBACK_ARGS_EXACT = 'CALLBACK_ARGS_EXACT';
+
 /**
  * Deterministic synthetic TX_HASH for an injected execution with no real
  * on-chain transaction behind it.
@@ -103,6 +108,9 @@ function synthesizeTxHash(tag, network, chain, uniqueId){
  *        legacy context (no TX_HASH key); callers gate this on SYNTH_EXEC_TX_HASH
  * @param {object} [opts.extra]        site-specific fields merged verbatim
  *        (TX_INDEX/TX_VOUT, CALL_DEPTH, VM_GAS_LIMIT, CROSS_HOPS, ...)
+ * @param {boolean} [opts.callback=false] true for an ATTEST, XCALL or binding VOTE
+ *        callback, whose arguments the framework built as an array; EXECUTE runs
+ *        that array as is from CALLBACK_ARGS_EXACT on (actions/execute/validate.js)
  * @returns {object} the context object to pass to actionExecute.parse
  */
 function buildInjectedExecContext(opts){
@@ -148,7 +156,12 @@ function buildInjectedExecContext(opts){
         ...(o.extra || {}),
     };
     if(txHash) context.TX_HASH = txHash;
+    // Only an injector sets this, never the wire: a user-broadcast EXECUTE keeps its
+    // '|'-delimited argument semantics. The key is read in actions/execute/validate.js
+    // and never stored or carried into a nested emission's context.
+    if(o.callback) context[FRAMEWORK_CALLBACK] = true;
     return context;
 }
 
-module.exports = { buildInjectedExecContext, synthesizeTxHash, SYNTH_EXEC_TX_HASH, SYNTH_TAGS };
+module.exports = { buildInjectedExecContext, synthesizeTxHash, SYNTH_EXEC_TX_HASH, SYNTH_TAGS,
+                   FRAMEWORK_CALLBACK, CALLBACK_ARGS_EXACT };

@@ -79,3 +79,10 @@ describe('sync health fields', function(){
         }
     });
 });
+
+describe('syncFields() behind a REORG-halted decoder', function(){
+    it('reads not synced, whatever isSynced says', function(){
+        const result = fields(makeIndexer({ isSynced: () => true, decoderReorgHalted: true }));
+        assert.strictEqual(result.synced, false);
+    });
+});

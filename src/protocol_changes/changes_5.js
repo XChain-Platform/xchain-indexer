@@ -53,6 +53,10 @@ const {
     DELEGATION_ROTATE_IN_WINDOW_TESTNET_TIME,
     SLASH_ATTEST_MULTIROUND_EXEMPT_MAINNET_TIME,
     SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME,
+    HOST_CALL_BOUNDS_MAINNET_TIME,
+    HOST_CALL_BOUNDS_TESTNET_TIME,
+    PER_ELEMENT_METER_MAINNET_TIME,
+    PER_ELEMENT_METER_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -158,6 +162,30 @@ const CHANGES = [
     // testnet; regtest is inert unless a venue sets GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME.
     ['GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS', '0.2.0', UNARMED, UNARMED,
         () => regtestTimeOverride('GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME')() || UNARMED, 0, 0, 0],
+
+    // HOST_CALL_BOUNDS: mirrors xchain-vm HOST_CALL_BOUNDS_ACTIVATION, judged by block time. From the
+    // instant on, an emission refused at the emission cap is not charged its reservation, prepay or
+    // request fee, a value that contains itself throws a catchable TypeError instead of faulting
+    // out_of_stack at the gas ceiling, and a host-call argument may nest as deep as a plain
+    // JSON.stringify of it. Unarmed on mainnet and testnet; regtest is active from genesis.
+    ['HOST_CALL_BOUNDS', '0.2.0', HOST_CALL_BOUNDS_MAINNET_TIME,
+        HOST_CALL_BOUNDS_TESTNET_TIME, 0, 0, 0, 0],
+
+    // PER_ELEMENT_METER: mirrors xchain-vm PER_ELEMENT_METER_ACTIVATION, judged by block time. From
+    // the instant on, iterator-helper callbacks and yielded values, set algebra with a set-like
+    // argument, String.raw segments and every key an object spread or rest copies are charged
+    // per element. Unarmed on mainnet and testnet; regtest is active from genesis.
+    ['PER_ELEMENT_METER', '0.2.0', PER_ELEMENT_METER_MAINNET_TIME,
+        PER_ELEMENT_METER_TESTNET_TIME, 0, 0, 0, 0],
+
+    // CALLBACK_ARGS_EXACT: an ATTEST, XCALL or binding VOTE callback runs with the argument
+    // array its injector built, so a '|' inside a provider response, a callee return value or a
+    // callback param stays inside its own argument. Below the flag the arguments are joined on
+    // '|' and split again before the VM, which is how they ran before. Judged by the block that
+    // injects the callback. Unarmed on mainnet and testnet; genesis-active on regtest unless a
+    // venue sets CALLBACK_ARGS_EXACT_REGTEST_TIME.
+    ['CALLBACK_ARGS_EXACT', '0.2.0', UNARMED, UNARMED,
+        regtestTimeOverride('CALLBACK_ARGS_EXACT_REGTEST_TIME'), 0, 0, 0],
 ];
 
 module.exports = CHANGES;

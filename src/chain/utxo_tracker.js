@@ -53,7 +53,9 @@ class UtxoTracker {
     // A failure where the tracker gave NO answer (unconfigured, unreachable, non-2xx,
     // unreadable body) carries code UTXO_TRACKER_UNAVAILABLE so a consensus caller can
     // halt and retry; a JSON-RPC error body is the tracker's answer and stays untagged.
-    async call(method, params){
+    // `opts.timeoutMs` bounds the request (an abort is an unanswered call, so it carries
+    // UTXO_TRACKER_UNAVAILABLE); consensus callers pass none and keep the unbounded wait.
+    async call(method, params, opts){
         if(!this.enabled)
             throw unavailable('UTXO tracker not configured (UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT)');
 
@@ -66,11 +68,14 @@ class UtxoTracker {
 
         let response;
         try {
-            response = await fetch(this.endpoint, {
+            let init = {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body:    body
-            });
+            };
+            if(opts && Number.isFinite(opts.timeoutMs) && opts.timeoutMs > 0)
+                init.signal = AbortSignal.timeout(opts.timeoutMs);
+            response = await fetch(this.endpoint, init);
         } catch (e) {
             throw unavailable('UTXO tracker unreachable: ' + (e && e.message), e);
         }
@@ -118,6 +123,16 @@ class UtxoTracker {
             return null;
         }
         return { height: result.height };
+    }
+
+    // Return the tracker's sync view ({ tracker_height, node_height, lag, synced, ... }),
+    // or null when it answered without one. HEALTH REPORTING ONLY: the indexer reads
+    // node_height as the coin node tip for its readiness verdict and never feeds it to a
+    // hashed value. Throws on transport / RPC failure like every other call here, and
+    // gives up after timeoutMs (default 5 s) so a hung tracker cannot pin the read open.
+    async getSyncStatus(timeoutMs = 5000){
+        let result = await this.call('get_sync_status', {}, { timeoutMs: timeoutMs });
+        return (result && typeof result === 'object') ? result : null;
     }
 
     // Return { firstSeen, sync }: the same value getFirstSeen would give, plus the

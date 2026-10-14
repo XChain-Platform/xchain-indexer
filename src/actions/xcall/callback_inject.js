@@ -113,6 +113,7 @@ async function injectCallback(request, contextData, resultStatus, resultPayload)
         emitter:       contextData['ACTION_INDEX'],
         synthTag:      SYNTH_TAGS.XCALL_CALLBACK,
         synthId:       request.call_id,
+        callback:      true,
         extra: {
             CALL_DEPTH:   0,
             VM_GAS_LIMIT: XCALL_CALLBACK_GAS,

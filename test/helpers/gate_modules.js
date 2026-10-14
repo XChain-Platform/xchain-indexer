@@ -144,9 +144,11 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'bridge_row_fields_terminal_activation',
     'vm_lint_optional_chain_heights',
     'bigint_surface_strip_heights',
+    'gas_ceiling_exhausted_heights',
     'vm_lint_banned_with_heights',
     'vm_lint_nesting_depth_activation',
     'vm_lint_destructure_heights',
+    'vm_lint_syntax_depth_heights',
     'nested_execute_gas_sum_activation',
     'swap_edit_rematch_activation',
     'market_list_source_activation',
@@ -175,6 +177,10 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'send_gated_total_tick_id_activation',
     'action_admission_dispatched_only',
     'anchor_fold_reissue_source_author_activation',
+    'resource_fault_signal_heights',
+    'host_error_stack_strip_heights',
+    'json_stringify_reentry_heights',
+    'native_stack_terminal_heights',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
