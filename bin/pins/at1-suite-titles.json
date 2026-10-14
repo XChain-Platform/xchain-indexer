@@ -3588,6 +3588,11 @@
       "finds open swaps whose effective lists resolve to the changed root",
       "rejects an unknown token-list market kind before querying"
     ],
+    "3c7c11ca01ad82ad": [
+      "market 24-hour change divides on full-precision prices does not shift a change that 8-place truncation moves",
+      "market 24-hour change divides on full-precision prices keeps sub-8-decimal prices from collapsing the change",
+      "market 24-hour change divides on full-precision prices still reports an ordinary change and a zero baseline as 0"
+    ],
     "3c864b6bfe359c45": [
       "protocol_changes VM lint destructure row is active on regtest at genesis and unarmed on every public chain",
       "protocol_changes VM lint destructure row registers the per-chain height map"
@@ -17233,8 +17238,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1317,
-      "titleCount": 13259,
+      "fileCount": 1318,
+      "titleCount": 13262,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -18061,6 +18066,7 @@
         "test/unit/db/markets/dispenser_value_accounting.test.js": "ffa5e36a34b268a9",
         "test/unit/db/markets/dispenser_value_accounting.test/multi_dispenser.test.js": "81a72d318183f418",
         "test/unit/db/markets/dispenser_value_accounting.test/send_triggered.test.js": "d27a6904c05061c1",
+        "test/unit/db/markets/market_day_change_precision.test.js": "3c7c11ca01ad82ad",
         "test/unit/db/markets/markets_native_coin_pairs.test.js": "7176d07530da2fe0",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_admission_schema.test.js": "1d3cfa8b4efea4a2",
