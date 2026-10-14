@@ -28,6 +28,65 @@
 'use strict';
 
 const { hubConsensusHashFields } = require('./health/hub_fields');
+// Pure verdict modules, required directly rather than through the XChainIndexer class
+// the route is handed, so a stub class in a test still gets the real rule.
+const { barrierHoldMs, barrierCeilingExceeded, publishedStallClass } = require('../XChainIndexer/stall_health.js');
+const { attributedStallReason } = require('./health/stall_fields');
+const { readinessVerdict } = require('../XChainIndexer/readiness/verdict.js');
+
+// The coin node tip for chainLag, or the empty shape when the indexer cannot read one
+// (no tracker configured, or a stub without the method). Never throws.
+async function readChainTip(indexer){
+    try {
+        if(indexer && typeof indexer.readChainTip === 'function')
+            return await indexer.readChainTip();
+    } catch (err) {
+        // Reporting only: an unreadable tip is an unknown tip.
+    }
+    return { height: null, source: null, at: null };
+}
+
+// Tip, barrier-hold and readiness fields, inserted after stallClass so every key
+// monitors already read keeps its place. lag above stays decoder-relative (consumers
+// gate on it); chainLag is the same figure against the coin node tip, which keeps
+// moving while a halted decoder's tip is frozen. ready / notReadyReasons are the
+// readiness verdict (../XChainIndexer/readiness/verdict.js): reported here and answered
+// as the status code of GET /ready, never folded into this route's 503.
+function readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexerDbUnreachable, chainTip }){
+    let now = verdict.now;
+    let tip = chainTip || { height: null, source: null, at: null };
+    let decoderLag = (decoderBlock != null && indexerBlock != null) ? decoderBlock - indexerBlock : null;
+    let chainLag   = (Number.isFinite(tip.height) && indexerBlock != null) ? tip.height - indexerBlock : null;
+    let pollSilent = (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false;
+    let holdMs     = barrierHoldMs(indexer.barrierHold, now);
+    let exceeded   = barrierCeilingExceeded(indexer.barrierHold, indexer.barrierHoldCeilingMs, now);
+    let readiness  = readinessVerdict({
+        now:                    now,
+        indexerDbUnreachable:   !!indexerDbUnreachable,
+        wedged:                 !!verdict.wedged,
+        pollSilent:             pollSilent,
+        decoderReorgHalted:     !!indexer.decoderReorgHalted,
+        barrierCeilingExceeded: exceeded,
+        decoderLag:             decoderLag,
+        chainLag:               chainLag,
+        waitingOnFutureBlock:   !!verdict.futureWait,
+        lastBlockCommittedAt:   indexer.lastBlockCommittedAt,
+        startedAt:              indexer.startedAt,
+        noCommitMs:             indexer.readyNoCommitMs
+    });
+    return {
+        chainTip:               tip.height,
+        chainTipSource:         tip.source,
+        chainTipAt:             tip.at,
+        chainLag:               chainLag,
+        decoderReorgHalted:     !!indexer.decoderReorgHalted,
+        barrierHoldMs:          holdMs,
+        barrierHoldCeilingMs:   indexer.barrierHoldCeilingMs || null,
+        barrierCeilingExceeded: exceeded,
+        ready:                  readiness.ready,
+        notReadyReasons:        readiness.reasons
+    };
+}
 
 // The decoder's current tip, read fresh from the decoder DB; the indexer's
 // in-memory snapshot when that DB is unreachable.
@@ -96,8 +155,14 @@ function pollHeartbeatFields(indexer){
 }
 
 // The sync and stall half of the /status body, in the key order monitors have always read.
-function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict }){
+function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict,
+                                                   indexerDbUnreachable, chainTip }){
     let { now, stalled, wedged, futureWait, stallClass } = verdict;
+    // A halted decoder's tip is frozen, so an indexer level with it is not synced: it
+    // is level with a chain that stopped. isSynced keeps its decoder-parity meaning
+    // otherwise, and atProcessableTip follows it.
+    let halted = !!indexer.decoderReorgHalted;
+    let synced = indexer.isSynced() && !halted;
     return {
         indexerBlock: indexerBlock,
         inFlightBlock: inFlightBlock,
@@ -105,20 +170,22 @@ function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock,
         lag:          (decoderBlock != null && indexerBlock != null)
                         ? decoderBlock - indexerBlock
                         : null,
-        isSynced:     indexer.isSynced(),
+        isSynced:     synced,
         // true when every block consensus currently PERMITS this indexer to commit is
         // committed: level with the decoder tip, or the only thing in the way is a
         // future-stamped block it must legally wait out. Read this, not isSynced, before
         // concluding a non-zero lag means the indexer is behind: a testnet4 miner stamping
         // each block ~20 min ahead pins lag at ~6 blocks forever with isSynced stuck false,
         // while the indexer commits every block the instant it becomes processable.
-        atProcessableTip: XChainIndexer.atProcessableTip(indexer.isSynced(), indexer.stallReason,
+        atProcessableTip: XChainIndexer.atProcessableTip(synced, indexer.stallReason,
                                                          indexer.stallClearsAt, now),
         // Why the block counter is not advancing, or null when advancing normally:
         // a hub-sync barrier timeout (price/oracle/match/call/snapshot) or a VM
         // executor host fault. Lets a monitoring probe tell these stalls apart from
         // a healthy catch-up, all of which otherwise present only as a growing lag.
-        stallReason:  indexer.stallReason || null,
+        // With no stall of its own behind a REORG-halted decoder it names that halt
+        // (decoder_reorg_halt: ...), exactly as the health method does.
+        stallReason:  attributedStallReason(indexer),
         // Epoch-ms at which the current time-keyed barrier can first be
         // satisfied, or null. Non-null means this indexer is waiting on WALL CLOCK
         // because the block it is on is stamped in the future, which is expected and
@@ -140,16 +207,22 @@ function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock,
         waitingOnFutureBlock: futureWait,
         // Single machine-readable verdict on the counter, so a probe does not have to
         // join stallReason/degraded/stallClearsAt: 'none' | 'future_block_wait' |
-        // 'barrier_defer' | 'wedged'.
-        stallClass:   stallClass
+        // 'bridge_proof_wait' | 'price_landing_wait' | 'barrier_defer' | 'wedged', plus the
+        // two a restart cannot clear (publishedStallClass): 'upstream_halted' and
+        // 'rollcall_proof_wait', escalating to 'rollcall_proof_stuck' past the hold ceiling.
+        stallClass:   publishedStallClass(stallClass, indexer.stallReason, { decoderReorgHalted: halted,
+            ceilingExceeded: barrierCeilingExceeded(indexer.barrierHold, indexer.barrierHoldCeilingMs, now) }),
+        ...readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexerDbUnreachable, chainTip })
     };
 }
 
 // The /status JSON body, in the key order monitors have always read.
-function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict, hubMirror }){
+function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict, hubMirror,
+                                             indexerDbUnreachable, chainTip }){
     let { lastHubConfigFetchAt, hubConfigAgeSeconds, hubConfigStale } = verdict;
     return {
-        ...statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict }),
+        ...statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decoderBlock, verdict,
+                                                      indexerDbUnreachable, chainTip }),
         // epoch-ms of the most recent successful block commit (null until the first),
         // so a probe can read advance-recency directly rather than infer it from lag.
         lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
@@ -163,4 +236,4 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
     };
 }
 
-module.exports = { readDecoderBlock, hubMirrorStatus, statusVerdict, statusBody };
+module.exports = { readDecoderBlock, readChainTip, hubMirrorStatus, statusVerdict, statusBody };

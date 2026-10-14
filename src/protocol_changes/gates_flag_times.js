@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * The registry's own constants as rows: the 46 flag-day instants the
+ * The registry's own constants as rows: the 50 flag-day instants the
  * time-table parts share and the compiled consensus-version pin, under the
  * `protocol_changes.<NAME>` keys the entry has always exported them by. The
  * values stay declared in flag_times.js, flag_times_batch_fees.js and
@@ -68,6 +68,10 @@ const {
     DELEGATION_ROTATE_IN_WINDOW_TESTNET_TIME,
     SLASH_ATTEST_MULTIROUND_EXEMPT_MAINNET_TIME,
     SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME,
+    HOST_CALL_BOUNDS_MAINNET_TIME,
+    HOST_CALL_BOUNDS_TESTNET_TIME,
+    PER_ELEMENT_METER_MAINNET_TIME,
+    PER_ELEMENT_METER_TESTNET_TIME,
 } = require('./flag_times.js');
 const {
     BATCH_ISSUANCE_LIMITS_MAINNET_TIME,
@@ -125,6 +129,10 @@ addGate('protocol_changes.DELEGATION_ROTATE_IN_WINDOW_MAINNET_TIME', 'constant',
 addGate('protocol_changes.DELEGATION_ROTATE_IN_WINDOW_TESTNET_TIME', 'constant', DELEGATION_ROTATE_IN_WINDOW_TESTNET_TIME);
 addGate('protocol_changes.SLASH_ATTEST_MULTIROUND_EXEMPT_MAINNET_TIME', 'constant', SLASH_ATTEST_MULTIROUND_EXEMPT_MAINNET_TIME);
 addGate('protocol_changes.SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME', 'constant', SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME);
+addGate('protocol_changes.HOST_CALL_BOUNDS_MAINNET_TIME', 'constant', HOST_CALL_BOUNDS_MAINNET_TIME);
+addGate('protocol_changes.HOST_CALL_BOUNDS_TESTNET_TIME', 'constant', HOST_CALL_BOUNDS_TESTNET_TIME);
+addGate('protocol_changes.PER_ELEMENT_METER_MAINNET_TIME', 'constant', PER_ELEMENT_METER_MAINNET_TIME);
+addGate('protocol_changes.PER_ELEMENT_METER_TESTNET_TIME', 'constant', PER_ELEMENT_METER_TESTNET_TIME);
 
 // vm_lint_destructure_heights
 addGate('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION', 'height', {
@@ -134,6 +142,23 @@ addGate('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION', 'height', 
     'BTC:testnet': 156230,
     'LTC:testnet': 4912984,
     'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// vm_lint_syntax_depth_heights
+// Height on the processing chain's own block_index. At or above it the deploy lint
+// refuses a source over the VM's fixed syntax-depth bound before any recursive pass,
+// enforces the delimiter-nesting rule whatever the nesting row says, and treats a host
+// stack overflow as a host fault. MUST equal xchain-vm LINT_SYNTAX_DEPTH_ACTIVATION,
+// whose null is this row's UNARMED.
+addGate('vm_lint_syntax_depth_heights.VM_LINT_SYNTAX_DEPTH_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
     testnet: UNARMED,
     regtest: 0,
 });

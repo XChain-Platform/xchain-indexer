@@ -102,7 +102,9 @@ function buildVmOptions(ctx, snapshot, blockHash, rootDiscrim){
         code:             ctx.contractInfo.code,
         state:            snapshot.contractState,
         method:           data['METHOD'],
-        params:           data['METHOD_PARAMS'] ? data['METHOD_PARAMS'].split('|') : [],
+        // A copy, so nothing the VM side does to its params reaches ctx.methodArgs.
+        params:           Array.isArray(ctx.methodArgs) ? ctx.methodArgs.slice()
+                          : (data['METHOD_PARAMS'] ? data['METHOD_PARAMS'].split('|') : []),
         caller:           data['SOURCE'],
         contractAddress:  'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'],
         contractIndex:    data['CONTRACT_ACTION_INDEX'],

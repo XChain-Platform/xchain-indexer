@@ -35,10 +35,10 @@ const { getLogger } = require('./observability/index.js');
 
 // The method groups beside this entry (./XChainIndexer/). Each part holds one concern and
 // is installed onto the prototype below the class, so every call site stays this.<method>().
-const { stallWedged, waitingOnFutureBlock, stallClassOf, atProcessableTip, nextBarrierHold,
+const { stallWedged, waitingOnFutureBlock, stallClassOf, publishedStallClass, atProcessableTip, nextBarrierHold,
         barrierHoldMs, barrierCeilingExceeded, isMirrorBarrierReason } = require('./XChainIndexer/stall_health.js');
 const { initChainState, initHaltState, initHubConfigState, initBarrierTiming,
-        initDirectCallState } = require('./XChainIndexer/instance_state.js');
+        initDirectCallState, initReadinessState } = require('./XChainIndexer/instance_state.js');
 const { hubConfigCoinKey, hubConfigMethods } = require('./XChainIndexer/hub_config.js');
 const barrierClockMethods       = require('./XChainIndexer/barrier_clock.js');
 const directCallPresenceMethods = require('./XChainIndexer/direct_call_presence.js');
@@ -56,6 +56,7 @@ const mirrorBarrierMethods      = require('./XChainIndexer/mirror_barriers.js');
 const blockPassMethods          = require('./XChainIndexer/block_passes.js');
 const blockCommitMethods        = require('./XChainIndexer/block_commit.js');
 const blockFaultMethods         = require('./XChainIndexer/block_faults.js');
+const chainTipMethods           = require('./XChainIndexer/readiness/chain_tip.js');
 
 class XChainIndexer {
 
@@ -117,6 +118,7 @@ class XChainIndexer {
         initHubConfigState(this);
         initBarrierTiming(this);
         initDirectCallState(this);
+        initReadinessState(this);
     }
 
     // Handle indicating if indexer is synced
@@ -312,7 +314,7 @@ Object.assign(XChainIndexer.prototype, barrierClockMethods, directCallPresenceMe
               hubConfigMethods, trainGateMethods, decoderProbeMethods, backgroundJobMethods,
               hubConfigPollMethods, runtimeConfigMethods, blockPollMethods, blockParseMethods,
               priceBarrierMethods, mirrorBarrierMethods, blockPassMethods, blockCommitMethods,
-              blockFaultMethods);
+              blockFaultMethods, chainTipMethods);
 
 module.exports = Object.assign(XChainIndexer, {
     DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS,
@@ -325,6 +327,7 @@ module.exports = Object.assign(XChainIndexer, {
     stallWedged,
     waitingOnFutureBlock,
     stallClassOf,
+    publishedStallClass,
     atProcessableTip,
     nextBarrierHold,
     barrierHoldMs,

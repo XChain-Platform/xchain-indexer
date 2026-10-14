@@ -2897,6 +2897,22 @@
       "ATTEST per-block admission caps (spec \u00a711.1) @regression isAttestRequestCapActive is ARMED at genesis on mainnet by the 2026-09-09 ruling",
       "ATTEST per-block admission caps (spec \u00a711.1) @regression isAttestRequestCapActive is armed from genesis on testnet and regtest"
     ],
+    "31034e0dac6cfb6a": [
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) LTC and DOGE flip ON at their own ratified heights",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) at the BTC mainnet height (961000): both flags ON",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) below the BTC mainnet height (960999): both flags OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) does NOT track the Pkg 3 gate (a separate epoch, resolved separately)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is per-coin: LTC and DOGE mainnet at the BTC height stay OFF",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) regtest is genesis-armed (both flags ON from height 0)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads enforceLintGlobalAlias as its own flag",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads the new flags ALONGSIDE the existing async / lint-hardening flags (no regression)",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) at the flag day: enforceBannedRest ON",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) below the flag day: enforceBannedRest OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads enforceBannedWith from its own height row",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads enforceLintDestructure from its own height row",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads exactly the eleven enforce* flags validateSyntax reads"
+    ],
     "311bc22d541bf998": [
       "Tier 1 - Validation functions @tier1 getFormatVersion(format) never throws for string, number, null, undefined inputs",
       "Tier 1 - Validation functions @tier1 getFormatVersion(format) returns an integer, 0, or null (never NaN or undefined)",
@@ -3429,6 +3445,10 @@
       "batched COINPAY resolves its own payment output @regression @tier1 the A5 invariant: one payment settles ONE obligation, not N two obligations to a RESOLVED payee with one payment's worth: exactly one settles",
       "batched COINPAY resolves its own payment output @regression @tier1 the A5 invariant: one payment settles ONE obligation, not N two obligations to the ROW'S OWN payee with one payment's worth: exactly one settles"
     ],
+    "39deaa3f8a62287c": [
+      "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
+      "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
+    ],
     "3a25c746f0ad7a91": [
       "database session time zone @regression @tier1 pins direct and pooled connections to UTC"
     ],
@@ -3577,6 +3597,13 @@
     "3cd15f47b0f9b91e": [
       "LIST change rematch for token-level lists @regression @tier2 leaves them blocked before the gate is active",
       "LIST change rematch for token-level lists @regression @tier2 re-matches open markets whose token allow or block list names any edit generation"
+    ],
+    "3cdde43380ba5754": [
+      "DEPLOY constructor gas clamp on every path @regression @tier1 bills a constructor under the ceiling at its real gas whether or not the activation is live",
+      "DEPLOY constructor gas clamp on every path @regression @tier1 clamps a constructor success above the ceiling once the activation is live",
+      "DEPLOY constructor gas clamp on every path @regression @tier1 clamps a generic constructor error above the ceiling once the activation is live",
+      "DEPLOY constructor gas clamp on every path @regression @tier1 keeps the resource-family clamp on every network",
+      "DEPLOY constructor gas clamp on every path @regression @tier1 replays the raw overshoot before the activation, exactly as the unclamped settle did"
     ],
     "3cfa10324fa5563a": [
       "Database token escrow methods @regression @tier1 clearTokenEscrow calls doQuery with UPDATE setting NULL",
@@ -3775,16 +3802,6 @@
     "3fcd109353e0dc95": [
       "getanchorconfirmations anchor-by-txid pagination against a real MariaDB @tier3 never ends a page inside a bundle: a multi-section action at the boundary moves whole to the next page",
       "getanchorconfirmations anchor-by-txid pagination against a real MariaDB @tier3 partitions a set of ANCHOR_ROW_LIMIT * 2 + 3 rows across pages with no gap and no overlap"
-    ],
-    "402e0cdc190f1daf": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
-      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
-      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
     ],
     "4056956385f780ce": [
       "repeated finalizeBlock exception status emits the exact wedged status fixture consumed by xchain-watch",
@@ -4028,6 +4045,26 @@
       "bridge_settle: the XBRIDGE settle pass SLASH: the bridge engines are a slashable family resolves each bridge canonical slot from snapshot_block at field index 2",
       "bridge_settle: the XBRIDGE settle pass the pass position and ordering clears ctx.proof when the pass ends, so no row inherits another row proof",
       "bridge_settle: the XBRIDGE settle pass the pass position and ordering runs policy snapshots at the HEAD, before any transfer leg"
+    ],
+    "44ca5a03f9220589": [
+      "UtxoTracker.getSyncStatus() asks get_sync_status with a bounded request and returns the sync view",
+      "UtxoTracker.getSyncStatus() leaves consensus calls unbounded: no signal unless one is asked for",
+      "XChainIndexer readiness state and readChainTip() answers within the timeout when the tracker hangs",
+      "XChainIndexer readiness state and readChainTip() ignores the -1 an unsynced tracker reports and keeps the last known tip on failure",
+      "XChainIndexer readiness state and readChainTip() reads node_height from the tracker and caches it for the TTL",
+      "XChainIndexer readiness state and readChainTip() reports no tip when no tracker is configured",
+      "XChainIndexer readiness state and readChainTip() stamps startedAt and the readiness window at construction",
+      "publishedStallClass() gives the roll call proof wait its own class, escalating past the ceiling",
+      "publishedStallClass() names an indexer idle behind a halted decoder upstream_halted",
+      "publishedStallClass() never refines a wedge away, and leaves every other class alone",
+      "readinessVerdict() carries every liveness fault as a readiness fault",
+      "readinessVerdict() is not ready behind a halted decoder even though decoder lag reads 0",
+      "readinessVerdict() is ready when nothing holds",
+      "readinessVerdict() judges a stuck block from boot when nothing has committed since a restart",
+      "readinessVerdict() never calls a future-stamped block wait behind_tip_no_commit",
+      "readinessVerdict() resolves the no-commit window, falling back on unusable values",
+      "readinessVerdict() stays ready while catching up inside the window, and at the tip on a quiet chain",
+      "readinessVerdict() takes the larger of decoder and chain lag, null when neither is known"
     ],
     "44fb2beced9ca1a1": [
       "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) appends the family at the END, leaving the pre-existing gate order untouched",
@@ -4951,6 +4988,12 @@
     "50ed779f04dda399": [
       "listMetaHash matches the documentation metadata vectors"
     ],
+    "50ede05bfc1b0ce8": [
+      "protocol_changes/vm_twin/resource_fault_signal_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
+      "protocol_changes/vm_twin/resource_fault_signal_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
+      "protocol_changes/vm_twin/resource_fault_signal_matches_vm: activation parity @regression @tier1 pins the registry row in the consensus identity",
+      "protocol_changes/vm_twin/resource_fault_signal_matches_vm: activation parity @regression @tier1 registers a per-chain height row, unarmed on mainnet and testnet, live on regtest"
+    ],
     "51054d5d5d5d46dd": [
       "list share mirror wiring @regression @tier1 arms after a complete list snapshot drain and refreshes after a live row",
       "list share mirror wiring @regression @tier1 drains list_snapshots before price_snapshots",
@@ -5362,6 +5405,12 @@
     ],
     "587ca334686b8a78": [
       "06 Genesis Bootstrap (full-scale) injects the full manifest within the genesis watchdog window"
+    ],
+    "58a722e0f4b362c8": [
+      "protocol_changes/vm_twin/host_error_stack_strip_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
+      "protocol_changes/vm_twin/host_error_stack_strip_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
+      "protocol_changes/vm_twin/host_error_stack_strip_matches_vm: activation parity @regression @tier1 pins the registry row in the consensus identity",
+      "protocol_changes/vm_twin/host_error_stack_strip_matches_vm: activation parity @regression @tier1 registers a per-chain height row, unarmed on mainnet and testnet, live on regtest"
     ],
     "58fd73daf6487e45": [
       "02 Action Benchmarks SEND-only blocks",
@@ -6525,6 +6574,15 @@
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 signature counting and the exact error strings the responsible signer of that same pair is accepted: 1/1",
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 signature counting and the exact error strings valid quorum: sigs inlined, error string absent"
     ],
+    "699a77b47130480e": [
+      "sync health fields is healthy only while running with neither database circuit open",
+      "sync health fields normalizes an undefined in-flight block to null",
+      "sync health fields reports null database circuits when their handles are absent",
+      "sync health fields reports null lag when either height is null or undefined",
+      "sync health fields subtracts the indexed height from the decoder height for lag",
+      "sync health fields uses the value returned by isSynced",
+      "syncFields() behind a REORG-halted decoder reads not synced, whatever isSynced says"
+    ],
     "69b7814a5ee226de": [
       "Order_Match escrow/credit precision parity @regression @tier1 escrow release is the bit-exact negation of the paired credit on an 18-dp fill",
       "Order_Match escrow/credit precision parity @regression @tier1 negative control: JS unary minus on the same value DOES lose precision"
@@ -6959,6 +7017,24 @@
       "ATTEST responsible-set canonical-vector conformance @regression @tier1 weighted source dedupe drops duplicate source",
       "ATTEST responsible-set canonical-vector conformance @regression @tier1 weighted source dedupe with widen 1",
       "ATTEST responsible-set canonical-vector conformance @regression @tier1 weighted with redundancy 1 selects lowest-hash leader after dedupe"
+    ],
+    "6ef120d164896dd9": [
+      "CALLBACK_ARGS_EXACT: ATTEST callback @regression @tier1 a JSON response with a \"|\" keeps the developer param in slot 4",
+      "CALLBACK_ARGS_EXACT: ATTEST callback @regression @tier1 a callback param \"a|b\" stays one argument",
+      "CALLBACK_ARGS_EXACT: ATTEST callback @regression @tier1 a provider response \"x|user-B\" cannot take the contract's own slot 4",
+      "CALLBACK_ARGS_EXACT: ATTEST callback @regression @tier1 a response of 5000 \"|\" characters is one argument, not 5001",
+      "CALLBACK_ARGS_EXACT: ATTEST callback @regression @tier1 an expiry callback keeps a callback param \"a|b\" whole",
+      "CALLBACK_ARGS_EXACT: XCALL callback @regression @tier1 a callback param \"a|b\" stays one argument",
+      "CALLBACK_ARGS_EXACT: XCALL callback @regression @tier1 a callee return value \"x|user-B|\" cannot take the caller's slot 4",
+      "CALLBACK_ARGS_EXACT: binding VOTE callback @regression @tier1 a callback param written as \"a\\u007cb\" in JSON stays one argument",
+      "CALLBACK_ARGS_EXACT: every callback injector marks its context, and only those @regression @tier1 ATTEST response, ATTEST expiry, XCALL result and binding VOTE callbacks",
+      "CALLBACK_ARGS_EXACT: every callback injector marks its context, and only those @regression @tier1 a user-broadcast EXECUTE keeps its \"|\" wire semantics with the gate on",
+      "CALLBACK_ARGS_EXACT: registry row @regression @tier1 is declared unarmed on mainnet and testnet",
+      "CALLBACK_ARGS_EXACT: registry row @regression @tier1 is genesis-active on regtest unless a venue sets CALLBACK_ARGS_EXACT_REGTEST_TIME",
+      "CALLBACK_ARGS_EXACT: what does not change @regression @tier1 [\"a|b\"] and [\"a\",\"b\"] reach the VM differently but store the same display value",
+      "CALLBACK_ARGS_EXACT: what does not change @regression @tier1 a \"|\"-free callback runs with the same arguments with the gate on or off",
+      "CALLBACK_ARGS_EXACT: what does not change @regression @tier1 a callbackMethod \"c|d\" is passed whole as the method on both sides of the gate",
+      "CALLBACK_ARGS_EXACT: what does not change @regression @tier1 the stored METHOD_PARAMS / INPUT_PARAMS stays the \"|\" join on both sides of the gate"
     ],
     "6ef38ff80d7265e8": [
       "Database detail-row writers tolerate a null tick_id @regression @tier1 createContractDelegation inserts a null tick_id for an unresolvable TICK",
@@ -7525,6 +7601,18 @@
       "Send handler @regression @tier1 format 0: single send valid send \u2192 processDispenserSends invoked",
       "Send handler @regression @tier1 format 0: single send valid send \u2192 updateBalances called",
       "Send handler @regression @tier1 format 0: single send valid single send \u2192 STATUS valid, createSend called"
+    ],
+    "77cc01075dd8d18a": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
+      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the VM harness-activation twins in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the gas-ceiling exhaustion row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
     ],
     "783b89448d7f13a0": [
       "protocol_changes VM lint banned-with row is active on regtest at genesis and unarmed on every mainnet and testnet chain",
@@ -9053,6 +9141,10 @@
       "Database.updateBalances (parallelized) @unit @regression passes the rollback flag through to each updateAddressBalance call",
       "Database.updateBalances (parallelized) @unit @regression runs address updates sequentially (one fully completes before the next starts)"
     ],
+    "86289bceaff4a2d3": [
+      "protocol_changes VM lint syntax-depth row is active on regtest at genesis and dark on mainnet and testnet",
+      "protocol_changes VM lint syntax-depth row registers the per-chain height map, unarmed on every public chain"
+    ],
     "8643007e19b6fe3d": [
       "indexer API auth: JSON-RPC batch gate with INDEXER_API_KEY configured 401s a gated call mixed with a public call in a batch",
       "indexer API auth: JSON-RPC batch gate with INDEXER_API_KEY configured 401s a gated call smuggled inside a BATCH with no key",
@@ -9421,6 +9513,12 @@
       "config message limits applyMessageAndPollLimits sets exactly its consensus keys and values",
       "config message limits applyMessageMethods sets exactly its consensus keys and values",
       "config message limits keeps every scalar numeric limit a positive integer"
+    ],
+    "8d5eb56839bd7876": [
+      "GET /status and GET /ready on a healthy indexer answers 200 on both for a caught-up indexer, with chainLag beside lag",
+      "GET /status and GET /ready on a healthy indexer keeps every key /status already carried, in order, with the new ones after stallClass",
+      "GET /status and GET /ready on faults a restart cannot clear reports a held block that survived a restart: /status 200, /ready 503 past the ceiling",
+      "GET /status and GET /ready on faults a restart cannot clear reports an indexer frozen behind a halted decoder: /status 200 with lag 0, /ready 503"
     ],
     "8d8bd01b3feabe43": [
       "ANCHOR v3 same-publisher archive re-issue accepts identical content from the same publisher and sequence",
@@ -11388,6 +11486,11 @@
       "HubDbSync mirror-write confirmation and the apply-failure watermark latch @regression @tier1 writes route through the fail-loud primitive sends an _applyRow write to doQueryStrict when the connection has one",
       "HubDbSync mirror-write confirmation and the apply-failure watermark latch @regression @tier1 writes route through the fail-loud primitive still writes through doQuery when the connection exposes no strict primitive"
     ],
+    "a6abafeb24201686": [
+      "protocol_changes/vm_twin/gas_ceiling_exhausted_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
+      "protocol_changes/vm_twin/gas_ceiling_exhausted_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
+      "protocol_changes/vm_twin/gas_ceiling_exhausted_matches_vm: activation parity @regression @tier1 pins the registry row in the consensus identity"
+    ],
     "a6ca6c165d689dc7": [
       "14 \u2013 Multi-chain full-state parity @regression @tier1 DOGE full state is byte-identical to BTC (modulo the 5 normalized artifacts)",
       "14 \u2013 Multi-chain full-state parity @regression @tier1 LTC full state is byte-identical to BTC (modulo the 5 normalized artifacts)",
@@ -11951,6 +12054,12 @@
       "list share leg injection rejects an upper-case snapshot id before injection",
       "list share leg injection rejects non-array legs before injection",
       "list share leg injection returns empty indexes without injecting an empty plan"
+    ],
+    "af3b13066b325fa8": [
+      "protocol_changes GAS_CEILING_EXHAUSTED_ACTIVATION row @regression @tier1 is a registry-only stem",
+      "protocol_changes GAS_CEILING_EXHAUSTED_ACTIVATION row @regression @tier1 keeps its registry part within the structure limit",
+      "protocol_changes GAS_CEILING_EXHAUSTED_ACTIVATION row @regression @tier1 registers a frozen per-chain height map, unarmed on mainnet and testnet, live on regtest",
+      "protocol_changes GAS_CEILING_EXHAUSTED_ACTIVATION row @regression @tier1 stays dark on every mainnet and testnet chain and is active from regtest genesis"
     ],
     "af47dfc14d6003c2": [
       "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count 'Infinity' and 'NaN' keep their legacy insufficient-funds verdict",
@@ -13197,14 +13306,6 @@
       "Integration: full-node participation determinism and the batch zero-reward rule @regression @tier1 re-deriving from a clean DB yields IDENTICAL reward rows + hash chain (determinism = no fork)",
       "Integration: full-node participation determinism and the batch zero-reward rule @regression @tier1 the batch validated and the challenge participation accrued per SOURCE"
     ],
-    "c2ed3c62c5af33a7": [
-      "sync health fields is healthy only while running with neither database circuit open",
-      "sync health fields normalizes an undefined in-flight block to null",
-      "sync health fields reports null database circuits when their handles are absent",
-      "sync health fields reports null lag when either height is null or undefined",
-      "sync health fields subtracts the indexed height from the decoder height for lag",
-      "sync health fields uses the value returned by isSynced"
-    ],
     "c3487eec1e568310": [
       "AnchorProofClient (DOGE anchor visibility) @regression @tier2 proveMined guards does not leak a decided verdict to a different reward tuple on the same txid",
       "AnchorProofClient (DOGE anchor visibility) @regression @tier2 proveMined guards memoizes a decided verdict but never memoizes unknown",
@@ -13411,6 +13512,10 @@
       "price capability resolution off BTC @regression the truncation fallback still behaves the local BTC path still marks a capped read truncated",
       "price capability resolution off BTC @regression the truncation fallback still behaves the mirrored path never claims truncation"
     ],
+    "c590b54c8d9a0786": [
+      "Deploy (DEPLOY) @regression @tier2 syntax-depth deploy-lint gate threading passes enforceLintSyntaxDepth false on testnet and mainnet while the row is unarmed",
+      "Deploy (DEPLOY) @regression @tier2 syntax-depth deploy-lint gate threading passes enforceLintSyntaxDepth true on regtest from genesis"
+    ],
     "c5c4b726fc0811ec": [
       "stateCommitment: stakes subtree rebuilds only on change @regression a CHANGED stake set rebuilds and moves the root",
       "stateCommitment: stakes subtree rebuilds only on change @regression a GAP in block continuity rebuilds, even with an identical stake set",
@@ -13504,6 +13609,12 @@
       "STAKE_SNAPSHOT_SLASH_WINDOW reaches the VM stake snapshot through isEnabled @regression @tier1 EXECUTE passes the isEnabled verdict (true) at the block being processed",
       "STAKE_SNAPSHOT_SLASH_WINDOW reaches the VM stake snapshot through isEnabled @regression @tier1 the controller guard passes the isEnabled verdict (false) at the host block",
       "STAKE_SNAPSHOT_SLASH_WINDOW reaches the VM stake snapshot through isEnabled @regression @tier1 the controller guard passes the isEnabled verdict (true) at the host block"
+    ],
+    "c7b2c49276d24577": [
+      "protocol_changes/vm_twin/per_element_meter_matches_vm: activation parity @regression @tier1 agrees with the VM predicate on each side of every armed instant",
+      "protocol_changes/vm_twin/per_element_meter_matches_vm: activation parity @regression @tier1 matches the VM instant on every network",
+      "protocol_changes/vm_twin/per_element_meter_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
+      "protocol_changes/vm_twin/per_element_meter_matches_vm: activation parity @regression @tier1 registers the time-table row in part 5, unarmed on mainnet and testnet, live on regtest"
     ],
     "c8071ebba1ac2646": [
       "Anchor (ANCHOR) @regression @tier3 a v0 mined BELOW ANCHOR_ACTIVATION is invalid whatever it decodes to",
@@ -13946,6 +14057,12 @@
       "migration reorder and live-schema guard quoted comment markers @regression @tier1 keeps a rename target between quoted markers in the reorder table set",
       "migration reorder and live-schema guard quoted comment markers @regression @tier1 strips block comments with the splitter quote model"
     ],
+    "d14b2a8196167f6c": [
+      "protocol_changes/vm_twin/host_call_bounds_matches_vm: activation parity @regression @tier1 agrees with the VM predicate on each side of every armed instant",
+      "protocol_changes/vm_twin/host_call_bounds_matches_vm: activation parity @regression @tier1 matches the VM instant on every network",
+      "protocol_changes/vm_twin/host_call_bounds_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
+      "protocol_changes/vm_twin/host_call_bounds_matches_vm: activation parity @regression @tier1 registers the time-table row in part 5, unarmed on mainnet and testnet, live on regtest"
+    ],
     "d17e30f1f575956a": [
       "PRICE v1 refusal case fixtures builds the four cases in order for caps { value: 19, fee: 20 }",
       "PRICE v1 refusal case fixtures fails the leading-zero texts against canonical yet passes them against legacy",
@@ -13975,6 +14092,12 @@
       "15 \u2013 SDK<->indexer fee-fragment parity @regression @tier1 isValidAmountFormat() fractional-cap parity decimals=8 amount=1.2.3.4 -> false (both)",
       "15 \u2013 SDK<->indexer fee-fragment parity @regression @tier1 isValidAmountFormat() fractional-cap parity decimals=8 amount=1.5 -> true (both)",
       "15 \u2013 SDK<->indexer fee-fragment parity @regression @tier1 isValidAmountFormat() fractional-cap parity decimals=8 amount=100 -> true (both)"
+    ],
+    "d1bfe2b0906e9c21": [
+      "protocol_changes/vm_twin/json_stringify_reentry_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
+      "protocol_changes/vm_twin/json_stringify_reentry_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
+      "protocol_changes/vm_twin/json_stringify_reentry_matches_vm: activation parity @regression @tier1 pins the registry row in the consensus identity",
+      "protocol_changes/vm_twin/json_stringify_reentry_matches_vm: activation parity @regression @tier1 registers a per-chain height row, unarmed on mainnet and testnet, live on regtest"
     ],
     "d2042aa3438cc5fe": [
       "Dispense action handler @regression @tier2 multiple matching dispensers: createDispense called for each",
@@ -16909,6 +17032,12 @@
       "HubDbSync content-keyed apply @regression @tier1 state_checkpoints ignores a colliding wire id and dedupes or upgrades on content",
       "HubDbSync content-keyed apply @regression @tier1 the price batch path also strips every wire id"
     ],
+    "fd75cdd445f6e0af": [
+      "protocol_changes/vm_twin/native_stack_terminal_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
+      "protocol_changes/vm_twin/native_stack_terminal_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
+      "protocol_changes/vm_twin/native_stack_terminal_matches_vm: activation parity @regression @tier1 pins the registry row in the consensus identity",
+      "protocol_changes/vm_twin/native_stack_terminal_matches_vm: activation parity @regression @tier1 registers a per-chain height row, unarmed on mainnet and testnet, live on regtest"
+    ],
     "fda26087725f5fb7": [
       "BTC price barrier covers time as well as height @regression @tier1 all price barriers defer the block rather than processing it",
       "BTC price barrier covers time as well as height @regression @tier1 height satisfaction does not imply time satisfaction",
@@ -17092,8 +17221,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1301,
-      "titleCount": 13166,
+      "fileCount": 1316,
+      "titleCount": 13249,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17212,6 +17341,7 @@
         "test/unit/actions/bridge/xbridge.test/v1_burn.test.js": "6aa241fa8a3bc6e6",
         "test/unit/actions/bridge/xbridge.test/v3_lock.test.js": "ab44c3cb98ffce39",
         "test/unit/actions/bridge/xbridge.test/v4_burn.test.js": "ac9b353b9d7d511b",
+        "test/unit/actions/callback_args_exact.test.js": "6ef120d164896dd9",
         "test/unit/actions/contract/callback.test.js": "975fb162b72501a2",
         "test/unit/actions/contract/callback.test/holder_list_filtering.test.js": "129faa36d0e69de4",
         "test/unit/actions/contract/callback.test/native_fee_payment.test.js": "6ba9ff528d557453",
@@ -17222,9 +17352,10 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "3bd78cc1cc1aae71",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "31034e0dac6cfb6a",
         "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "8fcbc76f528097f2",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
+        "test/unit/actions/contract/deploy.test/lint_syntax_depth_flag.test.js": "c590b54c8d9a0786",
         "test/unit/actions/contract/deploy.test/native_fee.test.js": "2ef587e9e97d807d",
         "test/unit/actions/contract/deploy.test/staking_config.test.js": "750c96e2e1dcca8c",
         "test/unit/actions/contract/deploy_chunked.test.js": "2dc2973d1b26b2c4",
@@ -17563,7 +17694,7 @@
         "test/unit/api/health/reorg_health_stats_null.test.js": "5caf6af9f6bed1d6",
         "test/unit/api/health/shutdown.test.js": "9f1e3a4773262edd",
         "test/unit/api/health/stall_fields.test.js": "fb5344c11f961c86",
-        "test/unit/api/health/sync_fields.test.js": "c2ed3c62c5af33a7",
+        "test/unit/api/health/sync_fields.test.js": "699a77b47130480e",
         "test/unit/api/reads/api_bridge_reads.test.js": "d5091677642a6150",
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
         "test/unit/api/reads/price_batch_query.test.js": "8c6b69def3f9000c",
@@ -17590,6 +17721,7 @@
         "test/unit/api/rpc/token_policy_list_ref.test.js": "0d061e71ba86eff6",
         "test/unit/api/rpc/token_policy_resolve_refs.test.js": "64c039d7b0a6d648",
         "test/unit/api/stake_source.test.js": "bed4c39786728d9f",
+        "test/unit/api/status_ready_route.test.js": "8d5eb56839bd7876",
         "test/unit/api/status_schema_ready.test.js": "e624e2e0e1e9bd13",
         "test/unit/api/tip_block_time.test.js": "5fd61225b4760c51",
         "test/unit/attestation/attest_broadcast_fee_activation.test.js": "4dff9efe8fe9df01",
@@ -17804,6 +17936,7 @@
         "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
         "test/unit/contracts/stake_snapshot_strings.test.js": "a0a533092c7a2e98",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
+        "test/unit/contracts/vm_failure_status.test/constructor_gas_ceiling_exhausted.test.js": "3cdde43380ba5754",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
         "test/unit/contracts/vm_stake_snapshot_decimal_strings.test.js": "af56bad14283ad0f",
         "test/unit/contracts/vm_stake_snapshot_gate_off_types.test.js": "08a84ab3f12a6cb8",
@@ -18242,9 +18375,19 @@
         "test/unit/protocol_changes/vm_lint/vm_lint_destructure_row.test.js": "3c864b6bfe359c45",
         "test/unit/protocol_changes/vm_lint/vm_lint_nesting_depth_row.test.js": "06ffa42905e141f0",
         "test/unit/protocol_changes/vm_lint/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
+        "test/unit/protocol_changes/vm_lint/vm_lint_syntax_depth_row.test.js": "86289bceaff4a2d3",
+        "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_matches_vm.test.js": "a6abafeb24201686",
+        "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "af3b13066b325fa8",
+        "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "d14b2a8196167f6c",
+        "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "58a722e0f4b362c8",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_hook_row.test.js": "f959c69addce7dd8",
+        "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "d1bfe2b0906e9c21",
+        "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "fd75cdd445f6e0af",
+        "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "c7b2c49276d24577",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
+        "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "50ede05bfc1b0ce8",
+        "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
@@ -18266,7 +18409,7 @@
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "402e0cdc190f1daf",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "77cc01075dd8d18a",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
@@ -18388,6 +18531,7 @@
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
         "test/unit/xchain_indexer/parse_exception_wedge.test.js": "4056956385f780ce",
         "test/unit/xchain_indexer/poll_early_decide_watermark.test.js": "998eea1b7fd2bc86",
+        "test/unit/xchain_indexer/readiness_verdict.test.js": "44ca5a03f9220589",
         "test/unit/xchain_indexer/resolve_btc_chain_id_midchain.test.js": "f8d27657ca37a414",
         "test/unit/xchain_indexer/stall_health.test.js": "2537dd40819c57ff",
         "test/unit/xchain_indexer/stall_health.test/barrier_mapping.test.js": "26506740301590af",

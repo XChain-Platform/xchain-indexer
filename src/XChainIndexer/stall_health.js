@@ -23,6 +23,7 @@
 
 const BRIDGE_PROOF_BARRIER = 'bridge_proof_barrier';
 const PRICE_LANDING_BARRIER = 'price_landing_barrier';
+const ROLLCALL_PROOF_REASON = 'rollcall_proof_unavailable';
 
 // The no-progress window a stall is judged against. The price-landing barrier waits on
 // the OTHER landing chains' published landed times, which move on their own cadence, so
@@ -109,6 +110,27 @@ function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClea
     return 'barrier_defer';
 }
 
+// The stall class the status surfaces publish: stallClassOf's verdict, refined for the
+// two stalls a restart cannot clear and that otherwise read as something milder.
+//   'upstream_halted'     - the paired decoder carries a live REORG_HALT marker and the
+//                           indexer has no stall of its own. It has caught up to the
+//                           decoder's frozen tip, so without this it reads 'none'.
+//   'rollcall_proof_wait' - a roll call epoch is deferred because the Dogecoin side
+//                           cannot yet prove who signed. It clears when that visibility
+//                           returns, not on a clock, so like bridge_proof_wait it is a
+//                           wait rather than a mirror-barrier defer.
+//   'rollcall_proof_stuck' - the same wait once the block's hold has passed its ceiling.
+// A 'wedged' verdict is never refined away: the liveness contract (the /status 503 and
+// what autoheal reads) is stallWedged() alone, and this function changes none of it.
+// HEALTH REPORTING ONLY: hashes nothing and gates no wait.
+function publishedStallClass(baseClass, stallReason, { decoderReorgHalted = false, ceilingExceeded = false } = {}){
+    if(baseClass === 'wedged') return baseClass;
+    if(!stallReason && decoderReorgHalted) return 'upstream_halted';
+    if(stallReason === ROLLCALL_PROOF_REASON)
+        return ceilingExceeded ? 'rollcall_proof_stuck' : 'rollcall_proof_wait';
+    return baseClass;
+}
+
 // True when the indexer has committed every block consensus currently PERMITS it to
 // commit: either it is level with the decoder tip (isSynced), or the only thing between
 // it and the tip is a future-stamped block it must legally wait out. `isSynced` keeps its
@@ -181,6 +203,7 @@ module.exports = {
     stallWedged,
     waitingOnFutureBlock,
     stallClassOf,
+    publishedStallClass,
     atProcessableTip,
     nextBarrierHold,
     isMirrorBarrierReason,

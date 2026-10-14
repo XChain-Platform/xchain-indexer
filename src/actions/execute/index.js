@@ -130,6 +130,9 @@ class Execute {
         let ctx = {
             data:            data,
             error:           error,
+            // The VM's argument array when a framework callback runs under
+            // CALLBACK_ARGS_EXACT (./validate.js); null splits METHOD_PARAMS instead.
+            methodArgs:      null,
             contractInfo:    null,
             gasCost:         null,
             fee:             null,

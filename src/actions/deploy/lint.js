@@ -102,6 +102,9 @@ async function resolveLintFlags(deploy, data){
     let enforceBannedWith = gateRegistry.activeAt('vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION', deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
     let enforceLintNestingDepth = gateRegistry.activeAt('vm_lint_nesting_depth_activation.VM_LINT_NESTING_DEPTH_ACTIVATION', deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
     let enforceLintDestructure = gateRegistry.activeAt('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION', deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
+    // The syntax-depth bound: at its height the VM also enforces the delimiter rule on
+    // deploy (the execute-time lint always has), so the nesting row above stops mattering.
+    let enforceLintSyntaxDepth = gateRegistry.activeAt('vm_lint_syntax_depth_heights.VM_LINT_SYNTAX_DEPTH_ACTIVATION', deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
     // banned-rest (unmeterable rest positions) is the deploy half of
     // REST_PATTERN_METER. Its VM twin wraps a top-level rest's source in the
     // size-charged helper; the positions with no addressable source cannot be
@@ -111,7 +114,7 @@ async function resolveLintFlags(deploy, data){
     // the chain already accepted. Below the flag day the rule is dropped and the
     // historical verdict replays byte-identically.
     let enforceBannedRest = await deploy.actions.protocolChanges.isEnabled('REST_PATTERN_METER', data['BLOCK_INDEX']);
-    return { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias, enforceLintOptionalChain, enforceBannedWith, enforceLintNestingDepth, enforceLintDestructure, enforceBannedRest };
+    return { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias, enforceLintOptionalChain, enforceBannedWith, enforceLintNestingDepth, enforceLintDestructure, enforceBannedRest, enforceLintSyntaxDepth };
 }
 
 /**

@@ -28,6 +28,10 @@ const crypto = require('crypto');
 const { resolveRootDiscriminator } = require('../../consensus/batch_root_discriminator.js');
 const { GAS_CEILING } = require('./constants.js');
 const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
+const gateRegistry = require('../../consensus/gate_registry');
+
+// Registry key of the activation that clamps the constructor's gas on every path.
+const GAS_CEILING_EXHAUSTED_GATE = 'gas_ceiling_exhausted_heights.GAS_CEILING_EXHAUSTED_ACTIVATION';
 
 /**
  * Decide whether the constructor runs and resolve its root discriminator.
@@ -88,7 +92,9 @@ async function executeConstructor(deploy, run){
 
         let vmLedger = await constructorLedger(deploy, run);
         run.constructorResult = await callConstructor(deploy, run, blockHash, vmLedger);
-        settleConstructorOutcome(run);
+        let clampEveryPath = gateRegistry.activeAt(GAS_CEILING_EXHAUSTED_GATE,
+            deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
+        settleConstructorOutcome(run, clampEveryPath);
     }
 }
 
@@ -180,9 +186,10 @@ async function callConstructor(deploy, run, blockHash, vmLedger){
 /**
  * Clamp the constructor's gas into totalGas and turn a failure into the deploy's verdict.
  *
- * @param {object} run  the deployment's run state (mutated: totalGas, constructorError, error)
+ * @param {object}  run             the deployment's run state (mutated: totalGas, constructorError, error)
+ * @param {boolean} clampEveryPath  the gas-ceiling exhaustion activation is live at this block
  */
-function settleConstructorOutcome(run){
+function settleConstructorOutcome(run, clampEveryPath){
     let constructorResult = run.constructorResult;
     // Defense-in-depth (consensus): mirror the gasUsed clamp in actions/execute/settle.js so a
     // resource termination in the constructor can never cause totalGas (hashed via
@@ -193,6 +200,14 @@ function settleConstructorOutcome(run){
     let constructorGas = constructorResult.gasUsed;
     if(!constructorResult.success && /^(out_of_gas|timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(String(constructorResult.error)))
         constructorGas = GAS_CEILING;
+    // Past the activation, clamp on every path as the EXECUTE settle does. A constructor
+    // that swallowed a gas exhaustion and then threw reports a generic 'error:' with up
+    // to one charge past the ceiling, which the family regex above does not catch, so the
+    // overshoot reached totalGas and the hashed contract_executions.gas_used. One that
+    // swallowed and then returned settles valid, and there the overshoot is also billed.
+    // Below the activation the raw value is kept so history replays unchanged.
+    if(clampEveryPath)
+        constructorGas = Math.min(constructorGas, GAS_CEILING);
     run.totalGas += constructorGas;
 
     if(!constructorResult.success){

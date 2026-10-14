@@ -309,7 +309,8 @@ async function buildCallbackContext(poll, data, chain, emissionActionIndex){
         emitter:       data['ACTION_INDEX'],
         synthTag:      SYNTH_TAGS.VOTE_CALLBACK,
         synthId:       poll.action_index,
-        includeTxHash: synthActive
+        includeTxHash: synthActive,
+        callback:      true
     });
 
     return emissionData;

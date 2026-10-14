@@ -21,7 +21,8 @@
  *
  ********************************************************************/
 
-const { stallWedged, waitingOnFutureBlock, stallClassOf, atProcessableTip } = require('../../XChainIndexer');
+const { stallWedged, waitingOnFutureBlock, stallClassOf, publishedStallClass, atProcessableTip,
+        barrierCeilingExceeded } = require('../../XChainIndexer');
 
 // Is the counter advancing, is the poll loop alive, and if a stall is set, is it
 // a healthy wait, a barrier defer or a wedge. `now` is the caller's one clock read.
@@ -56,15 +57,22 @@ function advanceFields(indexer, now){
         // pinned at ~6 blocks and stallReason naming whichever time-keyed barrier is waiting.
         waitingOnFutureBlock: waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now),
         // Single machine-readable verdict on the block counter, so a monitor reads one field
-        // instead of joining three: 'none' | 'future_block_wait' | 'barrier_defer' | 'wedged'.
-        stallClass:       stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                       indexer.healthStallGraceMs, now, indexer.stallClearsAt,
-                                       indexer.priceLandingGraceMs),
+        // instead of joining three: 'none' | 'future_block_wait' | 'barrier_defer' | 'wedged',
+        // refined by publishedStallClass into 'upstream_halted' / 'rollcall_proof_wait' /
+        // 'rollcall_proof_stuck' exactly as GET /status publishes it.
+        stallClass:       publishedStallClass(
+                              stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
+                                           indexer.healthStallGraceMs, now, indexer.stallClearsAt,
+                                           indexer.priceLandingGraceMs),
+                              indexer.stallReason,
+                              { decoderReorgHalted: !!indexer.decoderReorgHalted,
+                                ceilingExceeded: barrierCeilingExceeded(indexer.barrierHold,
+                                                                        indexer.barrierHoldCeilingMs, now) }),
         // true when every block consensus currently PERMITS this indexer to commit is
         // committed (level with the decoder tip, or the only blocker is a future-stamped
         // block). The "functionally caught up" signal: `synced` keeps its literal
         // decoder-tip-parity meaning and reads false through the whole future-stamp wait.
-        atProcessableTip: atProcessableTip(indexer.isSynced(), indexer.stallReason,
+        atProcessableTip: atProcessableTip(indexer.isSynced() && !indexer.decoderReorgHalted, indexer.stallReason,
                                            indexer.stallClearsAt, now),
         // Epoch-ms at which the current time-keyed barrier can first be satisfied,
         // or null. Non-null means the indexer is waiting on WALL CLOCK (a future-stamped

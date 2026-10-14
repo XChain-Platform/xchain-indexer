@@ -24,6 +24,7 @@ const { CONFIG_ENV } = require('../config.js');
 // The hold ceiling comes from the same named constant HubDbSync throttles its forced
 // resync on (see initBarrierTiming).
 const { resolveBarrierHoldCeilingMs } = require('../hub/hub_db_sync.js');
+const { resolveReadyNoCommitMs } = require('./readiness/verdict.js');
 
 // Chain identity, stall and loop-liveness fields: what /health reads to tell an
 // advancing, deferring, wedged or silent block loop apart.
@@ -65,6 +66,10 @@ function initChainState(indexer){
     // outer poll loop and the inner catch-up loop, since an initial sync legitimately stays
     // inside the inner one for hours. Read by isPollSilent().
     indexer.lastPollAt = 0;
+    // Wall-clock (epoch ms) this instance was constructed. The readiness verdict counts
+    // "no commit" from here when nothing has committed since boot, so a restart cannot
+    // turn a block stuck before it into one that is never judged (see readiness/verdict.js).
+    indexer.startedAt = Date.now();
     // Decoder reorg events (one per orphaned block) this process has recorded as processed, for the metrics scrape.
     indexer.reorgsProcessedSinceStart = 0;
 }
@@ -212,4 +217,24 @@ function initDirectCallState(indexer){
     indexer.anchorAttestArrivalMarginS = null;
 }
 
-module.exports = { initChainState, initHaltState, initHubConfigState, initBarrierTiming, initDirectCallState };
+// The readiness verdict's window and the coin node tip it compares against. Every field
+// here is reporting only: GET /ready and the /status readiness fields read them, and
+// nothing that gates a block or a hashed value does.
+function initReadinessState(indexer){
+    // Coin node tip read from the utxo tracker for /status chainLag (see readiness/chain_tip.js):
+    // the height, when it was read, and the refresh bookkeeping. Reporting only.
+    indexer.chainTip           = null;
+    indexer.chainTipAt         = null;
+    indexer._chainTipCheckedAt = 0;
+    indexer._chainTipInFlight  = null;
+    indexer.chainTipTtlMs      = parseInt(CONFIG_ENV.INDEXER_CHAIN_TIP_TTL_MS || '15000', 10);
+    indexer.chainTipTimeoutMs  = parseInt(CONFIG_ENV.INDEXER_CHAIN_TIP_TIMEOUT_MS || '1500', 10);
+
+    // Window (ms) the indexer may sit behind a known tip without a commit before GET /ready
+    // reports it not ready (readiness/verdict.js). Readiness, never liveness: it moves no
+    // status code the container healthcheck reads. Purely operational, NOT a consensus parameter.
+    indexer.readyNoCommitMs = resolveReadyNoCommitMs(CONFIG_ENV.INDEXER_READY_NO_COMMIT_MS);
+}
+
+module.exports = { initChainState, initHaltState, initHubConfigState, initBarrierTiming, initDirectCallState,
+                   initReadinessState };
