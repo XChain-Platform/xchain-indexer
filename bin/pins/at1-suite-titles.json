@@ -7780,6 +7780,14 @@
       "capability validator request steps unconfiguredCapabilityError() returns null when the capability is configured",
       "capability validator request steps unconfiguredCapabilityError() returns the exact capability error when configuration is absent"
     ],
+    "7d0a4c1edba09f78": [
+      "contract_executions text clips against MariaDB @integration refuses the unclipped value of a 300-character method name under the pinned sql_mode",
+      "contract_executions text clips against MariaDB @integration refuses the unclipped value of a 70,008-character ASCII revert reason under the pinned sql_mode",
+      "contract_executions text clips against MariaDB @integration refuses the unclipped value of an 80,000-byte emoji revert reason under the pinned sql_mode",
+      "contract_executions text clips against MariaDB @integration stores the clipped value of a 300-character method name and reads it back unchanged",
+      "contract_executions text clips against MariaDB @integration stores the clipped value of a 70,008-character ASCII revert reason and reads it back unchanged",
+      "contract_executions text clips against MariaDB @integration stores the clipped value of an 80,000-byte emoji revert reason and reads it back unchanged"
+    ],
     "7d62cbabc6cf594b": [
       "mirror-admission chain margin gate @regression @tier1 falls back to the legacy margin when the override or height is unusable",
       "mirror-admission chain margin gate @regression @tier1 keeps the DOGE testnet margin inert below its sentinel",
@@ -15747,6 +15755,18 @@
       "ATTEST batch chunk read: the publisher partition and its row limit (row 59) @regression reassembles a real multi-chunk batch read back through the bounded query",
       "ATTEST batch chunk read: the publisher partition and its row limit (row 59) @regression still hands a foreign publisher nothing of this batch"
     ],
+    "ea0a32519488ba6a": [
+      "Database.normalizeDataValues() ERROR_MESSAGE clip leaves fitting values alone @regression @tier1 ERROR_MESSAGE: does not mutate the caller object",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip leaves fitting values alone @regression @tier1 ERROR_MESSAGE: keeps a short value and a within-capacity lone surrogate unchanged",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip leaves fitting values alone @regression @tier1 ERROR_MESSAGE: keeps a value of exactly 65,535 bytes unchanged",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip leaves fitting values alone @regression @tier1 ERROR_MESSAGE: leaves null as null and clips the same input to the same value every time",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip to the TEXT byte capacity @regression @tier1 ERROR_MESSAGE: clips a 70,008-character ASCII revert reason to the 65,535-byte column capacity",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip to the TEXT byte capacity @regression @tier1 ERROR_MESSAGE: clips an 80,000-byte emoji revert reason on a character boundary",
+      "Database.normalizeDataValues() ERROR_MESSAGE clip to the TEXT byte capacity @regression @tier1 ERROR_MESSAGE: steps back off 2- and 3-byte characters that straddle the cut",
+      "Database.normalizeDataValues() METHOD_NAME clip to the VARCHAR(250) character capacity @regression @tier1 METHOD_NAME: clips a 300-character method name to 250 characters",
+      "Database.normalizeDataValues() METHOD_NAME clip to the VARCHAR(250) character capacity @regression @tier1 METHOD_NAME: counts a 4-byte character as one and never splits it",
+      "Database.normalizeDataValues() METHOD_NAME clip to the VARCHAR(250) character capacity @regression @tier1 METHOD_NAME: keeps a 250-character name, a short name and null unchanged"
+    ],
     "ea62056189a4fc7e": [
       "protocol_changes BET feed list edit row @regression @tier1 is registry-only and keeps its registry part within the size limit",
       "protocol_changes BET feed list edit row @regression @tier1 registers an unarmed production height map with regtest active from genesis",
@@ -17072,8 +17092,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1300,
-      "titleCount": 13156,
+      "fileCount": 1301,
+      "titleCount": 13166,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -17803,6 +17823,7 @@
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
+        "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
         "test/unit/db/db.test/get_block_index.test.js": "6acb53eca64ed20e",
         "test/unit/db/db.test/reorg_identity.test.js": "2394b1e6a050e4c7",
         "test/unit/db/db.test/validator_capabilities.test.js": "fc5d6e4ae9cfb50a",
@@ -18507,8 +18528,8 @@
       }
     },
     "test:integration": {
-      "fileCount": 67,
-      "titleCount": 419,
+      "fileCount": 68,
+      "titleCount": 425,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
@@ -18518,6 +18539,7 @@
         "test/integration/attest_relay_identity.test/attest_relay_identity_migration.test.js": "feadcd4727782c6d",
         "test/integration/attest_relay_identity.test/attest_relay_identity_request_id.test.js": "38927f13832ace8b",
         "test/integration/datetime_migrations_real.test.js": "db5cccdf7f214cc5",
+        "test/integration/execution_text_clip_db.test.js": "7d0a4c1edba09f78",
         "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
         "test/integration/markets_native_coin_migration.test.js": "3bd193539b3a5957",
         "test/integration/migration_live_schema_guard.test.js": "afa55fee6bb13a1b",
@@ -18580,8 +18602,8 @@
       }
     },
     "test:integration:ci": {
-      "fileCount": 67,
-      "titleCount": 419,
+      "fileCount": 68,
+      "titleCount": 425,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
@@ -18591,6 +18613,7 @@
         "test/integration/attest_relay_identity.test/attest_relay_identity_migration.test.js": "feadcd4727782c6d",
         "test/integration/attest_relay_identity.test/attest_relay_identity_request_id.test.js": "38927f13832ace8b",
         "test/integration/datetime_migrations_real.test.js": "db5cccdf7f214cc5",
+        "test/integration/execution_text_clip_db.test.js": "7d0a4c1edba09f78",
         "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
         "test/integration/markets_native_coin_migration.test.js": "3bd193539b3a5957",
         "test/integration/migration_live_schema_guard.test.js": "afa55fee6bb13a1b",
@@ -18741,8 +18764,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 960,
-      "titleCount": 10254,
+      "fileCount": 961,
+      "titleCount": 10264,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19295,6 +19318,7 @@
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
+        "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
         "test/unit/db/db.test/get_block_index.test.js": "6acb53eca64ed20e",
         "test/unit/db/db.test/reorg_identity.test.js": "2394b1e6a050e4c7",
         "test/unit/db/db.test/validator_capabilities.test.js": "fc5d6e4ae9cfb50a",
@@ -19707,8 +19731,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 431,
-      "titleCount": 5120,
+      "fileCount": 432,
+      "titleCount": 5130,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
@@ -19873,6 +19897,7 @@
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
+        "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
         "test/unit/db/db.test/get_block_index.test.js": "6acb53eca64ed20e",
         "test/unit/db/db.test/reorg_identity.test.js": "2394b1e6a050e4c7",
         "test/unit/db/db.test/validator_capabilities.test.js": "fc5d6e4ae9cfb50a",
@@ -20144,8 +20169,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 960,
-      "titleCount": 10254,
+      "fileCount": 961,
+      "titleCount": 10264,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20698,6 +20723,7 @@
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
+        "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
         "test/unit/db/db.test/get_block_index.test.js": "6acb53eca64ed20e",
         "test/unit/db/db.test/reorg_identity.test.js": "2394b1e6a050e4c7",
         "test/unit/db/db.test/validator_capabilities.test.js": "fc5d6e4ae9cfb50a",
