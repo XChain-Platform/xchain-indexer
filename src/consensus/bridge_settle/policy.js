@@ -35,8 +35,8 @@ const { policyHash, verifyMembershipOrder, parseMembershipOrRef } = require('./p
 const gateRegistry = require('../gate_registry');
 const { isSettled, recordSettlement } = require('./settlements.js');
 const { injectBridgedToken } = require('./leg_effects.js');
-const { resolveTransferOrigin } = require('../bridge_checkpoint_check/origin.js');
 const createPolicyLegs = require('./policy_legs.js');
+const { applyOrderActive, orderVerdict, lockInLegDecimals } = require('./policy_order.js');
 
 /**
  * The refusals that read the ROW and the block alone.
@@ -105,6 +105,22 @@ async function guardApplyOrder(deps, row, ctx, f){
     const db = ctx.indexerDb;
     if(await isSettled(db, f.id, 'policy'))
         return { reason: SETTLE_REASON.ALREADY_APPLIED, terminal: false };
+
+    // From BRIDGE_POLICY_APPLY_ORDER_ACTIVATION the order is contiguous by seq over this chain's
+    // own records (policy_order.js): the check below reads only the earlier seqs the mirror
+    // holds, so a seq that arrives after a later one has applied would otherwise apply last.
+    if(applyOrderActive(ctx)){
+        const verdict = await orderVerdict(db, row, ctx, f);
+        if(verdict === 'stale'){
+            log('XPOLICY', f.id, SETTLE_REASON.POLICY_SEQ_STALE + ' : terminal');
+            return { reason: SETTLE_REASON.POLICY_SEQ_STALE, terminal: true };
+        }
+        if(verdict === 'hold'){
+            log('XPOLICY', f.id, SETTLE_REASON.POLICY_SEQ_GAP + ' : carrying forward');
+            return { reason: SETTLE_REASON.POLICY_SEQ_GAP, terminal: false };
+        }
+        return null;
+    }
 
     const earlier = await db.mirrorDb().getEarlierFinalizedPolicySnapshots(row.network, f.origin, f.name, f.seq);
     for(const e of (earlier || [])){
@@ -175,15 +191,7 @@ async function signedCopyDecimals(deps, ctx, f){
     if(typeof mirror.getFinalizedBridgeTransfersForChain !== 'function') return null;
     const bind = deps.canonicals.mirrorBindClause(ctx);
     const rows = await mirror.getFinalizedBridgeTransfersForChain(ctx.network, ctx.coin, bind);
-    for(const row of (rows || [])){
-        const origin = resolveTransferOrigin(row);
-        if(origin && origin.kind === 'lock' && origin.originChain === f.origin &&
-           origin.nativeTick === f.name){
-            const decimals = int(row.decimals);
-            if(decimals !== null) return decimals;
-        }
-    }
-    return null;
+    return lockInLegDecimals(rows, f.origin, f.name);
 }
 
 function noCopy(deps, copyTick, detail){

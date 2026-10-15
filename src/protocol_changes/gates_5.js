@@ -241,3 +241,20 @@ addGate('dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICING_ACTIVATION', '
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION at read
 });
+
+// bridge_policy_apply_order_activation
+// Height on the chain's own block_index. From it the bridge settle pass selects token policy
+// snapshots only for ticks with a bridged copy on this chain (a local token row, or a due lock
+// in-leg that creates one), before the XPOLICY_MAX_PER_BLOCK cap, so snapshots for ticks bridged
+// elsewhere stop taking every slot. From the same height a tick's snapshots apply in contiguous
+// policy_seq order: a seq waits while an earlier one is neither applied nor recorded refused, a
+// seq at or below the applied one never applies, and a seq still waiting
+// XPOLICY_SEQ_GAP_BOUND_S of block time past its own effective_time applies over the gap. Below
+// it the pass replays as before. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a
+// venue arms it with XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION (shared_rows.js). The
+// selection and the bound live in src/consensus/bridge_settle/policy_order.js.
+addGate('bridge_policy_apply_order_activation.BRIDGE_POLICY_APPLY_ORDER_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION at read
+});

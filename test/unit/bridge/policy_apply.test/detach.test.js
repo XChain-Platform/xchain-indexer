@@ -22,6 +22,7 @@ const {
 } = require('./helpers/setup.js');
 
 const DETACH_GATE = 'bridge_policy_detach_activation.BRIDGE_POLICY_DETACH';
+const APPLY_ORDER_GATE = 'bridge_policy_apply_order_activation.BRIDGE_POLICY_APPLY_ORDER_ACTIVATION';
 const ALLOW_LIST_INDEX = 4242;
 const BLOCK_LIST_INDEX = 4343;
 
@@ -110,9 +111,11 @@ describe('policy apply: detach gate boundaries', function(){
         const res = await BS.applyPolicySnapshot(row, ctx);
         assert.strictEqual(res.applied, true, res.reason || '');
         assert.deepStrictEqual(state.injected, []);
-        assert.strictEqual(gateRegistry.activeAt.callCount, 1);
-        assert.deepStrictEqual(gateRegistry.activeAt.firstCall.args,
-            [DETACH_GATE, 'regtest', 'DOGE', 900, null]);
+        // Two reads at this block: the apply-order gate in the order guard, then the detach gate.
+        assert.deepStrictEqual(gateRegistry.activeAt.getCalls().map(c => c.args), [
+            [APPLY_ORDER_GATE, 'regtest', 'DOGE', 900, null],
+            [DETACH_GATE, 'regtest', 'DOGE', 900, null],
+        ]);
     });
 
     it('injects nothing when null lists have no pointers to detach', async function(){

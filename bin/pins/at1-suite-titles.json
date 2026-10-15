@@ -10594,6 +10594,21 @@
       "Amount representability @regression @tier1 isRepresentableAmount() rule rejects undefined at 8 decimals (undefined)",
       "Amount representability @regression @tier1 isRepresentableAmount() rule rejects {} at 8 decimals (a raw object: rendering is safeToString's job, not this rule's)"
     ],
+    "92057fbff5be7e05": [
+      "bridge_settle: policy apply order guard @regression armed: applies v1 then v2 once v1 is due, and v2 over a missing v1 past the bound",
+      "bridge_settle: policy apply order guard @regression armed: holds v2 while v1 is not yet mirrored, then never applies v1 over v2",
+      "bridge_settle: policy apply order guard @regression reads the applied seq and the refused seqs from the local records",
+      "bridge_settle: policy apply order guard @regression unarmed: v2 applies over a v1 that is not mirrored, and v1 then applies, as before",
+      "bridge_settle: policy selection by contiguous seq @regression armed: a forged huge seq admitted over its gap does not mark the real seq 1 stale",
+      "bridge_settle: policy selection by contiguous seq @regression armed: judges an unsigned huge policy_seq at once, held and then admitted past the bound",
+      "bridge_settle: policy selection by contiguous seq @regression armed: leaves out a seq at or below the applied one, and admits over a gap past the bound",
+      "bridge_settle: policy selection by contiguous seq @regression armed: leaves out a seq whose predecessor is missing, and keeps one that follows it",
+      "bridge_settle: policy selection by contiguous seq @regression unarmed: the selection ignores seq order, as before",
+      "bridge_settle: policy selection excludes ticks with no copy before the cap @regression armed: a snapshot for a tick with a copy applies past carried no-copy rows",
+      "bridge_settle: policy selection excludes ticks with no copy before the cap @regression armed: keeps a row this chain originates, so its own terminal refusal still judges it",
+      "bridge_settle: policy selection excludes ticks with no copy before the cap @regression armed: re-admits a row once its copy exists, by token row or by a due lock in-leg",
+      "bridge_settle: policy selection excludes ticks with no copy before the cap @regression unarmed: the five carried no-copy rows still fill the cap, as before"
+    ],
     "921003c7d543ef9c": [
       "HubClient hub-rejection classification carries the reason on the thrown error for the queue log",
       "HubClient hub-rejection classification resolves a successful retraction result untouched",
@@ -18642,8 +18657,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1366,
-      "titleCount": 13685,
+      "fileCount": 1368,
+      "titleCount": 13698,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19197,6 +19212,7 @@
         "test/unit/bridge/bridge_settle.test.js": "910f0e2007f1aedd",
         "test/unit/bridge/bridge_settle.test/due_set_and_checkpoints.test.js": "1017207e60c137f5",
         "test/unit/bridge/bridge_settle.test/gas_tick_case.test.js": "15ca3c63388ae707",
+        "test/unit/bridge/bridge_settle.test/policy_apply_order.test.js": "92057fbff5be7e05",
         "test/unit/bridge/bridge_settle.test/policy_barrier.test.js": "543039eae6bde8a7",
         "test/unit/bridge/bridge_settle.test/proof_after_quorum.test.js": "e3ac61fb28a09639",
         "test/unit/bridge/bridge_settle.test/refusal_logging.test.js": "aca73b0f37adfbac",

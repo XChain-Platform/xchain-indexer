@@ -39,6 +39,7 @@ const { parseMembershipOrRef } = require('./policy_membership.js');
 const { dropRefRowsFromFirst } = require('./policy_ref_due.js');
 const { belowBridgeActivation } = require('./transfer.js');
 const { recordSettlement } = require('./settlements.js');
+const { applyOrderActive, selectArmed } = require('./policy_order.js');
 const gateRegistry = require('../gate_registry');
 
 const POLICY_REFUSAL_RECORD_KEY =
@@ -285,8 +286,12 @@ async function duePolicySnapshots(deps, ctx){
         const refused = await db.getRecordedPolicyRefusalIds(ids);
         for(const r of refused) seen.add(r.transfer_id);
     }
-    return rows.filter(r => !seen.has(r.snapshot_id))
-               .slice(0, XPOLICY_MAX_PER_BLOCK || 5);
+    let unapplied = rows.filter(r => !seen.has(r.snapshot_id));
+    // From BRIDGE_POLICY_APPLY_ORDER_ACTIVATION the rows with no bridged copy here and the rows
+    // the seq order holds leave BEFORE the cap, so a snapshot for a tick bridged elsewhere, or
+    // one waiting on its predecessor, cannot take a slot every block (policy_order.js).
+    if(applyOrderActive(ctx)) unapplied = await selectArmed(unapplied, ctx, { bind: bind });
+    return unapplied.slice(0, XPOLICY_MAX_PER_BLOCK || 5);
 }
 
 /**
