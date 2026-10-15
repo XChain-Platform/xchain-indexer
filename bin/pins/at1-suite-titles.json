@@ -8591,6 +8591,18 @@
       "dispense value accounting: multi-dispenser payment outside a batch @regression @tier1 the non-batch tally never appears on data as a BATCH_VALUE_LEDGER",
       "dispense value accounting: multi-dispenser payment outside a batch @regression @tier1 the tally is scoped to ONE action: a second DISPENSE gets a fresh payment"
     ],
+    "81c33486bde89d47": [
+      "MATCH origin-open activation @regression @tier1 an armed list plan does not settle a swap completed by its earlier step",
+      "MATCH origin-open activation @regression @tier1 an armed stale order plan cannot settle escrow already returned by cancellation",
+      "MATCH origin-open activation @regression @tier1 armed ORDER_MATCH returns before candidate lookup for a cancelled origin",
+      "MATCH origin-open activation @regression @tier1 armed SWAP_MATCH returns before candidate lookup for a completed origin",
+      "MATCH origin-open activation @regression @tier1 arms regtest at the configured boundary and never arms live networks",
+      "MATCH origin-open activation @regression @tier1 keeps the terminal-origin settlement path unchanged while the gate is unarmed",
+      "MATCH origin-open activation @regression @tier1 mainnet retains the terminal-origin path even when the regtest lever is armed",
+      "MATCH origin-open activation @regression @tier1 testnet retains the terminal-origin path even when the regtest lever is armed",
+      "MATCH origin-open activation @regression @tier1 the legacy stale order plan settles escrow after the cancellation refund",
+      "MATCH origin-open activation @regression @tier1 the legacy swap plan debits the same completed offer escrow twice"
+    ],
     "81c7c2c21a52ed26": [
       "Database._migrationMode() @regression @tier1 defaults to manual when no tag is present (never auto-runs unknown DDL)",
       "Database._migrationMode() @regression @tier1 ignores a mode= tag below the first SQL statement (body prose cannot arm auto)",
@@ -18747,8 +18759,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1373,
-      "titleCount": 13778,
+      "fileCount": 1374,
+      "titleCount": 13788,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18965,6 +18977,7 @@
         "test/unit/actions/market/dispenser_expire.test.js": "090805c45b5b3a5b",
         "test/unit/actions/market/dispenser_settlement_idempotency.test.js": "2f5611f310786b32",
         "test/unit/actions/market/list_edit_remove.test.js": "c60ea6810870541d",
+        "test/unit/actions/market/match_origin_open_activation.test.js": "81c33486bde89d47",
         "test/unit/actions/market/order.test.js": "b3eea5de6160a08f",
         "test/unit/actions/market/order.test/cancel.test.js": "4b307ffce89c1cdf",
         "test/unit/actions/market/order.test/create_rules.test.js": "6c8830c1a590c64a",

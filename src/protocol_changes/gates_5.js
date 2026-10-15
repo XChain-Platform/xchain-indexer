@@ -299,3 +299,17 @@ addGate('vote_v3_tick_existence_activation.VOTE_V3_TICK_EXISTENCE_ACTIVATION', '
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION at read
 });
+
+// match_origin_open_activation
+// Height on the chain's own block_index. From it ORDER_MATCH and SWAP_MATCH re-read the
+// originating offer and return before candidate lookup unless its latest status is open.
+// This covers a LIST rematch plan whose earlier step made a later planned origin terminal
+// and the match an ORDER or SWAP cancel dispatches from the offer it just cancelled, so
+// escrow already settled or refunded is not settled again. Below it both handlers replay
+// as before. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms
+// it with XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION (shared_rows.js).
+addGate('match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION at read
+});

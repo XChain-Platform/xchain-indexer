@@ -24,6 +24,7 @@ const settlePart = require('./settle.js');
 const gateRegistry = require('../../consensus/gate_registry');
 
 const SWAP_EDIT_REMATCH_KEY = 'swap_edit_rematch_activation.SWAP_EDIT_REMATCH_ACTIVATION';
+const MATCH_ORIGIN_OPEN_KEY = 'match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION';
 
 class Swap_Match {
 
@@ -50,6 +51,14 @@ class Swap_Match {
 
         // Bail out if swap no longer exists (already expired or rolled back)
         if(!swapInfo)
+            return;
+
+        // From the activation, a match must still originate from an open swap. LIST
+        // rematching snapshots open offers before it runs the handlers, so an earlier step
+        // can make a later origin terminal before this latest-row read, and a cancel
+        // dispatches a match from the swap it has just cancelled.
+        if(gateRegistry.activeAt(MATCH_ORIGIN_OPEN_KEY, this.config['NETWORK'],
+            this.config['COIN'], data['BLOCK_INDEX'], null) && swapInfo['SWAP_STATUS'] !== 'open')
             return;
 
         // Get a list of any matching open swaps
