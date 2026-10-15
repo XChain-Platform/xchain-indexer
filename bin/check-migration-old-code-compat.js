@@ -360,6 +360,40 @@ async function exerciseAdmissionMirrorRows(raw, exercisable){
     return notes;
 }
 
+// The tables the boot-time `assert*TablesPresent` startup assertions require, read from
+// the assertions themselves (each declares its list as a `const REQUIRED = [...]`), so a
+// table added to an assertion is picked up here without a second list to keep in step.
+// Throws when an assertion carries no readable list: a silent empty answer would leave the
+// gate building nothing and failing at runMigrations only on the day that table is needed.
+function startupRequiredTables(){
+    const out = new Set();
+    for(const name of Object.getOwnPropertyNames(Database.prototype).filter(n => /^assert.*TablesPresent$/.test(n))){
+        const m = /const\s+REQUIRED\s*=\s*\[([^\]]*)\]/.exec(Database.prototype[name].toString());
+        const tables = m ? [...m[1].matchAll(/['"]([a-z_][a-z0-9_]*)['"]/gi)].map(x => x[1].toLowerCase()) : [];
+        if(!tables.length) throw new Error(name + ' declares no readable REQUIRED table list; startupRequiredTables must be taught to read it.');
+        for(const t of tables) out.add(t);
+    }
+    return [...out].sort();
+}
+
+// Build every startup-required table the old-ref step did not create, through the
+// product's own createTable (src/sql of this tree), which is what the real boot does for a
+// missing table in verifyTables. A table the pending set CREATEs is left to the migration.
+async function buildStartupRequiredTables(db, raw, dbName, skip){
+    const want = startupRequiredTables().filter(t => !skip.has(t));
+    if(!want.length) return [];
+    const live = new Set((await raw(
+        `SELECT TABLE_NAME AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN (${want.map(() => '?').join(', ')})`,
+        [dbName, ...want])).map(r => String(r.n).toLowerCase()));
+    const built = [];
+    for(const t of want){
+        if(live.has(t)) continue;
+        await db.createTable(t + '.sql');
+        built.push(t);
+    }
+    return built;
+}
+
 function git(...args){
     return execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
@@ -559,6 +593,12 @@ async function main(){
     const seededAdmission = await seedAdmissionMirrorRows(raw, mustExercise);
     if(seededAdmission.length) console.log('seeded a legacy row in: ' + seededAdmission.join(', '));
 
+    // The tables runMigrations' closing startup assertions require (bridge and shared-list
+    // tables): not every one exists at every old ref, and the assertions run after the
+    // migrations, so the gate builds the missing ones the way the real boot does.
+    const startupBuilt = await buildStartupRequiredTables(db, raw, DB_NAME, new Set([...created, ...affected, ...referenced]));
+    if(startupBuilt.length) console.log('built for the startup assertions (product createTable): ' + startupBuilt.join(', '));
+
     // ── Seed the ledger as the deployed host's really looks ──────────────────────
     {
         const conn = await db.getConnection();
@@ -718,4 +758,4 @@ if(require.main === module)
 
 // For the unit test that pins the admission-table statements to the migration's
 // manifest and drives the two loops above with a recording connection.
-module.exports = { OLD_STATEMENTS, ADMISSION_MIRROR_ROWS, addedColumns, seedAdmissionMirrorRows, exerciseAdmissionMirrorRows };
+module.exports = { startupRequiredTables, buildStartupRequiredTables, OLD_STATEMENTS, ADMISSION_MIRROR_ROWS, addedColumns, seedAdmissionMirrorRows, exerciseAdmissionMirrorRows };

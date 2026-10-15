@@ -4215,6 +4215,12 @@
       "Database.isCapabilityConfigured() @regression @tier1 returns false when STAKING.CAPABILITIES is missing entirely",
       "Database.isCapabilityConfigured() @regression @tier1 returns true for a configured capability"
     ],
+    "4640ed78651b4c0e": [
+      "compat gate: startup-required tables builds the missing tables through db.createTable, skipping live and skipped ones",
+      "compat gate: startup-required tables covers every table named in each assert*TablesPresent REQUIRED list",
+      "compat gate: startup-required tables every required table has a src/sql definition the product createTable can build",
+      "compat gate: startup-required tables exports the startup table reader and builder"
+    ],
     "4675f3133a96b7c1": [
       "mirror-admission replay witness each side resolves, from the env the parent hands it, the era A3 expects",
       "mirror-admission replay witness runs parameterized SQL through the indexer Database wrapper",
@@ -17932,8 +17938,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1342,
-      "titleCount": 13470,
+      "fileCount": 1343,
+      "titleCount": 13474,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18985,6 +18991,7 @@
         "test/unit/list_share/policy/policy_hash_ref.test.js": "f6c1cdcc5ab66603",
         "test/unit/list_share/policy/policy_ref_due.test.js": "cd23b989ff73f7d3",
         "test/unit/merkle_twin_parity.test.js": "8fae778f6e264e95",
+        "test/unit/migration/compat_gate_startup_tables.test.js": "4640ed78651b4c0e",
         "test/unit/migration/db_reconcile_auto_dedup_scope.test.js": "4212b5d3db36de1e",
         "test/unit/migration/db_reconcile_fulltext_index.test.js": "918fa176a8537ff6",
         "test/unit/migration/legacy_migrations_ported.test.js": "0ec0f41236d14b46",
