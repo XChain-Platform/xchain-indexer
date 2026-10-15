@@ -36,6 +36,14 @@ const PROOF_STALL_REASON = {
     UNREACHABLE:   'the origin-chain indexer served no usable escrow proof',
 };
 
+// The {error} text the origin-side getbridgeescrowproof read serves when its own sub-roots at
+// the asked height do not reassemble to the state_root of the signed checkpoint it holds there
+// (a reorg below that height, or a minority fork). It is an {error} answer like every other
+// "cannot prove it here", so a consumer reads it as an unavailable proof and STALLS; the text
+// is distinct only so a log can tell it from an outage. The origin bounds how long it gives
+// this answer (db/credits/bridge_reads.js divergenceSettled); the consumer adds no rule of its own.
+const ESCROW_STATE_DIVERGED = 'escrow state at that block_index does not reassemble to the signed checkpoint state_root';
+
 // The ANCHOR wire version that carries a checkpoint SECTION in its own right. Version 1 is the
 // archive head, which carries its WRAPPER checkpoint's identity rather than being one, and
 // version 2 is a continuation chunk with no identity at all. Kept as a local constant rather
@@ -59,4 +67,4 @@ class BridgeProofUnavailableError extends Error {
     }
 }
 
-module.exports = { BRIDGE_PROOF_BARRIER, PROOF_STALL_REASON, BridgeProofUnavailableError };
+module.exports = { BRIDGE_PROOF_BARRIER, PROOF_STALL_REASON, ESCROW_STATE_DIVERGED, BridgeProofUnavailableError };

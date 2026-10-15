@@ -6601,6 +6601,25 @@
       "Decoder->indexer DB read contract @regression @tier1 getDecoderBlockData() executes against the real schema and returns the normalized shape",
       "Decoder->indexer DB read contract @regression @tier1 returns an empty array (not an error) for a block with no transactions"
     ],
+    "677146c005a44b90": [
+      "getbridgeescrowproof refuses to serve state that diverges from the signed checkpoint @regression @tier1 a checkpoint row with no signed root is left to the consumer, which binds its own selected checkpoint",
+      "getbridgeescrowproof refuses to serve state that diverges from the signed checkpoint @regression @tier1 a node whose own roots at the height differ from the signed state_root answers { error } and no envelope",
+      "getbridgeescrowproof refuses to serve state that diverges from the signed checkpoint @regression @tier1 an honest origin node (own roots reassemble to the signed state_root) still serves a verifying envelope",
+      "getbridgeescrowproof refuses to serve state that diverges from the signed checkpoint @regression @tier1 compares case-insensitively, so an upper-case signed root that matches is still served",
+      "getbridgeescrowproof refuses to serve state that diverges from the signed checkpoint @regression @tier1 the RPC relays the { error } answer unchanged",
+      "getbridgeescrowproof: the divergence answer is bounded by a later checkpoint this node reproduces @regression @tier1 drops the remembered row after a local reorg below it and answers the error again",
+      "getbridgeescrowproof: the divergence answer is bounded by a later checkpoint this node reproduces @regression @tier1 keeps answering the error for a later checkpoint only 11 blocks past",
+      "getbridgeescrowproof: the divergence answer is bounded by a later checkpoint this node reproduces @regression @tier1 keeps answering the error on a minority fork: the later signed root is not this node state",
+      "getbridgeescrowproof: the divergence answer is bounded by a later checkpoint this node reproduces @regression @tier1 keeps answering the error when the later checkpoint lacks a quorum",
+      "getbridgeescrowproof: the divergence answer is bounded by a later checkpoint this node reproduces @regression @tier1 reads no row above this node own tip",
+      "getbridgeescrowproof: the divergence answer is bounded by a later checkpoint this node reproduces @regression @tier1 remembers the settling row: a second call reads no checkpoint page",
+      "getbridgeescrowproof: the divergence answer is bounded by a later checkpoint this node reproduces @regression @tier1 serves the envelope again once a quorum-signed checkpoint 12 blocks past reproduces this node state",
+      "getbridgeescrowproof: the divergence answer is bounded by a later checkpoint this node reproduces @regression @tier1 settles across scan pages (70 pre-reorg rows before the reproducing one)",
+      "getbridgeescrowproof: the divergence answer is bounded by a later checkpoint this node reproduces @regression @tier1 settles past 8 pre-reorg checkpoints in the window (the first reproducing row is the 9th)",
+      "getbridgeescrowproof: the divergence answer is bounded by a later checkpoint this node reproduces @regression @tier1 skips an unverifiable lower candidate and settles on the next one up",
+      "the consumer reads the divergence answer as an unavailable proof and defers the block @regression @tier1 buildEscrowProof raises BridgeProofUnavailableError (the block loop defers), never a refusal",
+      "the consumer reads the divergence answer as an unavailable proof and defers the block @regression @tier1 fetchEscrowProof returns null for the { error } answer, never an envelope"
+    ],
     "67835353c924205c": [
       "packaging: engines.node ceiling excludes Node 23 and above",
       "packaging: engines.node ceiling keeps a written reason next to the ceiling",
@@ -18548,8 +18567,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1357,
-      "titleCount": 13620,
+      "fileCount": 1358,
+      "titleCount": 13637,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19030,6 +19049,7 @@
         "test/unit/api/health/sync_fields.test.js": "699a77b47130480e",
         "test/unit/api/reads/api_bridge_reads.test.js": "d5091677642a6150",
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
+        "test/unit/api/reads/bridge_escrow_proof_divergence.test.js": "677146c005a44b90",
         "test/unit/api/reads/price_batch_query.test.js": "8c6b69def3f9000c",
         "test/unit/api/reads/reorg_history_query.test.js": "7ee0eb2668992ec0",
         "test/unit/api/rollcall_signers.test.js": "46fc3a8b9e5949d9",
