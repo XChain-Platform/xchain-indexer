@@ -116,6 +116,8 @@ const REGTEST_ARMING = {
         { env: 'XC_LISTS_MARKET_REGTEST_TIME', label: 'LISTS MARKET TIME', armedHeight: 0, keys: ['regtest'] },
     'remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION':
         { env: 'XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION', label: 'REMOTE TOKEN ADMISSION', armedHeight: 0, keys: ['regtest'] },
+    'pass_progress_retirement_activation.PASS_PROGRESS_RETIREMENT_ACTIVATION':
+        { env: 'XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION', label: 'PASS PROGRESS RETIREMENT', armedHeight: 0, keys: ['regtest'] },
 };
 
 // env name -> its reader. Each variable is read BY NAME, once, here: the
@@ -136,6 +138,7 @@ const ENV_READERS = {
     XC_LISTS_MARKET_REGTEST_ACTIVATION:   (env) => env.XC_LISTS_MARKET_REGTEST_ACTIVATION,
     XC_LISTS_MARKET_REGTEST_TIME:         (env) => env.XC_LISTS_MARKET_REGTEST_TIME,
     XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION: (env) => env.XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION,
+    XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION: (env) => env.XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION,
 };
 
 // The raw value of the rule's env variable, through its named reader.

@@ -43,6 +43,13 @@ function createMockDb() {
         // Block management
         getBlockIndex: sinon.stub().resolves(null),
         getBlockTime: sinon.stub().resolves(1700000000),
+        // Past-block protocol time, read by the pass retirement age (consensus/pass_retirement).
+        // Unresolved by default, so no mirrored row reads as aged and nothing retires unless a
+        // suite supplies the clock.
+        protocolTimeForStoredBlock: sinon.stub().resolves(false),
+        // Mirror binding, below the admission activation: rows bind by the clock.
+        mirrorAdmissionActiveAt: sinon.stub().returns(false),
+        admitColumn: sinon.stub().returns('admit_block_btc'),
         getBlockHashes: sinon.stub().resolves({ ledger: 'abc', actions: 'def' }),
         createBlock: sinon.stub().resolves(['abc12', 'def34']),
         createReorg: sinon.stub().resolves(),

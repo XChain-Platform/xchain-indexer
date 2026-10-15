@@ -3801,6 +3801,15 @@
       "controller guard async and slash emission deny @regression @tier1 denies a guard that emits SLASH and rolls its savepoint back",
       "controller guard async and slash emission deny @regression @tier1 denies a guard that emits XCALL and rolls its savepoint back"
     ],
+    "3ba35a724cce8d68": [
+      "pass retirement age @regression ages a clock-bound row when the block a grace back had reached its effective_time",
+      "pass retirement age @regression can only read a row younger on a clock that steps back, never older",
+      "pass retirement age @regression falls back to the clock for a row with no height for this chain in the admission era",
+      "pass retirement age @regression ignores admit_block outside the admission era, and effective_time inside it",
+      "pass retirement age @regression never ages a row when the reference block is below genesis or not stored",
+      "pass retirement age @regression never ages a row whose admission column is not a height, or whose effective_time is missing",
+      "pass retirement age @regression sizes the grace at about two hours of each chain and takes the longest for an unknown chain"
+    ],
     "3ba5b094789a13b1": [
       "Database.getLatestPrice() time-gated selection (H-3) @regression @tier1 M-17: a query error propagates instead of collapsing into \"no price\"",
       "Database.getLatestPrice() time-gated selection (H-3) @regression @tier1 M-17: doQueryStrict throws on a NON-transactional query error (where doQuery swallows)",
@@ -4029,6 +4038,14 @@
       "rollback drops the SMT resolver caches @regression rollback.js clears BOTH resolver caches",
       "rollback drops the SMT resolver caches @regression the clear happens on the indexer db, not some other handle",
       "rollback drops the SMT resolver caches @regression the clear sits immediately after commit, beside the block-time memo"
+    ],
+    "3e5119d767a96b8c": [
+      "pass progress retirement: the CROSS_SETTLE pass @regression armed, settles every valid match behind 30 unapplicable ones within the grace",
+      "pass progress retirement: the CROSS_SETTLE pass @regression on mainnet, replays the pass unchanged",
+      "pass progress retirement: the CROSS_SETTLE pass @regression on testnet, replays the pass unchanged",
+      "pass progress retirement: the XEXEC dispatch pass @regression armed, executes every valid dispatch behind 30 unapplicable ones within the grace",
+      "pass progress retirement: the XEXEC dispatch pass @regression on mainnet, replays the pass unchanged",
+      "pass progress retirement: the XEXEC dispatch pass @regression on testnet, replays the pass unchanged"
     ],
     "3edaebe4951561d7": [
       "XChainIndexer._priceMirrorHorizon @regression @tier2 anchors on the decoder first block when nothing is indexed yet",
@@ -5272,6 +5289,29 @@
       "alterTableForDrift(): column-order drift report @regression names exactly the three tail-appended sweeps columns",
       "alterTableForDrift(): column-order drift report @regression records nothing for a table already in source order",
       "schemaShapeSummary(): column-order drift line @regression reports a table whose only drift is column order as drift, naming the columns"
+    ],
+    "4f44506fda2aa121": [
+      "pass progress retirement: CROSS_SETTLE clocks and networks @regression ages a match the admission era admits by its admit_block, not by its effective_time",
+      "pass progress retirement: CROSS_SETTLE clocks and networks @regression retires nothing on mainnet, however old the match",
+      "pass progress retirement: CROSS_SETTLE clocks and networks @regression retires nothing on testnet, however old the match",
+      "pass progress retirement: CROSS_SETTLE clocks and networks @regression still settles a quorate match with an open leg, however old",
+      "pass progress retirement: CROSS_SETTLE exits @regression keeps a short-quorum match one block inside the grace",
+      "pass progress retirement: CROSS_SETTLE exits @regression never retires a match deferred on a capability snapshot that is not mirrored yet",
+      "pass progress retirement: CROSS_SETTLE exits @regression retires a dismissed leg (indexed, not an offer) without reading a signature",
+      "pass progress retirement: CROSS_SETTLE exits @regression retires a quorate match whose local leg is not there",
+      "pass progress retirement: CROSS_SETTLE exits @regression retires a short-quorum match whose snapshot is present once it has been selectable for the grace",
+      "pass progress retirement: XCALL result orphan in the admission era @regression keeps it one block inside the grace",
+      "pass progress retirement: XCALL result orphan in the admission era @regression retires an orphan with a far-future effective_time once its admit_block is a grace behind",
+      "pass progress retirement: XEXEC dispatch exits @regression keeps refusing a short-quorum dispatch inside the grace",
+      "pass progress retirement: XEXEC dispatch exits @regression never retires a dispatch deferred on a snapshot not yet mirrored",
+      "pass progress retirement: XEXEC dispatch exits @regression retires a dispatch over the hop ceiling past the grace, before any signature is read",
+      "pass progress retirement: XEXEC dispatch exits @regression retires a short-quorum dispatch past the grace instead of recording another refusal",
+      "pass progress retirement: XEXEC dispatch exits @regression retires nothing for another network or another target chain",
+      "pass progress retirement: XEXEC dispatch on unarmed networks @regression retires nothing on mainnet, however old the dispatch",
+      "pass progress retirement: XEXEC dispatch on unarmed networks @regression retires nothing on testnet, however old the dispatch",
+      "pass progress retirement: getcrosschaincallresult @regression reports a retired dispatch as not executed, so no result is relayed for it",
+      "pass progress retirement: getcrosschaincallresult @regression reports an executed call exactly as before",
+      "pass progress retirement: the activation row @regression is a height row, unarmed on mainnet and testnet, inert on regtest unless the venue arms it"
     ],
     "4f9a9190b0431827": [
       "Utility @regression @tier1 getAddressesList() should return current addresses object",
@@ -17974,8 +18014,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1345,
-      "titleCount": 13506,
+      "fileCount": 1348,
+      "titleCount": 13540,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18710,6 +18750,9 @@
         "test/unit/cross_chain/db_cross_chain_call_rejections.test.js": "08e0fb31a08bbc02",
         "test/unit/cross_chain/db_get_effective_unprocessed_call_results.test.js": "4ea28f17e16f01bd",
         "test/unit/cross_chain/direct_call_presence.test.js": "49ec988ba0c842d0",
+        "test/unit/cross_chain/pass_progress_retirement.test.js": "4f44506fda2aa121",
+        "test/unit/cross_chain/pass_progress_retirement_pass.test.js": "3e5119d767a96b8c",
+        "test/unit/cross_chain/pass_retirement_age.test.js": "3ba35a724cce8d68",
         "test/unit/cross_chain/xcall_cap_default.test.js": "40c3932d64cf581c",
         "test/unit/cross_chain/xcall_result_retirement.test.js": "470963c99e4be416",
         "test/unit/db/anchors/anchor_archive_row_status.test.js": "489112fc1f59fbf6",

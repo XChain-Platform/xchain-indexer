@@ -45,10 +45,12 @@ const { getLogger } = require('../../observability/index.js');
  * admission column holds a value that is not a usable height, and an unsynced snapshot
  * must defer such a row, not abort the block.
  *
- * @param {Object} m - the mirrored cross_chain_matches row
+ * @param {Object} m       - the mirrored cross_chain_matches row
+ * @param {Object} [verdict] - when given, receives snapshotAbsent: true on the deferral exit, so
+ *                             the caller can tell a snapshot still to come from a short quorum
  * @returns {Promise<boolean>} true only when the match may settle on this chain
  */
-async function verifyMatchQuorum(m){
+async function verifyMatchQuorum(m, verdict){
 
     let snapshotBlock = Number(m.snapshot_block);
     let weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, m.network);
@@ -65,6 +67,7 @@ async function verifyMatchQuorum(m){
         // retries on a later block. NOT an error. (Deterministic quorum-N under PARTIAL
         // snapshot arrival is sealed separately by the multi-node design; presence here.)
         getLogger().info("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : capability snapshot not synced : deferring');
+        if(verdict) verdict.snapshotAbsent = true;
         return false;
     }
 

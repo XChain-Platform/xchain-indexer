@@ -59,6 +59,8 @@ const { getLogger } = require('../../observability/index.js');
 // with this handler as the receiver, so both read this.indexerDb / this.actions unchanged.
 const dispatchQuorum = require('./dispatch_quorum.js');
 const runTarget      = require('./run_target.js');
+// Retirement of a dispatch still unapplicable past the grace (./retire.js).
+const retire         = require('./retire.js');
 // Return payloads are mirrored to every indexer AND ANCHOR-archived on DOGE,
 // so they are hard-capped. Oversize yields status 'payload_too_large' with an
 // empty payload (deterministic truncation rule). Vendored single source of
@@ -129,6 +131,14 @@ class Xexec {
         return true;
     }
 
+    // True when the dispatch is this chain's and refused only for its hop count, the one
+    // dispatchInScope refusal the injection query does not already filter out.
+    exceedsHopCeiling(c, coin){
+        return String(c.network || '') === String(this.config['NETWORK'] || '') &&
+               String(c.target_chain) === String(coin) &&
+               Number(c.cross_hops) > XCALL_MAX_HOPS;
+    }
+
     // The EXECUTE context the injected call runs in.
     //
     // Synthetic, chain/network-namespaced TX_HASH: there is no real transaction
@@ -168,7 +178,14 @@ class Xexec {
 
         let coin = this.config['COIN'];
 
-        if(!this.dispatchInScope(c, coin)) return;
+        // From PASS_PROGRESS_RETIREMENT_ACTIVATION the two exits below that write no execution
+        // row retire the dispatch once it has been selectable for the grace (./retire.js); a
+        // deferral on a snapshot not yet mirrored never does.
+        if(!this.dispatchInScope(c, coin)){
+            if(this.exceedsHopCeiling(c, coin))
+                await retire.retireUnapplicableDispatch.call(this, c, data, 'cross_hops');
+            return;
+        }
 
         let q = await dispatchQuorum.verifyDispatchQuorum.call(this, c);
         if(!q.synced){
@@ -180,6 +197,7 @@ class Xexec {
             return;
         }
         if(!q.quorumMet){
+            if(await retire.retireUnapplicableDispatch.call(this, c, data, 'no_quorum')) return;
             await this.recordQuorumRefusal(c, data, q);
             return;
         }
@@ -211,7 +229,9 @@ class Xexec {
     // Quorum starvation: the mirrored row's signature set does not
     // meet quorum against the pinned snapshot. NOT terminal: signature sets
     // are per-hub and hubs gossip more signatures over time, so the call
-    // stays effective + unexecuted and retries every block. Record the
+    // stays effective + unexecuted and retries every block, until, from
+    // PASS_PROGRESS_RETIREMENT_ACTIVATION, the grace runs out and parse()
+    // retires it instead of reaching here (./retire.js). Record the
     // refusal (node-local diagnostics, upsert per attempt) so a starved
     // dispatch is visible to operators and to getcrosschaincallresult
     // instead of leaving only this console line.

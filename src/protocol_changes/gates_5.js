@@ -22,7 +22,7 @@
 
 'use strict';
 
-const { addGate, UNARMED } = require('./shared_rows.js');
+const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 
 // mainnet_launch_activation
 // MAINNET_LAUNCH_ACTIVATION: the block time from which mainnet admits every transaction.
@@ -159,4 +159,21 @@ addGate('settlement_bounds_activation.SETTLEMENT_BOUNDS_ACTIVATION', 'height', {
     mainnet: UNARMED,
     testnet: UNARMED,
     regtest: 0,
+});
+
+// pass_progress_retirement_activation
+// Height on the chain's own block_index. From it the capped CROSS_SETTLE and XEXEC dispatch passes
+// retire a mirrored row that is still unapplicable a grace of blocks after it became selectable
+// (a short quorum with the snapshot present, a dismissed or missing local leg, cross_hops above the
+// ceiling), recording an idempotency row that moves no value, so it stops holding a slot. From the
+// same height the XCALL result pass ages an orphan result that carries an admission height by that
+// height instead of by its effective_time. Below it all three passes replay as before. Unarmed on
+// mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with
+// XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION (shared_rows.js), so the shared regtest rail
+// and wallet CI keep today's passes unless they opt in. The grace and the age rule live in
+// src/consensus/pass_retirement/index.js.
+addGate('pass_progress_retirement_activation.PASS_PROGRESS_RETIREMENT_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION at read
 });
