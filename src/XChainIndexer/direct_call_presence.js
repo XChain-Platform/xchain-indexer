@@ -14,10 +14,11 @@
  *
  * XChain Indexer - Direct-hub-DB call-presence barrier
  *
- * The single-host (no-mirror) twin of the HubDbSync call barrier. Before the
- * cross-chain-call pass the block loop waits, bounded, until the hub database this
- * node reads directly covers the block: by clock below the mirror-admission
- * activation, by the hub's persisted admission height above it. Installed onto
+ * The single-host (no-mirror) twins of the HubDbSync call and remote-token barriers.
+ * Before the cross-chain-call pass the block loop waits, bounded, until the hub database
+ * this node reads directly covers the block: by clock below the mirror-admission
+ * activation, by the hub's persisted admission height above it. The remote-token wait is
+ * height-only and reads the same persisted floor for remote_token_snapshots. Installed onto
  * XChainIndexer.prototype by ../XChainIndexer.js.
  *
  ********************************************************************/
@@ -41,6 +42,17 @@ async function probeAdmissionFloor(indexer, probe){
         if(/^(?:0|[1-9][0-9]*)$/.test(raw) && Number.isSafeInteger(Number(raw))) probe.lastFloor = Number(raw);
     }
     return probe.lastFloor !== null && probe.lastFloor >= probe.target;
+}
+
+// The hub's persisted admission floor for one `<table>.<CHAIN>` param, or null when the row
+// is absent, is not canonical digits, or the read fails. Never coerced from a missing value.
+async function readDirectAdmissionFloor(indexer, network, param){
+    let rows;
+    try { rows = await indexer.hubDb.getHubConfigParam('xchain', network, 'admission_watermark', param); }
+    catch(e){ return null; }
+    if(!rows || rows.length === 0 || rows[0].param_value === null || rows[0].param_value === undefined) return null;
+    let raw = String(rows[0].param_value).trim();
+    return (/^(?:0|[1-9][0-9]*)$/.test(raw) && Number.isSafeInteger(Number(raw))) ? Number(raw) : null;
 }
 
 // One probe of the clock form (below the activation). Records the mirror watermark and
@@ -229,6 +241,31 @@ module.exports = {
                 ', escape at ' + (blockTime + graceS) + ')' +
                 (admission ? heightTail(probe.lastFloor) : '') + '; retrying...');
             await this.util.sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())));
+        }
+    },
+
+    // The direct-hub-DB form of the remote-token pin barrier (deferOnRemoteTokenSync): wait,
+    // bounded by the call-presence timeout, until the hub's persisted remote_token_snapshots
+    // admission floor for this chain reaches consumerTargetHeight for block B, then throw so
+    // the caller defers the block. Height form only, because the barrier exists only from the
+    // activation, and fail closed on an absent row, a non-digit value or a query error.
+    async waitForDirectRemoteTokenPresence(blockHeight){
+        let chain = (this.config && this.config['COIN']) ? String(this.config['COIN']).trim().toUpperCase() : '';
+        let network = String((this.config && this.config['NETWORK']) || '');
+        let target = consumerTargetHeight('remote_token_snapshots', chain, network, Number(blockHeight));
+        let timeoutMs = Number(this.callPresenceTimeoutMs);
+        if(!Number.isFinite(timeoutMs) || timeoutMs <= 0) timeoutMs = 10000;
+        let deadline = Date.now() + timeoutMs;
+        let floor = null;
+        while(true){
+            floor = await readDirectAdmissionFloor(this, network, 'remote_token_snapshots.' + chain);
+            if(chain !== '' && floor !== null && floor >= target) return;
+            if(Date.now() >= deadline)
+                this.util.throwError('direct remote-token barrier timed out after ' + timeoutMs +
+                    'ms waiting for block_height ' + blockHeight + ' (admission height remote_token_snapshots.' +
+                    (chain === '' ? 'unknown' : chain) + ' at ' + (floor === null ? 'none' : floor) +
+                    ', needs ' + target + ')');
+            await this.util.sleep(Math.min(250, Math.max(1, deadline - Date.now())));
         }
     }
 };

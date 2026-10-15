@@ -38,7 +38,7 @@ describe('protocol_changes consensus-bound shared rows', function () {
     });
 
     it('keeps the oracle and chain-margin entries at the shared digest tail', function () {
-        assert.deepStrictEqual(SHARED_GATES.slice(-8), [
+        assert.deepStrictEqual(SHARED_GATES.slice(-9), [
             ['oracle_price_age_hourly_activation', ['ORACLE_PRICE_AGE_HOURLY_ACTIVATION']],
             ['oracle_hourly_window_activation', ['ORACLE_HOURLY_WINDOW_FIRST_ROUND']],
             ['oracle_round_time_activation', ['ORACLE_ROUND_TIME_ACTIVATION']],
@@ -53,6 +53,7 @@ describe('protocol_changes consensus-bound shared rows', function () {
                 ['ADMIT_CHAIN_MARGIN_ACTIVATION', 'ADMIT_CHAIN_MARGIN_BLOCKS'],
             ],
             ['order_match_price_cross_activation', ['ORDER_MATCH_PRICE_CROSS_ACTIVATION']],
+            ['remote_token_admission_activation', ['REMOTE_TOKEN_ADMISSION_ACTIVATION']],
         ]);
     });
 

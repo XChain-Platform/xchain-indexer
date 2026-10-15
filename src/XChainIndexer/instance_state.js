@@ -122,6 +122,26 @@ function initHubConfigState(indexer){
     indexer.lastHubConfigWatermark = 0;
 }
 
+// Action-scoped barrier state, all node-local and never hashed.
+function initActionBarrierFlags(indexer){
+    // priceBarrierBlock      - the block the two flags below describe.
+    // priceBarrierSkipped    - the price/oracle barriers were skipped for it because
+    //                          priceReadPredicate proved no transaction-borne price
+    //                          reader; read by db.assertPriceBarrierNotSkipped().
+    // priceBarrierForceBlock - a block that must take the barriers unconditionally on
+    //                          its next attempt, set when that assertion fired. Cleared
+    //                          once that block commits, so it is a one-shot escalation
+    //                          rather than a latch that would re-arm the every-block wait.
+    indexer.priceBarrierBlock      = null;
+    indexer.priceBarrierSkipped    = false;
+    indexer.priceBarrierForceBlock = null;
+    // The same three for the remote-token pin barrier, read by
+    // db.assertRemoteTokenBarrierNotSkipped() at the admitted pin read.
+    indexer.remoteTokenBarrierBlock      = null;
+    indexer.remoteTokenBarrierSkipped    = false;
+    indexer.remoteTokenBarrierForceBlock = null;
+}
+
 // Barrier timing and hold state: the per-attempt timeout, the hold ceiling and record,
 // the price-barrier skip flags, and the two health windows sized off the timeout.
 function initBarrierTiming(indexer){
@@ -145,18 +165,7 @@ function initBarrierTiming(indexer){
     // see that a mirror needed re-driving without reading container logs.
     indexer.barrierCeilingHits = 0;
 
-    // Action-scoped barrier state, all node-local and never hashed.
-    // priceBarrierBlock      - the block the two flags below describe.
-    // priceBarrierSkipped    - the price/oracle barriers were skipped for it because
-    //                          priceReadPredicate proved no transaction-borne price
-    //                          reader; read by db.assertPriceBarrierNotSkipped().
-    // priceBarrierForceBlock - a block that must take the barriers unconditionally on
-    //                          its next attempt, set when that assertion fired. Cleared
-    //                          once that block commits, so it is a one-shot escalation
-    //                          rather than a latch that would re-arm the every-block wait.
-    indexer.priceBarrierBlock      = null;
-    indexer.priceBarrierSkipped    = false;
-    indexer.priceBarrierForceBlock = null;
+    initActionBarrierFlags(indexer);
 
     // Grace window (ms) for the /status healthcheck's stall discriminator. A set stallReason
     // reports the container unhealthy (503) only after NO block has committed for this long, so

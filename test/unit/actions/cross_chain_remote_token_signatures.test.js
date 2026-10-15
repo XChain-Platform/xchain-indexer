@@ -44,13 +44,57 @@ describe('Pinned remote token signature re-verify @regression @tier2', function 
     });
     afterEach(() => sinon.restore());
 
-    it('builds the hub XREMOTE canonical', function () {
+    it('builds the hub XREMOTE canonical below the admission era', function () {
         const id = 'f90fc14ebe1f32e4140547e40be3f12e739fca4f8bcdfaf6534cdf33566d9682';
-        assert.strictEqual(remoteTokenCanonical({
+        // Regtest is below it too unless the venue sets XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION.
+        for (const network of ['mainnet', 'testnet', 'regtest']) {
+            assert.strictEqual(remoteTokenCanonical({
+                snapshot_id: id, network, coin: 'btc', tick: 'XTOKEN', decimals: 8,
+                owner: 'bcrt1qowner', source_action_index: 42, snapshot_block: 1200, finalizing_view: 2,
+                admit_block_btc: 7, admit_block_ltc: 8, admit_block_doge: 9,
+            }), `XREMOTE|${id}|2|${network}|BTC|XTOKEN|8|bcrt1qowner|42|1200`);
+        }
+    });
+});
+
+describe('Pinned remote token admission map in the signed bytes @regression @tier2', function () {
+    const ARM = 'XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION';
+    beforeEach(() => {
+        process.env[ARM] = 'armed';
+        const activeAt = gateRegistry.activeAt;
+        sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...args) =>
+            key === REMOTE_TOKEN_KEY ? true : activeAt(key, ...args));
+    });
+    afterEach(() => { delete process.env[ARM]; sinon.restore(); });
+
+    it('appends the admission map in the admission era and refuses a row without one', function () {
+        const id = 'f90fc14ebe1f32e4140547e40be3f12e739fca4f8bcdfaf6534cdf33566d9682';
+        const row = {
             snapshot_id: id, network: 'regtest', coin: 'btc', tick: 'XTOKEN', decimals: 8,
             owner: 'bcrt1qowner', source_action_index: 42, snapshot_block: 1200, finalizing_view: 2,
-        }), `XREMOTE|${id}|2|regtest|BTC|XTOKEN|8|bcrt1qowner|42|1200`);
+            admit_block_btc: 1204, admit_block_ltc: 5000, admit_block_doge: null,
+        };
+        assert.strictEqual(remoteTokenCanonical(row),
+            `XREMOTE|${id}|2|regtest|BTC|XTOKEN|8|bcrt1qowner|42|1200|BTC:1204,LTC:5000`);
+        assert.throws(() => remoteTokenCanonical({ ...row, admit_block_btc: null, admit_block_ltc: null }), /carries no admission map/);
     });
+
+    it('accepts a pinned row signed over its map and rejects one whose map was altered', async function () {
+        const map = { admit_block_btc: 1, admit_block_ltc: 1, admit_block_doge: 1 };
+        assert.strictEqual(await remoteTokenAcceptError(makeHandler(signedRemoteTokenRow(map)), state()), null);
+        const row = signedRemoteTokenRow(map);
+        row.admit_block_ltc = 2;
+        assert.strictEqual(await remoteTokenAcceptError(makeHandler(row), state()), REJECT);
+    });
+});
+
+describe('Pinned remote token signature re-verify @regression @tier2', function () {
+    beforeEach(() => {
+        const activeAt = gateRegistry.activeAt;
+        sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...args) =>
+            key === REMOTE_TOKEN_KEY ? true : activeAt(key, ...args));
+    });
+    afterEach(() => sinon.restore());
 
     it('accepts a row with a quorum of valid signatures', async function () {
         assert.strictEqual(await remoteTokenAcceptError(makeHandler(signedRemoteTokenRow()), state()), null);

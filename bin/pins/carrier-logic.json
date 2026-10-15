@@ -59,7 +59,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "4546074d3c270b3b497eee3ed7aa9ed973f8387dc8d4ae5e48478583db8600c1",
+      "hash": "83981d2b10525aa4e771e386486a8ebd91c40db96f5941701529929c45d0207b",
       "twins": [
         "xchain-hub"
       ]
@@ -2139,6 +2139,13 @@
       "from": "5727511efdf8497853838f2b0608f2d6ac33caabccc483d650987f9944802e1a",
       "to": "4546074d3c270b3b497eee3ed7aa9ed973f8387dc8d4ae5e48478583db8600c1",
       "reason": "order_match_price_cross_activation appended to SHARED_GATES",
+      "date": "2026-10-14"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "4546074d3c270b3b497eee3ed7aa9ed973f8387dc8d4ae5e48478583db8600c1",
+      "to": "83981d2b10525aa4e771e386486a8ebd91c40db96f5941701529929c45d0207b",
+      "reason": "remote_token_admission_activation appended to SHARED_GATES",
       "date": "2026-10-14"
     }
   ]

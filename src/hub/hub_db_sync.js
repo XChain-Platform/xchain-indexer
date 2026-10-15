@@ -87,6 +87,7 @@ const contentBarrierMethods  = require('./hub_db_sync/barriers/oracle_match_call
 const bridgePolicyBarrierMethods = require('./hub_db_sync/barriers/bridge_policy.js');
 const attestBarrierMethods   = require('./hub_db_sync/barriers/attest.js');
 const snapshotBarrierMethods = require('./hub_db_sync/barriers/snapshot.js');
+const remoteTokenBarrierMethods = require('./hub_db_sync/barriers/remote_token.js');
 const rowApplyMethods        = require('./hub_db_sync/row_apply.js');
 const retractionMethods      = require('./hub_db_sync/retractions.js');
 const liveEventMethods       = require('./hub_db_sync/live_events.js');
@@ -121,7 +122,7 @@ Object.assign(HubDbSync.prototype, watermarkMethods, lifecycleMethods,
               bootstrapDrainMethods, bootstrapFlushMethods, bootstrapVerdictMethods,
               mirrorScopeMethods, chainIdentityMethods, reconciliationMethods,
               priceBarrierMethods, priceLandingBarrierMethods, contentBarrierMethods, bridgePolicyBarrierMethods,
-              attestBarrierMethods, snapshotBarrierMethods,
+              attestBarrierMethods, snapshotBarrierMethods, remoteTokenBarrierMethods,
               rowApplyMethods, retractionMethods, liveEventMethods, transportMethods);
 
 // ONE export shape: the class. Everything a consumer reaches beside it (ensureTables,

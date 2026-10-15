@@ -97,9 +97,11 @@ const AUTO_INCREMENT_ID_TABLES = ['price_snapshots', 'oracle_prices', 'cross_cha
                                   'bridge_transfers', 'policy_snapshots', 'list_snapshots',
                                   'remote_token_snapshots', 'state_checkpoints', 'anchor_reward_attestations'];
 
-// Hub federation state tables. remote_token_snapshots has no dedicated block-loop
-// barrier, so it rides the global stream watermark, and it is never retracted (see
-// RETRACTION_COLUMNS above). state_checkpoints carries quorum-signed per-chain
+// Hub federation state tables. remote_token_snapshots rides the global stream watermark
+// in mirrorStatus and is never retracted (see RETRACTION_COLUMNS above). Its block-loop
+// barrier, from remote_token_admission_activation, is keyed on the hub's per-chain
+// HEIGHT watermark for the table (barriers/remote_token.js), never on this seconds one,
+// so its membership here changes nothing that barrier reads. state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
 // never retracted. A reorged height is superseded by a new row with a higher
 // checkpoint_seq. Not on any settlement-critical path (no block-loop barrier).

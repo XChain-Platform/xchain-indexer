@@ -52,8 +52,8 @@ const PARTS = walkJs(path.join(SRC_HUB, 'hub_db_sync'));
 // one list or the other, so a new part is classified here before it can be forgotten.
 const METHOD_PARTS = [
     'barriers/attest.js', 'barriers/bridge_policy.js', 'barriers/oracle_match_call.js', 'barriers/price.js',
-    'barriers/price_landing.js', 'barriers/snapshot.js', 'bootstrap/drain.js', 'bootstrap/flush.js',
-    'bootstrap/verdict.js',
+    'barriers/price_landing.js', 'barriers/remote_token.js', 'barriers/snapshot.js', 'bootstrap/drain.js',
+    'bootstrap/flush.js', 'bootstrap/verdict.js',
     'chain_identity.js', 'foreign_reconciliation.js', 'lifecycle.js', 'live_events.js', 'mirror_scope.js',
     'retractions.js', 'row_apply.js', 'transport.js', 'watermarks.js',
 ];

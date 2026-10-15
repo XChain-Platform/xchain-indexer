@@ -22,16 +22,58 @@
  *
  ********************************************************************/
 
+// The admitted pin read for each reading chain, one whole statement per chain so no column
+// name is ever built at run time. A row with no admission height for the chain never matches.
+const PINNED_REMOTE_TOKEN_ADMITTED_SQL = Object.freeze({
+    BTC: `SELECT * FROM remote_token_snapshots
+         WHERE status = 'finalized' AND network = ? AND coin = ? AND tick = ?
+           AND admit_block_btc IS NOT NULL AND admit_block_btc <= ?
+         ORDER BY snapshot_block DESC, source_action_index DESC, snapshot_id DESC
+         LIMIT 1`,
+    LTC: `SELECT * FROM remote_token_snapshots
+         WHERE status = 'finalized' AND network = ? AND coin = ? AND tick = ?
+           AND admit_block_ltc IS NOT NULL AND admit_block_ltc <= ?
+         ORDER BY snapshot_block DESC, source_action_index DESC, snapshot_id DESC
+         LIMIT 1`,
+    DOGE: `SELECT * FROM remote_token_snapshots
+         WHERE status = 'finalized' AND network = ? AND coin = ? AND tick = ?
+           AND admit_block_doge IS NOT NULL AND admit_block_doge <= ?
+         ORDER BY snapshot_block DESC, source_action_index DESC, snapshot_id DESC
+         LIMIT 1`
+});
+
 module.exports = {
 
     // MIRROR (db.mirrorDb()). Latest finalized federation snapshot for one remote token.
-    async getPinnedRemoteToken(network, coin, tick){
+    // With no `admission` this is the presence read, byte for byte. With one, the read is
+    // bounded to rows admitted on admission.chain at or below admission.height, and a row
+    // with no admission height for that chain is never returned: the table has no signed
+    // time to fall back on, so a NULL column means "not admitted here".
+    async getPinnedRemoteToken(network, coin, tick, admission){
+        if(admission !== undefined)
+            return await this.getAdmittedRemoteToken(network, coin, tick, admission);
         const rows = await this.doQueryStrict(
             `SELECT * FROM remote_token_snapshots
              WHERE status = 'finalized' AND network = ? AND coin = ? AND tick = ?
              ORDER BY snapshot_block DESC, source_action_index DESC, snapshot_id DESC
              LIMIT 1`,
             [String(network), String(coin).toUpperCase(), String(tick)]);
+        return rows.length > 0 ? rows[0] : null;
+    },
+
+    // MIRROR (db.mirrorDb()). The admitted form of the pin read: the newest finalized row
+    // whose admit_block_<chain> is at or below admission.height. Fails the block closed when
+    // this block skipped the remote-token barrier (see assertRemoteTokenBarrierNotSkipped).
+    async getAdmittedRemoteToken(network, coin, tick, admission){
+        this.assertRemoteTokenBarrierNotSkipped('getPinnedRemoteToken');
+        const chain = String(admission && admission.chain);
+        const sql = Object.prototype.hasOwnProperty.call(PINNED_REMOTE_TOKEN_ADMITTED_SQL, chain)
+            ? PINNED_REMOTE_TOKEN_ADMITTED_SQL[chain] : null;
+        const height = Number(admission && admission.height);
+        if(sql === null || !Number.isSafeInteger(height) || height < 0)
+            this.util.throwError('getPinnedRemoteToken: unusable admission ' + JSON.stringify(admission));
+        const rows = await this.doQueryStrict(sql,
+            [String(network), String(coin).toUpperCase(), String(tick), height]);
         return rows.length > 0 ? rows[0] : null;
     },
 

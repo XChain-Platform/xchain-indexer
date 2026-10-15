@@ -69,11 +69,11 @@ describe('hub-schema-version', function () {
     });
 });
 
-// The value itself is part of the contract: a reader or hub on v9 is refused by
-// strict equality once the mirror contract is at v10.
-describe('hub-schema-version: the v10 mirror contract', function () {
-    it('is v10, so a v9 hub stream is refused and a v9 reader refuses this one', function () {
-        assert.strictEqual(mod.HUB_SCHEMA_VERSION, 10);
-        assert.notStrictEqual(9, mod.HUB_SCHEMA_VERSION);
+// The value itself is part of the contract: v11 adds the remote_token_snapshots admission
+// columns, and a reader or hub on v10 is refused by strict equality.
+describe('hub-schema-version: the v11 remote-token admission mirror shape', function () {
+    it('is v11, so a v10 hub stream is refused and a v10 reader refuses this one', function () {
+        assert.strictEqual(mod.HUB_SCHEMA_VERSION, 11);
+        assert.notStrictEqual(10, mod.HUB_SCHEMA_VERSION);
     });
 });

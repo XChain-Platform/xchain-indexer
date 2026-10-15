@@ -264,4 +264,21 @@ module.exports = {
         this.util.throwError(err);
     },
 
+    // The same backstop for the remote-token pin barrier. The block loop takes that barrier
+    // only on blocks whose own transactions can create an ORDER or SWAP; a create reached
+    // another way (an injected execution, a callback) reads the admitted pin here, and if this
+    // block skipped the barrier the block fails closed and its retry takes the barrier. Scoped
+    // to block processing exactly as the price backstop above is.
+    assertRemoteTokenBarrierNotSkipped(site){
+        const ctx = txEpochStore.getStore();
+        if(ctx === undefined || ctx.consensus !== true) return;
+        const ix = this.indexer;
+        if(!ix || !ix.remoteTokenBarrierSkipped) return;
+        ix.remoteTokenBarrierForceBlock = ix.remoteTokenBarrierBlock;
+        const err = new Error('remote-token barrier skipped but ' + site + ' read the pin mirror at block ' +
+            ix.remoteTokenBarrierBlock + '; deferring the block so it re-runs with the barrier enforced');
+        err.code = 'REMOTE_TOKEN_BARRIER_DEFERRED';
+        this.util.throwError(err);
+    },
+
 };

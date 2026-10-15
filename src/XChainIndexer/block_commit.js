@@ -155,6 +155,9 @@ module.exports = {
         this.priceBarrierSkipped = false;
         if(this.priceBarrierForceBlock === blockToParse)
             this.priceBarrierForceBlock = null;
+        this.remoteTokenBarrierSkipped = false;
+        if(this.remoteTokenBarrierForceBlock === blockToParse)
+            this.remoteTokenBarrierForceBlock = null;
     },
 
     // Roll back a block that failed after its transaction opened, then record why.
@@ -177,6 +180,7 @@ module.exports = {
         // this rollback IS the price-barrier escalation, that flag is what makes
         // the retry take the barrier instead of skipping again and looping.
         this.priceBarrierSkipped = false;
+        this.remoteTokenBarrierSkipped = false;
 
         this.noteBlockFault(error, lastIndexerBlock);
         if(rollbackErr) throw rollbackErr;

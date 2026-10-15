@@ -125,6 +125,18 @@
 // applies in both directions, so a v9 reader must reject the v10 stream and a v10
 // reader must reject a v9 hub. The hub rolls FIRST and stamps 10, then every
 // indexer and the explorer follow back to back, as for v8 and v9.
-const HUB_SCHEMA_VERSION = 10;
+//
+// v11: remote_token_snapshots gained admit_block_btc, admit_block_ltc and admit_block_doge,
+// the signed admission map a pin carries from remote_token_admission_activation. A v10
+// reader drops the columns on apply, so on an armed venue it could not bind a pin to the
+// block it was admitted at, and a v10 hub serves no admission map at all; strict equality
+// refuses both pairings by name instead. An indexer gets the columns from the
+// 2026-10-14-remote-token-admission migration (mode=auto, applied at startup), and the
+// explorer from its later-column mirror migration.
+//
+// v11 ROLL: the v10 order stands. The hub rolls FIRST and stamps 11, then every indexer and
+// the explorer roll back to back behind it. The whole roll completes BELOW every network's
+// remote_token_admission_activation height.
+const HUB_SCHEMA_VERSION = 11;
 
 module.exports = { HUB_SCHEMA_VERSION };

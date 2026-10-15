@@ -211,6 +211,12 @@ function initListShareBarrier(sync) {
     sync._listShareWaiters     = [];
 }
 
+// The remote-token pin barrier: height-keyed, with no empty-mirror escape.
+function initRemoteTokenBarrier(sync) {
+    sync.remoteTokenBootstrapped = false;
+    sync._remoteTokenWaiters     = [];
+}
+
 // The content-watermark barriers over the other mirrored tables.
 function initContentBarrierState(sync) {
     initOracleBarrier(sync);
@@ -219,6 +225,7 @@ function initContentBarrierState(sync) {
     initBridgeBarrier(sync);
     initPolicyBarrier(sync);
     initListShareBarrier(sync);
+    initRemoteTokenBarrier(sync);
 }
 
 // What the consumer told this client about itself and the hooks it wired.

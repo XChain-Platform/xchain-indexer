@@ -182,6 +182,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'json_stringify_reentry_heights',
     'native_stack_terminal_heights',
     'order_match_price_cross_activation',
+    'remote_token_admission_activation',
     'vote_settlement_exact_activation',
     'settlement_bounds_activation',
 ]);
