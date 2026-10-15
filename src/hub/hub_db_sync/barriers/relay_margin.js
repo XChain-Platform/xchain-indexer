@@ -32,6 +32,13 @@ const RELAY_MARGIN_FLOOR_S = Object.freeze({ BTC: 2400, LTC: 600, DOGE: 240 });
 // The hub caps every relay margin at RELAY_MARGIN_MAX_S, so a leg on a chain this table
 // does not name is never stamped further ahead than this. Used only as an UPPER bound.
 const RELAY_MARGIN_MAX_S = 3000;
+// The window every co-signing follower holds a row's effective_time to, against its OWN clock
+// at the moment it signs (xchain-hub src/cross_chain/bridge/validate.js): at least
+// RELAY_MIN_FUTURE_S (xchain-hub src/lib/relay_margin.js) and at most RELAY_MAX_FUTURE_S ahead.
+// The stamp itself is the proposing leader's clock plus its margin, so this window, not the
+// margin table, is the only bound on a stamp that every honest row meets.
+const RELAY_MIN_FUTURE_S = 60;
+const RELAY_MAX_FUTURE_S = 3600;
 
 // One leg's margin as SQL, built from the constants above and a column name only.
 function legMarginSql(column) {
@@ -47,4 +54,4 @@ function legMarginSql(column) {
 const MATCH_FINALIZED_AT_SQL =
     'MAX(effective_time - GREATEST(' + legMarginSql('a_chain') + ', ' + legMarginSql('b_chain') + ')) AS finalized_ts';
 
-module.exports = { RELAY_MARGIN_FLOOR_S, RELAY_MARGIN_MAX_S, MATCH_FINALIZED_AT_SQL };
+module.exports = { RELAY_MARGIN_FLOOR_S, RELAY_MARGIN_MAX_S, RELAY_MIN_FUTURE_S, RELAY_MAX_FUTURE_S, MATCH_FINALIZED_AT_SQL };

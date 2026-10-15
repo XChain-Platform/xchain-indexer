@@ -27,79 +27,26 @@
  *
  ********************************************************************/
 
-const { getLogger } = require('../../../observability/index.js');
 const { strictHubRead } = require('../mirror_write.js');
+const { mirrorTablePresent, noteWatermarkReadFailure } = require('./mirror_table_probe.js');
+const { RELAY_MIN_FUTURE_S, RELAY_MAX_FUTURE_S } = require('./relay_margin.js');
 
-// The two mirror tables this file reads a watermark from. Named as data because the
-// probe below asks information_schema for exactly these names: a consumer schema
+// How far apart the stamps of two honest snapshots can sit when the later-signed one is
+// stamped EARLIER. A snapshot's effective_time is the proposing leader's clock at proposal
+// plus the largest relay floor over the tick's copies (xchain-hub src/cross_chain/bridge/
+// policy_poll.js), and the only bound every honest row meets is the follower window: each
+// co-signer holds the stamp between RELAY_MIN_FUTURE_S and RELAY_MAX_FUTURE_S ahead of its own
+// clock when it signs. Rounds for different ticks run concurrently under their own leaders, so
+// one signed a moment after another can be stamped up to RELAY_MAX_FUTURE_S - RELAY_MIN_FUTURE_S
+// (3540 s) before it, whatever the margin table says.
+const POLICY_STAMP_SPREAD_S = RELAY_MAX_FUTURE_S - RELAY_MIN_FUTURE_S;
+
+// The mirror tables this file reads a watermark from. Named as data because the
+// probe (mirror_table_probe.js) asks information_schema for exactly these names: a consumer schema
 // carries them only once the bridge tables have been created in it.
 const BRIDGE_TABLE = 'bridge_transfers';
 const POLICY_TABLE = 'policy_snapshots';
 const LIST_SHARE_TABLE = 'list_snapshots';
-
-// How long a NEGATIVE table probe is trusted. A positive answer is kept for the life
-// of the process (a mirror table cannot vanish from under a running client), a
-// negative one expires so that creating the table heals the barrier by itself rather
-// than needing the consumer restarted.
-const MIRROR_TABLE_PROBE_TTL_MS = 60000;
-
-// MariaDB error 1146 (ER_NO_SUCH_TABLE), matched on the numeric errno as well as the
-// name because the two spellings come from different layers of the driver and only
-// the number is stable.
-function isMissingTableError(err) {
-    const cause = (err && err.cause) ? err.cause : err;
-    return Number(cause && cause.errno) === 1146 || (cause && cause.code) === 'ER_NO_SUCH_TABLE';
-}
-
-// Report a mirror table the consumer's schema does not carry, and remember it, so the
-// next refresh skips a statement that cannot work. Reported, not swallowed: a barrier
-// held shut by a table nobody created is indistinguishable from a mirror that is merely
-// behind, and only this line separates them.
-function noteMirrorTableAbsent(sync, table) {
-    if (!sync._mirrorTableMemo) sync._mirrorTableMemo = {};
-    sync._mirrorTableMemo[table] = { present: false, at: Date.now() };
-    getLogger().warn('HubDbSync: this schema has no ' + table + ' table, so its sync barrier stays ' +
-                     'closed and every block needing it will defer; create the bridge mirror tables ' +
-                     'in the hub DB this consumer reads');
-}
-
-// Whether the connected schema carries `table`, memoized on the instance rather than
-// asked per refresh: the refreshes run on every mirrored row, and the answer only
-// changes when somebody creates the table. DATABASE() rather than a configured name,
-// so the answer is about the schema the read itself lands in.
-//
-// A probe that ITSELF fails answers true, which is the behaviour before this guard
-// existed: the caller's catch below is the net, so a broken probe costs one failed
-// statement and never a barrier that opens on a watermark it did not read.
-async function mirrorTablePresent(sync, table) {
-    if (!sync._mirrorTableMemo) sync._mirrorTableMemo = {};
-    let memo = sync._mirrorTableMemo[table];
-    if (memo && (memo.present || (Date.now() - memo.at) < MIRROR_TABLE_PROBE_TTL_MS)) return memo.present;
-    let rows;
-    try {
-        rows = await strictHubRead(sync.hubDb,
-            "SELECT TABLE_NAME FROM information_schema.TABLES " +
-            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", [table]);
-    } catch (e) {
-        return true;
-    }
-    if (rows.length > 0) {
-        sync._mirrorTableMemo[table] = { present: true, at: Date.now() };
-        return true;
-    }
-    noteMirrorTableAbsent(sync, table);
-    return false;
-}
-
-// Why a watermark read failed, said out loud. A missing table is the pre-migration
-// schema, and the memo makes the next refresh skip the statement; anything else is a
-// real fault, and a barrier held shut by a broken connection or a lost grant is worth
-// exactly one log line per refresh rather than silence.
-function noteWatermarkReadFailure(sync, table, err) {
-    if (isMissingTableError(err)) { noteMirrorTableAbsent(sync, table); return; }
-    getLogger().warn('HubDbSync: could not read the ' + table + ' watermark, so its sync barrier ' +
-                     'stays closed: ' + (err && err.message));
-}
 
 module.exports = {
 
@@ -264,8 +211,28 @@ module.exports = {
             return;
         }
         this.policySyncTimestamp = ts;
+        this.policyCoveredTimestamp = this.policyContentCoverage(ts);
         if (armBootstrap) this.policyBootstrapped = true;
         this.releasePolicyWaiters();
+    },
+
+    // The block time through which every snapshot this chain reads is local, or null when
+    // nothing vouches for it. The newest local stamp was signed while every co-signer's clock
+    // read at least that stamp minus RELAY_MAX_FUTURE_S, and a snapshot signed after it was
+    // stamped at least RELAY_MIN_FUTURE_S past a later clock reading, so a snapshot still
+    // missing is effective no earlier than MAX(effective_time) - POLICY_STAMP_SPREAD_S. The raw
+    // MAX alone vouches for much less: a snapshot whose copies sit on BTC is stamped 2400 s
+    // ahead and one whose copies sit on DOGE 240 s ahead, on different leaders' clocks.
+    //
+    // This assumes the local rows arrived in the order the hub signed them. Time a round spends
+    // between its signatures and the hub's write, and time a written row spends reaching this
+    // mirror, has no protocol bound; the stream escape below and the bridge barrier rest on the
+    // same assumption.
+    // Without a coin (the explorer's display mirror) the unscoped MAX stands.
+    policyContentCoverage(ts) {
+        if (!this.coin) return ts;
+        if (ts === null || ts === undefined) return null;
+        return ts - POLICY_STAMP_SPREAD_S;
     },
 
     // ADMISSION ERA: the policy_snapshots height watermark for this chain has reached B - 4.
@@ -273,18 +240,30 @@ module.exports = {
     // EVERY chain with no clause at all, so its map must name every chain the federation
     // serves, and a chain the map omits binds by the legacy rule on this rail rather than
     // being admitted by somebody else's height.
+    //
+    // The empty-mirror fast path and the content shortcut both need a drained connection.
+    // policyBootstrapped survives a socket close (resetOnSocketClose clears _bootstrapDrained,
+    // not this flag), and neither an empty scope nor a mirrored stamp proves anything about a
+    // snapshot finalized while the socket was down, so both wait for the re-drain.
+    //
+    // The content shortcut reads policyCoveredTimestamp (see policyContentCoverage), never
+    // the raw MAX: snapshot stamps come from different leaders' clocks plus different margins,
+    // so the newest stamp vouches only for snapshots due at least the stamp spread before it.
+    // Holding longer than the raw MAX
+    // would is safe, because a barrier decides only WHEN a block runs and never what it
+    // applies, and the stream escape below still opens every block on a live connection.
     policySyncSatisfied(blockTime, blockHeight = null) {
-        if (this.policyBootstrapped && this.policySyncTimestamp === null) return true;
+        if (this.policyBootstrapped && this._bootstrapDrained && this.policySyncTimestamp === null) return true;
         if (this.admissionActiveAt(blockHeight))
             return this.policyBootstrapped && this.heightSatisfied('policy_snapshots', blockHeight);
-        if (this.policySyncTimestamp !== null && this.policySyncTimestamp >= blockTime) return true;
-        // Stream watermark escape, exactly as above. Note the cached scalar is a MAX over a
-        // column that is NOT monotonic across policy_seq: a later seq can carry an EARLIER
-        // effective_time, because the stamp is the max relay floor over the chains holding
-        // copies and that set changes. That is safe here and is why the ordering rule lives
-        // in the apply pass instead: this barrier only ever answers "has the mirror been
-        // told everything effective by now", and a seq whose stamp is earlier than one
-        // already mirrored is, by that question, already covered.
+        if (this.policyBootstrapped && this._bootstrapDrained &&
+            this.policyCoveredTimestamp !== null && this.policyCoveredTimestamp !== undefined &&
+            this.policyCoveredTimestamp >= blockTime) return true;
+        // Stream watermark escape: a snapshot is broadcast once the hub writes it and is
+        // stamped at least RELAY_MIN_FUTURE_S ahead of its signers' clocks, so a watermark past this
+        // block's time plus the grace means every snapshot effective at or before it is
+        // already local. This is what opens a block on a healthy node when no recent stamp
+        // covers it, and what keeps a quiet table from freezing the tip.
         if (this.policyBootstrapped && this.streamWatermark >= blockTime + this.policyWatermarkGraceS) return true;
         return false;
     },
@@ -343,8 +322,11 @@ module.exports = {
         this.releaseListShareWaiters();
     },
 
+    // The empty-mirror fast path needs a drained connection, as at the bridge and policy
+    // barriers: listShareBootstrapped survives a socket close, and an empty table proves
+    // nothing about a first list version written while the socket was down.
     listShareSyncSatisfied(blockHeight) {
-        if (this.listShareBootstrapped && this.listShareMirrorEmpty) return true;
+        if (this.listShareBootstrapped && this._bootstrapDrained && this.listShareMirrorEmpty) return true;
         return this.listShareBootstrapped && this.heightSatisfied(LIST_SHARE_TABLE, blockHeight);
     },
 

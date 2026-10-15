@@ -209,6 +209,9 @@ function initPolicyBarrier(sync) {
     // source/destination pair: a policy row targets every chain holding a copy of the
     // tick and names no destination, so there is nothing to scope the far side by.
     sync.policySyncTimestamp = null;
+    // The block time through which every snapshot this chain reads is provably local
+    // (policyContentCoverage): the content shortcut's watermark.
+    sync.policyCoveredTimestamp = null;
     sync.policyBootstrapped  = false;
     sync._policyWaiters      = [];
 }

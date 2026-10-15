@@ -459,6 +459,14 @@
       "Dispenser_Expire action handler @regression @tier2 ownership dispenser: does not clear the escrow gate when already cleared (null)",
       "Dispenser_Expire action handler @regression @tier2 ownership dispenser: does not clear the escrow gate when it belongs to a different ACTION_INDEX"
     ],
+    "09433e19985136e3": [
+      "list share barrier: empty-mirror path needs a drained connection @regression @tier1 holds an empty list mirror behind the height watermark until the re-drain",
+      "policy barrier: content shortcut scoped by the follower stamp window @regression @tier1 holds a block while a snapshot signed after the newest local one is due and missing",
+      "policy barrier: content shortcut scoped by the follower stamp window @regression @tier1 keeps the raw MAX for a display mirror with no coin",
+      "policy barrier: content shortcut scoped by the follower stamp window @regression @tier1 never holds a healthy node forever: a stream watermark advance releases the waiter",
+      "policy barrier: content shortcut scoped by the follower stamp window @regression @tier1 opens once the newest stamp covers the whole stamp spread",
+      "policy barrier: content shortcut scoped by the follower stamp window @regression @tier1 opens the content shortcut only on a drained connection"
+    ],
     "095a443c3cec5cd4": [
       "Xcall (XCALL) @regression @tier3 v2: expire flips a pending request to expired BEFORE injecting the callback (interlock order)",
       "Xcall (XCALL) @regression @tier3 v2: expire is a no-op when the request is already terminal (race-protected)",
@@ -18623,8 +18631,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1365,
-      "titleCount": 13670,
+      "fileCount": 1366,
+      "titleCount": 13676,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19573,6 +19581,7 @@
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/bridge_policy_timeout_message.test.js": "0c5504ff31a9de9c",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "c8995b58f82a9ced",
+        "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
