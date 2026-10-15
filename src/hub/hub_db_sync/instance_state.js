@@ -162,6 +162,9 @@ function initMatchBarrier(sync) {
     // different blocks, diverging that chain's ledger. Mirrors oracleSyncTimestamp:
     // a NULL max (empty mirror) is valid and means "no cross-chain matches to wait on".
     sync.matchSyncTimestamp = null;
+    // The block time through which every match touching this chain is provably local
+    // (matchContentCoverage): the content shortcut's watermark.
+    sync.matchCoveredTimestamp = null;
     sync.matchBootstrapped  = false;
     sync._matchWaiters      = [];
 }
@@ -175,6 +178,9 @@ function initCallBarrier(sync) {
     // NULL-is-valid semantics and watermark escape as the match barrier
     // (#1984 class: a quiet table must never freeze the tip).
     sync.callSyncTimestamp = null;
+    // The newest call row this chain applies (see refreshCallSyncTimestamp): the
+    // content shortcut's watermark.
+    sync.callGatedSyncTimestamp = null;
     sync.callBootstrapped  = false;
     sync._callWaiters      = [];
 }
@@ -189,6 +195,9 @@ function initBridgeBarrier(sync) {
     // blocks and fork that chain's ledger. Same NULL-is-valid semantics and watermark
     // escape as the match and call barriers.
     sync.bridgeSyncTimestamp = null;
+    // The newest finalized IN-leg (dest_chain = this chain) alone: the content
+    // shortcut's watermark, since only in-legs share this chain's relay margin.
+    sync.bridgeDestSyncTimestamp = null;
     sync.bridgeBootstrapped  = false;
     sync._bridgeWaiters      = [];
 }

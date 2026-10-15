@@ -26,7 +26,7 @@
 const { getLogger } = require('../../observability/index.js');
 const { HUB_SCHEMA_VERSION } = require('../hub_schema_version');
 const { hasExpectedSchemaVersion, schemaVersionLabel } = require('./schema_version_check.js');
-const { CROSS_CHAIN_TABLES } = require('./mirror_tables.js');
+const { CROSS_CHAIN_TABLES, MIRRORED_TABLES } = require('./mirror_tables.js');
 const { PENDING_PRICE_EVENT_CAP } = require('./mirror_bounds.js');
 const { applyMirrorWrite } = require('./mirror_write.js');
 
@@ -59,6 +59,11 @@ module.exports = {
             // following heartbeat cannot certify the stream as caught-up
             // while we are dropping rows we cannot apply.
             this._schemaMismatchSeen = true;
+            // The refused row may be an in-place change below a stored position, which
+            // only a page from zero re-serves. Owe every table one, so the latch clears
+            // only once a drain opened after this refusal has applied it.
+            this.markRepageOwed(MIRRORED_TABLES);
+            this._priceRepageFloor = null;
             return;
         }
         if (event.type === 'row:anchor-stamped' && event.table === 'cross_chain_matches') {
@@ -132,8 +137,9 @@ module.exports = {
     // overflow the buffer is abandoned and flagged: the flush then reports the
     // table not-drained so bootstrapAll re-pages the dropped rows straight
     // from the hub (they are in its DB) instead of opening the gate over the
-    // loss; dropped deletions are redelivered by the hub's deferred-retraction
-    // path (item 5296), same as deletions missed while disconnected.
+    // loss. A dropped deletion is cleared the same way as one missed while
+    // disconnected: price_snapshots is still owed its re-page from zero on this
+    // connection, and that complete page runs reconcileForeignPriceRounds.
     bufferPriceEvent(event) {
         if (this._pendingPriceOverflow) return;
         if (this._pendingPriceEvents.length >= PENDING_PRICE_EVENT_CAP) {

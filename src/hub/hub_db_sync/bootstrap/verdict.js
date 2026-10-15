@@ -129,6 +129,8 @@ module.exports = {
                 'reach; widening the lookback to ' + widened + 's and re-draining');
         }
         this._priceMirrorFloorTs = 0;
+        // The recorded floor start belongs to the refused bound; the re-drain starts from zero.
+        this._priceRepageFloor = null;
         return false;
     },
 
@@ -136,9 +138,11 @@ module.exports = {
     // both bounded something and passed the check above; a full drain clears it.
     notePriceFloorAfterDrain(drain, fullyDrained) {
         if (drain.table === 'price_snapshots' && fullyDrained) {
-            this._priceMirrorFloorTs = (drain.priceSkipped > 0) ? drain.priceFloor : 0;
+            // A drain that started at the floor is bounded whether or not it skipped a row.
+            let bounded = drain.priceSkipped > 0 || drain.floorStart === true;
+            this._priceMirrorFloorTs = bounded ? drain.priceFloor : 0;
             // A drain that bounded nothing IS the full mirror the re-floor was waiting for.
-            if (drain.priceSkipped === 0) this._priceMirrorRefloor = false;
+            if (!bounded) this._priceMirrorRefloor = false;
         }
     },
 
@@ -163,6 +167,13 @@ module.exports = {
         if (fullyDrained && drain.fullTable && drain.servedSnapshotKeys)
             await this.reconcileForeignCapabilitySnapshots(drain.servedSnapshotKeys, drain.snapshotKeysComplete,
                                                             drain.maxServedSnapshotBlock, drain.snapshotPreDrainMaxId);
+
+        // Clear the oracle rows the hub has retracted. Same COMPLETE-re-page precondition,
+        // and ordered before armBarriersAfterDrain so the oracle barrier arms off the
+        // cleaned table.
+        if (fullyDrained && drain.fullTable && drain.servedOracleKeys)
+            await this.reconcileRetractedOracleRows(drain.servedOracleKeys, drain.oracleKeysComplete,
+                                                    drain.oraclePreDrainMaxId);
     },
 
     // Only arm this table's barrier state once it FULLY drained. The per-table refresh
@@ -190,8 +201,9 @@ module.exports = {
             // applied), so the pass cannot mistake one for a foreign row; and the
             // refresh below must read the cleaned table, or the barrier arms off a
             // height the mirror is about to lose.
-            if (drain.fullTable)
-                await this.reconcileForeignPriceRounds(drain.servedPriceKeys, drain.priceKeysComplete, drain.maxServedRound);
+            if (drain.fullTable || drain.floorStart)
+                await this.reconcileForeignPriceRounds(drain.servedPriceKeys, drain.priceKeysComplete, drain.maxServedRound,
+                                                       drain.floorStart ? drain.priceFloor : 0);
             if (!(await this.replayDrainedPriceEvents())) return false;
             await this.refreshPriceSyncHeight();
         }

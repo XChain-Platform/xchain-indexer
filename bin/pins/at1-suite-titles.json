@@ -2423,6 +2423,16 @@
       "Database.createContract() contract meta manifest @regression @tier1 an absent optional version does not shift the other three columns",
       "Database.createContract() contract meta manifest @regression @tier1 the meta write does not disturb the columns the row already carried"
     ],
+    "279b4d45f67586c9": [
+      "HubDbSync _applyRow oracle_prices generation upgrade @regression @tier2 falls back to INSERT IGNORE if the row carries no push_generation column",
+      "HubDbSync _applyRow oracle_prices generation upgrade @regression @tier2 guards every column on VALUES(push_generation) >= push_generation and never reassigns the unique-key columns",
+      "HubDbSync _applyRow oracle_prices generation upgrade @regression @tier2 still filters hub-only columns the local mirror does not carry",
+      "HubDbSync _applyRow oracle_prices generation upgrade @regression @tier2 uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for oracle_prices",
+      "HubDbSync _applyRow price_snapshots skipped\u2192finalized upgrade @regression @tier2 falls back to INSERT IGNORE if the row carries no status column",
+      "HubDbSync _applyRow price_snapshots skipped\u2192finalized upgrade @regression @tier2 guards every column on the incoming status and never reassigns the unique-key columns",
+      "HubDbSync _applyRow price_snapshots skipped\u2192finalized upgrade @regression @tier2 still filters hub-only columns the local mirror does not carry",
+      "HubDbSync _applyRow price_snapshots skipped\u2192finalized upgrade @regression @tier2 uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for price_snapshots"
+    ],
     "27e6dea0edfed7ae": [
       "votes append-only (reorg safety) @regression @tier1 createBallot never deletes prior rows and inserts one row per selection",
       "votes append-only (reorg safety) @regression @tier1 getPollTally counts only each voter's latest ballot set (MAX action_index filter)",
@@ -2511,6 +2521,24 @@
       "AIRDROP ticker-list holder collection reads bare and resolvable own-coin ticks when armed",
       "AIRDROP ticker-list holder collection reads every item as written and no ticker ids when unarmed",
       "AIRDROP ticker-list holder collection rejects invalid dependencies before making any read"
+    ],
+    "298aa4ba8cf7060c": [
+      "HubDbSync bridge_transfers revive upsert @regression @tier1 takes a finalized row at a strictly higher push_generation, fence last",
+      "HubDbSync forced resync is a full drain @regression @tier1 a terminate (close 1006) cannot resume a stored position",
+      "HubDbSync forced resync is a full drain @regression @tier1 with no socket the direct re-bootstrap starts every table from zero",
+      "HubDbSync oracle retraction reconciliation (F3) @regression @tier1 refuses when no local row matches a served key, and skips on a truncated key set",
+      "HubDbSync oracle retraction reconciliation (F3) @regression @tier1 spares a row that landed after the drain opened",
+      "HubDbSync same-instance reconnect re-pages the in-place tables @regression @tier1 certifies nothing while a table is still owed its re-page",
+      "HubDbSync same-instance reconnect re-pages the in-place tables @regression @tier1 clears a price round the hub DELETEd while away (unsigned retraction)",
+      "HubDbSync same-instance reconnect re-pages the in-place tables @regression @tier1 clears an oracle row the hub DELETEd while away (F3, unsigned retraction)",
+      "HubDbSync same-instance reconnect re-pages the in-place tables @regression @tier1 keeps the append-only tables on their stored position",
+      "HubDbSync same-instance reconnect re-pages the in-place tables @regression @tier1 re-serves a bridge revive made below the stored position",
+      "HubDbSync same-instance reconnect re-pages the in-place tables @regression @tier1 re-serves a call re-finalized after a retraction made below the stored position",
+      "HubDbSync same-instance reconnect re-pages the in-place tables @regression @tier1 re-serves a oracle generation republish made below the stored position",
+      "HubDbSync same-instance reconnect re-pages the in-place tables @regression @tier1 re-serves a price batch_block_time stamp made below the stored position",
+      "HubDbSync same-instance reconnect re-pages the in-place tables @regression @tier1 re-serves a price skipped to finalized made below the stored position",
+      "HubDbSync schema-mismatch latch survives an incremental drain @regression @tier1 a drain opened before the refusal cannot settle it",
+      "HubDbSync schema-mismatch latch survives an incremental drain @regression @tier1 stays set until every table re-paged from zero after the refusal"
     ],
     "29f5f5978231b2bd": [
       "Cross-chain royalty: create-side gate + signed-legs settlement (real DB + real VM) @phaseE 1. cross-chain listing of a royalty token is ACCEPTED and the legs ride the order row",
@@ -4663,6 +4691,11 @@
     ],
     "4b48770c46d6248a": [
       "setAnchorArchiveStatus() updates every row for the action with the requested status"
+    ],
+    "4b6a44f185cc3ea1": [
+      "relay margin table: indexer barrier copy against the hub @regression @tier1 carries the hub cap",
+      "relay margin table: indexer barrier copy against the hub @regression @tier1 names the same chains as the hub, with the same floor for each",
+      "relay margin table: indexer barrier copy against the hub @regression @tier1 takes the cap for an unknown chain where the hub falls back to the BTC floor"
     ],
     "4b6c4b0645d4de84": [
       "Mint handler @regression @tier1 AMOUNT format fractional AMOUNT for 0-decimal token \u2192 invalid",
@@ -13726,6 +13759,16 @@
       "Integration: full-node participation determinism and the batch zero-reward rule @regression @tier1 re-deriving from a clean DB yields IDENTICAL reward rows + hash chain (determinism = no fork)",
       "Integration: full-node participation determinism and the batch zero-reward rule @regression @tier1 the batch validated and the challenge participation accrued per SOURCE"
     ],
+    "c2fdb8f42f2319d4": [
+      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 a consumer with no mirror bound re-pages from zero",
+      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 a forced resync with no socket forgets the floor start (verifier m8)",
+      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 re-pages from zero after an instance change, a forced resync or a schema refusal",
+      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 re-pages from zero when the floor has moved down (verifier m7)",
+      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 a floor-started reconcile keeps a held predecessor below the floor (verifier m6)",
+      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 starts below the lowest applied id, settles the owed re-page and keeps the floor",
+      "HubDbSync stall detector spares a re-page that is still moving @regression @tier1 never forces a resync while drain ticks keep moving, and does once they stop",
+      "HubDbSync stall detector spares a re-page that is still moving @regression @tier1 still resyncs a frozen mirror when no bootstrap is running"
+    ],
     "c3487eec1e568310": [
       "AnchorProofClient (DOGE anchor visibility) @regression @tier2 proveMined guards does not leak a decided verdict to a different reward tuple on the same txid",
       "AnchorProofClient (DOGE anchor visibility) @regression @tier2 proveMined guards memoizes a decided verdict but never memoizes unknown",
@@ -14058,6 +14101,19 @@
       "SQL quote walkers honour backslash escapes @regression @tier1 preserves a -- sequence inside a backslash-escaped literal instead of stripping it",
       "SQL quote walkers honour backslash escapes @regression @tier1 splits INSERT-with-\\' then DROP into two statements, not one",
       "SQL quote walkers honour backslash escapes @regression @tier1 still treats a doubled quote as an escape"
+    ],
+    "c8995b58f82a9ced": [
+      "hub_db_sync bridge content shortcut and empty-mirror paths @regression @tier1 bridge: an out-leg stamped with a longer margin does not open the shortcut, an in-leg does",
+      "hub_db_sync bridge content shortcut and empty-mirror paths @regression @tier1 bridge: the empty-mirror path waits for a drained connection",
+      "hub_db_sync bridge content shortcut and empty-mirror paths @regression @tier1 match and call: the empty-mirror path waits for a drained connection",
+      "hub_db_sync match and call content shortcuts read one relay margin @regression @tier1 call: a dispatch this chain sent to BTC does not vouch for a dispatch it must inject",
+      "hub_db_sync match and call content shortcuts read one relay margin @regression @tier1 match: a DOGE/BTC match stamped 2400 s ahead does not vouch for a DOGE/LTC match due earlier",
+      "hub_db_sync match and call content shortcuts read one relay margin @regression @tier1 match: the coverage statement computes each match's own margin on a real engine",
+      "hub_db_sync price dispute reaches a running mirror @regression @tier1 a disputed row takes a mirrored finalized round out of the finalized set",
+      "hub_db_sync price dispute reaches a running mirror @regression @tier1 a round the hub re-finalizes after a dispute comes back, and skipped still upgrades",
+      "hub_db_sync price dispute reaches a running mirror @regression @tier1 a skipped placeholder never demotes a finalized or a disputed round",
+      "hub_db_sync price dispute reaches a running mirror @regression @tier1 lands on the same row a fresh drain of the hub table inserts",
+      "hub_db_sync price dispute reaches a running mirror @regression @tier1 redelivery of the dispute is idempotent"
     ],
     "c89b285a9e6a4068": [
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_BINDING_MINIMUMS flag-day (/ BonkDAO-class guard) gate ACTIVE: binding poll with MIN_VOTERS=0 \u2192 invalid (an explicit zero is no floor)",
@@ -18471,8 +18527,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1351,
-      "titleCount": 13565,
+      "fileCount": 1355,
+      "titleCount": 13603,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19416,8 +19472,10 @@
         "test/unit/hub/hub_db_sync/barriers/attestation_copies_nonfatal.test.js": "e9616084430205ad",
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/bridge_policy_timeout_message.test.js": "0c5504ff31a9de9c",
+        "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "c8995b58f82a9ced",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
+        "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
@@ -19432,7 +19490,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync.test/ensure_tables.test.js": "27734cdd7a5bfa64",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/failover_reconnect_delay.test.js": "4b7e3de0fc957445",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/own_rollback_generation_wiring.test.js": "ed8c2bd1cc10406b",
-        "test/unit/hub/hub_db_sync/hub_db_sync.test/price_and_oracle_upgrades.test.js": "a3a9680a2521091d",
+        "test/unit/hub/hub_db_sync/hub_db_sync.test/price_and_oracle_upgrades.test.js": "279b4d45f67586c9",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/resync_close_repages.test.js": "08779979a717f622",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/retraction_guards.test.js": "bdf7d418cf196406",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/rowless_snapshot_page.test.js": "db68fb7aaa7e576a",
@@ -19478,6 +19536,8 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "235ff56a0118b523",
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "1f0e549847cee838",
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
+        "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
+        "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/retraction_fence_columns.test.js": "521ffb32e51656bb",
         "test/unit/hub/hub_db_sync/snapshot_barrier_admission_height.test.js": "c3a9a6f506a2d4be",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",

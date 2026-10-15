@@ -237,7 +237,9 @@ describe('HubDbSync call-sync watermark chain scoping @regression @tier1', funct
         assert.ok(/cross_chain_calls/.test(captured.sql));
         assert.ok(/target_chain\s*=\s*\?\s+OR\s+source_chain\s*=\s*\?/i.test(captured.sql),
             'must filter to calls touching this coin');
-        assert.deepStrictEqual(captured.args, ['BTC', 'BTC']);
+        assert.ok(/phase = 'dispatch' AND target_chain = \?\) OR \(phase = 'result' AND source_chain = \?/.test(captured.sql),
+            'the content shortcut reads only the rows this chain applies');
+        assert.deepStrictEqual(captured.args, ['BTC', 'BTC', 'BTC', 'BTC']);
         assert.strictEqual(sync.callSyncTimestamp, 123);
     });
 

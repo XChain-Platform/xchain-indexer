@@ -159,10 +159,25 @@ function capabilitySnapshotKey(row) {
         .map(v => String(v).toLowerCase()).join(' ');
 }
 
+// Memory bound on the served-key set the oracle retraction reconciliation builds over a
+// full re-page (reconcileRetractedOracleRows). One key per oracle_prices row the hub
+// serves. Above it the pass is skipped for that drain: absence from a truncated set
+// proves nothing, and no ceiling rule is safe across independently numbered chains.
+const ORACLE_PRICE_KEY_CAP = 500000;
+
+// Natural key of an oracle_prices row: its UNIQUE idx_oracle_action (source_chain,
+// action_index). Lowercased and NUL-joined for the same reasons as capabilitySnapshotKey:
+// the column collation is case-insensitive, and a wire number and a driver-returned BIGINT
+// string for the same action index must derive the same key.
+function oraclePriceKey(row) {
+    return [row.source_chain, row.action_index].map(v => String(v).toLowerCase()).join('\u0000');
+}
+
 module.exports = {
     LOCAL_COLUMN_CACHE_TTL_MS, PENDING_PRICE_EVENT_CAP,
     PRICE_BATCH_APPLY_ROWS, BOOTSTRAP_PROGRESS_INTERVAL_MS,
     PRICE_FINALIZED_KEY_CAP, PRICE_MIRROR_ROUND_MARGIN, PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS,
     PRICE_MIRROR_LOOKBACK_S, PRICE_MIRROR_LOOKBACK_GROWTH, PRICE_MIRROR_LOOKBACK_MAX_S,
     priceRoundKey, CAPABILITY_SNAPSHOT_KEY_CAP, capabilitySnapshotKey,
+    ORACLE_PRICE_KEY_CAP, oraclePriceKey,
 };

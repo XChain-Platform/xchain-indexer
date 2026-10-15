@@ -78,6 +78,7 @@ const lifecycleMethods       = require('./hub_db_sync/lifecycle.js');
 const bootstrapDrainMethods  = require('./hub_db_sync/bootstrap/drain.js');
 const bootstrapFlushMethods  = require('./hub_db_sync/bootstrap/flush.js');
 const bootstrapVerdictMethods = require('./hub_db_sync/bootstrap/verdict.js');
+const bootstrapRepageMethods = require('./hub_db_sync/bootstrap/repage.js');
 const mirrorScopeMethods     = require('./hub_db_sync/mirror_scope.js');
 const chainIdentityMethods   = require('./hub_db_sync/chain_identity.js');
 const reconciliationMethods  = require('./hub_db_sync/foreign_reconciliation.js');
@@ -119,7 +120,7 @@ class HubDbSync {
 // a duplicate here would be a second definition of one method, and the drift guard
 // in the entry test compares the installed names against each part's own).
 Object.assign(HubDbSync.prototype, watermarkMethods, lifecycleMethods,
-              bootstrapDrainMethods, bootstrapFlushMethods, bootstrapVerdictMethods,
+              bootstrapDrainMethods, bootstrapFlushMethods, bootstrapVerdictMethods, bootstrapRepageMethods,
               mirrorScopeMethods, chainIdentityMethods, reconciliationMethods,
               priceBarrierMethods, priceLandingBarrierMethods, contentBarrierMethods, bridgePolicyBarrierMethods,
               attestBarrierMethods, snapshotBarrierMethods, remoteTokenBarrierMethods,

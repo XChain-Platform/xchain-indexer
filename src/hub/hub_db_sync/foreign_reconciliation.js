@@ -16,7 +16,7 @@
  *
  * The passes that clear what a complete re-page proves the hub does not hold:
  * retracted matches, finalized price rounds and capability snapshots left behind
- * by a repointed or rebuilt hub.
+ * by a repointed or rebuilt hub, and oracle rows the hub has retracted.
  *
  * Part of the hub-mirror client (src/hub/hub_db_sync.js), which installs the
  * methods here onto HubDbSync.prototype. Vendored byte-identical into
@@ -26,7 +26,7 @@
 
 const { getLogger } = require('../../observability/index.js');
 const { PRICE_FINALIZED_KEY_CAP, priceRoundKey, CAPABILITY_SNAPSHOT_KEY_CAP,
-        capabilitySnapshotKey } = require('./mirror_bounds.js');
+        capabilitySnapshotKey, ORACLE_PRICE_KEY_CAP, oraclePriceKey } = require('./mirror_bounds.js');
 
 module.exports = {
 
@@ -123,17 +123,19 @@ module.exports = {
     // errors, which is the only state this runs in - has seen every row the hub holds. A
     // local finalized row at a key that drain did not serve as finalized is therefore a
     // row the hub does not have: either a round it never produced, or one it holds as
-    // skipped/disputed, which the status-gated upsert deliberately refuses to downgrade.
-    // Neither is recoverable by any later delivery, exactly like the retraction
+    // skipped, which the status-gated upsert deliberately never lets demote a local round.
+    // A round the hub holds as disputed is not in that set: the upsert takes an incoming
+    // disputed row whole, so the drain has already turned the local copy to disputed.
+    // Neither survivor is recoverable by any later delivery, exactly like the retraction
     // reconcileRetractedMatches converges.
     //
     // Delete rather than mark: unlike a match, a price round has no status consensus
     // treats as a tombstone (a 'skipped' row IS a legitimate hub row), and the hub's own
     // row for that key re-arrives on the next drain if it exists. Local `skipped` rows are
     // left alone: no consensus read sees them, and the upsert converges them in place.
-    async reconcileForeignPriceRounds(servedKeys, keysComplete, maxServedRound) {
+    async reconcileForeignPriceRounds(servedKeys, keysComplete, maxServedRound, floorTs) {
         if (!servedKeys) return;
-        let stale = await this.staleForeignPriceRoundIds(servedKeys, keysComplete, maxServedRound);
+        let stale = await this.staleForeignPriceRoundIds(servedKeys, keysComplete, maxServedRound, floorTs);
         if (stale === null || stale.length === 0) return;
         // Chunked so one oversized IN list can never blow the statement limit.
         for (let i = 0; i < stale.length; i += 500) {
@@ -154,8 +156,11 @@ module.exports = {
 
     // The local finalized rows the drain proves foreign, by natural key when the served
     // set is complete and by the round ceiling when it overflowed. Null when the pass
-    // must not run at all: a read failed, or the key derivation itself looks broken.
-    async staleForeignPriceRoundIds(servedKeys, keysComplete, maxServedRound) {
+    // must not run at all: a read failed, or the key derivation itself looks broken. A
+    // floorTs above zero judges only rows at or above that block time: the drain started at
+    // the mirror floor (choosePriceRepageStart) and served nothing older.
+    async staleForeignPriceRoundIds(servedKeys, keysComplete, maxServedRound, floorTs) {
+        let floor = (Number(floorTs) > 0) ? [Number(floorTs)] : [];
         let locals, stale;
         if (!keysComplete) {
             // The set overflowed its memory cap, so absence from it proves nothing. Fall
@@ -178,7 +183,8 @@ module.exports = {
         } else {
             try {
                 locals = await this.hubDb.doQuery(
-                    "SELECT id, round_number, coin_pair FROM price_snapshots WHERE status = 'finalized'");
+                    "SELECT id, round_number, coin_pair FROM price_snapshots WHERE status = 'finalized'" +
+                    (floor.length ? ' AND block_timestamp >= ?' : ''), floor);
             } catch (e) {
                 getLogger().warn('HubDbSync: price round reconciliation skipped (read failed):', e);
                 return null;
@@ -324,6 +330,71 @@ module.exports = {
                 .filter(Number.isFinite);
         }
         return stale;
+    },
+
+    // Clear oracle rows the hub has retracted.
+    //
+    // A PRICE v1 reorg makes the hub DELETE the rolled-back oracle_prices rows
+    // (PriceAggregator retract -> db/oracle.js deleteOraclePricesForRetraction) and broadcast
+    // a deletion event. That event is unsigned, so it is not quorum class and the hub never
+    // keeps it for deletion replay: a mirror that was disconnected across it, or refused it,
+    // holds a row the hub no longer has, and no later delivery can address it. Every consensus
+    // read of this table (the VM oracle preload, the oracle barrier's MAX(effective_at)) would
+    // keep selecting it on this node alone.
+    //
+    // The warrant is the one reconcileForeignCapabilitySnapshots rests on: the hub's snapshot
+    // route for this table is UNFILTERED (findOraclePricesAfterId: SELECT * ... WHERE id > ?),
+    // so a COMPLETE drain from zero has seen every row the hub holds, and a local row at a key
+    // that drain did not serve is a row the hub does not have. The same two fences apply:
+    //   - only rows that PREDATE the drain are judged (id <= preDrainMaxId), because a live
+    //     oracle event applies immediately and can land a row after the last page was read;
+    //   - if the hub served rows and NOT ONE local row matched a served key, the two sides
+    //     are not deriving the same key, and the pass refuses rather than empty the table.
+    // Delete rather than mark: the table has no status column, and the delete is exactly what
+    // the streamed deletion would have done.
+    async reconcileRetractedOracleRows(servedKeys, keysComplete, preDrainMaxId) {
+        if (!servedKeys) return;
+        preDrainMaxId = Number(preDrainMaxId);
+        if (!Number.isFinite(preDrainMaxId) || preDrainMaxId <= 0) return;
+        if (!keysComplete) {
+            getLogger().warn('HubDbSync: oracle retraction reconciliation exceeded its key cap (' +
+                ORACLE_PRICE_KEY_CAP + '); skipped for this drain');
+            return;
+        }
+        let locals;
+        try {
+            locals = await this.hubDb.doQuery('SELECT id, source_chain, action_index FROM oracle_prices');
+        } catch (e) {
+            getLogger().warn('HubDbSync: oracle retraction reconciliation skipped (read failed):', e);
+            return;
+        }
+        locals = locals || [];
+        let matched = locals.filter(r => servedKeys.has(oraclePriceKey(r))).length;
+        if (servedKeys.size > 0 && locals.length > 0 && matched === 0) {
+            getLogger().error('HubDbSync: oracle retraction reconciliation refused: the hub served ' +
+                servedKeys.size + ' row(s) but NONE of the ' + locals.length + ' local row(s) matched ' +
+                'a served key. That is a key-derivation mismatch, not a retraction; leaving the ' +
+                'mirror untouched.');
+            return;
+        }
+        let stale = locals
+            .filter(r => Number(r.id) <= preDrainMaxId && !servedKeys.has(oraclePriceKey(r)))
+            .map(r => Number(r.id))
+            .filter(Number.isFinite);
+        if (stale.length === 0) return;
+        for (let i = 0; i < stale.length; i += 500) {
+            let chunk = stale.slice(i, i + 500);
+            try {
+                await this.hubDb.doQuery(
+                    'DELETE FROM oracle_prices WHERE id IN (' + chunk.map(() => '?').join(',') + ')', chunk);
+            } catch (e) {
+                getLogger().warn('HubDbSync: oracle retraction reconciliation failed for a chunk:', e);
+                return;
+            }
+        }
+        getLogger().warn('HubDbSync: removed ' + stale.length + ' oracle_prices row(s) the hub has retracted ' +
+            'but this mirror still held (a missed unsigned retraction, converged from a complete re-page)');
+        await this.refreshOracleSyncTimestamp();
     },
 
 };

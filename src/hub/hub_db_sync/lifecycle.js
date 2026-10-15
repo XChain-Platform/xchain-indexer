@@ -128,7 +128,7 @@ module.exports = {
     },
 
     // Drain every mirrored table once, in the order below, and report the per-table
-    // watermarks of the ones that drained in full.
+    // watermarks of the ones that drained in full (a table still owed its re-page did not).
     // price_snapshots bootstraps LAST so EVERY per-block barrier that gates block
     // processing (oracle, cross-chain match, cross-chain call, capability snapshot)
     // arms its empty-mirror fast path before the one heavy table drains. Each needs its
@@ -163,6 +163,7 @@ module.exports = {
                 getLogger().warn('HubDbSync: ' + table + ' bootstrap failed:', err);
             }
         }
+        if (undrained.length === 0) undrained = this.repageOwedTables().map(t => t + ' (re-page owed)');
         return { marks: marks, allDrained: undrained.length === 0, undrained: undrained };
     },
 
@@ -170,14 +171,14 @@ module.exports = {
     // watermark to the oldest per-table mark, unless this mirror is in poll mode.
     certifyFullDrain(marks, drainEpoch) {
         // Keep the epoch check at the certification boundary as well as at the
-        // bootstrap caller. No alternate caller may open the gate with a drain
-        // whose socket closed before certification.
-        if (this._wsEpoch !== drainEpoch || failover.uncaughtUpBlocks(this)) return false;
+        // bootstrap caller. No alternate caller may open the gate with a drain whose socket
+        // closed, or while a table is owed the re-page that runs its reconciliation passes.
+        if (this._wsEpoch !== drainEpoch || failover.uncaughtUpBlocks(this) || this.repageOwedTables().length > 0) return false;
         this._bootstrapDrained = true;
         this._failoverPendingDrain = false;
-        // A clean full drain proves the hub's schema_version matched (a
-        // mismatch parks the bootstrap), so any earlier live mismatch is
-        // resolved: re-open the watermark gate.
+        // A clean full drain proves the hub's schema_version matched (a mismatch parks the
+        // bootstrap). A live schema refusal also owes every table a re-page (handleRowEvent),
+        // and all of them ran after it, so the refused rows are applied: re-open the watermark gate.
         this._schemaMismatchSeen = false;
         // Same reasoning for the apply-failure latch: a clean full drain re-wrote
         // every table from the hub, so whatever a live apply failed to write is
@@ -314,6 +315,7 @@ module.exports = {
     driveResync(reason) {
         this.forcedResyncCount++;
         getLogger().warn('HubDbSync: forcing a mirror resync (' + String(reason || 'barrier hold ceiling reached') + ')');
+        this.forgetPositionsForResync();
         if (this.ws) {
             // terminate() over close(): a half-open socket may never complete a closing
             // handshake, and the 'close' handler runs either way to schedule the reconnect.

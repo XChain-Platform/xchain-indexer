@@ -106,7 +106,7 @@ module.exports = {
     // ── XBRIDGE transfer sync barrier (mirrors the match/call barriers exactly) ──
 
     async refreshBridgeSyncTimestamp(armBootstrap = this._bootstrapDrained) {
-        let ts = null;
+        let ts = null, destTsValue = null;
         // Ask the schema for the table before naming it: on a consumer whose hub DB was
         // never given the bridge mirror tables, the statement below is error 1146 every
         // time this runs, swallowed, and the operator is told nothing at all.
@@ -123,17 +123,33 @@ module.exports = {
             // Both legs are scoped, not just dest_chain: the source chain reads its own
             // escrow and burn state out of the same mirror for the invariant, and an
             // out-leg's source is named by src_chain.
+            //
+            // The second aggregate is the content shortcut's own watermark, scoped to
+            // dest_chain alone. A transfer's effective_time is the hub's clock at
+            // finalization plus relayMarginFloorS(dest_chain) (BTC 2400 s, LTC 600 s,
+            // DOGE 240 s), so only rows sharing one destination share one margin and grow
+            // in finalization order. A DOGE -> BTC out-leg finalized first can carry a
+            // later effective_time than an LTC -> DOGE in-leg finalized after it, so a
+            // MAX over both legs proves nothing about the in-legs this chain mints
+            // (getFinalizedBridgeTransfersForChain reads dest_chain = this chain only).
+            // Without a coin (the explorer's display mirror) the unscoped MAX stands.
             let where = "WHERE status = 'finalized'";
             let args  = [];
-            if (this.coin) { where += " AND (src_chain = ? OR dest_chain = ?)"; args = [this.coin, this.coin]; }
-            let rows = await strictHubRead(this.hubDb,
-                "SELECT MAX(effective_time) AS ts FROM bridge_transfers " + where, args);
-            if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
+            let select = 'SELECT MAX(effective_time) AS ts';
+            if (this.coin) {
+                where += " AND (src_chain = ? OR dest_chain = ?)";
+                select += ', MAX(CASE WHEN dest_chain = ? THEN effective_time END) AS dest_ts';
+                args = [this.coin, this.coin, this.coin];
+            }
+            let rows = await strictHubRead(this.hubDb, select + " FROM bridge_transfers " + where, args);
+            if (rows.length > 0 && rows[0].ts !== null && rows[0].ts !== undefined) ts = Number(rows[0].ts);
+            if (rows.length > 0 && rows[0].dest_ts !== null && rows[0].dest_ts !== undefined) destTsValue = Number(rows[0].dest_ts);
         } catch (e) {
             noteWatermarkReadFailure(this, BRIDGE_TABLE, e);     // barrier stays closed
             return;
         }
         this.bridgeSyncTimestamp = ts;
+        this.bridgeDestSyncTimestamp = this.coin ? destTsValue : ts;
         // Arm only under a full bootstrap drain; reconnect / live-row refreshes default
         // armBootstrap to _bootstrapDrained so they cannot arm the NULL fast path from a
         // holed mirror and fork (#1788).
@@ -143,11 +159,24 @@ module.exports = {
 
     // ADMISSION ERA: the bridge_transfers height watermark for this chain has reached B - 4,
     // replacing both clock cases exactly as the match and call members above.
+    //
+    // The empty-mirror fast path also needs a drained connection. bridgeBootstrapped
+    // survives a socket close (resetOnSocketClose clears _bootstrapDrained, not this
+    // flag), and an empty scope proves nothing about a transfer finalized while the socket
+    // was down, so the path waits for the re-drain like the heartbeat gate does.
+    //
+    // The content shortcut reads bridgeDestSyncTimestamp, the newest in-leg alone (see
+    // refreshBridgeSyncTimestamp): in-legs share this chain's margin, so an in-leg
+    // effective at or past this block's time proves every in-leg finalized before it is
+    // local and every one finalized after it is effective no earlier. The stream escape
+    // below needs no scoping, because a frozen or live watermark only vouches for rows
+    // finalized before it.
     bridgeSyncSatisfied(blockTime, blockHeight = null) {
-        if (this.bridgeBootstrapped && this.bridgeSyncTimestamp === null) return true;
+        if (this.bridgeBootstrapped && this._bootstrapDrained && this.bridgeSyncTimestamp === null) return true;
         if (this.admissionActiveAt(blockHeight))
             return this.bridgeBootstrapped && this.heightSatisfied('bridge_transfers', blockHeight);
-        if (this.bridgeSyncTimestamp !== null && this.bridgeSyncTimestamp >= blockTime) return true;
+        if (this.bridgeDestSyncTimestamp !== null && this.bridgeDestSyncTimestamp !== undefined &&
+            this.bridgeDestSyncTimestamp >= blockTime) return true;
         // Stream watermark escape: a transfer is broadcast the moment the hub finalizes it,
         // and its effective_time is stamped FORWARD (now + the destination's relay margin
         // floor), so a watermark past this block's time plus the grace means every transfer

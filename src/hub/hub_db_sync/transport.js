@@ -28,6 +28,7 @@ const https  = require('https');
 const url    = require('url');
 const { getLogger } = require('../../observability/index.js');
 const { sanitizeHeights } = require('./watermark_config.js');
+const { REPAGE_PER_CONNECTION_TABLES } = require('./mirror_tables.js');
 const { sendHubRequest } = require('../hub_client/request.js');
 
 let WebSocket = null;
@@ -147,9 +148,15 @@ const transportMethods = {
         // re-page from zero on every reconnect.
         let instanceId = (typeof event.hub_instance_id === 'string' && event.hub_instance_id !== '')
             ? event.hub_instance_id : null;
-        if (instanceId === null || instanceId !== this._lastHubInstanceId)
+        if (instanceId === null || instanceId !== this._lastHubInstanceId) {
             this._drainPositions = Object.create(null);
+            this._priceRepageFloor = null;
+        }
         this._lastHubInstanceId = instanceId;
+        // A kept position covers appends only. Rows the hub changed in place or deleted while
+        // no socket was open sit below it, so the tables with such producers re-page from zero
+        // on every connection, which also runs their reconciliation passes.
+        this.markRepageOwed(REPAGE_PER_CONNECTION_TABLES);
 
         // Hub has registered our subscription. Capture hub-side max IDs
         // (included by HubDbBroadcaster for gap detection after bootstrap).
@@ -240,8 +247,8 @@ const transportMethods = {
         this.heightWatermarks = {};
         this._readyHeights    = null;
         // Price events buffered for the drain die with the socket: their
-        // inserts re-page via the re-bootstrap and their deletions are
-        // redelivered by the hub's deferred-retraction path (item 5296).
+        // inserts re-page via the re-bootstrap and their deletions are cleared
+        // by the reconciliation pass the next connection's re-page from zero runs.
         // Reset the per-connection price-drain state so live price rows
         // buffer again until the reconnect re-bootstrap drains (#2422),
         // and bump the epoch so a flush racing this close cannot

@@ -134,6 +134,18 @@ const AUTO_INCREMENT_ID_TABLES = ['price_snapshots', 'oracle_prices', 'cross_cha
 const HUB_STATE_TABLES = ['remote_token_snapshots', 'state_checkpoints',
                           'anchor_reward_attestations', 'attestation_responses'];
 
+// The tables whose hub rows change under an id the mirror has already paged past, or
+// vanish by a deletion the hub never replays: price_snapshots (the batch_block_time stamp,
+// skipped to finalized, the unsigned retraction DELETE), oracle_prices (a generation
+// republish, the unsigned retraction DELETE), cross_chain_matches and cross_chain_calls
+// (re-finalized in place after a retraction) and bridge_transfers (revived in place). A
+// since_id page from a stored position never re-serves any of those changes, so every new
+// connection owes each of these tables one re-page from zero, and that complete page is
+// also what arms the reconciliation passes that clear what the hub no longer holds. Cost:
+// the whole of each table is served once per reconnect; price_snapshots dominates.
+const REPAGE_PER_CONNECTION_TABLES = ['price_snapshots', 'oracle_prices', 'cross_chain_matches',
+                                      'cross_chain_calls', 'bridge_transfers'];
+
 // The column that names a mirrored row to an operator when a mirror fence refuses or purges
 // it, and the settlement family tag its refusal carries. A fence runs BEFORE the settlement
 // screen, so for a refused row the fence's own line is the only record of which row it was;
@@ -160,5 +172,6 @@ const REFUSED_ROW_NAMED_CAP = 10000;
 module.exports = {
     RETRACTION_COLUMNS, RETRACTION_CHAIN_COLUMNS,
     CROSS_CHAIN_TABLES, HUB_STATE_TABLES, MIRRORED_TABLES, AUTO_INCREMENT_ID_TABLES,
+    REPAGE_PER_CONNECTION_TABLES,
     REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT, REFUSED_ROW_NAMED_CAP,
 };

@@ -23,7 +23,11 @@ function makeReadyFrameHarness({ drainOutcomes }) {
 
     const drainEveryTable = sinon.stub(sync, 'drainEveryTable').callsFake(async () => {
         if (outcomes.length === 0) throw new Error('No scripted drain outcome remains');
-        return outcomes.shift();
+        const outcome = outcomes.shift();
+        // A scripted complete drain stands for every table paged in full, which is what
+        // settles the re-page each ready frame owes.
+        if (outcome && outcome.allDrained) sync._repageOwed.clear();
+        return outcome;
     });
     const scheduleBootstrapRetry = sinon.stub(sync, 'scheduleBootstrapRetry');
     const socket = {};
