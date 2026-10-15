@@ -149,13 +149,14 @@ module.exports = {
         let results = await this.doQuery(query, args);
     },
 
-    // Bounded batch of the most-stale existing market rows for the throttled 24h rolling-stats
-    // ageing sweep (processMarketUpdates). Returns market ids whose stats were last refreshed
-    // before `time_24hr` (NULL = never), oldest-first, capped at `limit`, so per-block refresh
-    // cost is bounded by the cap rather than the total active-market count. The `markets` table is
-    // unhashed / snapshot-replicated with no consensus reader (see rollback.js IDX-2), so a
-    // node-local sweep cadence cannot diverge block state. ORDER BY (last_updated, id) is stable.
-    async getStaleMarkets(time_24hr, limit){
+    // The markets the per-block 24h ageing sweep (processMarketUpdates) refreshes, in two parts.
+    // First a batch of the most-stale rows, last refreshed before `time_24hr` (NULL = never),
+    // oldest-first and capped at `limit`: ORDER BY (last_updated, id) is stable. Then, when the
+    // caller passes the block, every market getAgedMarkets finds, uncapped, because its stored 24h
+    // figures are already wrong at this block; that read costs O(matches leaving the window this
+    // block), not O(history). The `markets` table is unhashed / snapshot-replicated with no
+    // consensus reader (see rollback.js IDX-2), so a node-local sweep cadence cannot diverge state.
+    async getStaleMarkets(time_24hr, limit, block_index){
         let max = Number(limit);
         if(!Number.isFinite(max) || max <= 0) max = 25;
         let rows = await this.doQuery(
@@ -165,10 +166,107 @@ module.exports = {
              ORDER BY (last_updated IS NULL) DESC, last_updated ASC, id ASC
              LIMIT ?`,
             [time_24hr, max]);
+        rows = rows || [];
+        if(block_index === undefined || block_index === null) return rows;
+        let seen = new Set(rows.map(row => Number(row.id)));
+        for(let row of await this.getAgedMarkets(block_index, time_24hr))
+            if(!seen.has(Number(row.id))) rows.push(row);
+        return rows;
+    },
+
+    // The rollback's market pairs plus every market whose last_updated is past block_time, the
+    // surviving tip's time, so stamped by a block the reorg removed: the 24h ageing sweep
+    // refreshes a market no orphaned order row names. Pairs keep their order; the extra
+    // markets follow by id, each once in either orientation.
+    async withMarketsRefreshedAfter(markets, block_time){
+        if(!Number.isFinite(Number(block_time)))
+            return markets;
+        let key  = (p) => Math.min(Number(p.tick1_id), Number(p.tick2_id)) + ':' + Math.max(Number(p.tick1_id), Number(p.tick2_id));
+        let seen = new Set(markets.map(key));
+        let rows = await this.doQuery(
+            `SELECT tick1_id, tick2_id, coin1_id, coin2_id FROM markets WHERE last_updated > ? ORDER BY id ASC`,
+            [Number(block_time)]);
+        let out = markets.slice();
+        for(let row of (rows || [])){
+            if(seen.has(key(row))) continue;
+            seen.add(key(row));
+            out.push({ tick1_id: Number(row.tick1_id), tick2_id: Number(row.tick2_id),
+                       coin1_id: Number(row.coin1_id) || 0, coin2_id: Number(row.coin2_id) || 0 });
+        }
+        return out;
+    },
+
+    // Markets whose 24h figures changed only because time moved: a valid same-coin match whose
+    // block_time lies between the previous block's window start and this block's (time_24hr) has
+    // just left the window, so the stored 24h price, high, low, volume and change no longer match
+    // a recompute. Both ends are bounded: the slice is found by block_index (indexed) with a
+    // binary search over block times whose targets sit AGED_SLICE_WIDEN_SECONDS outside the
+    // window edges, for stamps that run out of height order, and only that slice's actions are
+    // read; the exact block_time filter then keeps the true slice. A market already
+    // refreshed at this block (last_updated = time_24hr + 24h) is left out.
+    async getAgedMarkets(block_index, time_24hr){
+        let height = Number(block_index), cutoff = Number(time_24hr);
+        if(!Number.isFinite(height) || !Number.isFinite(cutoff)) return [];
+        let previous = await this.protocolTimeForStoredBlock(height - 1);
+        if(previous === false || previous === null || !Number.isFinite(Number(previous))) return [];
+        let from = Number(previous) - 86400;
+        if(from > cutoff) return [];
+        let bottom = await this.doQuery('SELECT MIN(block_index) AS b FROM blocks', []);
+        let low    = (bottom && bottom.length > 0 && bottom[0].b !== null) ? Number(bottom[0].b) : height;
+        let first  = await firstBlockAtOrAfter(this, from - AGED_SLICE_WIDEN_SECONDS, low, height);
+        let last   = await firstBlockAtOrAfter(this, cutoff + AGED_SLICE_WIDEN_SECONDS + 1, first, height) - 1;
+        // The status is compared in JS, not joined by name: a status join hands the planner an
+        // equality that drives the read from every valid match instead of the block slice.
+        let validId = await this.getStatusId('valid');
+        let pairs   = await this.doQuery(
+            `SELECT DISTINCT
+                    COALESCE(om.give_tick_id,0) AS give_tick_id,
+                    COALESCE(om.get_tick_id,0)  AS get_tick_id,
+                    om.status_id                AS status_id
+             FROM actions a
+                INNER JOIN order_matches om ON (om.action_index=a.action_index)
+                INNER JOIN blocks        b  ON (b.block_index=a.block_index)
+             WHERE a.block_index BETWEEN ? AND ? AND
+                   om.give_coin_id=om.get_coin_id AND
+                   b.block_time >= ? AND
+                   b.block_time <= ?`,
+            [first, Math.min(height, last), from, cutoff]);
+        let ids = new Set();
+        for(let pair of (pairs || []).filter(row => validId !== null && Number(row.status_id) === Number(validId))){
+            let row = await this.getMarketRow(pair.give_tick_id, pair.get_tick_id);
+            if(row) ids.add(Number(row.id));
+        }
+        if(ids.size === 0) return [];
+        let list = [...ids];
+        let rows = await this.doQuery(
+            `SELECT id FROM markets
+             WHERE id IN (${list.map(() => '?').join(', ')}) AND (last_updated IS NULL OR last_updated < ?)
+             ORDER BY id ASC`,
+            [...list, cutoff + 86400]);
         return rows || [];
     },
 
 };
+
+// Seconds a time-sliced read moves each binary-search target outward. A block's stamp must exceed
+// the median of the 11 before it and may run up to 2 hours ahead of network time, so a block
+// stamped 7200 s ahead sits above every block mined in the next 2 hours: about 18 blocks on BTC,
+// 54 on LTC and 126 on DOGE. A block count cannot cover all three chains; 3 hours of time does,
+// with an hour of margin, on every chain.
+const AGED_SLICE_WIDEN_SECONDS = 10800;
+
+// The lowest height in [lo, hi] whose stored block_time is at or after `time`, by binary search,
+// reading as if stamps rose with height (the widening above covers the ones that do not). A height
+// with no blocks row reads as earlier. hi when none qualifies.
+async function firstBlockAtOrAfter(db, time, lo, hi){
+    while(lo < hi){
+        let mid = Math.floor((lo + hi) / 2);
+        let t   = await db.getBlockTimeAtHeightOrNull(mid);
+        if(t === null || t < time) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo;
+}
 
 // The class these methods install onto, read for its statics. The require sits below
 // module.exports so the two files load in either order: whichever runs first, the

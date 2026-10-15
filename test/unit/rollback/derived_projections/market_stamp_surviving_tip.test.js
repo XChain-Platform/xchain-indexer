@@ -43,6 +43,8 @@ function makeDb(heights) {
     for (const step of ['updateBalances', 'updateTokens', 'sanityCheck', 'updateMarketInfo']) sinon.stub(db, step).resolves();
     sinon.stub(db, 'getMarketId').resolves(1);
     sinon.stub(db, 'getMarketInfo').callsFake(async (market_id, block_time) => ({ market_id, last_updated: block_time }));
+    // No market was stamped by an orphaned block here, so the refresh covers the given pair only.
+    sinon.stub(db, 'withMarketsRefreshedAfter').callsFake(async (markets) => markets);
     return db;
 }
 

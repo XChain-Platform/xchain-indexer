@@ -56,6 +56,17 @@
       "migration live-schema MODIFY guard: lock-wait head and unplaced MODIFY @regression @tier1 refuses a MODIFY it cannot place instead of skipping it",
       "migration live-schema MODIFY guard: lock-wait head and unplaced MODIFY @regression @tier1 refuses a lock-wait MODIFY that strips AUTO_INCREMENT or a DEFAULT"
     ],
+    "01eb6f06411f95bc": [
+      "markets: 24h ageing and reorg refresh @regression @tier1 adds every market whose 24h window lost a trade this block to the ageing sweep",
+      "markets: 24h ageing and reorg refresh @regression @tier1 finds a trade in a block stamped 7200 s ahead, the most a stamp may lead",
+      "markets: 24h ageing and reorg refresh @regression @tier1 has a reorg also recompute the markets an orphaned block refreshed",
+      "markets: 24h ageing and reorg refresh @regression @tier1 has the reorg collector read the same order_statuses pairs the block path refreshes",
+      "markets: 24h ageing and reorg refresh @regression @tier1 reads the same slice width however much history lies below it",
+      "markets: 24h ageing and reorg refresh @regression @tier1 returns only the stale batch when the caller passes no block",
+      "markets: refresh on every order-state change @regression @tier1 collects the pair a COINPAY settled in a block with no ORDER-family action",
+      "markets: refresh on every order-state change @regression @tier1 collects the pairs of the orders a SWEEP cancelled",
+      "markets: refresh on every order-state change @regression @tier1 keeps the ORDER-family pairs first so new-pair id assignment order is unchanged"
+    ],
     "0249295e69b670ed": [
       "Anchor canonical vectors byte-identity to xchain-documentation @regression fixture is byte-identical to xchain-documentation/protocol/test-vectors/anchor_canonical.json",
       "Anchor canonical vectors byte-identity to xchain-documentation @regression the pre-restart vectors are gone (v4..v7 deleted; v3 is re-used by the archive fold)",
@@ -1430,6 +1441,11 @@
       "Database.getConnection() circuit breaker @regression @tier1 transitions to half-open when circuit cooldown has expired",
       "Database.releaseConnection() @regression @tier1 does nothing when no transactionConnection",
       "Database.releaseConnection() @regression @tier1 releases and clears transactionConnection when set"
+    ],
+    "18477c824737fcc9": [
+      "Rollback over an action-empty range @regression @tier3 keeps the action-range resets behind the guard when there is no orphaned action",
+      "Rollback over an action-empty range @regression @tier3 runs every block-keyed in-place reset when the orphaned range holds no actions",
+      "Rollback over an action-empty range @regression @tier3 still runs the bet resets before the action-scoped deletes when the range has actions"
     ],
     "185f2e8e30926ebe": [
       "reconcileAnchorRewardWinner() @regression @tier1 does NOT log a pre-image when no reconcile block is given (legacy 2-arg callers unchanged)",
@@ -17052,6 +17068,10 @@
       "anchor archive recovery registry coverage @regression @tier1 reports an unhashed hub mirror that declares no recovery policy",
       "anchor archive recovery registry coverage @regression @tier1 the xchain-sync registry copy declares the same recovery policies"
     ],
+    "e68b72e9ed70cdba": [
+      "Utility @regression @tier1 processCooldownCompletions() history mapping maps each fresh completion action to its source address and released tick",
+      "Utility @regression @tier1 processCooldownCompletions() history mapping writes no mapping on the legacy path, whose credit reuses the already-mapped UNSTAKE index"
+    ],
     "e6aed40fa235b3b4": [
       "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" is rejected as invalid: TICK (caret dot) when the flag is active",
       "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" reproduces the PRE-FLAG (defective) valid verdict when the flag is off",
@@ -17437,6 +17457,15 @@
     "ed9f6b845c9ad063": [
       "db.getListAtBlock legacy edit-chain bound @regression @tier1 preserves direct-child resolution for a three-edit legacy chain",
       "db.getListAtBlock legacy edit-chain bound @regression @tier1 walks past the 16-hop cap when its fallback is newer than the queried block"
+    ],
+    "eda08e76aa5d910e": [
+      "Rollback @regression @tier3 clears escrow when no offer survives (orphaned offer / SET direction)",
+      "Rollback @regression @tier3 does NOT touch escrow when there is no orphaned range",
+      "Rollback @regression @tier3 re-derives AFTER the dataTables delete (orphaned offers/status rows already gone)",
+      "Rollback @regression @tier3 re-stamps escrow to a surviving open GIVE_OWNERSHIP offer (orphaned release / CLEAR direction)",
+      "Rollback @regression @tier3 resets terminal attestation requests whose flip happened in the orphaned range",
+      "Rollback @regression @tier3 reverses cooldown maturities even when the orphaned range has NO actions (firstActionIndex null)",
+      "Rollback @regression @tier3 still issues the request_status reset when the orphaned range holds no actions"
     ],
     "ee1365d37c917234": [
       "protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1 is present in the class table and registry in the same shape",
@@ -18594,8 +18623,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1362,
-      "titleCount": 13656,
+      "fileCount": 1365,
+      "titleCount": 13670,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19442,6 +19471,7 @@
         "test/unit/db/markets/dispenser_value_accounting.test/multi_dispenser.test.js": "81a72d318183f418",
         "test/unit/db/markets/dispenser_value_accounting.test/send_triggered.test.js": "d27a6904c05061c1",
         "test/unit/db/markets/market_day_change_precision.test.js": "3c7c11ca01ad82ad",
+        "test/unit/db/markets/market_refresh/touched_and_aged_pairs.test.js": "01eb6f06411f95bc",
         "test/unit/db/markets/markets_native_coin_pairs.test.js": "7176d07530da2fe0",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_admission_schema.test.js": "1d3cfa8b4efea4a2",
@@ -19843,8 +19873,9 @@
         "test/unit/rollback/reorg_catchup_cursor.test.js": "694d08dca6dd0abb",
         "test/unit/rollback/reorg_resume_cursor_hole.test.js": "93e45958dfe95026",
         "test/unit/rollback/rollback.test.js": "147635c74f2bf70e",
+        "test/unit/rollback/rollback.test/actionless_block_flips.test.js": "18477c824737fcc9",
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
-        "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "78664d20d86a7a0f",
+        "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "eda08e76aa5d910e",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
         "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
         "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "a7b9a30696b4da72",
@@ -19933,6 +19964,7 @@
         "test/unit/utility/utility.test.js": "4f9a9190b0431827",
         "test/unit/utility/utility.test/bignumber.test.js": "9c413eb2335154fc",
         "test/unit/utility/utility.test/block_loop.test.js": "b0736fe3615f59a3",
+        "test/unit/utility/utility.test/cooldown_completion_mapping.test.js": "e68b72e9ed70cdba",
         "test/unit/utility/utility.test/fees_and_transforms.test.js": "b0c6c69916c83dff",
         "test/unit/utility/utility.test/format_and_ledger.test.js": "8c20f0a6066f53f4",
         "test/unit/utility/utility.test/validation.test.js": "f16d88684a803df3",

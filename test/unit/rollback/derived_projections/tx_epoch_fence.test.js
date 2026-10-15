@@ -66,6 +66,7 @@ describe('reorg rollback writes are fenced to their transaction @regression @tie
         for (const step of ['updateBalances', 'updateTokens', 'sanityCheck']) sinon.stub(db, step).resolves();
         sinon.stub(db, 'getBlockTime').resolves(1700000000);
         sinon.stub(db, 'getMarketId').callsFake(async (tick1_id) => tick1_id);
+        sinon.stub(db, 'withMarketsRefreshedAfter').callsFake(async (markets) => markets);
         sinon.stub(db, 'getMarketInfo').callsFake(async (market_id) => {
             if (market_id === 1) {
                 const e = new Error('injected lock wait timeout');

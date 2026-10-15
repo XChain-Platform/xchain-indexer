@@ -246,43 +246,42 @@ class Rollback {
         return staged;
     }
 
-    // Undo the flips an orphaned action wrote IN PLACE on a row that SURVIVES the reorg.
-    // Each reset states its own fork risk; they share the guard because every one of them
-    // is keyed on an orphaned action, so none has anything to undo without one.
+    // Undo the flips the orphaned blocks wrote IN PLACE on a row that SURVIVES the reorg.
+    // Each reset states its own fork risk. The block-keyed resets run UNCONDITIONALLY:
+    // a block pass can write their stamps in a block that mints no actions row (the BET
+    // deadline latch stamps bet_feeds.closed_block, the DELEGATE v1 materialization
+    // journals a key rotation, a rollcall eviction stamps delegations), and an orphaned
+    // range made only of such blocks leaves firstActionIndex null. Skipping them there
+    // left the surviving rows flipped, so a rolled-back node rejected a wager on a feed a
+    // fresh node held open. Every one keys on a stamp at or above block_index, which only
+    // an orphaned block can have written, so each is a no-op when nothing was flipped.
+    // The resets after the guard key on the orphaned action range itself: the archive and
+    // attest head restores, the action-scoped purge, the icon sweep and the three re-derives
+    // read rows only an orphaned action writes, so without one they have nothing to undo.
     async restoreInPlaceFlips(block_index, firstActionIndex){
+        await this.resetOrphanedAttestRequests(block_index);
+
+        await this.resetOrphanedXcallRequests(block_index);
+
+        await this.reopenOrphanedPolls(block_index);
+
+        await this.resetOrphanedBetFlips(block_index);
+
+        await this.resetOrphanedPollCallbacks(block_index);
+
+        await this.clearOrphanedDeactivations(block_index);
+
+        await this.restoreContractSlashAmounts(block_index);
+
+        await this.restoreDelegationRotations(block_index);
+
+        await this.restoreCapabilitySlashAmounts(block_index);
+
+        // The anchor reward reconcile-restore (restoreReconciledAnchorRewards) and the
+        // cooldown-maturity reversal (reverseCooldownMaturities) are block-keyed too and run
+        // unconditionally from purgeOrphanedTables and the top of the transaction.
+
         if(firstActionIndex !== null){
-
-            await this.resetOrphanedAttestRequests(block_index);
-
-            await this.resetOrphanedXcallRequests(block_index);
-
-            await this.reopenOrphanedPolls(block_index);
-
-            await this.resetOrphanedBetFlips(block_index);
-
-            await this.resetOrphanedPollCallbacks(block_index);
-
-            await this.clearOrphanedDeactivations(block_index);
-
-            await this.restoreContractSlashAmounts(block_index);
-
-            await this.restoreDelegationRotations(block_index);
-
-            await this.restoreCapabilitySlashAmounts(block_index);
-
-            // Anchor reward reconcile-restore (RB-ANCHOR) was here; it now runs
-            // UNCONDITIONALLY just past this guard, for the same reason the cooldown reversal
-            // below left it: the BTC-side derive path calls reconcileAnchorRewardWinner with a
-            // NULL anchor action index (anchor_reward_derive.js, the rows arrive over the
-            // mirror), so it mints no actions row and an orphaned range carrying only a
-            // derive-side reconcile leaves firstActionIndex null.
-
-            // Cooldown-maturity reversal was here; it is now in reverseCooldownMaturities,
-            // called UNCONDITIONALLY at the top of the transaction (before this guard). It had
-            // to leave this firstActionIndex-gated block because the legacy cooldown maturity
-            // (pre UNSTAKE_COOLDOWN_COMPLETION_ACTION) mints NO actions row, so an orphaned
-            // range containing only such a maturity leaves firstActionIndex null and would skip
-            // the reversal entirely, forking the ledger vs a from-genesis replay.
 
             await this.resetOrphanedArchiveHeads(block_index, firstActionIndex);
 

@@ -65,6 +65,19 @@ module.exports = {
                     pairScan.collectPairs(results, marketKeys, markets);
            }
         }
+        // The block path also refreshes every pair whose order book or fills changed through
+        // an action outside the four order types: a COINPAY completes orders and promotes its
+        // match to 'valid', a SWEEP cancels orders, a COINPAY_EXPIRE or CROSS_SETTLE closes
+        // them. Each such change writes an order_statuses row, or a coinpay_statuses row for
+        // the in-place match promotion, so those two tables name the pairs. They come after
+        // the scan above, so a new pair (only ever from an ORDER) keeps its id slot.
+        if(!update){
+            for(let query of [pairScan.orderStatusPairQuery(), pairScan.coinpayStatusPairQuery()]){
+                let results = await this.doQuery(query, [block_index]);
+                if(results.length > 0)
+                    pairScan.collectPairs(results, marketKeys, markets);
+            }
+        }
         return markets;
     },
 
@@ -149,6 +162,46 @@ const pairScan = {
                         ORDER BY o1.action_index ASC`;
         }
         return query;
+    },
+
+    // Same-coin orders that took a status row from any action in the block. The order's
+    // own validity is checked, so a rejected ORDER names no pair.
+    orderStatusPairQuery(){
+        return `SELECT
+                        o1.action_index,
+                        o1.get_tick_id  as tick1_id,
+                        o1.give_tick_id as tick2_id,
+                        o1.get_coin_id  as coin1_id,
+                        o1.give_coin_id as coin2_id
+                    FROM
+                        actions a1
+                        INNER JOIN order_statuses s1 ON (s1.action_index=a1.action_index)
+                        INNER JOIN orders         o1 ON (o1.action_index=s1.order_action_index)
+                        INNER JOIN index_statuses s2 ON (s2.id=o1.status_id)
+                    WHERE
+                        a1.block_index=? AND
+                        o1.give_coin_id=o1.get_coin_id AND
+                        s2.status='valid'
+                    ORDER BY s1.action_index ASC, o1.action_index ASC`;
+    },
+
+    // Same-coin COINPay matches whose obligation took a status row in the block. The settling
+    // COINPAY promotes the match row in place, which leaves no stamp on the match itself.
+    coinpayStatusPairQuery(){
+        return `SELECT
+                        m1.action_index,
+                        m1.get_tick_id  as tick1_id,
+                        m1.give_tick_id as tick2_id,
+                        m1.get_coin_id  as coin1_id,
+                        m1.give_coin_id as coin2_id
+                    FROM
+                        actions a1
+                        INNER JOIN coinpay_statuses s1 ON (s1.action_index=a1.action_index)
+                        INNER JOIN order_matches    m1 ON (m1.action_index=s1.coinpay_action_index)
+                    WHERE
+                        a1.block_index=? AND
+                        m1.give_coin_id=m1.get_coin_id
+                    ORDER BY s1.action_index ASC, m1.action_index ASC`;
     },
 
     collectPairs(results, marketKeys, markets){

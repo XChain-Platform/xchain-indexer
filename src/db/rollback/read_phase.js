@@ -237,8 +237,10 @@ module.exports = {
                         m.action_index >= ?`;
         }
 
-        // ORDER_CANCELS / ORDER_EDITS / ORDER_EXPIRES
-        if(['order_cancels','order_edits','order_expires'].includes(table)){
+        // ORDER_CANCELS / ORDER_EDITS / ORDER_EXPIRES / ORDER_STATUSES. An orphaned status row
+        // names the pair of every order a SWEEP, COINPAY or COINPAY_EXPIRE closed, which
+        // Database.getMarkets refreshes forward through the same table.
+        if(['order_cancels','order_edits','order_expires','order_statuses'].includes(table)){
             query = `SELECT 
                         o1.give_tick_id as tick1_id,
                         o1.get_tick_id  as tick2_id,
