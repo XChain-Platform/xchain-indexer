@@ -186,6 +186,8 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'vote_settlement_exact_activation',
     'settlement_bounds_activation',
     'pass_progress_retirement_activation',
+    'slash_historical_set_activation',
+    'anchor_reward_copy_selection_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

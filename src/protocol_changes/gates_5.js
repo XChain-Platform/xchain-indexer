@@ -177,3 +177,33 @@ addGate('pass_progress_retirement_activation.PASS_PROGRESS_RETIREMENT_ACTIVATION
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION at read
 });
+
+// slash_historical_set_activation
+// Height on the chain's own block_index, judged at the height a capability set is read for.
+// From it the effective signer set, the source stake weights and the per-key membership test
+// read at height h add back every capability_slash_debits row on a stakes row whose slash
+// block is above h, so the set at h depends only on the chain up to h for an active bond as it
+// already did for a cooling one. A read at the tip sees no such debit and is unchanged. Below
+// it the reads sum the current stakes.amount. Unarmed on mainnet and testnet. The regtest entry
+// is UNPINNED: a venue arms it with XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION (shared_rows.js).
+addGate('slash_historical_set_activation.SLASH_HISTORICAL_SET_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION at read
+});
+
+// anchor_reward_copy_selection_activation
+// Height on the BTC block the derive pass runs at. From it the pass reads every distinct copy of
+// each pending anchor_reward_attestations tuple (the kept row and anchor_reward_attestation_copies)
+// and mints the tuple when any copy passes its gates, meets quorum and proves on DOGE, taking the
+// proven copy with the lowest doge_anchor_txid; it defers when none proves and a copy is still
+// undecided, and pays nothing otherwise. The copies differ only in fields the XANCPUB signatures do
+// not cover, and the reward row carries neither, so the tuple's outcome no longer depends on which
+// copy arrived first. Below it the first copy received decides, as before. Unarmed on mainnet and
+// testnet. The regtest entry is UNPINNED: a venue arms it with
+// XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION (shared_rows.js).
+addGate('anchor_reward_copy_selection_activation.ANCHOR_REWARD_COPY_SELECTION_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION at read
+});

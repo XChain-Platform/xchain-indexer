@@ -290,7 +290,8 @@ module.exports = {
             // axis rather than a stall.
             heightShortfalls: Object.assign({}, this._heightShortfalls),
             heightsFrozenMs: (this._heightsLastAdvanceAt == null)
-                ? null : (Date.now() - this._heightsLastAdvanceAt)
+                ? null : (Date.now() - this._heightsLastAdvanceAt),
+            attestationCopyFailures: this._attestationCopies ? this._attestationCopies.failures : 0   // apply/attestation_copies.js
         };
     },
     // Force a rate-limited subscribe-then-bootstrap cycle without opening a barrier.

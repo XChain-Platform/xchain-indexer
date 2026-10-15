@@ -53,33 +53,8 @@ async function legacyPinGateOn(m){
 // Returns what createValidatorReward returned, or false when the proof is rejected;
 // throws AnchorProofUnavailableError when it cannot be decided.
 async function mintProvenRow(indexerDb, row, m){
-    // LEGACY_ANCHOR_REWARD_PIN: a tuple pinned from the pre-restart chain is not minted again.
-    const legacyDropped = await legacyPinGateOn(m);
-    if(legacyDropped && isLegacyRewardPinned({
-        reward_type: row.reward_type, round_reference: row.round_reference,
-        snapshot_block: row.snapshot_block, publisher: String(row.publisher).toLowerCase(),
-        txid: row.doge_anchor_txid
-    }, m.legacyRewardPins)){
-        getLogger().warn('anchor reward ' + row.reward_type + '/' + row.round_reference + ' publisher ' +
-                     String(row.publisher).toLowerCase() + ' is a LEGACY_ANCHOR_REWARD_PIN tuple; no reward derived');
-        return false;
-    }
-    // The mirror says this reward's anchor was mined. Prove it against DOGE
-    // ourselves before minting: the mirror is transport, and the hub that wrote the
-    // row is exactly the party the reward pays. 'rejected' is chain-determined and
-    // fleet-uniform, so it skips this row permanently; 'unknown' is a local
-    // visibility failure, so it defers the whole block rather than letting this
-    // node's reward set diverge from its peers'.
-    let verdict = await (m.proof ? m.proof.proveMined({
-        txid:            row.doge_anchor_txid,
-        rewardType:      String(row.reward_type),
-        roundReference:  Number(row.round_reference),
-        snapshotBlock:   Number(row.snapshot_block),
-        publisher:       String(row.publisher).toLowerCase(),
-        network:         String(row.network),
-        minConfirmations: m.minConfirmations,
-        legacyDropped:   legacyDropped
-    }) : 'unknown');
+    let verdict = await proveRow(row, m);
+    if(verdict === 'pinned') return false;
     if(verdict === 'unknown')
         throw new AnchorProofUnavailableError(
             'anchor reward ' + row.reward_type + '/' + row.round_reference + ' (publisher ' +
@@ -92,6 +67,46 @@ async function mintProvenRow(indexerDb, row, m){
                      (row.doge_anchor_txid || '<no txid>') + '); no reward derived');
         return false;
     }
+    return mintRow(indexerDb, row, m);
+}
+
+// The proof half of mintProvenRow, deciding nothing: 'pinned' for a LEGACY_ANCHOR_REWARD_PIN
+// tuple, otherwise the AnchorProofClient's verdict on this row's own doge_anchor_txid
+// ('verified', 'rejected', or 'unknown' when it cannot be decided here).
+async function proveRow(row, m){
+    // LEGACY_ANCHOR_REWARD_PIN: a tuple pinned from the pre-restart chain is not minted again.
+    const legacyDropped = await legacyPinGateOn(m);
+    if(legacyDropped && isLegacyRewardPinned({
+        reward_type: row.reward_type, round_reference: row.round_reference,
+        snapshot_block: row.snapshot_block, publisher: String(row.publisher).toLowerCase(),
+        txid: row.doge_anchor_txid
+    }, m.legacyRewardPins)){
+        getLogger().warn('anchor reward ' + row.reward_type + '/' + row.round_reference + ' publisher ' +
+                     String(row.publisher).toLowerCase() + ' is a LEGACY_ANCHOR_REWARD_PIN tuple; no reward derived');
+        return 'pinned';
+    }
+    // The mirror says this reward's anchor was mined. Prove it against DOGE
+    // ourselves before minting: the mirror is transport, and the hub that wrote the
+    // row is exactly the party the reward pays. 'rejected' is chain-determined and
+    // fleet-uniform, so it skips this row permanently; 'unknown' is a local
+    // visibility failure, so it defers the whole block rather than letting this
+    // node's reward set diverge from its peers'.
+    return await (m.proof ? m.proof.proveMined({
+        txid:            row.doge_anchor_txid,
+        rewardType:      String(row.reward_type),
+        roundReference:  Number(row.round_reference),
+        snapshotBlock:   Number(row.snapshot_block),
+        publisher:       String(row.publisher).toLowerCase(),
+        network:         String(row.network),
+        minConfirmations: m.minConfirmations,
+        legacyDropped:   legacyDropped
+    }) : 'unknown');
+}
+
+// The write half of mintProvenRow, for a row whose anchor proved: what createValidatorReward
+// returned. Nothing it writes comes from doge_anchor_txid or publisher_attestations, so any
+// proven copy of one tuple mints the same reward row.
+async function mintRow(indexerDb, row, m){
     // block_index = snapshot_block (the earn-block, where the stake source resolves);
     // derive_block_index = the current BTC block, which is where the row is actually
     // minted. Without the second stamp a reorg to any height in (snapshot_block,
@@ -103,4 +118,4 @@ async function mintProvenRow(indexerDb, row, m){
         arKey.rewardRoundQualifier(row.reward_type, row.snapshot_block));
 }
 
-module.exports = { AnchorProofUnavailableError, mintProvenRow };
+module.exports = { AnchorProofUnavailableError, mintProvenRow, proveRow, mintRow };

@@ -104,7 +104,7 @@ module.exports = {
     // The gate (network/coin/blockIndex) + caps + cappedStakeWeightsSql are byte-mirrored
     // in xchain-sync so the stakes_root set is identical on both sides of the height.
     async stakeWeightsWithCap(valid_id, blockIndex, minStake, label){
-        let sw = this.stakeWeightsSql(valid_id, blockIndex, minStake);
+        let sw = this.stakeWeightsAtSql(valid_id, blockIndex, minStake);
         // Ordering collation for BOTH regimes (stake_weight_collation_activation.js);
         // the legacy LIMIT branch truncates on the same order the capped branch ranks on.
         let binCollation = stakeWeightCollation.isStakeWeightBinCollationActive(

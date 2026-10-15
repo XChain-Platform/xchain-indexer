@@ -92,6 +92,14 @@ const ALLOWLIST = [
                 'complete that key within the filtered set and impose a total order.'
     },
     {
+        clause: 'reward_type, round_reference, publisher, snapshot_block, chain',
+        reason: 'getPendingAnchorRewardAttestationCopies: the query pins network, so the five ' +
+                'ordered columns name one reward tuple and order the tuples totally. Rows that ' +
+                'tie are copies of one tuple; the only reader, copy_selection.copiesByTuple, ' +
+                'dedupes them by copy digest and sorts them by doge_anchor_txid then digest, so ' +
+                'the engine order among them reaches no decision.'
+    },
+    {
         clause: 'policy_seq DESC',
         reason: 'getAppliedPolicySnapshot: the query pins network, origin_chain and tick, ' +
                 'and policy_snapshots carries UNIQUE KEY uq_policy_seq (network, ' +

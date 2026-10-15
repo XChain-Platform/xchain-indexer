@@ -29,6 +29,7 @@ const { CROSS_CHAIN_TABLES } = require('./mirror_tables.js');
 const { LOCAL_COLUMN_CACHE_TTL_MS } = require('./mirror_bounds.js');
 const { coerceMirrorValue, priceUpsertSql, applyMirrorWrite } = require('./mirror_write.js');
 const { mirrorUpsertSql } = require('./row_upserts.js');
+const { recordAttestationCopy } = require('./apply/attestation_copies.js');
 
 module.exports = {
 
@@ -134,6 +135,8 @@ module.exports = {
         let placeholders = cols.map(() => '?').join(', ');
         let args = cols.map(c => coerceMirrorValue(row[c], this.cachedColumnType(table, c)));
         let written = await applyMirrorWrite(this.hubDb, mirrorUpsertSql(table, cols, placeholders), args);
+        // Every distinct copy of an anchor reward tuple is kept beside the first-wins row.
+        if (table === 'anchor_reward_attestations') await recordAttestationCopy(this, row);
         // The batch link is carried onto the local ATTEST v1 row when the row arrives linked,
         // or when a NULL changed a stored row (affectedRows 2: a reorg retraction's clear).
         // A NULL that inserted or changed nothing has nothing to carry.

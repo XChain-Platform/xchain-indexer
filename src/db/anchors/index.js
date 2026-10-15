@@ -101,6 +101,36 @@ module.exports = {
             [network, maxSnapshotBlock]);
     },
 
+    // The same pending tuples as getPendingAnchorRewardAttestations, with every distinct copy
+    // of each: the kept row, then each anchor_reward_attestation_copies row of a tuple the main
+    // table holds. Read from ANCHOR_REWARD_COPY_SELECTION_ACTIVATION by the copy selector
+    // (consensus/anchor_reward_derive/copy_selection.js), which dedupes the kept row against
+    // its own recorded copy by digest. Ordered by mirrored content only, never a local id.
+    async getPendingAnchorRewardAttestationCopies(network, maxSnapshotBlock){
+        const pending =
+            '   AND NOT EXISTS (SELECT 1 FROM validator_rewards vr ' +
+            '                     JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id ' +
+            '                    WHERE vr.reward_type = ara.reward_type ' +
+            '                      AND vr.round_reference = ara.round_reference ' +
+            '                      AND vr.round_qualifier = ' + arKey.sqlRoundQualifier('ara.reward_type', 'ara.snapshot_block') + ' ' +
+            '                      AND pk.pubkey <= LOWER(ara.publisher)) ';
+        const cols = 'ara.chain, ara.network, ara.reward_type, ara.round_reference, ara.snapshot_block, ara.publisher';
+        return await this.doQuery(
+            'SELECT * FROM (' +
+            'SELECT ' + cols + ', ara.publisher_attestations, ara.doge_anchor_txid ' +
+            '  FROM anchor_reward_attestations ara ' +
+            ' WHERE ara.network = ? AND ara.snapshot_block <= ? ' + pending +
+            'UNION ALL ' +
+            'SELECT ' + cols + ', c.publisher_attestations, c.doge_anchor_txid ' +
+            '  FROM anchor_reward_attestation_copies c ' +
+            '  JOIN anchor_reward_attestations ara ON ara.chain = c.chain AND ara.network = c.network ' +
+            '   AND ara.reward_type = c.reward_type AND ara.round_reference = c.round_reference ' +
+            '   AND ara.snapshot_block = c.snapshot_block AND ara.publisher = c.publisher ' +
+            ' WHERE ara.network = ? AND ara.snapshot_block <= ? ' + pending +
+            ') copies ORDER BY reward_type, round_reference, publisher, snapshot_block, chain',
+            [network, maxSnapshotBlock, network, maxSnapshotBlock]);
+    },
+
     /*
      * ANCHOR action methods (DOGE-only on-chain state commitments).
      * anchor_actions is the permanent on-chain record (action-indexed, rolled back

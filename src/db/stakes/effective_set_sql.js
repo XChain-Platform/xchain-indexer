@@ -22,6 +22,7 @@
  ********************************************************************/
 
 const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
+const slashAddBack = require('./slash_add_back.js');
 
 module.exports = {
 
@@ -39,6 +40,10 @@ module.exports = {
     // Every PBFT-quorum read (capability snapshots, signature verification, quorum
     // counts) MUST resolve through this one query so all consumers agree -
     // CONSENSUS-CRITICAL: any change here forks validation.
+    // The slash exclusion below keeps a pre-slash read stable only for a bond whose rows the
+    // slash leaves intact (a cooling row); an active row is zeroed in place. From
+    // slash_historical_set_activation each stakes row sums its amount as it stood at blockIndex
+    // (slash_add_back.js); below it the text and the answer are the committed ones.
     effectiveCapabilitySetSql(valid_id, blockIndex, minStake){
         // Permanent disqualification (WI-2 bump 2): a signing key proven to have
         // equivocated is PERMANENTLY barred from the effective signer set - not just
@@ -51,9 +56,13 @@ module.exports = {
         const slashExcl = (keyCol) =>
             `AND NOT EXISTS (SELECT 1 FROM capability_slash_events cse
                              WHERE cse.signing_pubkey_id = ${keyCol} AND cse.block_index <= ?)`;
+        const armed = slashAddBack.slashHistoricalSetActive(this.config, blockIndex);
+        const amt = (alias) => slashAddBack.stakeAmountAt(alias, armed);
+        const burns = (alias) => slashAddBack.laterBurnsJoin(alias, armed);
+        const burnArgs = slashAddBack.laterBurnsArgs(blockIndex, armed);
         let sql = `SELECT ip.pubkey AS pubkey,
-                          SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
-                   FROM stakes s
+                          SUM(${amt('s')}) AS total
+                   FROM stakes s${burns('s')}
                    JOIN index_pubkeys ip ON ip.id = s.signing_pubkey_id
                    WHERE s.status_id = ?
                      AND s.activation_block <= ?
@@ -74,8 +83,8 @@ module.exports = {
                    JOIN index_pubkeys ip2 ON ip2.id = d.signing_pubkey_id
                    JOIN (
                        SELECT s2.source_id AS source_id,
-                              SUM(CAST(s2.amount AS DECIMAL(30,8))) AS total
-                       FROM stakes s2
+                              SUM(${amt('s2')}) AS total
+                       FROM stakes s2${burns('s2')}
                        WHERE s2.status_id = ?
                          AND s2.activation_block <= ?
                          AND (s2.deactivation_block IS NULL OR s2.deactivation_block > ?)
@@ -86,8 +95,8 @@ module.exports = {
                      AND d.activation_block <= ?
                      AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)
                      ${slashExcl('d.signing_pubkey_id')}`;
-        let args = [valid_id, blockIndex, blockIndex, valid_id, blockIndex, blockIndex, minStake,
-                    valid_id, blockIndex, blockIndex, minStake,
+        let args = [...burnArgs, valid_id, blockIndex, blockIndex, valid_id, blockIndex, blockIndex, minStake,
+                    ...burnArgs, valid_id, blockIndex, blockIndex, minStake,
                     valid_id, blockIndex, blockIndex, blockIndex];
         return { sql, args };
     },
@@ -154,6 +163,62 @@ module.exports = {
                    ) ek ON ek.source_id = q.source_id
                    JOIN index_pubkeys ip ON ip.id = ek.pubkey_id`;
         let args = [valid_id, blockIndex, blockIndex, minStake,
+                    valid_id, blockIndex, blockIndex, valid_id, blockIndex, blockIndex,
+                    valid_id, blockIndex, blockIndex, blockIndex];
+        return { sql, args };
+    },
+
+    // The source-keyed stake weights every consensus read resolves through: stakeWeightsSql
+    // itself below slash_historical_set_activation, and from it the same query with each
+    // source total summed from its stakes rows as they stood at blockIndex (slash_add_back.js),
+    // so a later SLASH does not move a past height's weights. stakeWeightsSql stays the
+    // byte-identical twin xchain-sync's drift guard compares; the armed text lives only here.
+    // xchain-sync's getStakeWeightsByCapabilityAsOf reads the same amounts the same way.
+    stakeWeightsAtSql(valid_id, blockIndex, minStake){
+        if(!slashAddBack.slashHistoricalSetActive(this.config, blockIndex))
+            return this.stakeWeightsSql(valid_id, blockIndex, minStake);
+        const slashExcl = (keyCol) =>
+            `AND NOT EXISTS (SELECT 1 FROM capability_slash_events cse
+                             WHERE cse.signing_pubkey_id = ${keyCol} AND cse.block_index <= ?)`;
+        let sql = `SELECT ip.pubkey AS pubkey,
+                          sa.address AS source,
+                          q.total    AS weight
+                   FROM (
+                       SELECT s.source_id AS source_id,
+                              SUM(${slashAddBack.stakeAmountAt('s', true)}) AS total
+                       FROM stakes s${slashAddBack.laterBurnsJoin('s', true)}
+                       WHERE s.status_id = ?
+                         AND s.activation_block <= ?
+                         AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
+                       GROUP BY s.source_id
+                       HAVING total >= CAST(? AS DECIMAL(30,8))
+                   ) q
+                   JOIN index_addresses sa ON sa.id = q.source_id
+                   JOIN (
+                       SELECT s2.source_id AS source_id, s2.signing_pubkey_id AS pubkey_id
+                       FROM stakes s2
+                       WHERE s2.status_id = ?
+                         AND s2.activation_block <= ?
+                         AND (s2.deactivation_block IS NULL OR s2.deactivation_block > ?)
+                         AND NOT EXISTS (
+                             SELECT 1 FROM stake_key_revocations r
+                             WHERE r.source_id = s2.source_id
+                               AND r.signing_pubkey_id = s2.signing_pubkey_id
+                               AND r.status_id = ?
+                               AND r.deactivation_block <= ?
+                               AND r.action_index > s2.action_index)
+                         ${slashExcl('s2.signing_pubkey_id')}
+                       GROUP BY s2.source_id, s2.signing_pubkey_id
+                       UNION
+                       SELECT d.source_id AS source_id, d.signing_pubkey_id AS pubkey_id
+                       FROM delegations d
+                       WHERE d.status_id = ?
+                         AND d.activation_block <= ?
+                         AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)
+                         ${slashExcl('d.signing_pubkey_id')}
+                   ) ek ON ek.source_id = q.source_id
+                   JOIN index_pubkeys ip ON ip.id = ek.pubkey_id`;
+        let args = [...slashAddBack.laterBurnsArgs(blockIndex, true), valid_id, blockIndex, blockIndex, minStake,
                     valid_id, blockIndex, blockIndex, valid_id, blockIndex, blockIndex,
                     valid_id, blockIndex, blockIndex, blockIndex];
         return { sql, args };
