@@ -111,9 +111,18 @@ function isDispensePaymentTallyScaleActive(blockTime, network){
 // and `batchScoped` to "is this the shared batch pool". Both false-ish answers
 // keep the legacy scale, so a caller that cannot tell stays on deployed
 // behavior.
-function dispenseTallyScale(blockTime, network, tokenDenominated, batchScoped){
-    if(!tokenDenominated || batchScoped)
+//
+// `fiatPricingExact` is dispenser_fiat_pricing_activation at this block. It
+// extends the exact scale to a non-batch COIN payment: a FIAT fill (Mode A
+// FIAT_AMOUNT / price, Mode B the oracle-priced cost) can cost under a satoshi,
+// and at 8 dp such a fill drains nothing, so the next dispenser behind the
+// address prices against the whole payment again. A coin payment priced in whole
+// satoshis settles identically at either scale, as above.
+function dispenseTallyScale(blockTime, network, tokenDenominated, batchScoped, fiatPricingExact){
+    if(batchScoped)
         return DISPENSE_TALLY_LEGACY_SCALE;
+    if(!tokenDenominated)
+        return fiatPricingExact ? DISPENSE_TALLY_EXACT_SCALE : DISPENSE_TALLY_LEGACY_SCALE;
     if(isDispensePaymentTallyScaleActive(blockTime, network))
         return DISPENSE_TALLY_EXACT_SCALE;
     return DISPENSE_TALLY_LEGACY_SCALE;

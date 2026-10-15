@@ -189,6 +189,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'slash_historical_set_activation',
     'anchor_reward_copy_selection_activation',
     'token_supply_representation_activation',
+    'dispenser_fiat_pricing_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

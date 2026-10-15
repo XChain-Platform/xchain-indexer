@@ -193,12 +193,17 @@ module.exports = {
     //
     //   dispenser: { ORACLE_ADDRESS, GIVE_COIN, GIVE_TICK, FIAT_CODE }
     //
+    // Under dispenser_fiat_pricing_activation at blockIndex an effective_at tie resolves on
+    // source_chain (fiatPricingBound); a caller with no block index reads the pre-gate order.
+    //
     // Returns { valid, error? }.
-    async requireEffectiveOraclePrice(blockTime, dispenser, db){
+    async requireEffectiveOraclePrice(blockTime, dispenser, db, blockIndex){
         let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
-        let oracleRow = await priceDb.getOraclePrice(
-            dispenser['ORACLE_ADDRESS'], dispenser['GIVE_COIN'], dispenser['GIVE_TICK'],
-            dispenser['FIAT_CODE'], Number(blockTime));
+        let oracleRow = this.fiatPricingBound(blockIndex, blockTime)
+            ? await priceDb.getOraclePrice(dispenser['ORACLE_ADDRESS'], dispenser['GIVE_COIN'], dispenser['GIVE_TICK'],
+                dispenser['FIAT_CODE'], Number(blockTime), true)
+            : await priceDb.getOraclePrice(dispenser['ORACLE_ADDRESS'], dispenser['GIVE_COIN'], dispenser['GIVE_TICK'],
+                dispenser['FIAT_CODE'], Number(blockTime));
         if(!oracleRow)
             return { valid: false, error: 'invalid: ORACLE_ADDRESS (no effective oracle price)', oracleRow: null };
         return { valid: true, oracleRow: oracleRow };
@@ -232,14 +237,16 @@ module.exports = {
     // oracle. Same reason getFeeOraclePrices is shared by the native-fee check and its
     // pre-flight.
     //
+    // blockIndex binds both reads under dispenser_fiat_pricing_activation, as settlement's.
+    //
     // Returns { valid, error?, expectedFee (bignumber), belowDust? }.
-    async quoteOracleFee(blockTime, dispenser, db){
+    async quoteOracleFee(blockTime, dispenser, db, blockIndex){
         blockTime = Number(blockTime);
 
         // The oracle must already have an EFFECTIVE price. Shared with the standalone
         // create-time precondition (requireEffectiveOraclePrice above) so the two cannot
         // drift: one rule, one error string, one lookup.
-        let priceCheck = await this.requireEffectiveOraclePrice(blockTime, dispenser, db);
+        let priceCheck = await this.requireEffectiveOraclePrice(blockTime, dispenser, db, blockIndex);
         if(!priceCheck.valid)
             return { valid: false, error: priceCheck.error };
         let oracleRow = priceCheck.oracleRow;
@@ -254,7 +261,8 @@ module.exports = {
         let window   = parseInt(this.config['FIAT_DISPENSER_PRICE_WINDOW']) || 86400;
         let coinPair = dispenser['GET_COIN'] + '/' + dispenser['FIAT_CODE'];
         let priceDb  = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
-        let snapshots = await priceDb.getPricesInTimeRange(coinPair, blockTime - window, blockTime);
+        let snapshots = await this.fiatWindowPrices(priceDb, coinPair, blockTime - window, blockTime,
+            this.fiatPricingBound(blockIndex, blockTime));
         if(!snapshots || snapshots.length === 0)
             return { valid: false, error: 'invalid: ORACLE_ADDRESS (no validator price to value the oracle fee)' };
 
@@ -270,7 +278,7 @@ module.exports = {
     async validateOracleFee(data, dispenser, db){
         let oracleAddress = dispenser['ORACLE_ADDRESS'];
 
-        let quote = await this.quoteOracleFee(data['BLOCK_TIME'], dispenser, db);
+        let quote = await this.quoteOracleFee(data['BLOCK_TIME'], dispenser, db, data['BLOCK_INDEX']);
         if(!quote.valid) return quote;
 
         let expectedFee = quote.expectedFee;

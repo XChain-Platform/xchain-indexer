@@ -66,7 +66,7 @@
     },
     "dispense_payment_tally_scale_activation": {
       "path": "src/actions/dispense/dispense_payment_tally_scale_gate.js",
-      "hash": "b40920ad55b0d54006349fd4e7beaa66b258e16530c4826057d829d45b86537f",
+      "hash": "f97c0346f8a4a506e78aae6f6e6c88418f2a7d872ce21f06f2036d69946ccd1c",
       "twins": []
     },
     "dispenser_send_amount_compare_activation": {
@@ -2147,6 +2147,13 @@
       "to": "83981d2b10525aa4e771e386486a8ebd91c40db96f5941701529929c45d0207b",
       "reason": "remote_token_admission_activation appended to SHARED_GATES",
       "date": "2026-10-14"
+    },
+    {
+      "id": "dispense_payment_tally_scale_activation",
+      "from": "b40920ad55b0d54006349fd4e7beaa66b258e16530c4826057d829d45b86537f",
+      "to": "f97c0346f8a4a506e78aae6f6e6c88418f2a7d872ce21f06f2036d69946ccd1c",
+      "reason": "The dispense tally scale gate takes the fiat pricing activation as a fifth argument.",
+      "date": "2026-10-15"
     }
   ]
 }

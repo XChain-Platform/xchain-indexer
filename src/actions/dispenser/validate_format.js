@@ -188,7 +188,7 @@ module.exports = {
                 GIVE_COIN:      data['GIVE_COIN'],
                 GIVE_TICK:      data['GIVE_TICK'],
                 FIAT_CODE:      data['FIAT_CODE'],
-            }, priceDb);
+            }, priceDb, data['BLOCK_INDEX']);
             if(!priceCheck.valid)
                 error = priceCheck.error;
         }
@@ -215,7 +215,7 @@ module.exports = {
            gateRegistry.activeAt('dispenser_settlement_price_activation.DISPENSER_SETTLEMENT_PRICE_ACTIVATION', this.config['NETWORK'], this.config['COIN'], null, data['BLOCK_TIME']) &&
            await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', data['BLOCK_INDEX'])){
             let gap = await this.util.findSettlementPriceGap(fiatDispenser, Number(data['BLOCK_TIME']),
-                Number(this.config['FIAT_DISPENSER_PRICE_WINDOW']), this.indexerDb);
+                Number(this.config['FIAT_DISPENSER_PRICE_WINDOW']), this.indexerDb, data['BLOCK_INDEX']);
             if(gap)
                 error = gap;
         }
@@ -279,7 +279,7 @@ module.exports = {
                 // a ^id reference that is only resolved above.
                 let priceDb = (this.actions && this.actions.hubDb) || this.indexerDb;
                 let feeCheck = data['FEE_PROBE']
-                    ? await this.util.quoteOracleFee(data['BLOCK_TIME'], feeDispenser, priceDb)
+                    ? await this.util.quoteOracleFee(data['BLOCK_TIME'], feeDispenser, priceDb, data['BLOCK_INDEX'])
                     : await this.util.validateOracleFee(data, feeDispenser, priceDb);
                 if(!feeCheck.valid)
                     error = feeCheck.error;

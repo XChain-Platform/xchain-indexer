@@ -124,6 +124,8 @@ const REGTEST_ARMING = {
         { env: 'XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION', label: 'ANCHOR REWARD COPY SELECTION', armedHeight: 0, keys: ['regtest'] },
     'token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTIVATION':
         { env: 'XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION', label: 'TOKEN SUPPLY REPRESENTATION', armedHeight: 0, keys: ['regtest'] },
+    'dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICING_ACTIVATION':
+        { env: 'XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION', label: 'DISPENSER FIAT PRICING', armedHeight: 0, keys: ['regtest'] },
 };
 
 // env name -> its reader. Each variable is read BY NAME, once, here: the
@@ -148,6 +150,7 @@ const ENV_READERS = {
     XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION: (env) => env.XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION,
     XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION: (env) => env.XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION,
     XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION: (env) => env.XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION,
+    XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION: (env) => env.XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION,
 };
 
 // The raw value of the rule's env variable, through its named reader.

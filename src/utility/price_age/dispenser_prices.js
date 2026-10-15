@@ -21,9 +21,66 @@
 
 'use strict';
 
+const mathjs       = require('mathjs');
+const gateRegistry = require('../../consensus/gate_registry');
+
+const FIAT_PRICING_KEY = 'dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICING_ACTIVATION';
+
+// The mathjs bignumber the bc helpers use, at a precision no product or quotient below can
+// reach: an amount carries at most 42 integer digits and 18 decimals, a price or FIAT amount
+// fewer, so a product of two holds under 120 significant digits and is exact at 160.
+const ExactDecimal = mathjs.BigNumber.clone({ precision: 160 });
+
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
 module.exports = {
+
+    // Whether dispenser_fiat_pricing_activation binds at blockIndex on this chain. A caller
+    // with no block index (an API quote) reads as below it.
+    isFiatPricingActive(blockIndex){
+        if(this.isNull(blockIndex) || !Number.isFinite(Number(blockIndex))) return false;
+        return gateRegistry.activeAt(FIAT_PRICING_KEY, this.config['NETWORK'], this.config['COIN'], Number(blockIndex), null);
+    },
+
+    // The block a FIAT price read is bound to (db.getPricesInTimeRange's bound), or null
+    // below the gate, where every read is the pre-gate one.
+    fiatPricingBound(blockIndex, blockTime){
+        return this.isFiatPricingActive(blockIndex) ? { blockIndex: Number(blockIndex), blockTime: Number(blockTime) } : null;
+    },
+
+    // db.getPricesInTimeRange, bound to the block when fiatPricingBound gave a bound and in
+    // its pre-gate form otherwise.
+    fiatWindowPrices(priceDb, coinPair, startTime, endTime, bound){
+        return bound ? priceDb.getPricesInTimeRange(coinPair, startTime, endTime, bound)
+                     : priceDb.getPricesInTimeRange(coinPair, startTime, endTime);
+    },
+
+    // db.getOraclePricesInTimeRange, with the source_chain tiebreak when bound.
+    fiatWindowOraclePrices(priceDb, oracleAddress, coin, tick, fiat, startTime, endTime, bound){
+        return bound ? priceDb.getOraclePricesInTimeRange(oracleAddress, coin, tick, fiat, startTime, endTime, true)
+                     : priceDb.getOraclePricesInTimeRange(oracleAddress, coin, tick, fiat, startTime, endTime);
+    },
+
+    // Mode A fill count, the documented floor(COIN_AMOUNT x price / FIAT_AMOUNT), computed
+    // as an exact product and an exact integer division, so no intermediate rounds and the
+    // floor is never off by one. Saturates like bcfloorSaturating; a FIAT_AMOUNT that is
+    // not positive buys nothing, as the pre-gate division by a zero unit price did.
+    fiatFillsExact(coinAmount, price, fiatAmount){
+        let fiat = new ExactDecimal(this.bcstr(fiatAmount));
+        if(!fiat.gt(0)) return 0;
+        let fills = new ExactDecimal(this.bcstr(coinAmount)).times(this.bcstr(price)).divToInt(fiat);
+        if(fills.gt(Number.MAX_SAFE_INTEGER)) return Number.MAX_SAFE_INTEGER;
+        return fills.lt(0) ? 0 : fills.toNumber();
+    },
+
+    // Coin cost of `multiplier` Mode A fills, multiplier x FIAT_AMOUNT / price, rounded UP
+    // at `scale`: the one rounding a decimal tally needs, taken in the direction that never
+    // leaves a sibling dispenser more of the payment than the buyer has left.
+    fiatFillCost(multiplier, fillPrice, scale){
+        let cost = new ExactDecimal(this.bcstr(multiplier)).times(this.bcstr(fillPrice.fiatAmount))
+            .div(this.bcstr(fillPrice.price)).toDecimalPlaces(parseInt(scale), ExactDecimal.ROUND_UP);
+        return this.bcnum(cost.toFixed());
+    },
 
     // True when a dispenser's LATEST lifecycle status says a settlement already ran.
     //
@@ -80,12 +137,16 @@ module.exports = {
     // builds its pair from GET_COIN; this makes Mode B agree.
     // payCoin falls back to coin so the argument stays optional for callers that
     // genuinely have only one.
-    async reverseOraclePriceMatch(coinAmount, oracleAddress, coin, tick, fiat, blockTime, priceWindow, db, payCoin){
+    //
+    // blockIndex is the block settling; under dispenser_fiat_pricing_activation both reads are
+    // bound to it and the oracle tie resolves on source_chain (fiatPricingBound).
+    async reverseOraclePriceMatch(coinAmount, oracleAddress, coin, tick, fiat, blockTime, priceWindow, db, payCoin, blockIndex){
         let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
         let startTime = blockTime - priceWindow;
+        let bound = this.fiatPricingBound(blockIndex, blockTime);
 
         // Walk historical user oracle prices newest-first within the window
-        let oraclePrices = await priceDb.getOraclePricesInTimeRange(oracleAddress, coin, tick, fiat, startTime, blockTime);
+        let oraclePrices = await this.fiatWindowOraclePrices(priceDb, oracleAddress, coin, tick, fiat, startTime, blockTime, bound);
         if(!oraclePrices || oraclePrices.length === 0) return null;
 
         // Fetch the validator's COIN/FIAT prices ONCE, then pair each oracle row in memory.
@@ -102,7 +163,7 @@ module.exports = {
         // query returned at [0]. That holds whatever order the query returns and does not re-derive
         // "newest", so it cannot fork on an ordering assumption.
         let coinPair = (this.isNull(payCoin) ? coin : payCoin) + '/' + fiat;
-        let validatorPrices = await priceDb.getPricesInTimeRange(coinPair, startTime - priceWindow, blockTime);
+        let validatorPrices = await this.fiatWindowPrices(priceDb, coinPair, startTime - priceWindow, blockTime, bound);
         if(!validatorPrices || validatorPrices.length === 0) return null;
         for(let op of oraclePrices){
             // Keep the per-row LOWER bound: a validator price older than effectiveAt - priceWindow
@@ -144,10 +205,13 @@ module.exports = {
     // Given a coin payment amount, find the most recent price snapshot where the buyer can afford at least 1 unit
     // Returns { units, snapshot } or null if no match found
     // Prefers the local hub DB (where price_snapshots is synced from xchain-hub) when available.
-    async reversePriceMatch(coinAmount, fiatAmount, coinPair, blockTime, priceWindow, db){
+    // Under dispenser_fiat_pricing_activation at blockIndex the read is bound to the block and
+    // the count is fiatFillsExact; btcPerToken is returned either way.
+    async reversePriceMatch(coinAmount, fiatAmount, coinPair, blockTime, priceWindow, db, blockIndex){
         let startTime = blockTime - priceWindow;
         let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
-        let snapshots = await priceDb.getPricesInTimeRange(coinPair, startTime, blockTime);
+        let bound = this.fiatPricingBound(blockIndex, blockTime);
+        let snapshots = await this.fiatWindowPrices(priceDb, coinPair, startTime, blockTime, bound);
         for(let snapshot of snapshots){
             // Calculate BTC cost per token unit at this snapshot's price
             // btc_per_token = fiat_amount / snapshot.price
@@ -156,7 +220,8 @@ module.exports = {
             // raw_multiplier = coin_amount / btc_per_token
             let rawMultiplier = this.bcdiv(coinAmount, btcPerToken, 64);
             // Saturating, not throwing: a throw here wedges the block loop.
-            let units = this.bcfloorSaturating(rawMultiplier);
+            let units = bound ? this.fiatFillsExact(coinAmount, snapshot.price, fiatAmount)
+                              : this.bcfloorSaturating(rawMultiplier);
             if(units >= 1){
                 return {
                     units:        units,
@@ -173,14 +238,16 @@ module.exports = {
     // a create or refill is judged by the rows its dispenses will settle against.
     //
     //   dispenser: { FIAT, ORACLE_ADDRESS, GIVE_COIN, GIVE_TICK, GET_COIN }
-    async findSettlementPriceGap(dispenser, blockTime, priceWindow, db){
+    //   blockIndex: the block judging; the validator reads are bound as the matchers bind them.
+    async findSettlementPriceGap(dispenser, blockTime, priceWindow, db, blockIndex){
         let priceDb   = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
         let startTime = blockTime - priceWindow;
         let coinPair  = dispenser['GET_COIN'] + '/' + dispenser['FIAT'];
+        let bound     = this.fiatPricingBound(blockIndex, blockTime);
 
         // Verify Mode A has a validator snapshot inside the window reversePriceMatch reads
         if(this.isNull(dispenser['ORACLE_ADDRESS'])){
-            let snapshots = await priceDb.getPricesInTimeRange(coinPair, startTime, blockTime);
+            let snapshots = await this.fiatWindowPrices(priceDb, coinPair, startTime, blockTime, bound);
             return (snapshots && snapshots.length) ? null : 'invalid: FIAT_CODE (no price snapshot in the settlement window)';
         }
 
@@ -193,7 +260,7 @@ module.exports = {
         // Verify one of those oracle prices pairs with a validator price by the same bounds
         // reverseOraclePriceMatch applies: at or before its effective_at, at most one window older
         let payPair = (this.isNull(dispenser['GET_COIN']) ? dispenser['GIVE_COIN'] : dispenser['GET_COIN']) + '/' + dispenser['FIAT'];
-        let validatorPrices = await priceDb.getPricesInTimeRange(payPair, startTime - priceWindow, blockTime) || [];
+        let validatorPrices = await this.fiatWindowPrices(priceDb, payPair, startTime - priceWindow, blockTime, bound) || [];
         let paired = oraclePrices.some(op => validatorPrices.some(p =>
             p.timestamp <= op.effectiveAt && p.timestamp >= op.effectiveAt - priceWindow));
         return paired ? null : 'invalid: ORACLE_ADDRESS (no validator price pairs with the oracle price)';

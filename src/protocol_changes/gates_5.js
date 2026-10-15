@@ -223,3 +223,21 @@ addGate('token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTI
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION at read
 });
+
+// dispenser_fiat_pricing_activation
+// Height on the chain's own block_index. From it FIAT dispenser settlement, and the DISPENSER
+// create and oracle-fee reads beside it, read validator rounds bound the way the fee read and
+// the VM preload are bound (reference_block on the reference chain, the signed admission height
+// on the others, and the landed-batch clause where that row is armed), so a round stamped inside
+// the window but anchored above the block cannot be read. Mode A counts fills as
+// floor(COIN_AMOUNT x price / FIAT_AMOUNT) exactly; a non-batch coin-payment tally runs at the
+// exact tally scale and charges a Mode A fill its exact cost, so sub-satoshi fills drain the
+// shared payment; and an oracle_prices tie on (effective_at, action_index) resolves on
+// source_chain. Below it all four replay as before. Unarmed on mainnet and testnet. The regtest
+// entry is UNPINNED: a venue arms it with XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION
+// (shared_rows.js).
+addGate('dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICING_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION at read
+});

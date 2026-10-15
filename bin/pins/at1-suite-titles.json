@@ -3946,6 +3946,14 @@
       "repeated finalizeBlock exception status emits the exact wedged status fixture consumed by xchain-watch",
       "repeated finalizeBlock exception status promotes the second consecutive finalizeBlock exception and keeps it latched"
     ],
+    "408fd804c864f21b": [
+      "dispenser_fiat_pricing_activation: landed-batch clause on the bounded read @regression @tier1 armed with the landed-batch row active, a round whose batch has not landed is not read",
+      "dispenser_fiat_pricing_activation: price read bound @regression @tier1 armed on a non-reference chain in the admission era, the read binds on the signed admission height",
+      "dispenser_fiat_pricing_activation: price read bound @regression @tier1 armed, a Mode A dispense settles the same on the live node and the resync",
+      "dispenser_fiat_pricing_activation: price read bound @regression @tier1 armed, a create judged only on a round anchored above the block has no settlement price",
+      "dispenser_fiat_pricing_activation: price read bound @regression @tier1 armed, the validator price behind a Mode B oracle quote is bound the same way",
+      "dispenser_fiat_pricing_activation: price read bound @regression @tier1 unarmed, the live node and the resync settle Mode A at different prices (the replay case)"
+    ],
     "40c3932d64cf581c": [
       "XCALL mirror reads default to the protocol cap @regression @tier1 an explicit limit still wins over the protocol cap",
       "XCALL mirror reads default to the protocol cap @regression @tier1 undispatched calls cap at XCALL_MAX_CALLS_PER_BLOCK for limit 0",
@@ -11481,6 +11489,12 @@
       "ANCHOR retired wires on a from-genesis replay @regression a v7 bundle below ANCHOR_ACTIVATION (three sections walked as one head) is recorded SQL-safe too",
       "ANCHOR retired wires on a from-genesis replay @regression the writer maps every non-numeric numeric-slot value to NULL and keeps real numbers"
     ],
+    "9e696ebcfe49994b": [
+      "dispenser_fiat_pricing_activation: oracle tie order @regression @tier1 armed, the create-time effective price picks the same row whatever order the mirror received",
+      "dispenser_fiat_pricing_activation: oracle tie order @regression @tier1 armed, the settlement read picks the same row whatever order the mirror received",
+      "dispenser_fiat_pricing_activation: oracle tie order @regression @tier1 armed, the tie goes to the greatest source_chain, as the last DESC key",
+      "dispenser_fiat_pricing_activation: oracle tie order @regression @tier1 unarmed, two mirrors filled in opposite orders settle the tie differently (the replay case)"
+    ],
     "9e93cc1f907c0074": [
       "[regression:p0] ownership dispense: the ownership-transfer ledger row carries its block fields @money @regression @tier1 a DISPENSE inside a BATCH writes the ISSUE with the BATCH transaction block fields",
       "[regression:p0] ownership dispense: the ownership-transfer ledger row carries its block fields @money @regression @tier1 a block-level pass with no transaction still transfers, with a NULL tx_index",
@@ -13042,6 +13056,12 @@
     "b6cf2646bdeade14": [
       "list-share producer rules digest gate publishes and resolves the producer gate",
       "list-share producer rules digest gate stays unarmed on mainnet and testnet and is active at regtest genesis"
+    ],
+    "b784b2ff10c1589f": [
+      "dispenser_fiat_pricing_activation: shared coin-payment tally @regression @tier1 armed, every recorded charge covers the fiat value of the fills it bought",
+      "dispenser_fiat_pricing_activation: shared coin-payment tally @regression @tier1 armed, the recorded costs are the fills bought and never sum past the payment",
+      "dispenser_fiat_pricing_activation: shared coin-payment tally @regression @tier1 armed, the two dispensers together credit the 155 fills the payment buys",
+      "dispenser_fiat_pricing_activation: shared coin-payment tally @regression @tier1 unarmed, a sub-satoshi first fill drains nothing and the payment buys 156 (the replay case)"
     ],
     "b7b23e989bc73b5e": [
       "push_generation stamping on hub-pinned federation reads (item 2367) @regression getcrosschaincall reads the generation BEFORE the rows (HUB-RETRACT-1 ordering)",
@@ -16739,6 +16759,13 @@
       "bridge_settle: proof acquisition after terminal guards refuses an already settled row without calling its proof fetcher",
       "bridge_settle: proof acquisition after terminal guards still defers a quorate due in leg when no checkpoint is held"
     ],
+    "e3eb231de5a57eeb": [
+      "dispenser_fiat_pricing_activation: Mode A floor rule @regression @tier1 armed, a caller that supplies no block index keeps the unarmed count",
+      "dispenser_fiat_pricing_activation: Mode A floor rule @regression @tier1 armed, a large payment is credited the documented count, not thirty-three over it",
+      "dispenser_fiat_pricing_activation: Mode A floor rule @regression @tier1 armed, an exact three-fill payment is credited three",
+      "dispenser_fiat_pricing_activation: Mode A floor rule @regression @tier1 armed, every count across prices, fiat amounts and fill boundaries is the floor rule",
+      "dispenser_fiat_pricing_activation: Mode A floor rule @regression @tier1 unarmed, an exact three-fill payment is credited two (the replay case)"
+    ],
     "e3ed0f90fd114dfc": [
       "state_hash poll-finalize class (VOTE flag-day, armed) @regression active: an IDENTICAL flip hashes the same (no false halt)",
       "state_hash poll-finalize class (VOTE flag-day, armed) @regression active: the flip is folded in, and a dropped/divergent finalization HALTS (different hash)",
@@ -18567,8 +18594,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1358,
-      "titleCount": 13637,
+      "fileCount": 1362,
+      "titleCount": 13656,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19692,6 +19719,10 @@
         "test/unit/price/db_oracle_stale_round_visibility.test.js": "4549c1e4b7ebd824",
         "test/unit/price/db_oracle_strict_price_reads.test.js": "5f003062269c93ec",
         "test/unit/price/db_price_capability_off_btc.test.js": "c562c3c3096c665e",
+        "test/unit/price/dispenser_fiat_pricing.test/mode_a_floor.test.js": "e3eb231de5a57eeb",
+        "test/unit/price/dispenser_fiat_pricing.test/read_bound.test.js": "408fd804c864f21b",
+        "test/unit/price/dispenser_fiat_pricing.test/tally_scale.test.js": "b784b2ff10c1589f",
+        "test/unit/price/dispenser_fiat_pricing.test/tie_order.test.js": "9e696ebcfe49994b",
         "test/unit/price/get_latest_price_batch_landed.test.js": "05993a17e695dbea",
         "test/unit/price/oracle_snapshot_age_seconds_query.test.js": "17c33ccc3e9829c6",
         "test/unit/price/price_admission_shipped_testnet_boundary.test.js": "70b517652d10a921",
