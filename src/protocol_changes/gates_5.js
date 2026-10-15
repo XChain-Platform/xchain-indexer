@@ -287,3 +287,15 @@ addGate('execute_fee_cap_activation.EXECUTE_FEE_CAP_ACTIVATION', 'height', {
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION at read
 });
+
+// vote_v3_tick_existence_activation
+// Height on the chain's own block_index. From it a VOTE v3 delegation names an issued
+// TICK: the false result getTokenInfo returns for an unknown ticker is refused instead of
+// passing the null-only legacy check and storing a delegation row. Below it the old verdict
+// replays exactly. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue
+// arms it with XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION (shared_rows.js).
+addGate('vote_v3_tick_existence_activation.VOTE_V3_TICK_EXISTENCE_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION at read
+});

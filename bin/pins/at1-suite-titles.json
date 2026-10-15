@@ -4168,6 +4168,14 @@
       "db misc mixin: table-parameterized identifiers @regression refuses a hostile TABLE name before issuing anything",
       "db misc mixin: table-parameterized identifiers @regression refuses a non-string identifier rather than stringifying it"
     ],
+    "431d3e1700c16904": [
+      "VOTE v3 TICK existence activation @regression @tier1 keeps the legacy accepted row while regtest is unarmed",
+      "VOTE v3 TICK existence activation @regression @tier1 publishes the intended network activation table",
+      "VOTE v3 TICK existence activation @regression @tier1 refuses an unknown TICK and stores no row when armed",
+      "VOTE v3 TICK existence activation @regression @tier1 stays unarmed on mainnet even when the regtest variable is armed",
+      "VOTE v3 TICK existence activation @regression @tier1 stays unarmed on testnet even when the regtest variable is armed",
+      "VOTE v3 TICK existence activation @regression @tier1 switches verdicts exactly at the configured height boundary"
+    ],
     "432f2275f96736af": [
       "Withdraw custody guard helper gas accounting @regression @tier1 refuses a BTC owner without GAS before entering either guard",
       "Withdraw custody guard helper gas accounting @regression @tier1 returns the sum of both allowed guards metered fees",
@@ -18739,8 +18747,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1372,
-      "titleCount": 13772,
+      "fileCount": 1373,
+      "titleCount": 13778,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19113,6 +19121,7 @@
         "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js": "2d0e6bd90f6953d4",
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
         "test/unit/actions/vm_runtime_dependencies.test.js": "1430f668b647634f",
+        "test/unit/actions/vote/tick_existence_gate.test.js": "431d3e1700c16904",
         "test/unit/actions/vote_binding_dry_run_refusal.test.js": "03383d47d43bb92e",
         "test/unit/actions/wire_text_before_validation.test.js": "28d9be92b2657def",
         "test/unit/actions/xcall.test.js": "cdaf976c3205a143",

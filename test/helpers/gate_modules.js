@@ -193,6 +193,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'bridge_policy_apply_order_activation',
     'vm_emission_amount_format_activation',
     'execute_fee_cap_activation',
+    'vote_v3_tick_existence_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
