@@ -2522,6 +2522,17 @@
       "JSON-RPC stake family @regression @tier1 getownstake validates the key, refuses without a database and reports a throw",
       "JSON-RPC stake family @regression @tier1 getstakesourcebypubkey delegates to stake_source.js against the same indexer"
     ],
+    "28d9be92b2657def": [
+      "wire text before validation: DIVIDEND recipients built before AMOUNT is judged @regression @tier1 a numeric AMOUNT still pays every holder",
+      "wire text before validation: DIVIDEND recipients built before AMOUNT is judged @regression @tier1 a text AMOUNT \"1x\" gives no recipients instead of throwing",
+      "wire text before validation: DIVIDEND recipients built before AMOUNT is judged @regression @tier1 a text AMOUNT \"abc\" gives no recipients instead of throwing",
+      "wire text before validation: SEND and DESTROY legs of an unknown TICK merged before the TICK is judged @regression @tier1 a known tick still merges at its own decimals",
+      "wire text before validation: SEND and DESTROY legs of an unknown TICK merged before the TICK is judged @regression @tier1 two DESTROY legs of an unknown tick merge at 0 decimals",
+      "wire text before validation: SEND and DESTROY legs of an unknown TICK merged before the TICK is judged @regression @tier1 two SEND legs of an unknown tick to one destination merge at 0 decimals",
+      "wire text before validation: VOTE v0 create refused before its DEPOSIT check @regression @tier1 a text DEPOSIT \"1x\" on a refused create settles inert",
+      "wire text before validation: VOTE v0 create refused before its DEPOSIT check @regression @tier1 a text DEPOSIT \"abc\" on a refused create settles inert",
+      "wire text before validation: util.bcparses @regression @tier1 answers exactly whether the raw helpers throw"
+    ],
     "294f6ca3123cda7e": [
       "Rollback @regression @tier3 bumps the push generation inside the transaction (after beginTransaction, before commit)",
       "Rollback @regression @tier3 calls rollbackTransaction when an error occurs inside the transaction",
@@ -18632,7 +18643,7 @@
   "scripts": {
     "test": {
       "fileCount": 1366,
-      "titleCount": 13676,
+      "titleCount": 13685,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19003,6 +19014,7 @@
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
         "test/unit/actions/vm_runtime_dependencies.test.js": "1430f668b647634f",
         "test/unit/actions/vote_binding_dry_run_refusal.test.js": "03383d47d43bb92e",
+        "test/unit/actions/wire_text_before_validation.test.js": "28d9be92b2657def",
         "test/unit/actions/xcall.test.js": "cdaf976c3205a143",
         "test/unit/actions/xcall.test/process_result.test.js": "23c7c709347d6c2b",
         "test/unit/actions/xcall.test/result_suppresses_expiry.test.js": "ecaebb857eb828c0",

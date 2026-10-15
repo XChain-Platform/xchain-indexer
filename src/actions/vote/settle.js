@@ -48,7 +48,10 @@ async function settleCreatePoll(data, error, deposit){
     // at this v0 action_index; released by VOTE v2 finalize. One combined escrow
     // row (both are GAS from SOURCE); v2 routes the credits per kind. Same generic
     // ledger path as ATTEST's fee escrow, so rollback deletes by action_index.
-    let lockTotal = this.util.bcadd(deposit, data['GAS_ESCROW'], 8);
+    // The sum is taken only for a valid create: a refused one may carry the raw wire DEPOSIT
+    // (validateCreateDeposit skips its numeric check once an earlier rule has refused), and
+    // bcadd throws on non-numeric text, which would halt the block instead of settling it.
+    let lockTotal = error ? 0 : this.util.bcadd(deposit, data['GAS_ESCROW'], 8);
     if(!error && this.util.bcgt(lockTotal, 0)){
         this.util.addAddressTicker(data['SOURCE'], gas);
         let debits  = [[gas, lockTotal, data['SOURCE']]];

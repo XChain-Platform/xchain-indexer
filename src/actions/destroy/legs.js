@@ -95,8 +95,11 @@ function consolidateLegs(destroys, ticks, data){
             key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
                 ? 'i|' + idx
                 : 'k|' + key;
+        // An unknown TICK maps to false in `ticks`; it merges at 0 decimals, as an unlooked-up
+        // one does, and validation then refuses the leg. Passing false through would make
+        // bcadd's precision NaN, which throws and halts the block.
         if(!this.util.isNull(keys[key]))
-            amount = this.util.bcadd(amount, keys[key][1], ticks[tick] && ticks[tick]['DECIMALS']);
+            amount = this.util.bcadd(amount, keys[key][1], ticks[tick] ? ticks[tick]['DECIMALS'] : null);
         keys[key] = [tick, amount, memo];
     }
 

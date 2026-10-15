@@ -138,6 +138,7 @@ class Dividend {
 
         // Loop through list of holders and build out valid recipients list
         dividend['DEBIT'] = 0;
+        let amountParses = this.util.bcparses(data['AMOUNT']);
         if(dividendTokenInfo){
             for(let address in holders){
                 let valid = true;
@@ -150,7 +151,10 @@ class Dividend {
                 // Add address to the recipients list and calculate AMOUNT of the DIVIDEND_TICK the address should receive
                 // Skip holders whose calculated share rounds to 0 (e.g. fractional TICK balances when DIVIDEND_TICK is
                 // non-divisible) - they receive no DIVIDEND_TICK, so they must not count toward the per-recipient fee.
-                if(valid){
+                // The list is built before validateDividend judges AMOUNT, so an AMOUNT mathjs
+                // cannot parse ('abc') gives every holder a zero share instead of throwing out
+                // of the block; validateDividend then refuses it as 'invalid: AMOUNT (format)'.
+                if(valid && amountParses){
                     let share = this.util.bcmulfloor(holders[address], data['AMOUNT'], dividendTokenInfo['DECIMALS']);
                     if(share != 0)
                         recipients[address] = share;
