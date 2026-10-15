@@ -78,6 +78,7 @@ describe('protocol_changes consensus-bound shared rows', function () {
                 list_snapshots: 14,
                 policy_snapshots: 14,
                 price_snapshots: 16,
+                remote_token_snapshots: 14,
             },
         });
     });

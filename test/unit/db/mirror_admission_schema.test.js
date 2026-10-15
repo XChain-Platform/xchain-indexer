@@ -113,7 +113,7 @@ describe('mirror admission schema: the manifest shape (pure)', function(){
     });
 
     it('lists every manifest table for the compat gate, so an unlisted table cannot fail it by omission', function(){
-        assert.deepStrictEqual(M.compatGateTables(), [...M.MIRROR_ADMISSION_TABLES]);
+        assert.deepStrictEqual(M.compatGateTables(), [...M.MIRROR_ADMISSION_TABLES, 'remote_token_snapshots']);
     });
 });
 

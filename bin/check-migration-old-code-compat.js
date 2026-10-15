@@ -278,6 +278,22 @@ const OLD_STATEMENTS = {
                  WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ? AND effective_at <= ?
                  ORDER BY effective_at DESC, action_index DESC LIMIT 1`,
     },
+    // ── remote_token_snapshots (2026-10-14-remote-token-admission.sql) ──────────────
+    // Copied from v0.23.2: the insert is what src/hub/hub_db_sync/row_upserts.js
+    // mirrorUpsertSql composes for this table (plain INSERT IGNORE, by NAME over the signed
+    // columns the local table carries, so an old mirror names no admission column), and the
+    // read is the pin presence read src/db/list_share_mirrors/index.js getPinnedRemoteToken
+    // sends, which has no clock bound and returns the newest finalized pin.
+    remote_token_snapshots: {
+        insert: [
+            'INSERT IGNORE INTO remote_token_snapshots (snapshot_id, snapshot_block, network, coin, tick, decimals, owner, source_action_index, finalizing_view, validator_signatures, status)',
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ].join('\n'),
+        read: `SELECT * FROM remote_token_snapshots
+             WHERE status = 'finalized' AND network = ? AND coin = ? AND tick = ?
+             ORDER BY snapshot_block DESC, source_action_index DESC, snapshot_id DESC
+             LIMIT 1`,
+    },
 };
 
 // The rows the admission-table statements above are driven with: `legacy` is inserted
@@ -324,6 +340,11 @@ const ADMISSION_MIRROR_ROWS = {
         legacy: ['oracle1', 'DOGE', 'DOGE', 'PEPE', 'USD', '0.5', 1000, 1000, 1, 0],
         later:  ['oracle1', 'DOGE', 'DOGE', 'PEPE', 'USD', '0.6', 1001, 1001, 2, 0],
         read:   ['oracle1', 'DOGE', 'PEPE', 'USD', 2000], expect: 1,   // the old read is LIMIT 1
+    },
+    remote_token_snapshots: {
+        legacy: ['7'.repeat(64), 500, 'regtest', 'DOGE', 'PEPE', 8, 'owneraddr', 1, 0, '[]', 'finalized'],
+        later:  ['8'.repeat(64), 501, 'regtest', 'DOGE', 'PEPE', 8, 'owneraddr', 2, 0, '[]', 'finalized'],
+        read:   ['regtest', 'DOGE', 'PEPE'], expect: 1,   // the old read is LIMIT 1
     },
 };
 
@@ -554,14 +575,16 @@ async function main(){
         if(!cols.length) throw new Error('read no columns for ' + affected.join(', ') + '; the tables were not built');
         const before = {};
         for(const c of cols) (before[c.TABLE_NAME] = before[c.TABLE_NAME] || []).push(c.COLUMN_NAME);
-        // Assert positively: each pending ALTER's target column must be ABSENT now.
+        // Assert positively: each pending ALTER's target column must be ABSENT now from the
+        // table that ALTER names. The same column name on another affected table is not the
+        // delta (price_snapshots already carries admit_block_btc when remote_token_snapshots
+        // gains it).
         for(const f of pending){
             const body = fs.readFileSync(path.join(REPO, 'src/sql/migrations', f), 'utf8');
-            for(const m of body.matchAll(/ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+`?([a-z_][a-z0-9_]*)`?/gi)){
-                const col = m[1].toLowerCase();
-                for(const t of Object.keys(before))
-                    if(before[t].map(c => c.toLowerCase()).includes(col))
-                        throw new Error(t + ' already has ' + col + ' before migrating');
+            for(const { table, col } of addedColumns(body)){
+                const have = before[table] || before[Object.keys(before).find(t => t.toLowerCase() === table)] || [];
+                if(have.map(c => c.toLowerCase()).includes(col))
+                    throw new Error(table + ' already has ' + col + ' before migrating');
             }
         }
         return Object.entries(before).map(([t, c]) => t + '(' + c.length + ' cols)').join(' ');

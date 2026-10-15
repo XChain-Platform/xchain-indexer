@@ -262,12 +262,13 @@ addGate('list_meta_activation.LIST_META_ACTIVATION', 'height', {
 // legacy admission margin at the named chain height.
 addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS', 'constant', {
     DOGE: {
-        bridge_transfers:    14,
-        cross_chain_calls:   14,
-        cross_chain_matches: 14,
-        list_snapshots:      14,
-        policy_snapshots:    14,
-        price_snapshots:     16,
+        bridge_transfers:       14,
+        cross_chain_calls:      14,
+        cross_chain_matches:    14,
+        list_snapshots:         14,
+        policy_snapshots:       14,
+        price_snapshots:        16,
+        remote_token_snapshots: 14,
     },
 });
 addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION', 'height', {

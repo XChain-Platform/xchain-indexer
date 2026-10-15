@@ -132,11 +132,12 @@ function migrationStatements(manifest){
 
 /**
  * The tables bin/check-migration-old-code-compat.js must carry an OLD_STATEMENTS entry
- * for once the migration exists: every table the migration writes, because an unlisted
+ * for once the migrations exist: every table the dated admission migration writes, then
+ * remote_token_snapshots, which its own dated migration alters, because an unlisted
  * affected table fails that gate rather than skipping.
  */
 function compatGateTables(manifest){
-    return manifest ? Object.keys(manifest) : [...MIRROR_ADMISSION_TABLES];
+    return manifest ? Object.keys(manifest) : [...MIRROR_ADMISSION_TABLES, 'remote_token_snapshots'];
 }
 
 module.exports = {

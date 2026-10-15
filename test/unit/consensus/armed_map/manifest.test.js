@@ -253,6 +253,7 @@ describe('armed_map/manifest: collectRows', function () {
             list_snapshots: 14,
             policy_snapshots: 14,
             price_snapshots: 16,
+            remote_token_snapshots: 14,
         });
     });
 
