@@ -188,29 +188,13 @@ module.exports = {
         return obligation;
     },
 
-    // Get all expired COINPay obligations (status=pending_coinpay and expiration < block_time)
-    // @param {block_time} integer Current block timestamp
-    async getExpiredCoinpayObligations(block_time){
+    // Get all expired COINPay obligations (status=pending_coinpay and expiration < block_time,
+    // or expiration <= block_time when atExpiration is set)
+    // @param {block_time}   integer Current block timestamp
+    // @param {atExpiration} boolean Also expire an obligation whose expiration equals block_time
+    async getExpiredCoinpayObligations(block_time, atExpiration){
         let expired = [];
-        let query = `SELECT
-                        co.action_index,
-                        co.expiration
-                    FROM
-                        coinpay_obligations co
-                        INNER JOIN coinpay_statuses s1 ON (s1.coinpay_action_index=co.action_index)
-                        INNER JOIN index_statuses   s2 ON (s2.id=s1.status_id)
-                    WHERE
-                        s1.action_index = (
-                            SELECT
-                                MAX(s3.action_index)
-                            FROM
-                                coinpay_statuses s3
-                            WHERE
-                                s3.coinpay_action_index=co.action_index
-                        ) AND
-                        s2.status='pending_coinpay' AND
-                        co.expiration < ?
-                    ORDER BY co.action_index ASC`;
+        let query = expiredCoinpaysSql(atExpiration);
         let args = [block_time];
         let results = await this.doQuery(query, args);
         for(let row of results){
@@ -299,3 +283,47 @@ module.exports = {
     },
 
 };
+
+// The pending obligations due for COINPAY_EXPIRE at a block time: strictly past their
+// expiration, or (atExpiration) at or past it. Two whole statements, one per boundary.
+function expiredCoinpaysSql(atExpiration){
+    if(atExpiration)
+        return `SELECT
+                        co.action_index,
+                        co.expiration
+                    FROM
+                        coinpay_obligations co
+                        INNER JOIN coinpay_statuses s1 ON (s1.coinpay_action_index=co.action_index)
+                        INNER JOIN index_statuses   s2 ON (s2.id=s1.status_id)
+                    WHERE
+                        s1.action_index = (
+                            SELECT
+                                MAX(s3.action_index)
+                            FROM
+                                coinpay_statuses s3
+                            WHERE
+                                s3.coinpay_action_index=co.action_index
+                        ) AND
+                        s2.status='pending_coinpay' AND
+                        co.expiration <= ?
+                    ORDER BY co.action_index ASC`;
+    return `SELECT
+                        co.action_index,
+                        co.expiration
+                    FROM
+                        coinpay_obligations co
+                        INNER JOIN coinpay_statuses s1 ON (s1.coinpay_action_index=co.action_index)
+                        INNER JOIN index_statuses   s2 ON (s2.id=s1.status_id)
+                    WHERE
+                        s1.action_index = (
+                            SELECT
+                                MAX(s3.action_index)
+                            FROM
+                                coinpay_statuses s3
+                            WHERE
+                                s3.coinpay_action_index=co.action_index
+                        ) AND
+                        s2.status='pending_coinpay' AND
+                        co.expiration < ?
+                    ORDER BY co.action_index ASC`;
+}

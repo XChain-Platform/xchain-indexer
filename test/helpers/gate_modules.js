@@ -183,6 +183,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'native_stack_terminal_heights',
     'order_match_price_cross_activation',
     'vote_settlement_exact_activation',
+    'settlement_bounds_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

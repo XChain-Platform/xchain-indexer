@@ -146,3 +146,17 @@ addGate('vote_settlement_exact_activation.VOTE_SETTLEMENT_EXACT_ACTIVATION', 'he
     testnet: UNARMED,
     regtest: 0,
 });
+
+// settlement_bounds_activation
+// Height on the chain's own block_index. From it a CROSS_SETTLE leg settles only a match whose
+// tick and ownership flag equal the local offer's own give side, and a swap leg releases at most
+// the swap's own escrow, the bound the order leg already applies to its remaining give; a match
+// that disagrees records a no-op settlement and moves nothing. From the same height a COINPAY
+// obligation expires in the block whose time reaches its expiration, the instant from which a
+// COINPAY paying it is refused. Below it both replay as before. Unarmed on mainnet and testnet;
+// regtest from genesis.
+addGate('settlement_bounds_activation.SETTLEMENT_BOUNDS_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});

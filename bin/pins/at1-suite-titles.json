@@ -1572,6 +1572,12 @@
       "market list SOURCE activation @regression @tier2 SWAP refuses a blocked SOURCE with a clean GET_ADDRESS at activation",
       "market list SOURCE activation @regression @tier2 is armed from genesis on regtest and unarmed on public networks"
     ],
+    "1b6a8fbf451dc9e5": [
+      "COINPAY_EXPIRE boundary: getExpiredCoinpayObligations returns a pending obligation at its expiration only when asked to include it",
+      "COINPAY_EXPIRE boundary: getExpiredCoinpayObligations returns it past its expiration either way, and never a fulfilled one",
+      "COINPAY_EXPIRE boundary: the end-of-block pass armed (regtest) expires the obligation in the block whose time equals its expiration",
+      "COINPAY_EXPIRE boundary: the end-of-block pass unarmed (mainnet, testnet) expires it only once block_time passes its expiration"
+    ],
     "1b71f6771e1b4730": [
       "HubDbSync attestation_responses mirror registration @regression @tier1 IGNORES the override off regtest, with a warning, and keeps the frozen value",
       "HubDbSync attestation_responses mirror registration @regression @tier1 THROWS on a malformed regtest override rather than stamping NaN",
@@ -13735,6 +13741,21 @@
       "Database getTickerId lookup order @unit @regression orders a case-insensitive name lookup by ascending id and returns the first row",
       "Database getTickerId lookup order @unit @regression returns null when a name lookup misses"
     ],
+    "c092793d5cdd7b89": [
+      "Cross_Settle settlement bounds: armed b leg and ownership @regression @tier1 clamps the b leg to its swap escrow",
+      "Cross_Settle settlement bounds: armed b leg and ownership @regression @tier1 compares b_tick with the swap give tick when this chain is the b side",
+      "Cross_Settle settlement bounds: armed b leg and ownership @regression @tier1 reads the gate on this chain's network, coin and block",
+      "Cross_Settle settlement bounds: armed b leg and ownership @regression @tier1 transfers ownership for a matching ownership swap without a balance clamp",
+      "Cross_Settle settlement bounds: armed order leg @regression @tier1 records a no-op for an order match naming another tick",
+      "Cross_Settle settlement bounds: armed order leg @regression @tier1 still fills an order match naming the order's own tick",
+      "Cross_Settle settlement bounds: armed swap leg @regression @tier1 clamps a release above the swap escrow to the escrow and completes the swap",
+      "Cross_Settle settlement bounds: armed swap leg @regression @tier1 records a no-op for a match claiming ownership of a balance swap",
+      "Cross_Settle settlement bounds: armed swap leg @regression @tier1 records a no-op for a match naming another tick and leaves the swap open",
+      "Cross_Settle settlement bounds: armed swap leg @regression @tier1 releases an honest match in full",
+      "Cross_Settle settlement bounds: unarmed @regression @tier1 is the committed mainnet and testnet reading at every height",
+      "Cross_Settle settlement bounds: unarmed @regression @tier1 releases the match amount as signed when it exceeds the swap escrow",
+      "Cross_Settle settlement bounds: unarmed @regression @tier1 releases the match tick as signed when it differs from the swap give tick"
+    ],
     "c1156153bb6a807f": [
       "Execute (EXECUTE) @regression @tier2 cross-contract calls a callee run uses VM_GAS_LIMIT as its VM ceiling and reports its unused subtree gas",
       "Execute (EXECUTE) @regression @tier2 cross-contract calls a failed callee rolls back the tree and forfeits all refunds",
@@ -17903,8 +17924,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1339,
-      "titleCount": 13447,
+      "fileCount": 1341,
+      "titleCount": 13464,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18018,6 +18039,7 @@
         "test/unit/actions/bridge/cross_settle.test/order_leg.test.js": "de7ff199852d030d",
         "test/unit/actions/bridge/cross_settle.test/royalty.test.js": "47e2343a4128fb7d",
         "test/unit/actions/bridge/cross_settle.test/settlement.test.js": "99544f0869d50cad",
+        "test/unit/actions/bridge/cross_settle.test/settlement_bounds.test.js": "c092793d5cdd7b89",
         "test/unit/actions/bridge/escrow_negation_parity.test.js": "dac737186345882a",
         "test/unit/actions/bridge/xbridge.test.js": "76ca2669ee2fe4c3",
         "test/unit/actions/bridge/xbridge.test/token_bridged_rollback_parity.test.js": "2b9b1a4217e9148b",
@@ -18728,6 +18750,7 @@
         "test/unit/db/markets/batched_coinpay_multi_payee.test.js": "3910353b7edc4847",
         "test/unit/db/markets/bet_pass_bounding.test.js": "7c6586e0777e9c99",
         "test/unit/db/markets/coinpay_clears_order_match.test.js": "a4c5e76f1b00c73b",
+        "test/unit/db/markets/coinpay_expiry_boundary.test.js": "1b6a8fbf451dc9e5",
         "test/unit/db/markets/cross_chain_order_fill_fixed_notation.test.js": "e6f58e549f5b5546",
         "test/unit/db/markets/db_dispense_cancelling_match.test.js": "6e005b7108f4729e",
         "test/unit/db/markets/db_dispense_native_tick_match.test.js": "d0606b4e6fd77999",

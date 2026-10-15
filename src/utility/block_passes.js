@@ -27,6 +27,11 @@
 // requires nothing, so the pass resolves the same number without a require inside its body.
 const { CROSS_SETTLE_MAX_PER_BLOCK } = require('../protocol/constants.js');
 
+// From this row a COINPAY obligation expires in the block whose time reaches its expiration,
+// the instant coinpay/index.js stops accepting a COINPAY for it. Read on the block's own index.
+const gateRegistry = require('../consensus/gate_registry');
+const SETTLEMENT_BOUNDS_KEY = 'settlement_bounds_activation.SETTLEMENT_BOUNDS_ACTIVATION';
+
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
 module.exports = {
@@ -91,8 +96,10 @@ module.exports = {
             data['ACTION_INDEX'] = info.action_index;
             await actions.processAction(action, null, data, null);
         }
-        // Process expired COINPay obligations
-        let expiredObligations = await db.getExpiredCoinpayObligations(block_time);
+        // Process expired COINPay obligations: past their expiration, or from
+        // settlement_bounds_activation at it, when a COINPAY for them is already refused
+        let atExpiration = gateRegistry.activeAt(SETTLEMENT_BOUNDS_KEY, this.config['NETWORK'], this.config['COIN'], Number(block_index), null);
+        let expiredObligations = await db.getExpiredCoinpayObligations(block_time, atExpiration);
         for(let info of expiredObligations){
             let action = 'COINPAY_EXPIRE';
             let data = {};
