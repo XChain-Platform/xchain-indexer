@@ -258,3 +258,32 @@ addGate('bridge_policy_apply_order_activation.BRIDGE_POLICY_APPLY_ORDER_ACTIVATI
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION at read
 });
+
+// vm_emission_amount_format_activation
+// Height on the chain's own block_index. From it an amount a contract emits must be a plain
+// unsigned decimal numeral with at most AMOUNT_MAX_INTEGER_DIGITS integer digits before it is
+// rounded to its tick's decimals, the shape the user path's amount rule accepts; anything else refuses the emission, which fails the EXECUTE and rolls it back
+// whole. Below it the rounding coerces the text as before: NaN and Infinity become 0, and hex,
+// exponent and bare-point forms ('0x10', '1e-9', '1.', '.5') are read as numbers. Unarmed on
+// mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with
+// XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION (shared_rows.js).
+addGate('vm_emission_amount_format_activation.VM_EMISSION_AMOUNT_FORMAT_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION at read
+});
+
+// execute_fee_cap_activation
+// Height on the chain's own block_index. From it an EXECUTE's XCHAIN-balance fee debit is
+// capped at the GAS the caller holds when the run settles, floored at zero, so the debit never
+// leaves the caller's balance negative; the run's outcome and its metered gas stand. Below it
+// the full metered fee is debited, as before: the state commitment reads end-of-block nets, so
+// a block whose later action re-credits the caller commits with the uncapped debit, and below
+// STATE_COMMITMENT_ACTIVATION a negative balance commits, so capping without a height would
+// change committed balances. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a
+// venue arms it with XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION (shared_rows.js).
+addGate('execute_fee_cap_activation.EXECUTE_FEE_CAP_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION at read
+});

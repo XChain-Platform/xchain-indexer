@@ -24,6 +24,9 @@
 'use strict';
 
 const { getLogger } = require('../../observability/index.js');
+const gateRegistry = require('../../consensus/gate_registry');
+
+const EXECUTE_FEE_CAP_KEY = 'execute_fee_cap_activation.EXECUTE_FEE_CAP_ACTIVATION';
 
 // Consensus clamps on the gas this run reports. Both are no-ops when the VM
 // honours the ceiling it was given; they exist so a VM regression cannot make
@@ -76,6 +79,28 @@ function settleGasFee(ctx){
         data['VM_GAS_UNUSED_SUBTREE'] = Math.max(0, ctx.execCeiling - ctx.gasBilled);
 }
 
+// The XCHAIN-balance fee debit is capped at the GAS the caller holds when it settles.
+// Admission checks only VM_EXECUTE_BASE, and the run is metered against the protocol
+// ceiling, so the metered fee can exceed the caller's balance; an emitted ATTEST or XCALL
+// can also spend the caller's GAS during the run. An uncapped debit drives the balance
+// negative, which the state commitment's leaf encoder refuses, so the block never commits.
+// Same rule as the controller-guard bill (util.clampGuardFeeToBalance): the run's outcome
+// stands, the fee is capped at the held balance and floored at zero, and gasBilled keeps
+// the metered figure for the execution record. The balance is the caller's full ledger
+// net, the read updateBalances projects, so this execution's emissions are counted.
+// Gated on execute_fee_cap_activation (the settling block's own height): below it the full
+// metered fee is debited and no balance is read, byte-identical to the rule before the gate,
+// because a later action in the same block can re-credit the caller and the state commitment
+// reads end-of-block nets, so such blocks commit with the uncapped debit.
+async function capFeeToHeldGas(ctx){
+    if(ctx.error || ctx.skipFee || !ctx.tokenInfo || ctx.feePaymentMode !== 2 || !this.util.bcgt(ctx.fee, 0))
+        return;
+    if(!gateRegistry.activeAt(EXECUTE_FEE_CAP_KEY, this.config['NETWORK'], this.config['COIN'], Number(ctx.data['BLOCK_INDEX']), null))
+        return;
+    let held = await this.indexerDb.getAddressBalances(ctx.data['SOURCE']);
+    ctx.fee = this.util.clampGuardFeeToBalance(held, ctx.tokenInfo['TICK_ID'], ctx.fee);
+}
+
 async function recordExecution(ctx){
     let data = ctx.data;
 
@@ -124,9 +149,9 @@ async function applyLedgerChanges(ctx){
     // Debit gas fee from SOURCE. Mirror the in-memory balance debit's condition
     // EXACTLY (!error && !skipFee && feePaymentMode === 2). A failed VM run (revert /
     // out_of_gas / timeout) leaves `error` null (it sets vmError + a dedicated vmStatus),
-    // so the "caller pays for a failed attempt" case still debits. The source is known to
-    // hold GAS credits here (it passed the pre-VM balance check), so the debit stays
-    // ledger/balance-consistent even if it drives the balance negative. But an EXECUTE
+    // so the "caller pays for a failed attempt" case still debits. From execute_fee_cap_activation
+    // capFeeToHeldGas has already capped the fee at the GAS the source holds, so the debit never
+    // drives the balance negative; below it the full metered fee is debited. But an EXECUTE
     // rejected before the VM ran
     // (insufficient GAS funds / inactive contract / sleeping source) sets `error`
     // and must NOT record a ledger debit: burning gas the source never had drops
@@ -165,6 +190,7 @@ async function settleExecution(ctx){
 
     clampVmGas(ctx);
     settleGasFee.call(this, ctx);
+    await capFeeToHeldGas.call(this, ctx);
     await recordExecution.call(this, ctx);
     await applyLedgerChanges.call(this, ctx);
 }

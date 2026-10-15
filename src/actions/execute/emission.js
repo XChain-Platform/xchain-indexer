@@ -29,6 +29,22 @@
 // emission propagation) plus deploy.js, so they cannot drift into deriving different
 // ids for the same emission.
 const { resolveRootDiscriminator } = require('../../consensus/batch_root_discriminator.js');
+const gateRegistry = require('../../consensus/gate_registry');
+const { AMOUNT_MAX_INTEGER_DIGITS } = require('../../utility/validation/amount_representability_gate.js');
+
+const VM_EMISSION_AMOUNT_FORMAT_KEY = 'vm_emission_amount_format_activation.VM_EMISSION_AMOUNT_FORMAT_ACTIVATION';
+
+// The shape the user path's representability rule gives an amount, with no fractional cap: a
+// plain unsigned decimal numeral whose significant integer digits fit AMOUNT_MAX_INTEGER_DIGITS.
+// No exponent, sign, radix prefix, whitespace or empty half. roundEmissionAmounts checks an
+// emitted amount with it before rounding, so an over-precise computed amount still rounds onto
+// its tick's grid while a non-numeral is refused.
+const PLAIN_DECIMAL = /^[0-9]+(\.[0-9]+)?$/;
+function isPlainAmountText(text){
+    if(typeof text != 'string' || !PLAIN_DECIMAL.test(text))
+        return false;
+    return text.split('.')[0].replace(/^0+/, '').length <= AMOUNT_MAX_INTEGER_DIGITS;
+}
 
 // Amount-bearing fields of every emittable action, mapping each amount param to the param
 // that names the tick it is denominated in. processEmission normalizes each to
@@ -174,7 +190,7 @@ async function prepareEmissionParams(action, params, executionData){
     // emitted amount can carry more fractional digits than the tick; left unnormalized it
     // would be rejected by isValidAmountFormat (reverting e.g. every AMM swap). The
     // rounding is half-up (see roundEmissionAmounts), not truncation.
-    await this.roundEmissionAmounts(action, params);
+    await this.roundEmissionAmounts(action, params, executionData['BLOCK_INDEX']);
 
     // Build positional params array for the handler
     let actionParams = this.buildActionParams(action, params);
@@ -311,9 +327,20 @@ async function processEmission(emission, executionData, position, limits){
 // validated on the far chain. ISSUE uses its inline declared decimals (the tick is not in
 // the issues table yet). Driven by EMISSION_AMOUNT_FIELDS; keep that map in sync with
 // buildActionParams (enforced by the emission-map coverage test).
-async function roundEmissionAmounts(action, params){
+//
+// From vm_emission_amount_format_activation (keyed on `blockIndex`, the emitting block) an
+// amount about to be rounded must first be a plain decimal numeral, the shape the user path's
+// amount rule accepts (isPlainAmountText, on the safeToString rendering). bcadd would otherwise
+// coerce it: 'NaN' and 'Infinity' to 0, '0x10' to
+// 16, '1e-9' to 0, '1.' and '.5' to numbers. A refused amount throws, which rolls back the
+// emitting EXECUTE whole with an 'emission failed' status. Only rounded fields are checked: a
+// field skipped below reaches its handler raw, where the user rule applies to it unchanged.
+// Below the activation, or with no blockIndex, the rounding runs as before.
+async function roundEmissionAmounts(action, params, blockIndex){
     let fields = EMISSION_AMOUNT_FIELDS[action];
     if(!fields || !params) return params;
+    let formatRule = blockIndex !== undefined && blockIndex !== null &&
+        gateRegistry.activeAt(VM_EMISSION_AMOUNT_FORMAT_KEY, this.config['NETWORK'], this.config['COIN'], Number(blockIndex), null);
     for(let f of fields){
         let value = params[f.amount];
         if(this.util.isNull(value) || String(value) === '') continue;
@@ -330,6 +357,8 @@ async function roundEmissionAmounts(action, params){
             if(tickId === null) continue;
             decimals = await this.indexerDb.getTokenDecimalPrecision(tickId);
         }
+        if(formatRule && !isPlainAmountText(this.util.safeToString(value)))
+            throw new Error(action + ': invalid: ' + f.amount + ' (format)');
         // bcstr, not String(): a rounded dust amount below 1e-7 would render
         // exponentially ("3e-8") and fail the handler's format validation.
         params[f.amount] = this.util.bcstr(this.util.bcadd(value, 0, decimals));
@@ -337,4 +366,4 @@ async function roundEmissionAmounts(action, params){
     return params;
 }
 
-module.exports = { EMISSION_AMOUNT_FIELDS, processEmission, roundEmissionAmounts };
+module.exports = { EMISSION_AMOUNT_FIELDS, isPlainAmountText, processEmission, roundEmissionAmounts };

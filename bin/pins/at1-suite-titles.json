@@ -8116,6 +8116,16 @@
       "BET format 4 edit application @regression @tier1 replays the same action as an idempotent row update",
       "BET format 4 edit application @regression @tier1 retags a valid format 4 action before writing its append-only row"
     ],
+    "7ade2b0bf381a3b8": [
+      "EXECUTE fee cap gate @regression @tier1 a same-block re-credit ends at 10.02 unarmed (as develop) and 20 armed",
+      "EXECUTE fee cap gate @regression @tier1 armed: a run metered past the caller's balance debits only the balance",
+      "EXECUTE fee cap gate @regression @tier1 unarmed: the full metered fee is debited and no balance is read",
+      "EXECUTE fee cap gate: armed edges @regression @tier1 armed at a height: blocks below it debit the full fee",
+      "EXECUTE fee cap gate: armed edges @regression @tier1 armed: a covered fee is billed in full",
+      "EXECUTE fee cap gate: armed edges @regression @tier1 armed: no GAS left, or no gas row at all, is billed zero",
+      "EXECUTE fee cap gate: armed edges @regression @tier1 mainnet and testnet are unarmed",
+      "EXECUTE fee cap gate: armed edges @regression @tier1 native-coin payment, a system-injected run and a refused EXECUTE never read or debit GAS"
+    ],
     "7adea53fa28c1ede": [
       "LIST metadata storage clears a format 5 field with a dash",
       "LIST metadata storage does not store an invalid format 4 meta",
@@ -8155,6 +8165,16 @@
     ],
     "7b64478cdfbc1bf7": [
       "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) the contract slash-restore SQL is identical across xchain-indexer and xchain-sync (cross-repo twin)"
+    ],
+    "7bb4178b9b276761": [
+      "VM emission amount format gate @regression @tier1 a call without a block index keeps the legacy rounding",
+      "VM emission amount format gate @regression @tier1 armed at a height: blocks below it keep the legacy rounding",
+      "VM emission amount format gate @regression @tier1 armed: a field the rounding skips (tick unknown locally) reaches its handler untouched",
+      "VM emission amount format gate @regression @tier1 armed: every loose amount refuses the emission",
+      "VM emission amount format gate @regression @tier1 armed: plain amounts still round half-up",
+      "VM emission amount format gate @regression @tier1 isPlainAmountText accepts plain numerals of any fractional length and refuses the rest",
+      "VM emission amount format gate @regression @tier1 mainnet and testnet are unarmed",
+      "VM emission amount format gate @regression @tier1 unarmed on regtest: loose amounts round exactly as before"
     ],
     "7bed9231bd01caf8": [
       "protocol_changes unarmed rows use the named sentinel @regression @tier1 detects a stray all-nines value without treating prose as a value",
@@ -18719,8 +18739,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1370,
-      "titleCount": 13756,
+      "fileCount": 1372,
+      "titleCount": 13772,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18893,6 +18913,8 @@
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
+        "test/unit/actions/execute/emission_amount_format_gate.test.js": "7bb4178b9b276761",
+        "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7ade2b0bf381a3b8",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
