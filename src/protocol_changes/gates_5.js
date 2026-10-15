@@ -207,3 +207,19 @@ addGate('anchor_reward_copy_selection_activation.ANCHOR_REWARD_COPY_SELECTION_AC
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION at read
 });
+
+// token_supply_representation_activation
+// Height on the chain's own block_index. From it an ISSUE whose MINT_SUPPLY (first issue or
+// reissue) or a MINT whose AMOUNT would carry the token's total supply past MAX_TOKEN_SUPPLY is
+// refused whether or not the token declares MAX_SUPPLY, so no supply or balance outgrows the
+// 42 integer digits of the DECIMAL(60,18) ledger sums the per-block sanity check compares. From
+// the same height the per-block supply refresh writes tokens.supply in fixed notation, the form
+// the rollback rebuild writes, instead of the exponent form a bignumber stringifies to from 1e21
+// up and below 1e-7. Below it both replay as before. Unarmed on mainnet and testnet. The regtest
+// entry is UNPINNED: a venue arms it with XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION
+// (shared_rows.js).
+addGate('token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION at read
+});

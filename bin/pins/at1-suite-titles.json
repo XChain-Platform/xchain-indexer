@@ -5920,6 +5920,20 @@
       "getActiveStakeByPubkey undeactivatedOnly excludes deactivating rows @regression @tier1 default (no opts): keeps the activation-window clause for stake/delegate callers",
       "getActiveStakeByPubkey undeactivatedOnly excludes deactivating rows @regression @tier1 undeactivatedOnly: filters deactivation_block IS NULL and drops the future-block window clause"
     ],
+    "5c880597d1863312": [
+      "token_supply_representation_activation: the MAX_TOKEN_SUPPLY bound @regression @tier1 armed: MINT accepts a MINT on an uncapped token that lands exactly on the bound",
+      "token_supply_representation_activation: the MAX_TOKEN_SUPPLY bound @regression @tier1 armed: MINT keeps the MAX_SUPPLY refusal on a capped token at the bound",
+      "token_supply_representation_activation: the MAX_TOKEN_SUPPLY bound @regression @tier1 armed: MINT refuses a MINT on an uncapped token that would carry supply past the bound",
+      "token_supply_representation_activation: the MAX_TOKEN_SUPPLY bound @regression @tier1 armed: first ISSUE accepts a first ISSUE of an uncapped token minting exactly the bound, and one unit below it",
+      "token_supply_representation_activation: the MAX_TOKEN_SUPPLY bound @regression @tier1 armed: first ISSUE refuses a first ISSUE of an uncapped token whose MINT_SUPPLY passes the bound",
+      "token_supply_representation_activation: the MAX_TOKEN_SUPPLY bound @regression @tier1 armed: first ISSUE refuses one smallest unit past the bound at 18 decimals",
+      "token_supply_representation_activation: the MAX_TOKEN_SUPPLY bound @regression @tier1 armed: reissue accepts a format-2 reissue on an uncapped token that lands exactly on the bound",
+      "token_supply_representation_activation: the MAX_TOKEN_SUPPLY bound @regression @tier1 armed: reissue applies the bound to a capped token too, even with the cumulative MAX_SUPPLY cap off",
+      "token_supply_representation_activation: the MAX_TOKEN_SUPPLY bound @regression @tier1 armed: reissue keeps the cumulative MAX_SUPPLY refusal first on a capped token",
+      "token_supply_representation_activation: the MAX_TOKEN_SUPPLY bound @regression @tier1 armed: reissue refuses a format-2 reissue on an uncapped token that would carry supply past the bound",
+      "token_supply_representation_activation: unarmed @regression @tier1 unarmed is UNARMED on mainnet and testnet and UNPINNED on regtest, armed only by the variable",
+      "token_supply_representation_activation: unarmed @regression @tier1 unarmed keeps the legacy verdicts for over-bound ISSUE, reissue and MINT"
+    ],
     "5c88721f4a21ab7f": [
       "HubDbSync pre-rail barrier (D5) @regression @tier1 a block where the rail is behind and never catches up still times out, exactly as it does with no floor armed",
       "HubDbSync pre-rail barrier (D5) @regression @tier1 a block where the rail is behind waits, and clears when the mirror catches up, not on a timeout",
@@ -14985,6 +14999,13 @@
       "assertCursorWitness throws on a time mismatch or a hash mismatch",
       "assertCursorWitness throws when no live REORG row exists and queries with the cursor id"
     ],
+    "d1930372e9ec3c02": [
+      "token_supply_representation_activation: tokens.supply bytes @regression @tier1 armed: writes a sub-1e-7 supply in fixed notation",
+      "token_supply_representation_activation: tokens.supply bytes @regression @tier1 armed: writes a supply of 1e21 and above in fixed notation, and hashes those bytes",
+      "token_supply_representation_activation: tokens.supply bytes @regression @tier1 unarmed: keeps the exponent form byte-identical on regtest with the variable unset",
+      "token_supply_representation_activation: tokens.supply bytes @regression @tier1 unarmed: keeps the exponent form on mainnet and testnet even with the variable set",
+      "token_supply_representation_activation: tokens.supply bytes @regression @tier1 writes a normal-range supply the same either way"
+    ],
     "d1a4d043f6a13f27": [
       "15 \u2013 SDK<->indexer fee-fragment parity @regression @tier1 isValidAmountFormat() fractional-cap parity decimals=0 amount=1.2.3 -> false (both)",
       "15 \u2013 SDK<->indexer fee-fragment parity @regression @tier1 isValidAmountFormat() fractional-cap parity decimals=0 amount=1.5 -> false (both)",
@@ -18527,8 +18548,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1355,
-      "titleCount": 13603,
+      "fileCount": 1357,
+      "titleCount": 13620,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18893,6 +18914,7 @@
         "test/unit/actions/token/sweep.test/zero_amount_legs.test.js": "876d844bac9ef4be",
         "test/unit/actions/token/sweep/sweep_callback_unified_fee.test.js": "9769262aca6e43a0",
         "test/unit/actions/token/sweep/sweep_ticker_memoization.test.js": "856558ff8c380713",
+        "test/unit/actions/token/token_supply_bound.test.js": "5c880597d1863312",
         "test/unit/actions/token/uncapped_max_supply.test.js": "40d8afc9cd271bab",
         "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js": "2d0e6bd90f6953d4",
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
@@ -19413,6 +19435,7 @@
         "test/unit/db/subtree/orphan_stats_reads.test.js": "84a5bb8715a5c817",
         "test/unit/db/tickers/ticker_lookup_order.test.js": "c0917406521a91c5",
         "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
+        "test/unit/db/tokens/supply_representation.test.js": "d1930372e9ec3c02",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",

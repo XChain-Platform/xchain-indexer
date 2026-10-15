@@ -22,8 +22,11 @@
  ********************************************************************/
 
 const ledgerPrecision = require('../../consensus/ledger_amount_precision_gate');
+const gateRegistry    = require('../../consensus/gate_registry');
 
 const { getLogger } = require('../../observability/index.js');
+
+const TOKEN_SUPPLY_REPRESENTATION_KEY = 'token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTIVATION';
 
 module.exports = {
 
@@ -41,6 +44,13 @@ module.exports = {
         let creditsById = await supplyCheck.sumByTick(this, allIds, 'credits', true);
         let debitsById  = await supplyCheck.sumByTick(this, allIds, 'debits',  true);
         let escrowsById = await supplyCheck.sumByTick(this, allIds, 'escrows', true);
+        // From token_supply_representation_activation the supply is written in fixed notation,
+        // the form the rollback rebuild (createToken) writes. Below it doQuery stringifies the
+        // bignumber, which gives exponent form from 1e21 up and below 1e-7, and the state_hash
+        // token_supply class hashes those stored bytes, so a node that rolled the block back
+        // and replayed it holds different bytes until the tick is touched again.
+        let config        = this.config || {};
+        let fixedNotation = gateRegistry.activeAt(TOKEN_SUPPLY_REPRESENTATION_KEY, config['NETWORK'], config['COIN'], Number(block_index), null);
         for(let tick of tickList){
             let tick_id = tickers[tick];
             let credits = (creditsById[tick_id] != null) ? creditsById[tick_id] : 0;
@@ -51,6 +61,8 @@ module.exports = {
                 escrows,
                 decimals[tick]
             );
+            if(fixedNotation)
+                supply = this.util.bcstr(supply);
             await this.doQuery('UPDATE tokens SET supply=? WHERE tick_id=?', [supply, tick_id]);
         }
     },

@@ -25,6 +25,10 @@
 
 'use strict';
 
+const gateRegistry = require('../../consensus/gate_registry');
+
+const TOKEN_SUPPLY_REPRESENTATION_KEY = 'token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTIVATION';
+
 // Wire parse: the FORMAT gate, the positional PARAMS, number formats and the ^<id>
 // DESTINATION. Returns the (possibly replaced) data object with the verdict so far.
 async function parseWire(params, data, error){
@@ -153,8 +157,9 @@ async function validateTokenRules(ctx){
     ctx.error = error;
 }
 
-// The supply ceilings: the optional per-transaction MAX_MINT cap and MAX_SUPPLY, with the
-// GAS-tick policy note explaining why neither is special-cased for the gas token.
+// The supply ceilings: the optional per-transaction MAX_MINT cap, MAX_SUPPLY and the
+// MAX_TOKEN_SUPPLY bound on total supply, with the GAS-tick policy note explaining why the
+// MAX_MINT and MAX_SUPPLY caps are not special-cased for the gas token.
 async function validateSupplyCaps(ctx){
     let { data } = ctx;
     let error = ctx.error;
@@ -193,6 +198,15 @@ async function validateSupplyCaps(ctx){
         await this.actions.protocolChanges.isEnabled('UNCAPPED_MAX_SUPPLY_ZERO', data['BLOCK_INDEX']);
     if(!error && !uncappedSupply && this.util.bcgt(this.util.bcadd(data['SUPPLY'],data['AMOUNT'],data['DECIMALS']), this.util.bcadd(data['MAX_SUPPLY'],0,data['DECIMALS'])))
         error = 'invalid: mint exceeds MAX_SUPPLY';
+
+    // From token_supply_representation_activation the total supply is bounded by
+    // MAX_TOKEN_SUPPLY whether or not the token declares MAX_SUPPLY: an uncapped token skips
+    // the check above, and a supply past 42 integer digits outgrows the DECIMAL(60,18) ledger
+    // sums the per-block sanity check compares, so the block could never commit. A balance
+    // never exceeds its token's supply, so this bound keeps every balance in range too.
+    if(!error && gateRegistry.activeAt(TOKEN_SUPPLY_REPRESENTATION_KEY, this.config['NETWORK'], this.config['COIN'], Number(data['BLOCK_INDEX']), null)
+       && this.util.bcgt(this.util.bcadd(data['SUPPLY'],data['AMOUNT'],data['DECIMALS']), this.util.bcadd(this.config.MAX_TOKEN_SUPPLY,0,data['DECIMALS'])))
+        error = 'invalid: mint exceeds MAX_TOKEN_SUPPLY';
 
     ctx.error = error;
 }

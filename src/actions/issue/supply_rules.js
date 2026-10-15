@@ -13,8 +13,8 @@
  **********************************************************************
  *
  * ISSUE supply rules: MAX_SUPPLY and DECIMALS bounds, the LOCK_MAX_SUPPLY cap guard,
- * the TRANSFER and TRANSFER_SUPPLY addresses, and the MINT_SUPPLY and MINT_ADDRESS_MAX
- * caps, including the uncapped-token exemption.
+ * the TRANSFER and TRANSFER_SUPPLY addresses, the MINT_SUPPLY and MINT_ADDRESS_MAX caps,
+ * including the uncapped-token exemption, and the MAX_TOKEN_SUPPLY bound on total supply.
  *
  * Each function runs with `this` bound to the Issue handler (./index.js calls each as
  * fn.call(this, ctx)) and reads and writes the shared context.
@@ -22,6 +22,10 @@
  ********************************************************************/
 
 'use strict';
+
+const gateRegistry = require('../../consensus/gate_registry');
+
+const TOKEN_SUPPLY_REPRESENTATION_KEY = 'token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTIVATION';
 
 // MAX_SUPPLY bounds and floor, the LOCK_MAX_SUPPLY cap guard, and the DECIMALS bounds
 // and lock-after-supply rule.
@@ -97,7 +101,7 @@ function validateTransferFields(ctx){
 }
 
 // MINT_SUPPLY and MINT_ADDRESS_MAX against MAX_SUPPLY (skipped on an uncapped token),
-// the cumulative MINT_SUPPLY cap, and MINT_ADDRESS_MAX against MAX_MINT.
+// the cumulative MINT_SUPPLY cap, MINT_ADDRESS_MAX against MAX_MINT, and the MAX_TOKEN_SUPPLY bound.
 async function validateMintSupplyCaps(ctx){
     let { data } = ctx;
     let error = ctx.error;
@@ -149,7 +153,30 @@ async function validateMintSupplyCaps(ctx){
     if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && this.util.bcgt(data['MINT_ADDRESS_MAX'], 0) && this.util.bclt(data['MINT_ADDRESS_MAX'], data['MAX_MINT']))
         error = 'invalid: MINT_ADDRESS_MAX < MAX_MINT';
 
+    // MAX_TOKEN_SUPPLY bound on the token's total supply, capped or not (see
+    // validateMaxTokenSupply).
+    error = await validateMaxTokenSupply.call(this, data, error);
+
     ctx.error = error;
+}
+
+// From token_supply_representation_activation, refuse a MINT_SUPPLY (first issue or reissue)
+// that would carry the token's total supply past MAX_TOKEN_SUPPLY. MAX_SUPPLY is itself bounded
+// by MAX_TOKEN_SUPPLY, but an uncapped token skips every check against it, so without this bound
+// two valid MINT_SUPPLY credits of 42 nines give a 43-digit supply and balance, past the 42
+// integer digits the DECIMAL(60,18) ledger sums hold; the per-block sanity check then reads a
+// clamped sum and the block never commits. A balance never exceeds its token's supply, so this
+// one bound keeps every balance in range too. Read only on a still-valid action that mints.
+async function validateMaxTokenSupply(data, error){
+    if(error || this.util.isNull(data['MINT_SUPPLY']) || !this.util.bcgt(data['MINT_SUPPLY'], 0))
+        return error;
+    if(!gateRegistry.activeAt(TOKEN_SUPPLY_REPRESENTATION_KEY, this.config['NETWORK'], this.config['COIN'], Number(data['BLOCK_INDEX']), null))
+        return error;
+    let currentSupply = await this.indexerDb.getTokenSupply(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+    let projected     = this.util.bcadd(currentSupply, data['MINT_SUPPLY'], data['DECIMALS']);
+    if(this.util.bcgt(projected, this.util.bcadd(this.config.MAX_TOKEN_SUPPLY, 0, data['DECIMALS'])))
+        return 'invalid: MINT_SUPPLY exceeds MAX_TOKEN_SUPPLY';
+    return error;
 }
 
 module.exports = { validateSupplyFields, validateTransferFields, validateMintSupplyCaps };
