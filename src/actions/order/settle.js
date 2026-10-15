@@ -40,6 +40,13 @@ async function recordOrder(handler, st){
     if(format==2)
         getLogger().info("\t ORDER_EDIT: " + handler.config['COIN'] + ':' + data['ORDER_ACTION_INDEX'] + ' : ' + data['STATUS']);
 
+    // A cancel or edit whose ORDER_ACTION_INDEX stores as NULL was refused in
+    // validateGeneral; its row keeps that refusal under the placeholder 0, which names no
+    // action, since order_action_index is NOT NULL and a NULL bind halts the block.
+    if((format==1 || format==2) &&
+       handler.util.storesAsNull(order['ORDER_ACTION_INDEX'], handler.config['INTEGER_FIELDS']['ORDER_ACTION_INDEX']))
+        order['ORDER_ACTION_INDEX'] = 0;
+
     // Create record in orders table
     if(format==0)
         await handler.indexerDb.createOrder(order);

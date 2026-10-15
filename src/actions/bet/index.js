@@ -185,6 +185,11 @@ class Bet {
         if(format==2){
             bet['BET_STATUS'] = (status=='valid') ? 'open' : 'invalid';
             bet['TICK'] = feedInfo ? feedInfo['TICK'] : null; // denormalized feed tick
+            // A FEED_ACTION_INDEX that stores as NULL was refused in validateFeedState; the
+            // row keeps that refusal under the placeholder 0, which names no action, since
+            // bets.feed_action_index is NOT NULL and a NULL bind halts the block.
+            if(this.util.storesAsNull(bet['FEED_ACTION_INDEX'], this.config['INTEGER_FIELDS']['FEED_ACTION_INDEX']))
+                bet['FEED_ACTION_INDEX'] = 0;
         }
 
         return { status, bet };

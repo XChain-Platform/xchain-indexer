@@ -33,6 +33,13 @@ module.exports = {
             }
         }
 
+        // Refuse a bet whose FEED_ACTION_INDEX stores as NULL: the bets row holds it in a
+        // NOT NULL column (prepareBetRow stores the refusal with a placeholder). The other
+        // formats' rows take a NULL there, so their verdicts stay as they are.
+        if(!error && format==2 &&
+           this.util.storesAsNull(data['FEED_ACTION_INDEX'], this.config['INTEGER_FIELDS']['FEED_ACTION_INDEX']))
+            error = 'invalid: FEED_ACTION_INDEX (format)';
+
         if(!error && (format==1 || format==2 || format==3 || format==4) && !feedInfo)
             error = 'invalid: FEED_ACTION_INDEX (unknown)';
 

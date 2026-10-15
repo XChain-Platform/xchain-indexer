@@ -38,13 +38,16 @@ async function recordCarrier(carrier, data, slice){
         ' : bytes=' + partBytes + ' : ' + data['STATUS']);
 
     // Persist the chunk (stored valid or invalid so the explorer can surface its status;
-    // the DEPLOY assembler reads only VALID rows).
+    // the DEPLOY assembler reads only VALID rows). A CHUNK_INDEX or TOTAL_CHUNKS that does
+    // not parse to a finite number was refused in validateChunkFormat; the row keeps that
+    // refusal under the placeholder 0, since both columns are NOT NULL and a NaN or Infinity
+    // bind fails the INSERT and halts the block.
     await carrier.indexerDb.recordDeployChunk({
         ACTION_INDEX : data['ACTION_INDEX'],
         SOURCE       : data['SOURCE'],
         CODE_HASH    : data['CODE_HASH'],
-        CHUNK_INDEX  : chunkIndex,
-        TOTAL_CHUNKS : totalChunks,
+        CHUNK_INDEX  : Number.isFinite(chunkIndex) ? chunkIndex : 0,
+        TOTAL_CHUNKS : Number.isFinite(totalChunks) ? totalChunks : 0,
         CODE_PART    : data['CODE_PART'],
         STATUS       : status,
         BLOCK_INDEX  : data['BLOCK_INDEX']

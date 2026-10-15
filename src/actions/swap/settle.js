@@ -39,6 +39,13 @@ async function recordSwap(handler, st){
     if(format==2)
         getLogger().info("\t SWAP_EDIT : " + handler.config['COIN'] + ':' + data['SWAP_ACTION_INDEX'] + ' : ' + data['STATUS']);
 
+    // A cancel or edit whose SWAP_ACTION_INDEX stores as NULL was refused in
+    // validateGeneral; its row keeps that refusal under the placeholder 0, which names no
+    // action, since swap_action_index is NOT NULL and a NULL bind halts the block.
+    if((format==1 || format==2) &&
+       handler.util.storesAsNull(swap['SWAP_ACTION_INDEX'], handler.config['INTEGER_FIELDS']['SWAP_ACTION_INDEX']))
+        swap['SWAP_ACTION_INDEX'] = 0;
+
     // Create record in swaps table
     if(format==0)
         await handler.indexerDb.createSwap(swap);
