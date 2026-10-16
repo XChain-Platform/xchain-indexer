@@ -28,7 +28,7 @@ const { getLogger } = require('../observability/index.js');
 const gateRegistry = require('../consensus/gate_registry');
 const {
     remoteTokenAdmissionActive,
-    REMOTE_TOKEN_SYNC_STALL_REASON
+    REMOTE_TOKEN_RETRY_STALL_REASON
 } = require('../actions/cross_chain_remote_token.js');
 
 module.exports = {
@@ -194,7 +194,7 @@ module.exports = {
                 await this.waitForDirectRemoteTokenPresence(blockToParse);
         } catch(err){
             getLogger().warn('Deferring block ' + blockToParse + ' (remote token sync)', err);
-            this.stallReason = REMOTE_TOKEN_SYNC_STALL_REASON;
+            this.stallReason = REMOTE_TOKEN_RETRY_STALL_REASON;
             this.stallClearsAt = null;
             return true;
         }

@@ -24,7 +24,7 @@
 
 const assert = require('assert');
 const {
-    REMOTE_TOKEN_SYNC_STALL_REASON
+    REMOTE_TOKEN_RETRY_STALL_REASON
 } = require('../../../../src/actions/cross_chain_remote_token.js');
 
 /*
@@ -66,11 +66,11 @@ const SYNC_SRC = fs.readFileSync(SYNC_ENTRY, 'utf8') + '\n' +
 // rather than a rename that slides through.
 function graceWiring() {
     const pairs = [];
-    const re = /this\.stallReason = (?:'(\w+)'|(REMOTE_TOKEN_SYNC_STALL_REASON));[\s\S]*?this\.stallClearsAt\s*=\s*([^;]+);/g;
+    const re = /this\.stallReason = (?:'(\w+)'|(REMOTE_TOKEN_RETRY_STALL_REASON));[\s\S]*?this\.stallClearsAt\s*=\s*([^;]+);/g;
     let m;
     while ((m = re.exec(INDEXER_SRC)) !== null) {
-        const reason = m[1] || (m[2] === 'REMOTE_TOKEN_SYNC_STALL_REASON'
-            ? REMOTE_TOKEN_SYNC_STALL_REASON : null);
+        const reason = m[1] || (m[2] === 'REMOTE_TOKEN_RETRY_STALL_REASON'
+            ? REMOTE_TOKEN_RETRY_STALL_REASON : null);
         const expr  = m[3];
         const plain  = /\bbarrierClearsAt\(blockTime,\s*'([A-Za-z]+)'\)/.exec(expr);
         const height = /\bbarrierClearsAtHeightAware\(blockTime,\s*'([A-Za-z]+)',\s*blockToParse\)/.exec(expr);
@@ -116,7 +116,7 @@ const EXPECTED = [
     ['bridge_sync_barrier',             'bridgeWatermarkGraceS',       'height-aware'],
     ['policy_sync_barrier',             'policyWatermarkGraceS',       'height-aware'],
     ['list_share_sync_barrier',         null,                          'null'],
-    ['remote_token_sync_barrier',       null,                          'null'],          // height watermark, no clock instant
+    ['remote_token_retry_barrier',      null,                          'null'],          // action-scoped height retry
     // Direct-hub-DB twin of call_sync_barrier. A null here (no watermark to key on)
     // is what makes such a barrier wedge forever: it leaves no time-keyed escape at
     // all. This one has one, resolved onto the indexer from the SAME frozen call
