@@ -24,7 +24,11 @@ const mirrorBarriers = require('../../../src/XChainIndexer/mirror_barriers.js');
 const priceBarriers = require('../../../src/XChainIndexer/price_barriers.js');
 const watermarkMethods = require('../../../src/hub/hub_db_sync/watermarks.js');
 const remoteTokenMethods = require('../../../src/hub/hub_db_sync/barriers/remote_token.js');
-const { REMOTE_TOKEN_ADMISSION_KEY } = require('../../../src/actions/cross_chain_remote_token');
+const {
+    REMOTE_TOKEN_ADMISSION_KEY,
+    REMOTE_TOKEN_RETRY_STALL_REASON
+} = require('../../../src/actions/cross_chain_remote_token');
+const { isMirrorBarrierReason } = require('../../../src/XChainIndexer/stall_health.js');
 
 const SWAP = [{ data: 'SWAP|0|LTC|BARR|10||BTC|XT|5||addr|||x' }];
 
@@ -83,7 +87,9 @@ describe('remote-token pin barrier, block-loop member @regression @tier1', funct
         sinon.stub(console, 'warn');
         const ctx = context({ hubDbSync: { waitForRemoteTokenSync: sinon.stub().rejects(new Error('behind')) }, remoteTokenBarrierForceBlock: 501 });
         assert.strictEqual(await ctx.deferOnRemoteTokenSync(501), true);
-        assert.strictEqual(ctx.stallReason, 'remote_token_sync_barrier');
+        assert.strictEqual(REMOTE_TOKEN_RETRY_STALL_REASON, 'remote_token_retry_barrier');
+        assert.strictEqual(ctx.stallReason, REMOTE_TOKEN_RETRY_STALL_REASON);
+        assert.strictEqual(isMirrorBarrierReason(ctx.stallReason), true);
         assert.strictEqual(ctx.stallClearsAt, null);
     });
 });
