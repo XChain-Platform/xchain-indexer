@@ -30,6 +30,7 @@ const { verifyCanonicalQuorum } = require('./cross_settle/quorum.js');
 
 const REMOTE_TOKEN_KEY = 'cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION';
 const REMOTE_TOKEN_ADMISSION_KEY = 'remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION';
+const REMOTE_TOKEN_SYNC_STALL_REASON = 'remote_token_sync_barrier';
 
 // A registry with no row for `key` reads as below the activation.
 function gateActive(key, network, coin, height){
@@ -146,6 +147,6 @@ async function remoteTokenAcceptError(handler, st){
 }
 
 module.exports = {
-    REMOTE_TOKEN_KEY, REMOTE_TOKEN_ADMISSION_KEY, remoteTokenCanonical, remoteTokenAdmissionField,
-    remoteTokenAdmissionActive, remoteTokenAcceptError
+    REMOTE_TOKEN_KEY, REMOTE_TOKEN_ADMISSION_KEY, REMOTE_TOKEN_SYNC_STALL_REASON,
+    remoteTokenCanonical, remoteTokenAdmissionField, remoteTokenAdmissionActive, remoteTokenAcceptError
 };
