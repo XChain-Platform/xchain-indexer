@@ -62,7 +62,15 @@ const EXECUTABLE_RESIDUE = {
     '2026-07-16-mirror-twin-bigint-unsigned-align.sql': 'f704908ec8c87fe8faa43e991df277e8a0c303a628add80c7a809a723f04da34',
     '2026-07-26-tokens-backfill-lock-mint-supply.sql':  '554ee749cb1836ced104797186ff4ae5e048d07ac528898be25def30b3bcf273',
     '2026-07-29-state-checkpoints-uq-chain-seq.sql':    'dd0a8cf50b0c0f03ebb4f517003275e11a8843ded0e144a5041ef138a91b94cc',
+    '2026-09-12-bridge-tables.sql':                     '0123a996d8f66783b15aa7f8cfc2b0545844d3d8579cc50df66c79a6334a6a2e',
 };
+
+const BRIDGE_TABLES_FILE = '2026-09-12-bridge-tables.sql';
+const BRIDGE_TABLES_PREDECESSORS = [
+    'e4ef50910ca9ebc4582b1fbf1e3c6a151cb0b342c76a3949c7d0704729d8a6a7',
+    '3b2ad83e7ef63b9bfbad0cfd4d09befe7ffe501ae28a121f4ac7b7683da8f5cc',
+    '00b45c045b40bb8d2cbb778980b964bb490f8d53321178615e16922782495beb',
+];
 
 
 describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function () {
@@ -104,6 +112,18 @@ describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function 
             assert.ok([].concat(r.from).includes(recorded),
                 file + ': recorded revision ' + recorded.slice(0, 12) + ' is not covered.');
         });
+    });
+});
+
+describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function () {
+    it(BRIDGE_TABLES_FILE + ': heals every committed pre-correction revision', function () {
+        const r = Database.MIGRATION_CHECKSUM_REBASELINES[BRIDGE_TABLES_FILE];
+        assert.ok(r, BRIDGE_TABLES_FILE + ' must have a rebaseline entry');
+        const fromList = [].concat(r.from);
+        for (const predecessor of BRIDGE_TABLES_PREDECESSORS) {
+            assert.ok(fromList.includes(predecessor),
+                BRIDGE_TABLES_FILE + ': recorded revision ' + predecessor.slice(0, 12) + ' is not covered.');
+        }
     });
 });
 
