@@ -252,6 +252,15 @@
       "XCALL/VM protocol constants agree across vm/indexer/sdk the canonical xchain-documentation copy pins the same six values",
       "XCALL/VM protocol constants agree across vm/indexer/sdk this repo pins the six constants at the frozen values"
     ],
+    "049bade57f005021": [
+      "per-block balance delta collection @regression @tier1 accumulates by address and tick without mixing either key",
+      "per-block balance delta collection @regression @tier1 collects inserted credits and debits as opposite balance effects",
+      "per-block balance delta collection @regression @tier1 collects only new minus old when an existing credit row is replaced",
+      "per-block balance delta collection @regression @tier1 ignores escrows and writes made without an active block collector",
+      "per-block balance delta collection @regression @tier1 records nothing when the ledger DML fails",
+      "per-block balance delta collection @regression @tier1 replaces stale deltas whenever a block transaction opens",
+      "per-block balance delta collection @regression @tier1 reverses the replacement difference for a debit row"
+    ],
     "04f2b1458c348cb3": [
       "Programmable policy layer : Phase B enforcement @regression controllerActionClass : static action\u2192class map AIRDROP/DIVIDEND/SWEEP \u2192 transfer (bulk outbound moves are gated too)",
       "Programmable policy layer : Phase B enforcement @regression controllerActionClass : static action\u2192class map DESTROY \u2192 burn",
@@ -3213,6 +3222,11 @@
       "dispense payment tally scale: unaffected settlements @regression @tier1 a token payment that fits 8 dp settles and records identically on both sides",
       "dispense payment tally scale: unaffected settlements @regression @tier1 the batch pool keeps the 8 dp scale it shares with COINPAY"
     ],
+    "32d28eacf6d12ab7": [
+      "getOrderInfoBatch() @regression @tier1 deep-equals per-row getOrderInfo while using four set queries",
+      "getOrderInfoBatch() @regression @tier1 does no database work for an empty candidate set",
+      "getOrderInfoBatch() @regression @tier1 loads matcher candidates through the batch method once"
+    ],
     "32ded3574ceb5f61": [
       "bridge_settle: the XBRIDGE settle pass the refusal and deferral paths applies NOTHING for an id already recorded in bridge_settlements",
       "bridge_settle: the XBRIDGE settle pass the refusal and deferral paths applies NOTHING when the escrow cross-check returns ok:false",
@@ -4639,6 +4653,10 @@
       "AnchorRecovery list snapshots @regression @tier2 registers list_snapshots for archive recovery",
       "AnchorRecovery list snapshots @regression @tier2 restores a legacy archive with no list_snapshots exactly as before",
       "AnchorRecovery list snapshots @regression @tier2 restores quorum-signed full and delta rows byte for byte"
+    ],
+    "4982ff3988e6d5f9": [
+      "UNBIND exact wire value rule @regression ADDRESS format 1 (v1) treats only wire string 1 as unbind",
+      "UNBIND exact wire value rule @regression ISSUE format 6 (v6) treats only wire string 1 as unbind"
     ],
     "499b54ec6a7dfd34": [
       "Order_Match action handler @regression @tier2 allows match when GIVE_OWNERSHIP mirrors GET_OWNERSHIP (both 0)",
@@ -8982,6 +9000,11 @@
       "Smoke: REST /status SM-05g: GET /status marks a future-stamped-block wait distinctly and stays 200",
       "Smoke: REST /status SM-05h: a real barrier defer is NOT reported as a future-stamp wait"
     ],
+    "83a384a2abacb9b3": [
+      "genesis manifests carry no reserved chain root @regression @consensus BTC-ledger.csv names no RESERVED_FUTURE_ROOTS root or child of one",
+      "genesis manifests carry no reserved chain root @regression @consensus DOGE-ledger.csv names no RESERVED_FUTURE_ROOTS root or child of one",
+      "genesis manifests carry no reserved chain root @regression @consensus still reserves the six names taken out of the manifests"
+    ],
     "83afe667cf1b13d5": [
       "LIST bulk item writes chunks a large membership into bounded statements",
       "LIST bulk item writes dedupes edits on item and status together",
@@ -11897,6 +11920,10 @@
       "state_root reserved sub-trees: slot list @regression RESERVED_SUBTREES is exactly the non-v1 tail of merkle.STATE_SUBTREES, in order",
       "state_root reserved sub-trees: slot list @regression the frozen slot list has exactly five names (a sixth would change every historical state_root)",
       "state_root reserved sub-trees: slot list @regression there is no escrow sub-root: the locked leaf lives inside balances_root"
+    ],
+    "a2418791374bf31e": [
+      "Order_Match action handler @regression @tier2 breaks after the taker exhausts its GET side",
+      "Order_Match action handler @regression @tier2 breaks after the taker exhausts its GIVE side"
     ],
     "a28902a7c4dd4771": [
       "16 \u2013 Rollback replay idempotency @regression @tier3 apply -> rollback -> re-apply the SAME blocks equals a fresh from-genesis replay (content mode)"
@@ -18626,6 +18653,29 @@
       "HubDbSync content-keyed apply @regression @tier1 state_checkpoints ignores a colliding wire id and dedupes or upgrades on content",
       "HubDbSync content-keyed apply @regression @tier1 the price batch path also strips every wire id"
     ],
+    "fd5ba4d062e57afd": [
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) lets the reserved verdict win over the length verdict when a name is both",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) reads exactly as it does today below the flag",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) refuses a child of a reserved root through the parent gate, not through this guard",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) refuses a four-letter listed root the length floor does not cover",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) refuses a listed chain root from a user",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) refuses it case-folded, so the lower-case spelling cannot take the row",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus creation only (R8 (c), D50) leaves a caret id reference alone, which is always an edit of an existing row",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus creation only (R8 (c), D50) leaves an edit of a pre-flag three-character row alone",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus creation only (R8 (c), D50) leaves an edit of one of the six reclaimed listed rows alone",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus creation only (R8 (c), D50) still refuses a re-ISSUE of a listed name that does NOT exist",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus system-injected creation is exempt, which is how a bridge root row is made on a destination chain",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the four-character floor (AT6) admits a four-character new top-level name",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the four-character floor (AT6) measures the FULL tick, so a short child of a long parent passes",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the four-character floor (AT6) reads exactly as it does today below the flag",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the four-character floor (AT6) refuses a one-character new top-level name",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the four-character floor (AT6) refuses a three-character new top-level name",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the reserved set itself holds the 47 free roots plus the 6 reclaimed ones, none of them a live coin",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the reserved set itself is frozen, so no caller can edit a consensus membership test at runtime",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the six names taken out of the genesis manifests (ruling 2026-10-17) lists each of the six as a reserved root",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the six names taken out of the genesis manifests (ruling 2026-10-17) refuses a child of each of the six through the parent gate",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the six names taken out of the genesis manifests (ruling 2026-10-17) refuses a fresh ISSUE of each of the six, case-folded, and a re-ISSUE that names one"
+    ],
     "fd75cdd445f6e0af": [
       "protocol_changes/vm_twin/native_stack_terminal_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
       "protocol_changes/vm_twin/native_stack_terminal_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
@@ -18815,8 +18865,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1378,
-      "titleCount": 13813,
+      "fileCount": 1383,
+      "titleCount": 13833,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19048,6 +19098,7 @@
         "test/unit/actions/market/order_match.test/native_coin.test.js": "fecd6ae9e0eccb90",
         "test/unit/actions/market/order_match.test/ownership.test.js": "a2e477c9a852ff76",
         "test/unit/actions/market/order_match.test/skips_and_lists.test.js": "499b54ec6a7dfd34",
+        "test/unit/actions/market/order_match.test/taker_exhausted_break.test.js": "a2418791374bf31e",
         "test/unit/actions/market/order_match.test/token_lists.test.js": "aa5514abf48428bf",
         "test/unit/actions/market/order_swap_match_invariants.test.js": "0c136d013ba41d36",
         "test/unit/actions/market/swap.test.js": "c99129014d12ebae",
@@ -19189,6 +19240,7 @@
         "test/unit/actions/token/sweep/sweep_callback_unified_fee.test.js": "9769262aca6e43a0",
         "test/unit/actions/token/sweep/sweep_ticker_memoization.test.js": "856558ff8c380713",
         "test/unit/actions/token/token_supply_bound.test.js": "5c880597d1863312",
+        "test/unit/actions/token/unbind_value_rule.test.js": "4982ff3988e6d5f9",
         "test/unit/actions/token/uncapped_max_supply.test.js": "40d8afc9cd271bab",
         "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js": "2d0e6bd90f6953d4",
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
@@ -19400,7 +19452,7 @@
         "test/unit/bridge/issue/destroy_bridge_closures.test.js": "236d4672f067c253",
         "test/unit/bridge/issue/issue_bridge_storage.test.js": "2ecbbb8d214daa59",
         "test/unit/bridge/issue/xchain_btc_only_issue.test.js": "6e5d5732aa0d0c44",
-        "test/unit/bridge/issue_bridge_namespace.test.js": "46de38a2323753b3",
+        "test/unit/bridge/issue_bridge_namespace.test.js": "fd5ba4d062e57afd",
         "test/unit/bridge/issue_bridge_optin.test.js": "78f4d92179b7b8ca",
         "test/unit/bridge/issue_bridge_optin.test/policy_guards.test.js": "e1d270cff0ae3c90",
         "test/unit/bridge/policy/list_bridge_policy.test.js": "4c6fe17f3b81d78b",
@@ -19419,6 +19471,7 @@
         "test/unit/chain/genesis_airdrop.test.js": "fed4df525e9a9c09",
         "test/unit/chain/genesis_bridge_replay_pin.test.js": "00d1072d93378562",
         "test/unit/chain/genesis_dump.test.js": "20d80303d433525a",
+        "test/unit/chain/genesis_manifest_reserved_roots.test.js": "83a384a2abacb9b3",
         "test/unit/chain/harness_vm_block_rhythm.test.js": "c126f106c7f18f5a",
         "test/unit/chain/inject_protocol_token.test.js": "4a728b73bbd5b9f6",
         "test/unit/chain/mapper.test.js": "1c466720946854e2",
@@ -19574,6 +19627,7 @@
         "test/unit/db/anchors/archive_head_pick_gate.test.js": "9edb73492cfca621",
         "test/unit/db/anchors/max_archive_batch_seq_by_author_predicate.test.js": "7f93503626a6b339",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "025a38c8bb9a00ab",
+        "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
@@ -19675,6 +19729,7 @@
         "test/unit/db/markets/market_day_change_precision.test.js": "3c7c11ca01ad82ad",
         "test/unit/db/markets/market_refresh/touched_and_aged_pairs.test.js": "01eb6f06411f95bc",
         "test/unit/db/markets/markets_native_coin_pairs.test.js": "7176d07530da2fe0",
+        "test/unit/db/markets/order_info_batch.test.js": "32d28eacf6d12ab7",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_admission_schema.test.js": "1d3cfa8b4efea4a2",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
