@@ -48,7 +48,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
 
     it('exports HUB_STATE_TABLES as a frozen copy a caller cannot use to corrupt the class', function () {
         assert.deepStrictEqual(HubDbSync.HUB_STATE_TABLES,
-            ['remote_token_snapshots', 'state_checkpoints', 'anchor_reward_attestations', 'attestation_responses']);
+            ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses']);
         assert.ok(Object.isFrozen(HubDbSync.HUB_STATE_TABLES), 'the export must be read-only');
         assert.throws(() => { HubDbSync.HUB_STATE_TABLES.push('rogue_table'); },
             'a caller mutating the returned array must not be able to reach the module\'s own membership');
@@ -110,6 +110,8 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         assert.strictEqual(tables.price_snapshots, 444);
         assert.strictEqual(tables.capability_snapshots, null,
             'capability_snapshots satisfaction is a live per-block query, never a cached scalar');
+        assert.strictEqual(tables.remote_token_snapshots, null,
+            'remote_token_snapshots reports its per-chain evidence through the heights map');
     });
 
     // ── the wire position that accompanies the id strip ──

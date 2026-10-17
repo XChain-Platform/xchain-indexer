@@ -31,7 +31,8 @@ const swq    = require('../../consensus/stake_weighted_quorum.js');
 // the consumer's own registry entry, on the retraction's BTC-anchored snapshot block.
 const gateRegistry = require('../../consensus/gate_registry');
 const RETRACTION_SIGNING_KEY = 'retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION';
-const { RETRACTION_COLUMNS, RETRACTION_CHAIN_COLUMNS } = require('./mirror_tables.js');
+const { RETRACTION_COLUMNS, RETRACTION_CHAIN_COLUMNS,
+        QUORUM_CLASS_TABLES } = require('./mirror_tables.js');
 const { applyMirrorWrite } = require('./mirror_write.js');
 
 // ── signed-retraction verification helpers ───────────────────────────
@@ -116,8 +117,7 @@ module.exports = {
         // because they are never retracted (no RETRACTION_COLUMNS entry, so the generic path
         // below skips them). Giving any of them a RETRACTION_COLUMNS entry also requires adding
         // it to this list AND a push_generation column in both the hub and indexer DDL.
-        let quorumClass = (event.table === 'cross_chain_calls' || event.table === 'cross_chain_matches' ||
-                           event.table === 'bridge_transfers');
+        let quorumClass = QUORUM_CLASS_TABLES.includes(event.table);
         let ownChain = !!(this.coin && event.source_chain === this.coin && this.getOwnRollbackGeneration);
         if (!(await this.acceptRetractionFences(event, range, quorumClass, ownChain))) return;
         if (quorumClass && this.network && !(await this.acceptRetractionSignatures(event, range))) return;

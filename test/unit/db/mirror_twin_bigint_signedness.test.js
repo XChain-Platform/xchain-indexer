@@ -46,7 +46,7 @@ const HUB_DIR       = process.env.XCHAIN_HUB_DIR || path.join(__dirname, '..', '
 const HUB_SQL_DIR   = path.join(HUB_DIR, 'src', 'sql');
 
 // The hub-mirrored twins (hub_db_sync.js: oracle + CROSS_CHAIN_TABLES +
-// HUB_STATE_TABLES + price_snapshots). validator_rewards shares a NAME with a
+// HUB_STATE_TABLES + HEIGHT_MIRROR_TABLES + price_snapshots). validator_rewards shares a NAME with a
 // hub table but is a different, locally-written schema, not a mirror twin.
 const MIRROR_TWINS = [
     'oracle_prices',
@@ -118,7 +118,7 @@ function registerMirrorTwinInventoryTests() {
         const source = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'src', 'hub', 'hub_db_sync', 'mirror_tables.js'), 'utf8');
         const missingDecls = [];
         const declared = [];
-        for (const name of ['CROSS_CHAIN_TABLES', 'HUB_STATE_TABLES']) {
+        for (const name of ['CROSS_CHAIN_TABLES', 'HUB_STATE_TABLES', 'HEIGHT_MIRROR_TABLES']) {
             const tables = scrapeTableArray(source, name);
             if (!tables || tables.length === 0) { missingDecls.push(name); continue; }
             declared.push(...tables);

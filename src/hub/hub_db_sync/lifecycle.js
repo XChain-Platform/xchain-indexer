@@ -29,7 +29,8 @@
 // shim is installed. The explorer's vendored copy reaches the same path because it
 // carries the hub-canonical observability shim at src/observability/.
 const { getLogger } = require('../../observability/index.js');
-const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES, AUTO_INCREMENT_ID_TABLES } = require('./mirror_tables.js');
+const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES, HEIGHT_MIRROR_TABLES,
+        AUTO_INCREMENT_ID_TABLES } = require('./mirror_tables.js');
 const { WebSocket } = require('./transport.js');
 const failover = require('./failover/triggers.js');
 
@@ -143,7 +144,8 @@ module.exports = {
         let undrained = [];                // what held the gate this pass, named on the retry line
         let connectionEpoch = this._wsEpoch;
         let selectorRevision = this._selectorRevision;
-        for (let table of ['oracle_prices'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES, ['price_snapshots'])) {
+        for (let table of ['oracle_prices'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES,
+                                                   HEIGHT_MIRROR_TABLES, ['price_snapshots'])) {
             if(connectionEpoch !== this._wsEpoch || selectorRevision !== this._selectorRevision){
                 undrained.push('the hub connection changed');
                 break;
@@ -256,6 +258,9 @@ module.exports = {
         // HUB_STATE_TABLES rides the global streamWatermark, not a per-table
         // scalar: that IS what gates each of them (§4.2).
         for (let table of HUB_STATE_TABLES) tables[table] = this.streamWatermark;
+        // Height-gated tables have no honest scalar seconds value. Their per-chain
+        // positions are exposed by the heights map below.
+        for (let table of HEIGHT_MIRROR_TABLES) tables[table] = null;
         tables.oracle_prices       = this.oracleSyncTimestamp;
         tables.cross_chain_matches = this.matchSyncTimestamp;
         tables.cross_chain_calls   = this.callSyncTimestamp;

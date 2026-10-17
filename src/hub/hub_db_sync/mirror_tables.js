@@ -75,8 +75,8 @@ const RETRACTION_CHAIN_COLUMNS = {
 // buys refuseForeignChainRow's btc_chain_id fence (all three DDLs carry the column, and a
 // regtest venue that re-genesises its Bitcoin chain otherwise keeps serving dead-chain
 // transfers to every fresh indexer) and a place in the bootstrap concat loop below, ahead of
-// the one heavy table. Membership does NOT make a table quorum-class: that is the hard-coded
-// quorumClass list in applyRetraction (retractions.js), which demands the push_generation
+// the one heavy table. Membership does NOT make a table quorum-class: that is the
+// QUORUM_CLASS_TABLES registry below, which demands the push_generation
 // fence and the 2f+1 co-signature set and, of these three, names only bridge_transfers.
 // bridge_transfers also gets the RETRACTION_COLUMNS pair above; policy_snapshots and
 // list_snapshots are never retracted, so deletion events naming them are skipped rather
@@ -84,6 +84,15 @@ const RETRACTION_CHAIN_COLUMNS = {
 // quorumClass, or its deletions are accepted with no fence or signatures required.
 const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
                             'bridge_transfers', 'policy_snapshots', 'list_snapshots'];
+
+// Mirrored validity inputs whose deletion changes a consensus decision and therefore
+// requires the generation fence and, after activation, validator co-signatures.
+const QUORUM_CLASS_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'bridge_transfers'];
+
+// Tables read while deciding whether a cross-chain action is valid. Keep this explicit:
+// a new validity read must be classified for watermarking and retraction safety here.
+const VALIDITY_READ_TABLES = ['remote_token_snapshots', 'list_snapshots', 'policy_snapshots',
+                              'bridge_transfers', 'cross_chain_matches', 'cross_chain_calls'];
 
 const MIRRORED_TABLES = ['price_snapshots', 'oracle_prices', 'cross_chain_matches', 'cross_chain_calls',
                          'capability_snapshots', 'bridge_transfers', 'policy_snapshots', 'list_snapshots',
@@ -97,11 +106,12 @@ const AUTO_INCREMENT_ID_TABLES = ['price_snapshots', 'oracle_prices', 'cross_cha
                                   'bridge_transfers', 'policy_snapshots', 'list_snapshots',
                                   'remote_token_snapshots', 'state_checkpoints', 'anchor_reward_attestations'];
 
-// Hub federation state tables. remote_token_snapshots rides the global stream watermark
-// in mirrorStatus and is never retracted (see RETRACTION_COLUMNS above). Its block-loop
-// barrier, from remote_token_admission_activation, is keyed on the hub's per-chain
-// HEIGHT watermark for the table (barriers/remote_token.js), never on this seconds one,
-// so its membership here changes nothing that barrier reads. state_checkpoints carries quorum-signed per-chain
+// Tables whose validity barrier is certified by the hub's per-chain height watermark.
+// They still participate in every complete bootstrap drain, but mirrorStatus reports
+// their evidence through the heights map rather than the global seconds watermark.
+const HEIGHT_MIRROR_TABLES = ['remote_token_snapshots'];
+
+// Hub federation state tables. state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
 // never retracted. A reorged height is superseded by a new row with a higher
 // checkpoint_seq. Not on any settlement-critical path (no block-loop barrier).
@@ -131,8 +141,7 @@ const AUTO_INCREMENT_ID_TABLES = ['price_snapshots', 'oracle_prices', 'cross_cha
 // watermark (see mirrorStatus), which is only correct for tables no block-loop barrier gates
 // on. Each gates one: waitForBridgeSync and waitForPolicySync cache their own
 // MAX(effective_time), while waitForListShareSync uses the per-chain height watermark.
-const HUB_STATE_TABLES = ['remote_token_snapshots', 'state_checkpoints',
-                          'anchor_reward_attestations', 'attestation_responses'];
+const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
 
 // The tables whose hub rows change under an id the mirror has already paged past, or
 // vanish by a deletion the hub never replays: price_snapshots (the batch_block_time stamp,
@@ -171,7 +180,9 @@ const REFUSED_ROW_NAMED_CAP = 10000;
 
 module.exports = {
     RETRACTION_COLUMNS, RETRACTION_CHAIN_COLUMNS,
-    CROSS_CHAIN_TABLES, HUB_STATE_TABLES, MIRRORED_TABLES, AUTO_INCREMENT_ID_TABLES,
+    CROSS_CHAIN_TABLES, HUB_STATE_TABLES, HEIGHT_MIRROR_TABLES,
+    VALIDITY_READ_TABLES, QUORUM_CLASS_TABLES,
+    MIRRORED_TABLES, AUTO_INCREMENT_ID_TABLES,
     REPAGE_PER_CONNECTION_TABLES,
     REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT, REFUSED_ROW_NAMED_CAP,
 };
