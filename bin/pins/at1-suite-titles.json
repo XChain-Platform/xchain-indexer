@@ -337,6 +337,10 @@
       "PRICE price-range flag day @regression @tier3 the posture this node ships fails CLOSED on an unusable key, leaving the legacy behaviour",
       "PRICE price-range flag day @regression @tier3 the posture this node ships leaves mainnet inert at every instant, so the legacy path runs byte for byte"
     ],
+    "064be60bda83c679": [
+      "ANCHOR v3 checkpoint sequence binding below activation keeps the frozen fold valid with all-row watermark reads on mainnet",
+      "ANCHOR v3 checkpoint sequence binding below activation keeps the frozen fold valid with all-row watermark reads on testnet"
+    ],
     "066e3e1a7354e46d": [
       "ATTEST hub-mirror response applier @regression @tier3 bounded applicability read (utility.processAttestationResponses paging) applies the same rows paged as unpaged, when the cap prefix spans two pages",
       "ATTEST hub-mirror response applier @regression @tier3 bounded applicability read (utility.processAttestationResponses paging) orders the page by \u00a74.1 before it bounds it, and keysets rather than offsets",
@@ -637,6 +641,10 @@
       "price landing future-stamped block wait @regression @tier1 keeps a landing wait whose time has passed without a clear instant",
       "price landing future-stamped block wait @regression @tier1 reads a landing wait on a future-stamped block as future_block_wait",
       "price landing future-stamped block wait @regression @tier1 takes no hold toward the ceiling while the landing wait is future-stamped"
+    ],
+    "0c10b3d383a4d374": [
+      "Anchor v1 checkpoint sequence binding below gate @regression @tier3 keeps a mismatched checkpoint sequence valid on mainnet",
+      "Anchor v1 checkpoint sequence binding below gate @regression @tier3 keeps a mismatched checkpoint sequence valid on testnet"
     ],
     "0c136d013ba41d36": [
       "ORDER and SWAP matching invariants @regression @tier1 classifies every match-touched row for action-scoped rollback",
@@ -7717,6 +7725,10 @@
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) reads the mirror only for locally pending requests, scoped by network and block time",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) synthesizes an ATTEST v1 with NULL tx coordinates, BLOCK_TIME, and the row pair",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) synthesizes nothing at a block one second short of the effective_time"
+    ],
+    "73bf19393156da6f": [
+      "ANCHOR v0 checkpoint sequence binding below gate @regression @tier3 keeps mainnet sequence and snapshot independent on the all-rows watermark",
+      "ANCHOR v0 checkpoint sequence binding below gate @regression @tier3 keeps testnet sequence and snapshot independent on the all-rows watermark"
     ],
     "73d2a2e5a45a3b49": [
       "HubDbSync schema-version lockstep admits all three reader payloads when they carry the expected schema_version",
@@ -18893,8 +18905,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1386,
-      "titleCount": 13855,
+      "fileCount": 1389,
+      "titleCount": 13861,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18931,6 +18943,8 @@
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "cd53417c159a33c6",
@@ -19328,6 +19342,7 @@
         "test/unit/anchor/anchor_action_query.test/anchor_action_query_section_vs.test.js": "f110a0bd4d3b7f5b",
         "test/unit/anchor/anchor_archive_section_verdict.test.js": "63cd3cc2b8b75cb9",
         "test/unit/anchor/anchor_archive_sql_columns.test.js": "bab9c054a0998db8",
+        "test/unit/anchor/anchor_checkpoint_seq_bind_v3_below_gate.test.js": "064be60bda83c679",
         "test/unit/anchor/anchor_fold_sql_family.test.js": "20703ba8a82c0437",
         "test/unit/anchor/anchor_proof_client.test.js": "5ef99a2c3042bdaf",
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression.test.js": "c3487eec1e568310",
