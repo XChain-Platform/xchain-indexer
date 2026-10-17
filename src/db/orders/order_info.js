@@ -134,6 +134,76 @@ function orderInfoSql(coin){
                     LIMIT 1`;
 }
 
+function inList(values){
+    return values.map(() => '?').join(', ');
+}
+
+function orderInfoBatchSql(action_indexes){
+    return orderInfoSql(false)
+        .replace('o1.action_index=?', `o1.action_index IN (${inList(action_indexes)})`)
+        .replace(/\s+LIMIT 1$/, '');
+}
+
+function orderFromRow(db, row){
+    let order = { GIVE_COIN: db.config['COIN'] };
+    for(let key in row){
+        let name  = String(key).toUpperCase();
+        let value = row[key];
+        if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
+            value = Number(value);
+        order[name] = value;
+    }
+    return order;
+}
+
+function applyOrderState(db, order, edit, amounts){
+    if(edit.expiration)
+        order['EXPIRATION'] = edit.expiration;
+    if(edit.allow_list !== false)
+        order['ALLOW_LIST'] = edit.allow_list;
+    if(edit.block_list !== false)
+        order['BLOCK_LIST'] = edit.block_list;
+    if(order['GIVE_OWNERSHIP'] == 1 && db.util.isNull(order['GIVE_AMOUNT']))
+        order['GIVE_AMOUNT'] = '1';
+    if(order['GET_OWNERSHIP'] == 1 && db.util.isNull(order['GET_AMOUNT']))
+        order['GET_AMOUNT'] = '1';
+    order['GIVE_PRICE'] = db.util.getPrice(order['GET_AMOUNT'],  order['GIVE_AMOUNT']);
+    order['GET_PRICE']  = db.util.getPrice(order['GIVE_AMOUNT'], order['GET_AMOUNT']);
+    order['GIVE_REMAINING'] = amounts[0];
+    order['GET_REMAINING']  = amounts[1];
+    return order;
+}
+
+function emptyOrderEdit(){
+    return {
+        expiration: false,
+        allow_list: false,
+        block_list: false
+    };
+}
+
+function applyEditRow(db, edit, row){
+    if(!db.util.isNull(row.expiration) && db.util.isNumeric(row.expiration)) edit.expiration = Number(row.expiration);
+    if(!db.util.isNull(row.allow_list) && db.util.isNumeric(row.allow_list)) edit.allow_list = Number(row.allow_list);
+    if(!db.util.isNull(row.block_list) && db.util.isNumeric(row.block_list)) edit.block_list = Number(row.block_list);
+}
+
+function openingAmounts(row){
+    if(!row)
+        return [0, 0];
+    return [
+        (row.give_ownership == 1) ? '1' : row.give_amount,
+        (row.get_ownership  == 1) ? '1' : row.get_amount
+    ];
+}
+
+function subtractMatch(db, action_index, amounts, row){
+    let give_amount = (row.get_action_index==action_index) ? row.give_amount : row.get_amount;
+    let get_amount  = (row.get_action_index==action_index) ? row.get_amount  : row.give_amount;
+    amounts[0] = db.util.bcsub(amounts[0], give_amount, 64);
+    amounts[1] = db.util.bcsub(amounts[1], get_amount, 64);
+}
+
 module.exports = {
 
     // Handle looking up potential order matches
@@ -147,13 +217,7 @@ module.exports = {
         let args = [action_index, source_id];
         let results = await this.doQuery(query, args);
         if(results.length > 0){
-            // Loop through possible matches and get full information on the order match
-            for(let row of results){
-                let orderInfo = await this.getOrderInfo(row.coin, row.action_index);
-                if(!matches)
-                    matches = [];
-                matches.push(orderInfo);
-            }
+            matches = await this.getOrderInfoBatch(results);
         }
         // Sort matches by price, then by action_index
         if(matches)
@@ -166,55 +230,106 @@ module.exports = {
         let query = orderInfoSql(coin);
         let args  = coin ? [coin, action_index] : [action_index];
         let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            order = {};
-            order['GIVE_COIN'] = this.config['COIN'];
-            for(let key in results[0]){
-                let name  = String(key).toUpperCase()
-                let value = results[0][key];
-                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
-                    value = Number(value);
-                order[name] = value;
-            }
-        }
+        if(results.length > 0)
+            order = orderFromRow(this, results[0]);
         // Get additional information on this order
         if(order){
             // Get updated order properties from the order_edits table
             let edit = await this.getOrderEdits(action_index);
-            if(edit.expiration)
-                order['EXPIRATION'] = edit.expiration;
-            // A list edit to 0 (the LIST_EDIT_REMOVE sentinel) removes the list: 0 is the value
-            // a never-listed row already reads as. No valid edit below that flag day holds 0.
-            if(edit.allow_list !== false)
-                order['ALLOW_LIST'] = edit.allow_list;
-            if(edit.block_list !== false)
-                order['BLOCK_LIST'] = edit.block_list;
-            // Ownership orders carry no amount on the ownership side. Expose virtual '1'
-            // so price math + match comparison work uniformly. Settlement code branches on
-            // GIVE_OWNERSHIP / GET_OWNERSHIP flags rather than the synthetic amount.
-            if(order['GIVE_OWNERSHIP'] == 1 && this.util.isNull(order['GIVE_AMOUNT']))
-                order['GIVE_AMOUNT'] = '1';
-            if(order['GET_OWNERSHIP']  == 1 && this.util.isNull(order['GET_AMOUNT']))
-                order['GET_AMOUNT']  = '1';
-            // Determine order get/give prices
-            order['GIVE_PRICE'] = this.util.getPrice(order['GET_AMOUNT'],  order['GIVE_AMOUNT']);
-            order['GET_PRICE']  = this.util.getPrice(order['GIVE_AMOUNT'], order['GET_AMOUNT']);
             // Determine order amounts remaining
-            let [give_remaining, get_remaining] = await this.getOrderAmountsRemaining(action_index);
-            order['GIVE_REMAINING'] = give_remaining;
-            order['GET_REMAINING']  = get_remaining;
+            let amounts = await this.getOrderAmountsRemaining(action_index);
+            applyOrderState(this, order, edit, amounts);
         }
         return order;
+    },
+
+    async getOrderInfoBatch(candidates){
+        if(!Array.isArray(candidates) || candidates.length === 0)
+            return [];
+
+        let action_indexes = [...new Set(candidates.map(row => row.action_index))];
+        let marks = inList(action_indexes);
+        let order_rows = await this.doQuery(orderInfoBatchSql(action_indexes), action_indexes);
+
+        let edit_query = `SELECT
+                            o.order_action_index,
+                            o.expiration,
+                            o.allow_list,
+                            o.block_list
+                        FROM
+                            order_edits o
+                            INNER JOIN index_statuses s ON (s.id=o.status_id)
+                        WHERE
+                            o.order_action_index IN (${marks}) AND
+                            s.status=?
+                        ORDER BY
+                            o.order_action_index ASC,
+                            o.action_index ASC`;
+        let edit_rows = await this.doQuery(edit_query, action_indexes.concat(['valid']));
+
+        let opening_query = `SELECT
+                                o.action_index,
+                                o.give_coin_id,
+                                o.give_tick_id,
+                                o.give_amount,
+                                o.give_ownership,
+                                o.get_coin_id,
+                                o.get_tick_id,
+                                o.get_amount,
+                                o.get_ownership
+                            FROM
+                                orders o
+                                INNER JOIN index_statuses s ON (s.id=o.status_id)
+                            WHERE
+                                o.action_index IN (${marks}) AND
+                                s.status=?`;
+        let opening_rows = await this.doQuery(opening_query, action_indexes.concat(['valid']));
+
+        let match_query = `SELECT
+                                m.give_action_index,
+                                m.get_action_index,
+                                m.give_amount,
+                                m.get_amount
+                            FROM
+                                order_matches m
+                                INNER JOIN index_statuses s ON (s.id=m.status_id)
+                            WHERE
+                                (m.give_action_index IN (${marks}) OR m.get_action_index IN (${marks})) AND
+                                s.status IN (?, ?)
+                            ORDER BY action_index ASC`;
+        let match_rows = await this.doQuery(match_query,
+            action_indexes.concat(action_indexes, ['valid', 'pending_coinpay']));
+
+        let orders_by_index = new Map(order_rows.map(row => [String(row.action_index), row]));
+        let edits_by_index = new Map(action_indexes.map(index => [String(index), emptyOrderEdit()]));
+        let openings_by_index = new Map(opening_rows.map(row => [String(row.action_index), row]));
+        let matches_by_index = new Map(action_indexes.map(index => [String(index), []]));
+        for(let row of edit_rows)
+            applyEditRow(this, edits_by_index.get(String(row.order_action_index)), row);
+        for(let row of match_rows){
+            let give_key = String(row.give_action_index);
+            let get_key = String(row.get_action_index);
+            if(matches_by_index.has(give_key)) matches_by_index.get(give_key).push(row);
+            if(get_key !== give_key && matches_by_index.has(get_key)) matches_by_index.get(get_key).push(row);
+        }
+
+        return candidates.map(candidate => {
+            let key = String(candidate.action_index);
+            let row = orders_by_index.get(key);
+            if(!row || (candidate.coin && row.get_coin !== candidate.coin))
+                return false;
+            let order = orderFromRow(this, row);
+            let amounts = openingAmounts(openings_by_index.get(key));
+            for(let match of matches_by_index.get(key))
+                subtractMatch(this, candidate.action_index, amounts, match);
+            return applyOrderState(this, order, edits_by_index.get(key), amounts);
+        });
     },
 
     // Return order edit information for given action_index
     async getOrderEdits(action_index){
         // Define empty edit object
-        let edit  = {
-            expiration: false,
-            allow_list: false,
-            block_list: false
-        };
+        let edit = emptyOrderEdit();
         let query  = `SELECT 
                         o.expiration,
                         o.allow_list,
@@ -230,11 +345,8 @@ module.exports = {
         let args  = [action_index, 'valid'];
         let results = await this.doQuery(query, args);
         if(results.length > 0){
-            for(let row of results){
-                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = Number(row.expiration);
-                if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = Number(row.allow_list);
-                if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = Number(row.block_list);
-            }
+            for(let row of results)
+                applyEditRow(this, edit, row);
         }
         return edit;
     },
@@ -256,13 +368,9 @@ module.exports = {
             let info = results[0];
             give_coin_id   = info.give_coin_id;
             give_tick_id   = info.give_tick_id;
-            // Ownership orders carry no GIVE_AMOUNT/GET_AMOUNT in the schema; expose
-            // virtual '1' so the matcher's bignumber math (price ratios, single-fill
-            // subtraction) works uniformly with token-balance orders.
-            give_remaining = (info.give_ownership == 1) ? '1' : info.give_amount;
+            [give_remaining, get_remaining] = openingAmounts(info);
             get_coin_id    = info.get_coin_id;
             get_tick_id    = info.get_tick_id;
-            get_remaining  = (info.get_ownership  == 1) ? '1' : info.get_amount;
         }
         // Lookup amounts matched in order_matches
         query = `SELECT
@@ -281,12 +389,10 @@ module.exports = {
         results = await this.doQuery(query, args);
         if(results.length > 0){
             // Loop through each order match and deduct amount from remaining
-            for(let row of results){
-                let give_amount = (row.get_action_index==action_index) ? row.give_amount : row.get_amount;
-                let get_amount  = (row.get_action_index==action_index) ? row.get_amount  : row.give_amount;
-                give_remaining  = this.util.bcsub(give_remaining, give_amount, 64);
-                get_remaining   = this.util.bcsub(get_remaining,  get_amount, 64);
-            }
+            let amounts = [give_remaining, get_remaining];
+            for(let row of results)
+                subtractMatch(this, action_index, amounts, row);
+            [give_remaining, get_remaining] = amounts;
         }
         return [give_remaining, get_remaining];
     },
