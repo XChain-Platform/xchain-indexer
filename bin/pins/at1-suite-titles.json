@@ -6952,6 +6952,11 @@
       "sync health fields uses the value returned by isSynced",
       "syncFields() behind a REORG-halted decoder reads not synced, whatever isSynced says"
     ],
+    "69b28ea84c6d52df": [
+      "HubClient pushChainTip() candidate fanout pushes only to the current hub when pinned",
+      "HubClient pushChainTip() candidate fanout pushes to every unpinned candidate",
+      "HubClient pushChainTip() candidate fanout waits for every candidate when one push fails"
+    ],
     "69b7814a5ee226de": [
       "Order_Match escrow/credit precision parity @regression @tier1 escrow release is the bit-exact negation of the paired credit on an 18-dp fill",
       "Order_Match escrow/credit precision parity @regression @tier1 negative control: JS unary minus on the same value DOES lose precision"
@@ -18808,8 +18813,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1377,
-      "titleCount": 13808,
+      "fileCount": 1378,
+      "titleCount": 13811,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19759,6 +19764,7 @@
         "test/unit/hub/hub_client.test/hub_list.test.js": "418a7f785b9027c0",
         "test/unit/hub/hub_client.test/hub_list_refresh.test.js": "9fae3d16d5402aa7",
         "test/unit/hub/hub_client.test/hub_rejection.test.js": "921003c7d543ef9c",
+        "test/unit/hub/hub_client.test/push_chain_tip_fanout.test.js": "69b28ea84c6d52df",
         "test/unit/hub/hub_client.test/push_methods.test.js": "df1fca920021bbe3",
         "test/unit/hub/hub_client.test/retractions.test.js": "e8f3158d242019f6",
         "test/unit/hub/hub_config_staleness.test.js": "e114e1b97d1caeb4",
