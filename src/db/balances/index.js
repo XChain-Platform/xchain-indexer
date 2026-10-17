@@ -87,53 +87,44 @@ module.exports = {
     async updateAddressBalance(address, rollback){
         let type        = typeof address;
         let address_id  = null;
-        let balance     = 0;
-        let old_balance = 0;
-        let query       = false;
-        let results     = null;
         if(type==='number' && this.util.isNumeric(address))
             address_id = address;
         if(type==='string')
             address_id = await this.createAddress(address);
-        // Get list of address balances based on credits/debits tables
-        let balances = await this.getAddressBalances(address_id);
-        // Get list of address balances based on balances table. Only the rollback
-        // branch below reads this, so skip the query entirely on the forward path:
-        // it is one wasted round-trip per touched address per action, and fan-out
-        // actions (DIVIDEND / AIRDROP) run this loop once per holder. Keep the read
-        // HERE rather than inside the rollback branch, since it must observe the
-        // balances table BEFORE the UPSERT/DELETE loop rewrites it.
-        let old_balances = (rollback) ? await this.getAddressTableBalances(address_id) : {};
-        // Handle updating any current balances based on credits/debits table records
-        for(let tick_id in balances){
-            balance = balances[tick_id];
-            let args = [];
-            if(balance==0){
-                query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
-                args.push(address_id, tick_id);
-            } else {
-                // Convert BigNumber to a plain decimal string so the mariadb driver
-                // serializes it correctly. Normal notation is required: String()
-                // renders sub-1e-7 balances exponentially ("3e-8"), which the SMT
-                // leaf encoder rejects (block wedge) and drifts the byte-form vs sync.
-                balance = this.util.bcstr(balance);
-                query = "INSERT INTO balances (tick_id, address_id, amount) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE amount = VALUES(amount)";
-                args.push(tick_id, address_id, balance);
-            }
-            results = await this.doQuery(query, args);
+        let mode = balanceDeltaMode(this, rollback);
+        let deltas = pendingDeltas(this, address_id);
+        let old_balances = (rollback || (mode !== 'off' && deltas))
+            ? await this.getAddressTableBalances(address_id)
+            : {};
+        let balances;
+        let verification = null;
+
+        if(mode === 'on' && deltas){
+            balances = applyDeltas(this, old_balances, deltas, true);
+        } else {
+            balances = await this.getAddressBalances(address_id);
+            if(mode === 'verify' && deltas)
+                verification = compareBalances(this,
+                    applyDeltas(this, old_balances, deltas, false), balances);
         }
+
+        await writeBalances(this, address_id, balances);
         // If this is a rollback, then handle detecting records in balances table which should not exist and delete them
         // TODO: Test this code a bit better with various random rollbacks and verify all is working without any sanity check issues
         if(rollback){
             for(let tick_id in old_balances){
-                old_balance = old_balances[tick_id];
-                balance     = balances[tick_id];
+                let old_balance = old_balances[tick_id];
+                let balance     = balances[tick_id];
                 if(!this.util.isNull(old_balance) && (this.util.isNull(balance) || balance==0 )){
-                    query   = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
-                    results = await this.doQuery(query, [address_id, tick_id]);
+                    let query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
+                    await this.doQuery(query, [address_id, tick_id]);
                 }
             }
         }
+        if(verification)
+            logBalanceDiffs(address_id, verification);
+        if(mode !== 'off' && deltas)
+            this._balanceDelta.delete(address_id);
     },
 
     // Get address balances using balances table data
@@ -154,3 +145,66 @@ module.exports = {
     },
 
 };
+
+function balanceDeltaMode(db, rollback){
+    if(rollback || !(db._balanceDelta instanceof Map))
+        return 'off';
+    let mode = String((db.config && db.config['BALANCE_DELTA_MODE']) || 'off').toLowerCase();
+    return (mode === 'verify' || mode === 'on') ? mode : 'off';
+}
+
+function pendingDeltas(db, address_id){
+    return (db._balanceDelta instanceof Map && db._balanceDelta.get(address_id) instanceof Map)
+        ? db._balanceDelta.get(address_id)
+        : null;
+}
+
+function canonicalAmount(db, amount){
+    return db.util.bcstr(db.util.bcadd(amount || 0, 0, ledgerPrecision.LEDGER_AMOUNT_PRECISION));
+}
+
+function applyDeltas(db, old_balances, deltas, changedOnly){
+    let balances = changedOnly ? {} : Object.assign({}, old_balances);
+    for(const [tick_id, delta] of deltas){
+        let prior = old_balances[tick_id] || 0;
+        balances[tick_id] = canonicalAmount(db,
+            db.util.bcadd(prior, delta, ledgerPrecision.LEDGER_AMOUNT_PRECISION));
+    }
+    return balances;
+}
+
+function compareBalances(db, deltaBalances, summedBalances){
+    let differences = [];
+    let ticks = new Set(Object.keys(deltaBalances).concat(Object.keys(summedBalances)));
+    for(const tick_id of ticks){
+        let deltaAmount = canonicalAmount(db, deltaBalances[tick_id]);
+        let summedAmount = canonicalAmount(db, summedBalances[tick_id]);
+        if(deltaAmount !== summedAmount)
+            differences.push({ tick_id, deltaAmount, summedAmount });
+    }
+    return differences;
+}
+
+function logBalanceDiffs(address_id, differences){
+    for(const difference of differences)
+        getLogger().warn('Balance delta verification mismatch: address_id=' + address_id +
+            ' tick_id=' + difference.tick_id + ' delta=' + difference.deltaAmount +
+            ' summed=' + difference.summedAmount);
+}
+
+async function writeBalances(db, address_id, balances){
+    for(let tick_id in balances){
+        let balance = balances[tick_id];
+        let query;
+        let args;
+        if(balance==0){
+            query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
+            args = [address_id, tick_id];
+        } else {
+            balance = db.util.bcstr(balance);
+            query = "INSERT INTO balances (tick_id, address_id, amount) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE amount = VALUES(amount)";
+            args = [tick_id, address_id, balance];
+        }
+        await db.doQuery(query, args);
+    }
+}

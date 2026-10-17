@@ -11861,6 +11861,17 @@
       "activation-gate constant parity to canonical constants.js @regression train_activation.js TRAIN_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js",
       "activation-gate constant parity to canonical constants.js @regression xchain_bridge_activation.js XCHAIN_BRIDGE_ACTIVATION is value-identical to xchain-documentation/protocol/constants.js"
     ],
+    "a047f1b5c097c4d9": [
+      "balance delta application modes @regression @tier1 falls back to a re-sum when no block delta collector is active",
+      "balance delta application modes @regression @tier1 off re-sums ledger history and leaves the collected delta available",
+      "balance delta application modes @regression @tier1 on applies the pending delta without reading ledger history",
+      "balance delta application modes @regression @tier1 on deletes a balance driven exactly to zero",
+      "balance delta application modes @regression @tier1 on inserts a new dust balance in normal notation",
+      "balance delta application modes @regression @tier1 preserves a delta when its balance write fails",
+      "balance delta application modes @regression @tier1 rollback re-sums even when delta application is on",
+      "balance delta application modes @regression @tier1 verify logs each mismatch but still persists the re-summed balance",
+      "balance delta application modes @regression @tier1 verify persists the re-sum and stays quiet when the delta agrees"
+    ],
     "a0a533092c7a2e98": [
       "stakeSnapshotStrings fresh output does not mutate or reuse input objects, arrays, entries, or amounts",
       "stakeSnapshotStrings fresh output returns three fresh empty objects for an empty snapshot",
@@ -18865,8 +18876,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1383,
-      "titleCount": 13833,
+      "fileCount": 1384,
+      "titleCount": 13842,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19627,6 +19638,7 @@
         "test/unit/db/anchors/archive_head_pick_gate.test.js": "9edb73492cfca621",
         "test/unit/db/anchors/max_archive_batch_seq_by_author_predicate.test.js": "7f93503626a6b339",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "025a38c8bb9a00ab",
+        "test/unit/db/balance_delta_apply.test.js": "a047f1b5c097c4d9",
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
