@@ -1368,6 +1368,10 @@
       "ledgerKeysForBlock per-branch block filter @regression @tier1 filters both the credits and the debits branch by block inside the derived table",
       "ledgerKeysForBlock per-branch block filter @regression @tier1 returns the distinct non-empty keys as address<TAB>tick"
     ],
+    "1627468c01af8b39": [
+      "ATTEST callback BATCH_POSITION below gate @regression @tier3 direct v1 responses at positions 0 and 1 inject contexts with one root discriminator",
+      "ATTEST callback BATCH_POSITION below gate @regression @tier3 relay ok responses at positions 0 and 1 inject contexts with one root discriminator"
+    ],
     "1660347f96656b41": [
       "SQL schema column parity (definition path vs ledger path) @regression a migration-created table is NOT parked in the pre-ledger baseline",
       "SQL schema column parity (definition path vs ledger path) @regression a migration-created table matches its definition byte-for-byte (columns, keys, engine)",
@@ -18881,8 +18885,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1385,
-      "titleCount": 13845,
+      "fileCount": 1386,
+      "titleCount": 13847,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18972,6 +18976,7 @@
         "test/unit/actions/attest/attest_response_verify_vectors.test/mirror_era_canonical.test.js": "f96db63e0a31c835",
         "test/unit/actions/attest/attest_response_verify_vectors.test/pre_verification_errors.test.js": "bfb10fe9f39c4a4e",
         "test/unit/actions/attest/attest_response_verify_vectors.test/widening_step.test.js": "a2ef223856b71964",
+        "test/unit/actions/attest/callback_batch_position_below_gate.test.js": "1627468c01af8b39",
         "test/unit/actions/attest/canonical_signer_set.test.js": "4f4095f7fff521ab",
         "test/unit/actions/attest/mirror_apply_malformed_admission.test.js": "a37267dabef57ec2",
         "test/unit/actions/attest/mirror_signer_set_canonical.test.js": "125e47594c3f675e",
