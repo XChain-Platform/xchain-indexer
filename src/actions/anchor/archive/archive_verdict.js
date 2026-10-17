@@ -8,7 +8,7 @@
 const { getLogger } = require('../../../observability/index.js');
 const diag = require('../diagnostic_events.js');
 
-async function reportArchiveFailure(handler, failure, sectionScoped) {
+async function reportArchiveFailure(handler, failure, sectionScoped, journal) {
     getLogger().warn(failure.logLine);
     diag.noteAnchorFailed(failure.event);
 
@@ -17,7 +17,13 @@ async function reportArchiveFailure(handler, failure, sectionScoped) {
         if (typeof handler.indexerDb.setAnchorArchiveRowStatus !== 'function') {
             throw new Error('Missing handler.indexerDb.setAnchorArchiveRowStatus');
         }
+        if (journal === true) {
+            return handler.indexerDb.setAnchorArchiveRowStatus(actionIndex, 'invalid_archive', true);
+        }
         return handler.indexerDb.setAnchorArchiveRowStatus(actionIndex, 'invalid_archive');
+    }
+    if (journal === true) {
+        return handler.indexerDb.setAnchorArchiveStatus(actionIndex, 'invalid_archive', true);
     }
     return handler.indexerDb.setAnchorArchiveStatus(actionIndex, 'invalid_archive');
 }

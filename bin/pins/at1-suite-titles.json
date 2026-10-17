@@ -6987,6 +6987,10 @@
       "Action field-format contract field codec is delimiter-clean (split/join inverse for pipe-free fields) an embedded pipe provably changes arity; fields must be pipe-free",
       "Action field-format contract field codec is delimiter-clean (split/join inverse for pipe-free fields) pipe-free values round-trip through join \u2192 split for every template arity"
     ],
+    "66caa1177df15bb8": [
+      "archive stamp journal flag forwards only an exact true journal flag to both archive setters",
+      "archive stamp journal flag journals archive status only for an exact true flag on both scopes"
+    ],
     "66cd41f8bb0bfd3b": [
       "list share mirror membership re-read @regression @tier1 accepts an empty mirror list with the empty membership hash",
       "list share mirror membership re-read @regression @tier1 halts when a mirror member is missing",
@@ -17968,8 +17972,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1406,
-      "titleCount": 13925,
+      "fileCount": 1407,
+      "titleCount": 13927,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18018,6 +18022,7 @@
         "test/unit/actions/anchor/archive/anchor_archive_verdict_prefold.test.js": "0c41aab445ad49d3",
         "test/unit/actions/anchor/archive/anchor_archive_verdict_scoped.test.js": "2e3850c1f7da931d",
         "test/unit/actions/anchor/archive/archive_match_count_gate.test.js": "127df5c011e290d0",
+        "test/unit/actions/anchor/archive/archive_stamp_journal_flag.test.js": "66caa1177df15bb8",
         "test/unit/actions/anchor/bundle_order/anchor_bundle_order_activation.test.js": "74e4105debf3952c",
         "test/unit/actions/anchor/bundle_order/anchor_bundle_order_gate.test.js": "13b04af629143cd3",
         "test/unit/actions/anchor/bundle_order/anchor_order_reason_helpers.test.js": "3277653238c8d36f",
