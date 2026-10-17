@@ -159,10 +159,6 @@
       "public VOTE binding dry-run refusal falls through to the real engine for another action",
       "public VOTE binding dry-run refusal treats a lowercase action and an empty version as the same create"
     ],
-    "03398c9a5b04e1c7": [
-      "getMaxAnchorCheckpointSeq() version filter (#2239) parameterizes the version filter from the shared CHECKPOINT_VERSIONS constant",
-      "getMaxAnchorCheckpointSeq() version filter (#2239) still returns null when no watermark row exists"
-    ],
     "03399ab554f050dd": [
       "migration live-schema guard type and charset rules against a real MariaDB @tier3 allows: enum extended in a utf8 table from server metadata",
       "migration live-schema guard type and charset rules against a real MariaDB @tier3 allows: integer widened to an exact decimal from server metadata",
@@ -13111,6 +13107,14 @@
       "HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2 the per-leg reorg fences only ever move UP (a lowered fence would invite a stale delete)",
       "HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2 uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for cross_chain_matches"
     ],
+    "b381b504f17eca5f": [
+      "getArchiveReplayWatermarks() counts unverified rows, so the watermark does not differ between mirrored and unmirrored nodes",
+      "getArchiveReplayWatermarks() keeps the default statement unchanged and narrows valid-only reads",
+      "getArchiveReplayWatermarks() parameterizes the version filter from the shared ARCHIVE_HEAD_VERSIONS constant",
+      "getArchiveReplayWatermarks() returns both watermarks from a SINGLE statement over the same row set",
+      "getArchiveReplayWatermarks() returns nulls on an empty result set rather than throwing",
+      "getArchiveReplayWatermarks() returns nulls when no archive row exists, leaving the guard inert"
+    ],
     "b3af3a3b9c2e54df": [
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) an invalid signature leaves the request pending and writes NOTHING",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) applies a verified row: response row, terminal flip, callback, fulfilled_count",
@@ -14110,13 +14114,6 @@
       "snapshot barrier scope filter, admission height versus effective time inert (no activation) a row admitted below B but effective after t(B) is NOT in scope",
       "snapshot barrier scope filter, admission height versus effective time inert (no activation) scopes by effective_time and never names the admission column",
       "snapshot barrier scope filter, admission height versus effective time the same rows and the same (t, B) select different blocks per arm early and late flip between the arms"
-    ],
-    "c40243db8bf9d81d": [
-      "getArchiveReplayWatermarks() counts unverified rows, so the watermark does not differ between mirrored and unmirrored nodes",
-      "getArchiveReplayWatermarks() parameterizes the version filter from the shared ARCHIVE_HEAD_VERSIONS constant",
-      "getArchiveReplayWatermarks() returns both watermarks from a SINGLE statement over the same row set",
-      "getArchiveReplayWatermarks() returns nulls on an empty result set rather than throwing",
-      "getArchiveReplayWatermarks() returns nulls when no archive row exists, leaving the guard inert"
     ],
     "c42ed8ba04b55a79": [
       "consensus rules digest sentinel comments does not claim the shipped registry has no far-future sentinel",
@@ -17805,6 +17802,11 @@
       "Programmable policy layer : Phase B enforcement @regression maybeRunControllerGuard : control flow STAKE controller DENY reverts the action",
       "Programmable policy layer : Phase B enforcement @regression maybeRunControllerGuard : control flow STAKE routes to the 'stake' class and invokes the guard (stub now live)"
     ],
+    "eff168f8a3214dbb": [
+      "getMaxAnchorCheckpointSeq() version filter (#2239) keeps the default statement unchanged and narrows valid-only reads",
+      "getMaxAnchorCheckpointSeq() version filter (#2239) parameterizes the version filter from the shared CHECKPOINT_VERSIONS constant",
+      "getMaxAnchorCheckpointSeq() version filter (#2239) still returns null when no watermark row exists"
+    ],
     "f04d7472fea5effd": [
       "config currencies applies only the consensus coin and fiat currency lists",
       "config currencies produces an equal result when applied twice"
@@ -18882,7 +18884,7 @@
   "scripts": {
     "test": {
       "fileCount": 1385,
-      "titleCount": 13845,
+      "titleCount": 13847,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19345,8 +19347,8 @@
         "test/unit/anchor/db_archive_head_predicate.test.js": "5a7b380e23fda375",
         "test/unit/anchor/db_create_anchor_action_publisher.test.js": "6c6f0fb39f3fe2e3",
         "test/unit/anchor/db_get_anchor_v1_by_batch_seq_tieorder.test.js": "b57e643add732c08",
-        "test/unit/anchor/db_get_archive_replay_watermarks.test.js": "c40243db8bf9d81d",
-        "test/unit/anchor/db_get_max_anchor_checkpoint_seq_versions.test.js": "03398c9a5b04e1c7",
+        "test/unit/anchor/db_get_archive_replay_watermarks.test.js": "b381b504f17eca5f",
+        "test/unit/anchor/db_get_max_anchor_checkpoint_seq_versions.test.js": "eff168f8a3214dbb",
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
         "test/unit/anchor/diagnostic_events.test.js": "3d9f64cbeacabe25",
         "test/unit/anchor/max_archive_batch_seq_by_author.test.js": "f8fbd67961145f14",

@@ -140,6 +140,27 @@ describe('getArchiveReplayWatermarks()', function () {
         assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
                                { batchSeq: null, checkpointSeq: null });
     });
+
+    it('keeps the default statement unchanged and narrows valid-only reads', async function () {
+        const db   = makeDb();
+        const stub = sinon.stub(db, 'doQuery')
+                          .resolves([{ max_batch_seq: 1, max_checkpoint_seq: 2 }]);
+
+        await db.getArchiveReplayWatermarks(true);
+        await db.getArchiveReplayWatermarks(true, false);
+        await db.getArchiveReplayWatermarks(true, true);
+
+        assert.deepStrictEqual(stub.secondCall.args, stub.firstCall.args,
+                  'an omitted or false valid-only argument must produce the same statement and values');
+        assert.ok(/status\s+IN\s*\(\s*'valid'\s*,\s*'unverified'\s*\)/i.test(stub.firstCall.args[0]),
+                  'default reads must continue to include unverified rows');
+        assert.ok(/status\s+IN\s*\(\s*'valid'\s*\)/i.test(stub.thirdCall.args[0]),
+                  'valid-only reads must include valid rows');
+        assert.ok(!/unverified/i.test(stub.thirdCall.args[0]),
+                  'valid-only reads must exclude unverified rows');
+        assert.deepStrictEqual(stub.thirdCall.args[1], stub.firstCall.args[1],
+                  'valid-only reads must keep the existing bound values');
+    });
 });
 
 describe('getArchiveReplayWatermarks()', function () {
