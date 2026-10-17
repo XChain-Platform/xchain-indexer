@@ -31,7 +31,7 @@ const { hubConsensusHashFields } = require('./health/hub_fields');
 // Pure verdict modules, required directly rather than through the XChainIndexer class
 // the route is handed, so a stub class in a test still gets the real rule.
 const { barrierHoldMs, barrierCeilingExceeded, publishedStallClass } = require('../XChainIndexer/stall_health.js');
-const { attributedStallReason } = require('./health/stall_fields');
+const { attributedStallReason, trainActivationReport } = require('./health/stall_fields');
 const { readinessVerdict } = require('../XChainIndexer/readiness/verdict.js');
 
 // The coin node tip for chainLag, or the empty shape when the indexer cannot read one
@@ -232,6 +232,8 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hubConfigStale:       hubConfigStale,
         schemaReady:          indexer.schemaReady === true,
+        // /status and the health payload publish the same train activation verdict object.
+        train_activation:     trainActivationReport(indexer),
         hubMirror:            hubMirror,
         ...pollHeartbeatFields(indexer),
         ...hubConsensusHashFields(indexer)
