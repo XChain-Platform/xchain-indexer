@@ -23,7 +23,7 @@
  * The query under test is the one rollback.js actually builds: it is captured
  * from a Rollback run and then mechanically turned into the matching SELECT
  * (`UPDATE anchor_actions p` -> `SELECT p.action_index FROM anchor_actions p`,
- * `SET p.status_id = us.id` dropped), because sqlite has no multi-table UPDATE.
+ * with its assignment list dropped), because sqlite has no multi-table UPDATE.
  * Every JOIN and every WHERE term, which is the whole of what is under test,
  * survives that rewrite untouched and is evaluated by the engine.
  *
@@ -94,9 +94,13 @@ function makeDb(){
         },
         // The parent action indexes the captured reset UPDATE would have written.
         resetTargets(sql, args){
-            const select = sql
-                .replace('UPDATE anchor_actions p', 'SELECT p.action_index FROM anchor_actions p')
-                .replace('SET p.status_id = us.id', '');
+            let select = sql.replace(
+                'UPDATE anchor_actions p', 'SELECT p.action_index FROM anchor_actions p');
+            const assignments = /\bSET\b[\s\S]*?(?=\bWHERE\b)/i;
+            if(!assignments.test(select)){
+                throw new Error('captured reset UPDATE has no SET clause before its WHERE clause');
+            }
+            select = select.replace(assignments, '');
             return db.prepare(select).all(...args).map(r => Number(r.action_index));
         },
         close(){ db.close(); },
