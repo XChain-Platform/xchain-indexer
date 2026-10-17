@@ -55,6 +55,8 @@ describe('perf harness: instrumented blocks run through the integration launcher
         assert.deepStrictEqual(timed.trace, plain.trace);
         assert.ok(timed.trace.includes('util.processAttestationResponses'),
             'the cross-chain group ran, so the run is production\'s sequence and not a subset');
+        for (const method of ['refreshTokenSuppliesForBlock', 'getExpiredItems', 'findCancelledDispensers'])
+            assert.ok(timed.trace.includes('db.' + method), 'the run did not reach db.' + method);
     });
 
     it('times every collector phase, every pass group and finalizeBlock for each block', async function () {

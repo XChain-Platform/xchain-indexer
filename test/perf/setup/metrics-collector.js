@@ -80,7 +80,8 @@ class MetricsCollector {
 
         // Phase timing stats
         const phaseNames = ['decoderRead', 'actionProcessing', 'expirations',
-                            'cancellations', 'blockCreation', 'marketUpdates',
+                            'cancellations', 'supplyRefresh', 'expiryScan',
+                            'cancelScan', 'blockCreation', 'marketUpdates',
                             'sanityCheck', 'commit'];
         const phaseTiming = {};
         for (const name of phaseNames) {

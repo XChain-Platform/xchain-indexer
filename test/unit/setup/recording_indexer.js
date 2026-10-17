@@ -9,6 +9,7 @@
 // General Public License v3.0 or later; see LICENSE.md.
 
 const XChainIndexer = require('../../../src/XChainIndexer.js');
+const utilityBlockPasses = require('../../../src/utility/block_passes.js');
 
 const BLOCK_TIME     = 1700000000;
 const RAW_BLOCK_TIME = 1700000007;
@@ -58,6 +59,12 @@ function recordingIndexer(opts) {
             return [];
         },
     }, ['mirrorDb']);
+    for (const method of ['processExpirations', 'processCancellations']) {
+        ix.util[method] = async function (...args) {
+            trace.push('util.' + method);
+            return utilityBlockPasses[method].apply(ix.util, args);
+        };
+    }
     const decoderTrace = (method) => {
         if (traceDecoderCalls) trace.push('decoder.' + method);
     };
