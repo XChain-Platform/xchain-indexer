@@ -278,14 +278,6 @@ addGate('dispense_payment_tally_scale_activation.DISPENSE_TALLY_EXACT_SCALE', 'c
 // keeps. Also the render width of the dispenses row below.
 addGate('dispense_payment_tally_scale_activation.DISPENSE_TALLY_LEGACY_SCALE', 'constant', 8);
 
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']), matching the dispenser-family cohort.
-addGate('dispense_payment_tally_scale_activation.DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION', 'time', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
-
 // dispenser_amount_positivity_activation
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']).

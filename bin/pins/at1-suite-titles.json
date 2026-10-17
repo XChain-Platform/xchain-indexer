@@ -2947,6 +2947,16 @@
       "shared list params rejects unsupported, lower-case, null, and non-object parameter values",
       "shared list params returns the exact record shape with a cloned utf8 byte-sorted member array"
     ],
+    "2b43cec5c7ef3f91": [
+      "dispense payment tally scale: over-charge @regression @tier1 both fills the payment covers settle",
+      "dispense payment tally scale: over-issuance @regression @tier1 the same payment settles exactly the TWO fills it covers",
+      "dispense payment tally scale: over-issuance @regression @tier1 the settled rows never sum past the payment",
+      "dispense payment tally scale: selection @regression @tier1 the batch pool and a native-coin trigger keep the legacy scale",
+      "dispense payment tally scale: selection @regression @tier1 the exact scale is the platform maximum token precision",
+      "dispense payment tally scale: unaffected settlements @regression @tier1 a native-coin trigger retains the legacy scale",
+      "dispense payment tally scale: unaffected settlements @regression @tier1 a token payment that fits 8 dp settles and records without widening",
+      "dispense payment tally scale: unaffected settlements @regression @tier1 the batch pool keeps the 8 dp scale it shares with COINPAY"
+    ],
     "2b4abedb79b40a38": [
       "bridge and policy barriers on a schema without the mirror tables @regression @tier1 asks the schema once, not once per refresh",
       "bridge and policy barriers on a schema without the mirror tables @regression @tier1 keeps both barriers CLOSED, which is the side that cannot fork",
@@ -17974,7 +17984,7 @@
   "scripts": {
     "test": {
       "fileCount": 1406,
-      "titleCount": 13930,
+      "titleCount": 13925,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18179,7 +18189,7 @@
         "test/unit/actions/market/dispense.test/lists.test.js": "9bc7fc9f3666e48b",
         "test/unit/actions/market/dispense.test/oracle_per_token.test.js": "2e4b5d254d43a046",
         "test/unit/actions/market/dispense.test/settlement_records.test.js": "d2042aa3438cc5fe",
-        "test/unit/actions/market/dispense_payment_tally_scale.test.js": "32b91e3ceb72e5c2",
+        "test/unit/actions/market/dispense_payment_tally_scale.test.js": "2b43cec5c7ef3f91",
         "test/unit/actions/market/dispenser.test.js": "ace5f36204b02c5a",
         "test/unit/actions/market/dispenser.test/cancel.test.js": "1294cc725207b2fb",
         "test/unit/actions/market/dispenser.test/create_paths.test.js": "f4fce0288f1b045f",
