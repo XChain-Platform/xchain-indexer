@@ -313,3 +313,15 @@ addGate('match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION', 'height', {
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION at read
 });
+
+// reassemble_chunk_parent_status_activation
+// Height on the completing continuation chunk's DOGE block_index. From it chunk-side
+// archive reassembly runs only when its parent head has the same valid or gated-unverified
+// status the head-side path admits. Below it the continuation's own status remains the only
+// status guard. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms
+// it with XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION (shared_rows.js).
+addGate('reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATUS_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION at read
+});
