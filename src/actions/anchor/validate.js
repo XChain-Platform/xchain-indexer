@@ -224,6 +224,23 @@ function parseBundleTail(params, data, cursor, error){
     return { error, publisherSigs };
 }
 
+function checkpointSeqBindReason(s){
+    const maxSafeInteger = String(Number.MAX_SAFE_INTEGER);
+    const canonicalSafeInteger = value =>
+        typeof value === 'string' &&
+        /^(0|[1-9][0-9]*)$/.test(value) &&
+        (value.length < maxSafeInteger.length ||
+         (value.length === maxSafeInteger.length && value <= maxSafeInteger));
+
+    if(!s || !canonicalSafeInteger(s.CHECKPOINT_SEQ))
+        return 'CHECKPOINT_SEQ (not a canonical safe integer)';
+    if(!canonicalSafeInteger(s.SNAPSHOT_BLOCK))
+        return 'SNAPSHOT_BLOCK (not a canonical safe integer)';
+    if(s.CHECKPOINT_SEQ !== s.SNAPSHOT_BLOCK)
+        return 'CHECKPOINT_SEQ (does not match SNAPSHOT_BLOCK)';
+    return null;
+}
+
 // Shape-check one v0 section's fixed fields. Returns the failure reason (which the
 // caller prefixes with 'SECTION n ') or null when the section is well formed. Split
 // out so the reason strings stay in one place and read the same as the archive leg's.
@@ -298,6 +315,6 @@ module.exports = {
     SECTION_FIXED_FIELDS,
     readHeadFields, validateHeadShape, parseHeadSigs, parseHeadPublisherTail,
     validateBundleHeader, readSection, parseSectionSigs, parseBundleTail,
-    sectionShapeReason, sectionOrderReason, sigOrderReason,
+    checkpointSeqBindReason, sectionShapeReason, sectionOrderReason, sigOrderReason,
     validateChunkFields
 };
