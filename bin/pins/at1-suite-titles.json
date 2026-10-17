@@ -3680,6 +3680,11 @@
       "batched COINPAY resolves its own payment output @regression @tier1 the A5 invariant: one payment settles ONE obligation, not N two obligations to a RESOLVED payee with one payment's worth: exactly one settles",
       "batched COINPAY resolves its own payment output @regression @tier1 the A5 invariant: one payment settles ONE obligation, not N two obligations to the ROW'S OWN payee with one payment's worth: exactly one settles"
     ],
+    "39a4570af1805f2f": [
+      "Airdrop multi-leg native fee batch ledger and probe @regression @tier1 draws one leg fee from a BATCH_VALUE_LEDGER and rejects the unpaid second leg",
+      "Airdrop multi-leg native fee batch ledger and probe @regression @tier1 draws two leg fees from a fully funded BATCH_VALUE_LEDGER",
+      "Airdrop multi-leg native fee batch ledger and probe @regression @tier1 settles both legs during a FEE_PROBE without drawing from BATCH_VALUE_LEDGER"
+    ],
     "39deaa3f8a62287c": [
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
@@ -18935,8 +18940,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1393,
-      "titleCount": 13878,
+      "fileCount": 1394,
+      "titleCount": 13881,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19257,6 +19262,7 @@
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
