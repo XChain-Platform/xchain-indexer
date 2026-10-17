@@ -209,9 +209,10 @@ function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock,
         waitingOnFutureBlock: futureWait,
         // Single machine-readable verdict on the counter, so a probe does not have to
         // join stallReason/degraded/stallClearsAt: 'none' | 'future_block_wait' |
-        // 'bridge_proof_wait' | 'price_landing_wait' | 'barrier_defer' | 'wedged', plus the
-        // two a restart cannot clear (publishedStallClass): 'upstream_halted' and
-        // 'rollcall_proof_wait', escalating to 'rollcall_proof_stuck' past the hold ceiling.
+        // 'bridge_proof_wait' | 'train_activation_halt' | 'price_landing_wait' |
+        // 'barrier_defer' | 'wedged', plus the two a restart cannot clear
+        // (publishedStallClass): 'upstream_halted' and 'rollcall_proof_wait', escalating
+        // to 'rollcall_proof_stuck' past the hold ceiling.
         stallClass:   publishedStallClass(stallClass, indexer.stallReason, { decoderReorgHalted: halted,
             ceilingExceeded: barrierCeilingExceeded(indexer.barrierHold, indexer.barrierHoldCeilingMs, now) }),
         ...readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexerDbUnreachable, chainTip })
