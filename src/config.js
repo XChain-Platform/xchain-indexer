@@ -59,6 +59,7 @@ const GAS_TICK = require('./protocol/constants.js').GAS_TICK;
 // decided.
 const CONFIG_ENV = Object.freeze({
     ANCHOR_PROOF_TIMEOUT_MS: process.env.ANCHOR_PROOF_TIMEOUT_MS,
+    BALANCE_DELTA_MODE: process.env.BALANCE_DELTA_MODE,
     BRIDGE_PROOF_TIMEOUT_MS: process.env.BRIDGE_PROOF_TIMEOUT_MS,
     CORS_ORIGIN: process.env.CORS_ORIGIN,
     DB_ACQUIRE_TIMEOUT: process.env.DB_ACQUIRE_TIMEOUT,
@@ -136,6 +137,11 @@ const CONFIG_ENV = Object.freeze({
 // and its callers never touch process.env themselves.
 function readEnvNow(key){
     return process.env[key];
+}
+
+function applyBalanceDeltaMode(config){
+    let mode = String(CONFIG_ENV.BALANCE_DELTA_MODE || 'off').toLowerCase();
+    config['BALANCE_DELTA_MODE'] = ['off', 'verify', 'on'].includes(mode) ? mode : 'off';
 }
 
 // Tick, token, memo and BET limits. TICK_CHARACTERS, MIN/MAX_BET_REFUND_WINDOW
@@ -388,6 +394,7 @@ module.exports = {
         applyDispenserAndMessageLimits(config);
         applyWireFields(config);
         applyControllerPolicy(config);
+        applyBalanceDeltaMode(config);
         applyBlockTiming(config);
         applyGenesisLedger(config, coin);
         applyGenesisAirdrop(config, network);
