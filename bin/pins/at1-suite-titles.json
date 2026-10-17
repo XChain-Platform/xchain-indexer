@@ -16268,6 +16268,9 @@
       "Swap_Match action handler @regression @tier2 transfers ownership on both sides for an ownership-for-ownership swap",
       "Swap_Match action handler @regression @tier2 uses first valid match and ignores subsequent matches"
     ],
+    "d9ee41171af5848b": [
+      "cancelled dispenser latest-status probe shape @regression @tier1 keys the correlated MAX probe by dispenser and orders the result by action"
+    ],
     "d9f449f3bb6fb396": [
       "API-key gate (src/api/auth_gate.js) @regression @tier1 keyEquals compares in constant time over equal lengths and refuses a length mismatch",
       "API-key gate (src/api/auth_gate.js) @regression @tier1 with a key configured, refuses a gated method anywhere in a batch without the key and passes it with",
@@ -18881,8 +18884,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1385,
-      "titleCount": 13845,
+      "fileCount": 1386,
+      "titleCount": 13846,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19737,6 +19740,7 @@
         "test/unit/db/markets/db_dispenser_caps_counts.test.js": "9f5d2796c9488281",
         "test/unit/db/markets/db_dispenser_delay_protocol_time.test.js": "6643e508ad4d2185",
         "test/unit/db/markets/db_dispenser_send_amount_compare.test.js": "f1ddf65d011713e5",
+        "test/unit/db/markets/db_find_cancelled_dispensers_probe_shape.test.js": "d9ee41171af5848b",
         "test/unit/db/markets/db_find_swap_matches_ownership_null.test.js": "dd59b59221db9c53",
         "test/unit/db/markets/db_list_remove_and_proven_use.test.js": "68b486a4bc90a3f7",
         "test/unit/db/markets/dex_fill_quantization_parity.test.js": "e5aec9d580642730",
