@@ -13464,6 +13464,12 @@
       "NUMBER_FIELDS excludes address-bearing fields @regression exposes both lists",
       "NUMBER_FIELDS excludes address-bearing fields @regression no address-bearing field is numeric-normalized"
     ],
+    "baff1a5bd4d4dfa1": [
+      "Rollback sweep stats @regression @tier3 names every orphan sweep with its rows removed on the completion line",
+      "Rollback sweep stats @regression @tier3 reports only the current rollback sweeps, not an earlier one",
+      "Rollback sweep stats @regression @tier3 returns time and rows per table from the dangling-reference sweep",
+      "Rollback sweep stats @regression @tier3 returns time and ticker count from the token escrow re-derive"
+    ],
     "bb7ad6c26bf5b684": [
       "isMirrorBarrierReason @regression @tier1 classifies every mirror barrier as resync-able and every host fault as not",
       "isMirrorBarrierReason @regression @tier1 finds every stall reason the block loop actually sets",
@@ -18882,7 +18888,7 @@
   "scripts": {
     "test": {
       "fileCount": 1385,
-      "titleCount": 13845,
+      "titleCount": 13846,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20170,7 +20176,7 @@
         "test/unit/rollback/rollback_failure_preserves_error.test.js": "cd82da214987858b",
         "test/unit/rollback/rollback_hub_push_queue_at_use.test.js": "922ab0a36294b2a4",
         "test/unit/rollback/rollback_slash_restore_order.test.js": "1ef3d061fbdfa9cd",
-        "test/unit/rollback/rollback_sweep_stats.test.js": "ff459e9650a79a25",
+        "test/unit/rollback/rollback_sweep_stats.test.js": "baff1a5bd4d4dfa1",
         "test/unit/rollback/rollcall_unwind_schema_gap.test.js": "947a8652e2bab804",
         "test/unit/rollcall/db_rollcall_gates.test.js": "97eac3517509ca4d",
         "test/unit/rollcall/db_rollcalls_public_reads.test.js": "3efb8f783fe36f87",
