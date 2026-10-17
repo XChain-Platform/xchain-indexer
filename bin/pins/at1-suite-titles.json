@@ -554,6 +554,21 @@
       "LIST_TICK_COIN consumers @regression @consensus ISSUE coin-qualified root reservation leaves the historical colon ticker verdict unchanged below the gate",
       "LIST_TICK_COIN consumers @regression @consensus ISSUE coin-qualified root reservation refuses live and future coin roots without interning their ticker names"
     ],
+    "0a2fc0a50228f0e1": [
+      "capability snapshot proof pinned set parser accepts a one-entry set",
+      "capability snapshot proof pinned set parser accepts two sources and an uppercase public key",
+      "capability snapshot proof pinned set parser refuses a 63-hex public key and names its entry",
+      "capability snapshot proof pinned set parser refuses a blank source and names its entry",
+      "capability snapshot proof pinned set parser refuses a negative weight and names its entry",
+      "capability snapshot proof pinned set parser refuses a non-array value",
+      "capability snapshot proof pinned set parser refuses a non-object entry and names its index",
+      "capability snapshot proof pinned set parser refuses a nonnumeric weight and names its entry",
+      "capability snapshot proof pinned set parser refuses a null entry and names its index",
+      "capability snapshot proof pinned set parser refuses a numeric weight and names its entry",
+      "capability snapshot proof pinned set parser refuses a zero-only set",
+      "capability snapshot proof pinned set parser refuses an empty array",
+      "capability snapshot proof pinned set parser refuses invalid JSON"
+    ],
     "0a5e98f2d0503af2": [
       "src/db.js ORDER BY determinism (consensus hotspot invariant) @regression @tier1 does not accept *_id surrogate columns as the bare id/source tiebreaker",
       "src/db.js ORDER BY determinism (consensus hotspot invariant) @regression @tier1 every ORDER BY carries a recognized tiebreaker or a documented allowlist exception",
@@ -17973,8 +17988,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1406,
-      "titleCount": 13930,
+      "fileCount": 1407,
+      "titleCount": 13943,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18646,6 +18661,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
+        "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
