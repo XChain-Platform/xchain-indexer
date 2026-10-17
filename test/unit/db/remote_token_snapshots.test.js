@@ -69,9 +69,11 @@ describe('remote_token_snapshots mirror contract', function () {
         assert.match(sql, /KEY idx_source_ref \(coin, source_action_index\)/);
     });
 
-    it('is bootstrapped, globally watermarked, locally keyed, and never retracted', function () {
+    it('is bootstrapped, height watermarked, locally keyed, and never retracted', function () {
         assert.ok(!mirrorTables.CROSS_CHAIN_TABLES.includes('remote_token_snapshots'));
-        assert.ok(mirrorTables.HUB_STATE_TABLES.includes('remote_token_snapshots'));
+        assert.ok(!mirrorTables.HUB_STATE_TABLES.includes('remote_token_snapshots'));
+        assert.ok(mirrorTables.HEIGHT_MIRROR_TABLES.includes('remote_token_snapshots'));
+        assert.ok(mirrorTables.VALIDITY_READ_TABLES.includes('remote_token_snapshots'));
         assert.ok(mirrorTables.MIRRORED_TABLES.includes('remote_token_snapshots'));
         assert.ok(mirrorTables.AUTO_INCREMENT_ID_TABLES.includes('remote_token_snapshots'));
         // No push_generation fence column exists on either side, so no retraction mapping either.

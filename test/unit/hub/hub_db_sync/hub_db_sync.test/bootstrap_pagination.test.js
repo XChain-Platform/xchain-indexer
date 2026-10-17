@@ -16,7 +16,7 @@ const sinon = require('sinon');
 
 const HubDbSync = require('../../../../../src/hub/hub_db_sync.js');
 const { HUB_SCHEMA_VERSION } = require('../../../../../src/hub/hub_schema_version');
-const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES } =
+const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES, HEIGHT_MIRROR_TABLES } =
     require('../../../../../src/hub/hub_db_sync/mirror_tables.js');
 
 // Build a HubDbSync whose enabled flag is true (needs both a hub URL and a hub DB),
@@ -122,7 +122,8 @@ function registerBootstrapPaginationGroup9(PAGE, makeBootstrapSync, fullPage) { 
             const bootstrapTable = sinon.stub(sync, 'bootstrapTable').resolves(null);
             await sync.bootstrapAll();
             await clock.tickAsync(sync.pollIntervalMs * 3);
-            const mirroredTableCount = 2 + CROSS_CHAIN_TABLES.length + HUB_STATE_TABLES.length;
+            const mirroredTableCount = 2 + CROSS_CHAIN_TABLES.length + HUB_STATE_TABLES.length +
+                HEIGHT_MIRROR_TABLES.length;
             assert.strictEqual(bootstrapTable.callCount, mirroredTableCount,
                 `one pass over the ${mirroredTableCount} mirrored tables, no retries`);
         } finally {
