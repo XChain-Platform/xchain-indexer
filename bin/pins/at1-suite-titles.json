@@ -14174,6 +14174,18 @@
       "Smoke: REST /status SM-05k: GET /status reports hubMirror as unconfigured, never throwing, when the mirror is absent",
       "Smoke: REST /status SM-05l: GET /status degrades to the disabled hubMirror shape when the snapshot call throws"
     ],
+    "c4c306e18e19f547": [
+      "balance delta mode configuration accepts off",
+      "balance delta mode configuration accepts on",
+      "balance delta mode configuration accepts verify",
+      "balance delta mode configuration defaults a null value to off",
+      "balance delta mode configuration defaults a whitespace-only value to off",
+      "balance delta mode configuration defaults an empty value to off",
+      "balance delta mode configuration defaults an undefined value to off",
+      "balance delta mode configuration exports the supported modes",
+      "balance delta mode configuration normalizes surrounding whitespace and letter case",
+      "balance delta mode configuration rejects an unknown mode and names BALANCE_DELTA_MODE"
+    ],
     "c4d70bc831f40242": [
       "Programmable policy layer : custody guard ordering @regression does not run the address guard after a token denial",
       "Programmable policy layer : custody guard ordering @regression reserves the address ceiling after the token fee",
@@ -18881,8 +18893,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1385,
-      "titleCount": 13845,
+      "fileCount": 1386,
+      "titleCount": 13855,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19505,6 +19517,7 @@
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
         "test/unit/coins/fee_payment_mode_comment_twin.test.js": "489e8a6cb9e1177e",
         "test/unit/coins/fee_payment_mode_registry.test.js": "04f3052dcfe1e047",
+        "test/unit/config/balance_delta_mode.test.js": "c4c306e18e19f547",
         "test/unit/config/config.test.js": "ca901868920fa051",
         "test/unit/config/config.test/env_overrides.test.js": "09dab1f1abfabefd",
         "test/unit/config/config.test/hub_overlay.test.js": "4a3bc9fb11877228",
