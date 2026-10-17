@@ -40,7 +40,12 @@ const REGISTRY_TWINS = {
     RESOURCE_FAULT_SIGNAL_ACTIVATION: 'resource_fault_signal_heights.RESOURCE_FAULT_SIGNAL_ACTIVATION',
 };
 
-const KNOWN_GAPS = {};
+// Each gap names the row that pins it; that row moves the gate out of this map.
+const KNOWN_GAPS = {
+    HOST_FAULT_HALT_ACTIVATION: 'unarmed per-chain gate; its registry twin lands in XC-5063-p2',
+    STRING_RECEIVER_METER_ACTIVATION: 'unarmed meter gate; its armed-map mirror lands in XC-5065-p2',
+    STRING_RESULT_METER_ACTIVATION: 'unarmed meter gate; its armed-map mirror lands in XC-5441-p2',
+};
 
 function vmGateExportNames(holder) {
     const names = new Set();
