@@ -172,6 +172,10 @@
       "migration live-schema guard type and charset rules against a real MariaDB @tier3 refuses: microsecond datetime restated bare from server metadata",
       "migration live-schema guard type and charset rules against a real MariaDB @tier3 refuses: utf8mb4 column restated without a charset in a utf8 table from server metadata"
     ],
+    "03449cbd7e3a0746": [
+      "ATTEST seeded undelivered mirror response @regression @tier3 ignores the seeded row when the local request is absent",
+      "ATTEST seeded undelivered mirror response @regression @tier3 ignores the seeded row when the local request is already valid"
+    ],
     "037f439f3b60cf7b": [
       "migrate CLI status report @regression --status --json reports the ledger without applying migrations",
       "migrate CLI status report @regression --status prints only the text report and its summary",
@@ -3038,12 +3042,6 @@
     "2f7a8d1891a47dae": [
       "protocol_changes VM lint optional-chain row is active on regtest at genesis, unarmed on mainnet and armed at the v0.21.3 testnet heights",
       "protocol_changes VM lint optional-chain row registers the per-chain height map"
-    ],
-    "2f7cc80be9d7cebc": [
-      "/status train_activation copies a halt verdict",
-      "/status train_activation copies a pending verdict",
-      "/status train_activation reports an unevaluated verdict before the first block is graded",
-      "/status train_activation reports unevaluated when there is no trainActivation property"
     ],
     "2fac856423a9a7a8": [
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan computeFeeQuote still refuses BATCH: this door answers validity, never pricing",
@@ -18978,7 +18976,7 @@
   "scripts": {
     "test": {
       "fileCount": 1399,
-      "titleCount": 13902,
+      "titleCount": 13900,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19075,6 +19073,7 @@
         "test/unit/actions/attest/callback_batch_position_below_gate.test.js": "1627468c01af8b39",
         "test/unit/actions/attest/canonical_signer_set.test.js": "4f4095f7fff521ab",
         "test/unit/actions/attest/mirror_apply_malformed_admission.test.js": "a37267dabef57ec2",
+        "test/unit/actions/attest/mirror_apply_seeded_row_not_pending.test.js": "03449cbd7e3a0746",
         "test/unit/actions/attest/mirror_signer_set_canonical.test.js": "125e47594c3f675e",
         "test/unit/actions/attest/rollcall.test.js": "e65e23a11e0b9d4f",
         "test/unit/actions/attest_relay.test.js": "75c1e0031337ed39",
@@ -19507,7 +19506,6 @@
         "test/unit/api/stake_source.test.js": "bed4c39786728d9f",
         "test/unit/api/status_ready_route.test.js": "8d5eb56839bd7876",
         "test/unit/api/status_schema_ready.test.js": "e624e2e0e1e9bd13",
-        "test/unit/api/status_train_activation.test.js": "2f7cc80be9d7cebc",
         "test/unit/api/status_wedge_window.test.js": "a125d6a51b477187",
         "test/unit/api/tip_block_time.test.js": "5fd61225b4760c51",
         "test/unit/attestation/attest_broadcast_fee_activation.test.js": "4dff9efe8fe9df01",
