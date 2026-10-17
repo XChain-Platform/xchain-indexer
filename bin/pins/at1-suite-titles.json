@@ -18512,6 +18512,15 @@
       "attest_response_canonical: hub/indexer twin produces byte-identical canonicals to the hub copy across both eras",
       "attest_response_canonical: hub/indexer twin rejects the same spellings as the hub copy"
     ],
+    "f9b440bdcd327076": [
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 also refuses Redundant row format",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes Compact when the column is not fully indexed",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes Dynamic row format",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes a 100-character utf8mb4 widening that fits within 767 bytes",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes when the live column is already utf8mb4",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 refuses the indexed files.name utf8mb4 widening on Compact",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 treats a missing row format as Dynamic"
+    ],
     "fa4bd1452ca551bd": [
       "bridge_settle: destination below its format-specific bridge sub-gate applies the same v2 row once the XCHAIN gate is active",
       "bridge_settle: destination below its format-specific bridge sub-gate applyBridgeTransfer defers a v2 row below XCHAIN_BRIDGE_ACTIVATION and writes nothing",
@@ -18971,8 +18980,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1398,
-      "titleCount": 13898,
+      "fileCount": 1399,
+      "titleCount": 13905,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20078,6 +20087,7 @@
         "test/unit/migration/migration_auto_index_key_length.test.js": "62321e67976f95c9",
         "test/unit/migration/migration_executable_residue.test.js": "acaf148f7d78ff56",
         "test/unit/migration/migration_precondition_baseline.test.js": "3892effc8fcf1240",
+        "test/unit/migration/migration_precondition_baseline.test/row_format_gate.test.js": "f9b440bdcd327076",
         "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js": "ad9b4cab9e7d3566",
         "test/unit/migration/migration_precondition_oracle_tick.test.js": "3067b102d53b0b5f",
         "test/unit/migration/migration_preconditions.test.js": "10419775b050d37c",
