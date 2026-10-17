@@ -6125,6 +6125,12 @@
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) rejects when a signature does not verify",
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) rejects when the cross_chain snapshot is empty (fails closed)"
     ],
+    "5e93fa420238108c": [
+      "Database.getContractStakeRotationOrigin @regression @tier1 binds the slot and current key and reads the journal in replay order",
+      "Database.getContractStakeRotationOrigin @regression @tier1 keeps the first origin and the last matching delegation through later rotations",
+      "Database.getContractStakeRotationOrigin @regression @tier1 returns null for an unrotated slot",
+      "Database.getContractStakeRotationOrigin @regression @tier1 returns the original key and delegation for a single rotation"
+    ],
     "5ec5de0135d41cfb": [
       "Execute (EXECUTE) @regression @tier2 processSlashEmission consumes a delimiter-bearing token whole (named-field read, never pipe-split)",
       "Execute (EXECUTE) @regression @tier2 processSlashEmission no-ops silently when the pubkey is not staked here",
@@ -17943,8 +17949,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1401,
-      "titleCount": 13910,
+      "fileCount": 1402,
+      "titleCount": 13914,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18840,6 +18846,7 @@
         "test/unit/db/stakes/db_contract_delegation_held_key_gate_off.test.js": "7e9e0954be3bb895",
         "test/unit/db/stakes/db_contract_delegation_materialize.test.js": "8e2845a99501f6fb",
         "test/unit/db/stakes/db_contract_stake_refund_precision.test.js": "ebee9ed4a6d4955f",
+        "test/unit/db/stakes/db_contract_stake_rotation_origin.test.js": "5e93fa420238108c",
         "test/unit/db/stakes/db_get_poll_results_for_vm_tick.test.js": "d8b5e860c7d126cc",
         "test/unit/db/stakes/db_get_stakers_tieorder.test.js": "8f4660420aff57bc",
         "test/unit/db/stakes/db_slash_capability_stake.test.js": "a731875fc2cd0972",
