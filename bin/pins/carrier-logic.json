@@ -2159,7 +2159,7 @@
       "id": "dispense_payment_tally_scale_activation",
       "from": "f97c0346f8a4a506e78aae6f6e6c88418f2a7d872ce21f06f2036d69946ccd1c",
       "to": "4ef246800ca989ef3a42f847da1aec8018941fbd44cb4d546af269cb46f1a649",
-      "reason": "XC-3351 gate retirement",
+      "reason": "Gate retirement",
       "date": "2026-10-17"
     }
   ]
