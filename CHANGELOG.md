@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.2] - 2026-10-14
+
+### Fixed
+- An ownership dispense now writes the ownership-transfer ledger row with the block fields of the paying transaction.
+
+## [0.23.1] - 2026-10-13
+
+### Fixed
+- Clipped contract execution error text and method names to their column capacity so an oversized value no longer fails the block write.
+
 ## [0.23.0] - 2026-10-11
 
 ### Added
