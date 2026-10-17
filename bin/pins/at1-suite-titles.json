@@ -337,10 +337,6 @@
       "PRICE price-range flag day @regression @tier3 the posture this node ships fails CLOSED on an unusable key, leaving the legacy behaviour",
       "PRICE price-range flag day @regression @tier3 the posture this node ships leaves mainnet inert at every instant, so the legacy path runs byte for byte"
     ],
-    "064be60bda83c679": [
-      "ANCHOR v3 checkpoint sequence binding below activation keeps the frozen fold valid with all-row watermark reads on mainnet",
-      "ANCHOR v3 checkpoint sequence binding below activation keeps the frozen fold valid with all-row watermark reads on testnet"
-    ],
     "066e3e1a7354e46d": [
       "ATTEST hub-mirror response applier @regression @tier3 bounded applicability read (utility.processAttestationResponses paging) applies the same rows paged as unpaged, when the cap prefix spans two pages",
       "ATTEST hub-mirror response applier @regression @tier3 bounded applicability read (utility.processAttestationResponses paging) orders the page by \u00a74.1 before it bounds it, and keysets rather than offsets",
@@ -641,10 +637,6 @@
       "price landing future-stamped block wait @regression @tier1 keeps a landing wait whose time has passed without a clear instant",
       "price landing future-stamped block wait @regression @tier1 reads a landing wait on a future-stamped block as future_block_wait",
       "price landing future-stamped block wait @regression @tier1 takes no hold toward the ceiling while the landing wait is future-stamped"
-    ],
-    "0c10b3d383a4d374": [
-      "Anchor v1 checkpoint sequence binding below gate @regression @tier3 keeps a mismatched checkpoint sequence valid on mainnet",
-      "Anchor v1 checkpoint sequence binding below gate @regression @tier3 keeps a mismatched checkpoint sequence valid on testnet"
     ],
     "0c136d013ba41d36": [
       "ORDER and SWAP matching invariants @regression @tier1 classifies every match-touched row for action-scoped rollback",
@@ -7726,10 +7718,6 @@
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) synthesizes an ATTEST v1 with NULL tx coordinates, BLOCK_TIME, and the row pair",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) synthesizes nothing at a block one second short of the effective_time"
     ],
-    "73bf19393156da6f": [
-      "ANCHOR v0 checkpoint sequence binding below gate @regression @tier3 keeps mainnet sequence and snapshot independent on the all-rows watermark",
-      "ANCHOR v0 checkpoint sequence binding below gate @regression @tier3 keeps testnet sequence and snapshot independent on the all-rows watermark"
-    ],
     "73d2a2e5a45a3b49": [
       "HubDbSync schema-version lockstep admits all three reader payloads when they carry the expected schema_version",
       "HubDbSync schema-version lockstep preserves relic-row refusal after a versioned snapshot passes the shared check",
@@ -13476,6 +13464,12 @@
       "NUMBER_FIELDS excludes address-bearing fields @regression exposes both lists",
       "NUMBER_FIELDS excludes address-bearing fields @regression no address-bearing field is numeric-normalized"
     ],
+    "baff1a5bd4d4dfa1": [
+      "Rollback sweep stats @regression @tier3 names every orphan sweep with its rows removed on the completion line",
+      "Rollback sweep stats @regression @tier3 reports only the current rollback sweeps, not an earlier one",
+      "Rollback sweep stats @regression @tier3 returns time and rows per table from the dangling-reference sweep",
+      "Rollback sweep stats @regression @tier3 returns time and ticker count from the token escrow re-derive"
+    ],
     "bb7ad6c26bf5b684": [
       "isMirrorBarrierReason @regression @tier1 classifies every mirror barrier as resync-able and every host fault as not",
       "isMirrorBarrierReason @regression @tier1 finds every stall reason the block loop actually sets",
@@ -14185,18 +14179,6 @@
       "Smoke: REST /status SM-05j: GET /status surfaces hubMirror disconnected without claiming connected",
       "Smoke: REST /status SM-05k: GET /status reports hubMirror as unconfigured, never throwing, when the mirror is absent",
       "Smoke: REST /status SM-05l: GET /status degrades to the disabled hubMirror shape when the snapshot call throws"
-    ],
-    "c4c306e18e19f547": [
-      "balance delta mode configuration accepts off",
-      "balance delta mode configuration accepts on",
-      "balance delta mode configuration accepts verify",
-      "balance delta mode configuration defaults a null value to off",
-      "balance delta mode configuration defaults a whitespace-only value to off",
-      "balance delta mode configuration defaults an empty value to off",
-      "balance delta mode configuration defaults an undefined value to off",
-      "balance delta mode configuration exports the supported modes",
-      "balance delta mode configuration normalizes surrounding whitespace and letter case",
-      "balance delta mode configuration rejects an unknown mode and names BALANCE_DELTA_MODE"
     ],
     "c4d70bc831f40242": [
       "Programmable policy layer : custody guard ordering @regression does not run the address guard after a token denial",
@@ -18905,8 +18887,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1389,
-      "titleCount": 13861,
+      "fileCount": 1385,
+      "titleCount": 13846,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18943,8 +18925,6 @@
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
-        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
-        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "cd53417c159a33c6",
@@ -19342,7 +19322,6 @@
         "test/unit/anchor/anchor_action_query.test/anchor_action_query_section_vs.test.js": "f110a0bd4d3b7f5b",
         "test/unit/anchor/anchor_archive_section_verdict.test.js": "63cd3cc2b8b75cb9",
         "test/unit/anchor/anchor_archive_sql_columns.test.js": "bab9c054a0998db8",
-        "test/unit/anchor/anchor_checkpoint_seq_bind_v3_below_gate.test.js": "064be60bda83c679",
         "test/unit/anchor/anchor_fold_sql_family.test.js": "20703ba8a82c0437",
         "test/unit/anchor/anchor_proof_client.test.js": "5ef99a2c3042bdaf",
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression.test.js": "c3487eec1e568310",
@@ -19532,7 +19511,6 @@
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
         "test/unit/coins/fee_payment_mode_comment_twin.test.js": "489e8a6cb9e1177e",
         "test/unit/coins/fee_payment_mode_registry.test.js": "04f3052dcfe1e047",
-        "test/unit/config/balance_delta_mode.test.js": "c4c306e18e19f547",
         "test/unit/config/config.test.js": "ca901868920fa051",
         "test/unit/config/config.test/env_overrides.test.js": "09dab1f1abfabefd",
         "test/unit/config/config.test/hub_overlay.test.js": "4a3bc9fb11877228",
@@ -20198,7 +20176,7 @@
         "test/unit/rollback/rollback_failure_preserves_error.test.js": "cd82da214987858b",
         "test/unit/rollback/rollback_hub_push_queue_at_use.test.js": "922ab0a36294b2a4",
         "test/unit/rollback/rollback_slash_restore_order.test.js": "1ef3d061fbdfa9cd",
-        "test/unit/rollback/rollback_sweep_stats.test.js": "ff459e9650a79a25",
+        "test/unit/rollback/rollback_sweep_stats.test.js": "baff1a5bd4d4dfa1",
         "test/unit/rollback/rollcall_unwind_schema_gap.test.js": "947a8652e2bab804",
         "test/unit/rollcall/db_rollcall_gates.test.js": "97eac3517509ca4d",
         "test/unit/rollcall/db_rollcalls_public_reads.test.js": "3efb8f783fe36f87",

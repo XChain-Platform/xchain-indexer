@@ -73,7 +73,7 @@ module.exports = {
     // guard (xchain-sync test/unit/rollback_coverage.test.js) asserts they match, so
     // source + replica derive byte-identical escrow_action_index values.
     async rederiveTokenEscrow(){
-        await rederiveSql.rederiveTokenEscrow(this.indexerDb);
+        this.recordSweepStats([await rederiveSql.rederiveTokenEscrow(this.indexerDb)]);
     },
 
     // Re-derive tokens.bridged, AFTER the dataTables delete. The first applied XBRIDGE v3
