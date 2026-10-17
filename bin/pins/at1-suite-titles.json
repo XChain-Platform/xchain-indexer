@@ -344,6 +344,10 @@
       "ATTEST hub-mirror response applier @regression @tier3 bounded applicability read (utility.processAttestationResponses paging) stops reading once the cap is filled instead of dragging the whole pending set in",
       "ATTEST hub-mirror response applier @regression @tier3 bounded applicability read (utility.processAttestationResponses paging) walks past pages that yield nothing, and carries the keyset rather than an offset"
     ],
+    "06e8633b056522cf": [
+      "Unstake handler @regression @tier2 v1 row journal before delegated rotation full unstake keeps the unstake on the request pubkey and writes no residual",
+      "Unstake handler @regression @tier2 v1 row journal before delegated rotation partial unstake keeps the unstake and VERSION 3 residual on the request pubkey"
+    ],
     "06f9bcdda9c7ef64": [
       "strict same-chain price landings @regression @tier1 advances the own landing block when protocol time is unchanged",
       "strict same-chain price landings @regression @tier1 excludes a DOGE round stamped at exactly T(B) when strict landing is armed",
@@ -18881,8 +18885,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1385,
-      "titleCount": 13845,
+      "fileCount": 1386,
+      "titleCount": 13847,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19178,6 +19182,7 @@
         "test/unit/actions/stake/unstake.test.js": "680f2af85c82fa8c",
         "test/unit/actions/stake/unstake.test/contract_targeted.test.js": "a9a5188842f493a3",
         "test/unit/actions/stake/unstake.test/partial.test.js": "4c1dae4cf2168305",
+        "test/unit/actions/stake/unstake.test/v1_row_journal_below_gate.test.js": "06e8633b056522cf",
         "test/unit/actions/stake/vote_invariants.test.js": "5b459280dedaa2eb",
         "test/unit/actions/stake/vote_invariants.test/binding_minimums.test.js": "c89b285a9e6a4068",
         "test/unit/actions/stake/vote_invariants.test/callback_probe_listing.test.js": "4c83f18995661c13",
