@@ -303,6 +303,26 @@ async function unsignedRetypeProbe(conn, table, column){
     return /^\s*-/.test(String(min)) ? { liveMin: String(min), column } : { unsignedRetypeSafe: true };
 }
 
+async function rowFormatRefusal(conn, file, table, column, live, definition){
+    if(typeof live.ROW_FORMAT !== 'string' || !/^(?:compact|redundant)$/i.test(live.ROW_FORMAT)) return;
+    if(declaredCharset(definition) !== 'utf8mb4' || String(live.CHARACTER_SET_NAME).toLowerCase() === 'utf8mb4') return;
+    const type = parseType(definition);
+    const chars = type && SIZED.has(type.name) && /^\d+$/.test(type.args || '') ? Number(type.args) : 0;
+    if(chars * 4 <= 767) return;
+    const indexed = await conn.query(
+        'SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() ' +
+        'AND TABLE_NAME = ? AND COLUMN_NAME = ? AND SUB_PART IS NULL LIMIT 1',
+        [table, column]
+    );
+    if(!Array.isArray(indexed) || !indexed.length) return;
+    const error = new Error('runMigrations: ' + file + ' widens ' + table + '.' + column + ' to utf8mb4 on a ' +
+        live.ROW_FORMAT + ' table where the column is indexed. Run ALTER TABLE ' + table +
+        ' ROW_FORMAT=DYNAMIC; and restart, or re-tag the file `-- xchain:migration mode=manual` and apply it deliberately via ' +
+        '`node src/db/migration/migrate.js`.');
+    error.name = 'MigrationRowFormatError';
+    throw error;
+}
+
 // Throw when an auto file's MODIFY would strip or narrow a live column. An absent live
 // column (a fresh install, or one the file itself adds) is not drift and passes through.
 async function assertNoLiveColumnLoss(conn, file, statements){
@@ -315,13 +335,14 @@ async function assertNoLiveColumnLoss(conn, file, statements){
         }
         const rows = await conn.query(
             'SELECT COLUMN_TYPE, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT, GENERATION_EXPRESSION, CHARACTER_SET_NAME, ' +
-            'COLLATION_NAME, TABLE_COLLATION FROM information_schema.COLUMNS c JOIN information_schema.TABLES t ' +
+            'COLLATION_NAME, TABLE_COLLATION, t.ROW_FORMAT FROM information_schema.COLUMNS c JOIN information_schema.TABLES t ' +
             'ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME ' +
             'WHERE c.TABLE_SCHEMA = DATABASE() AND t.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = ? AND c.COLUMN_NAME = ?',
             [table, column]
         );
         const live = Array.isArray(rows) ? rows.find(r => r && r.COLUMN_TYPE != null) : null;
         if(!live) continue;
+        await rowFormatRefusal(conn, file, table, column, live, definition);
         const probe = unsignedRetypeCandidate(live, definition) ? await unsignedRetypeProbe(conn, table, column) : {};
         const found = losses(live, definition, probe);
         if(found.length){
