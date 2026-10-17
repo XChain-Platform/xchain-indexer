@@ -453,6 +453,11 @@
       "ROLLCALL epoch close (\u00a73.4) the eviction effect stamps every delegation of the source, or the DELEGATE branch keeps it in",
       "ROLLCALL epoch close (\u00a73.4) the eviction effect stamps the stake SOURCE-SCOPED and sweeps pending rows"
     ],
+    "0854ad12bbb1e5ec": [
+      "Security: ATTEST response mirror boot guard network policy @regression @tier1 refuses an armed BTC mainnet boot without a hub database source",
+      "Security: ATTEST response mirror boot guard network policy @regression @tier1 refuses an armed BTC testnet boot without a hub database source",
+      "Security: ATTEST response mirror boot guard network policy @regression @tier1 warns and continues for an armed BTC regtest boot without a hub database source"
+    ],
     "087297546f0ad980": [
       "ISSUE settlement owner history adds no extra address when the source keeps ownership",
       "ISSUE settlement owner history lists the owner named at creation in the addresses refreshed for the tick"
@@ -18110,6 +18115,11 @@
       "settleBetsBatch writes the same rows as the per-bet terminal writers @regression @tier1 writes nothing for an empty list",
       "settleBetsBatch writes the same rows as the per-bet terminal writers @regression @tier1 writes one history row for a bet repeated inside the same chunk"
     ],
+    "f4990631037844d2": [
+      "Security: ATTEST response mirror boot guard @regression @tier1 does not apply the BTC-only response-mirror refusal to another chain",
+      "Security: ATTEST response mirror boot guard @regression @tier1 does not apply the response-mirror refusal on unpinned mainnet",
+      "Security: ATTEST response mirror boot guard @regression @tier1 refuses BTC testnet without a hub database source"
+    ],
     "f4d512605040b459": [
       "VM ledger-read loader: buildVmBalancesAndTokenInfo @regression @tier2 re-keys to nested symbol-keyed balances + loads tokenInfo, bounded by action_index"
     ],
@@ -18881,8 +18891,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1385,
-      "titleCount": 13845,
+      "fileCount": 1386,
+      "titleCount": 13847,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20187,7 +20197,8 @@
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
         "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
-        "test/unit/security/configuration/response_mirror_boot_guard.test.js": "1eb17536e3364766",
+        "test/unit/security/configuration/response_mirror_boot_guard.test.js": "f4990631037844d2",
+        "test/unit/security/configuration/response_mirror_boot_guard_networks.test.js": "0854ad12bbb1e5ec",
         "test/unit/security/configuration/startup_validation.test.js": "9b13c5407b7bccf8",
         "test/unit/security/input-validation/negative_amounts.test.js": "d6f6a4b7d2e1a81e",
         "test/unit/security/input-validation/parameter_injection.test.js": "fe3fce070c5e1bad",
