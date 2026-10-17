@@ -40,6 +40,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
+const fc     = require('fast-check');
 
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
@@ -59,15 +60,16 @@ function makeDb() {
     return db;
 }
 
-// Run getHolders against an injected set of equal-balance credit rows returned in `creditRows`
-// order (no debits). Returns the ordered list of holder addresses as getHolders would iterate it.
-async function holderOrder(creditRows) {
+// Run getHolders against injected credit and debit rows. Returns the ordered list of holder
+// addresses as getHolders would iterate it.
+async function holderOrder(creditRows, debitRows = []) {
     const db = makeDb();
     sinon.stub(db, 'createTicker').resolves(1);
     sinon.stub(db, 'getTokenDecimalPrecision').resolves(8);
     sinon.stub(db, 'doQuery').callsFake(async (sql) => {
-        // The credits GROUP BY query feeds the holder balances; debits query returns nothing.
+        // The two GROUP BY queries feed the holder balances.
         if (/FROM\s+credits\b/i.test(sql)) return creditRows;
+        if (/FROM\s+debits\b/i.test(sql)) return debitRows;
         return [];
     });
     const holders = await db.getHolders('TESTTOKEN', 306, 999);
@@ -116,6 +118,56 @@ describe('Database.getHolders() equal-balance tiebreak determinism @regression @
         const order = await holderOrder(rows);
         // 500 first, then the two 100-balance holders in lexicographic address order.
         assert.deepStrictEqual(order, ['addrM', 'addrA', 'addrZ']);
+    });
+
+    it('canonicalizes seeded holder row permutations across mixed balances', async function () {
+        await fc.assert(fc.asyncProperty(
+            fc.array(fc.integer({ min: 1, max: 1000 }), { minLength: 1, maxLength: 24 }),
+            async balances => {
+                const rows = balances.map((credits, index) => ({
+                    address: 'addr' + String(index).padStart(3, '0'),
+                    credits: String(credits),
+                }));
+                const rotated = rows.length > 1 ? rows.slice(1).concat(rows[0]) : rows.slice();
+                const [forward, reverse, shifted] = await Promise.all([
+                    holderOrder(rows),
+                    holderOrder(rows.slice().reverse()),
+                    holderOrder(rotated),
+                ]);
+                assert.deepStrictEqual(reverse, forward);
+                assert.deepStrictEqual(shifted, forward);
+            }
+        ), { seed: 0x4d49584f, numRuns: 80 });
+    });
+
+    it('keeps the minimum exact positive holder and removes an exact-zero holder', async function () {
+        const order = await holderOrder(
+            [
+                { address: 'minimum', credits: '0.000000000000000001' },
+                { address: 'zero', credits: '0.000000000000000001' },
+            ],
+            [{ address: 'zero', debits: '0.000000000000000001' }]
+        );
+        assert.deepStrictEqual(order, ['minimum']);
+    });
+
+    it('scopes both holder queries to committed rows before the distribution action', async function () {
+        const db = makeDb();
+        const calls = [];
+        sinon.stub(db, 'createTicker').resolves(1);
+        sinon.stub(db, 'doQuery').callsFake(async (sql, args) => {
+            calls.push({ sql, args: args.slice() });
+            return [];
+        });
+
+        await db.getHolders('TESTTOKEN', 306, 999);
+
+        assert.strictEqual(calls.length, 2);
+        for(const call of calls){
+            assert.match(call.sql, /a1\.block_index <= \?/);
+            assert.match(call.sql, /m\.action_index < \?/);
+            assert.deepStrictEqual(call.args, [1, 306, 999]);
+        }
     });
 
     // (3) Negative control: the PRE-FIX balance-only comparator leaves the injected scramble

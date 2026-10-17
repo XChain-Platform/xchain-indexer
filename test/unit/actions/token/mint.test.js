@@ -104,6 +104,18 @@ describe('Mint handler @regression @tier1', function () {
 
     describe('TICK validations', function () {
 
+        it('getTokenInfo false not-found result records invalid instead of throwing', async function () {
+            indexer.indexerDb.getTokenInfo.resolves(false);
+
+            const params = ['0', 'UNKNOWN', '50', '', ''];
+            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'invalid: TICK (unknown)');
+            assert.ok(indexer.indexerDb.createMint.calledOnce);
+        });
+
         it('TICK not found → invalid (token issued in prior block so null-guard path reached)', async function () {
             // NOTE: mint.js line 80 accesses tokenInfo['BLOCK_INDEX'] before the null guard on line 84.
             // When tokenInfo is truly null this throws a TypeError; that is a production bug.

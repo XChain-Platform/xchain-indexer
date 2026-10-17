@@ -32,6 +32,12 @@
     "00d7e3417ecc95fb": [
       "HubDbSync oracle_prices generation convergence @regression @tier1 re-pages two mirrors from zero and converges both to the newer generation in one pass"
     ],
+    "0148f36de0403362": [
+      "Distribution rounding and conservation @money @regression @tier1 airdrops debit exactly the sum of recipient legs at decimals 0 through 18",
+      "Distribution rounding and conservation @money @regression @tier1 floors every dividend share once and debits exactly the emitted credits at decimals 0 through 18",
+      "Distribution rounding and conservation @money @regression @tier1 includes an exact one-unit dividend share and omits sub-unit dust",
+      "Distribution rounding and conservation @money @regression @tier1 same-token and distinct-token dividends produce the same conserved recipient shares"
+    ],
     "018402ee475c49ef": [
       "activation ladder fork-avoiding constraints (the bridge train cut) C3: comparison logic falsified on a local fixture (never the shipped maps) goes red, naming both heights, when the fixture is perturbed so the train boundary lands ABOVE the bridge height",
       "activation ladder fork-avoiding constraints (the bridge train cut) C3: comparison logic falsified on a local fixture (never the shipped maps) goes red, naming both heights, when the fixture is perturbed so the train boundary lands AT the bridge height",
@@ -599,6 +605,12 @@
       "price landing future-stamped block wait @regression @tier1 keeps a landing wait whose time has passed without a clear instant",
       "price landing future-stamped block wait @regression @tier1 reads a landing wait on a future-stamped block as future_block_wait",
       "price landing future-stamped block wait @regression @tier1 takes no hold toward the ceiling while the landing wait is future-stamped"
+    ],
+    "0c136d013ba41d36": [
+      "ORDER and SWAP matching invariants @regression @tier1 classifies every match-touched row for action-scoped rollback",
+      "ORDER and SWAP matching invariants @regression @tier1 conserves both assets exactly across seeded partial fills and payout splits",
+      "ORDER and SWAP matching invariants @regression @tier1 excludes self-matches and applies explicit deterministic candidate ordering",
+      "ORDER and SWAP matching invariants @regression @tier1 keeps offers matchable at the exact expiration second and expires them afterward"
     ],
     "0c13b5d1d073adc0": [
       "bin/lib/carrier_logic_pin.js: --retire and --move (h) --retire removes the entry and records a move to nothing",
@@ -2699,6 +2711,25 @@
       "merkle stakes-root + block-leaf golden vectors (#4751) @regression @tier1 sumCanonicalAmounts (exact 18-dp BigInt scaling) empty input is canonical zero",
       "merkle stakes-root + block-leaf golden vectors (#4751) @regression @tier1 sumCanonicalAmounts (exact 18-dp BigInt scaling) sums mixed-scale amounts exactly"
     ],
+    "2c0f30425303b37c": [
+      "Mint handler @regression @tier1 LOCK_MINT LOCK_MINT=0 (not locked) \u2192 valid",
+      "Mint handler @regression @tier1 LOCK_MINT LOCK_MINT=1 \u2192 invalid",
+      "Mint handler @regression @tier1 MEMO validations MEMO with pipe \u2192 invalid",
+      "Mint handler @regression @tier1 MEMO validations MEMO with semicolon \u2192 invalid",
+      "Mint handler @regression @tier1 MEMO validations MEMO within allowed length \u2192 valid",
+      "Mint handler @regression @tier1 TICK validations TICK not found \u2192 invalid (token issued in prior block so null-guard path reached)",
+      "Mint handler @regression @tier1 TICK validations getTokenInfo false not-found result records invalid instead of throwing",
+      "Mint handler @regression @tier1 TICK validations token issued in same block before tx index invalidated \u2192 invalid",
+      "Mint handler @regression @tier1 TICK validations token issued in same block but valid before tx index \u2192 valid",
+      "Mint handler @regression @tier1 address sleeping SOURCE sleeping \u2192 invalid",
+      "Mint handler @regression @tier1 address sleeping TICK sleeping \u2192 invalid",
+      "Mint handler @regression @tier1 createMint is always called createMint is called even on invalid mint (LOCK_MINT case)",
+      "Mint handler @regression @tier1 createMint is always called updateBalances and updateTokens NOT called on invalid mint",
+      "Mint handler @regression @tier1 valid mint mint credits SOURCE address",
+      "Mint handler @regression @tier1 valid mint valid mint \u2192 STATUS valid, createMint called",
+      "Mint handler @regression @tier1 valid mint valid mint \u2192 mapper.createMappings called",
+      "Mint handler @regression @tier1 valid mint valid mint \u2192 updateBalances and updateTokens called"
+    ],
     "2cca37e54b2963e5": [
       "SLASH action handler: equivocation verifier @regression ACCEPTS a genuine XORACLEB equivocation (two batches over ONE window at one anchor)",
       "SLASH action handler: equivocation verifier @regression ACCEPTS an XORACLE equivocation (snapshot_block recovered from ROUND_ID)",
@@ -4182,6 +4213,14 @@
       "Withdraw custody guard helper routing @regression @tier1 loads SOURCE balances when the caller supplies null gas balances",
       "Withdraw custody guard helper routing @regression @tier1 sends the custody-to-SOURCE leg to the token and SOURCE transfer guards"
     ],
+    "434427669a1ca875": [
+      "Database.getHolders() equal-balance tiebreak determinism @regression @tier1 canonicalizes seeded holder row permutations across mixed balances",
+      "Database.getHolders() equal-balance tiebreak determinism @regression @tier1 keeps balance-descending order, using the address tiebreak only on equal balances",
+      "Database.getHolders() equal-balance tiebreak determinism @regression @tier1 keeps the minimum exact positive holder and removes an exact-zero holder",
+      "Database.getHolders() equal-balance tiebreak determinism @regression @tier1 negative control: a balance-only comparator forks on equal-balance holders",
+      "Database.getHolders() equal-balance tiebreak determinism @regression @tier1 returns equal-balance holders in a stable order regardless of GROUP BY return order",
+      "Database.getHolders() equal-balance tiebreak determinism @regression @tier1 scopes both holder queries to committed rows before the distribution action"
+    ],
     "43479b4e4ee9439d": [
       "Controller custody guard end-to-end reorg replay covers DENY, ALLOW, gas refusal, and unbound custody routing",
       "Controller custody guard end-to-end reorg replay rolls back and reprocesses every post-activation custody row exactly"
@@ -4203,6 +4242,16 @@
       "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/sends by source returns send record",
       "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/status returns explorer config",
       "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/token returns correct token info"
+    ],
+    "4385266db12e6aae": [
+      "MINT query and rollback scope @regression @tier1 purges every mint counter input and recomputes both derived projections",
+      "MINT query and rollback scope @regression @tier1 scopes mint totals and token supply strictly before the current action",
+      "MINT supply windows and counters @regression @tier1 applies LOCK_MINT to the next action and not to an earlier action",
+      "MINT supply windows and counters @regression @tier1 counts prior same-block BATCH-position mints once and the current mint once",
+      "MINT supply windows and counters @regression @tier1 records a refusal but changes no ledger balance, supply, or valid-mint total",
+      "MINT supply windows and counters @regression @tier1 rejects the same-block mint that would cumulatively exceed MAX_SUPPLY",
+      "MINT supply windows and counters @regression @tier1 restores mint and supply totals exactly after rollback and replay",
+      "MINT supply windows and counters @regression @tier1 uses one inclusive rule at both exact window boundaries"
     ],
     "43df6c0dc2772225": [
       "archive reward round_qualifier against a real MariaDB @tier3 a reconcile for one snapshot never retracts the other snapshot winner",
@@ -18759,8 +18808,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1374,
-      "titleCount": 13788,
+      "fileCount": 1377,
+      "titleCount": 13808,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18993,6 +19042,7 @@
         "test/unit/actions/market/order_match.test/ownership.test.js": "a2e477c9a852ff76",
         "test/unit/actions/market/order_match.test/skips_and_lists.test.js": "499b54ec6a7dfd34",
         "test/unit/actions/market/order_match.test/token_lists.test.js": "aa5514abf48428bf",
+        "test/unit/actions/market/order_swap_match_invariants.test.js": "0c136d013ba41d36",
         "test/unit/actions/market/swap.test.js": "c99129014d12ebae",
         "test/unit/actions/market/swap.test/maker_policy_admission.test.js": "2b716c727c33a522",
         "test/unit/actions/market/swap_expire.test.js": "bd54b695db5d4f76",
@@ -19096,6 +19146,7 @@
         "test/unit/actions/token/broadcast.test/fee_length_gate.test.js": "51b3468275b1d232",
         "test/unit/actions/token/destroy.test.js": "85f55ffbe5c712da",
         "test/unit/actions/token/destroy.test/destroy_behaviors.test.js": "93d204b9c442eeda",
+        "test/unit/actions/token/distribution_conservation.test.js": "0148f36de0403362",
         "test/unit/actions/token/dividend.test.js": "1e1c9edff4a1606c",
         "test/unit/actions/token/dividend.test/fee_handling.test.js": "c2bcef01bd400303",
         "test/unit/actions/token/dividend.test/holder_lists.test.js": "4df0f225c7a91ad2",
@@ -19106,11 +19157,12 @@
         "test/unit/actions/token/issue.test/mint_supply_cap.test.js": "9f70ca955e7b59ab",
         "test/unit/actions/token/issue.test/policy_list_detach.test.js": "f3be88258d140fb7",
         "test/unit/actions/token/issue.test/supply_and_locks.test.js": "2ba6badbcc60323f",
-        "test/unit/actions/token/mint.test.js": "ff321f3951fd499c",
+        "test/unit/actions/token/mint.test.js": "2c0f30425303b37c",
         "test/unit/actions/token/mint.test/address_cap.test.js": "c682fbbac9feaf2e",
         "test/unit/actions/token/mint.test/amounts.test.js": "4b6c4b0645d4de84",
         "test/unit/actions/token/mint.test/block_window.test.js": "49d3733e30ba52ef",
         "test/unit/actions/token/mint.test/destination.test.js": "c1ef0fe71cbe3da1",
+        "test/unit/actions/token/mint_supply_windows_conformance.test.js": "4385266db12e6aae",
         "test/unit/actions/token/roundtrip_golden.test.js": "4c962f6b732dd447",
         "test/unit/actions/token/send.test.js": "77b99807f21ed82d",
         "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "c4841dfff6c76d0b",
@@ -19530,7 +19582,7 @@
         "test/unit/db/db_get_block_hashes_idindependence.test.js": "33ad0789078ca418",
         "test/unit/db/db_get_block_hashes_tieorder.test.js": "df70fa8cfbe0bfbf",
         "test/unit/db/db_get_block_time_faultloud.test.js": "e8571b4e4ce9eb18",
-        "test/unit/db/db_get_holders_tiebreak.test.js": "2170c0bb4787050f",
+        "test/unit/db/db_get_holders_tiebreak.test.js": "434427669a1ca875",
         "test/unit/db/db_getlist_determinism.test.js": "1f83e7fb228abe16",
         "test/unit/db/db_integer_field_range.test.js": "d9dad518fbb16e93",
         "test/unit/db/db_ledger_retype.test.js": "22046df4d39086a6",
