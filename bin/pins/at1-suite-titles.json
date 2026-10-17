@@ -6855,6 +6855,10 @@
       "Attest (ATTEST) @regression @tier3 E1: request fees v2: fee refund on expiry expiry of a fee-bearing request refunds the escrow to FEE_PAYER",
       "Attest (ATTEST) @regression @tier3 E1: request fees v2: fee refund on expiry expiry of a feeless request writes no ledger rows (baseline preserved)"
     ],
+    "67e9ad621c10ee25": [
+      "isTrainActivationHalt() recognizes train activation halt reasons",
+      "isTrainActivationHalt() rejects absent, non-string and unrelated stall reasons"
+    ],
     "68011ffa60463425": [
       "Rollback: ATTEST batch-link retraction (spec \u00a76.3, row 55) collects un-landed batches by joining every rolled-back chunk back to its head",
       "Rollback: ATTEST batch-link retraction (spec \u00a76.3, row 55) does not collect or stage anything when the hub client is disabled",
@@ -18948,8 +18952,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1395,
-      "titleCount": 13887,
+      "fileCount": 1396,
+      "titleCount": 13889,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20341,6 +20345,7 @@
         "test/unit/xchain_indexer/resolve_btc_chain_id_midchain.test.js": "f8d27657ca37a414",
         "test/unit/xchain_indexer/stall_health.test.js": "145f063fb3380510",
         "test/unit/xchain_indexer/stall_health.test/barrier_mapping.test.js": "26506740301590af",
+        "test/unit/xchain_indexer/stall_health.test/is_train_activation_halt.test.js": "67e9ad621c10ee25",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_health_smoke_parity.test.js": "850d161466315079",
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
