@@ -59,4 +59,9 @@ describe('automatic migration unique-key witness against live metadata @tier3', 
         await conn.query('ALTER TABLE witness_rows DROP INDEX uq_witness_pair, ADD UNIQUE INDEX live_pair (a, b)');
         await assert.doesNotReject(() => assertUniqueKeyWitness(conn, DB_NAME, 'live.sql', WRITE, () => DECLARED));
     });
+
+    it('passes when the key-dependent target does not exist live', async function () {
+        await conn.query('DROP TABLE witness_rows');
+        await assert.doesNotReject(() => assertUniqueKeyWitness(conn, DB_NAME, 'live.sql', WRITE, () => DECLARED));
+    });
 });

@@ -117,10 +117,22 @@ function liveUniqueColumnSets(rows){
         .sort((a, b) => a.seq - b.seq).map(part => part.column).join(',')));
 }
 
+async function liveTableExists(conn, dbName, table){
+    const rows = await conn.query(
+        'SELECT EXISTS(SELECT 1 FROM information_schema.TABLES ' +
+        'WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?) AS TABLE_EXISTS',
+        [dbName, table]
+    );
+    if(!Array.isArray(rows) || !rows.length) return true;
+    const value = rows[0].TABLE_EXISTS == null ? rows[0].table_exists : rows[0].TABLE_EXISTS;
+    return value == null || Number(value) !== 0;
+}
+
 async function assertUniqueKeyWitness(conn, dbName, file, statements, declaredUniqueIndexes){
     for(const table of targetsNeedingWitness(statements)){
         const declared = (await declaredUniqueIndexes(table) || []).filter(index => index && index.unique);
         if(!declared.length) continue;
+        if(!await liveTableExists(conn, dbName, table)) continue;
         const rows = await conn.query(
             'SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SEQ_IN_INDEX FROM information_schema.STATISTICS ' +
             'WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX',

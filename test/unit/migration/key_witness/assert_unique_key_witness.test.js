@@ -22,6 +22,7 @@ const write = ['INSERT IGNORE INTO target (a, b) VALUES (1, 2)'];
 const row = (name, nonUnique, column, seq) => ({
     INDEX_NAME: name, NON_UNIQUE: nonUnique, COLUMN_NAME: column, SEQ_IN_INDEX: seq,
 });
+const exists = (value) => ({ TABLE_EXISTS: value ? 1 : 0 });
 
 describe('automatic migration unique-key witness @regression @tier1', function () {
     it('finds each key-dependent write and ignores one inside a quoted literal', function () {
@@ -41,7 +42,8 @@ describe('automatic migration unique-key witness @regression @tier1', function (
 
     it('passes a live unique index with the same ordered column set under another name', async function () {
         let reads = 0;
-        const conn = { query: async () => {
+        const conn = { query: async sql => {
+            if(/information_schema\.TABLES/.test(sql)) return [exists(true)];
             reads++;
             return [row('live_pair', 0, 'b', 2), row('live_pair', 0, 'a', 1)];
         } };
@@ -50,8 +52,20 @@ describe('automatic migration unique-key witness @regression @tier1', function (
     });
 
     it('refuses a non-unique live index with the same columns', async function () {
-        const conn = { query: async () => [row('uq_pair', 1, 'a', 1), row('uq_pair', 1, 'b', 2)] };
+        const conn = { query: async sql => /information_schema\.TABLES/.test(sql) ? [exists(true)] :
+            [row('uq_pair', 1, 'a', 1), row('uq_pair', 1, 'b', 2)] };
         await assert.rejects(() => assertUniqueKeyWitness(conn, 'db', 'f.sql', write, () => declared), /uq_pair/);
+    });
+
+    it('passes a target table that does not exist live without reading its indexes', async function () {
+        let indexReads = 0;
+        const conn = { query: async sql => {
+            if(/information_schema\.TABLES/.test(sql)) return [exists(false)];
+            indexReads++;
+            return [];
+        } };
+        await assert.doesNotReject(() => assertUniqueKeyWitness(conn, 'db', 'f.sql', write, () => declared));
+        assert.strictEqual(indexReads, 0);
     });
 
     it('passes a table created earlier in the same file without reading live metadata', async function () {

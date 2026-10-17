@@ -9845,14 +9845,6 @@
       "Anchor pre-activation status gate @regression @tier3 reads the old spelling as a non-candidate, so the stamp is what changes the verdict",
       "Anchor pre-activation status gate @regression @tier3 stamps unverified below ANCHOR_ACTIVATION once the gate is active"
     ],
-    "88d146e3a15c6889": [
-      "automatic migration unique-key witness @regression @tier1 finds each key-dependent write and ignores one inside a quoted literal",
-      "automatic migration unique-key witness @regression @tier1 ignores a key-dependent statement inside a quoted literal",
-      "automatic migration unique-key witness @regression @tier1 passes a live unique index with the same ordered column set under another name",
-      "automatic migration unique-key witness @regression @tier1 passes a table created earlier in the same file without reading live metadata",
-      "automatic migration unique-key witness @regression @tier1 refuses a missing declared unique index and names its complete remedy",
-      "automatic migration unique-key witness @regression @tier1 refuses a non-unique live index with the same columns"
-    ],
     "88d6102dd7170497": [
       "shared-list table contracts @regression @tier1 baselines only when both shared-list tables are present",
       "shared-list table contracts @regression @tier1 classifies list snapshot admission heights as indexer mirror columns",
@@ -13828,6 +13820,15 @@
       "Mode B create requires an effective oracle price @regression @tier2 leaves Mode A alone: no oracle named, no lookup attempted",
       "Mode B create requires an effective oracle price @regression @tier2 rejects an ownership create naming an oracle with no effective price",
       "Mode B create requires an effective oracle price @regression @tier2 still accepts that same create BELOW the gate (replay stays byte-identical)"
+    ],
+    "bc0fdae14389c0fc": [
+      "automatic migration unique-key witness @regression @tier1 finds each key-dependent write and ignores one inside a quoted literal",
+      "automatic migration unique-key witness @regression @tier1 ignores a key-dependent statement inside a quoted literal",
+      "automatic migration unique-key witness @regression @tier1 passes a live unique index with the same ordered column set under another name",
+      "automatic migration unique-key witness @regression @tier1 passes a table created earlier in the same file without reading live metadata",
+      "automatic migration unique-key witness @regression @tier1 passes a target table that does not exist live without reading its indexes",
+      "automatic migration unique-key witness @regression @tier1 refuses a missing declared unique index and names its complete remedy",
+      "automatic migration unique-key witness @regression @tier1 refuses a non-unique live index with the same columns"
     ],
     "bc4d187734183319": [
       "Emission amount truncation (item 5346) @regression @tier1 behavior: amounts normalized to tick decimals (== ledger bcadd) ISSUE uses its inline declared decimals (tick not in issues table yet)",
@@ -18952,7 +18953,7 @@
   "scripts": {
     "test": {
       "fileCount": 1396,
-      "titleCount": 13888,
+      "titleCount": 13889,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20049,7 +20050,7 @@
         "test/unit/migration/compat_gate_startup_tables.test.js": "4640ed78651b4c0e",
         "test/unit/migration/db_reconcile_auto_dedup_scope.test.js": "4212b5d3db36de1e",
         "test/unit/migration/db_reconcile_fulltext_index.test.js": "918fa176a8537ff6",
-        "test/unit/migration/key_witness/assert_unique_key_witness.test.js": "88d146e3a15c6889",
+        "test/unit/migration/key_witness/assert_unique_key_witness.test.js": "bc0fdae14389c0fc",
         "test/unit/migration/key_witness/committed_auto_files.test.js": "47b5ee89067e58ec",
         "test/unit/migration/legacy_migrations_ported.test.js": "0ec0f41236d14b46",
         "test/unit/migration/migrate.test.js": "c26b3a8dec758d2c",
