@@ -1,4 +1,4 @@
--- xchain:migration mode=manual
+-- xchain:migration mode=auto
 -- Migration: validator_rewards.derive_block_index +
 --            anchor_reward_reconcile_log.reward_derive_block_index.
 --
@@ -32,13 +32,13 @@
 -- src/sql/anchor_reward_reconcile_log.sql (reward_derive_block_index), as
 -- nullable-with-DEFAULT columns and a non-unique index. verifyTables() runs BEFORE
 -- runMigrations() at startup, so the drift reconciler converges all three on any node
--- that boots this build, whether or not anyone runs this file. mode=manual therefore
--- does NOT hold the change back across the fleet, and must not be read as if it did:
--- it keeps this file the explicit, auditable apply path for a database an operator
--- converges by replaying migrations alone. Where the converged shape is already
--- present, Database.MIGRATION_PRECONDITIONS baselines this file - the runner records
--- it as applied without executing a statement, so the ledger states what is true
--- instead of listing a permanent no-op as outstanding work.
+-- that boots this build before the migration gate is read. This file is mode=auto
+-- because the reconciler applies the same objects first and every statement is ADD
+-- COLUMN IF NOT EXISTS or ADD INDEX IF NOT EXISTS, so the migration remains safe and
+-- idempotent when replayed directly. Where the converged shape is already present,
+-- Database.MIGRATION_PRECONDITIONS baselines this file - the runner records it as
+-- applied without executing a statement, so the ledger states what is true instead
+-- of listing a permanent no-op as outstanding work.
 --
 -- WHAT THE FLEET ACTUALLY HAS TO AGREE ON, before any ANCHOR_REWARD_DERIVE_ACTIVATION
 -- height is ratified on mainnet/testnet, is a BINARY property, not a ledger row: every
