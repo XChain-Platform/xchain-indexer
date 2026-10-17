@@ -88,9 +88,9 @@ async function loadRecords(handler, st){
     // Look up the GIVE and GET token records that the checks below rely on
     if(format==0){
         if(!isNativeCoinGive)
-            giveTokenInfo = await handler.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            giveTokenInfo = await handler.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
         if(!isNativeCoinGet && data['GET_COIN']==handler.config['COIN']){
-            getTokenInfo = await handler.indexerDb.getTokenInfo(data['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            getTokenInfo = await handler.indexerDb.getTokenInfo(data['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
         } else if(!isNativeCoinGet) {
             // TODO : add code to xchain-hub to validate that GET_TICK is valid on GET_COIN, and if not, mark as invalid
         }
