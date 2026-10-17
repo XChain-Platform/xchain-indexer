@@ -554,6 +554,21 @@
       "LIST_TICK_COIN consumers @regression @consensus ISSUE coin-qualified root reservation leaves the historical colon ticker verdict unchanged below the gate",
       "LIST_TICK_COIN consumers @regression @consensus ISSUE coin-qualified root reservation refuses live and future coin roots without interning their ticker names"
     ],
+    "0a2fc0a50228f0e1": [
+      "capability snapshot proof pinned set parser accepts a one-entry set",
+      "capability snapshot proof pinned set parser accepts two sources and an uppercase public key",
+      "capability snapshot proof pinned set parser refuses a 63-hex public key and names its entry",
+      "capability snapshot proof pinned set parser refuses a blank source and names its entry",
+      "capability snapshot proof pinned set parser refuses a negative weight and names its entry",
+      "capability snapshot proof pinned set parser refuses a non-array value",
+      "capability snapshot proof pinned set parser refuses a non-object entry and names its index",
+      "capability snapshot proof pinned set parser refuses a nonnumeric weight and names its entry",
+      "capability snapshot proof pinned set parser refuses a null entry and names its index",
+      "capability snapshot proof pinned set parser refuses a numeric weight and names its entry",
+      "capability snapshot proof pinned set parser refuses a zero-only set",
+      "capability snapshot proof pinned set parser refuses an empty array",
+      "capability snapshot proof pinned set parser refuses invalid JSON"
+    ],
     "0a5e98f2d0503af2": [
       "src/db.js ORDER BY determinism (consensus hotspot invariant) @regression @tier1 does not accept *_id surrogate columns as the bare id/source tiebreaker",
       "src/db.js ORDER BY determinism (consensus hotspot invariant) @regression @tier1 every ORDER BY carries a recognized tiebreaker or a documented allowlist exception",
@@ -2884,6 +2899,18 @@
       "HubDbSync same-instance reconnect re-pages the in-place tables @regression @tier1 re-serves a price skipped to finalized made below the stored position",
       "HubDbSync schema-mismatch latch survives an incremental drain @regression @tier1 a drain opened before the refusal cannot settle it",
       "HubDbSync schema-mismatch latch survives an incremental drain @regression @tier1 stays set until every table re-paged from zero after the refusal"
+    ],
+    "299c4ed3013e8a10": [
+      "snapshot checkpoint canonical forms the snapshot round id",
+      "snapshot checkpoint canonical refuses non-BTC chains, unsafe block indexes, and malformed hashes",
+      "snapshot checkpoint canonical uses the buried capability snapshot height on every network",
+      "snapshot checkpoint canonical writes the literal domain-separated canonical bytes",
+      "snapshot checkpoint quorum accepts strictly more than two thirds of the stake",
+      "snapshot checkpoint quorum accepts validator_signatures as JSON text",
+      "snapshot checkpoint quorum adds a key to seen only after one of its signatures verifies",
+      "snapshot checkpoint quorum does not count duplicate or untrusted keys",
+      "snapshot checkpoint quorum fails closed on empty or malformed trust and signature sets",
+      "snapshot checkpoint quorum ignores malformed signatures and verifier failures"
     ],
     "29f5f5978231b2bd": [
       "Cross-chain royalty: create-side gate + signed-legs settlement (real DB + real VM) @phaseE 1. cross-chain listing of a royalty token is ACCEPTED and the legs ride the order row",
@@ -6494,6 +6521,12 @@
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) rejects when a signature does not verify",
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) rejects when the cross_chain snapshot is empty (fails closed)"
     ],
+    "5e93fa420238108c": [
+      "Database.getContractStakeRotationOrigin @regression @tier1 binds the slot and current key and reads the journal in replay order",
+      "Database.getContractStakeRotationOrigin @regression @tier1 keeps the first origin and the last matching delegation through later rotations",
+      "Database.getContractStakeRotationOrigin @regression @tier1 returns null for an unrotated slot",
+      "Database.getContractStakeRotationOrigin @regression @tier1 returns the original key and delegation for a single rotation"
+    ],
     "5ec5de0135d41cfb": [
       "Execute (EXECUTE) @regression @tier2 processSlashEmission consumes a delimiter-bearing token whole (named-field read, never pipe-split)",
       "Execute (EXECUTE) @regression @tier2 processSlashEmission no-ops silently when the pubkey is not staked here",
@@ -6986,6 +7019,10 @@
       "Action field-format contract every format template is well-formed keys are integer versions; templates start with VERSION; tokens are field names",
       "Action field-format contract field codec is delimiter-clean (split/join inverse for pipe-free fields) an embedded pipe provably changes arity; fields must be pipe-free",
       "Action field-format contract field codec is delimiter-clean (split/join inverse for pipe-free fields) pipe-free values round-trip through join \u2192 split for every template arity"
+    ],
+    "66caa1177df15bb8": [
+      "archive stamp journal flag forwards only an exact true journal flag to both archive setters",
+      "archive stamp journal flag journals archive status only for an exact true flag on both scopes"
     ],
     "66cd41f8bb0bfd3b": [
       "list share mirror membership re-read @regression @tier1 accepts an empty mirror list with the empty membership hash",
@@ -11995,6 +12032,16 @@
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: two MINTs of the SAME tick \u2192 invalid: MINT (limit)",
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: unresolvable ticks share ONE bucket, so two of them reject"
     ],
+    "abdaaa8e11bc14ba": [
+      "capability snapshot proof binding @regression @tier1 holds another source, refuses another amount, and holds malformed row amounts",
+      "capability snapshot proof binding @regression @tier1 holds invalid and malformed sibling paths without throwing",
+      "capability snapshot proof binding @regression @tier1 holds malformed member collections and missing signer entries",
+      "capability snapshot proof binding @regression @tier1 holds malformed, unbound, and mismatched state roots",
+      "capability snapshot proof binding @regression @tier1 holds missing, malformed, and leaf-inconsistent commitments",
+      "capability snapshot proof binding @regression @tier1 holds proofs that are absent, at another block, or stamped with another version",
+      "capability snapshot proof binding @regression @tier1 refuses a verified non-member",
+      "capability snapshot proof binding @regression @tier1 verifies a real member on testnet, mainnet, and regtest"
+    ],
     "ac51d51746a87eae": [
       "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits a valid parent when the gate is active",
       "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits an unverified parent only when the head-side status gate admits it",
@@ -13647,6 +13694,14 @@
       "balance delta mode configuration exports the supported modes",
       "balance delta mode configuration normalizes surrounding whitespace and letter case",
       "balance delta mode configuration rejects an unknown mode and names BALANCE_DELTA_MODE"
+    ],
+    "c4cd22d5892484be": [
+      "Database validator-set ordering below activation @regression @tier1 getActiveValidators orders by bare pubkey on mainnet",
+      "Database validator-set ordering below activation @regression @tier1 getActiveValidators orders by bare pubkey on regtest",
+      "Database validator-set ordering below activation @regression @tier1 getActiveValidators orders by bare pubkey on testnet",
+      "Database validator-set ordering below activation @regression @tier1 getValidatorsByCapability orders by bare pubkey on mainnet",
+      "Database validator-set ordering below activation @regression @tier1 getValidatorsByCapability orders by bare pubkey on regtest",
+      "Database validator-set ordering below activation @regression @tier1 getValidatorsByCapability orders by bare pubkey on testnet"
     ],
     "c4d70bc831f40242": [
       "Programmable policy layer : custody guard ordering @regression does not run the address guard after a token denial",
@@ -15496,6 +15551,10 @@
       "Escrow release negation parity @regression @tier1 negative control: JS unary minus on the same value DOES lose precision",
       "Escrow release negation parity @regression @tier1 no action handler negates a ledger amount with JS unary minus (source scan)"
     ],
+    "db0f22ae2fc52ee3": [
+      "protocol_changes active-stake collation gate @regression @tier1 is inert when height is null or non-finite",
+      "protocol_changes active-stake collation gate @regression @tier1 registers a height gate unarmed on public networks and active from regtest genesis"
+    ],
     "db4cdd7dac8b8bff": [
       "04 Spike Load handles repeated micro-spikes (bursty traffic)",
       "04 Spike Load handles spike from 1 tx/block to 100 tx/block without errors"
@@ -16914,6 +16973,12 @@
       "Programmable policy layer : Phase B enforcement @regression maybeRunControllerGuard : control flow STAKE controller DENY reverts the action",
       "Programmable policy layer : Phase B enforcement @regression maybeRunControllerGuard : control flow STAKE routes to the 'stake' class and invokes the guard (stub now live)"
     ],
+    "efb099e2e746f08d": [
+      "train activation halt stall health @regression does not grade a train activation halt past the grace as wedged",
+      "train activation halt stall health @regression publishes the train activation halt class without rewriting it",
+      "train activation halt stall health @regression reports a train activation halt as degraded in the health payload",
+      "train activation halt stall health @regression still grades a non-train reason past the grace as wedged"
+    ],
     "eff168f8a3214dbb": [
       "getMaxAnchorCheckpointSeq() version filter (#2239) keeps the default statement unchanged and narrows valid-only reads",
       "getMaxAnchorCheckpointSeq() version filter (#2239) parameterizes the version filter from the shared CHECKPOINT_VERSIONS constant",
@@ -17978,8 +18043,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1407,
-      "titleCount": 13933,
+      "fileCount": 1415,
+      "titleCount": 13982,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18028,6 +18093,7 @@
         "test/unit/actions/anchor/archive/anchor_archive_verdict_prefold.test.js": "0c41aab445ad49d3",
         "test/unit/actions/anchor/archive/anchor_archive_verdict_scoped.test.js": "2e3850c1f7da931d",
         "test/unit/actions/anchor/archive/archive_match_count_gate.test.js": "127df5c011e290d0",
+        "test/unit/actions/anchor/archive/archive_stamp_journal_flag.test.js": "66caa1177df15bb8",
         "test/unit/actions/anchor/bundle_order/anchor_bundle_order_activation.test.js": "74e4105debf3952c",
         "test/unit/actions/anchor/bundle_order/anchor_bundle_order_gate.test.js": "13b04af629143cd3",
         "test/unit/actions/anchor/bundle_order/anchor_order_reason_helpers.test.js": "3277653238c8d36f",
@@ -18651,6 +18717,8 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
+        "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
+        "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
@@ -18692,6 +18760,7 @@
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_registry_parity.test.js": "56e2effa6675b4fa",
+        "test/unit/consensus/snapshot_checkpoint/canonical.test.js": "299c4ed3013e8a10",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
         "test/unit/consensus/stale_twin_module_refs.test.js": "25c3d82b177fdf7c",
         "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "4db50e18ffcab3aa",
@@ -18786,6 +18855,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
         "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "f254d69bb75856a7",
@@ -18879,6 +18949,7 @@
         "test/unit/db/stakes/db_contract_delegation_held_key_gate_off.test.js": "7e9e0954be3bb895",
         "test/unit/db/stakes/db_contract_delegation_materialize.test.js": "8e2845a99501f6fb",
         "test/unit/db/stakes/db_contract_stake_refund_precision.test.js": "ebee9ed4a6d4955f",
+        "test/unit/db/stakes/db_contract_stake_rotation_origin.test.js": "5e93fa420238108c",
         "test/unit/db/stakes/db_get_poll_results_for_vm_tick.test.js": "d8b5e860c7d126cc",
         "test/unit/db/stakes/db_get_stakers_tieorder.test.js": "8f4660420aff57bc",
         "test/unit/db/stakes/db_slash_capability_stake.test.js": "a731875fc2cd0972",
@@ -19182,6 +19253,7 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "928a3b458b1abf59",
         "test/unit/protocol/protocol_changes.test/unusable_block_time.test.js": "cb3e0ef54d91ff54",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
         "test/unit/protocol_changes/anchor/anchor_bundle_order_row.test.js": "332212f43d474164",
         "test/unit/protocol_changes/anchor/anchor_fold_rows.test.js": "2d944feb25011092",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
@@ -19384,6 +19456,7 @@
         "test/unit/xchain_indexer/stall_health.test/barrier_mapping.test.js": "26506740301590af",
         "test/unit/xchain_indexer/stall_health.test/is_train_activation_halt.test.js": "67e9ad621c10ee25",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
+        "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
         "test/unit/xchain_indexer/stall_health_smoke_parity.test.js": "850d161466315079",
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
@@ -19756,8 +19829,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1064,
-      "titleCount": 11020,
+      "fileCount": 1069,
+      "titleCount": 11044,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20297,6 +20370,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
+        "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "e23f4b08d34e0b5a",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
@@ -20381,6 +20455,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
         "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "f254d69bb75856a7",
@@ -20457,6 +20532,7 @@
         "test/unit/db/stakes/db_contract_delegation_held_key_gate_off.test.js": "7e9e0954be3bb895",
         "test/unit/db/stakes/db_contract_delegation_materialize.test.js": "8e2845a99501f6fb",
         "test/unit/db/stakes/db_contract_stake_refund_precision.test.js": "ebee9ed4a6d4955f",
+        "test/unit/db/stakes/db_contract_stake_rotation_origin.test.js": "5e93fa420238108c",
         "test/unit/db/stakes/db_get_poll_results_for_vm_tick.test.js": "d8b5e860c7d126cc",
         "test/unit/db/stakes/db_get_stakers_tieorder.test.js": "8f4660420aff57bc",
         "test/unit/db/stakes/db_slash_capability_stake.test.js": "a731875fc2cd0972",
@@ -20673,6 +20749,7 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "928a3b458b1abf59",
         "test/unit/protocol/protocol_changes.test/unusable_block_time.test.js": "cb3e0ef54d91ff54",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
@@ -20822,12 +20899,13 @@
         "test/unit/xchain_indexer/resolve_btc_chain_id_midchain.test.js": "f8d27657ca37a414",
         "test/unit/xchain_indexer/stall_health.test/barrier_mapping.test.js": "26506740301590af",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
+        "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
       }
     },
     "test:regression:fast": {
-      "fileCount": 506,
-      "titleCount": 5613,
+      "fileCount": 510,
+      "titleCount": 5633,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20986,6 +21064,7 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
+        "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
@@ -21041,6 +21120,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
         "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "f254d69bb75856a7",
@@ -21102,6 +21182,7 @@
         "test/unit/db/stakes/db_contract_delegation_held_key_gate_off.test.js": "7e9e0954be3bb895",
         "test/unit/db/stakes/db_contract_delegation_materialize.test.js": "8e2845a99501f6fb",
         "test/unit/db/stakes/db_contract_stake_refund_precision.test.js": "ebee9ed4a6d4955f",
+        "test/unit/db/stakes/db_contract_stake_rotation_origin.test.js": "5e93fa420238108c",
         "test/unit/db/stakes/db_get_poll_results_for_vm_tick.test.js": "d8b5e860c7d126cc",
         "test/unit/db/stakes/db_get_stakers_tieorder.test.js": "8f4660420aff57bc",
         "test/unit/db/stakes/db_slash_capability_stake.test.js": "a731875fc2cd0972",
@@ -21251,6 +21332,7 @@
         "test/unit/protocol/list_reference_validity_gate.test.js": "75196e85b9673333",
         "test/unit/protocol/price_time_gate.test.js": "3ba5b094789a13b1",
         "test/unit/protocol/protocol_change_registry_prototype.test.js": "9227d0e83b5535c1",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
@@ -21338,8 +21420,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1064,
-      "titleCount": 11020,
+      "fileCount": 1069,
+      "titleCount": 11044,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21879,6 +21961,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
+        "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "e23f4b08d34e0b5a",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
@@ -21963,6 +22046,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
         "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "f254d69bb75856a7",
@@ -22039,6 +22123,7 @@
         "test/unit/db/stakes/db_contract_delegation_held_key_gate_off.test.js": "7e9e0954be3bb895",
         "test/unit/db/stakes/db_contract_delegation_materialize.test.js": "8e2845a99501f6fb",
         "test/unit/db/stakes/db_contract_stake_refund_precision.test.js": "ebee9ed4a6d4955f",
+        "test/unit/db/stakes/db_contract_stake_rotation_origin.test.js": "5e93fa420238108c",
         "test/unit/db/stakes/db_get_poll_results_for_vm_tick.test.js": "d8b5e860c7d126cc",
         "test/unit/db/stakes/db_get_stakers_tieorder.test.js": "8f4660420aff57bc",
         "test/unit/db/stakes/db_slash_capability_stake.test.js": "a731875fc2cd0972",
@@ -22255,6 +22340,7 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "928a3b458b1abf59",
         "test/unit/protocol/protocol_changes.test/unusable_block_time.test.js": "cb3e0ef54d91ff54",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
@@ -22404,6 +22490,7 @@
         "test/unit/xchain_indexer/resolve_btc_chain_id_midchain.test.js": "f8d27657ca37a414",
         "test/unit/xchain_indexer/stall_health.test/barrier_mapping.test.js": "26506740301590af",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
+        "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
       }
     },
