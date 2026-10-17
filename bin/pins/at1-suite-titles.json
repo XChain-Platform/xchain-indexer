@@ -1835,6 +1835,12 @@
       "LIST tick coin activation @regression @tier1 stores every qualified mirror member as written without validation lookup",
       "LIST tick coin activation @regression @tier1 stores foreign qualified items canonically without token lookup when armed"
     ],
+    "1e1170b8eaa24c88": [
+      "Database status/action id cache @regression @tier1 drops a pending id when commit fails",
+      "Database status/action id cache @regression @tier1 drops a rolled-back id so the next lookup reads the database",
+      "Database status/action id cache @regression @tier1 promotes a pending id after commit and serves it without another query",
+      "Database status/action id cache @regression @tier1 serves a pending id inside the transaction that assigned it"
+    ],
     "1e1c9edff4a1606c": [
       "Dividend @regression @tier2 TICK validations DIVIDEND_TICK not found \u2192 invalid",
       "Dividend @regression @tier2 TICK validations TICK not found \u2192 invalid",
@@ -18981,8 +18987,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1398,
-      "titleCount": 13893,
+      "fileCount": 1399,
+      "titleCount": 13897,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19807,6 +19813,7 @@
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
         "test/unit/db/events/reorg_cursor_guards.test.js": "d18641680b374c5c",
+        "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/adversarial_compact_id.test.js": "359bcfb442706852",
         "test/unit/db/ledger/adversarial_compact_id_handler.test.js": "9b346c96ac848481",

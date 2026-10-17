@@ -14,16 +14,9 @@
  *
  * XChain Platform Action - PRICE
  *
- * Three versions, two of them live on the wire:
- *   v0: the RETIRED per-round validator snapshot. Its former wire,
- *       PRICE|0|ROUND|TIMESTAMP|BTC_BLOCK_HEIGHT|PAIR_COUNT|PAIR_ID|PAIR_PRICE|...|SIG_COUNT|PUBKEY|SIG|...,
- *       is no longer parsed: VERSION 0 now names the batch form below, whose round bodies
- *       keep the v0 shape. ed25519.buildPriceV0Payload survives as the per-round canonical
- *       the hub-to-hub push path still signs and verifies.
- *   v1: User TOKEN/FIAT oracle price (no staking required)
- *       Format: PRICE|1|COIN|TICK|FIAT|VALUE|FEE|MEMO
- *   v2: Validator BATCH snapshot - one signed action carrying an hourly window of
- *       full v0-shaped round bodies, in either of two wire forms
+ * Two live versions on the wire:
+ *   v0: Validator BATCH snapshot - one signed action carrying an hourly window of
+ *       v0-shaped round bodies, in either of two wire forms
  *       Format: PRICE|0|FIRST_ROUND|LAST_ROUND|BTC_BLOCK_HEIGHT|ROUND_COUNT|
  *                 ROUND|TIMESTAMP|ANCHOR_HEIGHT|PAIR_COUNT|pair|price|...[|ADMIT_BLOCKS] (x ROUND_COUNT)
  *                 |SIG_COUNT|PUBKEY|SIG|...
@@ -31,14 +24,18 @@
  *       ADMIT_BLOCKS is the round's admission map (CODE:digits in ASCII order, comma-joined),
  *       a declared slot present exactly when the round's OWN anchor is in the mirror
  *       admission era and absent below it; a batch never straddles that activation.
+ *       The retired per-round v0 wire is no longer parsed. ed25519.buildPriceV0Payload
+ *       survives as the per-round canonical that the hub-to-hub push signs.
+ *   v1: User TOKEN/FIAT oracle price (no staking required)
+ *       Format: PRICE|1|COIN|TICK|FIAT|VALUE|FEE|MEMO
  *
  * v0 validation:
  *   1. Each PUBKEY must have an active price capability stake
  *   2. Each Ed25519 signature must verify against the canonical payload
  *   3. SIG_COUNT must meet PBFT quorum: >= max(2 * floor((price_count - 1) / 3) + 1, ceil((price_count + 1) / 2))
  *
- * After validation, the indexer pushes the round to xchain-hub which
- * deduplicates by round_number into the unified price_snapshots table.
+ * After validation, the indexer pushes each round of the batch to xchain-hub,
+ * which dedupes by round_number into price_snapshots.
  *
  ********************************************************************/
 
@@ -71,7 +68,7 @@ class Price {
         // v0 has variable-length params; the format string is informational
         this.formats[0] = 'VERSION|FIRST_ROUND|LAST_ROUND|BTC_BLOCK_HEIGHT|ROUND_COUNT|...|SIG_COUNT|...';
         this.formats[1] = 'VERSION|COIN|TICK|FIAT|VALUE|FEE|MEMO';
-        // v2 has variable-length params and two wire forms; the format string is informational
+        // The v0 batch has variable-length params and two wire forms; the format string is informational
     }
 
     async parse(params, data, error){
@@ -189,7 +186,7 @@ class Price {
     // 5. STORAGE. round_number carries FIRST_ROUND (because the column is indexed and every
     // existing read treats it as "the round this action is about"), sigs_json carries the
     // batch signature set, and pair_count/pairs_json/sig_count are left unset so they
-    // store NULL: on a v2 row those three would describe only one round out of the window.
+    // store NULL: on a v0 batch row those three would describe only one round out of the window.
     storePriceBatchFields(data, batch, roundsWire, error){
         data['ROUND']             = batch.firstRound;
         data['BTC_BLOCK_HEIGHT']  = batch.btcBlockHeight;
