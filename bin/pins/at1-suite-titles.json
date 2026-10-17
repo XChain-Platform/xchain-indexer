@@ -4638,6 +4638,10 @@
       "runMigrations() checksum heal branch @regression @tier1 an unpinned edit to a rebaselined file still trips the immutability guard",
       "runMigrations() checksum heal branch @regression @tier1 the pre-rename ledger heals silently instead of logging content CHANGED"
     ],
+    "4982ff3988e6d5f9": [
+      "UNBIND exact wire value rule @regression ADDRESS format 1 (v1) treats only wire string 1 as unbind",
+      "UNBIND exact wire value rule @regression ISSUE format 6 (v6) treats only wire string 1 as unbind"
+    ],
     "499b54ec6a7dfd34": [
       "Order_Match action handler @regression @tier2 allows match when GIVE_OWNERSHIP mirrors GET_OWNERSHIP (both 0)",
       "Order_Match action handler @regression @tier2 creates action mappings after a successful match",
@@ -19189,6 +19193,7 @@
         "test/unit/actions/token/token_supply_bound.test.js": "5c880597d1863312",
         "test/unit/actions/token/uncapped_max_supply.test.js": "40d8afc9cd271bab",
         "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js": "2d0e6bd90f6953d4",
+        "test/unit/actions/token/unbind_value_rule.test.js": "4982ff3988e6d5f9",
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
         "test/unit/actions/vm_runtime_dependencies.test.js": "1430f668b647634f",
         "test/unit/actions/vote/tick_existence_gate.test.js": "431d3e1700c16904",
@@ -20921,6 +20926,7 @@
         "test/unit/actions/token/sweep/sweep_ticker_memoization.test.js": "856558ff8c380713",
         "test/unit/actions/token/uncapped_max_supply.test.js": "40d8afc9cd271bab",
         "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js": "2d0e6bd90f6953d4",
+        "test/unit/actions/token/unbind_value_rule.test.js": "4982ff3988e6d5f9",
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
         "test/unit/actions/xcall.test.js": "cdaf976c3205a143",
         "test/unit/actions/xcall.test/process_result.test.js": "23c7c709347d6c2b",
@@ -22326,6 +22332,7 @@
         "test/unit/actions/token/sweep/sweep_ticker_memoization.test.js": "856558ff8c380713",
         "test/unit/actions/token/uncapped_max_supply.test.js": "40d8afc9cd271bab",
         "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js": "2d0e6bd90f6953d4",
+        "test/unit/actions/token/unbind_value_rule.test.js": "4982ff3988e6d5f9",
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
         "test/unit/actions/xcall.test.js": "cdaf976c3205a143",
         "test/unit/actions/xcall.test/process_result.test.js": "23c7c709347d6c2b",
