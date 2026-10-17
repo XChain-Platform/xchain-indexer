@@ -18962,8 +18962,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1396,
-      "titleCount": 13889,
+      "fileCount": 1397,
+      "titleCount": 13891,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
