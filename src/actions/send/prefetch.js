@@ -34,7 +34,7 @@ module.exports = {
         for(let send of sends){
             let tick = send[0];
             if(ticks[tick] === undefined)
-                ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
         }
 
         // Get address preferences for all destination addresses (used in MEMO requirement check)
@@ -104,7 +104,7 @@ module.exports = {
         // guard gas. Load the SOURCE's GAS balance once so a multi-send debits it cumulatively
         // across controlled legs (maybeRunControllerGuard reserves the ceiling against it).
         let gasTick      = this.config['GAS'];
-        let gasInfo      = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let gasInfo      = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
         let gasBalances  = await this.indexerDb.getAddressBalances(data['SOURCE'], gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // SOURCE sleeping-state check is byte-identical for every leg (same SOURCE, same
