@@ -24,6 +24,8 @@
  ********************************************************************/
 
 const { getLogger } = require('../../../observability/index.js');
+const { strictHubRead } = require('../mirror_write.js');
+const { RELAY_MARGIN_FLOOR_S, MATCH_FINALIZED_AT_SQL } = require('./relay_margin.js');
 
 module.exports = {
 
@@ -35,7 +37,7 @@ module.exports = {
     async refreshOracleSyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
         try {
-            let rows = await this.hubDb.doQuery('SELECT MAX(effective_at) AS ts FROM oracle_prices');
+            let rows = await strictHubRead(this.hubDb, 'SELECT MAX(effective_at) AS ts FROM oracle_prices');
             if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
         } catch (e) {
             return;                                         // table not ready yet; leave state untouched
@@ -136,7 +138,7 @@ module.exports = {
     // Recompute the highest effective_time present in the local cross_chain_matches copy
     // (finalized only) and release satisfied waiters. A NULL max (empty mirror) is valid.
     async refreshMatchSyncTimestamp(armBootstrap = this._bootstrapDrained) {
-        let ts = null;
+        let ts = null, finalizedTs = null;
         try {
             // Scope the watermark to matches that touch THIS coin (either leg), matching
             // the settlement query (src/db/cross_chain/index.js: WHERE ... AND (a_chain = ? OR b_chain = ?)) and
@@ -146,16 +148,28 @@ module.exports = {
             // waitForMatchSync pass before every match effective for this coin is mirrored
             // locally, so two indexers settling the same chain could settle the same match at
             // divergent blocks and fork. Symmetric to the cross_chain_calls fix (item 4573).
+            //
+            // finalized_ts feeds the content shortcut (see matchContentCoverage): a
+            // MAX(effective_time) over matches with different margins proves nothing about
+            // the matches with the smaller one, since a DOGE/BTC match finalized first is
+            // effective 1800 s after a DOGE/LTC match finalized a moment later.
             let where = "WHERE status = 'finalized'";
             let args  = [];
-            if (this.coin) { where += " AND (a_chain = ? OR b_chain = ?)"; args = [this.coin, this.coin]; }
-            let rows = await this.hubDb.doQuery(
-                "SELECT MAX(effective_time) AS ts FROM cross_chain_matches " + where, args);
-            if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
+            let select = 'SELECT MAX(effective_time) AS ts';
+            if (this.coin) {
+                where += " AND (a_chain = ? OR b_chain = ?)";
+                args = [this.coin, this.coin];
+                select += ', ' + MATCH_FINALIZED_AT_SQL;
+            }
+            let rows = await strictHubRead(this.hubDb, select + " FROM cross_chain_matches " + where, args);
+            if (rows.length > 0 && rows[0].ts !== null && rows[0].ts !== undefined) ts = Number(rows[0].ts);
+            if (rows.length > 0 && rows[0].finalized_ts !== null && rows[0].finalized_ts !== undefined)
+                finalizedTs = Number(rows[0].finalized_ts);
         } catch (e) {
             return;                                             // table not ready yet
         }
         this.matchSyncTimestamp = ts;
+        this.matchCoveredTimestamp = this.matchContentCoverage(ts, finalizedTs);
         // Arm only under a full bootstrap drain; reconnect / live-row refreshes
         // default armBootstrap to _bootstrapDrained so they cannot arm the NULL
         // fast path from a holed mirror and fork (#1788).
@@ -163,18 +177,34 @@ module.exports = {
         this.releaseMatchWaiters();
     },
 
+    // The block time through which every match touching this chain is provably local,
+    // or null when nothing proves it. With the local rows a prefix of the hub's
+    // finalization order, a match still missing finalized no earlier than finalizedTs and
+    // carries at least this chain's own margin floor (its margin is the larger of its two
+    // legs' floors), so it is effective no earlier than finalizedTs plus that floor.
+    // Without a coin (the explorer's display mirror) the unscoped MAX stands, as before.
+    matchContentCoverage(ts, finalizedTs) {
+        if (!this.coin) return ts;
+        let floor = RELAY_MARGIN_FLOOR_S[this.coin];
+        if (floor === undefined || finalizedTs === null) return null;
+        return finalizedTs + floor;
+    },
+
     // ADMISSION ERA: the cross_chain_matches height watermark for this chain has reached
     // B - 4, or a hub that has published admission evidence has streamed through blockTime
-    // plus grace without producing another row. The empty-mirror escape survives unchanged.
+    // plus grace without producing another row. The empty-mirror escape survives unchanged,
+    // except that it needs a drained connection: matchBootstrapped outlives a socket close,
+    // and an empty scope proves nothing about a match finalized while the socket was down.
     matchSyncSatisfied(blockTime, blockHeight = null) {
-        if (this.matchBootstrapped && this.matchSyncTimestamp === null) return true;
+        if (this.matchBootstrapped && this._bootstrapDrained && this.matchSyncTimestamp === null) return true;
         const streamSatisfied = this.matchBootstrapped &&
             this.streamWatermark >= blockTime + this.matchWatermarkGraceS;
         if (this.admissionActiveAt(blockHeight)) {
             if (this.admissionStreamSatisfied('cross_chain_matches', streamSatisfied)) return true;
             return this.matchBootstrapped && this.heightSatisfied('cross_chain_matches', blockHeight);
         }
-        if (this.matchSyncTimestamp !== null && this.matchSyncTimestamp >= blockTime) return true;
+        if (this.matchCoveredTimestamp !== null && this.matchCoveredTimestamp !== undefined &&
+            this.matchCoveredTimestamp >= blockTime) return true;
         // Stream watermark: matches are stamped with the hub's wall clock at
         // finalization and broadcast immediately, so a watermark past this
         // block's time (plus clock-skew grace) means every match effective at
@@ -235,7 +265,7 @@ module.exports = {
     // ── Cross-chain call sync barrier (mirrors the match barrier exactly) ──────
 
     async refreshCallSyncTimestamp(armBootstrap = this._bootstrapDrained) {
-        let ts = null;
+        let ts = null, gated = null;
         try {
             // Scope the watermark to calls that touch THIS coin (target or source),
             // matching the snapshot-presence barrier below. A global MAX(effective_time)
@@ -243,16 +273,32 @@ module.exports = {
             // letting the barrier pass before every call effective for this coin is
             // mirrored locally, so two indexers settling the same chain could inject the
             // same XEXEC at divergent positions and fork (item 4573).
+            //
+            // gated_ts is the content shortcut's own watermark: only the rows this chain
+            // APPLIES, a dispatch it is the target of and a result it is the source of
+            // (getEffectiveUndispatchedCalls, getEffectiveUnprocessedCallResults). The
+            // hub's call engine stamps each row with the margin of the chain that applies
+            // it (xchain-hub src/cross_chain/call/plumbing.js relayEffectiveTime), so those
+            // rows share this chain's margin and grow in finalization order, while a
+            // dispatch this chain sent to BTC runs 2400 s ahead and vouches for nothing
+            // here. Without a coin (the explorer's display mirror) the unscoped MAX stands.
             let where = "WHERE status = 'finalized'";
             let args  = [];
-            if (this.coin) { where += " AND (target_chain = ? OR source_chain = ?)"; args = [this.coin, this.coin]; }
-            let rows = await this.hubDb.doQuery(
-                "SELECT MAX(effective_time) AS ts FROM cross_chain_calls " + where, args);
-            if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
+            let select = 'SELECT MAX(effective_time) AS ts';
+            if (this.coin) {
+                where += " AND (target_chain = ? OR source_chain = ?)";
+                select += ", MAX(CASE WHEN (phase = 'dispatch' AND target_chain = ?) OR (phase = 'result' AND source_chain = ?)" +
+                          ' THEN effective_time END) AS gated_ts';
+                args = [this.coin, this.coin, this.coin, this.coin];
+            }
+            let rows = await strictHubRead(this.hubDb, select + " FROM cross_chain_calls " + where, args);
+            if (rows.length > 0 && rows[0].ts !== null && rows[0].ts !== undefined) ts = Number(rows[0].ts);
+            if (rows.length > 0 && rows[0].gated_ts !== null && rows[0].gated_ts !== undefined) gated = Number(rows[0].gated_ts);
         } catch (e) {
             return;                                             // table not ready yet
         }
         this.callSyncTimestamp = ts;
+        this.callGatedSyncTimestamp = this.coin ? gated : ts;
         // Arm only under a full bootstrap drain; reconnect / live-row refreshes
         // default armBootstrap to _bootstrapDrained so they cannot arm the NULL
         // fast path from a holed mirror and fork (#1788).
@@ -261,12 +307,15 @@ module.exports = {
     },
 
     // ADMISSION ERA: the cross_chain_calls height watermark for this chain has reached
-    // B - 4, replacing both clock cases exactly as the match member above.
+    // B - 4, replacing both clock cases exactly as the match member above. The empty-mirror
+    // escape needs a drained connection and the content shortcut reads the rows this chain
+    // applies, both for the reasons given at the match member and refreshCallSyncTimestamp.
     callSyncSatisfied(blockTime, blockHeight = null) {
-        if (this.callBootstrapped && this.callSyncTimestamp === null) return true;
+        if (this.callBootstrapped && this._bootstrapDrained && this.callSyncTimestamp === null) return true;
         if (this.admissionActiveAt(blockHeight))
             return this.callBootstrapped && this.heightSatisfied('cross_chain_calls', blockHeight);
-        if (this.callSyncTimestamp !== null && this.callSyncTimestamp >= blockTime) return true;
+        if (this.callGatedSyncTimestamp !== null && this.callGatedSyncTimestamp !== undefined &&
+            this.callGatedSyncTimestamp >= blockTime) return true;
         // Stream watermark escape: a relay row is broadcast the moment the hub
         // finalizes it, so a watermark past this block's time plus the grace means
         // every relay row effective at/before it is already local. Without this

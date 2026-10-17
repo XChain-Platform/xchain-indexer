@@ -1,7 +1,7 @@
 {
   "name": "xchain-indexer",
   "description": "xchain-indexer is a free open source token platform indexer for the XChain platform",
-  "version": "0.23.2",
+  "version": "0.24.0",
   "private": true,
   "xchainRequiresHub": "0.22.4",
   "license": "AGPL-3.0-or-later",
@@ -10,14 +10,14 @@
     "url": "https://github.com/XChain-Platform/xchain-indexer.git"
   },
   "dependencies": {
-    "acorn": "8.18.0",
+    "acorn": "8.16.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^5.2.1",
     "express-json-rpc-router": "^1.4.0",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
-    "mariadb": "3.5.3",
+    "mariadb": "3.5.4",
     "mathjs": "15.2.0",
     "ws": "^8.21.0",
     "xchain-vm": "file:./xchain-vm"
@@ -27,10 +27,12 @@
     "migrate": "node ./src/db/migration/migrate.js",
     "vendor:vm": "bash bin/vendor-vm.sh",
     "check:vm": "bash bin/vendor-vm.sh check",
+    "check:consensus-dependencies": "mocha --no-config --timeout 5000 'test/unit/actions/vm_runtime_dependencies.test.js'",
     "check:consensus-time": "if grep -rn 'getCurrentTime(' src/actions/ 2>/dev/null; then echo 'ERROR: getCurrentTime() (wall-clock Date.now) must never be called inside src/actions/. Block processing must use the deterministic block timestamp (data[\"BLOCK_TIME\"]); a wall-clock value here diverges consensus state across validator instances'; exit 1; else echo 'OK: no wall-clock time usage in src/actions/'; fi",
     "test": "mocha --timeout 30000 --require ./test/helpers/setup.js --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' 'test/security/**/*.test.js'",
     "coverage": "c8 --all --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 30000 --require ./test/helpers/setup.js --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' --exit",
     "coverage:check": "c8 --all --check-coverage --lines 93.7 --statements 93.7 --branches 86.3 --functions 90.2 --reporter=text-summary --include 'src/**/*.js' mocha --timeout 30000 --require ./test/helpers/setup.js --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' --exit",
+    "mutation": "stryker run",
     "ci": "npm run check:vm && mocha --timeout 30000 --recursive --exit 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' 'test/security/**/*.test.js' && npm run test:chaos && npm run test:guard-dependencies && npm run test:fuzz:quick && npm run test:smoke:unit && npm run test:boundary && npm run check:consensus-time && npm run check:merkle-vectors",
     "check:merkle-vectors": "node test/fixtures/gen-merkle-vectors.js --check",
     "test:integration": "mocha --no-config --timeout 120000 --exit 'test/integration/**/*.test.js'",
@@ -66,6 +68,8 @@
     "ci:full": "bash bin/ci-full.sh"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/mocha-runner": "^9.6.1",
     "c8": "^11.0.0",
     "fast-check": "^4.6.0",
     "mocha": "^11.7.5",

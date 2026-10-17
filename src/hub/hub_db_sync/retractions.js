@@ -31,7 +31,8 @@ const swq    = require('../../consensus/stake_weighted_quorum.js');
 // the consumer's own registry entry, on the retraction's BTC-anchored snapshot block.
 const gateRegistry = require('../../consensus/gate_registry');
 const RETRACTION_SIGNING_KEY = 'retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION';
-const { RETRACTION_COLUMNS, RETRACTION_CHAIN_COLUMNS } = require('./mirror_tables.js');
+const { RETRACTION_COLUMNS, RETRACTION_CHAIN_COLUMNS,
+        QUORUM_CLASS_TABLES } = require('./mirror_tables.js');
 const { applyMirrorWrite } = require('./mirror_write.js');
 
 // ── signed-retraction verification helpers ───────────────────────────
@@ -70,8 +71,8 @@ function verifyEd25519(payload, sigHex, pubkeyHex) {
 // fenced DELETE names a_/b_push_generation or push_generation unconditionally, so on a table
 // missing its fence column it fails with ER_BAD_FIELD_ERROR and the row stays mirrored: it never
 // degrades to an unfenced delete. The cure is the dated fence-column migrations (2026-07-17 and
-// 2026-07-19); the 2026-07-19 header is right, and the 2026-07-17 headers' "no-op" and
-// column-presence-guard wording is wrong.
+// 2026-07-19), whose headers all state the same failure; the 2026-07-19 header's opening line
+// disputing its 2026-07-17 siblings predates their correction and stays frozen with the file.
 function parseRetractionRange(event) {
     let from = Number(event.from_action_index);
     if (!Number.isFinite(from)) return null;
@@ -112,11 +113,11 @@ module.exports = {
         // bridge_transfers joins the quorum class: its rows are federation-co-signed and a
         // deletion mints value out of existence on the destination chain the same way a
         // forged match would, so an unfenced or unsigned deletion must be refused rather
-        // than applied. policy_snapshots and list_snapshots are absent because they are never
-        // retracted (no RETRACTION_COLUMNS entry, so the generic path below skips them); giving
-        // either one a RETRACTION_COLUMNS entry also requires adding it to this list.
-        let quorumClass = (event.table === 'cross_chain_calls' || event.table === 'cross_chain_matches' ||
-                           event.table === 'bridge_transfers');
+        // than applied. policy_snapshots, list_snapshots and remote_token_snapshots are absent
+        // because they are never retracted (no RETRACTION_COLUMNS entry, so the generic path
+        // below skips them). Giving any of them a RETRACTION_COLUMNS entry also requires adding
+        // it to this list AND a push_generation column in both the hub and indexer DDL.
+        let quorumClass = QUORUM_CLASS_TABLES.includes(event.table);
         let ownChain = !!(this.coin && event.source_chain === this.coin && this.getOwnRollbackGeneration);
         if (!(await this.acceptRetractionFences(event, range, quorumClass, ownChain))) return;
         if (quorumClass && this.network && !(await this.acceptRetractionSignatures(event, range))) return;

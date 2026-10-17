@@ -24,7 +24,8 @@
 const path    = require('path');
 const priceLog = require('./price_log.js');
 const oracleVmSnapshot = require('./oracle_vm_snapshot.js');
-const { isOraclePreloadAdmissionActive, oraclePreloadBound } = require('./oracle_preload_causality_gate.js');
+const { isOraclePreloadAdmissionActive, oraclePreloadBound,
+        ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN } = require('./oracle_preload_causality_gate.js');
 const { landedBoundClause } = require('./landed_bound.js');
 const gateRegistry = require('../../consensus/gate_registry');
 const { getLogger } = require('../../observability/index.js');
@@ -85,6 +86,44 @@ function admitBoundFor(config, blockHeight, opts){
     return b.sql === '' ? null : b;
 }
 
+// Whether the landed-batch bound binds at blockHeight, and whether in its strict form: the
+// one reading getLatestPrice and the bounded FIAT read share.
+function landedSelection(config, blockHeight){
+    let landedActive = gateRegistry.activeAt('price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION',
+        config['NETWORK'], config['COIN'], blockHeight, null);
+    let landingSets = gateRegistry.get('price_fee_batch_landed_activation.PRICE_LANDING_CHAINS');
+    let landingSet  = Object.prototype.hasOwnProperty.call(landingSets, config['NETWORK'])
+        ? landingSets[config['NETWORK']] : [];
+    let ownCoin     = String(config['COIN'] || '').trim().toUpperCase();
+    let landedStrict = landedActive && landingSet.includes(ownCoin) &&
+        gateRegistry.activeAt('price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION',
+            config['NETWORK'], config['COIN'], blockHeight, null);
+    return { landedActive, landedStrict };
+}
+
+// The clause and bindings that fix the rounds a FIAT settlement read sees at block B to what
+// chain data names (dispenser_fiat_pricing_activation): reference_block <= B on the reference
+// chain, as the fee read's height branch and the VM preload bind it there; the signed admission
+// height on another chain in the admission era, as the fee read and the preload bind it there
+// (outside it the window's own block_timestamp bound is the fee read's time bound); and the
+// landed-batch clause on the block's clock wherever getLatestPrice carries it.
+function fiatReadBound(config, bound){
+    let blockHeight = Number(bound.blockIndex), blockTime = Number(bound.blockTime);
+    let sql = '', args = [];
+    if(config['COIN'] === ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN){
+        sql = ' AND reference_block <= ?';
+        args = [blockHeight];
+    } else if(isOraclePreloadAdmissionActive(blockHeight, config['NETWORK'], config['COIN'])){
+        let b = oraclePreloadBound(blockHeight, blockTime, config['NETWORK'], config['COIN']);
+        sql = b.sql;
+        args = b.args;
+    }
+    let { landedActive, landedStrict } = landedSelection(config, blockHeight);
+    sql += landedBoundClause(landedActive, landedStrict);
+    if(landedActive) args = args.concat([blockTime]);
+    return { sql, args };
+}
+
 module.exports = Object.assign({
 
     async getMaxBatchBlockTime(){
@@ -119,8 +158,7 @@ module.exports = Object.assign({
         // block time. Armed with no such time available the read FAILS CLOSED (no price)
         // rather than answering from the unbounded selection, which is the fork this gate
         // closes; every consensus caller passes opts.blockTime.
-        let landedActive = gateRegistry.activeAt('price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION',
-            this.config['NETWORK'], this.config['COIN'], blockHeight, null);
+        let { landedActive, landedStrict } = landedSelection(this.config, blockHeight);
         let landedTime   = opts ? Number(opts.blockTime) : NaN;
         if(landedActive && !Number.isFinite(landedTime)){
             if(!this._batchLandedNoTimeWarned){
@@ -134,13 +172,6 @@ module.exports = Object.assign({
         // Empty below the height, so every query string and argument list stays
         // byte-identical to the pre-gate one and historical replay is unchanged. The
         // clause goes LAST in each WHERE so its argument appends last.
-        let landingSets = gateRegistry.get('price_fee_batch_landed_activation.PRICE_LANDING_CHAINS');
-        let landingSet  = Object.prototype.hasOwnProperty.call(landingSets, this.config['NETWORK'])
-            ? landingSets[this.config['NETWORK']] : [];
-        let ownCoin     = String(this.config['COIN'] || '').trim().toUpperCase();
-        let landedStrict = landedActive && landingSet.includes(ownCoin) &&
-            gateRegistry.activeAt('price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION',
-                this.config['NETWORK'], this.config['COIN'], blockHeight, null);
         let landedBound = landedBoundClause(landedActive, landedStrict);
         let { query, args } = selectLatestPriceQuery(coinPair, blockHeight, opts, landedBound, landedActive, landedTime,
             admitBoundFor(this.config, blockHeight, opts));
@@ -172,7 +203,10 @@ module.exports = Object.assign({
     // Get the latest effective oracle price for a (sourceAddress, coin, tick, fiat) combination
     // gated by blockTime so two nodes processing the same block see the same price.
     // The 24-hour lock window is enforced by `effective_at` - only prices whose effective_at <= blockTime are returned.
-    async getOraclePrice(sourceAddress, coin, tick, fiat, blockTime){
+    //
+    // chainTiebreak (dispenser_fiat_pricing_activation, decided by the caller) adds
+    // source_chain DESC as the last key; without it the order is the pre-gate one.
+    async getOraclePrice(sourceAddress, coin, tick, fiat, blockTime, chainTiebreak){
         this.assertPriceBarrierNotSkipped('getOraclePrice');
         let query = `SELECT source_address, source_chain, coin, tick, fiat, value, fee, memo,
                             block_time, effective_at, action_index
@@ -183,10 +217,13 @@ module.exports = Object.assign({
             query += ' AND effective_at <= ?';
             args.push(blockTime);
         }
-        // Tiebreak on action_index (consensus-stable: (source_chain, action_index) is the
-        // unique key) not id (local AUTO_INCREMENT, differs per mirror by arrival order),
-        // so an effective_at tie resolves to the same row on every node.
-        query += ' ORDER BY effective_at DESC, action_index DESC LIMIT 1';
+        // Tiebreak on action_index rather than id (local AUTO_INCREMENT, differs per mirror
+        // by arrival order). The unique key is (source_chain, action_index), so two chains can
+        // tie on both effective_at and action_index; only source_chain as the last key
+        // resolves that tie to the same row on every node.
+        query += chainTiebreak
+            ? ' ORDER BY effective_at DESC, action_index DESC, source_chain DESC LIMIT 1'
+            : ' ORDER BY effective_at DESC, action_index DESC LIMIT 1';
         // Strict read (M-17): the same swallow that forks the VM preload decides
         // whether a Mode B dispenser is valid at all, and on the hub instance an
         // errored read is indistinguishable from "no effective oracle price".
@@ -208,10 +245,17 @@ module.exports = Object.assign({
     },
 
     // Get oracle prices for a (sourceAddress, coin, tick, fiat) within a time range (newest-first)
-    // Used by reverseOraclePriceMatch for FIAT dispenser settlement.
-    async getOraclePricesInTimeRange(sourceAddress, coin, tick, fiat, startTime, endTime){
+    // Used by reverseOraclePriceMatch for FIAT dispenser settlement. chainTiebreak orders
+    // the (effective_at, action_index) ties on source_chain, as getOraclePrice does.
+    async getOraclePricesInTimeRange(sourceAddress, coin, tick, fiat, startTime, endTime, chainTiebreak){
         this.assertPriceBarrierNotSkipped('getOraclePricesInTimeRange');
-        let query = `SELECT value, block_time, effective_at, action_index
+        let query = chainTiebreak
+            ? `SELECT value, block_time, effective_at, action_index
+                     FROM oracle_prices
+                     WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ?
+                       AND effective_at BETWEEN ? AND ?
+                     ORDER BY effective_at DESC, action_index DESC, source_chain DESC`
+            : `SELECT value, block_time, effective_at, action_index
                      FROM oracle_prices
                      WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ?
                        AND effective_at BETWEEN ? AND ?
@@ -228,18 +272,31 @@ module.exports = Object.assign({
         }));
     },
 
-    // Get finalized prices for a coin pair within a time range (newest-first)
-    async getPricesInTimeRange(coinPair, startTime, endTime){
+    // Get finalized prices for a coin pair within a time range (newest-first).
+    //
+    // bound ({ blockIndex, blockTime } of the block reading, passed only under
+    // dispenser_fiat_pricing_activation) adds fiatReadBound's clause, so the rounds read are
+    // fixed by chain data rather than by which stamps this mirror happens to hold. Without it
+    // the statement is the pre-gate one.
+    async getPricesInTimeRange(coinPair, startTime, endTime, bound){
         this.assertPriceBarrierNotSkipped('getPricesInTimeRange');
-        let query = `SELECT price, round_number, block_timestamp
+        let chainBound = bound ? fiatReadBound(this.config, bound) : null;
+        let query = chainBound
+            ? `SELECT price, round_number, block_timestamp
+                     FROM price_snapshots
+                     WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
+                       AND block_timestamp BETWEEN ? AND ?${chainBound.sql}
+                     ORDER BY block_timestamp DESC, round_number DESC`
+            : `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
                        AND block_timestamp BETWEEN ? AND ?
                      ORDER BY block_timestamp DESC, round_number DESC`;
+        let args = [coinPair, startTime, endTime].concat(chainBound ? chainBound.args : []);
         // Strict read (M-17): the validator price that values the oracle fee and
         // settles a FIAT dispense; [] from a driver error is read as "no validator
         // price" and rejects or re-prices the action on this node only.
-        let rows = await this.doQueryStrict(query, [coinPair, startTime, endTime]);
+        let rows = await this.doQueryStrict(query, args);
         return rows.map(row => ({
             price:       row.price,
             roundNumber: Number(row.round_number),

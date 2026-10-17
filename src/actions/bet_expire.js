@@ -110,9 +110,11 @@ class Bet_Expire {
             escrows.push([feedInfo['TICK'], this.util.bcsub(0, betRow['AMOUNT'], 64), betRow['SOURCE']]);
             credits.push([feedInfo['TICK'], betRow['AMOUNT'], betRow['SOURCE']]);
             this.util.addAddressTicker(betRow['SOURCE'], feedInfo['TICK']);
-            await this.indexerDb.setBetSettled(betRow['ACTION_INDEX'], 'refunded', data['BLOCK_INDEX']);
-            await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betRow['ACTION_INDEX'], 'refunded');
         }
+        // Flip every refunded bet and write its history row in set-based chunks
+        // (a mass expiry would otherwise cost five serial round trips per bet)
+        await this.indexerDb.settleBetsBatch(data['ACTION_INDEX'],
+            openBets.map(betRow => betRow['ACTION_INDEX']), 'refunded', data['BLOCK_INDEX']);
     }
 }
 

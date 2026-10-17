@@ -76,3 +76,7 @@ CREATE TABLE anchor_actions (
 
 CREATE INDEX idx_anchor_batch      ON anchor_actions (match_batch_seq, version, chunk_index);
 CREATE INDEX idx_anchor_checkpoint ON anchor_actions (chain, network, checkpoint_seq);
+-- The per-block anchor_invalid state-hash class (archive_invalid_section.js) scopes the
+-- completing v2 chunk by block_index_doge = B. Without this index the planner walks every
+-- archive head and probes its chunks, so each block reads the whole table.
+CREATE INDEX idx_anchor_block_doge ON anchor_actions (block_index_doge);

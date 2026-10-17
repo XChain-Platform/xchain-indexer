@@ -114,10 +114,12 @@ describe('Rollback @regression @tier3', function () {
         indexer.util.resetLists();
     });
 
-    it('does NOT issue the request_status reset when there is no orphaned range', async function () {
+    it('still issues the request_status reset when the orphaned range holds no actions', async function () {
         indexer.indexerDb.doQuery.resolves([]); // no firstActionIndex
         await rollback.rollback(100);
-        assert.ok(!attestationResetUpdate(), 'no reset UPDATE expected when the rolled-back range is empty');
+        // Keyed on resolved_block >= the rollback height, so it is a no-op unless an orphaned
+        // block flipped a request; an action-empty range must not skip it.
+        assert.ok(attestationResetUpdate(), 'the block-keyed reset runs without an orphaned action');
     });
     const OPEN_OFFER_RE   = /SELECT\s+o\.action_index\s+FROM\s+orders/i; // per-ticker open-offer query
 

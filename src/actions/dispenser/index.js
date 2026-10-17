@@ -250,6 +250,17 @@ class Dispenser {
     async checkDispenserAuthority(ctx){
     let { data, error, format, dispenserInfo } = ctx;
 
+        // Refuse a DISPENSER_ACTION_INDEX that stores as NULL. The dispenser_cancels and
+        // dispenser_edits rows hold it in a NOT NULL column, where a NULL bind halts the
+        // block, so the stored row keeps the refusal under the placeholder 0, which names
+        // no action.
+        if((format==1 || format==2) &&
+           this.util.storesAsNull(data['DISPENSER_ACTION_INDEX'], this.config['INTEGER_FIELDS']['DISPENSER_ACTION_INDEX'])){
+            if(!error)
+                error = 'invalid: DISPENSER_ACTION_INDEX (format)';
+            ctx.dispenser['DISPENSER_ACTION_INDEX'] = 0;
+        }
+
         // Validate DISPENSER_ACTION_INDEX is valid dispenser
         if(!error && (format==1 || format==2) && !dispenserInfo)
             error = 'invalid: DISPENSER_ACTION_INDEX (unknown)';

@@ -21,6 +21,9 @@
  * information_schema for every MODIFY in an auto file and names each loss. A type change
  * it has no widening rule for counts as a loss, and a text MODIFY that names no charset
  * or collation is compared against the table default the server would fall back to.
+ * One signedness flip passes: signed to unsigned on an AUTO_INCREMENT column whose MODIFY
+ * restates AUTO_INCREMENT, and only after a live MIN read finds no negative stored value.
+ * A MODIFY keyword the parse cannot place refuses the file instead of being skipped.
  *
  ********************************************************************/
 
@@ -107,18 +110,39 @@ function stripBlockComments(text){
     return out;
 }
 
-// Every `ALTER TABLE t ... MODIFY [COLUMN] c <definition>` clause in a statement list.
+// MariaDB's `ALTER [ONLINE] [IGNORE] TABLE [IF EXISTS] t [WAIT n | NOWAIT]` head. The lock-wait
+// option sits between the table and the first alter_spec, so it is consumed here, not read as one.
+const ALTER_HEAD = /^ALTER\s+(?:ONLINE\s+)?(?:IGNORE\s+)?TABLE\s+(?:IF\s+EXISTS\s+)?((?:`[^`]+`|[\w$]+)(?:\s*\.\s*(?:`[^`]+`|[\w$]+))?)\s+(?:(?:WAIT\s+\d+(?:\.\d+)?|NOWAIT)\s+)?([\s\S]*)$/i;
+
+// The table and top-level alter_specs of an ALTER TABLE statement, or null when the head does not parse.
+function alterSpecs(stmt){
+    const head = ALTER_HEAD.exec(stripBlockComments(stmt).trim());
+    if(!head) return null;
+    return { table: unquote(head[1].split('.').pop().trim()), specs: splitTopLevel(head[2]) };
+}
+
+// True when text carries a MODIFY keyword outside every quoted literal and identifier.
+const namesModify = (text) => /\bMODIFY\b/i.test(blankLiterals(text));
+
+// Every `ALTER TABLE t ... MODIFY [COLUMN] c <definition>` clause in a statement list. A MODIFY
+// keyword this parse cannot place comes back as { unparsed } so the caller fails closed on it.
 function modifyClauses(statements){
     const found = [];
     for(const stmt of statements){
-        const head = /^ALTER\s+(?:ONLINE\s+)?(?:IGNORE\s+)?TABLE\s+(?:IF\s+EXISTS\s+)?((?:`[^`]+`|\w+)(?:\s*\.\s*(?:`[^`]+`|\w+))?)\s+([\s\S]*)$/i.exec(stripBlockComments(stmt).trim());
-        if(!head) continue;
-        const table = unquote(head[1].split('.').pop().trim());
-        for(const clause of splitTopLevel(head[2])){
+        const parsed = alterSpecs(stmt);
+        if(!parsed){
+            const text = stripBlockComments(stmt).trim();
+            if(/^ALTER\b/i.test(text) && namesModify(text)) found.push({ unparsed: text });
+            continue;
+        }
+        for(const clause of parsed.specs){
             const m = /^\s*MODIFY\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(`[^`]+`|\w+)\s+([\s\S]+)$/i.exec(clause);
-            if(!m) continue;
+            if(!m){
+                if(namesModify(clause)) found.push({ table: parsed.table, unparsed: clause.trim() });
+                continue;
+            }
             const definition = m[2].replace(/\s+(?:FIRST|AFTER\s+(?:`[^`]+`|\w+))\s*$/i, '').trim();
-            found.push({ table, column: unquote(m[1]), definition });
+            found.push({ table: parsed.table, column: unquote(m[1]), definition });
         }
     }
     return found;
@@ -192,12 +216,14 @@ function narrowedPrecision(live, next){
     return null;
 }
 
-function narrowedType(rawLive, rawNext){
+function narrowedType(rawLive, rawNext, opts){
     if(!rawLive || !rawNext) return null;
     const live = canonicalType(rawLive), next = canonicalType(rawNext);
     if(live.name in INT_RANK && next.name in INT_RANK){
         const l = INT_RANK[live.name], n = INT_RANK[next.name];
         if(n < l) return live.name + ' -> ' + next.name;
+        // Skip the signed -> unsigned flip only when the live probe proved no stored value is negative.
+        if(n === l && !live.unsigned && next.unsigned && opts && opts.unsignedRetypeSafe) return null;
         if(n === l && live.unsigned !== next.unsigned) return live.name + (live.unsigned ? ' unsigned' : '') + ' -> ' + next.name + (next.unsigned ? ' unsigned' : '');
         return null;
     }
@@ -222,7 +248,8 @@ function narrowedType(rawLive, rawNext){
 const collationKey = (name) => (name == null || name === '' ? null : String(name).toLowerCase().replace(/^utf8_/, 'utf8mb3_'));
 
 // Every loss one MODIFY would cause against the live column row; empty when it is safe.
-function losses(live, definition){
+// `opts` carries the unsigned-retype probe verdict (unsignedRetypeSafe, liveMin).
+function losses(live, definition, opts = {}){
     const out  = [];
     const bare = blankLiterals(definition);
     const extra = String(live.EXTRA || '').toLowerCase();
@@ -235,8 +262,8 @@ function losses(live, definition){
     if(String(live.COLUMN_COMMENT || '') !== '' && !/\bCOMMENT\b/i.test(bare)) out.push('strips COMMENT');
     if(generated && !/\bGENERATED\b|\bAS\s*\(/i.test(bare)) out.push('strips the generation expression');
 
-    const narrowed = narrowedType(parseLiveType(live.COLUMN_TYPE), parseType(definition));
-    if(narrowed) out.push('narrows the type (' + narrowed + ')');
+    const narrowed = narrowedType(parseLiveType(live.COLUMN_TYPE), parseType(definition), opts);
+    if(narrowed) out.push('narrows the type (' + narrowed + ')' + (opts.liveMin == null ? '' : ', live MIN(' + opts.column + ') is ' + opts.liveMin));
 
     const liveSet = live.CHARACTER_SET_NAME ? String(live.CHARACTER_SET_NAME).toLowerCase() : null;
     const nextSet = declaredCharset(bare);
@@ -256,10 +283,36 @@ function losses(live, definition){
     return out;
 }
 
+// A same-rank signed -> unsigned MODIFY that keeps AUTO_INCREMENT on an AUTO_INCREMENT column.
+function unsignedRetypeCandidate(live, definition){
+    const from = parseLiveType(live.COLUMN_TYPE), to = parseType(definition);
+    if(!from || !to) return false;
+    const l = INT_RANK[canonicalType(from).name], n = INT_RANK[canonicalType(to).name];
+    return l != null && l === n && !from.unsigned && to.unsigned &&
+        /\bauto_increment\b/.test(String(live.EXTRA || '').toLowerCase()) &&
+        /\bAUTO_INCREMENT\b/i.test(blankLiterals(definition));
+}
+
+// Read the live minimum, since a mirrored id may be copied in rather than generated here.
+// An AUTO_INCREMENT column is always indexed, so MIN is one index read; NULL is an empty table.
+async function unsignedRetypeProbe(conn, table, column){
+    const quote = (id) => '`' + String(id).replace(/`/g, '``') + '`';
+    const rows = await conn.query('SELECT MIN(' + quote(column) + ') AS m FROM ' + quote(table));
+    const min = Array.isArray(rows) && rows[0] ? rows[0].m : null;
+    if(min == null) return { unsignedRetypeSafe: true };
+    return /^\s*-/.test(String(min)) ? { liveMin: String(min), column } : { unsignedRetypeSafe: true };
+}
+
 // Throw when an auto file's MODIFY would strip or narrow a live column. An absent live
 // column (a fresh install, or one the file itself adds) is not drift and passes through.
 async function assertNoLiveColumnLoss(conn, file, statements){
-    for(const { table, column, definition } of modifyClauses(statements)){
+    for(const { table, column, definition, unparsed } of modifyClauses(statements)){
+        if(unparsed != null){
+            throw new Error('runMigrations: ' + file + ' is tagged mode=auto but carries a MODIFY this guard cannot read: "' +
+                unparsed.slice(0, 160) + (unparsed.length > 160 ? '...' : '') + '", so the live column it lands on goes unchecked. ' +
+                'Rewrite it as `ALTER TABLE t [WAIT n | NOWAIT] MODIFY [COLUMN] c <definition>`, or re-tag the file ' +
+                '`-- xchain:migration mode=manual` and apply it deliberately via `node src/db/migration/migrate.js`.');
+        }
         const rows = await conn.query(
             'SELECT COLUMN_TYPE, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT, GENERATION_EXPRESSION, CHARACTER_SET_NAME, ' +
             'COLLATION_NAME, TABLE_COLLATION FROM information_schema.COLUMNS c JOIN information_schema.TABLES t ' +
@@ -269,7 +322,8 @@ async function assertNoLiveColumnLoss(conn, file, statements){
         );
         const live = Array.isArray(rows) ? rows.find(r => r && r.COLUMN_TYPE != null) : null;
         if(!live) continue;
-        const found = losses(live, definition);
+        const probe = unsignedRetypeCandidate(live, definition) ? await unsignedRetypeProbe(conn, table, column) : {};
+        const found = losses(live, definition, probe);
         if(found.length){
             throw new Error('runMigrations: ' + file + ' is tagged mode=auto but its MODIFY of ' + table + '.' + column +
                 ' would damage the live column: ' + found.join('; ') + '. Restate every live attribute in the MODIFY, ' +
@@ -278,4 +332,4 @@ async function assertNoLiveColumnLoss(conn, file, statements){
     }
 }
 
-module.exports = { assertNoLiveColumnLoss, modifyClauses, losses, stripBlockComments };
+module.exports = { assertNoLiveColumnLoss, modifyClauses, alterSpecs, losses, stripBlockComments, blankLiterals };

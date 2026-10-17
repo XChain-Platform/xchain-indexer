@@ -287,9 +287,9 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
                              'bridge_transfers', 'policy_snapshots', 'list_snapshots'])
             assert.ok(lines(warn).includes('HubDbSync: purged 3 ' + table + ' row(s) from chain ' + CHAIN_OLD),
                 'the purge of ' + table + ' must be reported with its count and the chain it cleared');
-        assert.strictEqual(seen.sql.filter((q) => /^SELECT MAX\(effective_time\) AS ts FROM cross_chain_matches/.test(q.sql)).length, 1,
+        assert.strictEqual(seen.sql.filter((q) => /^SELECT MAX\(effective_time\) AS ts\b[\s\S]* FROM cross_chain_matches /.test(q.sql)).length, 1,
             'a purge that removed the newest match must re-read the barrier the way a retraction does');
-        assert.strictEqual(seen.sql.filter((q) => /^SELECT MAX\(effective_time\) AS ts FROM cross_chain_calls/.test(q.sql)).length, 1);
+        assert.strictEqual(seen.sql.filter((q) => /^SELECT MAX\(effective_time\) AS ts\b[\s\S]* FROM cross_chain_calls /.test(q.sql)).length, 1);
     });
 
     it('purges on the FIRST id it learns, which is the only reach into rows applied before it', async function () {

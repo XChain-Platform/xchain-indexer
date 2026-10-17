@@ -84,9 +84,9 @@ addGate('protocol/constants.STATE_COMMITMENT_ACTIVATION', 'height', {
 // checkpoint canonical, exactly like STAKE_WEIGHTED_QUORUM_ACTIVATION / EQUIV_HEADER_ACTIVATION, so the
 // hub and the BTC/LTC/DOGE indexers all flip the SIGNED shape on the same anchor. The operator MUST pick
 // a snapshot_block at/after which every checkpointed chain is already past its own STATE_COMMITMENT
-// flag-day (else the engine would have no roots to sign). Kept byte-identical to the local copies in
-// xchain-{hub,indexer,sdk,explorer,sync}/src/checkpoint_commitment_activation.js (sync consumes it at
-// checkpoint.js to decide whether to expect the roots) by the cross-service regression suite. Same
+// flag-day (else the engine would have no roots to sign). Kept equal to the registry row
+// checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION in shared_rows_2.js (sync reads it
+// at checkpoint.js to decide whether to expect the roots) by the activation-constants parity suite. Same
 // ARMED height and deploy-by convention as the maps above: mainnet is armed to 961000
 // (2026-07-07; BTC anchor ~2026-08-04), not a disabled placeholder.
 addGate('protocol/constants.CHECKPOINT_COMMITMENT_ACTIVATION', 'height', {
@@ -151,10 +151,10 @@ addGate('protocol/constants.ARCHIVE_REWARD_AMOUNT', 'constant', '10.00000000');
 // gated separately by the CROSS_CHAIN_ROYALTY entry in the indexer's protocol_changes.js; the
 // operator MUST flip this canonical gate first or together with it, NEVER create-side first
 // (create-side ON with canonical OFF would put the legs in unsigned mirror fields, the exact
-// tamper hole the legs-in-canonical design closes). Kept byte-identical to the local copies in
-// xchain-{hub,indexer}/src/cross_chain_royalty_activation.js by the cross-service regression
-// suite. Same ARMED height and deploy-by convention as the maps above: mainnet is armed to
-// 961000 (2026-07-07; BTC anchor ~2026-08-04), not a disabled placeholder.
+// tamper hole the legs-in-canonical design closes). Kept equal to the registry row
+// cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION in shared_rows_2.js by the
+// activation-constants parity suite. Same ARMED height and deploy-by convention as the maps
+// above: mainnet is armed to 961000 (2026-07-07; BTC anchor ~2026-08-04), not a disabled placeholder.
 addGate('protocol/constants.CROSS_CHAIN_ROYALTY_ACTIVATION', 'height', {
     mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers before this height
     testnet: 0,

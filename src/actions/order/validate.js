@@ -218,6 +218,12 @@ async function validateGeneral(handler, st){
     if(!error && checkMakerPolicy && !isNativeCoinGet && await handler.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GET_TICK'], data['BLOCK_INDEX']) == false)
         error = 'invalid: GET_ADDRESS (not authorized for GET_TICK)';
 
+    // Refuse an ORDER_ACTION_INDEX that stores as NULL: the order_cancels and order_edits
+    // rows hold it in a NOT NULL column (recordOrder stores the refusal with a placeholder)
+    if(!error && (format==1 || format==2) &&
+       handler.util.storesAsNull(data['ORDER_ACTION_INDEX'], handler.config['INTEGER_FIELDS']['ORDER_ACTION_INDEX']))
+        error = 'invalid: ORDER_ACTION_INDEX (format)';
+
     // Validate ORDER_ACTION_INDEX is valid SWAP
     if(!error && (format==1 || format==2) && !orderInfo)
         error = 'invalid: ORDER_ACTION_INDEX (unknown)';

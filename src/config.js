@@ -59,6 +59,7 @@ const GAS_TICK = require('./protocol/constants.js').GAS_TICK;
 // decided.
 const CONFIG_ENV = Object.freeze({
     ANCHOR_PROOF_TIMEOUT_MS: process.env.ANCHOR_PROOF_TIMEOUT_MS,
+    BALANCE_DELTA_MODE: process.env.BALANCE_DELTA_MODE,
     BRIDGE_PROOF_TIMEOUT_MS: process.env.BRIDGE_PROOF_TIMEOUT_MS,
     CORS_ORIGIN: process.env.CORS_ORIGIN,
     DB_ACQUIRE_TIMEOUT: process.env.DB_ACQUIRE_TIMEOUT,
@@ -95,6 +96,8 @@ const CONFIG_ENV = Object.freeze({
     INDEXER_ALLOW_UNAUTHENTICATED: process.env.INDEXER_ALLOW_UNAUTHENTICATED,
     INDEXER_API_KEY: process.env.INDEXER_API_KEY,
     INDEXER_API_PORT: process.env.INDEXER_API_PORT,
+    INDEXER_CHAIN_TIP_TIMEOUT_MS: process.env.INDEXER_CHAIN_TIP_TIMEOUT_MS,
+    INDEXER_CHAIN_TIP_TTL_MS: process.env.INDEXER_CHAIN_TIP_TTL_MS,
     INDEXER_COIN: process.env.INDEXER_COIN,
     INDEXER_DB_HOST: process.env.INDEXER_DB_HOST,
     INDEXER_DB_NAME: process.env.INDEXER_DB_NAME,
@@ -110,6 +113,7 @@ const CONFIG_ENV = Object.freeze({
     INDEXER_POLL_SILENT_MS: process.env.INDEXER_POLL_SILENT_MS,
     INDEXER_PREFLIGHT_MEMO_MAX: process.env.INDEXER_PREFLIGHT_MEMO_MAX,
     INDEXER_RATE_LIMIT_RPM: process.env.INDEXER_RATE_LIMIT_RPM,
+    INDEXER_READY_NO_COMMIT_MS: process.env.INDEXER_READY_NO_COMMIT_MS,
     MIGRATE_QUERY_TIMEOUT: process.env.MIGRATE_QUERY_TIMEOUT,
     MIGRATION_STRICT_CHECKSUM: process.env.MIGRATION_STRICT_CHECKSUM,
     SHUTDOWN_TIMEOUT_MS: process.env.SHUTDOWN_TIMEOUT_MS,
@@ -133,6 +137,11 @@ const CONFIG_ENV = Object.freeze({
 // and its callers never touch process.env themselves.
 function readEnvNow(key){
     return process.env[key];
+}
+
+function applyBalanceDeltaMode(config){
+    let mode = String(CONFIG_ENV.BALANCE_DELTA_MODE || 'off').toLowerCase();
+    config['BALANCE_DELTA_MODE'] = ['off', 'verify', 'on'].includes(mode) ? mode : 'off';
 }
 
 // Tick, token, memo and BET limits. TICK_CHARACTERS, MIN/MAX_BET_REFUND_WINDOW
@@ -247,6 +256,9 @@ function applyControllerPolicy(config){
     // returned payoutLegs sum to <= this at create (else the listing is denied); applyProceedsSplit
     // re-checks conservation at match. A contract's manifest may declare a TIGHTER maxTakeBps
     // (Phase E); this is the absolute cap. 10000 = conservation is the only binding constraint.
+    // The cap is enforced at create only: at match, stored payout legs are applied as recorded
+    // (no re-check against the current global cap), so a later change to this value never alters
+    // the split of an already-listed order or swap. applyProceedsSplit still conserves proceeds.
     config['CONTROLLER_MAX_TAKE_BPS'] = 10000;
 }
 
@@ -382,6 +394,7 @@ module.exports = {
         applyDispenserAndMessageLimits(config);
         applyWireFields(config);
         applyControllerPolicy(config);
+        applyBalanceDeltaMode(config);
         applyBlockTiming(config);
         applyGenesisLedger(config, coin);
         applyGenesisAirdrop(config, network);

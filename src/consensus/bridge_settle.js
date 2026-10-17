@@ -17,7 +17,8 @@
  * BUILT. This module's shape, function names, parameter sets, return shapes and the escrow
  * check hook are stable; the bodies are here. verifyEscrowAgainstCheckpoint is the one door into
  * bridge_checkpoint_check.js, whose proof this pass fetches through bridge_proof_client.js
- * before calling it. The pass driver processBridgeSettlePass is what XChainIndexer.js calls.
+ * before calling it. The pass driver processBridgeSettlePass is what runSettlementPasses in
+ * XChainIndexer/block_passes.js calls.
  *
  * WHAT THIS FILE IS. The hub federation signs a transfer record (bridge_transfers) or a
  * token policy snapshot (policy_snapshots) and delivers it through the hub-DB mirror.
@@ -31,11 +32,14 @@
  * mined on this chain, the settle pass by an end-of-block sweep over mirrored rows. Keeping
  * them apart is also what lets the wire lane and the settle lane build in parallel.
  *
- * HOW IT IS DRIVEN. XChainIndexer.js's ordered pass list calls this immediately AFTER
- * util.processCrossChainSettlements and BEFORE util.processCrossChainCalls. THE POSITION IS
- * PINNED AND IS NOT A STYLE CHOICE: it assigns action indexes, so it is consensus-visible,
- * and it is what makes a credit bound at block B spendable at B+1 on every node and never
- * at B. That call site is made, in that position, and it passes this module's own ctx.
+ * HOW IT IS DRIVEN. runSettlementPasses in XChainIndexer/block_passes.js runs, in order,
+ * util.processCrossChainSettlements, listShareSettle.processListSharePass and then this pass;
+ * runCrossChainPasses then opens with util.processCrossChainCalls. THE POSITION IS PINNED AND
+ * IS NOT A STYLE CHOICE: it assigns action indexes, so it is consensus-visible, and it is
+ * what makes a credit bound at block B spendable at B+1 on every node and never at B. It
+ * also stays AFTER the list-share pass, because the XPOLICY leg binds list mirrors that pass
+ * creates; moving it earlier shifts every later action index in the block. The call passes
+ * this module's own ctx.
  *
  * ORDER, CAP AND BARRIER. Finalized rows apply in (snapshot_block, transfer_id) order at
  * the first block whose protocol block_time is at or past effective_time, at most
@@ -148,7 +152,7 @@ module.exports = {
     verifyEscrowAgainstCheckpoint,
     processBridgeSettlePass: pass.processBridgeSettlePass,
     fetchProofForTransfer:   pass.fetchProofForTransfer,
-    dueBridgeTransfers:      pass.dueBridgeTransfers,
+    unsettledBridgeTransfers: pass.unsettledBridgeTransfers,
     duePolicySnapshots:      pass.duePolicySnapshots,
     transferCanonical:       canonicals.transferCanonical,
     policyCanonical:         canonicals.policyCanonical,

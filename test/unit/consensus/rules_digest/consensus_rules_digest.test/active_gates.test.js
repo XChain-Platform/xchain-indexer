@@ -24,9 +24,9 @@ const { assert, crd, stubRegistryRow } = require('./helpers/consensus_rules_dige
 // the indexer's own instance of the same guard, so a one-sided edit here cannot pass by
 // running only on the other repo.
 describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', function () {
-    it('is sorted, has 45 entries, and contains the gates the last trains append', function () {
+    it('is sorted, has 47 entries, and contains the gates the last trains append', function () {
         const keys = crd.knownGateKeys();
-        assert.strictEqual(keys.length, 45, 'SHARED_GATES total entry count moved; re-derive this floor before changing it');
+        assert.strictEqual(keys.length, 47, 'SHARED_GATES total entry count moved; re-derive this floor before changing it');
         assert.deepStrictEqual(keys, [...keys].sort());
         for (const k of [
             'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION',
@@ -62,7 +62,9 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             'price_scale_activation.PRICE_V1_VALUE_MAX_LENGTH',
             'price_scale_activation.PRICE_V1_FEE_MAX_LENGTH',
             'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION',
-            'list_meta_activation.LIST_META_ACTIVATION'
+            'list_meta_activation.LIST_META_ACTIVATION',
+            'order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION',
+            'remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION'
         ]) assert.ok(keys.includes(k), 'missing ' + k);
     });
 });
@@ -81,7 +83,8 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
     // and a pin that moved with a drill lever would be a test of the launcher. The pinned value
     // is the fleet's: every shipped process reads the unarmed maps.
     it('digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet (and again at the 16:33Z ladder re-cut, and again when LTC:testnet mirror admission shipped null under dq4 (a))', function () {
-        // Moved again when the v0.23.0 cut armed its testnet flag days; re-derived with the
+        // Moved again when the v0.23.0 cut armed its testnet flag days, and again when the
+        // v0.24.0 cut armed its testnet heights and instant; re-derived with the
         // command above, equal to the hub suite's value.
         // Every gate module still on disk, not just the admission one: the family's arming
         // lever is shared, so the anchor-attest gate resolves from the same variable and a
@@ -101,7 +104,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             for (const [p] of saved) delete require.cache[p];
             const fresh = require('../../../../../src/consensus_rules_digest.js');
             assert.strictEqual(fresh.computeConsensusRulesDigest().digest,
-                'ac3e2e16d3500d1de7c6fd5bee77ebc6590451c1a21e3d858d24c08b00028425',
+                'cac4806586d5e35020f85dd9f0a6b8106f9838a259c9a4b94a6c6cecb2678c06',
                 'the consensus rules digest moved; a gate was added, removed, reordered or re-armed');
         } finally {
             for (const [p, mod] of saved) { if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod; }
@@ -137,7 +140,8 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             ['mirror_admission_activation', 'anchor_reward_activation', 'mirror_admission_activation',
                 'token_bridge_activation', 'anchor_bundle_order_activation', 'oracle_price_age_hourly_activation',
                 'oracle_hourly_window_activation', 'oracle_round_time_activation', 'price_scale_activation',
-                'list_share_producer_activation', 'list_meta_activation', 'mirror_admission_margin_activation'],
+                'list_share_producer_activation', 'list_meta_activation', 'mirror_admission_margin_activation',
+                'order_match_price_cross_activation', 'remote_token_admission_activation'],
             'the family must follow the bridge gate, then the later shared gates must remain appended');
     });
 

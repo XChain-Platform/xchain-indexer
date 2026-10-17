@@ -22,6 +22,9 @@
  ********************************************************************/
 
 const slashGrid = require('./slash_grid_gate');
+const gateRegistry = require('../../consensus/gate_registry');
+
+const ACTIVE_FIRST_KEY = 'contract_slash_active_first_activation.CONTRACT_SLASH_ACTIVE_FIRST_ACTIVATION';
 
 module.exports = {
 
@@ -83,7 +86,8 @@ module.exports = {
         // The two deduction passes share the request and the release ledger; each takes the
         // running remainder and total and hands them back once its rows are debited.
         let pass = { targetContractIndex, pubkeyId, tickId, valid_id, blockIndex, executionIndex, slashPosition,
-                     gridOn, deductDec, addRelease };
+                     gridOn, deductDec, addRelease,
+                     activeFirst: gateRegistry.activeAt(ACTIVE_FIRST_KEY, this.config['NETWORK'], this.config['COIN'], blockIndex, null) };
         ({ remaining, totalSlashed } = await slashPasses.activeStakeRows(this, pass, remaining, totalSlashed));
         if(!this.util.bcgt(remaining, '0')) return { total: this.util.bcstr(totalSlashed), releases: asReleases() };
         ({ remaining, totalSlashed } = await slashPasses.cooldownRows(this, pass, remaining, totalSlashed));
@@ -115,7 +119,7 @@ const slashPasses = {
 
     async activeStakeRows(db, pass, remaining, totalSlashed){
         let { targetContractIndex, pubkeyId, tickId, valid_id, blockIndex, executionIndex, slashPosition,
-              gridOn, deductDec, addRelease } = pass;
+              gridOn, deductDec, addRelease, activeFirst } = pass;
         // Pass 1: deduct from ACTIVE (never-unstaked) contract_stakes rows (LIFO - highest
         // action_index first). The deactivation filter is load-bearing: UNSTAKE v1 leaves the
         // contract_stakes row's `amount` intact (it only sets a FUTURE deactivation_block =
@@ -129,14 +133,21 @@ const slashPasses = {
         // the window slashed the phantom contract_stakes copy (crediting the destination) while the
         // sweep still refunded the contract_unstakes row - +X to the destination AND +X back to the
         // staker against one debit (silent supply inflation + total slash evasion).
+        // The legacy action-index LIFO put a newer pending-activation top-up ahead of the
+        // active stake exposed by the contract snapshot. Preserve LIFO within each group.
+        let orderBy = activeFirst
+            ? 'ORDER BY (cs.activation_block <= ?) DESC, cs.action_index DESC'
+            : 'ORDER BY cs.action_index DESC';
         let stakesQ = `SELECT cs.action_index, cs.amount, a.address AS source_address
                        FROM contract_stakes cs
                            LEFT JOIN index_addresses a ON (a.id = cs.source_id)
                        WHERE cs.target_contract_index=? AND cs.signing_pubkey_id=? AND cs.tick_id=? AND cs.status_id=?
                          AND CAST(cs.amount AS DECIMAL(60,18)) > 0
                          AND cs.deactivation_block IS NULL
-                       ORDER BY cs.action_index DESC`;
-        let stakeRows = await db.doQuery(stakesQ, [Number(targetContractIndex), pubkeyId, tickId, valid_id]);
+                       ${orderBy}`;
+        let stakeArgs = [Number(targetContractIndex), pubkeyId, tickId, valid_id];
+        if(activeFirst) stakeArgs.push(blockIndex);
+        let stakeRows = await db.doQuery(stakesQ, stakeArgs);
         for(let row of stakeRows){
             if(!db.util.bcgt(remaining, '0')) break;
             let rowAmt = String(row.amount);

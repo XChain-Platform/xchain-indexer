@@ -105,8 +105,8 @@ describe('shared-list table contracts @regression @tier1', function () {
         assert.strictEqual(typeof Database.prototype.assertListShareTablesPresent, 'function');
     });
 
-    it('pins the shared-list mirror contract to hub schema version 9', function () {
-        assert.strictEqual(HUB_SCHEMA_VERSION, 9);
+    it('pins the shared-list mirror contract to hub schema version 11', function () {
+        assert.strictEqual(HUB_SCHEMA_VERSION, 11);
     });
 
     it('classifies list snapshot admission heights as indexer mirror columns', function () {

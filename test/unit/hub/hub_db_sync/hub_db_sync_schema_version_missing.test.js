@@ -7,6 +7,7 @@ const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 const liveEvents = require('../../../../src/hub/hub_db_sync/live_events.js');
 const drain = require('../../../../src/hub/hub_db_sync/bootstrap/drain.js');
 const verdict = require('../../../../src/hub/hub_db_sync/bootstrap/verdict.js');
+const { MIRRORED_TABLES } = require('../../../../src/hub/hub_db_sync/mirror_tables.js');
 
 const CHAIN_NEW = '1a2b3c4d5e6f' + '0'.repeat(52);
 const CHAIN_OLD = '9f8e7d6c5b4a' + 'f'.repeat(52);
@@ -56,9 +57,11 @@ describe('HubDbSync schema-version lockstep', function () {
     afterEach(function () { sinon.restore(); });
 
     it('refuses a live row event that carries no schema_version', async function () {
+        let owed = null;
         const sync = {
             _schemaMismatchSeen: false,
             handleInsertedRowEvent: asyncSpy(),
+            markRepageOwed: (tables) => { owed = tables; },
         };
 
         await liveEvents.handleRowEvent.call(sync, {
@@ -66,6 +69,7 @@ describe('HubDbSync schema-version lockstep', function () {
         });
 
         assert.strictEqual(sync._schemaMismatchSeen, true);
+        assert.deepStrictEqual(owed, MIRRORED_TABLES, 'every table owes a re-page from zero');
         assert.strictEqual(sync.handleInsertedRowEvent.callCount, 0);
     });
 

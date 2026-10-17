@@ -220,11 +220,11 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
         });
 
         // The pre-restart era, in one place. The version restart renumbered the archive head
-        // 6 -> 1 and the bundle 7 -> 0 (anchor.js dispatch), so a pre-restart anchor row
-        // keeps its legacy wire byte while naming the same shape. A reward attested before
-        // the restart but maturing after it (BTC testnet 150456) must prove against that
-        // byte; the family exclusivity holds across eras; and the retired per-chain wires
-        // reject deterministically instead of deferring the block forever.
+        // 6 -> 1 and the bundle 7 -> 0, so a pre-restart anchor row keeps its legacy wire
+        // byte while naming the same shape. A reward attested before the restart but
+        // maturing after it (BTC testnet 150456) must prove against that byte; the family
+        // exclusivity holds across eras; and the retired per-chain wires reject
+        // deterministically instead of deferring the block forever.
         it('verifies a buried, tuple-matching pre-restart v6 archive head (the 150456 shape)', function () {
         assert.strictEqual(client().judge([anchor({ version: 6 })], expectation()), 'verified');
         });
@@ -289,5 +289,33 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
     const rows = [anchor({ version: 2, publisher: null }), anchor()];
     assert.strictEqual(client().judge(rows, expectation()), 'verified');
     });
+    });
+});
+
+describe('AnchorProofClient legacyDropped @regression @tier2', () => {
+    it('lets the pre-restart byte 6 prove an archive reward unless legacyDropped is exactly true', async function () {
+        const c = client();
+        c.fetch = async () => ({ exists: true, anchors: [anchor({ version: 6 })] });
+        assert.strictEqual(await c.proveMined(expectation()), 'verified');
+        assert.strictEqual(await c.proveMined(expectation({ legacyDropped: false })), 'verified');
+        assert.strictEqual(await c.proveMined(expectation({ legacyDropped: 'true' })), 'verified');
+    });
+
+    it('rejects byte 6 once legacyDropped is true', async function () {
+        const c = client();
+        c.fetch = async () => ({ exists: true, anchors: [anchor({ version: 6 })] });
+        assert.strictEqual(await c.proveMined(expectation({ legacyDropped: true })), 'rejected');
+    });
+
+    it('keys the memo on legacyDropped so one verdict never answers for the other', async function () {
+        const c = client();
+        let calls = 0;
+        c.fetch = async () => { calls++; return { exists: true, anchors: [anchor({ version: 6 })] }; };
+        assert.strictEqual(await c.proveMined(expectation()), 'verified');
+        assert.strictEqual(await c.proveMined(expectation({ legacyDropped: true })), 'rejected');
+        assert.strictEqual(await c.proveMined(expectation()), 'verified');
+        assert.strictEqual(await c.proveMined(expectation({ legacyDropped: true })), 'rejected');
+        assert.strictEqual(calls, 2, 'one DOGE read per legacyDropped value, then memoized');
+        assert.notStrictEqual(c.memoKey(TXID, expectation()), c.memoKey(TXID, expectation({ legacyDropped: true })));
     });
 });

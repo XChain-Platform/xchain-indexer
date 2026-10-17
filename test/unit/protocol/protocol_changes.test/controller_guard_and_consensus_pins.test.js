@@ -253,3 +253,35 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
     });
 });
+
+describe('ProtocolChanges @regression @tier3', function () {
+    beforeEach(freshRegistry);
+
+    describe('GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS registry row', function () {
+        it('is a v0.2.0 time-keyed row, unarmed on mainnet and armed on testnet at the v0.24.0 instant', function () {
+            const { UNARMED } = require('../../../../src/protocol_changes/core.js');
+            const change = pcFor('regtest').changes['GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS'];
+            assert.ok(change, 'GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS must be defined');
+            assert.strictEqual(change.version_minor, 2);
+            assert.strictEqual(change.mainnet_time, UNARMED);
+            assert.strictEqual(change.testnet_time, 1792303200);
+            assert.strictEqual(change.mainnet_block, 0);
+            assert.strictEqual(change.testnet_block, 0);
+            assert.strictEqual(change.regtest_block, 0);
+        });
+
+        it('stays disabled on mainnet and regtest, and on testnet only before the v0.24.0 instant', async function () {
+            for (const network of ['mainnet', 'regtest']) {
+                const pc2 = pcFor(network);
+                indexer.decoderDb.getBlockTime.resolves(4102444800);
+                assert.strictEqual(await pc2.isEnabled('GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS', 100), false, network);
+            }
+            const testnet = pcFor('testnet');
+            indexer.decoderDb.getBlockTime.resolves(1792303199);
+            assert.strictEqual(await testnet.isEnabled('GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS', 100), false, 'testnet before');
+            const testnetAfter = pcFor('testnet');
+            indexer.decoderDb.getBlockTime.resolves(1792303200);
+            assert.strictEqual(await testnetAfter.isEnabled('GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS', 100), true, 'testnet at the instant');
+        });
+    });
+});

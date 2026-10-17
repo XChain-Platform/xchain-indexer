@@ -24,6 +24,8 @@
 
 'use strict';
 
+const { FRAMEWORK_CALLBACK, CALLBACK_ARGS_EXACT } = require('../../consensus/exec_context.js');
+
 // Host-side assert: post-SYNTH_EXEC_TX_HASH every injected/emitted
 // execution context MUST carry a TX_HASH (real or synthesized via
 // consensus/exec_context.js). A hashless context reaching the VM silently
@@ -63,6 +65,17 @@ async function validateExecuteFields(ctx, params){
     data['METHOD']                = params[2];
     // Remaining params are method arguments
     data['METHOD_PARAMS']         = params.slice(3).join('|');
+
+    // A framework-injected callback carries arguments the framework did not parse off
+    // a '|'-delimited wire (a provider response, a callee return value, a contract's own
+    // callback params), so a '|' inside one would split it at the VM and shift every later
+    // argument. From CALLBACK_ARGS_EXACT on the VM gets the array itself; METHOD_PARAMS
+    // keeps the '|' join above as the stored display value. Elements convert the way
+    // join() converts them (null and undefined become ''), so a '|'-free callback runs
+    // with the same arguments on both sides of the flag.
+    if(data[FRAMEWORK_CALLBACK] &&
+       await this.actions.protocolChanges.isEnabled(CALLBACK_ARGS_EXACT, data['BLOCK_INDEX']))
+        ctx.methodArgs = params.slice(3).map(v => (v === null || v === undefined) ? '' : String(v));
 
     // Convert NUMBER fields from string value to number value
     if(!ctx.error)

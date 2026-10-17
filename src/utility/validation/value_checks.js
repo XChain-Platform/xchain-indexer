@@ -82,6 +82,18 @@ module.exports = {
         return (Number.isFinite(approx) && (approx < 0 || approx > Number(max)));
     },
 
+    // Whether db.normalizeDataValues stores a NUMBER_FIELDS value as NULL: empty, not
+    // numeric, or, when the field's INTEGER_FIELDS bound `max` is given, outside the range
+    // its column can hold. It mirrors those two passes exactly and nothing stricter, so a
+    // handler that refuses on it changes the outcome only of values that already reach
+    // the database as NULL. A typed row whose NOT NULL column takes such a NULL throws
+    // inside the block transaction under every sql_mode, and the block never commits.
+    storesAsNull(value, max){
+        if(this.isNull(value) || !this.isNumeric(value))
+            return true;
+        return !this.isNull(max) && this.exceedsUnsignedColumn(value, max);
+    },
+
     // Determine if value is null or undefined or empty
     isNull(value){
         return (value === null || value === undefined || value==='');

@@ -34,6 +34,8 @@ const REGISTRY_ONLY = new Set(REGISTRY_ONLY_STEMS.map(keyOf));
 
 // Gate rows the table cannot compare, and why.
 const SKIPPED = {
+    'mainnet_launch_activation.MAINNET_LAUNCH_ACTIVATION':
+        'registry-only time row with no predicate: admitsPrelaunch() takes launchActive from its caller, and testnet and regtest never consult it',
     'attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION':
         'no boolean predicate: widenSlots(atBlock, requestBlock, deadlineBlock, network) returns a slot count',
     'train_activation.TRAIN_ACTIVATION':
@@ -84,11 +86,13 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
         assert.strictEqual(REPLACED.size, 38, 'the W4 census of 25 predicate-only shims plus the 13 predicate-only twins of W5');
-        assert.strictEqual(REGISTRY_ONLY.size, 53, 'the registry-only gate census moved');
+        assert.strictEqual(REGISTRY_ONLY.size, 76, 'the registry-only gate census moved');
         assert.ok(REGISTRY_ONLY.has('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'),
             'the cross-chain remote-token gate is registry-only');
         assert.ok(REGISTRY_ONLY.has('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION'),
             'the VM lint destructure gate is registry-only');
+        assert.ok(REGISTRY_ONLY.has('vm_lint_syntax_depth_heights.VM_LINT_SYNTAX_DEPTH_ACTIVATION'),
+            'the VM lint syntax-depth gate is registry-only');
         for (const key of [...REPLACED, ...REGISTRY_ONLY]) {
             assert.ok(['height', 'time', 'constant'].includes(ProtocolChanges.registry.unitOf(key)),
                 key + ' is a height, time or constant row');

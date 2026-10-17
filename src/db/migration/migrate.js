@@ -48,6 +48,8 @@ const config   = require('../../config.js');
 const Utility  = require('../../utility.js');
 
 const { CONFIG_ENV } = require('../../config.js');
+const { migrationChecksum, classifyAppliedChecksum } = require('./checksum_verdict.js');
+const { MIGRATION_CHECKSUM_REBASELINES } = require('./checksum_rebaselines.js');
 // Spelled out for an operator reading it mid-incident: the difference between a
 // blanket run and a scoped one is the whole risk of this command, so each mode
 // says what it applies rather than naming a flag.
@@ -141,8 +143,8 @@ const MIGRATIONS_DIR = path.join(__dirname, '..', '..', 'sql', 'migrations');
 async function readAppliedLedger(db){
     const conn = await db.getConnection();
     try {
-        const rows = await conn.query('SELECT name, mode, applied_at FROM schema_migrations');
-        return new Map(rows.map(r => [r.name, { mode: r.mode, appliedAt: r.applied_at }]));
+        const rows = await conn.query('SELECT name, checksum, mode, applied_at FROM schema_migrations');
+        return new Map(rows.map(r => [r.name, { checksum: r.checksum, mode: r.mode, appliedAt: r.applied_at }]));
     } catch(err){
         if(err && (err.errno === 1146 || err.code === 'ER_NO_SUCH_TABLE')) return new Map();
         throw err;
@@ -165,31 +167,53 @@ async function reportStatus(db, dbName, json){
         applied.set(to, applied.get(from));
         applied.delete(from);
     }
+    // Each applied file is hashed and judged by the runner's own predicate, so a file the
+    // blanket run would refuse as CHANGED is reported CHANGED here, not 'applied'.
+    const verdicts = new Map();
     const rows = files.map(file => {
         const record = applied.get(file);
-        return record
-            ? { file, applied: true, mode: record.mode, appliedAt: record.appliedAt }
-            : { file, applied: false, mode: db.migrationMode(fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8')), appliedAt: null };
+        const raw = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
+        if(!record) return { file, applied: false, mode: db.migrationMode(raw), appliedAt: null, changed: false };
+        const current = migrationChecksum(raw);
+        const verdict = classifyAppliedChecksum(file, record.checksum, current, MIGRATION_CHECKSUM_REBASELINES);
+        verdicts.set(file, { verdict, recorded: String(record.checksum || ''), current });
+        return { file, applied: true, mode: record.mode, appliedAt: record.appliedAt, changed: verdict === 'changed' };
     });
     const pendingCount = rows.filter(r => !r.applied).length;
+    const changedCount = rows.filter(r => r.changed).length;
 
+    // Exit 0 whenever the report was produced: drift is data each consumer judges, and a
+    // scoped `--file` run deliberately ignores unrelated files, so it must not read as unreadable.
     if(json){
         console.log(JSON.stringify({
             database: dbName,
             total: rows.length,
             applied: rows.length - pendingCount,
             pending: pendingCount,
+            changed: changedCount,
             migrations: rows,
         }, null, 2));
         return;
     }
 
     console.log('migrate: status for ' + dbName + ' (read-only; nothing applied)');
-    for(const r of rows){
-        console.log('  [' + (r.applied ? 'applied' : 'PENDING') + ', mode=' + r.mode + '] ' + r.file +
-            (r.applied && r.appliedAt ? ' (applied_at=' + r.appliedAt + ')' : ''));
+    for(const r of rows) console.log(statusLine(r, verdicts.get(r.file)));
+    console.log('migrate: ' + rows.length + ' migration(s), ' + (rows.length - pendingCount) + ' applied, ' + pendingCount + ' pending, ' +
+        changedCount + ' changed.');
+    if(changedCount){
+        console.log('migrate: a blanket `npm run migrate` will refuse until each CHANGED file is reverted or given a ' +
+            'reviewed MIGRATION_CHECKSUM_REBASELINES entry.');
     }
-    console.log('migrate: ' + rows.length + ' migration(s), ' + (rows.length - pendingCount) + ' applied, ' + pendingCount + ' pending.');
+}
+
+// One text status line: PENDING, CHANGED with both hash prefixes, or applied (noting a pending heal).
+function statusLine(r, v){
+    if(!r.applied) return '  [PENDING, mode=' + r.mode + '] ' + r.file;
+    if(r.changed){
+        return '  [CHANGED, mode=' + r.mode + '] ' + r.file + ' (recorded ' + v.recorded.slice(0, 12) + ', current ' + v.current.slice(0, 12) + ')';
+    }
+    return '  [applied, mode=' + r.mode + '] ' + r.file + (r.appliedAt ? ' (applied_at=' + r.appliedAt + ')' : '') +
+        (v.verdict === 'rebaseline' ? ' (reviewed rebaseline; the next run heals its checksum)' : '');
 }
 
 async function main(){

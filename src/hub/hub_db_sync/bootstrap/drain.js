@@ -78,6 +78,9 @@ module.exports = {
             drain.selectorRevision !== this._selectorRevision) return null;
 
         if (!fullyDrained) return null;
+        // A complete page from zero has run this table's reconciliation passes above.
+        if (drain.fullTable || drain.floorStart) this.settleRepageOwed(drain);
+        this.notePriceRepageFloor(drain);
         return drain.watermark !== null ? drain.watermark : 0;
     },
 
@@ -110,6 +113,7 @@ module.exports = {
         let cursor = await this.resolveDrainCursor(table, scope);
         let drain = await this.newDrainAccounting(table, scope, cursor);
         await this.newPriceBoundState(drain);
+        this.choosePriceRepageStart(drain);
         return drain;
     },
 
@@ -120,8 +124,10 @@ module.exports = {
         if (!Number.isFinite(lastId) || lastId < 0) lastId = 0;
         // Retractions are absent from this endpoint, so only a re-page from zero can prove
         // which matches the hub currently serves. An incremental page cannot distinguish a
-        // retracted old match from one below its cursor.
-        if (table === 'cross_chain_matches') {
+        // retracted old match from one below its cursor. A table owed a re-page (a new
+        // connection, a forced resync, a refused live row) starts from zero for the same
+        // reason: the change it may have missed sits below the stored position.
+        if (table === 'cross_chain_matches' || this.repageOwedSeq(table) !== undefined) {
             lastId = 0;
             this._drainPositions[table] = 0;
         }
@@ -162,6 +168,8 @@ module.exports = {
             connectionEpoch: this._wsEpoch,
             selectorRevision: this._selectorRevision,
             fullTable: cursor.lastId === 0,
+            // The owed mark this drain was opened under; only that mark may be settled by it.
+            repageSeq: this.repageOwedSeq(table),
             // Page until a SHORT page. The previous single-fetch version treated any
             // full page as "not drained" and never fetched the rest. On a hub table
             // larger than one page (prod price_snapshots: 13k+ rounds) the drain was
@@ -207,6 +215,7 @@ module.exports = {
         // page is applied, is what lets the reconciliation exempt those rows without needing a
         // buffer like the price path's.
         drain.snapshotPreDrainMaxId = (table === 'capability_snapshots') ? await this.localMaxId(table, scope) : 0;
+        await this.newOracleReconcileState(drain, scope);
         this.newDrainProgress(drain);
         return drain;
     },
@@ -300,6 +309,7 @@ module.exports = {
             if (!(await this.acceptSnapshotPage(table, result))) return false;
 
             drain.pagesFetched++;
+            this._bootstrapProgressTicks = (Number(this._bootstrapProgressTicks) || 0) + 1;
             for (let row of result.rows) {
                 drain.fetched++;
                 drain.pending.push({ row: row });

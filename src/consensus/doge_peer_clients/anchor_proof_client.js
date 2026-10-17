@@ -58,7 +58,7 @@ const gateRegistry = require('../gate_registry.js');
 // anchor_proof_client/binding.js; the getanchorconfirmations page walk proveMined runs
 // before it judges lives in anchor_proof_client/page_walk.js.
 const {
-    ATTESTED_VERSIONS, REWARD_FAMILY_VERSIONS, isRewardCandidateRow, judgeAnchors
+    ATTESTED_VERSIONS, REWARD_FAMILY_VERSIONS, isRewardCandidateRow, judgeAnchors, rewardFamily
 } = require('./anchor_proof_client/binding.js');
 const { walkAnchorPages } = require('./anchor_proof_client/page_walk.js');
 
@@ -72,6 +72,9 @@ function archiveRowTerminated(a, e){
     let network = String(e.network || '');
     let publisher = String(e.publisher || '').toLowerCase();
     if(!isRewardCandidateRow(a, network, publisher)) return false;
+    // Judge both gates in the DOGE domain, at the anchor's own block_index_doge. BTC derive
+    // (anchor_reward_derive.js rowGatesActive) judges them at the row's BTC snapshot_block and
+    // either refusal drops the reward, so termination is the union of the two domains.
     let dogeHeight = a.block_index_doge;
     let termActive = gateRegistry.activeAt(
         ANCHOR_ARCHIVE_FOLD_TERM, network, 'DOGE', dogeHeight, null);
@@ -171,6 +174,8 @@ class AnchorProofClient {
     //   expect.publisher       - the elected publisher pubkey being paid
     //   expect.network         - the reward's network
     //   expect.minConfirmations- required DOGE burial depth
+    //   expect.legacyDropped   - exactly true above the LEGACY_ANCHOR_REWARD_PIN gate: the
+    //                            pre-restart bytes 6 and 7 no longer prove a reward
     // Returns 'verified' | 'rejected' | 'unknown'.
     async proveMined(expect){
         let e = expect || {};
@@ -179,6 +184,10 @@ class AnchorProofClient {
         // and "cannot be proven" is a property of the ROW, identical on every node, so this
         // is a deterministic permanent skip rather than a defer.
         if(!/^[0-9a-f]{64}$/.test(txid)) return 'rejected';
+        // A reward_type naming no live family is the same kind of row property: judgeAnchors
+        // rejects it whatever DOGE serves, so answer before any I/O rather than defer the
+        // block on a DOGE outage for a reward that can never mint.
+        if(rewardFamily(e.rewardType) === null) return 'rejected';
         if(!this.url) return 'unknown';                       // fail closed: defer, never pay unproven
 
         let memoKey = this.memoKey(txid, e);
@@ -203,7 +212,9 @@ class AnchorProofClient {
     // unproven reward for another, and a 'rejected' suppress a legitimate one. Because the memo
     // is process-lifetime state, that leak also made the derived set restart-dependent, which
     // is a COLLECT-rail fork. Normalize exactly as judge does, or two spellings of one tuple
-    // miss each other. A field added to judge must be added here too. judge's chain term needs
+    // miss each other. A field added to judge must be added here too, legacyDropped
+    // included: it changes which versions bind, so a verdict reached under one value never
+    // answers for the other. judge's chain term needs
     // no entry of its own, and neither does the reward FAMILY or the round term it selects:
     // all three are derived from rewardType, which is already a term here.
     memoKey(txid, e){
@@ -213,7 +224,8 @@ class AnchorProofClient {
                 Number(e.snapshotBlock),
                 String(e.publisher || '').toLowerCase(),
                 String(e.network || ''),
-                Number(e.minConfirmations)].join('|');
+                Number(e.minConfirmations),
+                e.legacyDropped === true].join('|');
     }
 
     // Apply the indexer-only archive gate before the shared binding.

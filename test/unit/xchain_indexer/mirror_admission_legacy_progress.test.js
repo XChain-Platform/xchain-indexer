@@ -172,7 +172,9 @@ function buildDb(h, config, util, { network, rows, validators }, record) {
 function buildActions(h, config, util, db, protocolChanges, record) {
     const settleLeg = require('../../../src/actions/cross_settle/settle_leg.js');
     const actions = Object.assign({}, dispatchMethods, addressPrePass, {
-        config, util, indexerDb: db, decoderDb: null, mapper: null, protocolChanges,
+        // The decoder clock the pass retirement age reads; the measured row is still inside its
+        // grace at every height this suite drives, so it stays on the ordinary quorum path.
+        config, util, indexerDb: db, decoderDb: { protocolTimeForStoredBlock: async (b) => blockTime(b) }, mapper: null, protocolChanges,
         _actionCounters: {}, _primaryVerdict: null
     });
     actions.actionCrossSettle = new h.Settle(actions);

@@ -7,6 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-17
+
+### Added
+- Added the mainnet launch gate with prelaunch seed sources and a consensus dependency boot gate.
+- Added remote token pin admission, the order-match price cross and nested execute gas sum gates behind activation heights.
+- Added a balance delta mode, off by default, that collects and can apply per-block balance deltas.
+- Added a price landing wait stall class and indexed per-block anchor and checkpoint reads.
+
+### Changed
+- Raised the hub mirror schema version and re-paged in-place hub mirror tables on reconnect.
+- Bounded the policy barrier by the follower stamp window and classified height-watermarked mirror validity tables.
+- Mirrored the new xchain-vm activations and added a readiness signal.
+- Armed ORDER_MATCH_PRICE_CROSS_ACTIVATION on BTC:testnet at 156908.
+- Armed ORDER_MATCH_PRICE_CROSS_ACTIVATION on LTC:testnet at 4927400.
+- Armed ORDER_MATCH_PRICE_CROSS_ACTIVATION on DOGE:testnet at 68005165.
+- Armed REMOTE_TOKEN_ADMISSION_ACTIVATION on BTC:testnet at 156908.
+- Armed REMOTE_TOKEN_ADMISSION_ACTIVATION on LTC:testnet at 4927400.
+- Armed REMOTE_TOKEN_ADMISSION_ACTIVATION on DOGE:testnet at 68005165.
+- Armed GAS_CEILING_EXHAUSTED_ACTIVATION on BTC:testnet at 156908.
+- Armed GAS_CEILING_EXHAUSTED_ACTIVATION on LTC:testnet at 4927400.
+- Armed GAS_CEILING_EXHAUSTED_ACTIVATION on DOGE:testnet at 68005165.
+- Armed RESOURCE_FAULT_SIGNAL_ACTIVATION on BTC:testnet at 156908.
+- Armed RESOURCE_FAULT_SIGNAL_ACTIVATION on LTC:testnet at 4927400.
+- Armed RESOURCE_FAULT_SIGNAL_ACTIVATION on DOGE:testnet at 68005165.
+- Armed HOST_ERROR_STACK_STRIP_ACTIVATION on BTC:testnet at 156908.
+- Armed HOST_ERROR_STACK_STRIP_ACTIVATION on LTC:testnet at 4927400.
+- Armed HOST_ERROR_STACK_STRIP_ACTIVATION on DOGE:testnet at 68005165.
+- Armed JSON_STRINGIFY_REENTRY_ACTIVATION on BTC:testnet at 156908.
+- Armed JSON_STRINGIFY_REENTRY_ACTIVATION on LTC:testnet at 4927400.
+- Armed JSON_STRINGIFY_REENTRY_ACTIVATION on DOGE:testnet at 68005165.
+- Armed NATIVE_STACK_TERMINAL_ACTIVATION on BTC:testnet at 156908.
+- Armed NATIVE_STACK_TERMINAL_ACTIVATION on LTC:testnet at 4927400.
+- Armed NATIVE_STACK_TERMINAL_ACTIVATION on DOGE:testnet at 68005165.
+- Armed VOTE_SETTLEMENT_EXACT_ACTIVATION on BTC:testnet at 156908.
+- Armed VOTE_SETTLEMENT_EXACT_ACTIVATION on LTC:testnet at 4927400.
+- Armed VOTE_SETTLEMENT_EXACT_ACTIVATION on DOGE:testnet at 68005165.
+- Armed SETTLEMENT_BOUNDS_ACTIVATION on BTC:testnet at 156908.
+- Armed SETTLEMENT_BOUNDS_ACTIVATION on LTC:testnet at 4927400.
+- Armed SETTLEMENT_BOUNDS_ACTIVATION on DOGE:testnet at 68005165.
+- Armed PASS_PROGRESS_RETIREMENT_ACTIVATION on BTC:testnet at 156908.
+- Armed PASS_PROGRESS_RETIREMENT_ACTIVATION on LTC:testnet at 4927400.
+- Armed PASS_PROGRESS_RETIREMENT_ACTIVATION on DOGE:testnet at 68005165.
+- Armed SLASH_HISTORICAL_SET_ACTIVATION on BTC:testnet at 156908.
+- Armed SLASH_HISTORICAL_SET_ACTIVATION on LTC:testnet at 4927400.
+- Armed SLASH_HISTORICAL_SET_ACTIVATION on DOGE:testnet at 68005165.
+- Armed ANCHOR_REWARD_COPY_SELECTION_ACTIVATION on BTC:testnet at 156908.
+- Armed ANCHOR_REWARD_COPY_SELECTION_ACTIVATION on LTC:testnet at 4927400.
+- Armed ANCHOR_REWARD_COPY_SELECTION_ACTIVATION on DOGE:testnet at 68005165.
+- Armed TOKEN_SUPPLY_REPRESENTATION_ACTIVATION on BTC:testnet at 156908.
+- Armed TOKEN_SUPPLY_REPRESENTATION_ACTIVATION on LTC:testnet at 4927400.
+- Armed TOKEN_SUPPLY_REPRESENTATION_ACTIVATION on DOGE:testnet at 68005165.
+- Armed DISPENSER_FIAT_PRICING_ACTIVATION on BTC:testnet at 156908.
+- Armed DISPENSER_FIAT_PRICING_ACTIVATION on LTC:testnet at 4927400.
+- Armed DISPENSER_FIAT_PRICING_ACTIVATION on DOGE:testnet at 68005165.
+- Armed BRIDGE_POLICY_APPLY_ORDER_ACTIVATION on BTC:testnet at 156908.
+- Armed BRIDGE_POLICY_APPLY_ORDER_ACTIVATION on LTC:testnet at 4927400.
+- Armed BRIDGE_POLICY_APPLY_ORDER_ACTIVATION on DOGE:testnet at 68005165.
+- Armed VM_EMISSION_AMOUNT_FORMAT_ACTIVATION on BTC:testnet at 156908.
+- Armed VM_EMISSION_AMOUNT_FORMAT_ACTIVATION on LTC:testnet at 4927400.
+- Armed VM_EMISSION_AMOUNT_FORMAT_ACTIVATION on DOGE:testnet at 68005165.
+- Armed EXECUTE_FEE_CAP_ACTIVATION on BTC:testnet at 156908.
+- Armed EXECUTE_FEE_CAP_ACTIVATION on LTC:testnet at 4927400.
+- Armed EXECUTE_FEE_CAP_ACTIVATION on DOGE:testnet at 68005165.
+- Armed VOTE_V3_TICK_EXISTENCE_ACTIVATION on BTC:testnet at 156908.
+- Armed VOTE_V3_TICK_EXISTENCE_ACTIVATION on LTC:testnet at 4927400.
+- Armed VOTE_V3_TICK_EXISTENCE_ACTIVATION on DOGE:testnet at 68005165.
+- Armed MATCH_ORIGIN_OPEN_ACTIVATION on BTC:testnet at 156908.
+- Armed MATCH_ORIGIN_OPEN_ACTIVATION on LTC:testnet at 4927400.
+- Armed MATCH_ORIGIN_OPEN_ACTIVATION on DOGE:testnet at 68005165.
+- Armed VM_LINT_SYNTAX_DEPTH_ACTIVATION on BTC:testnet at 156908.
+- Armed VM_LINT_SYNTAX_DEPTH_ACTIVATION on LTC:testnet at 4927400.
+- Armed VM_LINT_SYNTAX_DEPTH_ACTIVATION on DOGE:testnet at 68005165.
+- Armed NESTED_EXECUTE_GAS_SUM_ACTIVATION on BTC:testnet at 156908.
+- Armed NESTED_EXECUTE_GAS_SUM_ACTIVATION on LTC:testnet at 4927400.
+- Armed NESTED_EXECUTE_GAS_SUM_ACTIVATION on DOGE:testnet at 68005165.
+- Armed EMISSION_DEPTH_EXECUTE_ONLY on BTC:testnet at 1792303200.
+- Armed EMISSION_DEPTH_EXECUTE_ONLY on LTC:testnet at 1792303200.
+- Armed EMISSION_DEPTH_EXECUTE_ONLY on DOGE:testnet at 1792303200.
+- Armed ARCHIVE_REPLAY_WRAPPER_WATERMARK on BTC:testnet at 1792303200.
+- Armed ARCHIVE_REPLAY_WRAPPER_WATERMARK on LTC:testnet at 1792303200.
+- Armed ARCHIVE_REPLAY_WRAPPER_WATERMARK on DOGE:testnet at 1792303200.
+- Armed LEGACY_ANCHOR_REWARD_PIN on BTC:testnet at 1792303200.
+- Armed LEGACY_ANCHOR_REWARD_PIN on LTC:testnet at 1792303200.
+- Armed LEGACY_ANCHOR_REWARD_PIN on DOGE:testnet at 1792303200.
+- Armed GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS on BTC:testnet at 1792303200.
+- Armed GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS on LTC:testnet at 1792303200.
+- Armed GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS on DOGE:testnet at 1792303200.
+- Armed HOST_CALL_BOUNDS on BTC:testnet at 1792303200.
+- Armed HOST_CALL_BOUNDS on LTC:testnet at 1792303200.
+- Armed HOST_CALL_BOUNDS on DOGE:testnet at 1792303200.
+- Armed PER_ELEMENT_METER on BTC:testnet at 1792303200.
+- Armed PER_ELEMENT_METER on LTC:testnet at 1792303200.
+- Armed PER_ELEMENT_METER on DOGE:testnet at 1792303200.
+- Armed CALLBACK_ARGS_EXACT on BTC:testnet at 1792303200.
+- Armed CALLBACK_ARGS_EXACT on LTC:testnet at 1792303200.
+- Armed CALLBACK_ARGS_EXACT on DOGE:testnet at 1792303200.
+
+### Fixed
+- Refused actions whose amounts or indexes would store as NULL, and text amounts before the arithmetic that halted blocks.
+- Kept reorg rollbacks atomic for derived projections and fixed escrow shadow journal batch replay.
+
 ## [0.23.2] - 2026-10-14
 
 ### Fixed

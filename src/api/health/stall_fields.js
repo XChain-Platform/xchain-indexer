@@ -41,6 +41,16 @@ function trainActivationReport(indexer){
             reason: 'no block has been evaluated against the train activation gate yet' };
 }
 
+// The stall reason as the status surfaces publish it: the indexer's own, else the
+// decoder's REORG_HALT when that is what holds it, else null. Shared by the health
+// method and GET /status so both name the same cause.
+function attributedStallReason(indexer){
+    if(indexer.stallReason) return indexer.stallReason;
+    if(indexer.decoderReorgHalted)
+        return 'decoder_reorg_halt: decoder wrote a REORG_HALT marker; resync the decoder, or clear the reviewed halt in place with `xchain-node clear-reorg-halt`';
+    return null;
+}
+
 // Why this node is not advancing, and whether it is still on the fleet's rule
 // set, in the health payload's key order.
 function stallFields(indexer){
@@ -55,9 +65,7 @@ function stallFields(indexer){
         // rather than reporting ordinary lag/null. A halted decoder cannot advance, so the
         // indexer's lag is a downstream symptom, not an indexer-side stall. Names both
         // remedies the decoder probe's log names; readers key on the leading word only.
-        stallReason:      indexer.decoderReorgHalted
-                            ? (indexer.stallReason || 'decoder_reorg_halt: decoder wrote a REORG_HALT marker; resync the decoder, or clear the reviewed halt in place with `xchain-node clear-reorg-halt`')
-                            : (indexer.stallReason || null),
+        stallReason:      attributedStallReason(indexer),
         decoderReorgHalted: !!indexer.decoderReorgHalted,
         // PLATFORM-TRAIN ACTIVATION. The one field here
         // that reports a fault BEFORE it happens: `pending` means the signed release
@@ -75,4 +83,4 @@ function stallFields(indexer){
     };
 }
 
-module.exports = { stallFields };
+module.exports = { stallFields, attributedStallReason };

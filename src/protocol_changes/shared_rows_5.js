@@ -262,12 +262,13 @@ addGate('list_meta_activation.LIST_META_ACTIVATION', 'height', {
 // legacy admission margin at the named chain height.
 addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS', 'constant', {
     DOGE: {
-        bridge_transfers:    14,
-        cross_chain_calls:   14,
-        cross_chain_matches: 14,
-        list_snapshots:      14,
-        policy_snapshots:    14,
-        price_snapshots:     16,
+        bridge_transfers:       14,
+        cross_chain_calls:      14,
+        cross_chain_matches:    14,
+        list_snapshots:         14,
+        policy_snapshots:       14,
+        price_snapshots:        16,
+        remote_token_snapshots: 14,
     },
 });
 addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION', 'height', {
@@ -302,6 +303,45 @@ addGate('oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION', 'height', {
     'LTC:testnet': 4907593,
     'DOGE:testnet': 67966647,
     regtest: 0,
+});
+// order_match_price_cross_activation: the ORDER book price-cross test. With
+// GIVE_PRICE = GET_AMOUNT / GIVE_AMOUNT and GET_PRICE = GIVE_AMOUNT / GET_AMOUNT both
+// sides quote the same unit, so a resting order is fillable when the incoming order's
+// GIVE_PRICE (its ask) does not exceed the resting order's GET_PRICE (its bid). Below
+// this height the legacy test, which compares the two the other way, stands, so pairs
+// whose limits do not cross fill and pairs whose limits cross do not. The indexer reads
+// it with its own coin at the ORDER_MATCH block; the hub's cross-chain book reads the
+// bare network entry at the match's BTC snapshot_block, so a release that adds
+// <COIN>:<network> heights for the indexers also sizes the bare entry for the hub.
+// Unarmed on mainnet and testnet; regtest is armed from genesis.
+addGate('order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
+    testnet: 156908,
+    regtest: 0,
+});
+// remote_token_admission_activation: admission by height for the remote-token pin. The
+// hub reads the bare network entry at a remote_token_snapshots row's BTC snapshot_block:
+// from it the row carries an admit_block_<c> for every chain and the map is signed into
+// the XREMOTE canonical. An indexer reads it with its own coin at the ORDER or SWAP
+// create's block B: from it the create is judged against the newest finalized pin whose
+// admit_block_<c> is at or below B, behind a height barrier on the hub's
+// remote_token_snapshots watermark, so the verdict no longer depends on when the pin
+// reached this node's mirror. A pin with no height for the reading chain is never read
+// at or above it. A release that adds <COIN>:<network> heights for the indexers sizes the
+// bare entry for the hub below every one of them. Unarmed on mainnet and testnet. The
+// regtest entry is UNPINNED: a venue arms it, hub and indexers together, with
+// XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION (shared_rows.js), because a pin-reading block
+// waits about one xdex round window for the height watermark.
+addGate('remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
+    testnet: 156908,
+    regtest: UNPINNED,   // ARMS by XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION at read
 });
 // stateHash: the state_hash class for the batch-completion stamp on a surviving v5 attest head.
 // Inert on mainnet and testnet until a flag day is sized; regtest is armed from genesis.

@@ -8,7 +8,7 @@
     },
     "anchor_reward_activation": {
       "path": "src/consensus/gates/anchor_reward_gate.js",
-      "hash": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
+      "hash": "7a99b4caa82fe705870a3c7d9dc1faeb4def1da1306e615bbfdaf850ba33947b",
       "twins": [
         "xchain-hub"
       ]
@@ -59,14 +59,14 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "4de1110b4bcdcc39f62664dfa843501536fec6065a585eeda60825dab1d26245",
+      "hash": "83981d2b10525aa4e771e386486a8ebd91c40db96f5941701529929c45d0207b",
       "twins": [
         "xchain-hub"
       ]
     },
     "dispense_payment_tally_scale_activation": {
       "path": "src/actions/dispense/dispense_payment_tally_scale_gate.js",
-      "hash": "b40920ad55b0d54006349fd4e7beaa66b258e16530c4826057d829d45b86537f",
+      "hash": "f97c0346f8a4a506e78aae6f6e6c88418f2a7d872ce21f06f2036d69946ccd1c",
       "twins": []
     },
     "dispenser_send_amount_compare_activation": {
@@ -137,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
+      "hash": "101cb384c5e074ee6686347333319a4be02024e2d8c179aff9f2d58f8bb7768f",
       "twins": [],
       "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
@@ -2094,10 +2094,66 @@
     },
     {
       "id": "consensus_rules_digest",
+      "from": "4de1110b4bcdcc39f62664dfa843501536fec6065a585eeda60825dab1d26245",
+      "to": "5727511efdf8497853838f2b0608f2d6ac33caabccc483d650987f9944802e1a",
+      "reason": "Apply the activeGatesAt unit filter only at or above ACTIVE_GATES_UNIT_FILTER_HEIGHTS",
+      "date": "2026-10-13"
+    },
+    {
+      "id": "consensus_rules_digest",
       "from": "2847f3f69ac4280baa67d70562c63f210cc6c3d27b1713bf92cbfb4601994c91",
       "to": "4de1110b4bcdcc39f62664dfa843501536fec6065a585eeda60825dab1d26245",
       "reason": "admit only unit-bearing registry rows into the active gate set",
       "date": "2026-10-11"
+    },
+    {
+      "id": "anchor_reward_activation",
+      "from": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
+      "to": "7a99b4caa82fe705870a3c7d9dc1faeb4def1da1306e615bbfdaf850ba33947b",
+      "reason": "Dropped the unused activeAt and resolveMirrorAdmissionRegtest imports and reworded two rejected comments",
+      "date": "2026-10-13"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "851e07405f80b41f206ff218374c9f1919d4091c8a78c43151658c6e3d988d71",
+      "to": "54e0b58f9bb3445f186483e661b416a5a9be7ec887018408322ec22103b3c1cb",
+      "reason": "Five changes_5 rows export named MAINNET and TESTNET flag_times constants",
+      "date": "2026-10-13"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "54e0b58f9bb3445f186483e661b416a5a9be7ec887018408322ec22103b3c1cb",
+      "to": "f8f6b6be115ac2b783107f3d4060511e1ca93e35b2d6252d6f2d2ee12408bda9",
+      "reason": "Load gates_5.js, the mainnet launch rows, from the entry",
+      "date": "2026-10-13"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "f8f6b6be115ac2b783107f3d4060511e1ca93e35b2d6252d6f2d2ee12408bda9",
+      "to": "101cb384c5e074ee6686347333319a4be02024e2d8c179aff9f2d58f8bb7768f",
+      "reason": "register the host-call bounds and per-element meter protocol rows mirroring the VM activations",
+      "date": "2026-10-14"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "5727511efdf8497853838f2b0608f2d6ac33caabccc483d650987f9944802e1a",
+      "to": "4546074d3c270b3b497eee3ed7aa9ed973f8387dc8d4ae5e48478583db8600c1",
+      "reason": "order_match_price_cross_activation appended to SHARED_GATES",
+      "date": "2026-10-14"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "4546074d3c270b3b497eee3ed7aa9ed973f8387dc8d4ae5e48478583db8600c1",
+      "to": "83981d2b10525aa4e771e386486a8ebd91c40db96f5941701529929c45d0207b",
+      "reason": "remote_token_admission_activation appended to SHARED_GATES",
+      "date": "2026-10-14"
+    },
+    {
+      "id": "dispense_payment_tally_scale_activation",
+      "from": "b40920ad55b0d54006349fd4e7beaa66b258e16530c4826057d829d45b86537f",
+      "to": "f97c0346f8a4a506e78aae6f6e6c88418f2a7d872ce21f06f2036d69946ccd1c",
+      "reason": "The dispense tally scale gate takes the fiat pricing activation as a fifth argument.",
+      "date": "2026-10-15"
     }
   ]
 }

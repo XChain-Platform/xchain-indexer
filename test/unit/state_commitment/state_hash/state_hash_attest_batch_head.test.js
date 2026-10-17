@@ -108,7 +108,8 @@ describe('state_hash attest_batch_head class @regression', function(){
         assert.deepStrictEqual(s.data.attest_batch_head, [{ action_index: 100, status: STAMPED }]);
         assert.strictEqual(calls.length, 10);
         assert.deepStrictEqual(calls[9].args,
-            ['%' + ATTEST_BATCH_COMPLETION_STAMP, abw.ATTEST_BATCH_HEAD_VERSION, abw.ATTEST_BATCH_CONTINUATION_VERSION, 7]);
+            ['%' + ATTEST_BATCH_COMPLETION_STAMP, abw.ATTEST_BATCH_HEAD_VERSION,
+             abw.ATTEST_BATCH_CONTINUATION_VERSION, 7, abw.ATTEST_BATCH_CONTINUATION_VERSION, 7]);
         const st = await build(stale);
         assert.notStrictEqual(st.hash, s.hash, 'a follower that dropped the stamp must diverge');
         const same = await build(baseResults().concat([[{ action_index: 100, status: STAMPED }]]));
@@ -121,10 +122,38 @@ describe('state_hash attest_batch_head class @regression', function(){
         const sql = calls[0].sql;
         assert.match(sql, /s\.status LIKE \?/);
         assert.match(sql, /p\.version = \? AND p\.batch_chunk_index = 0/);
+        assert.match(sql, /EXISTS \( SELECT 1 FROM attests e/);
+        assert.match(sql, /e\.version = \? AND e\.request_id = p\.request_id AND e\.block_index = \?/);
         assert.match(sql, /ca\.source_id = pa\.source_id/);
         assert.match(sql, /cs\.status = 'valid'/);
+        assert.match(sql, /c\.request_id = p\.request_id AND c\.version = \? AND c\.batch_chunk_index IS NOT NULL AND c\.batch_total_chunks = p\.batch_total_chunks AND c\.batch_crc32 = p\.batch_crc32 /);
         assert.match(sql, /\) = \? ORDER BY p\.action_index ASC$/);
         assert.doesNotMatch(sql, /status_id,|p\.status_id AS/);
+        assert.deepStrictEqual(calls[0].args,
+            ['%' + ATTEST_BATCH_COMPLETION_STAMP, abw.ATTEST_BATCH_HEAD_VERSION,
+             abw.ATTEST_BATCH_CONTINUATION_VERSION, 7, abw.ATTEST_BATCH_CONTINUATION_VERSION, 7]);
+
+        const head = { action_index: 100, total: 2, crc: 'aaaa1111', status: STAMPED };
+        const conts = [
+            { block: 7, total: 2, crc: 'aaaa1111' },
+            { block: 9, total: 3, crc: 'bbbb2222' },
+        ];
+        const db = { doQuery: async (sql, args) => {
+            const m = /c\.batch_total_chunks = p\.batch_total_chunks/.test(sql) && /c\.batch_crc32 = p\.batch_crc32/.test(sql);
+            assert.ok(m, 'subquery must bind chunk total and crc32');
+            const B = args[args.length - 1];
+            const last = conts.filter(c => c.total === head.total && c.crc === head.crc).pop();
+            return last && last.block === B ? [{ action_index: head.action_index, status: head.status }] : [];
+        } };
+        const at7 = await G.collectAttestBatchHead(db, 7);
+        const at9 = await G.collectAttestBatchHead(db, 9);
+        assert.deepStrictEqual(at7, [{ action_index: 100, status: STAMPED }]);
+        assert.deepStrictEqual(at9, []);
+        const opts = { activationDelay: null, gasTick: 'XCHAIN', network: 'regtest', coin: 'BTC' };
+        const pre7 = await buildStateHashData(dbFor(baseResults().concat([at7])), 7, opts);
+        const pre9 = await buildStateHashData(dbFor(baseResults().concat([at9])), 9, opts);
+        assert.deepStrictEqual(pre7.attest_batch_head, [{ action_index: 100, status: STAMPED }]);
+        assert.deepStrictEqual(pre9.attest_batch_head, []);
     });
 
     it('literal twins equal the canonical wire constants', function(){

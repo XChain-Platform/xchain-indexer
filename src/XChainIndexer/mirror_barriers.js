@@ -15,16 +15,21 @@
  * XChain Indexer - Mirror barriers
  *
  * The mirror sync barriers after the price pair, in block-loop order (cross-chain match,
- * call, bridge transfer, policy snapshot, direct-hub-DB call presence, anchor-reward
- * attestation, attestation response, capability snapshot), and the two height-aware
- * clear-instant helpers they report through. Each defers the block (stallReason set, no
- * transaction open) rather than process it against a mirror that has not caught up.
+ * call, bridge transfer, policy snapshot, list share, remote-token pin, direct-hub-DB call
+ * presence, anchor-reward attestation, attestation response, capability snapshot), and the
+ * two height-aware clear-instant helpers they report through. Each defers the block
+ * (stallReason set, no transaction open) rather than process it against a mirror that has
+ * not caught up.
  * Installed onto XChainIndexer.prototype by ../XChainIndexer.js.
  *
  ********************************************************************/
 
 const { getLogger } = require('../observability/index.js');
 const gateRegistry = require('../consensus/gate_registry');
+const {
+    remoteTokenAdmissionActive,
+    REMOTE_TOKEN_RETRY_STALL_REASON
+} = require('../actions/cross_chain_remote_token.js');
 
 module.exports = {
 
@@ -160,6 +165,36 @@ module.exports = {
         } catch(err){
             getLogger().warn('Deferring block ' + blockToParse + ' (list share sync)', err);
             this.stallReason = 'list_share_sync_barrier';
+            this.stallClearsAt = null;
+            return true;
+        }
+        return false;
+    },
+
+    // Remote-token pin barrier. From remote_token_admission_activation a cross-chain ORDER or
+    // SWAP create reads the newest pin admitted on this chain at or below its block, so that
+    // block must not be judged until the hub's remote_token_snapshots height watermark for
+    // this chain covers it: every pin admitted at or below B is then in the mirror this node
+    // reads. The watermark trails the tip by one xdex round window, so the wait is taken only
+    // where a pin is actually read: a block is first processed with the barrier skipped, an
+    // admitted read in it fails the block closed (db.assertRemoteTokenBarrierNotSkipped), and
+    // the retry of that block waits here. A wait, never hashed: below the activation, or with
+    // no mirror to wait on, it does nothing.
+    async deferOnRemoteTokenSync(blockToParse){
+        let armed = remoteTokenAdmissionActive(this.config['NETWORK'], this.config['COIN'], blockToParse);
+        let mirrored = !!this.hubDbSync || !!this.hubDb;
+        let mayRead = this.remoteTokenBarrierForceBlock === blockToParse;
+        this.remoteTokenBarrierBlock = blockToParse;
+        this.remoteTokenBarrierSkipped = armed && mirrored && !mayRead;
+        if(!armed || !mirrored || !mayRead) return false;
+        try {
+            if(this.hubDbSync)
+                await this.hubDbSync.waitForRemoteTokenSync(this.priceSyncTimeoutMs, blockToParse);
+            else
+                await this.waitForDirectRemoteTokenPresence(blockToParse);
+        } catch(err){
+            getLogger().warn('Deferring block ' + blockToParse + ' (remote token sync)', err);
+            this.stallReason = REMOTE_TOKEN_RETRY_STALL_REASON;
             this.stallClearsAt = null;
             return true;
         }

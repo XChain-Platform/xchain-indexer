@@ -49,7 +49,7 @@ CREATE TABLE tokens (
     bridge_chains         VARCHAR(250),                     -- comma list of destination coins this token may be locked to; empty/NULL = not bridgeable (the default, R4)
     min_depth             BIGINT UNSIGNED,                  -- issuer-raised confirmation depth; effective depth is max(coins.resolveConfirmations(origin, network), min_depth), so raise-only
     lock_bridge           TINYINT(1) NOT NULL DEFAULT 0,    -- Locks BRIDGE_CHAINS and MIN_DEPTH forever; the holder's assurance against the owner and against a new owner after a TRANSFER
-    bridged               TINYINT(1) NOT NULL DEFAULT 0     -- set by the first applied XBRIDGE v3 lock and never cleared in milestone 1, so emptying BRIDGE_CHAINS cannot reopen policy binding while copies are outstanding
+    bridged               TINYINT(1) NOT NULL DEFAULT 0     -- set by the first applied XBRIDGE v3 lock and cleared by no action in milestone 1, so emptying BRIDGE_CHAINS cannot reopen policy binding while copies are outstanding; a reorg that orphans that lock clears it
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX tick_id              ON tokens (tick_id);

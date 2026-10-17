@@ -153,7 +153,7 @@ module.exports = {
             // round_qualifier keeps this row's key identical to what the live writers
             // produce, which is what "same UNIQUE dedup" above promises. The staging table
             // carries no snapshot_block, but it does not need one: for 'anchor_archive' the
-            // reward's EARN block IS the snapshot block (both live writers pass
+            // reward's EARN block IS the snapshot block (the derive mint passes
             // SNAPSHOT_BLOCK as block_index), so the archived block_index is the qualifier.
             // Every other reward type resolves to 0 and is written exactly as before.
             // Without this a recovered node would key archive rewards at 0 while a live node
@@ -175,14 +175,14 @@ module.exports = {
     },
 
     // upsert: deterministic block-processing writers pass true so their value
-    //         always wins over a best-effort hub push that raced them - the
+    //         always wins over any row already holding the same key - the
     //         derived row is the consensus row (replay produces it byte-equal)
-    // deriveBlockIndex: the block that MATERIALIZED the row, when that differs from the
-    // reward's earn-block (blockIndex). Only the BTC-side anchor/archive
-    //         derivation passes it: that path earns at the checkpoint's SNAPSHOT_BLOCK but
-    //         writes while processing a much later BTC block, so rollback needs the creating
-    // block to know the row must disappear. Every other writer earns and
-    //         writes in the same block and leaves it NULL.
+    // deriveBlockIndex: the block that MATERIALIZED the row. Rule: a writer whose blockIndex
+    //         (earn-block) is earlier than the block being processed MUST pass that block here,
+    //         or the reorg delete, xchain-sync's derived-reward channel and the replica rollback
+    //         all miss the row. A writer that earns and writes in one block leaves it NULL. The
+    //         anchor/archive derive mint and rollcall_publish stamp it today (recovery restore
+    //         stamps its own INSERT); the call-site census test pins each writer's choice.
     // roundQualifier: the remaining component of the reward's UNIQUE identity. It is
     //         snapshot_block for 'anchor_archive' and 0 for every other reward type, because the
     //         archive leg's round_reference is MATCH_BATCH_SEQ - a dense hub counter a
@@ -234,14 +234,13 @@ module.exports = {
     // Keep exactly ONE validator_reward per (reward_type, round_reference) for
     // anchor rewards: the row whose signing pubkey sorts lexicographically
     // smallest - the SAME deterministic winner the hub's RewardTracker elects
-    // (recordAnchorReward). One logical anchor → one reward. In a failover
-    // double-publish the loser's pubkey can be pushed to THIS indexer before
-    // (or, because the hub's pushes are fire-and-forget, after) the winner's;
-    // the hub dedups its own DB but has no path to retract an already-pushed
-    // loser row from the indexer. Applying the identical smallest-pubkey rule
-    // here is order-independent and keeps the COLLECT rail + recovery
-    // single-winner fleet-wide (#3963). No-op for non-anchor reward types
-    // (those are derived deterministically per block and never pushed).
+    // (recordAnchorReward). One logical anchor → one reward. A failover
+    // double-publish leaves two quorum-attested anchor_reward_attestations rows
+    // for one logical reward, and the derive pass can mint the loser before the
+    // winner, in the same pass or an earlier one. Applying the identical
+    // smallest-pubkey rule here is order-independent and keeps the COLLECT rail
+    // + recovery single-winner fleet-wide. No-op for non-anchor reward types
+    // (those are derived deterministically per block, with no failover loser).
     // The min-pubkey is materialised in a derived table so the DELETE doesn't
     // self-reference its target table (MariaDB forbids that inline).
     //

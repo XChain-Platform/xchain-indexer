@@ -157,9 +157,10 @@ module.exports = {
     ctx.ledger = ledger;
     },
 
-    // The scale every tally read, charge and accumulation below runs at.
+    // The scale every tally read, charge and accumulation below runs at, and whether a
+    // Mode A fill is charged its exact cost (fiatFillPrice in pricing_paths.js).
     resolveDispenseTallyScale(ctx){
-    let { data, block_time } = ctx;
+    let { data, block_time, block_index } = ctx;
 
         // Scale every tally read, charge and accumulation below runs at.
         //
@@ -169,13 +170,16 @@ module.exports = {
         // (dispense_payment_tally_scale_gate.js carries the two rounding failures
         // and the unarmed-mainnet argument). The batch pool is excluded there: it counts
         // the transaction's coin settlement value and coinpay.js formats it at 8 dp.
+        let fiatPricing = this.util.isFiatPricingActive(block_index);
         let tallyScale = tallyScaleActivation.dispenseTallyScale(
             block_time,
             this.config['NETWORK'],
             data['DISPENSE_TYPE'] === 'SEND',
-            Object.prototype.hasOwnProperty.call(data, 'BATCH_VALUE_LEDGER'));
+            Object.prototype.hasOwnProperty.call(data, 'BATCH_VALUE_LEDGER'),
+            fiatPricing);
 
     ctx.tallyScale = tallyScale;
+    ctx.fiatExactTally = fiatPricing && tallyScale === tallyScaleActivation.DISPENSE_TALLY_EXACT_SCALE;
     },
 };
 

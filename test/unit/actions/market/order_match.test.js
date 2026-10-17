@@ -14,7 +14,9 @@
 // order_match.test/, the handler cases each opening the same 'Order_Match
 // action handler @regression @tier2' describe so every full test title is
 // unchanged; order_match.test/helpers/order_match_harness.js holds the order
-// fixtures and the mock harness they share.
+// fixtures and the mock harness they share. The price validation cases pin the
+// legacy comparison below order_match_price_cross_activation; the activated rule is
+// pinned in test/unit/boundary/orders/price_matching.test/.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -22,7 +24,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const sinon  = require('sinon');
 const { createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
 const {
-    BLOCK_TIME, makeOrderInfo, makeMatchInfo, useOrderMatchHarness,
+    BLOCK_TIME, belowPriceCross, makeOrderInfo, makeMatchInfo, useOrderMatchHarness,
 } = require('./order_match.test/helpers/order_match_harness.js');
 
 // Each test gets a fresh harness from useOrderMatchHarness; bind() hands it to
@@ -61,7 +63,7 @@ describe('Order_Match action handler @regression @tier2', function () {
     // ─── Price validation ────────────────────────────────────────────────
 
     it('skips match when matchInfo.GET_PRICE > orderInfo.GIVE_PRICE', async function () {
-        // GIVE_PRICE=5, but match wants GET_PRICE=10 : mismatch → skip
+        belowPriceCross(); // legacy comparison: GIVE_PRICE=5, match GET_PRICE=10 → skip
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ GIVE_PRICE: '5', GET_PRICE: '0.2' }));
         indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GET_PRICE: '10' })]);
 
@@ -83,7 +85,7 @@ describe('Order_Match action handler @regression @tier2', function () {
     });
 
     it('processes match when matchInfo.GET_PRICE < orderInfo.GIVE_PRICE (better price)', async function () {
-        // Match asks for less than order offers → better deal for the maker
+        belowPriceCross(); // legacy comparison: match GET_PRICE below order GIVE_PRICE → fill
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ GIVE_PRICE: '15', GET_PRICE: '0.1' }));
         indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GET_PRICE: '10' })]);
 

@@ -85,6 +85,8 @@ function makeSync(table, spec) {
     const hubDb = {
         doQuery: sinon.stub().resolves([]),
         doQueryStrict: sinon.stub().callsFake(async (sql, args) => {
+            // The copy record beside an anchor_reward_attestations row is its own table.
+            if (/INTO anchor_reward_attestation_copies /.test(sql)) return { affectedRows: 1 };
             writes.push({ sql, args });
             const match = new RegExp('INSERT(?: IGNORE)? INTO ' + table + ' \\(([^)]*)\\)').exec(sql);
             assert.ok(match, 'expected an insert for ' + table + ': ' + sql);

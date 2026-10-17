@@ -47,7 +47,8 @@ module.exports = {
                     // not on the chain of the token being priced (GIVE_COIN above).
                     // Equal today under the same-chain guard; see the note on
                     // reverseOraclePriceMatch.
-                    dispenser['GET_COIN']
+                    dispenser['GET_COIN'],
+                    data['BLOCK_INDEX']
                 );
                 if(priceMatch){
                     await this.applyOracleFill(ctx, row, priceMatch);
@@ -165,7 +166,7 @@ module.exports = {
 
     // v0 FIAT: the validator COIN/FIAT snapshot prices the fill.
     async priceFromValidatorSnapshot(ctx, row){
-    let { data, ledger, tallyScale } = ctx;
+    let { data, ledger, tallyScale, fiatExactTally } = ctx;
         let { dispenser, available } = row;
         let multiplier = row.multiplier;
         let unitCoinCost = row.unitCoinCost;
@@ -178,7 +179,8 @@ module.exports = {
                     coinPair,
                     data['BLOCK_TIME'],
                     this.config['FIAT_DISPENSER_PRICE_WINDOW'],
-                    this.indexerDb
+                    this.indexerDb,
+                    data['BLOCK_INDEX']
                 );
                 if(priceMatch){
                     multiplier = priceMatch.units;
@@ -186,6 +188,10 @@ module.exports = {
                     // single unit at the matched snapshot.
                     if(ledger)
                         unitCoinCost = priceMatch.btcPerToken;
+                    // On the exact tally the drain charges FIAT_AMOUNT / price itself, which
+                    // btcPerToken holds only to 18 dp.
+                    if(ledger && fiatExactTally)
+                        row.fiatFillPrice = { fiatAmount: dispenser['FIAT_AMOUNT'], price: priceMatch.snapshot.price };
                 } else {
                     error = 'invalid: no matching price snapshot';
                 }

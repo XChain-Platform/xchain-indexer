@@ -87,8 +87,15 @@ function crossChainCallResultRpc({ indexer }){
             try {
                 let latest = await db.getLatestBlockIndex();
                 let row    = await db.getCrossChainCallExecutionById(String(call_id));
+                // A retired dispatch (actions/xexec/retire.js) holds an executions row but ran
+                // nothing, so it reads as not executed and the federation relays no result for it;
+                // the retirement itself is surfaced beside the refusal diagnostics.
+                let retired = (row && /^retired:/.test(String(row.result_status))) ? row : null;
+                if(retired) row = null;
                 if(!row){
                     let res = { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
+                    if(retired)
+                        res.retired = { reason: String(retired.result_status).slice('retired:'.length), block_index: Number(retired.block_index) };
                     // Surface refusal diagnostics: a quorum-starved dispatch has
                     // no execution row, but the injection pass records WHY it keeps being
                     // refused. Node-local advisory only (never quorum-verified relay data).

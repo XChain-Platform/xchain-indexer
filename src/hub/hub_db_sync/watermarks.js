@@ -55,6 +55,7 @@ module.exports = {
         this.releaseBridgeWaiters();
         this.releasePolicyWaiters();
         this.releaseListShareWaiters();
+        this.releaseRemoteTokenWaiters();
         this.releaseAnchorAttestWaiters();
         this.releaseAttestResponseWaiters();
     },
@@ -72,6 +73,7 @@ module.exports = {
         this.releaseBridgeWaiters();
         this.releasePolicyWaiters();
         this.releaseListShareWaiters();
+        this.releaseRemoteTokenWaiters();
         this.releaseAnchorAttestWaiters();
         this.releaseAttestResponseWaiters();
     },
@@ -236,6 +238,9 @@ module.exports = {
             heightsShort:         this.heightsShort()
         }, now);
         if (verdict === 'ok') return verdict;
+        // A forced resync forgets every position, so restarting a long re-page that is still
+        // moving would only begin it again; the frozen watermark waits for it instead.
+        if (this.drainProgressing(now)) return 'draining';
 
         const frozenFrom = (this._lastWatermarkAdvanceAt == null)
             ? this._heightsLastAdvanceAt : this._lastWatermarkAdvanceAt;
@@ -273,6 +278,20 @@ module.exports = {
         else getLogger().error('HubDbSync: no onFatalStall handler wired, so this mirror stays up and ' +
             'keeps re-driving; a consumer that wants a supervisor restart must wire one.');
         return verdict;
+    },
+
+    // True while a bootstrap is running and has made progress within the stall window. The
+    // drain bumps _bootstrapProgressTicks per page and per row; progress is timed on this
+    // detector's own clock from the sample that first saw the counter move, the same guard
+    // requestResync applies with its hold ceiling.
+    drainProgressing(now) {
+        if (!this._bootstrapping) return false;
+        let ticks = Number(this._bootstrapProgressTicks) || 0;
+        if (ticks !== this._stallSeenProgressTicks) {
+            this._stallSeenProgressTicks = ticks;
+            this._stallSeenProgressAt = now;
+        }
+        return (now - this._stallSeenProgressAt) < this.watermarkStallMs;
     },
 
     // Cadence for the sampler, clamped down when the windows themselves are small so a
@@ -318,6 +337,8 @@ module.exports = {
         // outside any real heartbeat cadence, so a legitimate hub is never
         // clamped.
         const MIN_WATERMARK_INTERVAL_MS = 1000;
+        // Pairs with the hub's WATERMARK_INTERVAL_MAX_MS (src/peers/hub_db_broadcaster.js);
+        // the indexer's watermark_interval_hub_parity test holds the two equal.
         const MAX_WATERMARK_INTERVAL_MS = 300000;
         ms = Math.min(Math.max(ms, MIN_WATERMARK_INTERVAL_MS), MAX_WATERMARK_INTERVAL_MS);
         this.watermarkIntervalMs = ms;

@@ -25,6 +25,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { boundedAt, bankUnusedGas } = require('./nested_gas_sum.js');
 
 // Per-root discriminator for the ATTEST request_id / XCALL call_id preimages. One
 // helper for all three root-bearing sites here (top-level EXECUTE, controller guard,
@@ -101,7 +102,9 @@ function buildVmOptions(ctx, snapshot, blockHash, rootDiscrim){
         code:             ctx.contractInfo.code,
         state:            snapshot.contractState,
         method:           data['METHOD'],
-        params:           data['METHOD_PARAMS'] ? data['METHOD_PARAMS'].split('|') : [],
+        // A copy, so nothing the VM side does to its params reaches ctx.methodArgs.
+        params:           Array.isArray(ctx.methodArgs) ? ctx.methodArgs.slice()
+                          : (data['METHOD_PARAMS'] ? data['METHOD_PARAMS'].split('|') : []),
         caller:           data['SOURCE'],
         contractAddress:  'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'],
         contractIndex:    data['CONTRACT_ACTION_INDEX'],
@@ -199,6 +202,7 @@ async function writeVmStateChanges(ctx, vmResult){
 
 async function applyVmEmissions(ctx, vmResult, slashLedger){
     let data = ctx.data;
+    let nestedGasBounded = boundedAt(this.config, data);
     // Process emitted actions through existing handlers
     for(let i = 0; i < vmResult.emittedActions.length; i++){
         let emission = vmResult.emittedActions[i];
@@ -214,7 +218,7 @@ async function applyVmEmissions(ctx, vmResult, slashLedger){
             // reservation (gasLimit - billed, including its own
             // subtree's refunds) for this run's fee settlement.
             if(emission.action === 'EXECUTE')
-                ctx.nestedGasUnused += Number(emission.gasUnusedSubtree) || 0;
+                ctx.nestedGasUnused = bankUnusedGas(ctx.nestedGasUnused, emission, nestedGasBounded, ctx.gasUsed);
         }
 
         // Record emission link (SLASH rows carry no resultActionIndex)

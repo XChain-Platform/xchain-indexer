@@ -38,7 +38,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('../gate_registry');
+const { get, copy } = require('../gate_registry');
 
 const ANCHOR_REWARD_ACTIVATION = copy('anchor_reward_activation.ANCHOR_REWARD_ACTIVATION');
 
@@ -46,7 +46,7 @@ const ANCHOR_REWARD_AMOUNT = copy('anchor_reward_activation.ANCHOR_REWARD_AMOUNT
 
 // Whether anchor rewards are DERIVED from chain for an ANCHOR whose BTC-anchored
 // snapshot is at `snapshotBlock` on `network`. Below the threshold -> off (none
-// derived, and the hub push rail is retired; a publisher-bearing bundle rejected). An unpinned (null) or unknown
+// derived, and the hub push rail is retired; a publisher-bearing bundle is rejected). An unpinned (null) or unknown
 // network -> off (safe); `sb >= null` would otherwise arm at height 0.
 function isAnchorRewardActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
@@ -62,7 +62,7 @@ const ARCHIVE_REWARD_AMOUNT = copy('anchor_reward_activation.ARCHIVE_REWARD_AMOU
 
 // Whether the anchor_archive reward is DERIVED from chain for an archive anchor
 // whose BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the threshold
-// -> off (none derived, and the hub push rail is retired; a publisher-bearing archive head rejected).
+// -> off (none derived, and the hub push rail is retired; a publisher-bearing archive head is rejected).
 // An unpinned (null) or unknown network -> off (safe).
 function isArchiveRewardActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
@@ -156,8 +156,6 @@ function restoredRewardRearmFloor(reorgBlock, network){
 // (XC_MIRROR_ADMISSION_ACTIVATION, via REGTEST_ARMING in the registry part shared_rows.js)
 // arms both flag days, so a regtest drill cannot end up with the admission axis armed and
 // the horizon axis inert and still be called a drill.
-const { resolveMirrorAdmissionRegtest } = require('./mirror_admission_gate.js');
-
 const ANCHOR_ATTEST_ARRIVAL_MARGIN_S = copy('anchor_reward_activation.ANCHOR_ATTEST_ARRIVAL_MARGIN_S');
 
 const ANCHOR_ATTEST_BARRIER_ACTIVATION = get('anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION');

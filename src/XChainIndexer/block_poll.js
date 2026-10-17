@@ -41,7 +41,7 @@ module.exports = {
                                     ? await indexerReorgView.getLastProcessedReorgWitness() : null;
         let unprocessedReorgs    = await this.decoderDb.getReorgsSince(lastProcessedReorgId, cursorWitness);
         // Keep the decoder-halt flag current on every poll (loud on transition, then
-        // periodic). Advisory: it does not gate block processing, only makes the halt visible.
+        // periodic). pollDecoderOnce reads it to stop advancing while the halt stands.
         await this.checkDecoderReorgHalt();
 
         // Get last processed block from Indexer and Decoder databases
@@ -66,6 +66,19 @@ module.exports = {
             let rolled = await this.applyPendingReorgs(indexerReorgView, unprocessedReorgs, lastIndexerBlock);
             lastIndexerBlock     = rolled.lastIndexerBlock;
             lastProcessedReorgId = rolled.lastProcessedReorgId;
+        }
+
+        // A decoder carrying a durable REORG_HALT is condemned to a reset: its rows
+        // above the fork point may be the abandoned branch (a decoder that halted before
+        // finishing its rollback) or rows decoded forward on dispenser state that no
+        // longer matches a fresh sync. So the pass stops here, after the rollbacks above
+        // have landed, and indexes nothing new until the halt clears. Liveness only:
+        // every block this indexer does commit is decided exactly as before. The pass
+        // names no stall of its own, so the status surfaces publish upstream_halted,
+        // never wedged. A probe fault keeps the last known halt state (checkDecoderReorgHalt).
+        if(this.decoderReorgHalted === true){
+            this.beginPollPass(null);
+            return;
         }
 
         // If indexer has no parsed blocks, set last indexer block to first decoder block-1

@@ -144,7 +144,8 @@ describe('bridge sync barrier @regression @tier1', function () {
         const read = watermarkCalls(calls)[0];
         assert.match(read.sql, /FROM bridge_transfers/);
         assert.match(read.sql, /src_chain\s*=\s*\?\s+OR\s+dest_chain\s*=\s*\?/i);
-        assert.deepStrictEqual(read.args, ['DOGE', 'DOGE']);
+        assert.match(read.sql, /CASE WHEN dest_chain = \? THEN effective_time END/);
+        assert.deepStrictEqual(read.args, ['DOGE', 'DOGE', 'DOGE']);
         assert.strictEqual(sync.bridgeSyncTimestamp, 456);
     });
 
@@ -169,10 +170,12 @@ describe('bridge sync barrier @regression @tier1', function () {
         // node that drained nothing would mint at the wrong block and fork.
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.bridgeSyncTimestamp = null;
+        sync._bootstrapDrained = true;
         assert.strictEqual(sync.bridgeSyncSatisfied(1000), false, 'un-bootstrapped: must defer');
         sync.bridgeBootstrapped = true;
         assert.strictEqual(sync.bridgeSyncSatisfied(1000), true);
     });
+
 
     it('opens on the stream watermark at exactly its own grace, not one second earlier', function () {
         // The grace is a consensus input: every node must open at the same instant. Pin both
@@ -192,6 +195,7 @@ describe('bridge sync barrier @regression @tier1', function () {
     it('waitForBridgeSync resolves at once when the mirror is already past the block time', async function () {
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.bridgeSyncTimestamp = 2000;
+        sync.bridgeDestSyncTimestamp = 2000;
         assert.strictEqual(await sync.waitForBridgeSync(1500, 5000), 2000);
         assert.strictEqual(sync._bridgeWaiters.length, 0);
     });
@@ -211,7 +215,7 @@ describe('bridge sync barrier @regression @tier1', function () {
         // A missed refresh on a stream or reconnect edge leaves the scalar stale behind a
         // mirror that is current; without the re-read the block defers a full timeout for
         // nothing, once per block.
-        const { sync } = makeSync({ coin: 'DOGE' }, [{ ts: 4000 }]);
+        const { sync } = makeSync({ coin: 'DOGE' }, [{ ts: 4000, dest_ts: 4000 }]);
         sync.bridgeBootstrapped  = true;
         sync.bridgeSyncTimestamp = 500;                     // stale in memory, 4000 in the DB
         assert.strictEqual(await sync.waitForBridgeSync(1000, 30), 4000);
@@ -255,9 +259,12 @@ describe('policy sync barrier @regression @tier1', function () {
     it('an empty mirror satisfies the barrier ONLY after a full bootstrap drain', function () {
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.policySyncTimestamp = null;
+        sync._bootstrapDrained = true;
         assert.strictEqual(sync.policySyncSatisfied(1000), false);
         sync.policyBootstrapped = true;
         assert.strictEqual(sync.policySyncSatisfied(1000), true);
+        sync._bootstrapDrained = false;
+        assert.strictEqual(sync.policySyncSatisfied(1000), false, 'a closed socket re-drains first');
     });
 
     it('opens on the stream watermark at exactly its own grace', function () {
@@ -281,10 +288,12 @@ describe('policy sync barrier @regression @tier1', function () {
     });
 
     it('waitForPolicySync self-heals on timeout when the local mirror had caught up', async function () {
-        const { sync } = makeSync({ coin: 'DOGE' }, [{ ts: 4000 }]);
+        // 4540 is the newest stamp that covers block 1000 across the 3540 s stamp spread.
+        const { sync } = makeSync({ coin: 'DOGE' }, [{ ts: 4540 }]);
         sync.policyBootstrapped  = true;
+        sync._bootstrapDrained   = true;
         sync.policySyncTimestamp = 500;
-        assert.strictEqual(await sync.waitForPolicySync(1000, 30), 4000);
+        assert.strictEqual(await sync.waitForPolicySync(1000, 30), 4540);
     });
 });
 

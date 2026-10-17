@@ -121,6 +121,10 @@ module.exports = {
         // AUTO_INCREMENT) warns if it ever runs after this point, since an out-of-band
         // insert would bump MAX(id) and silently offset the dense counter.
         this.indexerDb.deterministicIndexingStarted = true;
+        // Ledger upserts accumulate their net credits-minus-debits effect here for
+        // balance maintenance. A new map prevents a committed or abandoned block's
+        // deltas from leaking into the next transaction.
+        this.indexerDb._balanceDelta = new Map();
         // Light-client state commitment: when active, install a
         // fresh per-block touched-key set so the ledger choke point
         // (db.createLedgerChangeRecord) records every (address, tick) mutated
@@ -174,8 +178,10 @@ module.exports = {
             let blockTimeout = this.blockWatchdogTimeout(blockToParse);
             let [ledger, actions, contracts] = await this.util.withTimeout(blockProcessing, blockTimeout, 'block ' + blockToParse);
 
-            // Commit the block data to the database
-            await this.indexerDb.commitTransaction();
+            // Commit the block data to the database. False means no block transaction was
+            // open to commit, so the block is abandoned rather than reported as committed.
+            if((await this.indexerDb.commitTransaction()) === false)
+                throw new Error('block ' + blockToParse + ': no open block transaction at commit; nothing was committed');
             committed = true;
 
             lastDecoderBlock = await this.afterBlockCommit(blk, [ledger, actions, contracts], lastDecoderBlock, debugTimer);

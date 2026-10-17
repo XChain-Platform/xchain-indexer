@@ -35,14 +35,14 @@ function registerPriceOracleUpgradeGroup1(PS_COLS, makeApplySync, finalizedRow) 
         assert.ok(!/^INSERT IGNORE/.test(insert.args[0]), 'must NOT be a plain INSERT IGNORE');
     }); }
 
-function registerPriceOracleUpgradeGroup2(PS_COLS, makeApplySync, finalizedRow) { it('guards every column on VALUES(status)=finalized and never reassigns the unique-key columns', async function () {
+function registerPriceOracleUpgradeGroup2(PS_COLS, makeApplySync, finalizedRow) { it('guards every column on the incoming status and never reassigns the unique-key columns', async function () {
         const { sync, doQuery } = makeApplySync(PS_COLS);
         await sync.applyRow('price_snapshots', finalizedRow());
         const sql = doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0])).args[0];
-        // price upgrades only when the incoming row is finalized
-        assert.ok(/`price` = IF\(VALUES\(status\) = 'finalized', VALUES\(`price`\), `price`\)/.test(sql));
-        // status flips to finalized only for an incoming finalized row
-        assert.ok(/status = IF\(VALUES\(status\) = 'finalized', 'finalized', status\)/.test(sql));
+        // price follows an incoming finalized or disputed row, never a skipped one
+        assert.ok(/`price` = IF\(VALUES\(status\) IN \('finalized', 'disputed'\), VALUES\(`price`\), `price`\)/.test(sql));
+        // status takes the incoming finalized or disputed status; a skipped row never demotes
+        assert.ok(/status = IF\(VALUES\(status\) IN \('finalized', 'disputed'\), VALUES\(status\), status\)/.test(sql));
         // the unique key + PK are never reassigned in the UPDATE clause
         const updateClause = sql.split('ON DUPLICATE KEY UPDATE')[1];
         assert.ok(!/`round_number` =/.test(updateClause));

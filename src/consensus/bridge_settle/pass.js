@@ -14,10 +14,11 @@
  *
  * XChain Platform - bridge settle pass: the end-of-block driver and its due sets.
  *
- * The pass driver, the proof fetch available to each transfer leg, and the two ordered,
- * capped due-set reads. The order inside the pass and the order inside each due set are
- * consensus-visible (they decide which action indexes exist at this block), so both are
- * spelled here exactly as they were.
+ * The pass driver, the proof fetch available to each transfer leg, and the two ordered
+ * due-set reads: the policy read is capped, the transfer read is not, because the transfer
+ * cap is a slot count inside the pass. The order inside the pass and the order inside each
+ * due set are consensus-visible (they decide which action indexes exist at this block), so
+ * both are spelled here exactly as they were.
  *
  * BUILT BY THE ENTRY (see the entry header and canonicals.js).
  *
@@ -38,6 +39,7 @@ const { parseMembershipOrRef } = require('./policy_membership.js');
 const { dropRefRowsFromFirst } = require('./policy_ref_due.js');
 const { belowBridgeActivation } = require('./transfer.js');
 const { recordSettlement } = require('./settlements.js');
+const { applyOrderActive, selectArmed } = require('./policy_order.js');
 const gateRegistry = require('../gate_registry');
 
 const POLICY_REFUSAL_RECORD_KEY =
@@ -124,8 +126,9 @@ async function fetchProofForTransfer(row, ctx){
 }
 
 /**
- * The end-of-block settle pass. XChainIndexer.js calls this in its PINNED position,
- * immediately after util.processCrossChainSettlements and before util.processCrossChainCalls.
+ * The end-of-block settle pass. runSettlementPasses in XChainIndexer/block_passes.js calls
+ * this in its PINNED position, after util.processCrossChainSettlements and
+ * listShareSettle.processListSharePass and before util.processCrossChainCalls.
  *
  * ORDER INSIDE THE PASS is pinned too: policy snapshots run at the HEAD, then the transfer
  * legs. A snapshot materialized after a credit in the same block would gate that credit under
@@ -170,18 +173,16 @@ async function processBridgeSettlePass(deps, ctx){
 }
 
 /**
- * The finalized, effective, unapplied transfers whose destination is THIS chain, in
- * (snapshot_block, transfer_id) order, capped.
+ * The finalized, effective, unapplied, non-deferred transfers whose destination is THIS chain,
+ * in (snapshot_block, transfer_id) order, UNCAPPED: exactly the list processBridgeSettlePass
+ * walks. The XBRIDGE_MAX_PER_BLOCK cap is applied only inside the pass, where a terminal
+ * refusal holds no slot, so no fixed prefix of this list is the set a block applies.
  *
  * ORDERED ON QUORUM-AGREED ROW CONTENT and never on the hub-assigned AUTO_INCREMENT `id`,
  * which is per-hub: two indexers mirroring different hubs must settle the same prefix, and an
  * id-ordered query would give them different ones. The same rule getEffectiveUnsettledMatches
  * follows, for the same reason.
  */
-async function dueBridgeTransfers(deps, ctx){
-    return (await unsettledBridgeTransfers(deps, ctx)).slice(0, XBRIDGE_MAX_PER_BLOCK || 25);
-}
-
 async function unsettledBridgeTransfers(deps, ctx){
     const db  = ctx.indexerDb;
     // Bound by height in the admission era and by the clock below it (mirrorBindClause).
@@ -285,8 +286,12 @@ async function duePolicySnapshots(deps, ctx){
         const refused = await db.getRecordedPolicyRefusalIds(ids);
         for(const r of refused) seen.add(r.transfer_id);
     }
-    return rows.filter(r => !seen.has(r.snapshot_id))
-               .slice(0, XPOLICY_MAX_PER_BLOCK || 5);
+    let unapplied = rows.filter(r => !seen.has(r.snapshot_id));
+    // From BRIDGE_POLICY_APPLY_ORDER_ACTIVATION the rows with no bridged copy here and the rows
+    // the seq order holds leave BEFORE the cap, so a snapshot for a tick bridged elsewhere, or
+    // one waiting on its predecessor, cannot take a slot every block (policy_order.js).
+    if(applyOrderActive(ctx)) unapplied = await selectArmed(unapplied, ctx, { bind: bind });
+    return unapplied.slice(0, XPOLICY_MAX_PER_BLOCK || 5);
 }
 
 /**
@@ -296,7 +301,7 @@ module.exports = function createPass(deps){
     return {
         processBridgeSettlePass: (ctx) => processBridgeSettlePass(deps, ctx),
         fetchProofForTransfer,
-        dueBridgeTransfers:      (ctx) => dueBridgeTransfers(deps, ctx),
+        unsettledBridgeTransfers: (ctx) => unsettledBridgeTransfers(deps, ctx),
         duePolicySnapshots:      (ctx) => duePolicySnapshots(deps, ctx),
     };
 };

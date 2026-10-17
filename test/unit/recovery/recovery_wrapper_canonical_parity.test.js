@@ -108,3 +108,59 @@ describe('recovery._wrapperCanonical: independent byte-parity (ITEM 2729)', func
         assert.strictEqual(actual.split('|').length, 14);
     });
 });
+
+// Compare the WHOLE string, archive extension and round id included, on both sides of
+// the equivocation header; the hub signer is pinned three-way in the hub's own suite.
+describe('recovery wrapperCanonical vs Anchor.canonical FORMAT 1: full archive string', function(){
+    const eq = require('../../../src/consensus/equivocation_header.js');
+    const RAW_HEAD = 'XCHECKPOINT|DOGE|mainnet|4521300|a1b2c3d4e5f6|ledgerhash_abc123|actionshash_def456|' +
+        'contracthash_789xyz|42|';
+
+    function anchorFull(v){
+        return new Anchor({}).canonical({
+            CHAIN: v.chain, NETWORK: v.network, BLOCK_INDEX_CHECKPOINTED: v.block_index,
+            BLOCK_HASH: v.block_hash, LEDGER_HASH: v.ledger_hash, ACTIONS_HASH: v.actions_hash,
+            CONTRACT_HASH: v.contract_hash, CHECKPOINT_SEQ: v.checkpoint_seq,
+            SNAPSHOT_BLOCK: v.snapshot_block, FORMAT: 1,
+            MATCH_BATCH_SEQ: v.match_batch_seq, MATCH_COUNT: v.match_count,
+            BATCH_CRC32: v.batch_crc32, TOTAL_CHUNKS: v.total_chunks
+        });
+    }
+    function atEquiv(overrides){
+        return Object.assign({}, v1, { snapshot_block: eq.EQUIV_HEADER_ACTIVATION.mainnet }, overrides);
+    }
+    // Read the round id: the text between the leading 'EQUIV|' and the first '||'.
+    function roundIdOf(s){
+        return s.slice('EQUIV|'.length, s.indexOf('||'));
+    }
+
+    it('below the equivocation header both builders emit the same bare archive string', function(){
+        assert.strictEqual(eq.isEquivHeaderActive(v1.snapshot_block, v1.network), false);
+        assert.strictEqual(anchorFull(v1), RAW_HEAD + '500000|7|3|deadbeef|1');
+        assert.strictEqual(AnchorRecovery.wrapperCanonicalForTest(v1), anchorFull(v1));
+    });
+
+    it('once the equivocation header is active both builders emit the same wrapped archive string', function(){
+        const at = atEquiv({});
+        const h = eq.EQUIV_HEADER_ACTIVATION.mainnet;
+        assert.strictEqual(eq.isEquivHeaderActive(at.snapshot_block, at.network), true);
+        assert.strictEqual(anchorFull(at),
+            'EQUIV|XCHECKPOINT|DOGE|mainnet|4521300|42|7|0||' + RAW_HEAD + h + '|7|3|deadbeef|1');
+        assert.strictEqual(AnchorRecovery.wrapperCanonicalForTest(at), anchorFull(at));
+    });
+
+    it('both builders carry the batch seq in the archive round id', function(){
+        assert.strictEqual(roundIdOf(anchorFull(atEquiv({}))), 'XCHECKPOINT|DOGE|mainnet|4521300|42|7|0');
+        const next = atEquiv({ match_batch_seq: 8 });
+        assert.strictEqual(roundIdOf(anchorFull(next)), 'XCHECKPOINT|DOGE|mainnet|4521300|42|8|0');
+        assert.strictEqual(roundIdOf(AnchorRecovery.wrapperCanonicalForTest(next)), roundIdOf(anchorFull(next)));
+    });
+
+    it('both builders embed an upper-case batch CRC as lower-case on both sides of the header', function(){
+        for(const v of [v1, atEquiv({})]){
+            const upper = Object.assign({}, v, { batch_crc32: 'DEADBEEF' });
+            assert.strictEqual(anchorFull(upper), anchorFull(v));
+            assert.strictEqual(AnchorRecovery.wrapperCanonicalForTest(upper), anchorFull(v));
+        }
+    });
+});

@@ -14,14 +14,14 @@
 
 const assert = require('assert');
 const registry = require('../../../src/consensus/gate_registry.js');
-const { activeGatesAt } = require('../../../src/consensus_rules_digest.js');
+const { activeGatesAt, ACTIVE_GATES_UNIT_FILTER_HEIGHTS } = require('../../../src/consensus_rules_digest.js');
 
 describe('consensus rules digest activeGatesAt unit filtering', function () {
     it('excludes network-shaped constant rows from the responsible set', function () {
         const key = 'oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND';
         assert.strictEqual(registry.registry.unitOf(key), 'constant');
         assert.strictEqual(registry.get(key).testnet, 5082);
-        assert.ok(!activeGatesAt(5082, 'testnet').includes(key));
+        assert.ok(!activeGatesAt(156140, 'testnet').includes(key));
         assert.ok(!activeGatesAt(Number.MAX_SAFE_INTEGER, 'regtest').includes(key));
     });
 
@@ -56,5 +56,19 @@ describe('consensus rules digest activeGatesAt unit filtering', function () {
         const first = Math.min(table['BTC:testnet'], table['LTC:testnet'], table['DOGE:testnet']);
         assert.ok(!activeGatesAt(first - 1, 'testnet').includes(key));
         assert.ok(activeGatesAt(first, 'testnet').includes(key));
+    });
+
+    it('applies the unit filter only at or above ACTIVE_GATES_UNIT_FILTER_HEIGHTS', function () {
+        const key = 'oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND';
+        const H = ACTIVE_GATES_UNIT_FILTER_HEIGHTS;
+        assert.deepStrictEqual(Object.assign({}, H), {
+            'mainnet': 0, 'BTC:testnet': 156140, 'LTC:testnet': 4912553, 'DOGE:testnet': 67988245
+        });
+        assert.ok(!activeGatesAt(Number.MAX_SAFE_INTEGER, 'mainnet').includes(key));
+        assert.ok(activeGatesAt(5082, 'testnet').includes(key));
+        assert.ok(!activeGatesAt(156140, 'testnet').includes(key));
+        assert.ok(activeGatesAt(5082, 'testnet', 'DOGE').includes(key));
+        assert.ok(!activeGatesAt(67988245, 'testnet', 'DOGE').includes(key));
+        assert.ok(activeGatesAt(156140, 'testnet', 'LTC').includes(key));
     });
 });

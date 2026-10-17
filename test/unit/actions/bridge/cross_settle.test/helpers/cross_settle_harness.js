@@ -21,6 +21,9 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../..
 
 const Cross_Settle = require('../../../../../../src/actions/cross_settle/index.js');
 const swq          = require('../../../../../../src/consensus/stake_weighted_quorum.js');
+const { stubGate } = require('../../../../../helpers/gate_modules.js');
+
+const SETTLEMENT_BOUNDS_KEY = 'settlement_bounds_activation.SETTLEMENT_BOUNDS_ACTIVATION';
 
 // ── Real Ed25519 keypair helpers ───────────────────────────────────────────
 // cross_settle verifies signatures with the production ed25519.js (no stub), so
@@ -111,6 +114,11 @@ function createCrossSettleHarness() {
     // weighted predicate diverges from the majority floor at N=3. Weighted
     // coverage lives in stake_weighted_quorum.test.js.
     const swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+
+    // The same for the settlement bounds: these cases settle against skeletal offer rows
+    // (no GIVE_TICK, GIVE_AMOUNT or GIVE_OWNERSHIP) on the unarmed path mainnet and testnet
+    // run, so pin it. settlement_bounds.test.js arms it against full offer rows.
+    stubGate(sinon, SETTLEMENT_BOUNDS_KEY, false);
 
     // Cross-chain DB methods not present in the shared mock : add neutral stubs.
     indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([]);

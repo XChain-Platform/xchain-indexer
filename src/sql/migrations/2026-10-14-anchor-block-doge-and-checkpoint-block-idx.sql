@@ -1,0 +1,42 @@
+-- xchain:migration mode=auto
+-- Migration: index anchor_actions (block_index_doge) and state_checkpoints
+-- (chain, network, block_index).
+--
+-- WHY
+-- ---
+-- Both tables are read once per block inside the block loop, and neither read has an
+-- index that serves its predicate:
+--
+--   collectAnchorInvalid (src/consensus/state_hash/archive_invalid_section.js) joins
+--   anchor_actions to itself and scopes the completing chunk by
+--   c.block_index_doge BETWEEN B AND B. No key leads on block_index_doge, so the planner
+--   walks every archive head by PRIMARY and probes each one's chunks: a whole-table
+--   read per block that grows with anchor history.
+--
+--   getMirroredStateCheckpointCandidates (src/db/anchors/index.js) ranges on
+--   chain = ? AND network = ? AND block_index >= ?. Both keys put checkpoint_seq after
+--   the equality prefix, so each call reads every row for the chain and filesorts it.
+--
+-- Warm, both finish in milliseconds. On the shared regtest rail (2026-10-14), with a
+-- 128 MB buffer pool under about 7 GB of schemas, each was caught by the processlist at
+-- 4 to 8 s per block, because the whole table is re-read from disk every block.
+--
+-- NOT consensus-visible. Index-only DDL: no predicate, ORDER BY or selected column
+-- changes, both reads order totally, so every result set is byte-identical; only the
+-- access path differs. Non-unique, and outside the uq_chain_seq split-brain fence.
+--
+-- Additive + idempotent: CREATE INDEX IF NOT EXISTS, a no-op wherever boot-time
+-- reconcileTableIndexes already healed the indexes in from src/sql/anchor_actions.sql and
+-- src/sql/state_checkpoints.sql. The names and column lists are byte-equal to those
+-- definitions. This file reaches only the indexer DB. Where HUB_DB_HOST points the
+-- read at a separate <INDEXER_DB_NAME>_HubMirror schema, that copy is built by the
+-- explorer's HubMirrorSyncManager from xchain-explorer/src/sql/hub-mirror/
+-- state_checkpoints.sql, whose ensureTables pass adds declared indexes to an existing
+-- table; the same KEY must be declared there for the mirror copy to get it.
+--
+-- HOW TO RUN
+--   node src/db/migration/migrate.js   (or apply this file to the indexer DB)
+
+CREATE INDEX IF NOT EXISTS idx_anchor_block_doge ON anchor_actions (block_index_doge);
+
+CREATE INDEX IF NOT EXISTS idx_chain_block ON state_checkpoints (chain, network, block_index);

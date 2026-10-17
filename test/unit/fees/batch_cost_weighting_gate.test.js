@@ -17,7 +17,7 @@
  *
  * One protocol change registers the whole model (the budget over per-action cost
  * weights, DEPLOY at the full budget, the ratified EXECUTE/XEXEC weight, and the
- * per-recipient fan-out weight) so a heterogeneous fleet can never run half of it:
+ * flat AIRDROP/DIVIDEND fan-out weight) so a heterogeneous fleet can never run half of it:
  * two nodes disagreeing about ONE weight disagree about which sub-commands ran.
  *
  * This suite pins the three things nothing else can catch:

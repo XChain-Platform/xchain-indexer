@@ -59,5 +59,8 @@ CREATE TABLE price_snapshots (
     -- bounds batch_block_time and then orders by round_number, so the landing clock
     -- has to sit between them or the added bound degrades into a filter over every
     -- finalized round of the pair.
-    KEY idx_pair_batchtime_round (coin_pair, batch_block_time, round_number)
+    KEY idx_pair_batchtime_round (coin_pair, batch_block_time, round_number),
+    -- Reorg purge: purgeOrphanedPriceSnapshots deletes WHERE reference_chain = 'BTC' AND
+    -- reference_block >= ?, which no other key leads on (scan of every round otherwise).
+    KEY idx_refchain_block (reference_chain, reference_block)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

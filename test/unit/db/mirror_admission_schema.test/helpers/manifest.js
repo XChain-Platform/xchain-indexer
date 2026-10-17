@@ -63,6 +63,7 @@ const MIRROR_ADMISSION_COLUMNS = Object.freeze({
     bridge_transfers:      Object.freeze({ columns: Object.freeze(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']), after: 'effective_time' }),
     policy_snapshots:      Object.freeze({ columns: Object.freeze(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']), after: 'network' }),
     list_snapshots:        Object.freeze({ columns: Object.freeze(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']), after: 'origin_block' }),
+    remote_token_snapshots: Object.freeze({ columns: Object.freeze(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']), after: 'source_action_index' }),
     price_snapshots:       Object.freeze({ columns: Object.freeze(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']), after: 'batch_block_time', hubAfter: 'push_generation' }),
     oracle_prices:         Object.freeze({ columns: Object.freeze(['admit_block']),                                           after: 'push_generation' }),
 });
@@ -81,9 +82,11 @@ const HUB_ONLY_ADMISSION_COLUMNS = Object.freeze({
 
 // The tables altered by the dated admission migration, in the order the migration and
 // compat gate list them. list_snapshots is created with its columns by its own manual
-// table migration, so it belongs to the manifest above but not this legacy ALTER set.
+// table migration, and remote_token_snapshots gains its columns in its own dated migration
+// (2026-10-14-remote-token-admission.sql), so both belong to the manifest above but not to
+// this legacy ALTER set.
 const MIRROR_ADMISSION_TABLES = Object.freeze(Object.keys(MIRROR_ADMISSION_COLUMNS)
-    .filter(table => table !== 'list_snapshots'));
+    .filter(table => table !== 'list_snapshots' && table !== 'remote_token_snapshots'));
 
 /**
  * The column lines of one CREATE TABLE body, in source order, from comment-stripped
@@ -129,11 +132,12 @@ function migrationStatements(manifest){
 
 /**
  * The tables bin/check-migration-old-code-compat.js must carry an OLD_STATEMENTS entry
- * for once the migration exists: every table the migration writes, because an unlisted
+ * for once the migrations exist: every table the dated admission migration writes, then
+ * remote_token_snapshots, which its own dated migration alters, because an unlisted
  * affected table fails that gate rather than skipping.
  */
 function compatGateTables(manifest){
-    return manifest ? Object.keys(manifest) : [...MIRROR_ADMISSION_TABLES];
+    return manifest ? Object.keys(manifest) : [...MIRROR_ADMISSION_TABLES, 'remote_token_snapshots'];
 }
 
 module.exports = {

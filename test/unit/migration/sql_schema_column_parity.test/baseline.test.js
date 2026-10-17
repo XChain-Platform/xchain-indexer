@@ -27,7 +27,7 @@ const path   = require('path');
 const { loadPinnedOriginFixture } = require('../../../helpers/pinnedOriginFixture');
 const {
     collectDefinitionColumns, collectMigrationColumns, collectMigrationCreatedTables,
-    collectMigrationModifies, stripInlineKeys,
+    collectMigrationModifies, stripInlineKeys, foldLiteralCase,
 } = require('./helpers/column_ledger.js');
 const {
     auditRetiredAnchorEntries, collectDefinedTables, collectMigrationDrops,
@@ -215,7 +215,8 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             for (const e of frozen) {
                 const name = String(e.name).toLowerCase();
                 if (!anchored.has(name)) { minted.push(`  ${table}.${e.name}  (frozen as: ${e.spec})`); continue; }
-                if (stripInlineKeys(anchored.get(name)) === stripInlineKeys(String(e.spec))) continue;
+                // The anchor froze literals uppercased, so literal case is the literal-case suite's to judge.
+                if (foldLiteralCase(stripInlineKeys(anchored.get(name))) === foldLiteralCase(stripInlineKeys(String(e.spec)))) continue;
                 const m = lastModify.get(table + '.' + name);
                 if (m && stripInlineKeys(m.spec) === stripInlineKeys(String(e.spec))) continue;
                 unjustified.push(`  ${table}.${e.name}\n    origin:    ${anchored.get(name)}\n    re-frozen: ${e.spec}\n    ` +
@@ -331,7 +332,8 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
                 .map(e => [String(e.name).toLowerCase(), String(e.spec)]));
             for (const e of frozen) {
                 const name = String(e.name).toLowerCase();
-                if (anchored.has(name) && stripInlineKeys(anchored.get(name)) !== stripInlineKeys(String(e.spec)))
+                if (anchored.has(name) && foldLiteralCase(stripInlineKeys(anchored.get(name))) !==
+                    foldLiteralCase(stripInlineKeys(String(e.spec))))
                     moved.push(table + '.' + name);
             }
         }

@@ -24,7 +24,7 @@
  *   - the idempotency filter        (an already-settled id moves no units)
  *   - the escrow would-go-negative  (an out leg short of escrow moves no units)
  *   - the escrow check ok:false     (a refused proof moves no units and mints no action)
- *   - the per-block cap             (the 26th due transfer is not in the slice)
+ *   - the per-block cap             (the pass applies no 26th transfer in one block)
  * A fifth property has a case of its own because it is the one thing that must NOT be a
  * refusal: a checkpoint this node does not hold yet STALLS the pass.
  *

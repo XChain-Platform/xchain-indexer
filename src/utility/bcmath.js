@@ -35,6 +35,23 @@ module.exports = {
         return mathjs.bignumber(str);
     },
 
+    // Whether `num` is safe to hand to the raw helpers below (bcadd, bcsub, bcmul, bcdiv,
+    // bcmulfloor, bcmuldivfloor). They pass their arguments to mathjs.bignumber unchecked,
+    // which throws on text it cannot parse ('abc', '1x', '1 ') and so halts the block; it
+    // accepts 'NaN', 'Infinity' and radix or exponent forms. A null argument is read as 0.
+    // This answers exactly "would the raw helper throw", unlike isNumeric, which disagrees
+    // with mathjs in both directions ('0x1.8' parses but is not numeric; '1 ' is numeric
+    // but does not parse), so a guard on it changes only inputs that throw today.
+    bcparses(num){
+        if(this.isNull(num)) return true;
+        try {
+            mathjs.bignumber(num);
+            return true;
+        } catch(e){
+            return false;
+        }
+    },
+
     // Render a big number as a plain decimal string in normal (never exponential)
     // notation. String()/toString() on a decimal.js-backed bignumber switches to
     // exponential below 1e-7 (e.g. "3e-8"), which the SMT leaf encoder rejects

@@ -24,6 +24,7 @@
 
 const { assert, path, Database, BRIDGE_TABLES_PROBE, BRIDGE_TABLE_ROWS, bridgeTablesPresent,
         LIST_SHARE_TABLES_PROBE, LIST_SHARE_TABLE_ROWS, listShareTablesPresent } = require('./helpers/migration_fixtures.js');
+const { SQL_MODE_PROBE, pinnedSqlModeRows } = require('./helpers/migration_fixtures.js');
 
 
 // Post-run schema contract. 2026-07-24-pubkeys-widen-uncompressed.sql is
@@ -36,6 +37,7 @@ describe('runMigrations() pubkey-width assertion @regression @tier1', function (
     function makeDb(pubkeyLen, { emptyDir = false } = {}) {
         const conn = {
             async query(sql) {
+                if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
                 if (/GET_LOCK/i.test(sql))                                        return [{ l: '1' }];
                 if (/RELEASE_LOCK/i.test(sql))                                    return [];
                 if (/SELECT name, checksum FROM schema_migrations/i.test(sql))    return [];
@@ -98,6 +100,7 @@ function makeDb(present, listShare = [...LIST_SHARE_TABLE_ROWS]) {
     };
     const conn = {
         async query(sql) {
+            if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
             if (/GET_LOCK/i.test(sql))                                     return [{ l: '1' }];
             if (/RELEASE_LOCK/i.test(sql))                                 return [];
             if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) return [];

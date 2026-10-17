@@ -15,7 +15,7 @@ on:
     # so the merge commit a release tag points at has its own green run.
     branches: [master, develop]
   pull_request:
-    branches: [master]
+    branches: [master, develop]
 
 jobs:
   ci:

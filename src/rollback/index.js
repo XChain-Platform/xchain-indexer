@@ -83,12 +83,8 @@ class Rollback {
         // relay rows seeded from rolled-back PRICE / XCALL actions on the cross-chain hub)
         this.hubClient = indexer.hubClient;
 
-        // Setup alias to the durable hub-push queue. Paused around the post-commit retraction
-        // block so an in-flight deferred drain cannot interleave with this rollback and re-issue
-        // a stale open-ended retraction against the just-rolled-back range (item 5297). May be
-        // unset during early boot (rollbacks only occur in the main loop after the queue starts),
-        // so every use is null-guarded.
-        this.hubPushQueue = indexer.hubPushQueue || null;
+        // No alias to the durable hub-push queue: XChainIndexer creates it after Rollback, so a
+        // copy taken here is always null. deliverStagedRetractions reads it from the indexer at use.
 
         // Deliberately NO alias to indexer.protocolChanges. That registry answers
         // isEnabled(name, block_index) against a LOCAL height, and during an unwind there is no
@@ -182,96 +178,110 @@ class Rollback {
     // inside leaves the database untouched; it ends the poll pass and the process (runBlockLoop
     // has no catch), and the restarted indexer re-detects the reorg and retries.
     async runRollbackTransaction(block_index, scope, markets, addresses, tickers){
-        let { firstActionIndex, lastActionIndex, unlandedAttestBatches } = scope;
-        let staged = null;
         this.sweepStats = [];
         // Begin a transaction; all deletes and recalculations are atomic
         await this.indexerDb.beginTransaction();
+        // Fence every write to this transaction's epoch, as the block loop does: a sibling of a
+        // fanned-out step (updateMarkets, updateTokenInfo) that outlives the teardown in the catch
+        // below then carries a stale epoch and is refused instead of landing in autocommit.
+        let txEpoch = this.indexerDb.currentTxEpoch();
         try {
-
-            // Reverse any cooldown maturities orphaned by this reorg. Runs UNCONDITIONALLY (outside
-            // the firstActionIndex guard) and BEFORE the generic deletes: the legacy (pre-flag-day)
-            // maturity path writes the refund credit + 'completed' flip against a SURVIVING unstake
-            // row and mints NO actions row in the maturity block, so a reorg over an action-empty
-            // range leaves firstActionIndex null and would otherwise skip the reversal entirely,
-            // stranding the refund and forking the ledger vs a from-genesis replay. Keyed entirely
-            // on block_index / cooldown_end_block, so it is a no-op when nothing matured. Seeds the
-            // affected source addresses/ticks into the util lists captured above so the unconditional
-            // updateBalances/updateTokens below recompute them.
-            await this.reverseCooldownMaturities(block_index);
-
-            if(firstActionIndex !== null){
-                await this.deleteContractEmissions(firstActionIndex);
-            }
-
-            await this.restoreInPlaceFlips(block_index, firstActionIndex);
-
-            await this.purgeOrphanedTables(block_index, firstActionIndex, markets);
-
-            // Re-derive attest_validator_stats for the orphaned range. This is
-            // a monotone aggregate (fulfilled/missed/slashed counters per
-            // validator/provider) with no action_index or block FK, so neither
-            // generic delete loop above can touch it. A blanket delete would also
-            // drop increments earned in surviving blocks. Instead we drop only the
-            // rows whose most-recent touch is in the orphaned range and rebuild them
-            // from the surviving signatures + expired-request records, matching what
-            // a from-genesis replay to block_index-1 would produce.
-            await this.recomputeAttestationValidatorStats(block_index);
-
-            await this.refreshDerivedProjections(block_index, addresses, tickers, markets);
-
-            staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches);
-
-            await this.commitAndInvalidateCaches();
-
+            return await this.indexerDb.runInTxEpoch(txEpoch,
+                () => this.applyRollbackWrites(block_index, scope, markets, addresses, tickers));
         } catch(e) {
-            // Roll back so the DB is left untouched rather than in a partial rollback state
-            await this.indexerDb.rollbackTransaction();
+            // Roll back so the DB is left untouched rather than in a partial rollback state.
+            // A rollback that throws too is logged here, so it never replaces `e`.
+            try {
+                await this.indexerDb.rollbackTransaction();
+            } catch(rollbackErr) {
+                getLogger().error('Reorg rollback to block ' + block_index + ' failed while unwinding after: ' +
+                    ((e && e.message) || e) + '; rollback error: ' + ((rollbackErr && rollbackErr.message) || rollbackErr));
+            }
             // Clear the reorg marker on failure too so it can't stick; the next pass (after the
             // restart this throw causes) re-detects the reorg and retries, re-arming it (#1812).
             if(this.indexer) this.indexer.stallReason = null;
             throw e;
         }
+    }
+
+    // The writes of the reorg transaction, in order, ending with the commit. Returns the
+    // staged hub retractions for the post-commit delivery.
+    async applyRollbackWrites(block_index, scope, markets, addresses, tickers){
+        let { firstActionIndex, lastActionIndex, unlandedAttestBatches } = scope;
+        // Reverse any cooldown maturities orphaned by this reorg. Runs UNCONDITIONALLY (outside
+        // the firstActionIndex guard) and BEFORE the generic deletes: the legacy (pre-flag-day)
+        // maturity path writes the refund credit + 'completed' flip against a SURVIVING unstake
+        // row and mints NO actions row in the maturity block, so a reorg over an action-empty
+        // range leaves firstActionIndex null and would otherwise skip the reversal entirely,
+        // stranding the refund and forking the ledger vs a from-genesis replay. Keyed entirely
+        // on block_index / cooldown_end_block, so it is a no-op when nothing matured. Seeds the
+        // affected source addresses/ticks into the util lists captured above so the unconditional
+        // updateBalances/updateTokens below recompute them.
+        await this.reverseCooldownMaturities(block_index);
+
+        if(firstActionIndex !== null){
+            await this.deleteContractEmissions(firstActionIndex);
+        }
+
+        await this.restoreInPlaceFlips(block_index, firstActionIndex);
+
+        await this.purgeOrphanedTables(block_index, firstActionIndex, markets);
+
+        // Re-derive attest_validator_stats for the orphaned range. This is
+        // a monotone aggregate (fulfilled/missed/slashed counters per
+        // validator/provider) with no action_index or block FK, so neither
+        // generic delete loop above can touch it. A blanket delete would also
+        // drop increments earned in surviving blocks. Instead we drop only the
+        // rows whose most-recent touch is in the orphaned range and rebuild them
+        // from the surviving signatures + expired-request records, matching what
+        // a from-genesis replay to block_index-1 would produce.
+        await this.recomputeAttestationValidatorStats(block_index);
+
+        await this.refreshDerivedProjections(block_index, addresses, tickers, markets);
+
+        let staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches);
+
+        await this.commitAndInvalidateCaches();
+
         return staged;
     }
 
-    // Undo the flips an orphaned action wrote IN PLACE on a row that SURVIVES the reorg.
-    // Each reset states its own fork risk; they share the guard because every one of them
-    // is keyed on an orphaned action, so none has anything to undo without one.
+    // Undo the flips the orphaned blocks wrote IN PLACE on a row that SURVIVES the reorg.
+    // Each reset states its own fork risk. The block-keyed resets run UNCONDITIONALLY:
+    // a block pass can write their stamps in a block that mints no actions row (the BET
+    // deadline latch stamps bet_feeds.closed_block, the DELEGATE v1 materialization
+    // journals a key rotation, a rollcall eviction stamps delegations), and an orphaned
+    // range made only of such blocks leaves firstActionIndex null. Skipping them there
+    // left the surviving rows flipped, so a rolled-back node rejected a wager on a feed a
+    // fresh node held open. Every one keys on a stamp at or above block_index, which only
+    // an orphaned block can have written, so each is a no-op when nothing was flipped.
+    // The resets after the guard key on the orphaned action range itself: the archive and
+    // attest head restores, the action-scoped purge, the icon sweep and the three re-derives
+    // read rows only an orphaned action writes, so without one they have nothing to undo.
     async restoreInPlaceFlips(block_index, firstActionIndex){
+        await this.resetOrphanedAttestRequests(block_index);
+
+        await this.resetOrphanedXcallRequests(block_index);
+
+        await this.reopenOrphanedPolls(block_index);
+
+        await this.resetOrphanedBetFlips(block_index);
+
+        await this.resetOrphanedPollCallbacks(block_index);
+
+        await this.clearOrphanedDeactivations(block_index);
+
+        await this.restoreContractSlashAmounts(block_index);
+
+        await this.restoreDelegationRotations(block_index);
+
+        await this.restoreCapabilitySlashAmounts(block_index);
+
+        // The anchor reward reconcile-restore (restoreReconciledAnchorRewards) and the
+        // cooldown-maturity reversal (reverseCooldownMaturities) are block-keyed too and run
+        // unconditionally from purgeOrphanedTables and the top of the transaction.
+
         if(firstActionIndex !== null){
-
-            await this.resetOrphanedAttestRequests(block_index);
-
-            await this.resetOrphanedXcallRequests(block_index);
-
-            await this.reopenOrphanedPolls(block_index);
-
-            await this.resetOrphanedBetFlips(block_index);
-
-            await this.resetOrphanedPollCallbacks(block_index);
-
-            await this.clearOrphanedDeactivations(block_index);
-
-            await this.restoreContractSlashAmounts(block_index);
-
-            await this.restoreDelegationRotations(block_index);
-
-            await this.restoreCapabilitySlashAmounts(block_index);
-
-            // Anchor reward reconcile-restore (RB-ANCHOR) was here; it now runs
-            // UNCONDITIONALLY just past this guard, for the same reason the cooldown reversal
-            // below left it: the BTC-side derive path calls reconcileAnchorRewardWinner with a
-            // NULL anchor action index (anchor_reward_derive.js, the rows arrive over the
-            // mirror), so it mints no actions row and an orphaned range carrying only a
-            // derive-side reconcile leaves firstActionIndex null.
-
-            // Cooldown-maturity reversal was here; it is now in reverseCooldownMaturities,
-            // called UNCONDITIONALLY at the top of the transaction (before this guard). It had
-            // to leave this firstActionIndex-gated block because the legacy cooldown maturity
-            // (pre UNSTAKE_COOLDOWN_COMPLETION_ACTION) mints NO actions row, so an orphaned
-            // range containing only such a maturity leaves firstActionIndex null and would skip
-            // the reversal entirely, forking the ledger vs a from-genesis replay.
 
             await this.resetOrphanedArchiveHeads(block_index, firstActionIndex);
 
@@ -282,6 +292,8 @@ class Rollback {
             await this.sweepOrphanedIcons();
 
             await this.rederiveTokenEscrow();
+
+            await this.rederiveTokenBridged();
 
             await this.rederiveCoinpayMatchStatus();
         }

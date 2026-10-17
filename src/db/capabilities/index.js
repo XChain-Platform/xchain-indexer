@@ -61,7 +61,8 @@ module.exports = {
     // No RPC handler reaches this any more; a caller that does is a forge vector.
     // pubkeyHex: 64-char hex Ed25519 signing pubkey of the validator that earned the reward
     // roundReference: round number (oracle_round) or attestation index
-    // rewardType: 'oracle_round', 'attest_fee', 'attest_bcast', 'anchor_<chain>', 'anchor_archive'
+    // rewardType: 'oracle_round', 'attest_fee', 'attest_bcast', 'anchor_bundle', 'anchor_archive'
+    //             (and the retired 'anchor_<chain>' on historical rows)
     // amount: reward amount as decimal string
     // blockIndex: block height when the reward was earned
     // Resolve the source_id (index_addresses id) of the active staking source

@@ -26,7 +26,7 @@
 
 const { getLogger } = require('../../../observability/index.js');
 const { PRICE_FINALIZED_KEY_CAP, priceRoundKey, CAPABILITY_SNAPSHOT_KEY_CAP,
-        capabilitySnapshotKey } = require('../mirror_bounds.js');
+        capabilitySnapshotKey, ORACLE_PRICE_KEY_CAP, oraclePriceKey } = require('../mirror_bounds.js');
 
 module.exports = {
 
@@ -64,6 +64,8 @@ module.exports = {
             else if (!batched) refused = ((await this.applyRow(drain.table, row)) === false);
             this.recordServedRow(drain, row);
             if (!boundOut && !refused) drain.applied++;
+            if (!boundOut && drain.priceHorizon > 0 && !(Number(row.id) >= drain.minAppliedWireId))
+                drain.minAppliedWireId = Number(row.id);
         } catch (err) {
             drain.applyErrors++;
             getLogger().warn('HubDbSync: failed to apply row in ' + drain.table + ':', err);
@@ -81,7 +83,10 @@ module.exports = {
             drain.lastId = rowId;
             this._drainPositions[drain.table] = rowId;
         }
-        if (this._bootstrapping) this._bootstrapLastProgressAt = Date.now();
+        if (this._bootstrapping) {
+            this._bootstrapLastProgressAt = Date.now();
+            this._bootstrapProgressTicks = (Number(this._bootstrapProgressTicks) || 0) + 1;
+        }
         return true;
     },
 
@@ -147,6 +152,10 @@ module.exports = {
             if (Number.isFinite(sb) && sb > drain.maxServedSnapshotBlock) drain.maxServedSnapshotBlock = sb;
             if (drain.servedSnapshotKeys.size >= CAPABILITY_SNAPSHOT_KEY_CAP) drain.snapshotKeysComplete = false;
             else drain.servedSnapshotKeys.add(capabilitySnapshotKey(row));
+        }
+        if (drain.servedOracleKeys) {
+            if (drain.servedOracleKeys.size >= ORACLE_PRICE_KEY_CAP) drain.oracleKeysComplete = false;
+            else drain.servedOracleKeys.add(oraclePriceKey(row));
         }
     },
 };

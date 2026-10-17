@@ -140,7 +140,15 @@ const SHARED_GATES = [
     // The per-chain admission margins decide which block a hub stamps and which watermark an
     // indexer accepts. Both the activation and the selected margins therefore belong in the
     // cross-process digest. Appended at the end to preserve every earlier preimage row.
-    ['mirror_admission_margin_activation',      ['ADMIT_CHAIN_MARGIN_ACTIVATION', 'ADMIT_CHAIN_MARGIN_BLOCKS']]
+    ['mirror_admission_margin_activation',      ['ADMIT_CHAIN_MARGIN_ACTIVATION', 'ADMIT_CHAIN_MARGIN_BLOCKS']],
+    // The ORDER book price-cross test: the indexer judges its own chain's ORDER_MATCH on
+    // it and the hub judges the cross-chain book on it, so a train that sizes it on one
+    // side only must report a rules mismatch. Appended at the end for the preimage order.
+    ['order_match_price_cross_activation',      ['ORDER_MATCH_PRICE_CROSS_ACTIVATION']],
+    // The remote-token pin's admission era: the hub stamps and signs the admission map under
+    // it and the indexer binds the pin by that map under it, so a train that sizes it on one
+    // side only must report a rules mismatch. Appended at the end for the preimage order.
+    ['remote_token_admission_activation',       ['REMOTE_TOKEN_ADMISSION_ACTIVATION']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an
@@ -151,6 +159,25 @@ const FAR_FUTURE_HEIGHT_SENTINEL = 9999999999;
 const ABSENT = '<absent>';
 
 const ACTIVE_GATES_UNIT_AWARE_ACTIVATION = Object.freeze(['height', 'time', 'epoch']);
+
+// The height at or above which activeGatesAt applies the activation-unit filter, per network or
+// 'COIN:network'. Below it the pre-filter answer stands, so a node replaying older history
+// derives the same responsible set it did then. A network with no entry always filters.
+const ACTIVE_GATES_UNIT_FILTER_HEIGHTS = Object.freeze({
+    'mainnet': 0,
+    'BTC:testnet': 156140,
+    'LTC:testnet': 4912553,
+    'DOGE:testnet': 67988245
+});
+
+function unitFilterHeight(network, coin){
+    const H = ACTIVE_GATES_UNIT_FILTER_HEIGHTS;
+    if (coin !== undefined && coin !== null && H[coin + ':' + network] !== undefined) return H[coin + ':' + network];
+    if (H[network] !== undefined) return H[network];
+    const suffix = ':' + network;
+    const coined = Object.keys(H).filter((k) => k.endsWith(suffix)).map((k) => H[k]);
+    return coined.length ? Math.min(...coined) : 0;
+}
 
 // Canonical JSON with object keys sorted, so two builds that spell the same map
 // with its networks in a different order still digest alike. JSON.stringify's
@@ -313,10 +340,11 @@ function activeGatesAt(height, network, coin){
     if (!Number.isFinite(h)) return [];
     const values = loadGateValues();
     const out = [];
+    const filterUnits = h >= unitFilterHeight(network, coin);
     for (const key of Object.keys(values)) {
         const v = values[key];
         if (v === ABSENT || v === null || typeof v !== 'object' || Array.isArray(v)) continue;
-        if (!hasActivationUnit(key)) continue;
+        if (filterUnits && !hasActivationUnit(key)) continue;
         const at = networkActivationHeight(v, network, coin);
         if (at === undefined) continue;
         if (!Number.isFinite(at) || at >= FAR_FUTURE_HEIGHT_SENTINEL) continue;
@@ -346,5 +374,6 @@ module.exports = {
     computeConsensusRulesDigest,
     knownGateKeys,
     activeGatesAt,
+    ACTIVE_GATES_UNIT_FILTER_HEIGHTS,
     diffGates
 };

@@ -21,7 +21,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const { createBaseData } = require('../../../fixtures/mocks');
+const { createBaseData, signedRemoteTokenRow, stubRemoteTokenValidators } = require('../../../fixtures/mocks');
 const { OWNER_ADDR, BLOCK_TIME, EXPIRATION, makeParams, makeOrderContext } = require('./order.test/helpers/order_context.js');
 
 let indexer;
@@ -136,7 +136,8 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('cross-chain order (GET_COIN != COIN) is accepted when CROSS_CHAIN_DEX is enabled and does NOT match locally', async function () {
-            indexer.indexerDb.mirrorDb = () => ({ getPinnedRemoteToken: sinon.stub().resolves({ decimals: 0 }) });
+            stubRemoteTokenValidators(indexer.indexerDb);
+            indexer.indexerDb.mirrorDb = () => ({ getPinnedRemoteToken: sinon.stub().resolves(signedRemoteTokenRow()) });
             // Cross-chain ORDER: the GIVE side escrows locally; matching + settlement are federation-driven,
             // so the local ORDER_MATCH path is skipped (the counterparty lives on another chain).
             const params = makeParams(`0|BTC|RAREPEPE|1||LTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);

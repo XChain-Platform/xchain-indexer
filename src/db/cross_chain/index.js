@@ -25,6 +25,7 @@ const path    = require('path');
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
 const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
         CROSS_SETTLE_MAX_PER_BLOCK,
+        XCALL_MAX_CALLS_PER_BLOCK,
         ORACLE_VM_ROUND_WINDOW,
         ORACLE_VM_MAX_ROWS } = require('../../protocol/constants.js');
 const diag = require('../../actions/anchor/diagnostic_events.js');
@@ -85,6 +86,19 @@ module.exports = {
              match.a_chain, Number(match.a_action_index), match.b_chain, Number(match.b_action_index)]);
     },
 
+    // Record the retirement of a match this chain cannot settle (actions/cross_settle/retire.js).
+    // The row is the same idempotency key a settlement writes, so the pass stops selecting the
+    // match, and it is anchored to a rollback-able action_index the same way. Both leg columns
+    // stay NULL: buildCrossChainDataForVM reads only rows that name their legs, so a retired
+    // match never reads as settled to a contract.
+    async recordCrossChainSettlementRetirement(action_index, match_id, local_action_index, block_index){
+        await this.doQuery(
+            `INSERT IGNORE INTO cross_chain_settlements
+             (action_index, match_id, local_action_index, block_index, a_chain, a_action_index, b_chain, b_action_index)
+             VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL)`,
+            [action_index, match_id, local_action_index, block_index]);
+    },
+
     // Effective, unexecuted dispatch rows targeting THIS chain - drives the XEXEC
     // injection pass. cross_chain_calls is hub-mirrored (read via mirrorDb) while
     // cross_chain_call_executions is local, so the exclusion is filtered in JS.
@@ -116,7 +130,9 @@ module.exports = {
         // re-dispatch a call already executed. Compare both sides lowercased. No-op for all-
         // lowercase data (no consensus change on the current chain).
         let executedSet = new Set(executed.map(r => String(r.call_id).toLowerCase()));
-        return calls.filter(c => !executedSet.has(String(c.call_id).toLowerCase())).slice(0, Number(limit) || 25);
+        // Default to the protocol cap, never a literal copy (see getEffectiveUnsettledMatches).
+        return calls.filter(c => !executedSet.has(String(c.call_id).toLowerCase()))
+                    .slice(0, Number(limit) || XCALL_MAX_CALLS_PER_BLOCK || 25);
     },
 
     // Effective, unprocessed result rows for requests THIS chain originated -
@@ -137,7 +153,8 @@ module.exports = {
     // rows accumulate on the mirror and are re-scanned every block), a residual cost that
     // a cross-database exclusion cannot address without a cross-DB join.
     async getEffectiveUnprocessedCallResults(coin, network, block_time, limit, block_index){
-        let cap = Number(limit) || 25;
+        // Default to the protocol cap, never a literal copy (see getEffectiveUnsettledMatches).
+        let cap = Number(limit) || XCALL_MAX_CALLS_PER_BLOCK || 25;
         let mirror = this.mirrorDb();
         // doQueryStrict (not doQuery) on both branches: these are CONSENSUS input reads. The
         // mirror branch never holds a transaction, so doQuery turns a transient DB fault into
@@ -187,6 +204,19 @@ module.exports = {
         // The call made it in: any refusal diagnostics recorded while it was
         // starved (cross_chain_call_rejections) are now stale evidence.
         await this.clearCrossChainCallRejection(call_id);
+    },
+
+    // Record the retirement of a dispatch this chain will not run (actions/xexec/retire.js): an
+    // executions row with result_status 'retired:<reason>', no EXECUTE, no payload and no gas,
+    // so the injection pass stops selecting the call. The refusal diagnostics stay, since the call
+    // never executed. getcrosschaincallresult reports such a row as not executed, so the
+    // federation relays no result for it and the source request ends at its own deadline.
+    async recordCrossChainCallRetirement(action_index, call_id, result_status, block_index){
+        await this.doQuery(
+            `INSERT IGNORE INTO cross_chain_call_executions
+             (action_index, call_id, execute_action_index, result_status, return_payload_b64, gas_used, block_index)
+             VALUES (?, ?, NULL, ?, '', 0, ?)`,
+            [action_index, String(call_id).toLowerCase(), result_status, block_index]);
     },
 
     // Record a REFUSED injection attempt for a dispatch row (XDISP-1 visibility).

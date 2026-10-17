@@ -69,6 +69,7 @@ module.exports = {
             emitter:       responseData['ACTION_INDEX'],
             txHash:        responseData['TX_HASH'],
             includeTxHash: synthActive || Boolean(responseData['TX_HASH']),
+            callback:      true,
             extra: {
                 TX_INDEX: responseData['TX_INDEX'],
                 TX_VOUT:  responseData['TX_VOUT']
@@ -123,7 +124,8 @@ module.exports = {
             emitter:       expireData['ACTION_INDEX'],
             synthTag:      SYNTH_TAGS.ATTEST_EXPIRE_CALLBACK,
             synthId:       request.request_id,
-            includeTxHash: synthActive
+            includeTxHash: synthActive,
+            callback:      true
         });
 
         // Unique per injected callback (the savepoint note lives on runCallbackSavepoint).

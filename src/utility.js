@@ -290,17 +290,17 @@ class Utility {
     // Split into two paths so per-block cost tracks blocks that actually touched a market rather
     // than the total active-market count (a getMarkets(update=true) refresh of EVERY market pair
     // with a valid open order older than 24h would touch effectively all active markets each block):
-    //   (1) Touched-this-block refresh: refresh only the pairs traded in THIS block. createMarket
-    //       assigns a NEW markets-row id only for a genuinely new pair, which can only appear from an
-    //       order/match in this touched set (an aged pair already has its row), so the deterministic
-    //       serial id-assignment order is fully preserved.
-    //   (2) Throttled 24h rolling-stats ageing sweep: refresh a bounded batch of the most-stale
-    //       existing market rows so the 24h window still ages out without recomputing all markets
+    //   (1) Touched-this-block refresh: the pairs whose orders or fills changed in THIS block.
+    //       createMarket assigns a NEW markets-row id only for a genuinely new pair, which can only
+    //       appear from an order in this touched set (an aged pair already has its row), so the
+    //       deterministic serial id-assignment order is fully preserved.
+    //   (2) 24h rolling-stats ageing sweep: the markets whose window lost a trade, plus a bounded
+    //       batch of the most-stale rows, so the 24h window ages out without recomputing all markets
     //       every block. The `markets` table is unhashed / snapshot-replicated with no consensus
     //       reader (see rollback.js), so a node-local sweep cadence never diverges block state.
     async processMarketUpdates(db, block_index, block_time){
-        // (1) Refresh only the pairs touched by an order action in this block (update=false ->
-        // WHERE b1.block_index=?), processed serially to pin new-pair id assignment to iteration order.
+        // (1) Refresh only the pairs whose orders or fills changed in this block (update=false ->
+        // block-scoped scans), processed serially to pin new-pair id assignment to iteration order.
         let markets = await db.getMarkets(block_index, false);
         for(let pair of markets){
             let market_id = await db.createMarket(pair.tick1_id, pair.tick2_id, pair.coin1_id, pair.coin2_id);
@@ -310,16 +310,16 @@ class Utility {
             await db.updateMarketInfo(data);
         }
 
-        // (2) Throttled ageing sweep: refresh a bounded batch of markets whose stats last refreshed
-        // more than 24h ago (oldest-first). Pairs already refreshed in step 1 carry last_updated =
-        // block_time, so they are naturally excluded here. Bounded by MARKET_STALE_SWEEP_BATCH.
+        // (2) Ageing sweep: a bounded batch (MARKET_STALE_SWEEP_BATCH) of markets last refreshed over
+        // 24h ago, oldest-first, plus every market whose 24h window lost a trade since its refresh.
+        // Pairs refreshed in step 1 carry last_updated = block_time, so neither set picks them up.
         // getBlockTime returns a `false` sentinel when the block row is unresolvable (older-schema
         // decoder DB); markets is non-consensus, so skipping the sweep for that block is safe,
         // while bcsub("false") would throw and wedge block processing.
         if(!Number.isFinite(Number(block_time)) || block_time === false || block_time === null)
             return;
         let time_24hr = this.bcsub(String(block_time), '86400');
-        let stale = await db.getStaleMarkets(time_24hr, Utility.MARKET_STALE_SWEEP_BATCH);
+        let stale = await db.getStaleMarkets(time_24hr, Utility.MARKET_STALE_SWEEP_BATCH, block_index);
         for(let row of stale){
             let data = await db.getMarketInfo(row.id, block_time);
             data.last_updated = block_time;
@@ -345,6 +345,7 @@ async function releaseCapabilityCooldowns(util, db, capabilityRows, completionAt
         // shape as the contract release below.
         await db.createEscrow(creditIndex, gas,
                               util.bcsub(0, row.amount, 64), row.source_address);
+        await mapCompletion(db, row.action_index, creditIndex, row.source_address, gas);
         addressesToRebalance.add(row.source_address);
         ticksToRebalance.add(gas);
     }
@@ -366,9 +367,17 @@ async function releaseContractCooldowns(util, db, contractRows, completionAttrib
         // not tokens being created. Mirrors order.js:499's release idiom.
         await db.createEscrow(creditIndex, row.tick,
                               util.bcsub(0, row.amount, 64), row.source_address);
+        await mapCompletion(db, row.action_index, creditIndex, row.source_address, row.tick);
         addressesToRebalance.add(row.source_address);
         ticksToRebalance.add(row.tick);
     }
+}
+
+// Map a fresh UNSTAKE completion action to its address and tick, as createMappings does for a user
+// action, so the history feed lists it; a legacy completion reuses the already-mapped unstake index.
+async function mapCompletion(db, unstakeActionIndex, creditIndex, address, tick){
+    if(String(creditIndex) === String(unstakeActionIndex)) return;
+    for(const [type, value] of [['address', address], ['tick', tick]]) await db.createActionMapping(creditIndex, type, value);
 }
 
 // Install the behaviour parts from utility/ NON-ENUMERABLE, the shape the class body they came

@@ -58,6 +58,7 @@ const { modulePathFor } = require('../../helpers/gate_modules.js');
 const HUB_DIR = path.resolve(process.env.XCHAIN_HUB_DIR || path.resolve(__dirname, '../../../../xchain-hub'));
 const SYNC_DIR = path.resolve(process.env.XCHAIN_SYNC_PATH || path.resolve(__dirname, '../../../../xchain-sync'));
 const NOT_A_ROW = new Set(['consensus/reserved_roots.js']);
+const REGISTRY_READ_STEMS = new Set(['mainnet_launch_activation', 'prelaunch_seed_sources']);
 function registryKey(file, exportName) { return file.replace(/\.js$/, '') + '.' + exportName; }
 // The local value of one GATES entry. W4 (activation registry, row 18) moved
 // the logic-bearing modules to their feature directories and retired the
@@ -67,6 +68,8 @@ function registryKey(file, exportName) { return file.replace(/\.js$/, '') + '.' 
 function localExport(file, exportName) {
     if (NOT_A_ROW.has(file)) return require('../../../src/' + file)[exportName];
     if (file === 'mirror_admission_margin_activation') return require('../../../src/consensus/gates/mirror_admission_margin_gate.js')[exportName];
+    // The launch rows have no exporting module: block_passes reads both rows by key and hands them to the predicate.
+    if (REGISTRY_READ_STEMS.has(file)) return registry.get(registryKey(file, exportName));
     const modulePath = modulePathFor(file.replace(/\.js$/, ''));
     if (modulePath === null) return registry.get(registryKey(file, exportName));
     return require(modulePath)[exportName];
@@ -230,6 +233,10 @@ const GATES = [
     ['oracle_price_age_hourly_activation',  'ORACLE_PRICE_AGE_HOURLY_ACTIVATION'],
     ['oracle_hourly_window_activation',     'ORACLE_HOURLY_WINDOW_FIRST_ROUND'],
     ['oracle_round_time_activation',        'ORACLE_ROUND_TIME_ACTIVATION'],
+    // The launch admission constants: a one-sided edit changes which pre-launch mainnet
+    // transactions are indexed, so the canon must equal the rows block_passes reads.
+    ['mainnet_launch_activation',           'MAINNET_LAUNCH_ACTIVATION'],
+    ['prelaunch_seed_sources',              'PRELAUNCH_SEED_SOURCES'],
 ];
 // The canonical map, loaded by each block's before-all hook.
 let canon = null;
@@ -347,7 +354,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         const roots = require('../../../src/consensus/reserved_roots.js').RESERVED_FUTURE_ROOTS;
         assert.ok(Array.isArray(roots), 'RESERVED_FUTURE_ROOTS must be an array');
         assert.ok(Object.isFrozen(roots), 'RESERVED_FUTURE_ROOTS must be frozen; a reserved set a caller can push to is not a rule');
-        // 47 measured free on 2026-09-11 plus the 6 squatted in the mainnet genesis manifests.
+        // 47 measured free on 2026-09-11 plus the 6 taken out of the mainnet genesis manifests.
         assert.strictEqual(roots.length, 53, 'the surveyed list is 47 free names plus 6 reclaimed ones');
         for (const t of roots) {
             assert.ok(/^[A-Z]{2,}$/.test(t), 'reserved root ' + JSON.stringify(t) + ' is not an upper-case ticker; ' +

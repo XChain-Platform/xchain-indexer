@@ -16,7 +16,7 @@
  *
  * MEMBERSHIP IS THE REGISTRY. Since the carriers became shims, every table
  * the process applies is a registry row, and the manifest is rows() plus the
- * fifteen VM mirror rows. What this guard has to catch is the one way a table
+ * seventeen VM mirror rows. What this guard has to catch is the one way a table
  * can escape that: a map literal declared somewhere under src/ instead of in
  * a registry part file. So the scan that used to check "declared, therefore
  * listed" now fails on ANY declaration outside src/protocol_changes/, and the
@@ -125,7 +125,8 @@ describe('armed_map/manifest: completeness guard', function () {
         // key: that is exactly the W4 census plus the registry-only rows, one row
         // per stem, and a new row that no module and no list names still reds here.
         const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS,
-            ['price_landed_strict_activation', 'anchor_preactivation_status_activation']);
+            ['price_landed_strict_activation', 'anchor_preactivation_status_activation',
+                'mainnet_launch_activation', 'prelaunch_seed_sources']);
         const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.') && !exported.has(k));
         const replaced = [...keys].filter((k) => stems.includes(k.slice(0, k.lastIndexOf('.'))));
         assert.strictEqual(replaced.length, stems.length + 1,
@@ -143,7 +144,7 @@ describe('armed_map/manifest: the row list', function () {
         const keys = manifest.ENTRIES.map((e) => e[0]);
         assert.deepStrictEqual(keys.slice(0, registryKeys.length), registryKeys);
         assert.deepStrictEqual(keys.slice(registryKeys.length), manifest.VM_EXPORT_NAMES.concat(manifest.VM_ACCESSORS_EXPORT_NAMES).map((n) => 'xchain-vm.' + n));
-        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 15);
+        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 17);
         assert.deepStrictEqual(manifest.VM_ACCESSORS_EXPORT_NAMES, ['ACCESSOR_OWN_KEY_ACTIVATION']);
     });
 
@@ -252,6 +253,7 @@ describe('armed_map/manifest: collectRows', function () {
             list_snapshots: 14,
             policy_snapshots: 14,
             price_snapshots: 16,
+            remote_token_snapshots: 14,
         });
     });
 
@@ -262,6 +264,39 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
         assert.strictEqual(Object.keys(row).length, 6);
         assertArmedHeightRow(row);
+    });
+
+    it('carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights', function () {
+        const key = 'nested_execute_gas_sum_activation.NESTED_EXECUTE_GAS_SUM_ACTIVATION';
+        // Resolved through the manifest entry itself, so the case does not depend on
+        // the VM mirror rows collectRows() also loads.
+        const entry = manifest.ENTRIES.find((e) => e[0] === key);
+        assert.ok(entry, 'the manifest lists the row');
+        const row = entry[1]();
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.deepStrictEqual(Object.keys(row).sort(),
+            ['BTC:mainnet', 'BTC:testnet', 'DOGE:mainnet', 'DOGE:testnet', 'LTC:mainnet', 'LTC:testnet', 'regtest', 'testnet']);
+        assert.strictEqual(row.regtest, 0);
+        // The v0.24.0 cut arms the three per-chain testnet keys; mainnet and the bare testnet key stay unarmed.
+        const ARMED = { 'BTC:testnet': 156908, 'LTC:testnet': 4927400, 'DOGE:testnet': 68005165 };
+        for (const k of Object.keys(row)) if (k !== 'regtest') assert.strictEqual(row[k], ARMED[k] || ProtocolChanges.UNARMED, k);
+        assert.strictEqual(ProtocolChanges.registry.unitOf(key), 'height');
+        // The fingerprint covers the row: collectRows() is the production armed map, so the
+        // gate has to be in it and its digest has to come out of the fingerprint of that map.
+        const { fingerprint } = require('../../../../src/consensus/armed_map/canonical.js');
+        const collected = manifest.collectRows();
+        assert.strictEqual(collected.ok, true, collected.reason);
+        const collectedRow = new Map(collected.rows).get(key);
+        assert.ok(collectedRow, 'collectRows() carries the gate in the production armed map');
+        assert.deepStrictEqual(collectedRow, row);
+        const full = fingerprint(collected.rows);
+        assert.match(full.rows[key], /^[0-9a-f]{64}$/);
+        const armed = collected.rows.map(([k, v]) => (k === key ? [k, { ...v, regtest: 1 }] : [k, v]));
+        const moved = fingerprint(armed);
+        assert.notStrictEqual(moved.rows[key], full.rows[key], 'arming the row moves its digest');
+        assert.notStrictEqual(moved.hex, full.hex, 'and the whole-map fingerprint');
+        const dropped = fingerprint(collected.rows.filter(([k]) => k !== key));
+        assert.ok(!(key in dropped.rows), 'omitting the gate removes its digest');
     });
 
     it('carries the per-chain LIST owner testnet heights', function () {

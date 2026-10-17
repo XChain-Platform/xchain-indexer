@@ -146,14 +146,14 @@ module.exports = {
      * derivation. createToken rebuilds `tokens` from the `issues` rows and no ISSUE may
      * set or clear this bit, so it has no derivation to ride.
      *
-     * Set by the FIRST applied XBRIDGE v3 lock and never cleared in milestone 1 (token
-     * spec section 8): emptying BRIDGE_CHAINS after bridging must not reopen policy
-     * binding while copies are outstanding on another chain. `bridged=0` in the WHERE
-     * makes the write a no-op for every later lock of the same tick.
+     * Set by the FIRST applied XBRIDGE v3 lock and never cleared by an action in
+     * milestone 1 (token spec section 8): emptying BRIDGE_CHAINS after bridging must not
+     * reopen policy binding while copies are outstanding on another chain. `bridged=0` in
+     * the WHERE makes the write a no-op for every later lock of the same tick.
      *
      * The column is a write-time cache: getTokenInfo derives BRIDGED from the applied v3
-     * rows in xbridges, so a rollback that orphans the first lock cannot leave a stale
-     * bit behind. `block_index` is logged, not stored.
+     * rows in xbridges, and a reorg that orphans the first lock clears the stored bit
+     * through the rollback's rederiveTokenBridged. `block_index` is logged, not stored.
      *
      * @param {string} tick        - the NATIVE tick being locked (never the rooted form)
      * @param {number} block_index - the block the lock applied at; logged, not stored

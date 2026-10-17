@@ -145,6 +145,11 @@ class Deposit {
         if(!error && !tokenInfo)
             error = 'invalid: TICK (unknown)';
 
+        // Refuse an AMOUNT that stores as NULL (empty or not numeric): deposits.amount is
+        // NOT NULL (settleDeposit stores the refusal with a placeholder)
+        if(!error && this.util.storesAsNull(data['AMOUNT']))
+            error = 'invalid: AMOUNT (format)';
+
         // Verify AMOUNT format
         if(!error && !this.util.isNull(data['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['AMOUNT'], data['BLOCK_TIME']))
             error = 'invalid: AMOUNT (format)';
@@ -179,7 +184,11 @@ class Deposit {
     async settleDeposit(data, status, guardFee = 0){
 
         // Create record in deposits table
-        await this.indexerDb.createDeposit(data);
+        // An AMOUNT that stores as NULL always leaves the action refused (see
+        // validateTokenAndBalance); the row keeps that refusal under the placeholder '0',
+        // since deposits.amount is NOT NULL and a NULL bind halts the block
+        let row = this.util.storesAsNull(data['AMOUNT']) ? Object.assign({}, data, { AMOUNT: '0' }) : data;
+        await this.indexerDb.createDeposit(row);
 
         // Contract derived address
         let contractAddress = 'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'];

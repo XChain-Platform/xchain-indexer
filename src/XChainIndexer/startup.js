@@ -38,6 +38,9 @@ const Genesis      = require('../chain/genesis.js');
 const { getLogger } = require('../observability/index.js');
 const { CONFIG_ENV } = require('../config.js');
 
+const ATTEST_RESPONSE_MIRROR_KEY =
+    'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
+
 module.exports = {
 
     // The hub, DOGE-anchor and DOGE roll-call clients. Created before the hub config
@@ -47,6 +50,7 @@ module.exports = {
         // Create hub client (for pushing chain tip and other cross-chain data to xchain-hub)
         this.hubClient = new HubClient();
         this.hubClient.setAddressSource(() => this.hubSelector.current());
+        this.hubClient.setCandidateSource(() => this.hubSelector.status());
 
         // DOGE anchor visibility for the BTC-side anchor/archive reward derivation. ANCHOR
         // lives on DOGE while the reward is minted here, so before paying, the derive pass
@@ -101,7 +105,9 @@ module.exports = {
                 // the mirror refuses hub-broadcast reorg retractions of THIS
                 // chain's rows unless their generation fence is below our own
                 // push_generations value, i.e. a rollback we actually performed.
-                getOwnRollbackGeneration: () => this.indexerDb.getPushGeneration(this.config['COIN']),
+                // Read through apiView() so it sees only the COMMITTED generation, never
+                // an open rollback's bump, and a read error throws so the guard fails closed.
+                getOwnRollbackGeneration: () => this.indexerDb.apiView().getPushGeneration(this.config['COIN']),
                 // Bound the price_snapshots bootstrap: the mirror needs the
                 // rounds the blocks THIS node will parse can read, not the oracle's whole
                 // history. Re-evaluated on every (re-)bootstrap, and null-safe - an
@@ -126,9 +132,18 @@ module.exports = {
         }
     },
 
-    // No hub database configured: fail closed on mainnet unless a local price source is
-    // acknowledged, and warn everywhere else.
+    // No hub database configured: require a response source for mirror-era BTC, then apply
+    // the existing local-price-source policy.
     checkLocalPriceSource(){
+        const responseMirrorActivation = changes.get(ATTEST_RESPONSE_MIRROR_KEY)[this.config['NETWORK']];
+        if(this.config['COIN'] === 'BTC' && responseMirrorActivation !== null &&
+           responseMirrorActivation !== changes.UNARMED){
+            this.util.throwError('HUB_DB_HOST / HUB_DB_NAME are not set on a BTC node where ' +
+                'ATTEST_RESPONSE_MIRROR_ACTIVATION is armed at block ' + responseMirrorActivation + '. ' +
+                'attestation_responses is an off-chain consensus input that settles request fees, ' +
+                'and AnchorRecovery cannot rebuild it. Configure a hub database source before booting.');
+        }
+
         // No hub DB credentials supplied. Hub-owned tables (price_snapshots, oracle_prices,
         // stakes, delegations, validator_rewards) will be read from the indexer's own DB.
         // Correct for single-host deployments (the local DB holds the synced hub copy), but

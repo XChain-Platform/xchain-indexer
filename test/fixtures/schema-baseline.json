@@ -348,7 +348,7 @@
       },
       {
         "name": "request_status",
-        "spec": "ENUM('PENDING','FULFILLED','EXPIRED','ERRORED','REJECTED')"
+        "spec": "ENUM('pending','fulfilled','expired','errored','rejected')"
       },
       {
         "name": "resolved_block",
@@ -364,7 +364,7 @@
       },
       {
         "name": "response_status",
-        "spec": "ENUM('OK','TIMEOUT','NO_QUORUM','PROVIDER_ERROR','EXPIRED')"
+        "spec": "ENUM('ok','timeout','no_quorum','provider_error','expired')"
       },
       {
         "name": "meta",
@@ -648,7 +648,7 @@
       },
       {
         "name": "target_table",
-        "spec": "ENUM('STAKES','UNSTAKES') NOT NULL"
+        "spec": "ENUM('stakes','unstakes') NOT NULL"
       },
       {
         "name": "stake_action_index",
@@ -970,7 +970,7 @@
       },
       {
         "name": "target_table",
-        "spec": "ENUM('CONTRACT_STAKES','CONTRACT_UNSTAKES') NOT NULL"
+        "spec": "ENUM('contract_stakes','contract_unstakes') NOT NULL"
       },
       {
         "name": "stake_action_index",
@@ -1292,7 +1292,7 @@
       },
       {
         "name": "status",
-        "spec": "VARCHAR(20) NOT NULL DEFAULT 'FINALIZED'"
+        "spec": "VARCHAR(20) NOT NULL DEFAULT 'finalized'"
       },
       {
         "name": "result_status",
@@ -1386,7 +1386,7 @@
       },
       {
         "name": "status",
-        "spec": "VARCHAR(20) NOT NULL DEFAULT 'FINALIZED'"
+        "spec": "VARCHAR(20) NOT NULL DEFAULT 'finalized'"
       },
       {
         "name": "batch_root",
@@ -2024,7 +2024,7 @@
       },
       {
         "name": "status",
-        "spec": "ENUM('PENDING','OK','FAILED','STALE') NOT NULL DEFAULT 'PENDING'"
+        "spec": "ENUM('pending','ok','failed','stale') NOT NULL DEFAULT 'pending'"
       },
       {
         "name": "attempts",
@@ -2676,7 +2676,7 @@
       },
       {
         "name": "settlement_type",
-        "spec": "ENUM('INSTANT','COINPAY') DEFAULT 'INSTANT'"
+        "spec": "ENUM('instant','coinpay') DEFAULT 'instant'"
       },
       {
         "name": "status_id",
@@ -2794,7 +2794,7 @@
       },
       {
         "name": "status",
-        "spec": "VARCHAR(16) NOT NULL DEFAULT 'PENDING'"
+        "spec": "VARCHAR(16) NOT NULL DEFAULT 'pending'"
       },
       {
         "name": "created_at",
@@ -2862,11 +2862,11 @@
       },
       {
         "name": "tally_mode",
-        "spec": "ENUM('APPROVAL','SPLIT')"
+        "spec": "ENUM('approval','split')"
       },
       {
         "name": "weight_mode",
-        "spec": "ENUM('BALANCE','STAKE','FLAT','QUADRATIC','TIME_WEIGHTED')"
+        "spec": "ENUM('balance','stake','flat','quadratic','time_weighted')"
       },
       {
         "name": "quorum",
@@ -2890,7 +2890,7 @@
       },
       {
         "name": "poll_status",
-        "spec": "ENUM('OPEN','FINALIZED','FAILED_QUORUM') NOT NULL DEFAULT 'OPEN'"
+        "spec": "ENUM('open','finalized','failed_quorum') NOT NULL DEFAULT 'open'"
       },
       {
         "name": "winning_option",
@@ -2914,7 +2914,7 @@
       },
       {
         "name": "fail_reason",
-        "spec": "ENUM('QUORUM','MIN_VOTERS','BOTH')"
+        "spec": "ENUM('quorum','min_voters','both')"
       },
       {
         "name": "decided_early",
@@ -2942,7 +2942,7 @@
       },
       {
         "name": "deposit_resolved",
-        "spec": "ENUM('REFUNDED','FORFEITED')"
+        "spec": "ENUM('refunded','forfeited')"
       },
       {
         "name": "status_id",
@@ -2992,7 +2992,7 @@
       },
       {
         "name": "status",
-        "spec": "ENUM('FINALIZED','SKIPPED','DISPUTED') NOT NULL"
+        "spec": "ENUM('finalized','skipped','disputed') NOT NULL"
       },
       {
         "name": "source_chain",
@@ -3070,7 +3070,7 @@
       },
       {
         "name": "validation_status",
-        "spec": "VARCHAR(20) NOT NULL DEFAULT 'PENDING'"
+        "spec": "VARCHAR(20) NOT NULL DEFAULT 'pending'"
       },
       {
         "name": "status_id",

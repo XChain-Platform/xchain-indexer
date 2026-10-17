@@ -64,6 +64,9 @@ module.exports = {
         }
         if (next === this._expectedBtcChainId) {
             this._btcChainIdSource = source;               // same chain, now measured locally
+            // A restated id is the retry point for a purge that failed earlier: a DELETE that
+            // threw or reported nothing left relics that nothing else will ever come back for.
+            if (this._chainIdPurgePending) await this.purgeForeignChainIdRows(null);
             return false;
         }
         let previous = this._expectedBtcChainId;
@@ -102,11 +105,16 @@ module.exports = {
     async purgeForeignChainIdRows(previous) {
         let expected = this._expectedBtcChainId;
         if (!expected) return 0;
+        // Pending until every DELETE below has reported a result; a failed one sets it again.
+        // _chainIdPurgeLegacyDue remembers that the legacy slice is owed across a retry,
+        // which has no `previous` of its own to say so.
+        this._chainIdPurgePending = false;
+        if (previous) this._chainIdPurgeLegacyDue = true;
         let scoped = await this.purgeChainScopedTables(expected, previous);
         let total = scoped.total;
         // These quorum-signed tables predate btc_chain_id on their row shape. A change
         // in the followed Bitcoin identity invalidates the whole local network slice.
-        if (previous) total += await this.purgeLegacyChainTables();
+        if (this._chainIdPurgeLegacyDue) total += await this.purgeLegacyChainTables();
         await this.refreshPurgedBarriers(scoped.refresh);
         return total;
     },
@@ -120,6 +128,7 @@ module.exports = {
                     'DELETE FROM ' + table + ' WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?', [expected]);
             } catch (e) {
                 getLogger().warn('HubDbSync: could not clear foreign-chain rows from ' + table + ':', e);
+                this._chainIdPurgePending = true;
                 continue;
             }
             // doQuery collapses a non-transactional query error into [], which carries no
@@ -130,6 +139,7 @@ module.exports = {
             if (!Number.isFinite(removed)) {
                 getLogger().warn('HubDbSync: foreign-chain purge of ' + table + ' reported no result; ' +
                     'if this mirror keeps holding rows from a dead chain, this read is where to look');
+                this._chainIdPurgePending = true;
                 continue;
             }
             if (removed <= 0) continue;
@@ -146,7 +156,7 @@ module.exports = {
     },
 
     async purgeLegacyChainTables() {
-        let total = 0;
+        let total = 0, failed = false;
         for (let table of ['state_checkpoints', 'anchor_reward_attestations']) {
             let result;
             try {
@@ -155,15 +165,19 @@ module.exports = {
                                                   scoped ? [this.network] : undefined);
             } catch (e) {
                 getLogger().warn('HubDbSync: could not clear rows from ' + table + ' after btc_chain_id changed:', e);
+                failed = true;
                 continue;
             }
             let removed = Number(result && result.affectedRows);
             if (!Number.isFinite(removed)) {
                 getLogger().warn('HubDbSync: btc_chain_id change purge of ' + table + ' reported no result');
+                failed = true;
                 continue;
             }
             if (removed > 0) total += removed;
         }
+        if (failed) this._chainIdPurgePending = true;
+        else this._chainIdPurgeLegacyDue = false;
         return total;
     },
 

@@ -15,6 +15,7 @@
 'use strict';
 
 const assert = require('assert');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const sinon = require('sinon');
@@ -31,6 +32,11 @@ const cli = {};
 
 function migrationFiles() {
     return fs.readdirSync(MIGRATIONS_DIR).filter((file) => file.endsWith('.sql')).sort();
+}
+
+// The checksum the runner records for a committed file, so a fake ledger row matches it.
+function sumOf(name) {
+    return crypto.createHash('sha256').update(fs.readFileSync(path.join(MIGRATIONS_DIR, name), 'utf8')).digest('hex');
 }
 
 function setUpCase() {
@@ -97,7 +103,7 @@ function makeFakeDb({ queryError, ledgerRows, planner = () => [] } = {}) {
                     if (queryError) throw queryError;
                     if (ledgerRows) return ledgerRows;
                     return files.slice(0, -2).map((name) => ({
-                        name, mode: 'auto', applied_at: '2026-09-27T00:00:00.000Z'
+                        name, checksum: sumOf(name), mode: 'auto', applied_at: '2026-09-27T00:00:00.000Z'
                     }));
                 },
                 release: async () => { state.released = true; },
@@ -136,23 +142,23 @@ function registerStatusOutputTests() {
         const output = printed(cli.logStub);
         const report = JSON.parse(output.slice(output.indexOf('{')));
         assert.deepStrictEqual(Object.keys(report),
-            ['database', 'total', 'applied', 'pending', 'migrations']);
+            ['database', 'total', 'applied', 'pending', 'changed', 'migrations']);
         assert.strictEqual(report.database, 'indexer_test');
         assert.strictEqual(report.total, fake.files.length);
         assert.strictEqual(report.applied, fake.files.length - 2);
         assert.strictEqual(report.pending, 2);
         assert.strictEqual(cli.logStub.callCount, 1, 'JSON mode must print one report object');
         assert.deepStrictEqual(report.migrations.map(Object.keys),
-            fake.files.map(() => ['file', 'applied', 'mode', 'appliedAt']));
+            fake.files.map(() => ['file', 'applied', 'mode', 'appliedAt', 'changed']));
         const applied = fake.files.slice(0, -2).map((file) => ({
-            file, applied: true, mode: 'auto', appliedAt: '2026-09-27T00:00:00.000Z'
+            file, applied: true, mode: 'auto', appliedAt: '2026-09-27T00:00:00.000Z', changed: false
         }));
         const pending = fake.files.slice(-2).map((file) => ({
-            file, applied: false, mode: 'manual', appliedAt: null
+            file, applied: false, mode: 'manual', appliedAt: null, changed: false
         }));
         assert.deepStrictEqual(report.migrations, [...applied, ...pending]);
         assert.deepStrictEqual(fake.queries,
-            ['SELECT name, mode, applied_at FROM schema_migrations']);
+            ['SELECT name, checksum, mode, applied_at FROM schema_migrations']);
         assert.strictEqual(fake.runMigrations.called, false);
         assert.strictEqual(cli.exitStub.called, false);
         assert.strictEqual(process.exitCode, undefined);
@@ -202,7 +208,7 @@ function registerStatusFailureAndTextTests() {
         const output = printed(cli.logStub);
         assert.match(output, new RegExp(
             'migrate: ' + fake.files.length + ' migration\\(s\\), ' +
-            (fake.files.length - 2) + ' applied, 2 pending\\.$'
+            (fake.files.length - 2) + ' applied, 2 pending, 0 changed\\.$'
         ));
         assert.strictEqual(output.split('\n').some((line) => line.startsWith('{')), false);
         assert.strictEqual(fake.runMigrations.called, false);
@@ -216,8 +222,8 @@ function registerRenameStatusTests() {
         const files = migrationFiles();
         assert.ok(files.includes(RENAMED_TO), RENAMED_TO + ' must be on disk');
         const ledgerRows = files.filter((name) => name !== RENAMED_TO)
-            .map((name) => ({ name, mode: 'auto', applied_at: '2026-09-27T00:00:00.000Z' }))
-            .concat([{ name: RENAMED_FROM, mode: 'auto', applied_at: '2026-09-09T00:00:00.000Z' }]);
+            .map((name) => ({ name, checksum: sumOf(name), mode: 'auto', applied_at: '2026-09-27T00:00:00.000Z' }))
+            .concat([{ name: RENAMED_FROM, checksum: sumOf(RENAMED_TO), mode: 'auto', applied_at: '2026-09-09T00:00:00.000Z' }]);
         const fake = makeFakeDb({ ledgerRows, planner: realPlanLedgerRenames });
         loadMigrate(fake.FakeDatabase, ['--status', '--json']);
         await fake.done;
@@ -225,20 +231,20 @@ function registerRenameStatusTests() {
         const output = printed(cli.logStub);
         const report = JSON.parse(output.slice(output.indexOf('{')));
         assert.deepStrictEqual(report.migrations.find((row) => row.file === RENAMED_TO),
-            { file: RENAMED_TO, applied: true, mode: 'auto', appliedAt: '2026-09-09T00:00:00.000Z' });
+            { file: RENAMED_TO, applied: true, mode: 'auto', appliedAt: '2026-09-09T00:00:00.000Z', changed: false });
         assert.strictEqual(report.migrations.some((row) => row.file === RENAMED_FROM), false);
         assert.strictEqual(report.pending, 0);
         assert.strictEqual(report.applied, files.length);
         // Status stays read-only: the one ledger SELECT, no UPDATE, no runner.
         assert.deepStrictEqual(fake.queries,
-            ['SELECT name, mode, applied_at FROM schema_migrations']);
+            ['SELECT name, checksum, mode, applied_at FROM schema_migrations']);
         assert.strictEqual(fake.runMigrations.called, false);
         assert.strictEqual(process.exitCode, undefined);
     });
 
     it('keeps the new name\'s own row when the ledger holds both old and new names', async function () {
         const files = migrationFiles();
-        const ledgerRows = files.map((name) => ({ name, mode: 'auto', applied_at: '2026-09-27T00:00:00.000Z' }))
+        const ledgerRows = files.map((name) => ({ name, checksum: sumOf(name), mode: 'auto', applied_at: '2026-09-27T00:00:00.000Z' }))
             .concat([{ name: RENAMED_FROM, mode: 'manual', applied_at: '2026-09-09T00:00:00.000Z' }]);
         const fake = makeFakeDb({ ledgerRows, planner: realPlanLedgerRenames });
         loadMigrate(fake.FakeDatabase, ['--status', '--json']);
@@ -247,7 +253,7 @@ function registerRenameStatusTests() {
         const output = printed(cli.logStub);
         const report = JSON.parse(output.slice(output.indexOf('{')));
         assert.deepStrictEqual(report.migrations.find((row) => row.file === RENAMED_TO),
-            { file: RENAMED_TO, applied: true, mode: 'auto', appliedAt: '2026-09-27T00:00:00.000Z' });
+            { file: RENAMED_TO, applied: true, mode: 'auto', appliedAt: '2026-09-27T00:00:00.000Z', changed: false });
         assert.strictEqual(report.pending, 0);
     });
 }
@@ -273,6 +279,60 @@ function registerStatusArgumentTests() {
     });
 }
 
+const REBASED = '2026-06-16-drop-orphaned-contract-balances.sql';
+const { MIGRATION_CHECKSUM_REBASELINES } = require('../../../src/db/migration/checksum_rebaselines.js');
+const { classifyAppliedChecksum } = require('../../../src/db/migration/checksum_verdict.js');
+
+// Run `--status [--json]` over a full ledger whose rows `edit` may rewrite; returns the output.
+async function statusOver(args, edit) {
+    const ledgerRows = migrationFiles().map((name) => edit({ name, checksum: sumOf(name), mode: 'auto', applied_at: 'x' }));
+    const fake = makeFakeDb({ ledgerRows });
+    loadMigrate(fake.FakeDatabase, args);
+    await fake.done;
+    return { fake, output: printed(cli.logStub) };
+}
+
+function registerChangedStatusTests() {
+    it('reports an applied file whose content changed as CHANGED and still exits 0', async function () {
+        const target = migrationFiles()[0];
+        const { fake, output } = await statusOver(['--status', '--json'],
+            (r) => (r.name === target ? Object.assign(r, { checksum: '0'.repeat(64) }) : r));
+        const report = JSON.parse(output.slice(output.indexOf('{')));
+        assert.strictEqual(report.changed, 1);
+        assert.deepStrictEqual(report.migrations.filter((m) => m.changed).map((m) => [m.file, m.applied]), [[target, true]]);
+        assert.strictEqual(process.exitCode, undefined);
+        assert.strictEqual(fake.runMigrations.called, false);
+        assert.ok(fake.queries.every((q) => /^SELECT /.test(q)), 'status issues no UPDATE');
+    });
+
+    it('prints a CHANGED text line with both hash prefixes and the refusal note', async function () {
+        const target = migrationFiles()[0];
+        const { output } = await statusOver(['--status'],
+            (r) => (r.name === target ? Object.assign(r, { checksum: 'f'.repeat(64) }) : r));
+        assert.match(output, new RegExp('\\[CHANGED, mode=auto\\] ' + target + ' \\(recorded ffffffffffff, current ' + sumOf(target).slice(0, 12) + '\\)'));
+        assert.match(output, /1 changed\.\nmigrate: a blanket `npm run migrate` will refuse/);
+    });
+
+    it('reports a reviewed rebaseline predecessor as applied, not CHANGED', async function () {
+        const rebase = MIGRATION_CHECKSUM_REBASELINES[REBASED];
+        assert.strictEqual(sumOf(REBASED), rebase.to, REBASED + ' hashes to its pinned rebaseline target');
+        const { output } = await statusOver(['--status', '--json'],
+            (r) => (r.name === REBASED ? Object.assign(r, { checksum: [].concat(rebase.from)[0] }) : r));
+        const report = JSON.parse(output.slice(output.indexOf('{')));
+        assert.strictEqual(report.changed, 0);
+        assert.strictEqual(report.migrations.find((m) => m.file === REBASED).changed, false);
+    });
+
+    it('classifies match, rebaseline and changed exactly as the runner does', function () {
+        const table = { 'a.sql': { from: ['1', '2'], to: '3' } };
+        assert.strictEqual(classifyAppliedChecksum('a.sql', '3', '3', table), 'match');
+        assert.strictEqual(classifyAppliedChecksum('a.sql', '2', '3', table), 'rebaseline');
+        assert.strictEqual(classifyAppliedChecksum('a.sql', '9', '3', table), 'changed');
+        assert.strictEqual(classifyAppliedChecksum('a.sql', '1', '4', table), 'changed');
+        assert.strictEqual(classifyAppliedChecksum('b.sql', null, '3', table), 'changed');
+    });
+}
+
 describe('migrate CLI status report @regression', function () {
     beforeEach(setUpCase);
     afterEach(tearDownCase);
@@ -280,4 +340,5 @@ describe('migrate CLI status report @regression', function () {
     registerStatusFailureAndTextTests();
     registerRenameStatusTests();
     registerStatusArgumentTests();
+    registerChangedStatusTests();
 });

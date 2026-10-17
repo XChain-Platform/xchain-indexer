@@ -52,6 +52,7 @@ const SETTLE_REASON = {
     POLICY_ORIGIN:   'this chain is the origin of the policy, nothing to inherit',
     POLICY_NO_COPY:  'no bridged copy of the tick exists on this chain yet',
     POLICY_SEQ_GAP:  'an earlier policy_seq for this tick is finalized and not applied yet',
+    POLICY_SEQ_STALE: 'a later policy_seq for this tick is already applied',
     POLICY_LEG:      'an injected policy leg did not apply',
     POLICY_REF_PENDING:         'a by-reference list names no mirror or home list on this chain yet',
     POLICY_REF_BEFORE_CONSUMER: 'a by-reference list arrived below the list share consumer gate',

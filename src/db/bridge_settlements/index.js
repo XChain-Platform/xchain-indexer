@@ -99,6 +99,37 @@ module.exports = {
              srcChain, srcActionIndex, destChain, destAddress, tick]);
     },
 
+    // LOCAL, then MIRROR. The highest policy_seq this chain applied for (origin, tick), 0 for
+    // none, and the seqs it recorded refused, ascending. The local records name the snapshot
+    // ids and the mirror names their seqs; a recorded snapshot was due when it was recorded, so
+    // the barrier put its mirror row here and the table never retracts one.
+    async getPolicySeqState(network, originChain, tick){
+        const recorded = await this.doQuery(
+            `SELECT transfer_id, kind FROM bridge_settlements
+         WHERE kind IN ('policy', 'refused') AND src_chain = ? AND tick = ?
+         ORDER BY transfer_id ASC, kind ASC`,
+            [String(originChain), String(tick)]);
+        const state = { appliedSeq: 0, refusedSeqs: [] };
+        if(recorded.length === 0) return state;
+        const ids = [...new Set(recorded.map(r => String(r.transfer_id)))];
+        const rows = await this.mirrorDb().doQueryStrict(
+            `SELECT snapshot_id, policy_seq FROM policy_snapshots
+         WHERE network = ? AND origin_chain = ? AND tick = ?
+           AND snapshot_id IN (${ids.map(() => '?').join(',')})
+         ORDER BY policy_seq ASC`,
+            [String(network), String(originChain), String(tick)].concat(ids));
+        const seqOf = new Map(rows.map(r => [String(r.snapshot_id), Number(r.policy_seq)]));
+        const refused = new Set();
+        for(const r of recorded){
+            const seq = seqOf.get(String(r.transfer_id));
+            if(seq === undefined || !Number.isInteger(seq)) continue;
+            if(r.kind === 'policy'){ if(seq > state.appliedSeq) state.appliedSeq = seq; }
+            else refused.add(seq);
+        }
+        state.refusedSeqs = [...refused].sort((a, b) => a - b);
+        return state;
+    },
+
     // MIRROR. Finalized snapshots for this (network, origin, tick) at a LOWER policy_seq, in
     // seq order. effective_time is not monotonic across seq, so an earlier seq can come due at
     // a later block; this read is what carries a row forward until its predecessors are in.

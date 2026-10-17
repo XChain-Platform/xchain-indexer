@@ -28,13 +28,14 @@
 
 const fs      = require('fs');
 const path    = require('path');
-const crypto  = require('crypto');
+const { migrationChecksum, classifyAppliedChecksum } = require('../migration/checksum_verdict.js');
 const { getLogger } = require('../../observability/index.js');
 const { CONFIG_ENV } = require('../../config.js');
 // Object-level half of the backdating guard: plain functions over statement lists, so
 // they are required directly rather than installed on the prototype.
 const { reorderVerdict, describeReorder } = require('./migration_reorder.js');
 const { assertNoLiveColumnLoss } = require('./migration_live_schema_guard.js');
+const { assertMigrationSqlMode } = require('./migration_sql_mode_guard.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -134,7 +135,7 @@ async function migrateFile(self, conn, file, appliedByName, ctx){
             '(apply order is lexical). Rename it with the authored date.');
     }
     const raw      = fs.readFileSync(path.join(dir, file), 'utf8');
-    const checksum = crypto.createHash('sha256').update(raw).digest('hex');
+    const checksum = migrationChecksum(raw);
 
     if(appliedByName.has(file)){
         await checkAppliedChecksum(conn, file, checksum, appliedByName, includeManual);
@@ -171,10 +172,8 @@ async function checkAppliedChecksum(conn, file, checksum, appliedByName, include
         // `from` may be a single hash or a list: the same reviewed edit
         // can supersede several historical file revisions, and each DB
         // recorded whichever revision it applied first. Normalize to a
-        // list so every recorded predecessor heals to the current hash.
-        const rebase   = Database.MIGRATION_CHECKSUM_REBASELINES[file];
-        const fromList = rebase ? [].concat(rebase.from) : [];
-        if(rebase && fromList.includes(appliedByName.get(file)) && checksum === rebase.to){
+        // list so every recorded predecessor heals to the current hash (checksum_verdict.js).
+        if(classifyAppliedChecksum(file, appliedByName.get(file), checksum, Database.MIGRATION_CHECKSUM_REBASELINES) === 'rebaseline'){
             await conn.query('UPDATE schema_migrations SET checksum = ? WHERE name = ?', [checksum, file]);
             getLogger().info('runMigrations: rebaselined checksum for ' + file + ' (reviewed retag, executable SQL unchanged).');
             return;
@@ -359,6 +358,7 @@ module.exports = {
         let timeoutTouched = false;
         let sessionDirty = false;
         try {
+            await assertMigrationSqlMode(conn, () => { sessionDirty = true; });
             // DB-scoped advisory lock so two processes don't apply concurrently. GET_LOCK
             // is server-global, so the name is namespaced by dbName (the shared MariaDB on
             // a combined box hosts many indexer DBs).

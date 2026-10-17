@@ -74,7 +74,7 @@ function signedEvent(sigs, overrides) {
 // RetractionConsensus.test.js: a signature minted over the literal must verify
 // against this module's independent rebuild, proving producer/consumer parity.
 // ---------------------------------------------------------------------------
-describe('HubDbSync._applyRetraction signed retractions @regression @tier1', function () {
+describe('HubDbSync applyRetraction signed retractions @regression @tier1', function () {
     it('REFUSES an unsigned quorum-class retraction once the local snapshot era passes the gate', async function () {
         const s = makeSigner();
         const { sync, deletes } = makeSigned({ snapRows: [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }] });
@@ -133,7 +133,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
     });
 });
 
-describe('HubDbSync._applyRetraction signed retractions @regression @tier1', function () {
+describe('HubDbSync applyRetraction signed retractions @regression @tier1', function () {
     it('REFUSES a signed set whose snapshot_block is itself below the gate era (no sub-gate minting)', async function () {
         const s = makeSigner();
         // mainnet threshold 963000: local high-water past it, but the event claims an old era
@@ -189,7 +189,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
     });
 });
 
-describe('HubDbSync._applyRetraction signed retractions @regression @tier1', function () {
+describe('HubDbSync applyRetraction signed retractions @regression @tier1', function () {
     it('still counts a duplicated pubkey ONCE when both entries verify (dedupe intact)', async function () {
         const signers = [makeSigner(), makeSigner(), makeSigner(), makeSigner()];
         const snapRows = signers.map((s, i) => ({ signing_pubkey: s.pubkey, amount: '100', source: 'src' + i }));
@@ -212,5 +212,18 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
             { pubkey: s.pubkey, sig: 'cd'.repeat(64) }
         ]));
         assert.strictEqual(deletes.length, 0, 'no verifying signature means no quorum, whatever the ordering');
+    });
+
+    it('never deletes remote_token_snapshots, signed or unsigned', async function () {
+        const s = makeSigner();
+        const canonical = 'XRETRACTV1|remote_token_snapshots|DOGE|42|99|7|5000';
+        const snapRows = [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }];
+        const refused = makeSigned({ snapRows });
+        await refused.sync.applyRetraction(signedEvent([], { table: 'remote_token_snapshots' }));
+        assert.strictEqual(refused.deletes.length, 0, 'an unsigned remote token deletion must be skipped');
+        // A validly signed, fenced event is skipped too: the table has no push_generation column.
+        const signed = makeSigned({ snapRows });
+        await signed.sync.applyRetraction(signedEvent([{ pubkey: s.pubkey, sig: s.sign(canonical) }], { table: 'remote_token_snapshots' }));
+        assert.strictEqual(signed.deletes.length, 0, 'a signed remote token deletion must be skipped');
     });
 });

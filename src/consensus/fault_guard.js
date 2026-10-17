@@ -67,6 +67,9 @@ function rethrowIfInfraFault(e){
     // uncovered-mirror verdict that healthy peers do not reach (a prior incident recorded
     // every XCALL execution injected on a transaction-less block as result_status='error').
     if(e && e.code === 'PRICE_BARRIER_DEFERRED') throw e;
+    // Remote-token barrier deferral: the same node-local coverage verdict for the admitted
+    // remote-token pin read (db.assertRemoteTokenBarrierNotSkipped()), retried the same way.
+    if(e && e.code === 'REMOTE_TOKEN_BARRIER_DEFERRED') throw e;
     // UTXO tracker gave no answer (unreachable, non-2xx, unreadable, unconfigured): a
     // node-local fault whose healthy peers got an answer, so a verdict here would fork.
     if(e && e.code === 'UTXO_TRACKER_UNAVAILABLE') throw e;

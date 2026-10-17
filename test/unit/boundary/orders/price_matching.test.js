@@ -17,8 +17,30 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
+const { stubGate } = require('../../../helpers/gate_modules.js');
 
+const gateRegistry = require('../../../../src/consensus/gate_registry');
 const OrderMatch = require('../../../../src/actions/order_match/index.js');
+
+// Price definitions, exactly as db/orders/order_info.js getOrderInfo derives them:
+//
+//   GIVE_PRICE = GET_AMOUNT  / GIVE_AMOUNT  (GET units asked per GIVE unit: the order's ask)
+//   GET_PRICE  = GIVE_AMOUNT / GET_AMOUNT   (GIVE units paid per GET unit: the order's bid)
+//
+// For an incoming order and a resting order on the mirrored pair both of these
+// quote the incoming order's GET tick per its GIVE tick, so the two limits cross
+// when the incoming order's GIVE_PRICE is at most the resting order's GET_PRICE.
+//
+// Two eras, split by order_match_price_cross_activation at the ORDER_MATCH block:
+//   below it the legacy comparison skips when matchInfo.GET_PRICE > orderInfo.GIVE_PRICE;
+//   from it the pair is skipped when orderInfo.GIVE_PRICE > matchInfo.GET_PRICE.
+// The fill math is the same in both eras and settles at the incoming order's ratio.
+//
+// ORD-01 to ORD-05 here pin the legacy era with hand-set prices (their GIVE_PRICE and
+// GET_PRICE are fixture values, not derived from the amounts). The cases on either
+// side of the activation live beside this file in price_matching.test/ and build
+// every order from its amounts.
+const PRICE_CROSS_KEY = 'order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION';
 
 function makeActionsCtx(indexer) {
     return {
@@ -40,14 +62,7 @@ const OTHER      = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 const BLOCK_TIME = 1700000000;
 
 /**
- * Builds a standard orderInfo object with sensible defaults.
- *
- * GIVE_PRICE = GIVE_AMOUNT / GET_AMOUNT  (price of one GIVE unit in GET terms)
- * GET_PRICE  = GET_AMOUNT  / GIVE_AMOUNT (price of one GET unit in GIVE terms)
- *
- * The price-compatibility check in order_match.js is:
- *   if (bcgt(matchInfo.GET_PRICE, orderInfo.GIVE_PRICE)) continue;  // skip
- * i.e. the match proceeds when matchInfo.GET_PRICE <= orderInfo.GIVE_PRICE.
+ * Builds a standard orderInfo object with hand-set legacy-era prices.
  */
 function makeOrderInfo(overrides = {}) {
     return Object.assign({
@@ -57,13 +72,13 @@ function makeOrderInfo(overrides = {}) {
         GIVE_TICK_ID:  10,
         GIVE_AMOUNT:   '100',
         GIVE_REMAINING:'100',
-        GIVE_PRICE:    '0.1',   // 100 RAREPEPE / 1000 PEPECASH → 0.1 PEPECASH per RAREPEPE
+        GIVE_PRICE:    '0.1',
         GIVE_COIN:     'BTC',
         GET_TICK:      'PEPECASH',
         GET_TICK_ID:   20,
         GET_AMOUNT:    '1000',
         GET_REMAINING: '1000',
-        GET_PRICE:     '10',    // inverse: 1000 PEPECASH / 100 RAREPEPE = 10 RAREPEPE per PEPECASH
+        GET_PRICE:     '10',
         GET_COIN:      'BTC',
         GET_ADDRESS:   SOURCE,
         ALLOW_LIST:    null,
@@ -74,10 +89,8 @@ function makeOrderInfo(overrides = {}) {
 }
 
 /**
- * Builds a matching counterpart order.
- * By convention the match swaps GIVE/GET ticks vs the original order.
- *
- * The match's GET_PRICE is the field that must be <= orderInfo.GIVE_PRICE for a match.
+ * Builds a matching counterpart order (GIVE/GET ticks swapped) with hand-set legacy-era prices.
+ * In the legacy era the match proceeds when its GET_PRICE <= orderInfo.GIVE_PRICE.
  */
 function makeMatchInfo(overrides = {}) {
     return Object.assign({
@@ -87,13 +100,13 @@ function makeMatchInfo(overrides = {}) {
         GIVE_TICK_ID:  20,
         GIVE_AMOUNT:   '1000',
         GIVE_REMAINING:'1000',
-        GIVE_PRICE:    '10',   // 1000 PEPECASH / 100 RAREPEPE → 10 RAREPEPE per PEPECASH
+        GIVE_PRICE:    '10',
         GIVE_COIN:     'BTC',
         GET_TICK:      'RAREPEPE',
         GET_TICK_ID:   10,
         GET_AMOUNT:    '100',
         GET_REMAINING: '100',
-        GET_PRICE:     '0.1',  // inverse: asking 0.1 PEPECASH per RAREPEPE (= orderInfo.GIVE_PRICE)
+        GET_PRICE:     '0.1',
         GET_COIN:      'BTC',
         GET_ADDRESS:   OTHER,
         ALLOW_LIST:    null,
@@ -109,12 +122,13 @@ function setupSmallestUnit() {
     indexer = createMockIndexer();
     const actionsCtx = makeActionsCtx(indexer);
     handler = new OrderMatch(actionsCtx);
+    stubGate(sinon, PRICE_CROSS_KEY, false);
 
     // Order has only 1 unit left to give; GIVE_PRICE = 1 so GET_PRICE = 1 (1:1 ratio)
     const orderInfo = makeOrderInfo({
         GIVE_AMOUNT:    '1',
         GIVE_REMAINING: '1',
-        GIVE_PRICE:     '1',    // 1 RAREPEPE / 1 PEPECASH
+        GIVE_PRICE:     '1',
         GET_AMOUNT:     '1',
         GET_REMAINING:  '1',
         GET_PRICE:      '1',
@@ -140,6 +154,7 @@ function setupMultipleMatches() {
     indexer = createMockIndexer();
     const actionsCtx = makeActionsCtx(indexer);
     handler = new OrderMatch(actionsCtx);
+    stubGate(sinon, PRICE_CROSS_KEY, false);
 
     const orderInfo = makeOrderInfo({
         GIVE_AMOUNT:    '200',
@@ -151,35 +166,35 @@ function setupMultipleMatches() {
     });
 
     // findOrderMatches returns matches sorted by price desc, action_index asc
-    // matchA has lower GET_PRICE (better for the order) → processed first
+    // matchA has lower GET_PRICE (better for the order under the legacy comparison) → processed first
     const matchA = makeMatchInfo({
         ACTION_INDEX:   2,
         GIVE_AMOUNT:    '1000',
         GIVE_REMAINING: '1000',
         GET_AMOUNT:     '100',
         GET_REMAINING:  '100',
-        GET_PRICE:      '0.05',  // better: asking less than order offers (0.1)
+        GET_PRICE:      '0.05',
     });
 
-    // matchB has a slightly worse price but still compatible
+    // matchB has a slightly worse price but still compatible under the legacy comparison
     const matchB = makeMatchInfo({
         ACTION_INDEX:   3,
         GIVE_AMOUNT:    '1000',
         GIVE_REMAINING: '1000',
         GET_AMOUNT:     '100',
         GET_REMAINING:  '100',
-        GET_PRICE:      '0.09',  // still below 0.1 → also valid
+        GET_PRICE:      '0.09',
     });
 
     indexer.indexerDb.getOrderInfo.resolves(orderInfo);
-    // Simulate DB returning matchA first (better price), then matchB
+    // Simulate DB returning matchA first, then matchB
     indexer.indexerDb.findOrderMatches.resolves([matchA, matchB]);
     indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'RAREPEPE', DECIMALS: 0 }));
     indexer.indexerDb.createActionIndex.resolves(10);
 }
 
 // ---------------------------------------------------------------------------
-// Suite
+// Legacy era (below order_match_price_cross_activation)
 // ---------------------------------------------------------------------------
 
 describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
@@ -195,6 +210,7 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
             indexer    = createMockIndexer();
             actionsCtx = makeActionsCtx(indexer);
             handler    = new OrderMatch(actionsCtx);
+            stubGate(sinon, PRICE_CROSS_KEY, false);
 
             // match.GET_PRICE == order.GIVE_PRICE  →  bcgt returns false  →  match proceeds
             const orderInfo = makeOrderInfo();
@@ -237,6 +253,7 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
             indexer    = createMockIndexer();
             actionsCtx = makeActionsCtx(indexer);
             handler    = new OrderMatch(actionsCtx);
+            stubGate(sinon, PRICE_CROSS_KEY, false);
 
             // match.GET_PRICE = 0.09 < order.GIVE_PRICE = 0.1 → bcgt returns false → match proceeds
             const orderInfo = makeOrderInfo();
@@ -279,6 +296,7 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
             indexer    = createMockIndexer();
             actionsCtx = makeActionsCtx(indexer);
             handler    = new OrderMatch(actionsCtx);
+            stubGate(sinon, PRICE_CROSS_KEY, false);
 
             // match.GET_PRICE = 0.11 > order.GIVE_PRICE = 0.1 → bcgt returns true → skipped
             const orderInfo = makeOrderInfo();

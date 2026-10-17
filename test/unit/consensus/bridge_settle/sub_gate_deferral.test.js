@@ -39,10 +39,10 @@ describe('bridge_settle: destination below its format-specific bridge sub-gate',
         assert.strictEqual(state.credits.length, 0);
     });
 
-    it('dueBridgeTransfers and the pass skip a v2 row below XCHAIN_BRIDGE_ACTIVATION', async function(){
+    it('the unsettled set and the pass skip a v2 row below XCHAIN_BRIDGE_ACTIVATION', async function(){
         xchainGate.returns(false);
         const { ctx, state } = fixture();
-        assert.deepStrictEqual(await BS.dueBridgeTransfers(ctx), []);
+        assert.deepStrictEqual(await BS.unsettledBridgeTransfers(ctx), []);
         let applied;
         await captureConsole(async () => { applied = await BS.processBridgeSettlePass(ctx); });
         assert.deepStrictEqual(applied.transfers, []);
@@ -52,13 +52,13 @@ describe('bridge_settle: destination below its format-specific bridge sub-gate',
     it('reads the XCHAIN gate on the destination coin at the block height', async function(){
         xchainGate.returns(false);
         const { ctx } = fixture();
-        await BS.dueBridgeTransfers(ctx);
+        await BS.unsettledBridgeTransfers(ctx);
         assert.ok(xchainGate.calledWith(ctx.network, 'DOGE', ctx.blockIndex, null));
     });
 
     it('applies the same v2 row once the XCHAIN gate is active', async function(){
         const { row, ctx, state } = fixture();
-        assert.strictEqual((await BS.dueBridgeTransfers(ctx)).length, 1);
+        assert.strictEqual((await BS.unsettledBridgeTransfers(ctx)).length, 1);
         let res;
         await captureConsole(async () => { res = await BS.applyBridgeTransfer(row, ctx); });
         assert.strictEqual(res.applied, true);
@@ -71,7 +71,7 @@ describe('bridge_settle: destination below its format-specific bridge sub-gate',
         const res = await BS.applyBridgeTransfer(row, ctx);
         assert.strictEqual(res.applied, false);
         assert.ok(/TOKEN_BRIDGE_ACTIVATION/.test(res.reason));
-        assert.deepStrictEqual(await BS.dueBridgeTransfers(ctx), []);
+        assert.deepStrictEqual(await BS.unsettledBridgeTransfers(ctx), []);
         assert.strictEqual(state.credits.length, 0);
         assert.strictEqual(state.actions.length, 0);
         assert.strictEqual(state.settlements.length, 0);
@@ -81,12 +81,12 @@ describe('bridge_settle: destination below its format-specific bridge sub-gate',
     it('does not use TOKEN_BRIDGE_ACTIVATION for a v2 row', async function(){
         tokenGate.returns(false);
         const { ctx } = fixture();
-        assert.strictEqual((await BS.dueBridgeTransfers(ctx)).length, 1);
+        assert.strictEqual((await BS.unsettledBridgeTransfers(ctx)).length, 1);
     });
 
     it('does not use XCHAIN_BRIDGE_ACTIVATION for a v5 row', async function(){
         xchainGate.returns(false);
         const { ctx } = fixture({ tick: 'PEPE' });
-        assert.strictEqual((await BS.dueBridgeTransfers(ctx)).length, 1);
+        assert.strictEqual((await BS.unsettledBridgeTransfers(ctx)).length, 1);
     });
 });

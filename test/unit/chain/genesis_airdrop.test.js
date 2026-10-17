@@ -70,7 +70,7 @@ function build(airdrop, cfgOverride){
 }
 
 // Recompute the combined set-hash the way an operator arming a bucket set has to:
-// `NAME:hash:amount` per bucket, newline-joined, in canonical (name byte-order) order.
+// `NAME:hash:amount` per bucket, newline-joined, in canonical (name code-unit) order.
 // Written independently of src/chain/genesis.js on purpose - it is the pinned wire form, so a
 // test that called the implementation could not catch the format changing under it.
 function setHash(airdrop){
@@ -80,7 +80,7 @@ function setHash(airdrop){
             hash:   (airdrop.hashes || [])[i] || 'unpinned',
             amount: airdrop.amounts[i],
         }))
-        .sort((a, b) => a.name < b.name ? -1 : 1)
+        .sort((a, b) => Buffer.compare(Buffer.from(a.name, 'utf8'), Buffer.from(b.name, 'utf8')))
         .map(b => b.name + ':' + b.hash + ':' + b.amount);
     return crypto.createHash('sha256').update(lines.join('\n')).digest('hex');
 }
@@ -205,7 +205,7 @@ describe('genesis airdrop pass', function(){
         let dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xchain-order-'));
         let xdp = path.join(dir, 'xdp.csv'); fs.writeFileSync(xdp, 'daddr1,1\n');
         let xcp = path.join(dir, 'xcp.csv'); fs.writeFileSync(xcp, 'addr1,1\n');
-        // Env lists XDP first; consensus order must still be XCP (name byte-order) first.
+        // Env lists XDP first; consensus order must still be XCP (name code-unit order) first.
         let { genesis, calls } = build({ paths: [xdp, xcp], hashes: [sha256(xdp), sha256(xcp)], amounts: ['70', '30'] });
         await genesis.inject(100, 1700000000);
         let c = credits(calls);
@@ -307,5 +307,21 @@ describe('genesis airdrop pass', function(){
         let b = path.join(dirB, 'xcp.csv'); fs.writeFileSync(b, 'addr2,1\n');
         let { genesis } = build({ paths: [a, b], hashes: ['', ''], amounts: ['1', '1'] });
         await assert.rejects(() => genesis.inject(100, 1700000000), /duplicate airdrop bucket name/);
+    });
+});
+
+describe('genesis airdrop pass', function(){
+    it('orders bucket names by UTF-8 byte order, where it differs from UTF-16 code unit order', function(){
+        // U+FF21 sorts before U+1D400 by UTF-8 bytes, though after it by code unit (0xD835 < 0xFF21).
+        let bold = '\u{1D400}', wide = '\uFF21';
+        for(let order of [[wide, bold], [bold, wide]]){
+            let { genesis } = build({ paths: order.map(n => '/airdrops/' + n + '.csv'), hashes: ['', ''], amounts: ['1', '1'] });
+            assert.deepStrictEqual(genesis.airdropBuckets().map(b => b.name), [wide, bold]);
+        }
+    });
+
+    it('keeps the ASCII bucket order unchanged', function(){
+        let { genesis } = build({ paths: ['/a/xcp.csv', '/a/btc.csv', '/a/pepe.csv'], hashes: ['', '', ''], amounts: ['1', '1', '1'] });
+        assert.deepStrictEqual(genesis.airdropBuckets().map(b => b.name), ['BTC', 'PEPE', 'XCP']);
     });
 });

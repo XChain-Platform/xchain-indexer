@@ -76,6 +76,14 @@ module.exports = {
         await rederiveSql.rederiveTokenEscrow(this.indexerDb);
     },
 
+    // Re-derive tokens.bridged, AFTER the dataTables delete. The first applied XBRIDGE v3
+    // lock sets the bit in place on a surviving token row, so orphaning that lock leaves the
+    // bit set where a from-genesis replay holds 0. Only that direction exists: a surviving
+    // lock already set the bit, so the re-derive only ever clears it.
+    async rederiveTokenBridged(){
+        await rederiveSql.rederiveTokenBridged(this.indexerDb);
+    },
+
     // Re-derive order_matches.status for COINPay matches, AFTER the dataTables
     // delete and for the same reason the escrow gate above is re-derived there.
     // A COINPay match is written `pending_coinpay` (actions/order_match.js) and

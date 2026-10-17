@@ -49,9 +49,10 @@ const MIN_NEW_TOP_LEVEL_TICK_LENGTH = 4;
 //     lowered, and for the four-plus-letter chain codes the floor does not cover.
 //
 // CREATION ONLY. An edit of a row that already exists is untouched:
-// every one-to-three character token and each of the six reclaimed four-letter rows
-// keeps its owner, its supply and its admin surface, and the six leave through the
-// genesis manifest edit, not through a guard that would strand them. That
+// every one-to-three character token issued before the flag keeps its owner, its supply
+// and its admin surface. The six four-letter chain codes that were squatted at genesis
+// left through the 2026-10-17 genesis manifest edit, not through a guard that would strand
+// them, so they now have no row and are refused like every other listed root. That
 // is what the existence probe below is for, and it uses the interning-suppressed
 // reader so a refused name never mints a dense ticker id (the economy
 // gatedGetTokenInfo exists for); the probe runs only for a name that is short or

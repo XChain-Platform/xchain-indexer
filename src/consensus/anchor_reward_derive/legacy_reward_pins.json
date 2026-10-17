@@ -1,0 +1,89 @@
+[
+    {
+        "reward_type": "anchor_bundle",
+        "round_reference": 150208,
+        "snapshot_block": 150208,
+        "publisher": "c1de91459e8bd93de9e3263c26d886058593d3fdae57ad0c1bd48ca3dd22f32a",
+        "txid": "e8a8da752583ca314913a8411431d47c744d2e8444acb5b79559b7e22951b439",
+        "network": "testnet",
+        "chain": "DOGE",
+        "wire_version": 7,
+        "verdict": "verified",
+        "minted_on_testnet_btc": {
+            "validator_reward_id": 4,
+            "derive_block_index": 150352
+        },
+        "doge_anchor": {
+            "action_index": 22,
+            "block_index_doge": 67856536
+        },
+        "peer_readings": {
+            "never_reindexed": "the DOGE indexer the testnet BTC indexer proved against when it minted this reward at block 150352: the v7 row read valid and tuple-matching, verdict verified",
+            "reindexed": "the explorer TDOGE replica (https://explorer.xchain.io/TDOGE): the v7 row reads 'invalid: ANCHOR before activation' with publisher null, so judge drops it as evidence and the verdict is rejected"
+        },
+        "source_query": [
+            "GET https://explorer.xchain.io/TDOGE/api/anchor_reward_attestations (attestation id 4)",
+            "GET https://explorer.xchain.io/TDOGE/api/anchor/e8a8da752583ca314913a8411431d47c744d2e8444acb5b79559b7e22951b439",
+            "GET https://explorer.xchain.io/TBTC/api/validator/c1de91459e8bd93de9e3263c26d886058593d3fdae57ad0c1bd48ca3dd22f32a (rewards id 4)"
+        ],
+        "read_at": "2026-10-13"
+    },
+    {
+        "reward_type": "anchor_archive",
+        "round_reference": 0,
+        "snapshot_block": 150312,
+        "publisher": "2661bd8f42b910bbb471387b7c28eaa440fc3c99077c160a69f22859f924aa7d",
+        "txid": "926b58d69bd7caf7cd93505716510e017c33f8b457768d3a52b9d2d235c22de5",
+        "network": "testnet",
+        "chain": "BTC",
+        "wire_version": 6,
+        "verdict": "verified",
+        "minted_on_testnet_btc": {
+            "validator_reward_id": 5,
+            "derive_block_index": 150456
+        },
+        "doge_anchor": {
+            "action_index": 47,
+            "block_index_doge": 67858576
+        },
+        "peer_readings": {
+            "never_reindexed": "the DOGE indexer the testnet BTC indexer proved against when it minted this reward at block 150456: the v6 row read valid and tuple-matching, verdict verified",
+            "reindexed": "the explorer TDOGE replica (https://explorer.xchain.io/TDOGE): the v6 row reads 'invalid: ANCHOR before activation' with publisher null, so judge drops it as evidence and the verdict is rejected"
+        },
+        "source_query": [
+            "GET https://explorer.xchain.io/TBTC/api/anchor_reward_attestations (attestation id 5)",
+            "GET https://explorer.xchain.io/TDOGE/api/anchor/926b58d69bd7caf7cd93505716510e017c33f8b457768d3a52b9d2d235c22de5",
+            "GET https://explorer.xchain.io/TBTC/api/validator/2661bd8f42b910bbb471387b7c28eaa440fc3c99077c160a69f22859f924aa7d (rewards id 5)"
+        ],
+        "read_at": "2026-10-13"
+    },
+    {
+        "reward_type": "anchor_bundle",
+        "round_reference": 150312,
+        "snapshot_block": 150312,
+        "publisher": "8a1215431e8143b2ebdc9fed2fe7f655ecc327c4efd66798bc4e5504a5d5b0a8",
+        "txid": "89385cf995f07d0435bf4ae2c29076670175f649843e5a468de8f177c8b4ab81",
+        "network": "testnet",
+        "chain": "DOGE",
+        "wire_version": 7,
+        "verdict": "verified",
+        "minted_on_testnet_btc": {
+            "validator_reward_id": 6,
+            "derive_block_index": 150456
+        },
+        "doge_anchor": {
+            "action_index": 48,
+            "block_index_doge": 67858576
+        },
+        "peer_readings": {
+            "never_reindexed": "the DOGE indexer the testnet BTC indexer proved against when it minted this reward at block 150456: the v7 row read valid and tuple-matching, verdict verified",
+            "reindexed": "the explorer TDOGE replica (https://explorer.xchain.io/TDOGE): the v7 row reads 'invalid: ANCHOR before activation' with publisher null, so judge drops it as evidence and the verdict is rejected"
+        },
+        "source_query": [
+            "GET https://explorer.xchain.io/TDOGE/api/anchor_reward_attestations (attestation id 6)",
+            "GET https://explorer.xchain.io/TDOGE/api/anchor/89385cf995f07d0435bf4ae2c29076670175f649843e5a468de8f177c8b4ab81",
+            "GET https://explorer.xchain.io/TBTC/api/validator/8a1215431e8143b2ebdc9fed2fe7f655ecc327c4efd66798bc4e5504a5d5b0a8 (rewards id 6)"
+        ],
+        "read_at": "2026-10-13"
+    }
+]

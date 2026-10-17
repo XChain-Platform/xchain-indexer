@@ -60,7 +60,9 @@ async function checkReplayGuards(handler, data, error){
     // is signature-bound to identical content and can only produce a duplicate row, which
     // the archive-head pick is already required to handle deterministically.
     if(!error){
-        let wm = await handler.indexerDb.getArchiveReplayWatermarks();
+        let wrapperRows = await handler.actions.protocolChanges.isEnabled(
+            'ARCHIVE_REPLAY_WRAPPER_WATERMARK', Number(data['BLOCK_INDEX']));
+        let wm = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows);
         let batchStale      = (wm.batchSeq !== null && Number(data['MATCH_BATCH_SEQ']) < wm.batchSeq);
         let checkpointStale = (wm.checkpointSeq !== null && Number(data['CHECKPOINT_SEQ']) < wm.checkpointSeq);
         if(batchStale && checkpointStale)
@@ -75,8 +77,11 @@ async function checkFoldArchiveReissue(handler, data, archive, error){
         handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
     if(!active || typeof handler.indexerDb.getArchiveHeadsByAuthorAndSeq !== 'function')
         return error;
+    let sourceAuthor = gateRegistry.activeAt(
+        'anchor_fold_reissue_source_author_activation.ANCHOR_FOLD_REISSUE_SOURCE_AUTHOR_ACTIVATION',
+        handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
     return await archiveReissueRefusal(handler.indexerDb, {
-        author: data['PUBLISHER'],
+        author: sourceAuthor ? data['SOURCE'] : data['PUBLISHER'],
         batchSeq: Number(archive['MATCH_BATCH_SEQ']),
         batchCrc32: archive['BATCH_CRC32'],
         matchCount: Number(archive['MATCH_COUNT'])

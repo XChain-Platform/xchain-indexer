@@ -21,7 +21,20 @@
  *
  ********************************************************************/
 
-const BRIDGE_PROOF_BARRIER = 'bridge_proof_barrier';
+// The bridge proof reason comes from the one place that raises it, so an exact-match test here cannot drift.
+const { BRIDGE_PROOF_BARRIER } = require('../consensus/bridge_proof_client/stall.js');
+const PRICE_LANDING_BARRIER = 'price_landing_barrier';
+const ROLLCALL_PROOF_REASON = 'rollcall_proof_unavailable';
+
+// The no-progress window a stall is judged against. The price-landing barrier waits on
+// the OTHER landing chains' published landed times, which move on their own cadence, so
+// it carries its own window (priceLandingGraceMs) instead of the generic stall grace.
+// Any other reason, or an unusable priceLandingGraceMs, falls back to graceMs.
+function graceFor(stallReason, graceMs, priceLandingGraceMs){
+    if(stallReason === PRICE_LANDING_BARRIER && Number.isFinite(priceLandingGraceMs) && priceLandingGraceMs > 0)
+        return priceLandingGraceMs;
+    return graceMs;
+}
 
 // Discriminate a genuinely WEDGED indexer from one that is merely deferring the
 // newest block behind a sync barrier that is itself advancing. A set stallReason
@@ -47,12 +60,21 @@ const BRIDGE_PROOF_BARRIER = 'bridge_proof_barrier';
 // clock passes it and the stall persists, the mirror really is stuck and the normal
 // grace-window verdict applies again. This is a HEALTH verdict only: it changes no
 // hashed value and no barrier waits any differently for it.
-function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
+//
+// `barrierHoldSinceMs` is the instant the current block first began waiting behind its
+// barrier (the hold record's `since`), or null when no hold is recorded. The no-progress
+// window starts at the LATER of the last commit and that instant. Measuring from the last
+// commit alone makes a slow chain flap: with ~20 minute blocks nearly every barrier wait
+// begins more than the grace after the previous commit, so a healthy indexer read wedged
+// (503, container unhealthy) the moment its wait began. A barrier held past the grace with
+// no progress still reads wedged, because the hold instant stops moving while it persists.
+function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null){
     if(!stallReason) return false;
     if(stallReason === BRIDGE_PROOF_BARRIER) return false;
     if(lastBlockCommittedAt == null) return false;
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
-    return (now - lastBlockCommittedAt) > graceMs;
+    let windowStart = Number.isFinite(barrierHoldSinceMs) ? Math.max(lastBlockCommittedAt, barrierHoldSinceMs) : lastBlockCommittedAt;
+    return (now - windowStart) > graceFor(stallReason, graceMs, priceLandingGraceMs);
 }
 
 // True when the current stall is nothing but a wait for WALL CLOCK to reach a
@@ -80,19 +102,43 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 //   'none'              - advancing normally, no stall.
 //   'future_block_wait' - waiting out a future-stamped block; healthy and self-clearing,
 //                         with stallClearsAt naming the instant it can first move.
-//   dedicated proof-wait class - waiting for a quorum-established bridge checkpoint
-//                                or proof.
+//   'bridge_proof_wait' - waiting for a quorum-established bridge checkpoint or proof;
+//                         never graded wedged, and it builds no barrier hold.
+//   'price_landing_wait' - waiting on the other landing chains' landed times, judged
+//                         against its own priceLandingGraceMs; wedged once that passes.
 //   'barrier_defer'     - a real barrier defer (mirror behind, host fault), still
 //                         advancing inside the grace window.
 //   'wedged'            - stalled with no commit for longer than the grace window.
 // 'future_block_wait' and 'wedged' cannot collide: stallWedged() already declines to
 // wedge a stall whose clear instant is still ahead.
-function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
+function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null){
     if(!stallReason) return 'none';
     if(stallReason === BRIDGE_PROOF_BARRIER) return 'bridge_proof_wait';
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
-    if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs)) return 'wedged';
+    if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs, priceLandingGraceMs, barrierHoldSinceMs)) return 'wedged';
+    if(stallReason === PRICE_LANDING_BARRIER) return 'price_landing_wait';
     return 'barrier_defer';
+}
+
+// The stall class the status surfaces publish: stallClassOf's verdict, refined for the
+// two stalls a restart cannot clear and that otherwise read as something milder.
+//   'upstream_halted'     - the paired decoder carries a live REORG_HALT marker and the
+//                           indexer has no stall of its own. It has caught up to the
+//                           decoder's frozen tip, so without this it reads 'none'.
+//   'rollcall_proof_wait' - a roll call epoch is deferred because the Dogecoin side
+//                           cannot yet prove who signed. It clears when that visibility
+//                           returns, not on a clock, so like bridge_proof_wait it is a
+//                           wait rather than a mirror-barrier defer.
+//   'rollcall_proof_stuck' - the same wait once the block's hold has passed its ceiling.
+// A 'wedged' verdict is never refined away: the liveness contract (the /status 503 and
+// what autoheal reads) is stallWedged() alone, and this function changes none of it.
+// HEALTH REPORTING ONLY: hashes nothing and gates no wait.
+function publishedStallClass(baseClass, stallReason, { decoderReorgHalted = false, ceilingExceeded = false } = {}){
+    if(baseClass === 'wedged') return baseClass;
+    if(!stallReason && decoderReorgHalted) return 'upstream_halted';
+    if(stallReason === ROLLCALL_PROOF_REASON)
+        return ceilingExceeded ? 'rollcall_proof_stuck' : 'rollcall_proof_wait';
+    return baseClass;
 }
 
 // True when the indexer has committed every block consensus currently PERMITS it to
@@ -167,6 +213,7 @@ module.exports = {
     stallWedged,
     waitingOnFutureBlock,
     stallClassOf,
+    publishedStallClass,
     atProcessableTip,
     nextBarrierHold,
     isMirrorBarrierReason,

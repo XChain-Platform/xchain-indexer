@@ -90,6 +90,7 @@ module.exports = {
             error:          valid ? null : (run.error || run.status || 'dry-run produced no status'),
             xchainFee:      (run.xchainFee == null) ? null : this.util.bcformat(this.util.bcnum(run.xchainFee), 8),
             requiredFeeNative: null,
+            requiredFeeSatsExact: null,
             feeSupported:   false
         };
 
@@ -111,6 +112,7 @@ module.exports = {
                 result.maxAcceptable     = priced.maxAcceptable;
                 result.requiredFeeNative = priced.requiredFeeNative;
                 result.requiredFeeSats   = priced.requiredFeeSats;
+                result.requiredFeeSatsExact = priced.requiredFeeSatsExact;
             } else {
                 result.feeError = priced.error;
             }

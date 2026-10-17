@@ -46,6 +46,13 @@ const EXPORTS_BEFORE_SPLIT = [
     'ITER_SET_METER_MAINNET_TIME', 'ITER_SET_METER_TESTNET_TIME',
     'DISPENSER_REFILL_MAINNET_TIME', 'DISPENSER_REFILL_TESTNET_TIME',
     'STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME', 'STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME',
+    'EXACT_INTEGER_WIRE_FIELDS_MAINNET_TIME', 'EXACT_INTEGER_WIRE_FIELDS_TESTNET_TIME',
+    'SLASH_XANCPUB_PUBLISHER_PAIR_MAINNET_TIME', 'SLASH_XANCPUB_PUBLISHER_PAIR_TESTNET_TIME',
+    'STAKE_SNAPSHOT_SLASH_WINDOW_MAINNET_TIME', 'STAKE_SNAPSHOT_SLASH_WINDOW_TESTNET_TIME',
+    'DELEGATION_ROTATE_IN_WINDOW_MAINNET_TIME', 'DELEGATION_ROTATE_IN_WINDOW_TESTNET_TIME',
+    'SLASH_ATTEST_MULTIROUND_EXEMPT_MAINNET_TIME', 'SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME',
+    'HOST_CALL_BOUNDS_MAINNET_TIME', 'HOST_CALL_BOUNDS_TESTNET_TIME',
+    'PER_ELEMENT_METER_MAINNET_TIME', 'PER_ELEMENT_METER_TESTNET_TIME',
 ];
 const API_HIDDEN = ['registry', 'UNARMED', 'UNPINNED'];
 
@@ -107,7 +114,7 @@ describe('protocol_changes/assembler: the public export shape @regression @tier1
         const entryLines = lines(fs.readFileSync(ENTRY, 'utf8'));
         assert.ok(entryLines <= lines(headText), 'entry ' + entryLines + ' lines must not be above HEAD ' + lines(headText));
         const files = fs.readdirSync(PARTS).filter((f) => f.endsWith('.js')).sort();
-        assert.ok(files.length >= 8 && files.length <= 21, files.length + ' part files');
+        assert.ok(files.length >= 8 && files.length <= 22, files.length + ' part files');
         for (const f of files) {
             const n = lines(fs.readFileSync(path.join(PARTS, f), 'utf8'));
             assert.ok(n <= 400, f + ' is ' + n + ' lines');

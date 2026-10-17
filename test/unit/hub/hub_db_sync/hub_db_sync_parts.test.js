@@ -52,13 +52,14 @@ const PARTS = walkJs(path.join(SRC_HUB, 'hub_db_sync'));
 // one list or the other, so a new part is classified here before it can be forgotten.
 const METHOD_PARTS = [
     'barriers/attest.js', 'barriers/bridge_policy.js', 'barriers/oracle_match_call.js', 'barriers/price.js',
-    'barriers/price_landing.js', 'barriers/snapshot.js', 'bootstrap/drain.js', 'bootstrap/flush.js',
-    'bootstrap/verdict.js',
+    'barriers/price_landing.js', 'barriers/remote_token.js', 'barriers/snapshot.js', 'bootstrap/drain.js',
+    'bootstrap/flush.js', 'bootstrap/verdict.js', 'bootstrap/repage.js',
     'chain_identity.js', 'foreign_reconciliation.js', 'lifecycle.js', 'live_events.js', 'mirror_scope.js',
     'retractions.js', 'row_apply.js', 'transport.js', 'watermarks.js',
 ];
 const HELPER_PARTS = [
-    'ensure_tables.js', 'env.js', 'failover/move_policy.js', 'failover/move_reset.js', 'failover/triggers.js', 'hub_selector.js', 'instance_state.js',
+    'apply/attestation_copies.js', 'barriers/mirror_table_probe.js', 'barriers/relay_margin.js', 'ensure_tables.js', 'env.js', 'failover/move_policy.js',
+    'failover/move_reset.js', 'failover/triggers.js', 'hub_selector.js', 'instance_state.js',
     'mirror_bounds.js', 'mirror_tables.js', 'mirror_write.js', 'row_upserts.js', 'watermark_config.js',
     'schema_version_check.js', 'watermark_state.js',
 ];

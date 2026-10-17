@@ -29,7 +29,8 @@
 // shim is installed. The explorer's vendored copy reaches the same path because it
 // carries the hub-canonical observability shim at src/observability/.
 const { getLogger } = require('../../observability/index.js');
-const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES, AUTO_INCREMENT_ID_TABLES } = require('./mirror_tables.js');
+const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES, HEIGHT_MIRROR_TABLES,
+        AUTO_INCREMENT_ID_TABLES } = require('./mirror_tables.js');
 const { WebSocket } = require('./transport.js');
 const failover = require('./failover/triggers.js');
 
@@ -128,7 +129,7 @@ module.exports = {
     },
 
     // Drain every mirrored table once, in the order below, and report the per-table
-    // watermarks of the ones that drained in full.
+    // watermarks of the ones that drained in full (a table still owed its re-page did not).
     // price_snapshots bootstraps LAST so EVERY per-block barrier that gates block
     // processing (oracle, cross-chain match, cross-chain call, capability snapshot)
     // arms its empty-mirror fast path before the one heavy table drains. Each needs its
@@ -143,7 +144,8 @@ module.exports = {
         let undrained = [];                // what held the gate this pass, named on the retry line
         let connectionEpoch = this._wsEpoch;
         let selectorRevision = this._selectorRevision;
-        for (let table of ['oracle_prices'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES, ['price_snapshots'])) {
+        for (let table of ['oracle_prices'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES,
+                                                   HEIGHT_MIRROR_TABLES, ['price_snapshots'])) {
             if(connectionEpoch !== this._wsEpoch || selectorRevision !== this._selectorRevision){
                 undrained.push('the hub connection changed');
                 break;
@@ -163,6 +165,7 @@ module.exports = {
                 getLogger().warn('HubDbSync: ' + table + ' bootstrap failed:', err);
             }
         }
+        if (undrained.length === 0) undrained = this.repageOwedTables().map(t => t + ' (re-page owed)');
         return { marks: marks, allDrained: undrained.length === 0, undrained: undrained };
     },
 
@@ -170,14 +173,14 @@ module.exports = {
     // watermark to the oldest per-table mark, unless this mirror is in poll mode.
     certifyFullDrain(marks, drainEpoch) {
         // Keep the epoch check at the certification boundary as well as at the
-        // bootstrap caller. No alternate caller may open the gate with a drain
-        // whose socket closed before certification.
-        if (this._wsEpoch !== drainEpoch || failover.uncaughtUpBlocks(this)) return false;
+        // bootstrap caller. No alternate caller may open the gate with a drain whose socket
+        // closed, or while a table is owed the re-page that runs its reconciliation passes.
+        if (this._wsEpoch !== drainEpoch || failover.uncaughtUpBlocks(this) || this.repageOwedTables().length > 0) return false;
         this._bootstrapDrained = true;
         this._failoverPendingDrain = false;
-        // A clean full drain proves the hub's schema_version matched (a
-        // mismatch parks the bootstrap), so any earlier live mismatch is
-        // resolved: re-open the watermark gate.
+        // A clean full drain proves the hub's schema_version matched (a mismatch parks the
+        // bootstrap). A live schema refusal also owes every table a re-page (handleRowEvent),
+        // and all of them ran after it, so the refused rows are applied: re-open the watermark gate.
         this._schemaMismatchSeen = false;
         // Same reasoning for the apply-failure latch: a clean full drain re-wrote
         // every table from the hub, so whatever a live apply failed to write is
@@ -255,6 +258,9 @@ module.exports = {
         // HUB_STATE_TABLES rides the global streamWatermark, not a per-table
         // scalar: that IS what gates each of them (§4.2).
         for (let table of HUB_STATE_TABLES) tables[table] = this.streamWatermark;
+        // Height-gated tables have no honest scalar seconds value. Their per-chain
+        // positions are exposed by the heights map below.
+        for (let table of HEIGHT_MIRROR_TABLES) tables[table] = null;
         tables.oracle_prices       = this.oracleSyncTimestamp;
         tables.cross_chain_matches = this.matchSyncTimestamp;
         tables.cross_chain_calls   = this.callSyncTimestamp;
@@ -290,7 +296,8 @@ module.exports = {
             // axis rather than a stall.
             heightShortfalls: Object.assign({}, this._heightShortfalls),
             heightsFrozenMs: (this._heightsLastAdvanceAt == null)
-                ? null : (Date.now() - this._heightsLastAdvanceAt)
+                ? null : (Date.now() - this._heightsLastAdvanceAt),
+            attestationCopyFailures: this._attestationCopies ? this._attestationCopies.failures : 0   // apply/attestation_copies.js
         };
     },
     // Force a rate-limited subscribe-then-bootstrap cycle without opening a barrier.
@@ -313,6 +320,7 @@ module.exports = {
     driveResync(reason) {
         this.forcedResyncCount++;
         getLogger().warn('HubDbSync: forcing a mirror resync (' + String(reason || 'barrier hold ceiling reached') + ')');
+        this.forgetPositionsForResync();
         if (this.ws) {
             // terminate() over close(): a half-open socket may never complete a closing
             // handshake, and the 'close' handler runs either way to schedule the reconnect.

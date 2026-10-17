@@ -15,7 +15,7 @@
  * XChain Indexer - Hub DB Sync Client: per-table upserts
  *
  * The statement applyRow runs for one mirrored row: a plain INSERT IGNORE for
- * the append-only tables, and for the five tables the hub mutates in place, the
+ * the append-only tables, and for the six tables the hub mutates in place, the
  * ON DUPLICATE KEY UPDATE body whose gate and assignment order carry the
  * convergence rule each comment below states. Pure string builders: nothing here
  * touches a connection, so the SQL is testable as text.
@@ -217,8 +217,32 @@ function attestationResponseUpsertSql(cols, placeholders) {
     return 'INSERT INTO attestation_responses (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
         + ' ON DUPLICATE KEY UPDATE batch_action_index = VALUES(batch_action_index)';
 }
+// bridge_transfers is keyed on transfer_id, a pure function of the source leg, and the hub
+// revives a retracted transfer IN PLACE when its leg is re-mined (db/bridge_transfers.js
+// insertBridgeTransfer): status back to finalized and a new round's validator_signatures,
+// finalizing_view, effective_time, snapshot_block, push_generation and btc_chain_id. A mirror
+// whose signed retraction never arrived (it was away and the hub's replay window was lost
+// with a hub restart) still holds the old finalized row, and a re-page that serves the
+// revived row cannot reach it through INSERT IGNORE. So take exactly the hub's revive
+// columns when the incoming row is finalized at a STRICTLY higher push_generation. Strictly:
+// one generation of one transfer is written once by the hub (its own double-finalize dedupe
+// leaves a finalized row untouched), so an equal generation stays first-copy as before. The
+// gate reads only VALUES(...) and the local push_generation, and push_generation is assigned
+// last, so no assignment changes the verdict of a later one. It only ever moves up.
+const BRIDGE_REVIVE_COLUMNS = ['validator_signatures', 'finalizing_view', 'effective_time',
+                               'snapshot_block', 'btc_chain_id'];
+function bridgeTransferUpsertSql(cols, placeholders) {
+    let gate = "VALUES(`status`) = 'finalized' AND COALESCE(VALUES(`push_generation`), 0) > COALESCE(`push_generation`, 0)";
+    let sets = BRIDGE_REVIVE_COLUMNS.filter(c => cols.includes(c))
+        .map(c => '`' + c + '` = IF(' + gate + ', VALUES(`' + c + '`), `' + c + '`)');
+    sets.push("`status` = IF(" + gate + ", 'finalized', `status`)");
+    sets.push('`push_generation` = GREATEST(COALESCE(`push_generation`, 0), COALESCE(VALUES(`push_generation`), 0))');
+    return 'INSERT INTO bridge_transfers (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
+        + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
+}
+
 // The statement for one mirrored row of `table` over the columns the local schema
-// accepts. The five upgrade paths above are keyed on the table AND on the presence of
+// accepts. The six upgrade paths above are keyed on the table AND on the presence of
 // the column their gate reads, so an older hub (or a mirror whose local table lacks
 // that column) falls through to the plain INSERT IGNORE rather than guessing.
 function mirrorUpsertSql(table, cols, placeholders) {
@@ -233,9 +257,11 @@ function mirrorUpsertSql(table, cols, placeholders) {
     // broadcasts it), a plain INSERT IGNORE here would drop the upgrade and
     // strand the replica at price=NULL while the master shows finalized;
     // exactly the ledger divergence the price-sync barrier guards against.
-    // Upgrade only when the INCOMING row is finalized (keyed on VALUES(status),
-    // stable regardless of ODKU assignment order), so an already-finalized
-    // local row is never clobbered and re-delivery stays idempotent.
+    // An incoming finalized or disputed row is taken whole and an incoming
+    // skipped row never touches an existing one (keyed on VALUES(status),
+    // stable regardless of ODKU assignment order), so a placeholder never
+    // demotes a round, a hub dispute reaches a running mirror, and
+    // re-delivery stays idempotent. priceUpsertSql states the rule.
     if (table === 'price_snapshots' && cols.includes('status')) {
         // priceUpsertSql(cols, 1) is this branch's original statement, moved out so the
         // bootstrap's multi-row batch emits the same ODKU body by construction.
@@ -245,6 +271,8 @@ function mirrorUpsertSql(table, cols, placeholders) {
     if (table === 'oracle_prices' && cols.includes('push_generation')) return oraclePriceUpsertSql(cols, placeholders);
     if (table === 'cross_chain_matches' && cols.includes('anchor_txid')) return crossChainMatchUpsertSql(cols, placeholders);
     if (table === 'attestation_responses' && cols.includes('batch_action_index')) return attestationResponseUpsertSql(cols, placeholders);
+    if (table === 'bridge_transfers' && cols.includes('status') && cols.includes('push_generation'))
+        return bridgeTransferUpsertSql(cols, placeholders);
     return 'INSERT IGNORE INTO ' + table + ' (' + cols.join(', ') + ') VALUES (' + placeholders + ')';
 }
 

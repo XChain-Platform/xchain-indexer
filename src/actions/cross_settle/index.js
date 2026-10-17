@@ -32,7 +32,8 @@
  *
  * WHERE THE PARTS LIVE. This file is the entry, the canonical signing string and the
  * per-block dispatch; ./local_leg.js decides which leg is ours and whether it is worth
- * settling, ./quorum.js verifies the signatures, and ./settle_leg.js moves the value.
+ * settling, ./quorum.js verifies the signatures, ./settle_leg.js moves the value, and
+ * ./retire.js retires a match that stays unapplicable past the grace.
  *
  ********************************************************************/
 
@@ -46,6 +47,7 @@ const ah      = require('../../consensus/gates/mirror_admission_gate.js');
 const localLeg   = require('./local_leg.js');
 const quorum     = require('./quorum.js');
 const settleLeg  = require('./settle_leg.js');
+const retire     = require('./retire.js');
 
 class Cross_Settle {
 
@@ -124,10 +126,23 @@ class Cross_Settle {
         let leg = localLeg.resolveLocalLeg(m, coin);
         if(!leg) return;
 
+        // From PASS_PROGRESS_RETIREMENT_ACTIVATION each exit below that writes nothing retires
+        // the match once it has been selectable for the grace (./retire.js); a deferral on a
+        // snapshot not yet mirrored never does.
         let probe = await localLeg.probeLocalLeg.call(this, data, m, leg, coin);
-        if(probe.dismissed) return;
+        if(probe.dismissed){
+            await retire.retireUnapplicableMatch.call(this, data, m, leg, 'dismissed');
+            return;
+        }
 
-        if(!await quorum.verifyMatchQuorum.call(this, m))
+        let verdict = {};
+        if(!await quorum.verifyMatchQuorum.call(this, m, verdict)){
+            if(!verdict.snapshotAbsent)
+                await retire.retireUnapplicableMatch.call(this, data, m, leg, 'no_quorum');
+            return;
+        }
+
+        if(!probe.localInfo && await retire.retireUnapplicableMatch.call(this, data, m, leg, 'no_leg'))
             return;
 
         // ORDER leg → partial-fill settlement (release the fill, decrement remaining, complete

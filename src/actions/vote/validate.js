@@ -24,6 +24,26 @@
 
 'use strict';
 
+const gateRegistry = require('../../consensus/gate_registry.js');
+
+const SETTLEMENT_EXACT_KEY = 'vote_settlement_exact_activation.VOTE_SETTLEMENT_EXACT_ACTIVATION';
+
+// The decimal places settle.js locks and releases a poll's GAS escrow at.
+const ESCROW_DECIMALS = 8;
+
+// Whether vote_settlement_exact_activation is active at this block for the handler's chain.
+function settlementExactAt(handler, blockIndex){
+    return gateRegistry.activeAt(SETTLEMENT_EXACT_KEY, handler.config['NETWORK'], handler.config['COIN'], Number(blockIndex), null);
+}
+
+// True when a numeric amount has a nonzero digit past ESCROW_DECIMALS, compared by value so
+// an exponent form ('1e-9') is caught the same as its plain spelling. Such an amount would
+// lock and release rounded while its credit moved the unrounded value.
+function exceedsEscrowDecimals(util, amount){
+    let atScale = util.bcadd(amount, 0, ESCROW_DECIMALS);
+    return util.bcgt(amount, atScale) || util.bclt(amount, atScale);
+}
+
 // VOTE v0 phase - the SOURCE gates: a sleeping creator, a TICK that must be a real
 // issued token, and the anti-spam requirement that the creator holds it.
 async function validateCreateSource(data, error){
@@ -167,6 +187,8 @@ async function validateCreateDeposit(data, error){
             error = 'invalid: DEPOSIT (non-negative amount)';
         else if(this.util.bclt(deposit, depositMin))
             error = 'invalid: DEPOSIT (below POLL_DEPOSIT_MIN ' + depositMin + ')';
+        else if(settlementExactAt(this, block_index) && exceedsEscrowDecimals(this.util, deposit))
+            error = 'invalid: DEPOSIT (more than ' + ESCROW_DECIMALS + ' decimal places)';
     }
     // Funding check: SOURCE must hold the DEPOSIT in GAS, read at
     // (block, action) so accept/reject is identical across validators.
@@ -211,6 +233,10 @@ async function validateBallotPoll(data, error){
 
     // Voting window: ballots accepted while cast_block <= end_block
     if(!error && block_index > Number(poll.end_block))
+        error = 'invalid: poll closed';
+    // From vote_settlement_exact_activation the poll must also still be open: an early-decide
+    // finalizes it before END_BLOCK, and a ballot after that would sit in votes uncounted.
+    if(!error && settlementExactAt(this, block_index) && poll.poll_status !== 'open')
         error = 'invalid: poll closed';
 
     // Hold-to-vote gate (cast time, protocol level): voter must hold TICK now
@@ -279,6 +305,7 @@ function parseBallotSelections(poll, data, error){
 }
 
 module.exports = {
+    settlementExactAt, exceedsEscrowDecimals, ESCROW_DECIMALS,
     validateCreateSource, validateCreatePollRules, validateCreateThresholds, validateCreateDeposit,
     validateBallotPoll, parseBallotSelections
 };

@@ -344,15 +344,22 @@ function accumulateDayStats(db, data, results, sideOf){
     data.tick2_24hr_volume = tick2_volume;
 }
 
+// Percentage change from `before` to `now`, divided on the full-precision prices (64 digits)
+// and rounded once, at the end, to 2 places. Truncating each price to 8 places first moved
+// the answer for any price with more digits than that.
+function percentChange(db, now, before){
+    return db.util.bcmul(db.util.bcdiv(db.util.bcsub(now, before, 64), before, 64), 100, 2);
+}
+
 // The 24-hour percentage change of each side's price.
 function applyDayChanges(db, data){
     // Calculate 24-hour price change percentage
     let tick1_change = 0.00;
     let tick2_change = 0.00;
     if(db.util.bcgt(data.tick1_price, 0) && db.util.bcgt(data.tick1_24hr_price, 0))
-        tick1_change = db.util.bcmul(db.util.bcdiv(db.util.bcsub(data.tick1_price, data.tick1_24hr_price,8), data.tick1_24hr_price,8), 100, 2);
+        tick1_change = percentChange(db, data.tick1_price, data.tick1_24hr_price);
     if(db.util.bcgt(data.tick2_price, 0) && db.util.bcgt(data.tick2_24hr_price, 0))
-        tick2_change = db.util.bcmul(db.util.bcdiv(db.util.bcsub(data.tick2_price, data.tick2_24hr_price,8), data.tick2_24hr_price,8), 100, 2);
+        tick2_change = percentChange(db, data.tick2_price, data.tick2_24hr_price);
     data.tick1_24hr_change = tick1_change;
     data.tick2_24hr_change = tick2_change;
 }

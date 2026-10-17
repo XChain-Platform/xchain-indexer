@@ -32,6 +32,8 @@ const { getLogger } = require('../../observability/index.js');
 // Vendored protocol constants; the orphan grace is the age-out clock for a
 // result row with no local request (see resultAgedOut).
 const PROTO = require('../../protocol/constants.js');
+// The height clock an orphan admitted by height ages by (see resultAgedOut).
+const passRetirement = require('../../consensus/pass_retirement');
 
 // Has an undeliverable result row aged out, i.e. can it no longer become
 // deliverable on any branch this chain could still adopt?
@@ -54,7 +56,9 @@ const PROTO = require('../../protocol/constants.js');
 //                    a request still absent that far past effectiveness is absent
 //                    because its branch is gone. Should a deeper-than-designed
 //                    reorg restore it anyway, the retirement row is anchored to a
-//                    rollback-able action_index and is erased with it.
+//                    rollback-able action_index and is erased with it. From
+//                    PASS_PROGRESS_RETIREMENT_ACTIVATION, a row the admission era
+//                    binds by height ages by that height instead (below).
 //
 // A row deferred because the capability snapshot is not mirrored yet never reaches
 // here (processResult returns earlier): that row is still expected to deliver, and
@@ -65,6 +69,14 @@ function resultAgedOut(r, request, data){
         let block    = parseInt(data['BLOCK_INDEX']);
         if(!Number.isFinite(deadline) || !Number.isFinite(block)) return false;
         return block > deadline;
+    }
+    // From PASS_PROGRESS_RETIREMENT_ACTIVATION an orphan that the admission era binds by its
+    // signed admit_block_<c> ages by that height and the shared grace in blocks: its
+    // effective_time is not what selected it and may sit arbitrarily far ahead, so the clock
+    // below would never run out and the row would hold its slot for good.
+    if(passRetirement.isPassRetirementActive(this.config, data['BLOCK_INDEX'])){
+        let byHeight = passRetirement.heightAgedOut(this.indexerDb, r, data['BLOCK_INDEX'], this.config['COIN']);
+        if(byHeight !== null) return byHeight;
     }
     // parseInt, not Number: Number(null) is 0, which would read a row with a missing
     // effective_time as infinitely old and retire it on sight.

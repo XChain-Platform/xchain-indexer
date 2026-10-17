@@ -45,10 +45,12 @@ const { getLogger } = require('../../observability/index.js');
  * admission column holds a value that is not a usable height, and an unsynced snapshot
  * must defer such a row, not abort the block.
  *
- * @param {Object} m - the mirrored cross_chain_matches row
+ * @param {Object} m       - the mirrored cross_chain_matches row
+ * @param {Object} [verdict] - when given, receives snapshotAbsent: true on the deferral exit, so
+ *                             the caller can tell a snapshot still to come from a short quorum
  * @returns {Promise<boolean>} true only when the match may settle on this chain
  */
-async function verifyMatchQuorum(m){
+async function verifyMatchQuorum(m, verdict){
 
     let snapshotBlock = Number(m.snapshot_block);
     let weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, m.network);
@@ -65,6 +67,7 @@ async function verifyMatchQuorum(m){
         // retries on a later block. NOT an error. (Deterministic quorum-N under PARTIAL
         // snapshot arrival is sealed separately by the multi-node design; presence here.)
         getLogger().info("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : capability snapshot not synced : deferring');
+        if(verdict) verdict.snapshotAbsent = true;
         return false;
     }
 
@@ -118,6 +121,34 @@ function collectValidSigners(validators, sigs, canonical){
     return validSigners;
 }
 
+/**
+ * The quorum rule over an already-built canonical and the locked cross_chain snapshot at
+ * snapshotBlock: stake-weighted above STAKE_WEIGHTED_QUORUM, else the legacy 2f+1 count.
+ * Pure read of indexerDb; a snapshot that is not mirrored reports snapshotAbsent.
+ *
+ * @returns {Promise<{met: boolean, snapshotAbsent: boolean}>}
+ */
+async function verifyCanonicalQuorum(indexerDb, canonical, signaturesJson, snapshotBlock, network){
+    let weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, network);
+    let validators = weighted
+        ? await indexerDb.getStakeWeightsByCapability('cross_chain', Number(snapshotBlock))
+        : await indexerDb.getValidatorsByCapability('cross_chain', Number(snapshotBlock));
+    let N = (validators && validators.length) ? validators.length : 0;
+    if(N === 0) return { met: false, snapshotAbsent: true };
+
+    let sigs;
+    try { sigs = JSON.parse(signaturesJson || '[]'); }
+    catch(_) { sigs = []; }
+    if(!Array.isArray(sigs)) sigs = [];
+
+    let validSigners = collectValidSigners(validators, sigs.filter(s => s && typeof s === 'object'), canonical);
+    let met = weighted
+        ? swq.meetsStakeThreshold(validators, validSigners)
+        : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
+    return { met: met, snapshotAbsent: false };
+}
+
 module.exports = {
-    verifyMatchQuorum
+    verifyMatchQuorum,
+    verifyCanonicalQuorum
 };

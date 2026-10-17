@@ -29,6 +29,83 @@
 const Database  = require('../db');
 const sweepSql  = require('../db/rollback/sweeps.js');
 
+const attestRecomputeStatsRecorder = Symbol('attestRecomputeStatsRecorder');
+
+function restoreMethod(target, name, descriptor){
+    if(descriptor)
+        Object.defineProperty(target, name, descriptor);
+    else
+        delete target[name];
+}
+
+function installAttestRecomputeStatsRecorder(rollback){
+    if(rollback[attestRecomputeStatsRecorder] || typeof rollback.recomputeAttestationValidatorStats !== 'function')
+        return;
+
+    rollback[attestRecomputeStatsRecorder] = true;
+    let recompute = rollback.recomputeAttestationValidatorStats;
+    rollback.recomputeAttestationValidatorStats = async function(...args){
+        let startedAt  = Date.now();
+        let sourceRows = 0;
+        let pairCount  = 0;
+        let completed  = false;
+        let fulfilledDescriptor = Object.getOwnPropertyDescriptor(this, 'countFulfilledSignatures');
+        let expiredDescriptor   = Object.getOwnPropertyDescriptor(this, 'readExpiredRequests');
+        let writeDescriptor     = Object.getOwnPropertyDescriptor(this, 'writeRecomputedStats');
+        let countFulfilled      = this.countFulfilledSignatures;
+        let readExpired         = this.readExpiredRequests;
+        let writeRecomputed     = this.writeRecomputedStats;
+
+        this.countFulfilledSignatures = async function(...fulfilledArgs){
+            let db = this.indexerDb;
+            let measuredDb = Object.create(db);
+            let measured = false;
+            measuredDb.doQuery = async function(...queryArgs){
+                let rows = await db.doQuery(...queryArgs);
+                if(!measured && Array.isArray(rows)){
+                    sourceRows += rows.length;
+                    measured = true;
+                }
+                return rows;
+            };
+            this.indexerDb = measuredDb;
+            try {
+                return await countFulfilled.apply(this, fulfilledArgs);
+            } finally {
+                this.indexerDb = db;
+            }
+        };
+        this.readExpiredRequests = async function(...expiredArgs){
+            let rows = await readExpired.apply(this, expiredArgs);
+            sourceRows += Array.isArray(rows) ? rows.length : 0;
+            return rows;
+        };
+        this.writeRecomputedStats = async function(stats, affected){
+            pairCount = affected instanceof Set ? affected.size : 0;
+            return await writeRecomputed.call(this, stats, affected);
+        };
+
+        try {
+            let result = await recompute.apply(this, args);
+            completed = true;
+            return result;
+        } finally {
+            restoreMethod(this, 'countFulfilledSignatures', fulfilledDescriptor);
+            restoreMethod(this, 'readExpiredRequests', expiredDescriptor);
+            restoreMethod(this, 'writeRecomputedStats', writeDescriptor);
+            if(completed){
+                this.recordSweepStats([{
+                    table: 'attest_validator_stats recompute (' + pairCount + ' pairs)',
+                    ms: Date.now() - startedAt,
+                    rows: sourceRows,
+                    sourceRows: sourceRows,
+                    pairs: pairCount,
+                }]);
+            }
+        }
+    };
+}
+
 module.exports = {
 
     // Sweep balances rows orphaned by the index-table delete above. `balances` is a
@@ -53,7 +130,12 @@ module.exports = {
     },
 
     // Keep each sweep's { table, ms, rows } for logRollbackSummary; runRollbackTransaction resets the list.
+    // The attest_validator_stats recompute report must also expose its elapsed ms,
+    // surviving source-row count and affected (validator, provider) pair count. Before
+    // quality_score drives responsible-set selection or slashing, replace the aggregate-only
+    // counters with block-stamped counters so rollback can remove orphaned increments directly.
     recordSweepStats(stats){
+        installAttestRecomputeStatsRecorder(this);
         this.sweepStats = (this.sweepStats || []).concat(stats || []);
     },
 
@@ -66,7 +148,7 @@ module.exports = {
     // to the pairs this rollback collected (`markets`), each is dropped only if NO surviving
     // orders/order_matches row references it in either orientation. markets is unhashed and
     // snapshot-replicated (no consensus reader), so this is a fresh-replay parity fix.
-    // COALESCE on the probes: the pair ids come from `markets`, where a tickerless
+    // NULL-aware probes: the pair ids come from `markets`, where a tickerless
     // side is 0, while orders/order_matches store NULL for it. Comparing the two
     // directly found no survivor for any token/native pair, so the delete below
     // dropped live markets on every reorg that touched one.

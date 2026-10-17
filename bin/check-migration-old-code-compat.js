@@ -278,6 +278,22 @@ const OLD_STATEMENTS = {
                  WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ? AND effective_at <= ?
                  ORDER BY effective_at DESC, action_index DESC LIMIT 1`,
     },
+    // ── remote_token_snapshots (2026-10-14-remote-token-admission.sql) ──────────────
+    // Copied from v0.23.2: the insert is what src/hub/hub_db_sync/row_upserts.js
+    // mirrorUpsertSql composes for this table (plain INSERT IGNORE, by NAME over the signed
+    // columns the local table carries, so an old mirror names no admission column), and the
+    // read is the pin presence read src/db/list_share_mirrors/index.js getPinnedRemoteToken
+    // sends, which has no clock bound and returns the newest finalized pin.
+    remote_token_snapshots: {
+        insert: [
+            'INSERT IGNORE INTO remote_token_snapshots (snapshot_id, snapshot_block, network, coin, tick, decimals, owner, source_action_index, finalizing_view, validator_signatures, status)',
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ].join('\n'),
+        read: `SELECT * FROM remote_token_snapshots
+             WHERE status = 'finalized' AND network = ? AND coin = ? AND tick = ?
+             ORDER BY snapshot_block DESC, source_action_index DESC, snapshot_id DESC
+             LIMIT 1`,
+    },
 };
 
 // The rows the admission-table statements above are driven with: `legacy` is inserted
@@ -325,6 +341,11 @@ const ADMISSION_MIRROR_ROWS = {
         later:  ['oracle1', 'DOGE', 'DOGE', 'PEPE', 'USD', '0.6', 1001, 1001, 2, 0],
         read:   ['oracle1', 'DOGE', 'PEPE', 'USD', 2000], expect: 1,   // the old read is LIMIT 1
     },
+    remote_token_snapshots: {
+        legacy: ['7'.repeat(64), 500, 'regtest', 'DOGE', 'PEPE', 8, 'owneraddr', 1, 0, '[]', 'finalized'],
+        later:  ['8'.repeat(64), 501, 'regtest', 'DOGE', 'PEPE', 8, 'owneraddr', 2, 0, '[]', 'finalized'],
+        read:   ['regtest', 'DOGE', 'PEPE'], expect: 1,   // the old read is LIMIT 1
+    },
 };
 
 // Seed one legacy row per admission table BEFORE the migration runs, so the
@@ -358,6 +379,40 @@ async function exerciseAdmissionMirrorRows(raw, exercisable){
         notes.push(t + ': old insert, re-delivery and clock-bound read all OK');
     }
     return notes;
+}
+
+// The tables the boot-time `assert*TablesPresent` startup assertions require, read from
+// the assertions themselves (each declares its list as a `const REQUIRED = [...]`), so a
+// table added to an assertion is picked up here without a second list to keep in step.
+// Throws when an assertion carries no readable list: a silent empty answer would leave the
+// gate building nothing and failing at runMigrations only on the day that table is needed.
+function startupRequiredTables(){
+    const out = new Set();
+    for(const name of Object.getOwnPropertyNames(Database.prototype).filter(n => /^assert.*TablesPresent$/.test(n))){
+        const m = /const\s+REQUIRED\s*=\s*\[([^\]]*)\]/.exec(Database.prototype[name].toString());
+        const tables = m ? [...m[1].matchAll(/['"]([a-z_][a-z0-9_]*)['"]/gi)].map(x => x[1].toLowerCase()) : [];
+        if(!tables.length) throw new Error(name + ' declares no readable REQUIRED table list; startupRequiredTables must be taught to read it.');
+        for(const t of tables) out.add(t);
+    }
+    return [...out].sort();
+}
+
+// Build every startup-required table the old-ref step did not create, through the
+// product's own createTable (src/sql of this tree), which is what the real boot does for a
+// missing table in verifyTables. A table the pending set CREATEs is left to the migration.
+async function buildStartupRequiredTables(db, raw, dbName, skip){
+    const want = startupRequiredTables().filter(t => !skip.has(t));
+    if(!want.length) return [];
+    const live = new Set((await raw(
+        `SELECT TABLE_NAME AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN (${want.map(() => '?').join(', ')})`,
+        [dbName, ...want])).map(r => String(r.n).toLowerCase()));
+    const built = [];
+    for(const t of want){
+        if(live.has(t)) continue;
+        await db.createTable(t + '.sql');
+        built.push(t);
+    }
+    return built;
 }
 
 function git(...args){
@@ -520,14 +575,16 @@ async function main(){
         if(!cols.length) throw new Error('read no columns for ' + affected.join(', ') + '; the tables were not built');
         const before = {};
         for(const c of cols) (before[c.TABLE_NAME] = before[c.TABLE_NAME] || []).push(c.COLUMN_NAME);
-        // Assert positively: each pending ALTER's target column must be ABSENT now.
+        // Assert positively: each pending ALTER's target column must be ABSENT now from the
+        // table that ALTER names. The same column name on another affected table is not the
+        // delta (price_snapshots already carries admit_block_btc when remote_token_snapshots
+        // gains it).
         for(const f of pending){
             const body = fs.readFileSync(path.join(REPO, 'src/sql/migrations', f), 'utf8');
-            for(const m of body.matchAll(/ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+`?([a-z_][a-z0-9_]*)`?/gi)){
-                const col = m[1].toLowerCase();
-                for(const t of Object.keys(before))
-                    if(before[t].map(c => c.toLowerCase()).includes(col))
-                        throw new Error(t + ' already has ' + col + ' before migrating');
+            for(const { table, col } of addedColumns(body)){
+                const have = before[table] || before[Object.keys(before).find(t => t.toLowerCase() === table)] || [];
+                if(have.map(c => c.toLowerCase()).includes(col))
+                    throw new Error(table + ' already has ' + col + ' before migrating');
             }
         }
         return Object.entries(before).map(([t, c]) => t + '(' + c.length + ' cols)').join(' ');
@@ -558,6 +615,12 @@ async function main(){
     // measured NULL on a row that exists rather than vacuously on an empty table.
     const seededAdmission = await seedAdmissionMirrorRows(raw, mustExercise);
     if(seededAdmission.length) console.log('seeded a legacy row in: ' + seededAdmission.join(', '));
+
+    // The tables runMigrations' closing startup assertions require (bridge and shared-list
+    // tables): not every one exists at every old ref, and the assertions run after the
+    // migrations, so the gate builds the missing ones the way the real boot does.
+    const startupBuilt = await buildStartupRequiredTables(db, raw, DB_NAME, new Set([...created, ...affected, ...referenced]));
+    if(startupBuilt.length) console.log('built for the startup assertions (product createTable): ' + startupBuilt.join(', '));
 
     // ── Seed the ledger as the deployed host's really looks ──────────────────────
     {
@@ -718,4 +781,4 @@ if(require.main === module)
 
 // For the unit test that pins the admission-table statements to the migration's
 // manifest and drives the two loops above with a recording connection.
-module.exports = { OLD_STATEMENTS, ADMISSION_MIRROR_ROWS, addedColumns, seedAdmissionMirrorRows, exerciseAdmissionMirrorRows };
+module.exports = { startupRequiredTables, buildStartupRequiredTables, OLD_STATEMENTS, ADMISSION_MIRROR_ROWS, addedColumns, seedAdmissionMirrorRows, exerciseAdmissionMirrorRows };

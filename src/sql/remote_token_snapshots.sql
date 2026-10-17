@@ -13,8 +13,11 @@
 --********************************************************************
 
 -- Federation-finalized token facts from a remote chain. Each version is keyed
--- by signed content; readers select the newest surviving snapshot and
--- retractions remove versions whose source action was rolled back.
+-- by signed content; readers select the newest finalized snapshot. The mirror
+-- never deletes a version, so a source-chain reorg does not remove one.
+-- admit_block_<c> is the signed admission height on chain <c>: at and above
+-- remote_token_admission_activation a reader on <c> at block B reads only rows
+-- whose admit_block_<c> is at or below B. Rows below it carry all three as NULL.
 CREATE TABLE remote_token_snapshots (
     id                   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     snapshot_id          CHAR(64) NOT NULL,
@@ -25,6 +28,9 @@ CREATE TABLE remote_token_snapshots (
     decimals             TINYINT UNSIGNED NOT NULL,
     owner                VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     source_action_index  BIGINT UNSIGNED NOT NULL,
+    admit_block_btc      BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_ltc      BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_doge     BIGINT UNSIGNED DEFAULT NULL,
     finalizing_view      INT NOT NULL DEFAULT 0,
     validator_signatures TEXT NOT NULL,
     status               VARCHAR(20) NOT NULL DEFAULT 'finalized',

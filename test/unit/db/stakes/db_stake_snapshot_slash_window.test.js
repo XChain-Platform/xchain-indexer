@@ -136,7 +136,7 @@ describe('slashContractStake then snapshot @regression @tier1', function () {
         db.doQuery.callsFake(async (q, params) => {
             if (/^UPDATE contract_unstakes/.test(q)) { unstakes.find(r => r.action_index === params[1]).amount = params[0]; return []; }
             if (/^UPDATE contract_stakes/.test(q))   { stakes.find(r => r.action_index === params[1]).amount = params[0]; return []; }
-            if (/ORDER BY cs.action_index DESC/.test(q) || /JOIN contract_unstakes/.test(q)) return [];
+            if (/ORDER BY [^\n]*cs.action_index DESC/.test(q) || /JOIN contract_unstakes/.test(q)) return [];
             if (/FROM contract_stakes/.test(q))   return stakes.map(r => Object.assign({}, r));
             if (/FROM contract_unstakes/.test(q)) return unstakes.map(r => Object.assign({}, r));
             return [];
@@ -175,7 +175,7 @@ function modelDb(stakes, unstakes) {
         if (/JOIN contract_unstakes/.test(q))
             return copy(stakes.filter(r => r.deactivation_block === null && r.activation_block > params[2]
                 && unstakes.some(u => u.action_index === r.action_index)));
-        if (/ORDER BY cs.action_index DESC/.test(q))
+        if (/ORDER BY [^\n]*cs.action_index DESC/.test(q))
             return copy(stakes.filter(r => r.deactivation_block === null && Number(r.amount) > 0).sort((a, b) => b.action_index - a.action_index));
         if (/ORDER BY cu.action_index DESC/.test(q))
             return copy(unstakes.filter(r => r.status_id !== 3 && Number(r.amount) > 0).sort((a, b) => b.action_index - a.action_index));

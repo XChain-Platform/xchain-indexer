@@ -43,11 +43,14 @@
  *
  * ACTIVATION. The version set RESTARTS at 0 at ANCHOR_ACTIVATION (see
  * the anchor_activation row in src/protocol_changes/), so the first check in parse() is the anchor's own
- * DOGE mined height: below the threshold EVERY ANCHOR of EVERY version is
- * 'invalid: ANCHOR before activation', because the same byte meant something
- * else on the pre-restart wire and no parser can tell the two apart from the
- * bytes alone. At/above it this table is the whole wire set, so any other
- * version byte falls out of the unknown-version check below.
+ * DOGE mined height: below the threshold no ANCHOR of any version is parsed,
+ * because the same byte meant something else on the pre-restart wire and no
+ * parser can tell the two apart from the bytes alone. The verdict there is
+ * 'unverified' where anchor_preactivation_status_activation.
+ * ANCHOR_PREACTIVATION_STATUS_ACTIVATION is active at that same height, and
+ * 'invalid: ANCHOR before activation' below that gate. At/above the threshold
+ * this table is the whole wire set, so any other version byte falls out of
+ * the unknown-version check below.
  *
  * The pre-restart versions (the per-chain anchors, the tail-less archive head
  * and the old bundle/archive-head bytes) are RETIRED, not deprecated: their
@@ -76,7 +79,7 @@ const reassembly   = require('./reassembly.js');
 const { splitV3Wire } = require('./v3/v3_wire.js');
 const { walkFoldSections } = require('./v3/v3_sections.js');
 const { foldArchiveReason } = require('./v3/v3_archive_check.js');
-const { canonicalBatchCrc, signsExtendedCanonical, extendSectionCanonicalBase } = require('./v3_canonical.js');
+const { archiveCanonicalSuffix, signsExtendedCanonical, extendSectionCanonicalBase } = require('./v3_canonical.js');
 const { recordFoldAction } = require('./v3/v3_record.js');
 function foldHeaderReason(config, data, error){
     if(error) return error;
@@ -89,7 +92,7 @@ function foldHeaderReason(config, data, error){
         return 'invalid: SECTION_COUNT (empty fold)';
     return null;
 }
-async function checkFoldSeqs(handler, sections, archive, error){
+async function checkFoldSeqs(handler, data, sections, archive, error){
     if(error) return error;
     for(let section of sections){
         let maximum = await handler.indexerDb.getMaxAnchorCheckpointSeq(section.CHAIN, section.NETWORK);
@@ -99,7 +102,9 @@ async function checkFoldSeqs(handler, sections, archive, error){
     }
     if(archive === null) return null;
     let wrapper = sections[Number(archive.WRAPPER_SECTION_INDEX)];
-    let watermark = await handler.indexerDb.getArchiveReplayWatermarks();
+    let wrapperRows = await handler.actions.protocolChanges.isEnabled(
+        'ARCHIVE_REPLAY_WRAPPER_WATERMARK', Number(data['BLOCK_INDEX']));
+    let watermark = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows);
     let batchStale = watermark.batchSeq !== null && Number(archive.MATCH_BATCH_SEQ) < watermark.batchSeq;
     let checkpointStale = watermark.checkpointSeq !== null && Number(wrapper.CHECKPOINT_SEQ) < watermark.checkpointSeq;
     return batchStale && checkpointStale ?
@@ -171,8 +176,7 @@ class Anchor {
             // hub's archiveCanonical, which nests the bare rawCanonicalCheckpoint; the
             // wrapper sigs are produced over the SAME archive canonical (the publisher tail
             // is attested separately via rewardCanonical).
-            base += '|' + String(d['MATCH_BATCH_SEQ']) + '|' + String(d['MATCH_COUNT']) + '|' +
-                    canonicalBatchCrc(d['BATCH_CRC32']) + '|' + String(d['TOTAL_CHUNKS']);
+            base += archiveCanonicalSuffix(d);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
         } else if(Number(d['FORMAT']) === 0){
             // Append the root suffix UNCONDITIONALLY. Of the seven checkpoint-family
@@ -254,8 +258,10 @@ class Anchor {
 
         // Activation FIRST, ahead of the version table: below ANCHOR_ACTIVATION the same
         // version bytes belonged to the pre-restart wire set, so no shape check on these
-        // bytes means anything and every ANCHOR down there is invalid whatever it decodes
-        // to. Keyed on the anchor's OWN DOGE mined height (data['BLOCK_INDEX'], the same
+        // bytes means anything and no ANCHOR down there is parsed whatever it decodes
+        // to: the verdict is 'unverified' where ANCHOR_PREACTIVATION_STATUS_ACTIVATION is
+        // active at the same height and 'invalid: ANCHOR before activation' below it.
+        // Keyed on the anchor's OWN DOGE mined height (data['BLOCK_INDEX'], the same
         // key the unverified-head gate in reassembly.js reads), never on SNAPSHOT_BLOCK or the
         // checkpointed height, which belong to other chains. activeAt fails closed on
         // a non-numeric height or an unknown network.
@@ -275,9 +281,13 @@ class Anchor {
         if(!error && String(this.config['COIN']) !== 'DOGE')
             error = 'invalid: ANCHOR only valid on DOGE';
 
-        // Dispatch by family. An unparseable version still lands on a body parser (carrying
-        // the error), and the archive-head parser is the fall-through, so a rejected action
-        // is recorded rather than dropped.
+        // Dispatch by family: 2 continuation, 3 fold (once armed), 0 bundle, and everything
+        // else on the archive-head parser. An unparseable version still lands on a body
+        // parser (carrying the error), and the archive-head parser is the fall-through, so a
+        // rejected action is recorded rather than dropped. That includes the retired
+        // pre-restart bytes 6 and 7: they are not in the version table, parse as
+        // 'invalid: VERSION (unknown)', and prove a reward only through the proof client's
+        // legacy alias, which LEGACY_ANCHOR_REWARD_PIN switches off (legacyDropped).
         if(format === 2) return await this.parseContinuation(params, data, error);
         if(format === 3 && foldActive) return await this.parseFold(params, data, error);
         if(format === 0) return await this.parseBundle(params, data, error);
@@ -317,7 +327,7 @@ class Anchor {
         error = tail.error;
 
         if(!error) error = foldArchiveReason(this, archive, data);
-        error = await checkFoldSeqs(this, sections, archive, error);
+        error = await checkFoldSeqs(this, data, sections, archive, error);
         error = await archiveHead.checkFoldArchiveReissue(this, data, archive, error);
         for(let section of sections)
             Object.defineProperty(section, 'FOLD_ARCHIVE', { value: archive, configurable: true });

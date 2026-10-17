@@ -54,6 +54,7 @@ module.exports = {
             || await this.deferOnBridgeSync(blockToParse, blockTime)
             || await this.deferOnPolicySync(blockToParse, blockTime)
             || await this.deferOnListShareSync(blockToParse, blockTime)
+            || await this.deferOnRemoteTokenSync(blockToParse)
             || await this.deferOnDirectCallPresence(blockToParse, blockTime)
             || await this.deferOnAnchorAttestSync(blockToParse, blockTime, anchorHorizonBound)
             || await this.deferOnAttestResponseSync(blockToParse, blockTime)
@@ -172,7 +173,7 @@ module.exports = {
                 await this.hubDbSync.waitForPriceLandingSync(blockToParse, blockTime, this.priceSyncTimeoutMs);
             } catch(err){
                 getLogger().warn('Deferring block ' + blockToParse + ' (price landing): ', err);
-                this.markPriceSyncHold();
+                this.stallReason = 'price_landing_barrier';
                 this.stallClearsAt = this.landingClearsAt(blockToParse, blockTime);
                 return true;
             }

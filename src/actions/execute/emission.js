@@ -29,6 +29,22 @@
 // emission propagation) plus deploy.js, so they cannot drift into deriving different
 // ids for the same emission.
 const { resolveRootDiscriminator } = require('../../consensus/batch_root_discriminator.js');
+const gateRegistry = require('../../consensus/gate_registry');
+const { AMOUNT_MAX_INTEGER_DIGITS } = require('../../utility/validation/amount_representability_gate.js');
+
+const VM_EMISSION_AMOUNT_FORMAT_KEY = 'vm_emission_amount_format_activation.VM_EMISSION_AMOUNT_FORMAT_ACTIVATION';
+
+// The shape the user path's representability rule gives an amount, with no fractional cap: a
+// plain unsigned decimal numeral whose significant integer digits fit AMOUNT_MAX_INTEGER_DIGITS.
+// No exponent, sign, radix prefix, whitespace or empty half. roundEmissionAmounts checks an
+// emitted amount with it before rounding, so an over-precise computed amount still rounds onto
+// its tick's grid while a non-numeral is refused.
+const PLAIN_DECIMAL = /^[0-9]+(\.[0-9]+)?$/;
+function isPlainAmountText(text){
+    if(typeof text != 'string' || !PLAIN_DECIMAL.test(text))
+        return false;
+    return text.split('.')[0].replace(/^0+/, '').length <= AMOUNT_MAX_INTEGER_DIGITS;
+}
 
 // Amount-bearing fields of every emittable action, mapping each amount param to the param
 // that names the tick it is denominated in. processEmission normalizes each to
@@ -92,12 +108,18 @@ function assertEmitterPosition(action, position){
 
 // Host-side re-validation of the call bounds the VM enforces at emit time, plus the
 // depth/hop/gas context the callee's own parse runs against.
-function validateEmissionBounds(action, params, executionData, limits){
+// EMISSION_DEPTH_EXECUTE_ONLY (unarmed gate): with it on, only an EXECUTE emission stamps the
+// incremented CALL_DEPTH; every other emission keeps the emitter's depth. Off, every emission
+// is stamped depth + 1 (the pre-gate behaviour).
+const EMISSION_DEPTH_EXECUTE_ONLY = 'EMISSION_DEPTH_EXECUTE_ONLY';
+
+function validateEmissionBounds(action, params, executionData, limits, depthExecuteOnly){
     // Cross-contract call emissions: re-validate depth + gasLimit HOST-side
     // (defense in depth; the VM enforces both at emit time, but an older or
     // compromised bundled VM must not be able to bypass them), then thread
     // the callee's depth + caller-funded ceiling through the emission data.
-    let callDepth = (Number(executionData['CALL_DEPTH']) || 0) + 1;
+    let emitterDepth = Number(executionData['CALL_DEPTH']) || 0;
+    let callDepth = (depthExecuteOnly && action !== 'EXECUTE') ? emitterDepth : emitterDepth + 1;
     let crossHops = Number(executionData['CROSS_HOPS']) || 0;
     let nestedGasLimit = null;
     if(action === 'EXECUTE'){
@@ -168,7 +190,7 @@ async function prepareEmissionParams(action, params, executionData){
     // emitted amount can carry more fractional digits than the tick; left unnormalized it
     // would be rejected by isValidAmountFormat (reverting e.g. every AMM swap). The
     // rounding is half-up (see roundEmissionAmounts), not truncation.
-    await this.roundEmissionAmounts(action, params);
+    await this.roundEmissionAmounts(action, params, executionData['BLOCK_INDEX']);
 
     // Build positional params array for the handler
     let actionParams = this.buildActionParams(action, params);
@@ -282,7 +304,10 @@ async function processEmission(emission, executionData, position, limits){
 
     await assertEmissionPermitted.call(this, executionData, action);
     assertEmitterPosition(action, position);
-    let bounds  = validateEmissionBounds(action, params, executionData, limits);
+    // EXECUTE is stamped depth + 1 either way, so the gate is only read for the other emissions.
+    let depthExecuteOnly = action !== 'EXECUTE' && await this.actions.protocolChanges.isEnabled(
+        EMISSION_DEPTH_EXECUTE_ONLY, executionData['BLOCK_INDEX']);
+    let bounds  = validateEmissionBounds(action, params, executionData, limits, depthExecuteOnly);
     let routing = await deriveEmissionRouting.call(this, executionData, position);
 
     let prepared = await prepareEmissionParams.call(this, action, params, executionData);
@@ -302,9 +327,20 @@ async function processEmission(emission, executionData, position, limits){
 // validated on the far chain. ISSUE uses its inline declared decimals (the tick is not in
 // the issues table yet). Driven by EMISSION_AMOUNT_FIELDS; keep that map in sync with
 // buildActionParams (enforced by the emission-map coverage test).
-async function roundEmissionAmounts(action, params){
+//
+// From vm_emission_amount_format_activation (keyed on `blockIndex`, the emitting block) an
+// amount about to be rounded must first be a plain decimal numeral, the shape the user path's
+// amount rule accepts (isPlainAmountText, on the safeToString rendering). bcadd would otherwise
+// coerce it: 'NaN' and 'Infinity' to 0, '0x10' to
+// 16, '1e-9' to 0, '1.' and '.5' to numbers. A refused amount throws, which rolls back the
+// emitting EXECUTE whole with an 'emission failed' status. Only rounded fields are checked: a
+// field skipped below reaches its handler raw, where the user rule applies to it unchanged.
+// Below the activation, or with no blockIndex, the rounding runs as before.
+async function roundEmissionAmounts(action, params, blockIndex){
     let fields = EMISSION_AMOUNT_FIELDS[action];
     if(!fields || !params) return params;
+    let formatRule = blockIndex !== undefined && blockIndex !== null &&
+        gateRegistry.activeAt(VM_EMISSION_AMOUNT_FORMAT_KEY, this.config['NETWORK'], this.config['COIN'], Number(blockIndex), null);
     for(let f of fields){
         let value = params[f.amount];
         if(this.util.isNull(value) || String(value) === '') continue;
@@ -321,6 +357,8 @@ async function roundEmissionAmounts(action, params){
             if(tickId === null) continue;
             decimals = await this.indexerDb.getTokenDecimalPrecision(tickId);
         }
+        if(formatRule && !isPlainAmountText(this.util.safeToString(value)))
+            throw new Error(action + ': invalid: ' + f.amount + ' (format)');
         // bcstr, not String(): a rounded dust amount below 1e-7 would render
         // exponentially ("3e-8") and fail the handler's format validation.
         params[f.amount] = this.util.bcstr(this.util.bcadd(value, 0, decimals));
@@ -328,4 +366,4 @@ async function roundEmissionAmounts(action, params){
     return params;
 }
 
-module.exports = { EMISSION_AMOUNT_FIELDS, processEmission, roundEmissionAmounts };
+module.exports = { EMISSION_AMOUNT_FIELDS, isPlainAmountText, processEmission, roundEmissionAmounts };

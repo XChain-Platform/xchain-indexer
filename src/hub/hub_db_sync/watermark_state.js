@@ -226,6 +226,13 @@ function initTransportState(sync, options) {
     // They are wire positions only and are never derived from locally assigned ids.
     sync._drainPositions = Object.create(null);
     sync._lastHubInstanceId = null;
+    // Tables owed a re-page from zero before the mirror may certify again, each mapped to
+    // the sequence number of the mark that made it owed (see markRepageOwed). A drain
+    // settles a mark only if it was opened after it.
+    sync._repageOwed = new Map();
+    sync._repageOwedSeq = 0;
+    // Where a same-instance price re-page may start (see choosePriceRepageStart), or null.
+    sync._priceRepageFloor = null;
 
     // Heartbeat-timeout watchdog: the hub broadcasts a {type:'watermark'} frame
     // every WS_WATERMARK_INTERVAL_MS (10s server-side default; see HubDbBroadcaster). A

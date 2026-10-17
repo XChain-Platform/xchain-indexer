@@ -6,6 +6,9 @@
 # leading `-` drops a false positive.
 #
 # DELETE and UPDATE are SQL verbs that rollback tests match against captured
-# query text, not binaries the suite runs.
+# query text, not binaries the suite runs. CREATE is the same kind of false
+# positive: the mirror dispute barrier test builds its in-memory SQLite tables
+# with db.exec('CREATE TABLE ...'), which the spawn scan reads as a command.
 -DELETE
 -UPDATE
+-CREATE

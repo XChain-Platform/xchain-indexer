@@ -113,6 +113,30 @@
 // v9 ROLL: the v8 order stands. The hub rolls FIRST and stamps 9, then every
 // indexer and the explorer roll back to back behind it. The whole roll completes
 // BELOW every network's LIST_META_ACTIVATION height.
-const HUB_SCHEMA_VERSION = 9;
+//
+// v10: the mirror set gained remote_token_snapshots, the validator-signed
+// remote-token records (tick, decimals and owner per source action). Like v3,
+// the table entered the mirror set under v9 without a bump of its own, so a v9
+// reader missing it was not refused; v10 restores the gate. A stale reader must
+// reject this stream until it has the table: an indexer gets it from the
+// 2026-10-09-remote-token-snapshots migration (mode=auto, applied at startup,
+// not a deploy precondition), and a vendored mirror client creates it from its
+// hub-mirror copy of the same table. Strict equality still
+// applies in both directions, so a v9 reader must reject the v10 stream and a v10
+// reader must reject a v9 hub. The hub rolls FIRST and stamps 10, then every
+// indexer and the explorer follow back to back, as for v8 and v9.
+//
+// v11: remote_token_snapshots gained admit_block_btc, admit_block_ltc and admit_block_doge,
+// the signed admission map a pin carries from remote_token_admission_activation. A v10
+// reader drops the columns on apply, so on an armed venue it could not bind a pin to the
+// block it was admitted at, and a v10 hub serves no admission map at all; strict equality
+// refuses both pairings by name instead. An indexer gets the columns from the
+// 2026-10-14-remote-token-admission migration (mode=auto, applied at startup), and the
+// explorer from its later-column mirror migration.
+//
+// v11 ROLL: the v10 order stands. The hub rolls FIRST and stamps 11, then every indexer and
+// the explorer roll back to back behind it. The whole roll completes BELOW every network's
+// remote_token_admission_activation height.
+const HUB_SCHEMA_VERSION = 11;
 
 module.exports = { HUB_SCHEMA_VERSION };

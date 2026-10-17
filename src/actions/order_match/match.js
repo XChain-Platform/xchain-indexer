@@ -5,6 +5,7 @@ const { tokenPolicyRejects } = require('../../consensus/order_swap_payout_policy
 const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
 const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
 const MARKET_LIST_SOURCE_KEY = 'market_list_source_activation.MARKET_LIST_SOURCE_ACTIVATION';
+const PRICE_CROSS_KEY = 'order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION';
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -74,7 +75,8 @@ module.exports = {
             getLogger().info('MATCH - GIVE / GET remaining=', match['GET_REMAINING'],  match['GIVE_REMAINING'])
         }
 
-        if(!this.hasFillRoom(orderInfo, matchInfo, order, match))
+        let priceCross = gateRegistry.activeAt(PRICE_CROSS_KEY, this.config['NETWORK'], this.config['COIN'], Number(data['BLOCK_INDEX']), null);
+        if(!this.hasFillRoom(orderInfo, matchInfo, order, match, priceCross))
             return;
 
         // Both fill amounts at precision 64, snapped onto each side's tick grid (order_match.js)
@@ -146,8 +148,9 @@ module.exports = {
         return true;
     },
 
-    // Both sides still have something to GIVE and GET, and the prices cross
-    hasFillRoom(orderInfo, matchInfo, order, match){
+    // Both sides still have something to GIVE and GET, and the prices cross.
+    // priceCross is the order_match_price_cross_activation era at the ORDER_MATCH block.
+    hasFillRoom(orderInfo, matchInfo, order, match, priceCross){
 
         // Ignore if we have nothing left to GIVE
         if(this.util.bclte(match['GIVE_REMAINING'], 0) || this.util.bclte(order['GIVE_REMAINING'], 0)){
@@ -163,8 +166,17 @@ module.exports = {
             return false;
         }
 
-        // Ignore price mismatches
-        if(this.util.bcgt(matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE'])){
+        // Ignore price mismatches. GIVE_PRICE is GET_AMOUNT / GIVE_AMOUNT and GET_PRICE is
+        // GIVE_AMOUNT / GET_AMOUNT (db/orders/order_info.js), so this order's GIVE_PRICE is
+        // its ask and the resting order's GET_PRICE is its bid, both in this order's GET
+        // units per GIVE unit. From the activation the pair is skipped when the ask exceeds
+        // the bid; the fill then settles at this order's ratio, which never exceeds the
+        // resting order's limit. Below it the legacy comparison runs the other way, kept
+        // byte-for-byte so historical replay is unchanged.
+        let mismatch = priceCross
+            ? this.util.bcgt(orderInfo['GIVE_PRICE'], matchInfo['GET_PRICE'])
+            : this.util.bcgt(matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
+        if(mismatch){
             if(this.debug)
                 getLogger().info('Skipping due to price mismatch ', matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
             return false;

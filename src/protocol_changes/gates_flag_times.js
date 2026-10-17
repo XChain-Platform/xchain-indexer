@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * The registry's own constants as rows: the 36 flag-day instants the
+ * The registry's own constants as rows: the 50 flag-day instants the
  * time-table parts share and the compiled consensus-version pin, under the
  * `protocol_changes.<NAME>` keys the entry has always exported them by. The
  * values stay declared in flag_times.js, flag_times_batch_fees.js and
@@ -58,6 +58,20 @@ const {
     DISPENSER_REFILL_TESTNET_TIME,
     STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,
     STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME,
+    EXACT_INTEGER_WIRE_FIELDS_MAINNET_TIME,
+    EXACT_INTEGER_WIRE_FIELDS_TESTNET_TIME,
+    SLASH_XANCPUB_PUBLISHER_PAIR_MAINNET_TIME,
+    SLASH_XANCPUB_PUBLISHER_PAIR_TESTNET_TIME,
+    STAKE_SNAPSHOT_SLASH_WINDOW_MAINNET_TIME,
+    STAKE_SNAPSHOT_SLASH_WINDOW_TESTNET_TIME,
+    DELEGATION_ROTATE_IN_WINDOW_MAINNET_TIME,
+    DELEGATION_ROTATE_IN_WINDOW_TESTNET_TIME,
+    SLASH_ATTEST_MULTIROUND_EXEMPT_MAINNET_TIME,
+    SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME,
+    HOST_CALL_BOUNDS_MAINNET_TIME,
+    HOST_CALL_BOUNDS_TESTNET_TIME,
+    PER_ELEMENT_METER_MAINNET_TIME,
+    PER_ELEMENT_METER_TESTNET_TIME,
 } = require('./flag_times.js');
 const {
     BATCH_ISSUANCE_LIMITS_MAINNET_TIME,
@@ -105,6 +119,20 @@ addGate('protocol_changes.DISPENSER_REFILL_MAINNET_TIME', 'constant', DISPENSER_
 addGate('protocol_changes.DISPENSER_REFILL_TESTNET_TIME', 'constant', DISPENSER_REFILL_TESTNET_TIME);
 addGate('protocol_changes.STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME', 'constant', STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME);
 addGate('protocol_changes.STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME', 'constant', STAKE_DELEGATED_SIGNING_KEY_TESTNET_TIME);
+addGate('protocol_changes.EXACT_INTEGER_WIRE_FIELDS_MAINNET_TIME', 'constant', EXACT_INTEGER_WIRE_FIELDS_MAINNET_TIME);
+addGate('protocol_changes.EXACT_INTEGER_WIRE_FIELDS_TESTNET_TIME', 'constant', EXACT_INTEGER_WIRE_FIELDS_TESTNET_TIME);
+addGate('protocol_changes.SLASH_XANCPUB_PUBLISHER_PAIR_MAINNET_TIME', 'constant', SLASH_XANCPUB_PUBLISHER_PAIR_MAINNET_TIME);
+addGate('protocol_changes.SLASH_XANCPUB_PUBLISHER_PAIR_TESTNET_TIME', 'constant', SLASH_XANCPUB_PUBLISHER_PAIR_TESTNET_TIME);
+addGate('protocol_changes.STAKE_SNAPSHOT_SLASH_WINDOW_MAINNET_TIME', 'constant', STAKE_SNAPSHOT_SLASH_WINDOW_MAINNET_TIME);
+addGate('protocol_changes.STAKE_SNAPSHOT_SLASH_WINDOW_TESTNET_TIME', 'constant', STAKE_SNAPSHOT_SLASH_WINDOW_TESTNET_TIME);
+addGate('protocol_changes.DELEGATION_ROTATE_IN_WINDOW_MAINNET_TIME', 'constant', DELEGATION_ROTATE_IN_WINDOW_MAINNET_TIME);
+addGate('protocol_changes.DELEGATION_ROTATE_IN_WINDOW_TESTNET_TIME', 'constant', DELEGATION_ROTATE_IN_WINDOW_TESTNET_TIME);
+addGate('protocol_changes.SLASH_ATTEST_MULTIROUND_EXEMPT_MAINNET_TIME', 'constant', SLASH_ATTEST_MULTIROUND_EXEMPT_MAINNET_TIME);
+addGate('protocol_changes.SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME', 'constant', SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME);
+addGate('protocol_changes.HOST_CALL_BOUNDS_MAINNET_TIME', 'constant', HOST_CALL_BOUNDS_MAINNET_TIME);
+addGate('protocol_changes.HOST_CALL_BOUNDS_TESTNET_TIME', 'constant', HOST_CALL_BOUNDS_TESTNET_TIME);
+addGate('protocol_changes.PER_ELEMENT_METER_MAINNET_TIME', 'constant', PER_ELEMENT_METER_MAINNET_TIME);
+addGate('protocol_changes.PER_ELEMENT_METER_TESTNET_TIME', 'constant', PER_ELEMENT_METER_TESTNET_TIME);
 
 // vm_lint_destructure_heights
 addGate('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION', 'height', {
@@ -114,6 +142,35 @@ addGate('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION', 'height', 
     'BTC:testnet': 156230,
     'LTC:testnet': 4912984,
     'DOGE:testnet': 67989993,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// vm_lint_syntax_depth_heights
+// Height on the processing chain's own block_index. At or above it the deploy lint
+// refuses a source over the VM's fixed syntax-depth bound before any recursive pass,
+// enforces the delimiter-nesting rule whatever the nesting row says, and treats a host
+// stack overflow as a host fault. MUST equal xchain-vm LINT_SYNTAX_DEPTH_ACTIVATION,
+// whose null is this row's UNARMED.
+addGate('vm_lint_syntax_depth_heights.VM_LINT_SYNTAX_DEPTH_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// nested_execute_gas_sum_activation
+addGate('nested_execute_gas_sum_activation.NESTED_EXECUTE_GAS_SUM_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: 0,
 });

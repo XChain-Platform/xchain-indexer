@@ -36,6 +36,7 @@ const { assert, fs, path, Database, BRIDGE_TABLES_PROBE, bridgeTablesPresent,
 // already there.
 const MIG_DIR = path.join(__dirname, '..', '..', '..', '..', 'src', 'sql', 'migrations');
 const crypto  = require('crypto');
+const { SQL_MODE_PROBE, pinnedSqlModeRows } = require('./helpers/migration_fixtures.js');
 const sha256  = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
 const OLD_NAMES = [
@@ -57,6 +58,7 @@ async function runAgainst(ledger) {
     const logged  = [];
     const conn = {
         query: async function (sql, params) {
+            if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
             if (/GET_LOCK/i.test(sql))     return [{ l: 1 }];
             if (/RELEASE_LOCK/i.test(sql)) return [{}];
             if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {

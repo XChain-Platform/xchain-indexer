@@ -32,6 +32,9 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
+const gateRegistry = require('../../consensus/gate_registry');
+
+const VOTE_V3_TICK_EXISTENCE_KEY = 'vote_v3_tick_existence_activation.VOTE_V3_TICK_EXISTENCE_ACTIVATION';
 
 // The phases of this handler, in ./vote/. Each part is called with the handler as its
 // receiver (fn.call(this, ...)), so the parts read this.indexerDb / this.util /
@@ -284,7 +287,9 @@ class Vote {
                 error = 'invalid: TICK (missing)';
             else {
                 let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], block_index, action_index);
-                if(this.util.isNull(tokenInfo))
+                let requireExistingTick = gateRegistry.activeAt(VOTE_V3_TICK_EXISTENCE_KEY,
+                    this.config['NETWORK'], this.config['COIN'], block_index, null);
+                if(requireExistingTick ? !tokenInfo : this.util.isNull(tokenInfo))
                     error = 'invalid: TICK (unknown)';
             }
         }

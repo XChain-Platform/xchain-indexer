@@ -24,6 +24,7 @@ const { CONFIG_ENV } = require('../config.js');
 // The hold ceiling comes from the same named constant HubDbSync throttles its forced
 // resync on (see initBarrierTiming).
 const { resolveBarrierHoldCeilingMs } = require('../hub/hub_db_sync.js');
+const { resolveReadyNoCommitMs } = require('./readiness/verdict.js');
 
 // Chain identity, stall and loop-liveness fields: what /health reads to tell an
 // advancing, deferring, wedged or silent block loop apart.
@@ -65,6 +66,10 @@ function initChainState(indexer){
     // outer poll loop and the inner catch-up loop, since an initial sync legitimately stays
     // inside the inner one for hours. Read by isPollSilent().
     indexer.lastPollAt = 0;
+    // Wall-clock (epoch ms) this instance was constructed. The readiness verdict counts
+    // "no commit" from here when nothing has committed since boot, so a restart cannot
+    // turn a block stuck before it into one that is never judged (see readiness/verdict.js).
+    indexer.startedAt = Date.now();
     // Decoder reorg events (one per orphaned block) this process has recorded as processed, for the metrics scrape.
     indexer.reorgsProcessedSinceStart = 0;
 }
@@ -117,6 +122,26 @@ function initHubConfigState(indexer){
     indexer.lastHubConfigWatermark = 0;
 }
 
+// Action-scoped barrier state, all node-local and never hashed.
+function initActionBarrierFlags(indexer){
+    // priceBarrierBlock      - the block the two flags below describe.
+    // priceBarrierSkipped    - the price/oracle barriers were skipped for it because
+    //                          priceReadPredicate proved no transaction-borne price
+    //                          reader; read by db.assertPriceBarrierNotSkipped().
+    // priceBarrierForceBlock - a block that must take the barriers unconditionally on
+    //                          its next attempt, set when that assertion fired. Cleared
+    //                          once that block commits, so it is a one-shot escalation
+    //                          rather than a latch that would re-arm the every-block wait.
+    indexer.priceBarrierBlock      = null;
+    indexer.priceBarrierSkipped    = false;
+    indexer.priceBarrierForceBlock = null;
+    // The same three for the remote-token pin barrier, read by
+    // db.assertRemoteTokenBarrierNotSkipped() at the admitted pin read.
+    indexer.remoteTokenBarrierBlock      = null;
+    indexer.remoteTokenBarrierSkipped    = false;
+    indexer.remoteTokenBarrierForceBlock = null;
+}
+
 // Barrier timing and hold state: the per-attempt timeout, the hold ceiling and record,
 // the price-barrier skip flags, and the two health windows sized off the timeout.
 function initBarrierTiming(indexer){
@@ -140,18 +165,7 @@ function initBarrierTiming(indexer){
     // see that a mirror needed re-driving without reading container logs.
     indexer.barrierCeilingHits = 0;
 
-    // Action-scoped barrier state, all node-local and never hashed.
-    // priceBarrierBlock      - the block the two flags below describe.
-    // priceBarrierSkipped    - the price/oracle barriers were skipped for it because
-    //                          priceReadPredicate proved no transaction-borne price
-    //                          reader; read by db.assertPriceBarrierNotSkipped().
-    // priceBarrierForceBlock - a block that must take the barriers unconditionally on
-    //                          its next attempt, set when that assertion fired. Cleared
-    //                          once that block commits, so it is a one-shot escalation
-    //                          rather than a latch that would re-arm the every-block wait.
-    indexer.priceBarrierBlock      = null;
-    indexer.priceBarrierSkipped    = false;
-    indexer.priceBarrierForceBlock = null;
+    initActionBarrierFlags(indexer);
 
     // Grace window (ms) for the /status healthcheck's stall discriminator. A set stallReason
     // reports the container unhealthy (503) only after NO block has committed for this long, so
@@ -162,6 +176,12 @@ function initBarrierTiming(indexer){
     // never flaps the healthcheck. Purely operational, NOT a consensus parameter.
     indexer.healthStallGraceMs = parseInt(CONFIG_ENV.INDEXER_HEALTH_STALL_GRACE_MS
                                        || String(Math.max(2 * indexer.priceSyncTimeoutMs, 120000)), 10);
+
+    // Own no-progress window (ms) for the price-landing wait (stall class price_landing_wait).
+    // That barrier waits on the other landing chains' landed times rather than the local
+    // mirror, so it is judged against this field, not healthStallGraceMs. Twice the generic
+    // window by default. Purely operational, NOT a consensus parameter.
+    indexer.priceLandingGraceMs = 2 * indexer.healthStallGraceMs;
 
     // Window (ms) the block-poll loop may go without completing an ITERATION before
     // isPollSilent() calls it dead. Sized off healthStallGraceMs, which is already at
@@ -206,4 +226,24 @@ function initDirectCallState(indexer){
     indexer.anchorAttestArrivalMarginS = null;
 }
 
-module.exports = { initChainState, initHaltState, initHubConfigState, initBarrierTiming, initDirectCallState };
+// The readiness verdict's window and the coin node tip it compares against. Every field
+// here is reporting only: GET /ready and the /status readiness fields read them, and
+// nothing that gates a block or a hashed value does.
+function initReadinessState(indexer){
+    // Coin node tip read from the utxo tracker for /status chainLag (see readiness/chain_tip.js):
+    // the height, when it was read, and the refresh bookkeeping. Reporting only.
+    indexer.chainTip           = null;
+    indexer.chainTipAt         = null;
+    indexer._chainTipCheckedAt = 0;
+    indexer._chainTipInFlight  = null;
+    indexer.chainTipTtlMs      = parseInt(CONFIG_ENV.INDEXER_CHAIN_TIP_TTL_MS || '15000', 10);
+    indexer.chainTipTimeoutMs  = parseInt(CONFIG_ENV.INDEXER_CHAIN_TIP_TIMEOUT_MS || '1500', 10);
+
+    // Window (ms) the indexer may sit behind a known tip without a commit before GET /ready
+    // reports it not ready (readiness/verdict.js). Readiness, never liveness: it moves no
+    // status code the container healthcheck reads. Purely operational, NOT a consensus parameter.
+    indexer.readyNoCommitMs = resolveReadyNoCommitMs(CONFIG_ENV.INDEXER_READY_NO_COMMIT_MS);
+}
+
+module.exports = { initChainState, initHaltState, initHubConfigState, initBarrierTiming, initDirectCallState,
+                   initReadinessState };

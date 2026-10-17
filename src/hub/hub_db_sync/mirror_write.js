@@ -60,15 +60,25 @@ function coerceMirrorValue(v, columnType) {
 
 // The price_snapshots upsert, for `rowCount` rows at once. ONE builder for both
 // the per-row applier and the bootstrap's batch, because the ODKU body is the
-// consensus-relevant part (skipped -> finalized upgrades only, keyed on
-// VALUES(status) so it is independent of assignment order) and two copies of it
-// would be two chances to diverge. At rowCount 1 it emits exactly the statement
-// applyRow emitted before this batching existed.
+// consensus-relevant part and two copies of it would be two chances to diverge.
+//
+// The incoming row's status decides, keyed on VALUES(status) so the result is
+// independent of assignment order:
+//   - 'finalized' takes the hub's row whole: a skipped placeholder upgrades in place,
+//     and a round the hub re-finalized after a dispute comes back.
+//   - 'disputed' takes the hub's row whole too. The hub disputes a finalized round
+//     in place (reorg_handler executeRollback) and re-emits the row, so a running
+//     mirror lands on the same row a fresh drain of the hub's table inserts, and
+//     every consensus read (all of them filter status = 'finalized') stops seeing it.
+//   - 'skipped' never touches an existing row, so a late or replayed placeholder
+//     cannot demote a finalized or disputed round.
+// At rowCount 1 it is the statement applyRow issues.
 function priceUpsertSql(cols, rowCount) {
     cols = cols.filter(c => c !== 'id');
     let updatable = cols.filter(c => c !== 'id' && c !== 'round_number' && c !== 'coin_pair' && c !== 'status');
-    let sets = updatable.map(c => '`' + c + "` = IF(VALUES(status) = 'finalized', VALUES(`" + c + '`), `' + c + '`)');
-    sets.push("status = IF(VALUES(status) = 'finalized', 'finalized', status)");
+    let takesRow = "VALUES(status) IN ('finalized', 'disputed')";
+    let sets = updatable.map(c => '`' + c + '` = IF(' + takesRow + ', VALUES(`' + c + '`), `' + c + '`)');
+    sets.push('status = IF(' + takesRow + ', VALUES(status), status)');
     let tuple = '(' + cols.map(() => '?').join(', ') + ')';
     let tuples = [];
     for (let i = 0; i < rowCount; i++) tuples.push(tuple);
@@ -86,8 +96,10 @@ function priceUpsertSql(cols, rowCount) {
 // wrote, which the VM oracle reads and the settlement barriers trust.
 // doQueryStrict is that same query with the swallow removed, and it already
 // carries every consensus-input read for this reason; writes belong on it too.
-// Reads deliberately stay on doQuery: an empty result is a legitimate answer
-// there and must not become a throw.
+// Barrier and watermark reads go through strictHubRead for the same reason:
+// doQueryStrict still returns [] for a genuinely empty result and throws only
+// on a query error, which would otherwise read as an empty mirror and open a
+// settlement barrier.
 //
 // Resolved per call rather than hard-coded because this module is vendored
 // byte-identical into xchain-explorer, where hubDb is HubMirrorPool: a minimal
@@ -100,4 +112,11 @@ async function applyMirrorWrite(hubDb, query, args) {
     return await hubDb.doQuery(query, args);
 }
 
-module.exports = { coerceMirrorValue, priceUpsertSql, applyMirrorWrite };
+// Read the hub mirror so a query error throws instead of returning [] (resolved like applyMirrorWrite).
+async function strictHubRead(hubDb, query, args) {
+    if (typeof hubDb.doQueryStrict === 'function')
+        return await hubDb.doQueryStrict(query, args);
+    return await hubDb.doQuery(query, args);
+}
+
+module.exports = { coerceMirrorValue, priceUpsertSql, applyMirrorWrite, strictHubRead };

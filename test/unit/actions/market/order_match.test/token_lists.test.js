@@ -18,7 +18,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const sinon  = require('sinon');
 const { createBaseData, createTokenInfo } = require('../../../../fixtures/mocks');
 const {
-    BLOCK_TIME, makeOrderInfo, makeMatchInfo, useOrderMatchHarness,
+    BLOCK_TIME, belowPriceCross, makeOrderInfo, makeMatchInfo, useOrderMatchHarness,
 } = require('./helpers/order_match_harness.js');
 
 // Each test gets a fresh harness from useOrderMatchHarness; bind() hands it to
@@ -210,7 +210,9 @@ describe('Order_Match action handler @regression @tier2', function () {
         // give_amount = max_give = 10; get_amount = 10 * GIVE_PRICE = 10 * 0.5 = 5
         // Price check: matchInfo.GET_PRICE(1) <= orderInfo.GIVE_PRICE(0.5)? 1 > 0.5 → mismatch → need GIVE_PRICE >= 1
         // Use GIVE_PRICE=2, GET_PRICE=1: give_from_get = 1000 * 1 = 1000 > max_give=10 → give-side bottleneck
-        // Price check: matchInfo.GET_PRICE(1) <= orderInfo.GIVE_PRICE(2) → passes
+        // Price check: matchInfo.GET_PRICE(1) <= orderInfo.GIVE_PRICE(2) → passes under the
+        // legacy comparison, so the case runs below the price-cross height
+        belowPriceCross();
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({
             GIVE_REMAINING: '10',
             GET_REMAINING:  '1000',

@@ -101,13 +101,27 @@ function normalizeStakeAmount(v){
     return (neg && out !== '0') ? '-' + out : out;
 }
 
-// Tables whose highest-`id`-survivor dedupe rule is validated and safe to auto-apply at
-// startup (see dedupeForUniqueIndex: an upsert that degraded to plain INSERT appended a
-// fresh row per change, so the highest id is the live value). reconcileTableIndexes will
-// only DELETE rows to force a UNIQUE index for a table on this allow-list; any other table
-// with blocking duplicates is left intact with a loud warning for a manual migration, so a
-// mis-declared UNIQUE index can never silently destroy rows on an unvalidated table.
-const AUTO_DEDUP_TABLES = new Set(['balances']);
+// UNIQUE indexes whose highest-`id`-survivor dedupe is validated and safe to auto-apply at
+// startup, keyed table -> index name -> exact ordered column list. The argument (an upsert on
+// that key degraded to plain INSERT, so the highest id per key is the live value; see
+// dedupeForUniqueIndex) holds for one key, not for every UNIQUE on the table, so
+// reconcileTableIndexes DELETEs rows only for an exact entry here. Any other declaration
+// blocked by duplicates is left intact with a loud warning; a new UNIQUE on a listed table
+// converges through a dated mode=manual migration, never by widening this map unreviewed.
+const AUTO_DEDUP_TABLES = Object.freeze({
+    balances: Object.freeze({ addr_tick: Object.freeze(['address_id', 'tick_id']) }),
+});
+
+// True only for a declared index whose table, name and unprefixed ordered columns match an entry.
+function isAutoDedupAllowed(table, indexName, columns, prefixes){
+    const byIndex = Object.prototype.hasOwnProperty.call(AUTO_DEDUP_TABLES, table) ? AUTO_DEDUP_TABLES[table] : null;
+    if(!byIndex || typeof indexName !== 'string' || !Array.isArray(columns)) return false;
+    const name = Object.keys(byIndex).find(n => n.toLowerCase() === indexName.toLowerCase());
+    if(!name) return false;
+    const want = byIndex[name];
+    if(columns.length !== want.length || (prefixes || []).some(p => p != null)) return false;
+    return columns.every((c, i) => String(c).toLowerCase() === want[i]);
+}
 
 // Accumulate one undeclared-shape finding for the verifyTables summary. `store` is the
 // Map verifyTables hangs off the instance for the length of a run; it is absent outside
@@ -218,7 +232,8 @@ function usesCapabilitySnapshot(config, capability){
 //
 // Holds only while sql_mode omits NO_BACKSLASH_ESCAPES. SESSION_SQL_MODE below is the
 // mode withPinnedSqlMode requests and it never carries that flag; sqlModeAllowsBackslashEscapes
-// is the probe to run against what the server actually reports.
+// is the probe run against what the server actually reports, enforced on the migration
+// connection by assertMigrationSqlMode (database/migration_sql_mode_guard.js).
 function opensBackslashEscape(str, i, quote){
     return str[i] === '\\' && quote !== '`' && i + 1 < str.length;
 }
@@ -257,6 +272,7 @@ module.exports = {
     requireStakeWeight,
     normalizeStakeAmount,
     AUTO_DEDUP_TABLES,
+    isAutoDedupAllowed,
     recordShapeDrift,
     txEpochStore,
     BLOCK_HASH_VERSION,

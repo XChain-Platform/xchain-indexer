@@ -264,4 +264,21 @@ module.exports = {
         this.util.throwError(err);
     },
 
+    // The backstop that enforces the remote-token pin barrier. Every armed block first runs
+    // with the barrier skipped; a create that reads the admitted pin here (an ORDER or SWAP
+    // in the block, an injected execution, a callback) fails that block closed, and its retry
+    // takes the barrier before reading. Scoped to block processing exactly as the price
+    // backstop above is.
+    assertRemoteTokenBarrierNotSkipped(site){
+        const ctx = txEpochStore.getStore();
+        if(ctx === undefined || ctx.consensus !== true) return;
+        const ix = this.indexer;
+        if(!ix || !ix.remoteTokenBarrierSkipped) return;
+        ix.remoteTokenBarrierForceBlock = ix.remoteTokenBarrierBlock;
+        const err = new Error('remote-token barrier skipped but ' + site + ' read the pin mirror at block ' +
+            ix.remoteTokenBarrierBlock + '; deferring the block so it re-runs with the barrier enforced');
+        err.code = 'REMOTE_TOKEN_BARRIER_DEFERRED';
+        this.util.throwError(err);
+    },
+
 };

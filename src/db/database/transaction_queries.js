@@ -58,19 +58,19 @@ module.exports = {
     async rollbackTransaction(){
         if(this.transactionConnection != null){
             getLogger().info("rolling back");
+            // Fence any zombie of the transaction being rolled back (M-16), BEFORE the
+            // ROLLBACK is sent: a write queued behind it on this connection would run in
+            // autocommit, so every write from here on must carry a stale epoch.
+            this._txEpoch++;
             try {
                 await this.transactionConnection.rollback();
             } finally {
                 await this.transactionConnection.release();
                 this.transactionConnection = null;
-                // Fence any zombie of the block that just rolled back (M-16): bumping the
-                // epoch here closes even the window before the next block's beginTransaction,
-                // so a post-rollback zombie write cannot land as a stray auto-committed row.
-                this._txEpoch++;
                 // The abort just un-assigned every dense index id this transaction handed
                 // out, so the id -> name memos it filled are now lies about ids the next
-                // caller will be given. In the finally, beside the epoch bump, for
-                // the same reason: a throw out of rollback() must not be able to skip it.
+                // caller will be given. In the finally so a throw out of rollback() cannot
+                // skip it.
                 this.clearSmtNameCaches();
                 this.releaseTxLock();
             }
@@ -123,6 +123,8 @@ module.exports = {
             }
             let tx = this.transactionConnection != null;
             let db = await this.getConnection();
+            // A teardown can begin during that await; re-check so no statement reaches the driver after it.
+            try { this.assertTxNotFenced(); } catch(e){ if(!tx) await db.release(); throw e; }
             try {
                 results = await db.query(query, args);
             } catch (error){
@@ -157,6 +159,8 @@ module.exports = {
             }
             let tx = this.transactionConnection != null;
             let db = await this.getConnection();
+            // A teardown can begin during that await; re-check so no statement reaches the driver after it.
+            try { this.assertTxNotFenced(); } catch(e){ if(!tx) await db.release(); throw e; }
             try {
                 results = await db.query(query, args);
             } catch (error){

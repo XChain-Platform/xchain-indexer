@@ -45,3 +45,11 @@ CREATE TABLE state_checkpoints (
     UNIQUE KEY uq_chain_seq (chain, network, checkpoint_seq),
     KEY idx_checkpoint_seq (chain, network, checkpoint_seq)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+
+-- getMirroredStateCheckpointCandidates runs inside the block loop and ranges on
+-- (chain, network, block_index >= ?). Neither key above has block_index after its
+-- equality prefix, so without this index each call reads and filesorts every row for
+-- the chain. Non-unique and outside the fence: the fence stays uq_chain_seq alone.
+-- Standalone so reconcileTableIndexes heals it onto an existing table at boot. A
+-- separate _HubMirror schema is built from the explorer's hub-mirror twin instead.
+CREATE INDEX idx_chain_block ON state_checkpoints (chain, network, block_index);

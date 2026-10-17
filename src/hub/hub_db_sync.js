@@ -78,6 +78,7 @@ const lifecycleMethods       = require('./hub_db_sync/lifecycle.js');
 const bootstrapDrainMethods  = require('./hub_db_sync/bootstrap/drain.js');
 const bootstrapFlushMethods  = require('./hub_db_sync/bootstrap/flush.js');
 const bootstrapVerdictMethods = require('./hub_db_sync/bootstrap/verdict.js');
+const bootstrapRepageMethods = require('./hub_db_sync/bootstrap/repage.js');
 const mirrorScopeMethods     = require('./hub_db_sync/mirror_scope.js');
 const chainIdentityMethods   = require('./hub_db_sync/chain_identity.js');
 const reconciliationMethods  = require('./hub_db_sync/foreign_reconciliation.js');
@@ -87,6 +88,7 @@ const contentBarrierMethods  = require('./hub_db_sync/barriers/oracle_match_call
 const bridgePolicyBarrierMethods = require('./hub_db_sync/barriers/bridge_policy.js');
 const attestBarrierMethods   = require('./hub_db_sync/barriers/attest.js');
 const snapshotBarrierMethods = require('./hub_db_sync/barriers/snapshot.js');
+const remoteTokenBarrierMethods = require('./hub_db_sync/barriers/remote_token.js');
 const rowApplyMethods        = require('./hub_db_sync/row_apply.js');
 const retractionMethods      = require('./hub_db_sync/retractions.js');
 const liveEventMethods       = require('./hub_db_sync/live_events.js');
@@ -118,10 +120,10 @@ class HubDbSync {
 // a duplicate here would be a second definition of one method, and the drift guard
 // in the entry test compares the installed names against each part's own).
 Object.assign(HubDbSync.prototype, watermarkMethods, lifecycleMethods,
-              bootstrapDrainMethods, bootstrapFlushMethods, bootstrapVerdictMethods,
+              bootstrapDrainMethods, bootstrapFlushMethods, bootstrapVerdictMethods, bootstrapRepageMethods,
               mirrorScopeMethods, chainIdentityMethods, reconciliationMethods,
               priceBarrierMethods, priceLandingBarrierMethods, contentBarrierMethods, bridgePolicyBarrierMethods,
-              attestBarrierMethods, snapshotBarrierMethods,
+              attestBarrierMethods, snapshotBarrierMethods, remoteTokenBarrierMethods,
               rowApplyMethods, retractionMethods, liveEventMethods, transportMethods);
 
 // ONE export shape: the class. Everything a consumer reaches beside it (ensureTables,

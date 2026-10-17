@@ -33,6 +33,8 @@ const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYA
 
 const { getLogger } = require('../../observability/index.js');
 
+const bounds = require('./settlement_bounds.js');
+
 /**
  * Settle a SWAP leg: the local offer must still be open (not already settled /
  * cancelled / expired), and the whole escrow releases to the counterparty.
@@ -64,15 +66,23 @@ async function settleSwapLeg(data, m, coin, leg, swapInfo){
         return;
     }
 
+    // A match naming another tick or ownership flag than the swap gives moves nothing
+    // (cross_settle/settlement_bounds.js), and the release never exceeds the swap's escrow.
+    if(bounds.mismatchesOffer.call(this, data, m, coin, leg, swapInfo)){
+        await recordNoopSettlement.call(this, data, m, leg.localActionIndex);
+        return;
+    }
+    let giveAmount = bounds.clampSwapReleaseToEscrow.call(this, data, m, coin, leg, swapInfo);
+
     // Settle: mint an internal action and release escrow to the counterparty.
     let action = { ACTION: 'CROSS_SETTLE', BLOCK_INDEX: data['BLOCK_INDEX'] };
     data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
     data['STATUS'] = 'valid';
 
     getLogger().info("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : release ' +
-                leg.giveAmount + ' ' + coin + ':' + (leg.giveTick || coin) + ' → ' + leg.payoutAddr + ' : ' + data['STATUS']);
+                giveAmount + ' ' + coin + ':' + (leg.giveTick || coin) + ' → ' + leg.payoutAddr + ' : ' + data['STATUS']);
 
-    await releaseEscrow.call(this, data, m, coin, leg, leg.giveAmount, swapInfo['SOURCE']);
+    await releaseEscrow.call(this, data, m, coin, leg, giveAmount, swapInfo['SOURCE']);
 
     // Complete the offer and record the settlement (idempotent on match_id).
     await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], leg.localActionIndex, 'complete');
@@ -119,6 +129,10 @@ async function settleOrderLeg(data, m, coin, leg, orderInfo){
         return;
     }
 
+    if(bounds.mismatchesOffer.call(this, data, m, coin, leg, orderInfo)){
+        await recordNoopSettlement.call(this, data, m, leg.localActionIndex);
+        return;
+    }
     let clamped = await clampFillToEscrow.call(this, data, m, coin, leg, orderInfo);
     if(clamped === null)
         return;
@@ -295,7 +309,7 @@ async function proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, 
     let info = await this.indexerDb.getTokenInfo(giveTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
     if(info && !this.util.isNull(info['DECIMALS']))
         dec = parseInt(info['DECIMALS']);
-    return this.util.applyProceedsSplit(giveTick, giveAmount, payoutAddr, reencoded, dec, parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']));
+    return this.util.applyProceedsSplit(giveTick, giveAmount, payoutAddr, reencoded, dec);
 }
 
 /**

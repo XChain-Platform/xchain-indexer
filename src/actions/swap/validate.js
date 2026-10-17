@@ -186,6 +186,12 @@ async function validateGeneral(handler, st){
     if(!error && checkMakerPolicy && await handler.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GET_TICK'], data['BLOCK_INDEX']) == false)
         error = 'invalid: GET_ADDRESS (not authorized for GET_TICK)';
 
+    // Refuse a SWAP_ACTION_INDEX that stores as NULL: the swap_cancels and swap_edits rows
+    // hold it in a NOT NULL column (recordSwap stores the refusal with a placeholder)
+    if(!error && (format==1 || format==2) &&
+       handler.util.storesAsNull(data['SWAP_ACTION_INDEX'], handler.config['INTEGER_FIELDS']['SWAP_ACTION_INDEX']))
+        error = 'invalid: SWAP_ACTION_INDEX (format)';
+
     // Validate SWAP_ACTION_INDEX is valid SWAP
     if(!error && (format==1 || format==2) && !swapInfo)
         error = 'invalid: SWAP_ACTION_INDEX (unknown)';

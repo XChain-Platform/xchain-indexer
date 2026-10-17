@@ -134,9 +134,16 @@ async function verifyCheckpointQuorum(cp, indexerDb){
  * commit the escrow credit, but "latest" is a moving target that differs on every node at every
  * instant, and the whole point of the rule is that two nodes holding the same rows pick the
  * same one. The highest seq at that height is the append-only table's own latest-wins rule
- * (state_checkpoints readers take MAX(checkpoint_seq); a reorged height is SUPERSEDED by a
- * higher seq rather than updated), so picking the lower seq would prove against a root the
- * federation itself has already replaced.
+ * (state_checkpoints readers take MAX(checkpoint_seq)), the tie-break when two rows name one
+ * height. A reorg does not replace a signed row: the hub's round refuses a second payload at a
+ * seq it already signed (xchain-hub src/anchor/checkpoint_engine/round.js claimSeqSignature).
+ * After a rollback the federation signs NEW rows over the chain it now follows: on LTC and DOGE
+ * those can land at heights below the old rows (not necessarily the old height itself), while
+ * on BTC the cadence latch puts them above. Either way the old row's root stays on no honest
+ * node, and when the new rows are not below the transfer's snapshot_block this rule still takes
+ * the old row, because it takes the FIRST at or after snapshot_block. The origin's
+ * getbridgeescrowproof read is what bounds that case (db/credits/bridge_reads.js
+ * divergenceSettled).
  *
  * Both sources are queried and the candidates are MERGED before the pick, rather than one
  * being preferred: a node that holds the anchor for height 105 and a mirrored row for 102 must

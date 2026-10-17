@@ -216,6 +216,17 @@ const MIGRATION_CHECKSUM_REBASELINES = {
         from: '069f0e73f1cb6179d0dcab361832204c96aa1cb4072454ddcd7e6a8acd2d31ab', // a0dd6d08, pre-tag
         to:   '37ff284b7f11f248e9f52979f70e5fe8f13c9cad7a7e719b4633866e8c81dc1a',
     },
+    // Scoped the bridge-table provenance claim to the column definitions as copied on
+    // 2026-09-12. Comment lines only; the four CREATE TABLE statements are byte-identical.
+    // The three predecessor hashes cover every committed spelling of the moved test paths.
+    '2026-09-12-bridge-tables.sql': {
+        from: [
+            'e4ef50910ca9ebc4582b1fbf1e3c6a151cb0b342c76a3949c7d0704729d8a6a7',
+            '3b2ad83e7ef63b9bfbad0cfd4d09befe7ffe501ae28a121f4ac7b7683da8f5cc',
+            '00b45c045b40bb8d2cbb778980b964bb490f8d53321178615e16922782495beb',
+        ],
+        to: '300201d9617dc15335237fe659800a08e9d0d03b735fd8f8d58d880d951d8133',
+    },
     // a06f8873 (2026-09-17) rewrote two comment lines of this already-applied file (the
     // header cited an internal spec path). Comment lines only; the executable SQL is
     // byte-identical, verified by diff against the first revision, 8c50c9d4. That revision
@@ -247,6 +258,30 @@ const MIGRATION_CHECKSUM_REBASELINES = {
             '59fcbbb1b7c93acde903d1aff9dbd2c0a350f1ad09f83ec020fc91cce01888e3', // 6f226b37, index comments
         ],
         to: '3ce329fb2d98b14d7b61aa892fed9ef483957eba6da77e708912efaf24318d09',
+    },
+    // Corrected FALSE notes in both WHY blocks. They said a replay-only replica missing the
+    // fence column was harmless because hub_db_sync fenced "conditionally on column presence";
+    // the retraction DELETE names the column unconditionally and fails there instead, so
+    // believing them strands orphaned mirror rows. Comment lines only: each ALTER TABLE is
+    // byte-identical, verified by comparing the comment-stripped residue. 1284845c2 is each
+    // file's only committed revision and an object-store scan found no other blob with the
+    // same residue, so one `from` covers every DB that applied them.
+    '2026-07-17-cross-chain-matches-reorg-fence-columns.sql': {
+        from: '8d8ef7feba1291153ea93c39e6f5b842643cb0ca74120d59478ac6664a8f3ed0', // 1284845c2, as authored
+        to:   '5940b7e0e676cb7523b7dd3b19cbce605d65428b105d8cdf3bf3cafeaab7cd02',
+    },
+    '2026-07-17-oracle-prices-add-push-generation.sql': {
+        from: '3690eb643162fa851103bc803103bb22a6427344002c2607ad1ef9680f764ff8', // 1284845c2, as authored
+        to:   'bb0fb2b5be674d00807255e61781b319f3e3f10207327926ec3274e3555d1a24',
+    },
+    // Corrected a FALSE note: the header named a v5-handler writer for batch_action_index
+    // and called a persistent NULL a coverage gap to alert on; the link is a best-effort
+    // hub-mirror stamp a reorg clears. Comment lines only: the ALTER TABLE is byte-identical,
+    // verified by comparing the comment-stripped residue. 3ddbf7689 is the file's only
+    // revision and an object-store scan found no other blob with the same residue.
+    '2026-09-03-attests-batch-action-index.sql': {
+        from: '755dcb61fb94a534f44f7ece590fbdc009ad1a85d100d4e8bae9144f10b95e5a', // 3ddbf7689, as authored
+        to:   '4f61f3b78e0fb0c3b06eec68ed2ff9d929f5b897be409684c5933e2ef40c0b16',
     },
 };
 

@@ -336,7 +336,9 @@ module.exports = {
             // three pricing paths set it before a dispense can be valid); the strict form
             // keeps it that way.
             if(ledger && !error && !this.util.isNull(unitCoinCost) && multiplier > 0){
-                let cost = this.util.bcmul(multiplier, unitCoinCost, tallyScale);
+                // A Mode A fill on the exact tally is charged multiplier x FIAT_AMOUNT / price.
+                let cost = row.fiatFillPrice ? this.util.fiatFillCost(multiplier, row.fiatFillPrice, tallyScale)
+                                             : this.util.bcmul(multiplier, unitCoinCost, tallyScale);
                 if(this.util.bclt(available, cost))
                     cost = available;
                 // Row 18: the row records what this dispense was CHARGED, not the whole

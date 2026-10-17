@@ -32,8 +32,9 @@
 // before the restart. Which versions can PROVE which family stays the job of
 // REWARD_FAMILY_VERSIONS below; membership here only says "this is an attested anchor".
 //
-// 3 is the fold wire, which the DOGE parse credits as an anchor_bundle reward. Leaving it
-// out made a fold-era reward eternally 'unknown' (the same halt as 150456). A v3 row parsed
+// 3 is the fold wire, whose chain sections prove an anchor_bundle reward that the BTC-side
+// derive mints (DOGE-side handlers credit nothing). Leaving it out made a fold-era reward
+// eternally 'unknown' (the same halt as 150456). A v3 row parsed
 // before the fold is armed carries the deterministic 'invalid: VERSION (unknown)', so it
 // can only turn such a txid into 'rejected', never into 'verified'.
 const ATTESTED_VERSIONS = [0, 1, 3, 4, 5, 6, 7];
@@ -50,10 +51,10 @@ const ATTESTED_VERSIONS = [0, 1, 3, 4, 5, 6, 7];
 // The per-chain family is gone with the per-chain wires: those rewards were attested before
 // the version restart, are already recorded, and are never re-derived.
 //
-// Each family also admits its PRE-RESTART wire byte. The restart renumbered the same two
-// shapes rather than defining new ones - anchor.js's own dispatch reads wire byte 6
-// through the v1 archive branch and 7 through the v0 bundle branch - but a pre-restart
-// anchor ROW keeps the byte it was mined with, so a pre-restart-attested reward maturing
+// Each family also admits its PRE-RESTART wire byte. The parser table in
+// src/actions/anchor/index.js holds only versions 0 to 3, so bytes 6 and 7 never parse as
+// valid anchors in either era; the alias exists because a pre-restart anchor ROW keeps
+// the byte it was mined with, so a pre-restart-attested reward maturing
 // after the restart must find its anchor under the legacy byte or it can never be proven
 // (the BTC testnet halt at 150455/150456). The exclusivity the map exists for survives the
 // alias: 6 admits only into archive and 7 only into bundle, so a bundle section still
@@ -95,14 +96,22 @@ function rewardFamily(rewardType){
     return null;
 }
 
+// The dropped form is for use above the legacy reward pin gate; 6 and 7 stay in ATTESTED_VERSIONS.
+function rewardFamilyVersions(family, { legacyDropped = false } = {}){
+    if(!Object.prototype.hasOwnProperty.call(REWARD_FAMILY_VERSIONS, family)) return null;
+    let list = REWARD_FAMILY_VERSIONS[family].slice();
+    return legacyDropped === true ? list.filter(v => v !== 6 && v !== 7) : list;
+}
+
 // Anchor statuses that are NOT fleet-uniform, so they are evidence of nothing here.
 //
 // judge's whole licence to memoize a permanent 'rejected' is that the status is chain
-// data every honest DOGE node computes identically. Three values in actions/anchor.js
-// break that, and they break it in OPPOSITE directions on the same anchor:
+// data every honest DOGE node computes identically. Four values in the parser under
+// src/actions/anchor/ break that, and they break it in OPPOSITE directions on the same
+// anchor:
 //   'unverified'            - the node holds no mirrored oracle_publish snapshot
-//                             (anchor.js oracleN === 0), so it declines to judge the
-//                             root quorum at all.
+//                             (src/actions/anchor/quorum.js oracleN === 0), so it
+//                             declines to judge the root quorum at all.
 //   'invalid: insufficient  - only a node that DOES mirror the snapshot can produce this
 //    signer stake|valid       verdict for the SAME anchor the unmirrored node stamped
 //    signatures (n/m)'        'unverified'.
@@ -121,8 +130,9 @@ function rewardFamily(rewardType){
 // only on fields that are node-class-independent (version, chain, network, publisher,
 // snapshot_block, seq, confirmations). The publisher-attestation quorum is not lost with
 // them: anchor_reward_derive.verifyAttestation re-runs it BTC-side before proveMined.
-// Every other 'invalid: ...' anchor.js writes is decided from the wire bytes plus
-// replayed DOGE chain state, so it stays a deterministic reject.
+// Every other 'invalid: ...' status the parser under src/actions/anchor/ writes is
+// decided from the wire bytes plus replayed DOGE chain state, so it stays a
+// deterministic reject.
 const NODE_CLASS_DEPENDENT_STATUS =
     /^(?:unverified|invalid: insufficient|invalid: SECTION \d+ insufficient|invalid_archive)/i;
 
@@ -182,13 +192,15 @@ function isRewardCandidateRow(a, network, publisher){
 // accept or reject is a consensus change and ships behind its own activation row.
 //
 // Returns { byAction: Map(action_index -> header block), filtered: old-peer maximum or null }.
-function bundleHeaderBlocks(anchors, network, publisher){
+function bundleHeaderBlocks(anchors, network, publisher, versions = REWARD_FAMILY_VERSIONS.bundle){
     let byAction = new Map();
     let filtered = null;
     for(let a of anchors){
         // Every era's bundle SECTION rows (v0, v3 fold sections, pre-restart v7) reconstruct
         // the header; one bundle is one era, so the eras never mix within an action.
-        if(!REWARD_FAMILY_VERSIONS.bundle.includes(Number(a.version))) continue;
+        // `versions` lets the caller drop the pre-restart wires, so a dropped v7 sibling
+        // cannot raise the header maximum either.
+        if(!versions.includes(Number(a.version))) continue;
         if(!isBundleSectionRow(a)) continue;
         let b = Number(a.snapshot_block);
         if(!Number.isFinite(b)) continue;
@@ -271,9 +283,10 @@ function judgeAnchors(anchors, e){
         snapshot:  Number(e.snapshotBlock),
         family:    family,
         isArchive: family === 'archive',
-        versions:  REWARD_FAMILY_VERSIONS[family]
+        // Only an exact true drops the pre-restart wires; any other value changes nothing.
+        versions:  rewardFamilyVersions(family, { legacyDropped: e.legacyDropped === true })
     };
-    let headers = (family === 'bundle') ? bundleHeaderBlocks(anchors, t.network, t.publisher) : null;
+    let headers = (family === 'bundle') ? bundleHeaderBlocks(anchors, t.network, t.publisher, t.versions) : null;
     let sawAttested = false;
     for(let a of anchors){
         if(!ATTESTED_VERSIONS.includes(Number(a.version))) continue;   // a sibling anchor in the same tx, not our proof
@@ -293,6 +306,6 @@ function judgeAnchors(anchors, e){
 
 module.exports = {
     ATTESTED_VERSIONS, REWARD_FAMILY_VERSIONS, NODE_CLASS_DEPENDENT_STATUS,
-    rewardFamily, isRewardCandidateRow, isBundleSectionRow, bundleHeaderBlocks, bindsToTuple,
+    rewardFamily, rewardFamilyVersions, isRewardCandidateRow, isBundleSectionRow, bundleHeaderBlocks, bindsToTuple,
     judgeAnchors
 };

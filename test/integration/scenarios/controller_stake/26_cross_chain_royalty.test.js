@@ -44,6 +44,7 @@ const { createDatabases, createDecoderSchema, decoderQuery, indexerQuery,
 const DecoderSeeder = require('../../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../../setup/indexer-launcher');
 const { seedGas } = require('../../setup/gas-seeder');
+const { signedRemoteTokenRow, stubRemoteTokenValidators } = require('../../../fixtures/mocks');
 
 const OWNER   = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // issues, binds, lists
 const LEGADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM'; // royalty leg recipient
@@ -143,11 +144,24 @@ async function setupRoyaltyRail() {
             { source: OWNER, data: `DEPLOY|0|${b64(SEGLEG)}|300000|` },
         ]);
         indexer = await initIndexer();
+        // The fixture validators back only the pinned remote token row (snapshot 1200);
+        // the injected match settles against the validator seeded in capability_snapshots,
+        // so every other snapshot block falls through to the real readers.
+        const realValidators = indexer.indexerDb.getValidatorsByCapability.bind(indexer.indexerDb);
+        const realWeights = indexer.indexerDb.getStakeWeightsByCapability.bind(indexer.indexerDb);
+        stubRemoteTokenValidators(indexer.indexerDb);
+        const fixtureValidators = indexer.indexerDb.getValidatorsByCapability;
+        const fixtureWeights = indexer.indexerDb.getStakeWeightsByCapability;
+        const PINNED_SNAPSHOT = signedRemoteTokenRow().snapshot_block;
+        indexer.indexerDb.getValidatorsByCapability = (cap, block) =>
+            Number(block) === PINNED_SNAPSHOT ? fixtureValidators(cap, block) : realValidators(cap, block);
+        indexer.indexerDb.getStakeWeightsByCapability = (cap, block) =>
+            Number(block) === PINNED_SNAPSHOT ? fixtureWeights(cap, block) : realWeights(cap, block);
         const realMirrorDb = indexer.indexerDb.mirrorDb.bind(indexer.indexerDb);
         indexer.indexerDb.mirrorDb = () => Object.create(realMirrorDb(), {
             // A seeded remote_token_snapshots row will replace this accessor stub;
             // this scenario tests royalty legs, not remote token pinning.
-            getPinnedRemoteToken: { value: async () => ({ decimals: 0 }) }
+            getPinnedRemoteToken: { value: async () => signedRemoteTokenRow() }
         });
         // LTC is native-fee-only; this scenario is about royalty legs, not fee mode, so pin
         // the xchain-balance fee path (scenario 11's forceXchainFeeMode: a placeholder

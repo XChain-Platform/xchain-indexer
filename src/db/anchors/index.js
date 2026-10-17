@@ -101,6 +101,36 @@ module.exports = {
             [network, maxSnapshotBlock]);
     },
 
+    // The same pending tuples as getPendingAnchorRewardAttestations, with every distinct copy
+    // of each: the kept row, then each anchor_reward_attestation_copies row of a tuple the main
+    // table holds. Read from ANCHOR_REWARD_COPY_SELECTION_ACTIVATION by the copy selector
+    // (consensus/anchor_reward_derive/copy_selection.js), which dedupes the kept row against
+    // its own recorded copy by digest. Ordered by mirrored content only, never a local id.
+    async getPendingAnchorRewardAttestationCopies(network, maxSnapshotBlock){
+        const pending =
+            '   AND NOT EXISTS (SELECT 1 FROM validator_rewards vr ' +
+            '                     JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id ' +
+            '                    WHERE vr.reward_type = ara.reward_type ' +
+            '                      AND vr.round_reference = ara.round_reference ' +
+            '                      AND vr.round_qualifier = ' + arKey.sqlRoundQualifier('ara.reward_type', 'ara.snapshot_block') + ' ' +
+            '                      AND pk.pubkey <= LOWER(ara.publisher)) ';
+        const cols = 'ara.chain, ara.network, ara.reward_type, ara.round_reference, ara.snapshot_block, ara.publisher';
+        return await this.doQuery(
+            'SELECT * FROM (' +
+            'SELECT ' + cols + ', ara.publisher_attestations, ara.doge_anchor_txid ' +
+            '  FROM anchor_reward_attestations ara ' +
+            ' WHERE ara.network = ? AND ara.snapshot_block <= ? ' + pending +
+            'UNION ALL ' +
+            'SELECT ' + cols + ', c.publisher_attestations, c.doge_anchor_txid ' +
+            '  FROM anchor_reward_attestation_copies c ' +
+            '  JOIN anchor_reward_attestations ara ON ara.chain = c.chain AND ara.network = c.network ' +
+            '   AND ara.reward_type = c.reward_type AND ara.round_reference = c.round_reference ' +
+            '   AND ara.snapshot_block = c.snapshot_block AND ara.publisher = c.publisher ' +
+            ' WHERE ara.network = ? AND ara.snapshot_block <= ? ' + pending +
+            ') copies ORDER BY reward_type, round_reference, publisher, snapshot_block, chain',
+            [network, maxSnapshotBlock, network, maxSnapshotBlock]);
+    },
+
     /*
      * ANCHOR action methods (DOGE-only on-chain state commitments).
      * anchor_actions is the permanent on-chain record (action-indexed, rolled back
@@ -222,13 +252,25 @@ module.exports = {
     // watermark differ between mirrored and unmirrored nodes. Note the direction of
     // that exposure: a poisoned row can only push either watermark UP, which makes
     // the guard stricter, never more permissive.
-    async getArchiveReplayWatermarks(){
+    //
+    // `wrapperRows` (the ARCHIVE_REPLAY_WRAPPER_WATERMARK gate, read by the caller)
+    // widens the row set, still ONE statement, with the wrapper chain row of each v3
+    // archive: the folded action's chain row that carries the archive's total_chunks.
+    // A v3 archive head row stores no checkpoint_seq, so the wrapper row is the only
+    // place a v3 archive's post-fold checkpoint seq lives. It has no match_batch_seq,
+    // so the batch watermark is unchanged.
+    async getArchiveReplayWatermarks(wrapperRows){
         let versions = ARCHIVE_HEAD_VERSIONS;
+        let wrapper = wrapperRows
+            ? ` OR (a.version = 3 AND a.chain IS NOT NULL AND a.total_chunks IS NOT NULL)` : ``;
+        // Every branch is parenthesised and the whole row set is grouped once, so the
+        // status filter below applies to the wrapper branch exactly as to the others.
+        let rowSet = `(${archiveHeadPredicate('a')}) OR (a.version IN (${versions.map(() => '?').join(', ')}))${wrapper}`;
         let query = `SELECT MAX(a.match_batch_seq) AS max_batch_seq,
                             MAX(a.checkpoint_seq)  AS max_checkpoint_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
-                     WHERE (${archiveHeadPredicate('a')} OR a.version IN (${versions.map(() => '?').join(', ')}))
+                     WHERE (${rowSet})
                        AND s.status IN ('valid', 'unverified')`;
         let rows = await this.doQuery(query, versions);
         let row  = rows.length > 0 ? rows[0] : {};
@@ -312,6 +354,8 @@ module.exports = {
     // exactly the checkpoint a bridge proof must never be handed.
     async getEarliestValidAnchorCheckpoint(version, chain, network, atOrAfterBlock){
         // Strict: a consensus-input read, where a fault returned as [] would read as "no rows".
+        // End on the primary key so the pick is total: the replay guards admit an equal seq,
+        // so two valid rows can tie on (block_index, checkpoint_seq), and the first-anchored one wins.
         return await this.doQueryStrict(
             `SELECT a.chain, a.network, a.block_index, a.checkpoint_seq, a.snapshot_block,
                     a.state_root, a.state_root_version
@@ -319,7 +363,7 @@ module.exports = {
              JOIN index_statuses s ON s.id = a.status_id
              WHERE a.version = ? AND a.chain = ? AND a.network = ? AND a.block_index >= ?
                AND a.state_root IS NOT NULL AND s.status = 'valid'
-             ORDER BY a.block_index ASC, a.checkpoint_seq DESC
+             ORDER BY a.block_index ASC, a.checkpoint_seq DESC, a.action_index ASC, a.section_index ASC
              LIMIT 1`,
             [version, chain, network, atOrAfterBlock]);
     },

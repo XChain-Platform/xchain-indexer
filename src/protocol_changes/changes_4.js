@@ -193,8 +193,8 @@ module.exports = [
     // longer become deliverable: past the request's deadline_block where a request
     // exists, or XCALL_RESULT_ORPHAN_GRACE_SECONDS of block time past the row's
     // quorum-signed effective_time where none does. Retirement records a
-    // 'skipped:<reason>' cross_chain_call_callbacks row against a freshly minted
-    // action_index, exactly like the existing already-terminal skip branch.
+    // 'retired:<reason>' cross_chain_call_callbacks row against a freshly minted
+    // action_index, the same shape as the already-terminal 'skipped:<status>' branch.
     //
     // Gated because retirement is CONSENSUS-VISIBLE in two ways: it mints an actions
     // row (hashed), and freeing a capped delivery slot moves which block a real
@@ -387,7 +387,7 @@ module.exports = [
     // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
     // carried by each settlement (so BTC/LTC/DOGE + the hub flip on the same
     // anchor). Registering it would invite a wrong isEnabled(localBlock) call.
-    // The gate + predicate live in src/stake_weighted_quorum.js
+    // The gate + predicate live in src/consensus/stake_weighted_quorum.js
     // (isStakeWeightedQuorumActive / meetsStakeThreshold). Canonical activation
     // height: xchain-documentation/protocol/constants.js.
 

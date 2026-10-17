@@ -92,6 +92,14 @@ const ALLOWLIST = [
                 'complete that key within the filtered set and impose a total order.'
     },
     {
+        clause: 'reward_type, round_reference, publisher, snapshot_block, chain',
+        reason: 'getPendingAnchorRewardAttestationCopies: the query pins network, so the five ' +
+                'ordered columns name one reward tuple and order the tuples totally. Rows that ' +
+                'tie are copies of one tuple; the only reader, copy_selection.copiesByTuple, ' +
+                'dedupes them by copy digest and sorts them by doge_anchor_txid then digest, so ' +
+                'the engine order among them reaches no decision.'
+    },
+    {
         clause: 'policy_seq DESC',
         reason: 'getAppliedPolicySnapshot: the query pins network, origin_chain and tick, ' +
                 'and policy_snapshots carries UNIQUE KEY uq_policy_seq (network, ' +
@@ -132,18 +140,6 @@ const ALLOWLIST = [
                 'carries UNIQUE KEY uq_chain_seq (chain, network, checkpoint_seq) ' +
                 '(src/sql/state_checkpoints.sql), so within the filtered set checkpoint_seq is ' +
                 'unique per row and the single term is already a total order.'
-    },
-    {
-        clause: 'a.block_index ASC, a.checkpoint_seq DESC',
-        reason: 'getEarliestValidAnchorCheckpoint: anchor_actions has no unique key over ' +
-                '(chain, network, checkpoint_seq), so a tie IS reachable here, but only ' +
-                'between rows of identical CONTENT. ANCHOR\'s replay guard (src/actions/' +
-                'anchor.js) refuses a seq below the recorded max and admits an equal one only ' +
-                'as an exact replay, which is signature-bound to identical content; the v1 ' +
-                'head that legitimately shares a seq is excluded by this query\'s version ' +
-                'and state_root IS NOT NULL filters. Every column the method selects is part ' +
-                'of that signed content, so an arbitrary tie-break returns the same VALUES ' +
-                'and the selected checkpoint is the same on every node.'
     },
     {
         clause: 'block_index DESC',

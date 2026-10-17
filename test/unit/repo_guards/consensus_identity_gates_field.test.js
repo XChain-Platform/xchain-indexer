@@ -85,9 +85,9 @@ describe('consensus identity GATES field and pin comparison', function () {
         for (const block of ['bare_checkout', 'armed_regtest_venue']) {
             assert.strictEqual(pin[block].consensus_rules_gates[key],
                 '{"mainnet":9999999999,"regtest":0,"testnet":5082}', block);
-            assert.strictEqual(pin[block].gate_key_count, 45, block);
+            assert.strictEqual(pin[block].gate_key_count, 47, block);
             assert.strictEqual(pin[block].gates_field_hash,
-                'ff2ff79fbeb40d8e5e0360bcd8ae0f7c5224660159412e5134fa2eab6f39599a', block);
+                '3d31976181db95861cd0a92ecb1c01ada526278c421a199bbe15f3136c71b9dd', block);
         }
     });
 
@@ -104,6 +104,14 @@ describe('consensus identity GATES field and pin comparison', function () {
         }
     });
 
+    it('pins the gas-ceiling exhaustion row in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'gas_ceiling_exhausted_heights.GAS_CEILING_EXHAUSTED_ACTIVATION';
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
     it('pins the relay-response deadline row in both checkout readings', function () {
         const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
         const key = 'attest_relay_response_deadline_activation.ATTEST_RELAY_RESPONSE_DEADLINE_ACTIVATION';
@@ -117,6 +125,29 @@ describe('consensus identity GATES field and pin comparison', function () {
         const key = 'action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY';
         for (const block of ['bare_checkout', 'armed_regtest_venue']) {
             assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
+    it('pins the VM harness-activation twins in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const keys = [
+            'resource_fault_signal_heights.RESOURCE_FAULT_SIGNAL_ACTIVATION',
+            'host_error_stack_strip_heights.HOST_ERROR_STACK_STRIP_ACTIVATION',
+            'protocol_changes.changes.HOST_CALL_BOUNDS',
+            'protocol_changes.HOST_CALL_BOUNDS_MAINNET_TIME',
+            'protocol_changes.HOST_CALL_BOUNDS_TESTNET_TIME',
+            'xchain-vm.HOST_CALL_BOUNDS_ACTIVATION',
+            'json_stringify_reentry_heights.JSON_STRINGIFY_REENTRY_ACTIVATION',
+            'native_stack_terminal_heights.NATIVE_STACK_TERMINAL_ACTIVATION',
+            'protocol_changes.changes.PER_ELEMENT_METER',
+            'protocol_changes.PER_ELEMENT_METER_MAINNET_TIME',
+            'protocol_changes.PER_ELEMENT_METER_TESTNET_TIME',
+            'xchain-vm.PER_ELEMENT_METER_ACTIVATION',
+        ];
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            for (const key of keys) {
+                assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, `${block}: ${key}`);
+            }
         }
     });
 

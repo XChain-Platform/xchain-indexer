@@ -64,12 +64,15 @@ const { getLogger } = require('../observability/index.js');
 const { AnchorProofUnavailableError, mintProvenRow } = require('./anchor_reward_derive/mint_row.js');
 const { groupByLogicalReward } = require('./anchor_reward_derive/reward_groups.js');
 const { recordLateDerive } = require('./anchor_reward_derive/late_derive_counter.js');
+const copySelection = require('./anchor_reward_derive/copy_selection.js');
 // No coin-registry require here on purpose: nothing inside the block transaction may read a
 // field the registry advertises as operator-tunable (see minConfirmations below).
 
 const ANCHOR_ARCHIVE_FOLD_TERM =
     'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
 const ANCHOR_FOLD = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
+const ANCHOR_REWARD_COPY_SELECTION =
+    'anchor_reward_copy_selection_activation.ANCHOR_REWARD_COPY_SELECTION_ACTIVATION';
 
 // Rebuild the XANCPUB canonical for a mirrored attestation row. MUST byte-match
 // anchor.js.rewardCanonical (DOGE parse side) and the hub's publisher canonical, or the
@@ -175,6 +178,9 @@ function rowGatesActive(row){
     // known reward types instead would silently stop paying a family added later, which
     // is a worse failure than the one this closes.
     if(String(row.reward_type) === 'anchor_archive'){
+        // Judge both gates in the BTC domain, at the row's snapshot_block. The DOGE proof client
+        // (anchor_proof_client.js archiveRowTerminated) judges them at the anchor's block_index_doge
+        // and either refusal drops the reward, so termination is the union of the two domains.
         let network = String(row.network);
         let snapshotBlock = row.snapshot_block;
         let termActive = gateRegistry.activeAt(
@@ -185,6 +191,55 @@ function rowGatesActive(row){
         return ar.isArchiveRewardActive(Number(row.snapshot_block), String(row.network));
     }
     return ar.isAnchorRewardActive(Number(row.snapshot_block), String(row.network));
+}
+
+// The amount a reward family pays: the archive leg its own constant, every anchor leg the other.
+function familyAmount(row){
+    return (String(row.reward_type) === 'anchor_archive') ? ar.ARCHIVE_REWARD_AMOUNT : ar.ANCHOR_REWARD_AMOUNT;
+}
+
+// The late-derive observation for a minted row; an observation failure never fails the block.
+function observeDerive(row, blockIndex){
+    try {
+        recordLateDerive(getLogger(), row, blockIndex, ar.ANCHOR_REWARD_MIRROR_MATURITY);
+    } catch(e){
+        getLogger().warn('Anchor reward late-derive observation failed: ' + (e && e.message ? e.message : e));
+    }
+}
+
+// Mint every row of one logical-reward group, one kept row per tuple. `m` carries the BTC
+// block, the AnchorProofClient and the burial depth. Returns whether any row was written.
+async function mintGroupRows(indexerDb, groupRows, m){
+    let anyWritten = false;
+    for(let row of groupRows){
+        if(!rowGatesActive(row)) continue;
+        if(!await verifyAttestation(indexerDb, row)) continue;
+        // Prove the row's DOGE anchor mined, then mint it (anchor_reward_derive/mint_row.js).
+        // An anchor that cannot be proven either way throws AnchorProofUnavailableError,
+        // which defers the whole block.
+        if(await mintProvenRow(indexerDb, row, Object.assign({}, m, { amount: familyAmount(row) }))){
+            observeDerive(row, m.blockIndex);
+            anyWritten = true;
+        }
+    }
+    return anyWritten;
+}
+
+// Mint one logical-reward group from every copy of each of its tuples
+// (anchor_reward_derive/copy_selection.js). Returns whether any tuple was minted.
+async function mintGroupCopies(indexerDb, groupRows, m){
+    let anyWritten = false;
+    for(let copies of copySelection.copiesByTuple(groupRows)){
+        let minted = await copySelection.mintTuple(copies, {
+            indexerDb, gatesActive: rowGatesActive, verifyAttestation,
+            mint: Object.assign({}, m, { amount: familyAmount(copies[0]) }),
+        });
+        if(minted){
+            observeDerive(minted, m.blockIndex);
+            anyWritten = true;
+        }
+    }
+    return anyWritten;
 }
 
 // Derive all matured, not-yet-derived anchor/archive rewards from the mirrored
@@ -207,7 +262,13 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
     // maturing everything at a negative height).
     let watermark = Number(blockIndex) - ar.ANCHOR_REWARD_MIRROR_MATURITY;
     if(!Number.isFinite(watermark) || watermark < 0) return 0;
-    let rows = await indexerDb.getPendingAnchorRewardAttestations(network, watermark);
+    // From anchor_reward_copy_selection_activation, judged at this block, every distinct copy
+    // of each pending tuple is read and the tuple mints from whichever copy proves
+    // (anchor_reward_derive/copy_selection.js); below it the one kept row per tuple decides.
+    let selectCopies = gateRegistry.activeAt(ANCHOR_REWARD_COPY_SELECTION, network, 'BTC', Number(blockIndex), null);
+    let rows = selectCopies
+        ? await indexerDb.getPendingAnchorRewardAttestationCopies(network, watermark)
+        : await indexerDb.getPendingAnchorRewardAttestations(network, watermark);
     if(!rows || rows.length === 0) return 0;
     // The burial depth this mint gate requires, from the frozen ledger constants beside the
     // activation map, NOT from the coin registry: the registry's `confirmations` is
@@ -225,24 +286,11 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
     let groups = groupByLogicalReward(rows);
 
     let derived = 0;
+    let mint = { blockIndex, proof, minConfirmations };
     for(let [, groupRows] of groups){
-        let anyWritten = false;
-        for(let row of groupRows){
-            if(!rowGatesActive(row)) continue;
-            if(!await verifyAttestation(indexerDb, row)) continue;
-            // Prove the row's DOGE anchor mined, then mint it (anchor_reward_derive/mint_row.js).
-            // An anchor that cannot be proven either way throws AnchorProofUnavailableError,
-            // which defers the whole block.
-            let amount = (String(row.reward_type) === 'anchor_archive') ? ar.ARCHIVE_REWARD_AMOUNT : ar.ANCHOR_REWARD_AMOUNT;
-            if(await mintProvenRow(indexerDb, row, { blockIndex, proof, minConfirmations, amount })){
-                try {
-                    recordLateDerive(getLogger(), row, blockIndex, ar.ANCHOR_REWARD_MIRROR_MATURITY);
-                } catch(e){
-                    getLogger().warn('Anchor reward late-derive observation failed: ' + (e && e.message ? e.message : e));
-                }
-                anyWritten = true;
-            }
-        }
+        let anyWritten = selectCopies
+            ? await mintGroupCopies(indexerDb, groupRows, mint)
+            : await mintGroupRows(indexerDb, groupRows, mint);
         if(anyWritten){
             let first = groupRows[0];
             // Reconcile the single smallest-pubkey winner. The reconcile-log block_index is the

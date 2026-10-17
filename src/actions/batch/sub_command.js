@@ -121,17 +121,17 @@ function subCommandTick(action, command, normalize){
 // that action for free, which is the exact failure the budget exists to prevent.
 //
 // `action` arrives already alias-normalized by the caller, matching the dispatch loop.
-// `data` and `normalize` are unused by the default and table paths and are threaded through
-// for the fan-out classes (AIRDROP, DIVIDEND), whose weight is 1 + recipients and whose
-// recipient count is NOT on the wire: AIRDROP carries a LIST_ACTION_INDEX and DIVIDEND
-// carries only a TICK, so both need an as-of read. Those reads must be as-of
-// (BLOCK_INDEX, ACTION_INDEX) and resolve-only, the discipline probeTokenInfo and
-// probeTickerId already set in this handler, or two nodes will weigh the same batch
-// differently and fork.
+// The fan-out classes (AIRDROP, DIVIDEND) take the FLAT table weight that
+// installFanOutWeights sets in limits.js (see its header for why it is not 1 + recipients),
+// so no path here reads the database and `data` and `normalize` are unused today.
 //
-// Async from the outset for that reason: adding the first fan-out class must not change
-// this signature, because the signature is what parse() and every other weight class are
-// written against.
+// They and the async signature are kept for a possible later per-recipient weight. The
+// recipient count is NOT on the wire (AIRDROP carries a LIST_ACTION_INDEX and DIVIDEND
+// carries only a TICK), so such a weight would need a database read. That read must be
+// as-of (BLOCK_INDEX, ACTION_INDEX) and resolve-only, the discipline probeTokenInfo and
+// probeTickerId already set in this handler, or two nodes will weigh the same batch
+// differently and fork. Keeping the signature now means adding it later would not change
+// what parse() and batchWeight() are written against.
 //
 // Never throws. A weight crash here would halt block processing, and the safe fallback is
 // the default 1, which is the pre-flag behaviour for that sub-command.

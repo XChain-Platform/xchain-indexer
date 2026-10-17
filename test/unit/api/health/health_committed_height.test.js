@@ -100,12 +100,26 @@ function handlerBody(name){
     return next ? rest.slice(0, next.index) : rest;
 }
 
-// The whole app.get('/status', ...) route.
-function statusRoute(){
-    const start = API_SRC.indexOf("app.get('/status'");
-    assert.ok(start > 0, "app.get('/status') not found in src/api.js");
+// The body of one app.get(<path>, ...) route.
+function routeText(routePath){
+    const start = API_SRC.indexOf("app.get('" + routePath + "'");
+    assert.ok(start > 0, "app.get('" + routePath + "') not found in src/api.js");
     const end = API_SRC.indexOf('\n    });', start);
-    assert.ok(end > start, "could not find the end of the '/status' route");
+    assert.ok(end > start, "could not find the end of the '" + routePath + "' route");
+    return API_SRC.slice(start, end);
+}
+
+// The heights GET /status advertises. Both /status and /ready read every input through
+// one shared statusSnapshot() so they cannot disagree, so the guard reads that function
+// and requires both routes to go through it rather than reading the database themselves.
+function statusRoute(){
+    const start = API_SRC.indexOf('async function statusSnapshot(');
+    assert.ok(start > 0, 'statusSnapshot() not found in src/api.js');
+    const end = API_SRC.indexOf('\n}\n', start);
+    assert.ok(end > start, 'could not find the end of statusSnapshot()');
+    for(const routePath of ['/status', '/ready'])
+        assert.match(routeText(routePath), /statusSnapshot\(/,
+            routePath + ' must read its heights through statusSnapshot()');
     return API_SRC.slice(start, end);
 }
 

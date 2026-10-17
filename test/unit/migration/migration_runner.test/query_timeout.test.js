@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const {
     assert, fs, path, Database, requireWithFreshConfig, DB_PATH,
 } = require('./helpers/migration_fixtures.js');
+const { SQL_MODE_PROBE, pinnedSqlModeRows } = require('./helpers/migration_fixtures.js');
 
 const MIG_DIR = path.join(__dirname, '..', '..', '..', '..', 'src', 'sql', 'migrations');
 
@@ -47,6 +48,7 @@ async function runAgainst(DatabaseClass = Database, options = {}){
     const conn = {
         async query(sql, params){
             calls.push({ sql, params });
+            if (SQL_MODE_PROBE.test(sql)) return pinnedSqlModeRows();
             if(/GET_LOCK/i.test(sql)) return [{ l: options.lockResult === undefined ? 1 : options.lockResult }];
             if(/RELEASE_LOCK/i.test(sql)) return [{}];
             if(/SELECT name, checksum FROM schema_migrations/i.test(sql)){

@@ -23,12 +23,27 @@ const assert = require('assert');
 const AnchorProofClient = require('../../../../src/consensus/doge_peer_clients/anchor_proof_client.js');
 const binding = require('../../../../src/consensus/doge_peer_clients/anchor_proof_client/binding.js');
 const { CHECKPOINT_VERSIONS } = require('../../../../src/db/anchor_sql.js');
-const { rewardTypeFor } = require('../../../../src/actions/anchor/reward_family.js');
+const { rewardTypeFor } = require('../../../helpers/expected_reward_family.js');
 const Anchor = require('../../../../src/actions/anchor/index.js');
 
 const TXID = 'c'.repeat(64);
 const SNAP = 150208;
 const PUBLISHER = 'aa'.repeat(32);
+
+// Hold wire version v to exactly the families the expected table names for it in any fold
+// state: present in each, absent from the other, so a version moved or added between
+// families fails here instead of passing a one-way check.
+function assertFamilyMembershipExact(v) {
+    const expected = new Set();
+    for (const foldActive of [false, true]) {
+        const type = rewardTypeFor(v, foldActive);
+        if (type === 'anchor_bundle') expected.add('bundle');
+        if (type === 'anchor_archive') expected.add('archive');
+    }
+    for (const family of ['archive', 'bundle'])
+        assert.strictEqual(binding.REWARD_FAMILY_VERSIONS[family].includes(v), expected.has(family),
+            family + ' family membership of v' + v);
+}
 
 // Build one v3 chain-section row as getanchorconfirmations serves it.
 function foldSection(overrides) {
@@ -178,6 +193,7 @@ describe('AnchorProofClient v3 fold binding @regression @tier2', () => {
                         assert.ok(binding.ATTESTED_VERSIONS.includes(v), 'attested set lacks v' + v);
                     }
                 }
+                assertFamilyMembershipExact(v);
             }
         });
 
@@ -199,6 +215,7 @@ describe('AnchorProofClient v3 fold binding @regression @tier2', () => {
                 }
                 if (String(formats[v]).split('|').includes('PUBLISHER'))
                     assert.ok(binding.ATTESTED_VERSIONS.includes(v), 'attested set lacks publisher-carrying v' + v);
+                assertFamilyMembershipExact(v);
             }
         });
 

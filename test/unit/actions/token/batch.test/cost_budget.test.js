@@ -272,9 +272,9 @@ describe('Batch @regression @tier3', function () {
             });
 
             it('an oversized batch is refused WITHOUT weighing anything', async function () {
-                // Not an optimization: weighing the fan-out classes costs an as-of read per
-                // sub-command, so without this filter the envelope lane's ~35,000 sub-commands
-                // would each buy a database read before anything bounded them.
+                // Not an optimization: weighing walks every sub-command, so without this filter
+                // the envelope lane's ~35,000 sub-commands would all be weighed before anything
+                // bounded them (fan-out weights are flat, so no database read is involved).
                 stubGates(true, true);
                 const spy = sinon.spy(handler, 'batchWeight');
                 const data = createBaseData({

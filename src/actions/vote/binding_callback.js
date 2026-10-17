@@ -31,6 +31,7 @@ const gateRegistry = require('../../consensus/gate_registry.js');
 const { getLogger } = require('../../observability/index.js');
 const { MAX_CODE_SIZE } = require('../../protocol/constants.js');
 const callbackProbeVm = require('./callback_probe_vm.js');
+const { settlementExactAt, exceedsEscrowDecimals, ESCROW_DECIMALS } = require('./validate.js');
 
 const USABLE_CALLBACK_GATE = 'vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD';
 
@@ -120,7 +121,11 @@ async function isCallbackMethodUsable(contract, method, data){
         if(!result || result.success !== true) return false;
         let verdict = callbackProbeVm.listingVerdict(result.manifest, method);
         if(verdict !== null) return verdict;
-    } catch(e) { result = null; }
+    } catch(e) {
+        // Halt on a VM host or DB fault so this node never takes its verdict from a different probe than its peers.
+        rethrowIfInfraFault(e);
+        result = null;
+    }
     result = await readCallbackManifest.call(
         this, probeVm, callbackProbeVm.buildProbeCode(code, method), contract, data
     );
@@ -198,6 +203,11 @@ async function validateCallbackEscrow(data, error, deposit){
     // Verify GAS_ESCROW is a non-negative amount
     if(!error && (!this.util.isNumeric(gasEscrow) || this.util.bclt(gasEscrow, 0)))
         error = 'invalid: GAS_ESCROW (non-negative amount)';
+    // From vote_settlement_exact_activation GAS_ESCROW shares the DEPOSIT precision rule:
+    // the combined escrow locks and releases at ESCROW_DECIMALS while its refund credit
+    // moves the amount as written.
+    if(!error && settlementExactAt(this, block_index) && exceedsEscrowDecimals(this.util, gasEscrow))
+        error = 'invalid: GAS_ESCROW (more than ' + ESCROW_DECIMALS + ' decimal places)';
     // Funding check covers DEPOSIT + GAS_ESCROW together (both in GAS).
     if(!error && this.util.bcgt(gasEscrow, 0)){
         let need     = this.util.bcadd(deposit, gasEscrow, 8);
@@ -309,7 +319,8 @@ async function buildCallbackContext(poll, data, chain, emissionActionIndex){
         emitter:       data['ACTION_INDEX'],
         synthTag:      SYNTH_TAGS.VOTE_CALLBACK,
         synthId:       poll.action_index,
-        includeTxHash: synthActive
+        includeTxHash: synthActive,
+        callback:      true
     });
 
     return emissionData;

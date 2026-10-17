@@ -23,6 +23,9 @@
 // The fill-amount arithmetic stays in this file, below parse().
 const matchPart  = require('./match.js');
 const settlePart = require('./settle.js');
+const gateRegistry = require('../../consensus/gate_registry');
+
+const MATCH_ORIGIN_OPEN_KEY = 'match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION';
 
 class Order_Match {
 
@@ -53,6 +56,14 @@ class Order_Match {
 
         // Bail out if order no longer exists (already expired or rolled back)
         if(!orderInfo)
+            return;
+
+        // From the activation, a match must still originate from an open order. LIST
+        // rematching snapshots open offers before it runs the handlers, so an earlier step
+        // can make a later origin terminal before this latest-row read, and a cancel
+        // dispatches a match from the order it has just cancelled.
+        if(gateRegistry.activeAt(MATCH_ORIGIN_OPEN_KEY, this.config['NETWORK'],
+            this.config['COIN'], data['BLOCK_INDEX'], null) && orderInfo['ORDER_STATUS'] !== 'open')
             return;
 
         // Get a list of any matching open orders
@@ -86,6 +97,11 @@ class Order_Match {
 
                 // Reset the address/tickers/transactions list on each match
                 this.util.resetLists();
+
+                // Preserve the legacy final list reset, but stop scanning candidates once
+                // either running side of the taker has been exhausted.
+                if(this.util.bclte(order['GIVE_REMAINING'], 0) || this.util.bclte(order['GET_REMAINING'], 0))
+                    break;
 
                 // Gate, size and settle this candidate (order_match/match.js)
                 await this.fillMatch(data, orderInfo, matchInfo, order, match, lists);

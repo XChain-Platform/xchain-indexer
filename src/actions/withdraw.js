@@ -154,6 +154,11 @@ class Withdraw {
         if(!error && !tokenInfo)
             error = 'invalid: TICK (unknown)';
 
+        // Refuse an AMOUNT that stores as NULL (empty or not numeric): withdrawals.amount is
+        // NOT NULL (settleWithdrawal stores the refusal with a placeholder)
+        if(!error && this.util.storesAsNull(data['AMOUNT']))
+            error = 'invalid: AMOUNT (format)';
+
         // Verify AMOUNT format
         if(!error && !this.util.isNull(data['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['AMOUNT'], data['BLOCK_TIME']))
             error = 'invalid: AMOUNT (format)';
@@ -187,7 +192,11 @@ class Withdraw {
     async settleWithdrawal(data, contractAddress, status, guardFee){
 
         // Create record in withdrawals table
-        await this.indexerDb.createWithdrawal(data);
+        // An AMOUNT that stores as NULL always leaves the action refused (see
+        // validateTokenAndBalance); the row keeps that refusal under the placeholder '0',
+        // since withdrawals.amount is NOT NULL and a NULL bind halts the block
+        let row = this.util.storesAsNull(data['AMOUNT']) ? Object.assign({}, data, { AMOUNT: '0' }) : data;
+        await this.indexerDb.createWithdrawal(row);
 
         // Store the SOURCE, contract address, and TICK in addresses list
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);

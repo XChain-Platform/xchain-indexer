@@ -139,7 +139,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
                   effective_time: 1, status: 'finalized', src_chain: 'BTC', src_action_index: 12 }
             ];
             const { ctx } = makeCtx({ coin: 'DOGE', mirrorTransfers: rows, settledLegs: ['BTC:11'] });
-            const due = await BS.dueBridgeTransfers(ctx);
+            const due = await BS.unsettledBridgeTransfers(ctx);
             assert.deepStrictEqual(due.map(r => r.transfer_id), ['2'.repeat(64)]);
         });
 
@@ -154,7 +154,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             // query selects the cross product of chains and indexes, so this is what proves the
             // PAIR is matched rather than the two lists separately.
             const { ctx } = makeCtx({ coin: 'DOGE', mirrorTransfers: rows, settledLegs: ['LTC:11'] });
-            const due = await BS.dueBridgeTransfers(ctx);
+            const due = await BS.unsettledBridgeTransfers(ctx);
             assert.deepStrictEqual(due.map(r => r.transfer_id), ['1'.repeat(64)]);
         });
 

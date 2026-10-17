@@ -24,11 +24,15 @@
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { usesCapabilitySnapshot } = require('../shared.js');
+const slashAddBack = require('./slash_add_back.js');
 
-// Stake-key path: per-pubkey aggregate of active, non-revoked stakes.
+// Stake-key path: per-pubkey aggregate of active, non-revoked stakes. From
+// slash_historical_set_activation each row sums its amount as it stood at blockIndex, as the
+// effective set does (slash_add_back.js).
 async function stakeKeyQualifies(db, pubkey_id, valid_id, blockIndex, minStake){
-    let query = `SELECT SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
-                     FROM stakes s
+    const armed = slashAddBack.slashHistoricalSetActive(db.config, blockIndex);
+    let query = `SELECT SUM(${slashAddBack.stakeAmountAt('s', armed)}) AS total
+                     FROM stakes s${slashAddBack.laterBurnsJoin('s', armed)}
                      WHERE s.signing_pubkey_id = ?
                        AND s.status_id = ?
                        AND s.activation_block <= ?
@@ -40,15 +44,17 @@ async function stakeKeyQualifies(db, pubkey_id, valid_id, blockIndex, minStake){
                              AND r.status_id = ?
                              AND r.deactivation_block <= ?
                              AND r.action_index > s.action_index)`;
-    let rows = await db.doQuery(query, [pubkey_id, valid_id, blockIndex, blockIndex, valid_id, blockIndex]);
+    let rows = await db.doQuery(query, [...slashAddBack.laterBurnsArgs(blockIndex, armed), pubkey_id, valid_id, blockIndex, blockIndex, valid_id, blockIndex]);
     return rows.length > 0 && rows[0].total !== null && db.util.bcgte(String(rows[0].total), minStake);
 }
 
 // Delegated-key path: an active delegation row for this pubkey qualifies
-// iff the delegating SOURCE's aggregate active stake meets the threshold.
+// iff the delegating SOURCE's aggregate active stake meets the threshold,
+// read as the stake-key path reads it.
 async function delegatedKeyQualifies(db, pubkey_id, valid_id, blockIndex, minStake){
-    let query = `SELECT SUM(CAST(s2.amount AS DECIMAL(30,8))) AS total
-                 FROM stakes s2
+    const armed = slashAddBack.slashHistoricalSetActive(db.config, blockIndex);
+    let query = `SELECT SUM(${slashAddBack.stakeAmountAt('s2', armed)}) AS total
+                 FROM stakes s2${slashAddBack.laterBurnsJoin('s2', armed)}
                  WHERE s2.status_id = ?
                    AND s2.activation_block <= ?
                    AND (s2.deactivation_block IS NULL OR s2.deactivation_block > ?)
@@ -58,7 +64,7 @@ async function delegatedKeyQualifies(db, pubkey_id, valid_id, blockIndex, minSta
                          AND d.status_id = ?
                          AND d.activation_block <= ?
                          AND (d.deactivation_block IS NULL OR d.deactivation_block > ?))`;
-    let rows = await db.doQuery(query, [valid_id, blockIndex, blockIndex, pubkey_id, valid_id, blockIndex, blockIndex]);
+    let rows = await db.doQuery(query, [...slashAddBack.laterBurnsArgs(blockIndex, armed), valid_id, blockIndex, blockIndex, pubkey_id, valid_id, blockIndex, blockIndex]);
     return rows.length > 0 && rows[0].total !== null && db.util.bcgte(String(rows[0].total), minStake);
 }
 

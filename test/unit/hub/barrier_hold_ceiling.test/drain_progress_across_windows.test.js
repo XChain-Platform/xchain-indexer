@@ -36,7 +36,10 @@ function makeDrainingSync() {
 let clock;
 function useFixedClock() {
     beforeEach(function () {
-        clock = sinon.useFakeTimers({ now: 1800000000000 });
+        clock = sinon.useFakeTimers({
+            now: 1800000000000,
+            toFake: ['Date', 'setTimeout', 'clearTimeout']
+        });
         sinon.stub(console, 'warn');
         sinon.stub(console, 'log');
     });

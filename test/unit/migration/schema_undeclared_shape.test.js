@@ -204,14 +204,15 @@ describe('startup drift detection sees shape the SQL source does NOT declare @re
         it('detection runs on a table that declares no standalone CREATE INDEX', async function () {
             // Before reconcileTableIndexes returned before the live read whenever
             // parseExpectedIndexes found nothing, so an inline-keys-only table could never
-            // be inspected at all. state_checkpoints declares its keys inline only.
+            // be inspected at all. capability_snapshots declares its keys inline only
+            // (state_checkpoints now carries a standalone idx_chain_block, so it no longer fits).
             const idx = require('../../../src/db').prototype.parseExpectedIndexes.call(
-                makeCtx(), fs.readFileSync(path.join(SQL_DIR, 'state_checkpoints.sql'), 'utf8'), 'state_checkpoints');
-            assert.deepStrictEqual(idx, [], 'fixture assumption: state_checkpoints has no standalone CREATE INDEX');
-            const { warns } = await runIndexes('state_checkpoints', [
-                { name: 'idx_hand_added', unique: false, fulltext: false, columns: ['block_hash'] },
+                makeCtx(), fs.readFileSync(path.join(SQL_DIR, 'capability_snapshots.sql'), 'utf8'), 'capability_snapshots');
+            assert.deepStrictEqual(idx, [], 'fixture assumption: capability_snapshots has no standalone CREATE INDEX');
+            const { warns } = await runIndexes('capability_snapshots', [
+                { name: 'idx_hand_added', unique: false, fulltext: false, columns: ['signing_pubkey'] },
             ]);
-            assert.ok(warns.some(w => /Schema shape drift on state_checkpoints/.test(w) && /idx_hand_added/.test(w)),
+            assert.ok(warns.some(w => /Schema shape drift on capability_snapshots/.test(w) && /idx_hand_added/.test(w)),
                 'an inline-keys-only table must still be inspected: ' + JSON.stringify(warns));
         });
     });

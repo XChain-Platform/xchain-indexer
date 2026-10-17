@@ -31,7 +31,7 @@
  * actions the chain will not take.
  *
  * This is the gate that ties the copies together, mirroring the
- * cross-repo repin guard (consensus-params.test.js, the six CONTROLLER_GUARD
+ * cross-repo repin guard (consensus_params.test.js, the six CONTROLLER_GUARD
  * gate constants): read every sibling's constants file straight off disk and
  * assert value equality, rather than trusting three independent literal pins to
  * be edited in lockstep.
@@ -61,6 +61,8 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
+
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 // The gated set and its frozen values. Editing a value here without moving all
 // four constants files (and the consumers that enforce them) is the exact
@@ -106,19 +108,11 @@ const REPO_ROOT = (function () {
 const SELF          = path.basename(REPO_ROOT);
 const PLATFORM_ROOT = path.dirname(REPO_ROOT);
 
-// Required-sibling policy, same convention as lint-parity.test.js: a missing
-// sibling checkout skips by default (standalone clones and local dev run
-// without one), and hard-fails wherever XCHAIN_REQUIRE_SIBLINGS=1 declares the
-// siblings were provided on purpose.
-const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
+// Judge each sibling with the shared helper: an absent sibling, or a lane symlink
+// into a live main checkout, skips by default and hard-fails wherever
+// XCHAIN_REQUIRE_SIBLINGS=1 declares the siblings were provided on purpose.
 function siblingOrSkip(ctx, absPath, what) {
-    if (fs.existsSync(absPath)) return true;
-    if (REQUIRE_SIBLINGS) {
-        assert.fail('cross-repo constants gate cannot run: ' + what + ' missing at ' +
-            absPath + '; XCHAIN_REQUIRE_SIBLINGS=1 forbids the green-by-skip');
-    }
-    ctx.skip();
-    return false;
+    return skipOrFail(ctx, siblingCheckout(__dirname, absPath), 'cross-repo constants gate (' + what + ')');
 }
 
 // Fresh read per call: these files are plain constant tables, but a cached
