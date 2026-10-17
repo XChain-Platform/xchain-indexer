@@ -13959,6 +13959,12 @@
       "createDestroy() - multi-destroy legs writes ONE ROW PER TICK LEG of a multi-destroy sharing one action_index",
       "createSend() - multi-send legs does not let a re-parse stamp one leg over every other leg of the same send"
     ],
+    "ca16e0fe306a77ff": [
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 pins the registry row in the consensus identity",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 registers a per-chain height row, unarmed on mainnet and testnet, live on regtest"
+    ],
     "ca7df2a33ba1c8cc": [
       "src/sql schema parse-coverage @regression @tier1 actions.sql every parsed column has a name and a definition",
       "src/sql schema parse-coverage @regression @tier1 actions.sql is parseable by the drift reconciler (non-null)",
@@ -17943,8 +17949,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1401,
-      "titleCount": 13910,
+      "fileCount": 1402,
+      "titleCount": 13914,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19177,6 +19183,7 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "af3b13066b325fa8",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "d14b2a8196167f6c",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "58a722e0f4b362c8",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_hook_row.test.js": "f959c69addce7dd8",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "d1bfe2b0906e9c21",

@@ -178,6 +178,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'action_admission_dispatched_only',
     'anchor_fold_reissue_source_author_activation',
     'resource_fault_signal_heights',
+    'host_fault_halt_heights',
     'host_error_stack_strip_heights',
     'json_stringify_reentry_heights',
     'native_stack_terminal_heights',
