@@ -42,9 +42,9 @@ const REGISTRY_TWINS = {
 
 // A gap is a gate whose indexer twin has not landed yet; the twin moves it out of this map.
 const KNOWN_GAPS = {
-    HOST_FAULT_HALT_ACTIVATION: 'unarmed per-chain gate awaiting its host_fault_halt_heights registry twin',
-    STRING_RECEIVER_METER_ACTIVATION: 'unarmed meter gate awaiting its STRING_RECEIVER_METER registry row and armed-map mirror',
     STRING_RESULT_METER_ACTIVATION: 'unarmed meter gate awaiting its STRING_RESULT_METER registry row and armed-map mirror',
+    TOSTRING_SIZE_METER_ACTIVATION: 'meter gate, mainnet and testnet at a far-future instant, awaiting its TOSTRING_SIZE_METER registry row and armed-map mirror',
+    TOSTRING_SIZE_METER_GATE_BLOCK_TIME: 'mainnet instant of TOSTRING_SIZE_METER_ACTIVATION, an alias once that gate is mirrored',
 };
 
 function vmGateExportNames(holder) {
