@@ -13643,6 +13643,14 @@
       "balance delta mode configuration normalizes surrounding whitespace and letter case",
       "balance delta mode configuration rejects an unknown mode and names BALANCE_DELTA_MODE"
     ],
+    "c4cd22d5892484be": [
+      "Database validator-set ordering below activation @regression @tier1 getActiveValidators orders by bare pubkey on mainnet",
+      "Database validator-set ordering below activation @regression @tier1 getActiveValidators orders by bare pubkey on regtest",
+      "Database validator-set ordering below activation @regression @tier1 getActiveValidators orders by bare pubkey on testnet",
+      "Database validator-set ordering below activation @regression @tier1 getValidatorsByCapability orders by bare pubkey on mainnet",
+      "Database validator-set ordering below activation @regression @tier1 getValidatorsByCapability orders by bare pubkey on regtest",
+      "Database validator-set ordering below activation @regression @tier1 getValidatorsByCapability orders by bare pubkey on testnet"
+    ],
     "c4d70bc831f40242": [
       "Programmable policy layer : custody guard ordering @regression does not run the address guard after a token denial",
       "Programmable policy layer : custody guard ordering @regression reserves the address ceiling after the token fee",
@@ -17973,8 +17981,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1406,
-      "titleCount": 13930,
+      "fileCount": 1407,
+      "titleCount": 13936,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18780,6 +18788,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
         "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "f254d69bb75856a7",
