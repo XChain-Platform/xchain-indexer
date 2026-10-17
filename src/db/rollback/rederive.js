@@ -69,6 +69,7 @@ module.exports = {
 
     // tokens.escrow_action_index re-derived from the surviving open GIVE_OWNERSHIP offers.
     async rederiveTokenEscrow(db){
+        let startedAt = Date.now();
         //<ESCROW-REDERIVE-SQL>
         const escrowAffectedTickersSql =
             `SELECT DISTINCT tk.tick FROM tokens t INNER JOIN index_tickers tk ON tk.id=t.tick_id WHERE t.escrow_action_index IS NOT NULL
@@ -95,6 +96,7 @@ module.exports = {
             let newEscrow = (offerRows.length > 0) ? offerRows[0].action_index : null;
             await db.doQuery("UPDATE tokens SET escrow_action_index=? WHERE tick_id=(SELECT id FROM index_tickers WHERE tick=? LIMIT 1)", [newEscrow, row.tick]);
         }
+        return { table: 'token_escrow', ms: Date.now() - startedAt, rows: escrowTickers.length };
     },
 
     // Clear the bridged bit of every token left with no applied XBRIDGE v3 lock: the same
