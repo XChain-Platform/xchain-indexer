@@ -9577,6 +9577,10 @@
     "856558ff8c380713": [
       "Sweep tick_id->ticker memoization @regression resolves each distinct held tick_id at most once across both passes"
     ],
+    "858aaae550bece4b": [
+      "archive_status_journal writes an action-wide archive status",
+      "archive_status_journal writes only the archive head row when scoped"
+    ],
     "85a592dc86f8b36a": [
       "CROSS_SETTLE per-block cap flag day @regression @tier1 registration is a time-keyed 2.0.0 change, genesis-active on testnet and regtest",
       "CROSS_SETTLE per-block cap flag day @regression @tier1 registration mainnet is ARMED AT GENESIS by the 2026-09-09 ruling",
@@ -18512,15 +18516,6 @@
       "attest_response_canonical: hub/indexer twin produces byte-identical canonicals to the hub copy across both eras",
       "attest_response_canonical: hub/indexer twin rejects the same spellings as the hub copy"
     ],
-    "f9b440bdcd327076": [
-      "migration live-schema MODIFY guard: row format gate @regression @tier1 also refuses Redundant row format",
-      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes Compact when the column is not fully indexed",
-      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes Dynamic row format",
-      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes a 100-character utf8mb4 widening that fits within 767 bytes",
-      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes when the live column is already utf8mb4",
-      "migration live-schema MODIFY guard: row format gate @regression @tier1 refuses the indexed files.name utf8mb4 widening on Compact",
-      "migration live-schema MODIFY guard: row format gate @regression @tier1 treats a missing row format as Dynamic"
-    ],
     "fa4bd1452ca551bd": [
       "bridge_settle: destination below its format-specific bridge sub-gate applies the same v2 row once the XCHAIN gate is active",
       "bridge_settle: destination below its format-specific bridge sub-gate applyBridgeTransfer defers a v2 row below XCHAIN_BRIDGE_ACTIVATION and writes nothing",
@@ -18981,7 +18976,7 @@
   "scripts": {
     "test": {
       "fileCount": 1399,
-      "titleCount": 13905,
+      "titleCount": 13900,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19751,6 +19746,7 @@
         "test/unit/db/anchors/anchor_archive_row_status.test.js": "489112fc1f59fbf6",
         "test/unit/db/anchors/anchor_archive_status_pin.test.js": "4b48770c46d6248a",
         "test/unit/db/anchors/archive_head_pick_gate.test.js": "9edb73492cfca621",
+        "test/unit/db/anchors/archive_status_journal.test.js": "858aaae550bece4b",
         "test/unit/db/anchors/max_archive_batch_seq_by_author_predicate.test.js": "7f93503626a6b339",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "025a38c8bb9a00ab",
         "test/unit/db/balance_delta_apply.test.js": "a047f1b5c097c4d9",
@@ -20087,7 +20083,6 @@
         "test/unit/migration/migration_auto_index_key_length.test.js": "62321e67976f95c9",
         "test/unit/migration/migration_executable_residue.test.js": "acaf148f7d78ff56",
         "test/unit/migration/migration_precondition_baseline.test.js": "3892effc8fcf1240",
-        "test/unit/migration/migration_precondition_baseline.test/row_format_gate.test.js": "f9b440bdcd327076",
         "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js": "ad9b4cab9e7d3566",
         "test/unit/migration/migration_precondition_oracle_tick.test.js": "3067b102d53b0b5f",
         "test/unit/migration/migration_preconditions.test.js": "10419775b050d37c",
