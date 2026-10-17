@@ -2651,6 +2651,18 @@
       "HubDbSync schema-mismatch latch survives an incremental drain @regression @tier1 a drain opened before the refusal cannot settle it",
       "HubDbSync schema-mismatch latch survives an incremental drain @regression @tier1 stays set until every table re-paged from zero after the refusal"
     ],
+    "299c4ed3013e8a10": [
+      "snapshot checkpoint canonical forms the snapshot round id",
+      "snapshot checkpoint canonical refuses non-BTC chains, unsafe block indexes, and malformed hashes",
+      "snapshot checkpoint canonical uses the buried capability snapshot height on every network",
+      "snapshot checkpoint canonical writes the literal domain-separated canonical bytes",
+      "snapshot checkpoint quorum accepts strictly more than two thirds of the stake",
+      "snapshot checkpoint quorum accepts validator_signatures as JSON text",
+      "snapshot checkpoint quorum adds a key to seen only after one of its signatures verifies",
+      "snapshot checkpoint quorum does not count duplicate or untrusted keys",
+      "snapshot checkpoint quorum fails closed on empty or malformed trust and signature sets",
+      "snapshot checkpoint quorum ignores malformed signatures and verifier failures"
+    ],
     "29f5f5978231b2bd": [
       "Cross-chain royalty: create-side gate + signed-legs settlement (real DB + real VM) @phaseE 1. cross-chain listing of a royalty token is ACCEPTED and the legs ride the order row",
       "Cross-chain royalty: create-side gate + signed-legs settlement (real DB + real VM) @phaseE 2. a leg that cannot re-encode to GET_COIN DENIES the listing (fail-closed)",
@@ -18977,8 +18989,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1399,
-      "titleCount": 13902,
+      "fileCount": 1400,
+      "titleCount": 13912,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19688,6 +19700,7 @@
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_registry_parity.test.js": "56e2effa6675b4fa",
+        "test/unit/consensus/snapshot_checkpoint/canonical.test.js": "299c4ed3013e8a10",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
         "test/unit/consensus/stale_twin_module_refs.test.js": "25c3d82b177fdf7c",
         "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "4db50e18ffcab3aa",
