@@ -7718,6 +7718,10 @@
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) synthesizes an ATTEST v1 with NULL tx coordinates, BLOCK_TIME, and the row pair",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) synthesizes nothing at a block one second short of the effective_time"
     ],
+    "73bf19393156da6f": [
+      "ANCHOR v0 checkpoint sequence binding below gate @regression @tier3 keeps mainnet sequence and snapshot independent on the all-rows watermark",
+      "ANCHOR v0 checkpoint sequence binding below gate @regression @tier3 keeps testnet sequence and snapshot independent on the all-rows watermark"
+    ],
     "73d2a2e5a45a3b49": [
       "HubDbSync schema-version lockstep admits all three reader payloads when they carry the expected schema_version",
       "HubDbSync schema-version lockstep preserves relic-row refusal after a versioned snapshot passes the shared check",
@@ -18881,8 +18885,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1385,
-      "titleCount": 13845,
+      "fileCount": 1386,
+      "titleCount": 13847,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18919,6 +18923,7 @@
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "cd53417c159a33c6",
