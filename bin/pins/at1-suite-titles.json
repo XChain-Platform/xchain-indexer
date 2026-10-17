@@ -3685,6 +3685,11 @@
       "batched COINPAY resolves its own payment output @regression @tier1 the A5 invariant: one payment settles ONE obligation, not N two obligations to a RESOLVED payee with one payment's worth: exactly one settles",
       "batched COINPAY resolves its own payment output @regression @tier1 the A5 invariant: one payment settles ONE obligation, not N two obligations to the ROW'S OWN payee with one payment's worth: exactly one settles"
     ],
+    "39a4570af1805f2f": [
+      "Airdrop multi-leg native fee batch ledger and probe @regression @tier1 draws one leg fee from a BATCH_VALUE_LEDGER and rejects the unpaid second leg",
+      "Airdrop multi-leg native fee batch ledger and probe @regression @tier1 draws two leg fees from a fully funded BATCH_VALUE_LEDGER",
+      "Airdrop multi-leg native fee batch ledger and probe @regression @tier1 settles both legs during a FEE_PROBE without drawing from BATCH_VALUE_LEDGER"
+    ],
     "39deaa3f8a62287c": [
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
@@ -12826,6 +12831,14 @@
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: two MINTs of the SAME tick \u2192 invalid: MINT (limit)",
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: unresolvable ticks share ONE bucket, so two of them reject"
     ],
+    "ac51d51746a87eae": [
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits a valid parent when the gate is active",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits an unverified parent only when the head-side status gate admits it",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 is unarmed on public networks and opt-in on regtest",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keeps the deployed chunk-status-only rule while the gate is inert",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keys the new rule on the chunk height and the unverified admission on the parent height",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 rejects an invalid parent before reading chunks when the gate is active"
+    ],
     "ac937e0de4e25dbe": [
       "Indexer cross-node determinism baseline @regression @tier1 every block produced a ledger + actions consensus hash",
       "Indexer cross-node determinism baseline @regression @tier1 hash chain matches the committed baseline (no consensus drift)",
@@ -18945,8 +18958,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1394,
-      "titleCount": 13880,
+      "fileCount": 1396,
+      "titleCount": 13889,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19000,6 +19013,7 @@
         "test/unit/actions/anchor/bundle_order/anchor_order_reason_helpers.test.js": "3277653238c8d36f",
         "test/unit/actions/anchor/bundle_order/bundle_order_cases.test.js": "22e147a7ae0e9cbb",
         "test/unit/actions/anchor/checkpoint_seq_bind_reason.test.js": "1292af054254884e",
+        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "ac51d51746a87eae",
         "test/unit/actions/anchor/v3/anchor_v3_archive_check.test.js": "90b635bde1229f56",
         "test/unit/actions/anchor/v3/anchor_v3_fold_rows.test.js": "78c42da2461e2b5b",
         "test/unit/actions/anchor/v3/anchor_v3_sections.test.js": "fae8eeba338baf48",
@@ -19267,6 +19281,7 @@
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
