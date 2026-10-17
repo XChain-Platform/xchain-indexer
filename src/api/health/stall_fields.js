@@ -83,4 +83,4 @@ function stallFields(indexer){
     };
 }
 
-module.exports = { stallFields, attributedStallReason };
+module.exports = { stallFields, attributedStallReason, trainActivationReport };
