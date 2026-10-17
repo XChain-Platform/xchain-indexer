@@ -2476,6 +2476,9 @@
       "HubDbSync.ensureTables index reconciliation @regression @tier3 does not query the live index set for a twin that declares no index",
       "HubDbSync.ensureTables index reconciliation @regression @tier3 parses inline KEY, UNIQUE KEY (prefix widths stripped) and standalone CREATE INDEX"
     ],
+    "27767578c21e1894": [
+      "Hash coverage guard @regression attests batch display link parity excludes batch_action_index by design while retaining later-block callback coverage"
+    ],
     "277896f6701a1593": [
       "bin/backfill-price-v1-mappings @regression @tier3 --apply writes exactly the missing mappings",
       "bin/backfill-price-v1-mappings @regression @tier3 a second --apply is a no-op",
@@ -18881,8 +18884,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1385,
-      "titleCount": 13845,
+      "fileCount": 1386,
+      "titleCount": 13846,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19830,6 +19833,7 @@
         "test/unit/hub/client/hub_rate_limit.test.js": "4bb859f5accff2bb",
         "test/unit/hub/client/hub_selector.test.js": "5eda3afa01cb5509",
         "test/unit/hub/hash_coverage.test.js": "74513e474bce99e9",
+        "test/unit/hub/hash_coverage.test/attest_batch_link_excluded.test.js": "27767578c21e1894",
         "test/unit/hub/hash_coverage.test/content_parity.test.js": "d6d1c2ce9ac6de6a",
         "test/unit/hub/hub_client.test.js": "0b3279bc0c8312d7",
         "test/unit/hub/hub_client.test/address_source.test.js": "517182bfca3b695a",
