@@ -164,12 +164,11 @@ const MIGRATION_CHECKSUM_REBASELINES = {
     // The header claimed mode=manual coordinated the fleet; it cannot (the drift
     // reconciler converges all three objects at verifyTables(), before runMigrations()
     // reads the gate), so the WHY/mode block was rewritten to state what the tag does
-    // and does not do. Comment lines only: the three ALTER TABLE statements are
-    // byte-identical, verified by comparing the comment-stripped residue. The auto retag
-    // now reflects that the reconciler applies the same idempotent objects first. All
-    // three pre-current committed revisions are listed since each fleet DB recorded
-    // whichever it applied first; on any database that never applied the file by hand
-    // the entry is inert.
+    // and does not do. The auto retag now reflects that the reconciler applies the same
+    // idempotent objects first. Comment lines only: the three ALTER TABLE statements are
+    // byte-identical, verified by comparing the comment-stripped residue. All three
+    // pre-current revisions are listed since each fleet DB recorded whichever it applied
+    // first; on any database that never applied the file by hand the entry is inert.
     '2026-08-12-validator-rewards-derive-block-index.sql': {
         from: [
             '8f6f8b6bae2026128b0b298892fc0b5601a67f2ff12cc05fb4da9ae9cfdd1100', // afee252f, as authored
