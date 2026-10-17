@@ -8275,6 +8275,10 @@
       "ANCHOR v3 archive wrapper section fields still appends the archive row after the sections",
       "ANCHOR v3 archive wrapper section fields stores the wrapper batch CRC lower-case as the signed canonical embeds it"
     ],
+    "7cb20332949b9a22": [
+      "Airdrop multi-leg native fee below cumulative gate @regression @tier1 settles both FORMAT 2 non-BATCH legs invalid when the native output is under one leg fee",
+      "Airdrop multi-leg native fee below cumulative gate @regression @tier1 settles both FORMAT 2 non-BATCH legs valid when one native output pays one leg but not their sum"
+    ],
     "7cc32f516c45e8ff": [
       "capability validator request steps notYetIndexedError() returns null when the requested block equals the latest block",
       "capability validator request steps notYetIndexedError() returns the exact error when the requested block is one ahead",
@@ -18881,8 +18885,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1385,
-      "titleCount": 13845,
+      "fileCount": 1386,
+      "titleCount": 13847,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19198,6 +19202,7 @@
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "d5d2a5097677f9b1",
