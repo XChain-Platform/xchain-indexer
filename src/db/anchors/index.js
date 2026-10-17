@@ -35,6 +35,7 @@ const arKey = require('../../actions/anchor/anchor_reward_key.js');
 // this mixin in anchors/, so createAnchorAction reads as the upsert it is.
 const { anchorActionRow } = require('./anchor_action_row.js');
 const { archiveHeadPickPredicate, foldArchiveHeadFloor } = require('./archive_head_pick.js');
+const { writeArchiveStatus } = require('./archive_status_journal.js');
 
 module.exports = {
 
@@ -338,15 +339,12 @@ module.exports = {
     // reader is built to reconcile.
     async setAnchorArchiveStatus(actionIndex, status){
         let status_id = await this.createStatus(status);
-        await this.doQuery("UPDATE anchor_actions SET status_id = ? WHERE action_index = ?", [status_id, actionIndex]);
+        await writeArchiveStatus(this, actionIndex, status_id, false);
     },
 
     async setAnchorArchiveRowStatus(actionIndex, status){
         let status_id = await this.createStatus(status);
-        await this.doQuery(
-            "UPDATE anchor_actions a SET a.status_id = ? WHERE a.action_index = ? AND " +
-            archiveHeadPredicate('a'),
-            [status_id, actionIndex]);
+        await writeArchiveStatus(this, actionIndex, status_id, true);
     },
 
 

@@ -9577,6 +9577,10 @@
     "856558ff8c380713": [
       "Sweep tick_id->ticker memoization @regression resolves each distinct held tick_id at most once across both passes"
     ],
+    "858aaae550bece4b": [
+      "archive_status_journal writes an action-wide archive status",
+      "archive_status_journal writes only the archive head row when scoped"
+    ],
     "85a592dc86f8b36a": [
       "CROSS_SETTLE per-block cap flag day @regression @tier1 registration is a time-keyed 2.0.0 change, genesis-active on testnet and regtest",
       "CROSS_SETTLE per-block cap flag day @regression @tier1 registration mainnet is ARMED AT GENESIS by the 2026-09-09 ruling",
@@ -18971,8 +18975,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1398,
-      "titleCount": 13898,
+      "fileCount": 1399,
+      "titleCount": 13900,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19742,6 +19746,7 @@
         "test/unit/db/anchors/anchor_archive_row_status.test.js": "489112fc1f59fbf6",
         "test/unit/db/anchors/anchor_archive_status_pin.test.js": "4b48770c46d6248a",
         "test/unit/db/anchors/archive_head_pick_gate.test.js": "9edb73492cfca621",
+        "test/unit/db/anchors/archive_status_journal.test.js": "858aaae550bece4b",
         "test/unit/db/anchors/max_archive_batch_seq_by_author_predicate.test.js": "7f93503626a6b339",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "025a38c8bb9a00ab",
         "test/unit/db/balance_delta_apply.test.js": "a047f1b5c097c4d9",
