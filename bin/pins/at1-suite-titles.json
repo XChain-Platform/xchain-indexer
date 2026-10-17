@@ -15491,6 +15491,10 @@
       "Escrow release negation parity @regression @tier1 negative control: JS unary minus on the same value DOES lose precision",
       "Escrow release negation parity @regression @tier1 no action handler negates a ledger amount with JS unary minus (source scan)"
     ],
+    "db0f22ae2fc52ee3": [
+      "protocol_changes active-stake collation gate @regression @tier1 is inert when height is null or non-finite",
+      "protocol_changes active-stake collation gate @regression @tier1 registers a height gate unarmed on public networks and active from regtest genesis"
+    ],
     "db4cdd7dac8b8bff": [
       "04 Spike Load handles repeated micro-spikes (bursty traffic)",
       "04 Spike Load handles spike from 1 tx/block to 100 tx/block without errors"
@@ -17973,8 +17977,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1406,
-      "titleCount": 13930,
+      "fileCount": 1407,
+      "titleCount": 13932,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19176,6 +19180,7 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "928a3b458b1abf59",
         "test/unit/protocol/protocol_changes.test/unusable_block_time.test.js": "cb3e0ef54d91ff54",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
         "test/unit/protocol_changes/anchor/anchor_bundle_order_row.test.js": "332212f43d474164",
         "test/unit/protocol_changes/anchor/anchor_fold_rows.test.js": "2d944feb25011092",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
@@ -19750,8 +19755,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1064,
-      "titleCount": 11025,
+      "fileCount": 1065,
+      "titleCount": 11027,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20667,6 +20672,7 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "928a3b458b1abf59",
         "test/unit/protocol/protocol_changes.test/unusable_block_time.test.js": "cb3e0ef54d91ff54",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
@@ -20820,8 +20826,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 506,
-      "titleCount": 5618,
+      "fileCount": 507,
+      "titleCount": 5620,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21245,6 +21251,7 @@
         "test/unit/protocol/list_reference_validity_gate.test.js": "75196e85b9673333",
         "test/unit/protocol/price_time_gate.test.js": "3ba5b094789a13b1",
         "test/unit/protocol/protocol_change_registry_prototype.test.js": "9227d0e83b5535c1",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
@@ -21332,8 +21339,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1064,
-      "titleCount": 11025,
+      "fileCount": 1065,
+      "titleCount": 11027,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22249,6 +22256,7 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "928a3b458b1abf59",
         "test/unit/protocol/protocol_changes.test/unusable_block_time.test.js": "cb3e0ef54d91ff54",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",

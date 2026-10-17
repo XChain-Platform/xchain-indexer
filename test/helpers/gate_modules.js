@@ -196,6 +196,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'vote_v3_tick_existence_activation',
     'match_origin_open_activation',
     'reassemble_chunk_parent_status_activation',
+    'active_stake_collation_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
