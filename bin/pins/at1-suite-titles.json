@@ -7643,13 +7643,6 @@
       "relay fee activation row attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION is a frozen height row with explicit network defaults",
       "relay fee activation row attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION is inactive on mainnet, active on testnet from the armed height, and active from regtest genesis"
     ],
-    "7228481715352e4c": [
-      "remote_token_snapshots mirror contract declares hub re-mirroring as its recovery policy",
-      "remote_token_snapshots mirror contract declares the signed token facts and rollback fence",
-      "remote_token_snapshots mirror contract is bootstrapped, globally watermarked, locally keyed, and never retracted",
-      "remote_token_snapshots mirror contract round trips a finalized fixture and keeps it through a fenced source-chain retraction",
-      "remote_token_snapshots never-retracted mirror skips an unfenced deletion"
-    ],
     "72a0b56687489fbe": [
       "hourly price age flips VM execution at its action block gate",
       "hourly price age flips a controller guard verdict at its host action block gate",
@@ -8303,6 +8296,13 @@
       "contract_executions text clips against MariaDB @integration stores the clipped value of a 70,008-character ASCII revert reason and reads it back unchanged",
       "contract_executions text clips against MariaDB @integration stores the clipped value of an 80,000-byte emoji revert reason and reads it back unchanged"
     ],
+    "7d2fbf0d10540698": [
+      "remote_token_snapshots mirror contract declares hub re-mirroring as its recovery policy",
+      "remote_token_snapshots mirror contract declares the signed token facts and rollback fence",
+      "remote_token_snapshots mirror contract is bootstrapped, height watermarked, locally keyed, and never retracted",
+      "remote_token_snapshots mirror contract round trips a finalized fixture and keeps it through a fenced source-chain retraction",
+      "remote_token_snapshots never-retracted mirror skips an unfenced deletion"
+    ],
     "7d62cbabc6cf594b": [
       "mirror-admission chain margin gate @regression @tier1 falls back to the legacy margin when the override or height is unusable",
       "mirror-admission chain margin gate @regression @tier1 keeps the DOGE testnet margin inert below its sentinel",
@@ -8649,6 +8649,11 @@
       "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged signature-proofed price round and writes none of the batch",
       "AnchorRecovery checkpoint and price tables @regression @tier2 rejects an object-form batch proof that lacks price quorum",
       "AnchorRecovery checkpoint and price tables @regression @tier2 uses the ABP archive key orders and only the full writer restores both tables"
+    ],
+    "816d9a465e12ae5b": [
+      "hub mirror validity-read table classifications @regression @tier1 classifies every validity read outside the global state watermark",
+      "hub mirror validity-read table classifications @regression @tier1 classifies remote token snapshots only under its height watermark",
+      "hub mirror validity-read table classifications @regression @tier1 puts every retractable validity read in the quorum class"
     ],
     "817446897676d65c": [
       "Smoke: handler instantiation and basic action processing SM-10: Actions constructor instantiates all handlers",
@@ -18876,8 +18881,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1384,
-      "titleCount": 13842,
+      "fileCount": 1385,
+      "titleCount": 13845,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19749,7 +19754,7 @@
         "test/unit/db/orders/cross_chain_offer_lists_fold.test.js": "e411489fced259a6",
         "test/unit/db/prices/landed_bound_clause.test.js": "d5f3085637164b79",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
-        "test/unit/db/remote_token_snapshots.test.js": "7228481715352e4c",
+        "test/unit/db/remote_token_snapshots.test.js": "7d2fbf0d10540698",
         "test/unit/db/rollback/in_place_flips_contract_stakes_reset.test.js": "c1dd57bac53e1487",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
@@ -19912,6 +19917,7 @@
         "test/unit/hub/hub_db_sync/retraction_fence_columns.test.js": "521ffb32e51656bb",
         "test/unit/hub/hub_db_sync/snapshot_barrier_admission_height.test.js": "c3a9a6f506a2d4be",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
+        "test/unit/hub/hub_db_sync/validity_read_tables.test.js": "816d9a465e12ae5b",
         "test/unit/hub/hub_db_sync/watermark_interval_hub_parity.test.js": "4e69a425c6f8c78b",
         "test/unit/hub/hub_mirror_read_max_ids.test.js": "f59780a5cacf7da9",
         "test/unit/hub/hub_push_queue.test.js": "883ed5c19fe43878",
