@@ -250,7 +250,8 @@ const ledgerChange = {
     async upsertRow(db, table, action_index, address_id, tick_id, amount){
         // Check if record already exists for this token
         let query = `SELECT
-                        action_index
+                        action_index,
+                        amount
                     FROM
                         ` + table + `
                     WHERE
@@ -258,10 +259,13 @@ const ledgerChange = {
                         address_id=? AND 
                         tick_id=?`;
         let exists = false;
+        let oldAmount = '0';
         let args    = [action_index, address_id, tick_id];
         let results = await db.doQuery(query, args);
-        if(results.length > 0)
+        if(results.length > 0){
             exists = true;
+            oldAmount = results[0].amount;
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -278,6 +282,29 @@ const ledgerChange = {
         }
         args    = [amount, action_index, address_id, tick_id];
         results = await db.doQuery(query, args);
+        ledgerChange.collectBalanceDelta(db, table, address_id, tick_id, amount, oldAmount, exists);
+    },
+
+    collectBalanceDelta(db, table, address_id, tick_id, amount, oldAmount, exists){
+        if(!(db._balanceDelta instanceof Map) || (table !== 'credits' && table !== 'debits'))
+            return;
+
+        // An upsert replaces an existing ledger row rather than adding another one,
+        // so only the difference from the persisted amount changes the balance.
+        let change = exists
+            ? db.util.bcsub(amount, oldAmount, ledgerPrecision.LEDGER_AMOUNT_PRECISION)
+            : db.util.bcadd(amount, 0, ledgerPrecision.LEDGER_AMOUNT_PRECISION);
+        if(table === 'debits')
+            change = db.util.bcsub(0, change, ledgerPrecision.LEDGER_AMOUNT_PRECISION);
+
+        let byTick = db._balanceDelta.get(address_id);
+        if(!byTick){
+            byTick = new Map();
+            db._balanceDelta.set(address_id, byTick);
+        }
+        let prior = byTick.get(tick_id) || '0';
+        byTick.set(tick_id, db.util.bcstr(
+            db.util.bcadd(prior, change, ledgerPrecision.LEDGER_AMOUNT_PRECISION)));
     },
 
 };

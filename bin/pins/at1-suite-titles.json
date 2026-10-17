@@ -252,6 +252,15 @@
       "XCALL/VM protocol constants agree across vm/indexer/sdk the canonical xchain-documentation copy pins the same six values",
       "XCALL/VM protocol constants agree across vm/indexer/sdk this repo pins the six constants at the frozen values"
     ],
+    "049bade57f005021": [
+      "per-block balance delta collection @regression @tier1 accumulates by address and tick without mixing either key",
+      "per-block balance delta collection @regression @tier1 collects inserted credits and debits as opposite balance effects",
+      "per-block balance delta collection @regression @tier1 collects only new minus old when an existing credit row is replaced",
+      "per-block balance delta collection @regression @tier1 ignores escrows and writes made without an active block collector",
+      "per-block balance delta collection @regression @tier1 records nothing when the ledger DML fails",
+      "per-block balance delta collection @regression @tier1 replaces stale deltas whenever a block transaction opens",
+      "per-block balance delta collection @regression @tier1 reverses the replacement difference for a debit row"
+    ],
     "04f2b1458c348cb3": [
       "Programmable policy layer : Phase B enforcement @regression controllerActionClass : static action\u2192class map AIRDROP/DIVIDEND/SWEEP \u2192 transfer (bulk outbound moves are gated too)",
       "Programmable policy layer : Phase B enforcement @regression controllerActionClass : static action\u2192class map DESTROY \u2192 burn",
@@ -18813,8 +18822,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1378,
-      "titleCount": 13811,
+      "fileCount": 1379,
+      "titleCount": 13818,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19572,6 +19581,7 @@
         "test/unit/db/anchors/archive_head_pick_gate.test.js": "9edb73492cfca621",
         "test/unit/db/anchors/max_archive_batch_seq_by_author_predicate.test.js": "7f93503626a6b339",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "025a38c8bb9a00ab",
+        "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
