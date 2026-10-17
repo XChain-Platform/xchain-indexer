@@ -11213,6 +11213,10 @@
       "AnchorRecovery (full-parse recovery) @regression @tier2 _quorumVerified verify-then-mark ordering (Pkg 13 twin parity) counts a qualified signer whose valid sig is ordered AFTER a garbage one",
       "AnchorRecovery (full-parse recovery) @regression @tier2 _quorumVerified verify-then-mark ordering (Pkg 13 twin parity) still counts a repeated valid signer ONCE (dedupe intact)"
     ],
+    "9f0a9ff75d332065": [
+      "bridge proof block fault classification @regression @tier1 defers a real bridge proof error under the one reason the health verdicts match",
+      "bridge proof block fault classification @regression @tier1 grades that deferred block a bridge proof wait, never a wedge, with no barrier hold"
+    ],
     "9f1e3a4773262edd": [
       "graceful shutdown closeServer resolves on a missing or closeless server rather than hanging the drain",
       "graceful shutdown closeServer resolves once, and drops idle keep-alive sockets that would hold close() open",
@@ -17931,8 +17935,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1399,
-      "titleCount": 13902,
+      "fileCount": 1400,
+      "titleCount": 13904,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19315,6 +19319,7 @@
         "test/unit/xchain_indexer/abandon_block_rollback_failure.test.js": "e6d68acf0746746c",
         "test/unit/xchain_indexer/apply_pending_reorgs.test.js": "1c8358d37961f103",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
+        "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
         "test/unit/xchain_indexer/decoder_halt_gate.test.js": "bbd13f49af6aeed8",
         "test/unit/xchain_indexer/indexer_poll_heartbeat.test.js": "3654541f666286e0",
