@@ -135,13 +135,20 @@ module.exports = {
     // No hub database configured: require a response source for mirror-era BTC, then apply
     // the existing local-price-source policy.
     checkLocalPriceSource(){
-        const responseMirrorActivation = changes.get(ATTEST_RESPONSE_MIRROR_KEY)[this.config['NETWORK']];
+        const network = this.config['NETWORK'];
+        const responseMirrorActivation = changes.get(ATTEST_RESPONSE_MIRROR_KEY)[network];
         if(this.config['COIN'] === 'BTC' && responseMirrorActivation !== null &&
            responseMirrorActivation !== changes.UNARMED){
-            this.util.throwError('HUB_DB_HOST / HUB_DB_NAME are not set on a BTC node where ' +
-                'ATTEST_RESPONSE_MIRROR_ACTIVATION is armed at block ' + responseMirrorActivation + '. ' +
-                'attestation_responses is an off-chain consensus input that settles request fees, ' +
-                'and AnchorRecovery cannot rebuild it. Configure a hub database source before booting.');
+            const mirrorSourceMessage = 'HUB_DB_HOST / HUB_DB_NAME are not set on a BTC ' + network +
+                ' node where ATTEST_RESPONSE_MIRROR_ACTIVATION is armed at block ' +
+                responseMirrorActivation + '. attestation_responses is an off-chain consensus input ' +
+                'that settles request fees, and AnchorRecovery cannot rebuild it.';
+            if(network === 'mainnet' || network === 'testnet'){
+                this.util.throwError(mirrorSourceMessage + ' Configure a hub database source before booting.');
+            } else if(network === 'regtest'){
+                getLogger().warn('WARNING: ' + mirrorSourceMessage +
+                    ' Continuing on regtest without a hub database source.');
+            }
         }
 
         // No hub DB credentials supplied. Hub-owned tables (price_snapshots, oracle_prices,
