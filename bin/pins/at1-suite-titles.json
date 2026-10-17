@@ -10890,6 +10890,11 @@
       "getPendingAttestationRequests() LIMIT hardening @regression @tier1 hard-caps the limit at 500 regardless of caller",
       "getPendingAttestationRequests() LIMIT hardening @regression @tier1 still appends the provider_id + cursor args ahead of the bound limit"
     ],
+    "946de61532b4e65b": [
+      "DEX create token info reads @regression @tier2 DISPENSER does not read SUPPLY",
+      "DEX create token info reads @regression @tier2 ORDER does not read SUPPLY",
+      "DEX create token info reads @regression @tier2 SWAP does not read SUPPLY"
+    ],
     "947a8652e2bab804": [
       "roll-call unwind schema-gap guard @regression a pre-migration database with none of the tables tries each delete and does not throw",
       "roll-call unwind schema-gap guard @regression any other fault surfaces and stops the unwind before the verdicts go",
@@ -18881,8 +18886,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1385,
-      "titleCount": 13845,
+      "fileCount": 1386,
+      "titleCount": 13848,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19074,6 +19079,7 @@
         "test/unit/actions/market/coinpay.test/order_finalisation.test.js": "f0b2b5a7508e3997",
         "test/unit/actions/market/coinpay.test/roles_and_ownership.test.js": "beeabd8d231e087a",
         "test/unit/actions/market/coinpay_expire.test.js": "e238e8b94beedf64",
+        "test/unit/actions/market/dex_token_info_supply_unread.test.js": "946de61532b4e65b",
         "test/unit/actions/market/dispense.test.js": "7f741fb793c49b56",
         "test/unit/actions/market/dispense.test/auto_close.test.js": "76c3e449cb5ec5c3",
         "test/unit/actions/market/dispense.test/fiat_pricing.test.js": "b98784bb1fb6c832",
