@@ -22,6 +22,7 @@ CREATE TABLE dispenser_statuses (
 
 CREATE        INDEX action_index           ON dispenser_statuses (action_index);
 CREATE        INDEX dispenser_action_index ON dispenser_statuses (dispenser_action_index);
+CREATE        INDEX dispenser_action_action ON dispenser_statuses (dispenser_action_index, action_index);
 CREATE        INDEX cancelled_by_id        ON dispenser_statuses (cancelled_by_id);
 -- Composite (status_id, action_index) bounds the per-block expiry sweep's
 -- open-item probe: it filters dispenser_statuses by status_id (via the index_statuses

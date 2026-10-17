@@ -25,6 +25,12 @@
 const { BRIDGE_PROOF_BARRIER } = require('../consensus/bridge_proof_client/stall.js');
 const PRICE_LANDING_BARRIER = 'price_landing_barrier';
 const ROLLCALL_PROOF_REASON = 'rollcall_proof_unavailable';
+// Marks a safety halt raised while evaluating or enforcing train activation.
+const TRAIN_ACTIVATION_HALT_PREFIX = 'train_activation_halt:';
+
+function isTrainActivationHalt(stallReason){
+    return typeof stallReason === 'string' && stallReason.startsWith(TRAIN_ACTIVATION_HALT_PREFIX);
+}
 
 // The no-progress window a stall is judged against. The price-landing barrier waits on
 // the OTHER landing chains' published landed times, which move on their own cadence, so
@@ -210,6 +216,8 @@ function barrierCeilingExceeded(hold, ceilingMs, now){
 }
 
 module.exports = {
+    TRAIN_ACTIVATION_HALT_PREFIX,
+    isTrainActivationHalt,
     stallWedged,
     waitingOnFutureBlock,
     stallClassOf,

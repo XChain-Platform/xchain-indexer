@@ -23,7 +23,15 @@ const { stallHealthCopies: smoke } = require('../../smoke/connected/api_status.t
 describe('smoke status stall-health parity', function () {
     const NOW = 1_000_000_000;
     const GRACE_VALUES = [0, 120000, NaN];
-    const REASONS = [null, '', 'price_sync_barrier', 'vm_executor_unavailable', 'bridge_proof_barrier'];
+    const REASONS = [
+        null,
+        '',
+        'price_sync_barrier',
+        'vm_executor_unavailable',
+        'bridge_proof_barrier',
+        'train_activation_halt: rule set 3 required at 900',
+        'train_activation_halt: train_activation: the activation gate itself failed to evaluate (x); refusing to advance',
+    ];
     const COMMIT_TIMES = [null, NOW - 120001, NOW - 120000, NOW - 1, NOW + 1];
     const CLEAR_TIMES = [undefined, null, NaN, -Infinity, NOW - 1, NOW, NOW + 1, Infinity, 'soon'];
 
