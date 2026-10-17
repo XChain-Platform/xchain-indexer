@@ -1013,6 +1013,15 @@
       "ANCHOR archive MATCH_COUNT gate returns null for non-gzip, non-JSON, and archives without a matches array",
       "ANCHOR archive MATCH_COUNT gate single chunk is valid while inert and rejected when armed; honest count stays valid"
     ],
+    "1292af054254884e": [
+      "ANCHOR checkpoint sequence binding reason accepts equal canonical decimal strings through the safe-integer ceiling",
+      "ANCHOR checkpoint sequence binding reason rejects either missing field",
+      "ANCHOR checkpoint sequence binding reason rejects leading-zero values even when they are equal",
+      "ANCHOR checkpoint sequence binding reason rejects non-digit values",
+      "ANCHOR checkpoint sequence binding reason rejects signed values",
+      "ANCHOR checkpoint sequence binding reason rejects unequal canonical values and names CHECKPOINT_SEQ",
+      "ANCHOR checkpoint sequence binding reason rejects values above Number.MAX_SAFE_INTEGER"
+    ],
     "1294cc725207b2fb": [
       "Dispenser action handler @regression @tier2 Format 1 \u2013 Cancel Dispenser a delegated dispenser can also be cancelled by its GET_ADDRESS",
       "Dispenser action handler @regression @tier2 Format 1 \u2013 Cancel Dispenser a delegated dispenser can be cancelled by its original creator",
@@ -18881,8 +18890,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1385,
-      "titleCount": 13845,
+      "fileCount": 1386,
+      "titleCount": 13852,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18933,6 +18942,7 @@
         "test/unit/actions/anchor/bundle_order/anchor_bundle_order_gate.test.js": "13b04af629143cd3",
         "test/unit/actions/anchor/bundle_order/anchor_order_reason_helpers.test.js": "3277653238c8d36f",
         "test/unit/actions/anchor/bundle_order/bundle_order_cases.test.js": "22e147a7ae0e9cbb",
+        "test/unit/actions/anchor/checkpoint_seq_bind_reason.test.js": "1292af054254884e",
         "test/unit/actions/anchor/v3/anchor_v3_archive_check.test.js": "90b635bde1229f56",
         "test/unit/actions/anchor/v3/anchor_v3_fold_rows.test.js": "78c42da2461e2b5b",
         "test/unit/actions/anchor/v3/anchor_v3_sections.test.js": "fae8eeba338baf48",
