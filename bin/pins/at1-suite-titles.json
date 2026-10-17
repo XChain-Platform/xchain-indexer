@@ -172,6 +172,10 @@
       "migration live-schema guard type and charset rules against a real MariaDB @tier3 refuses: microsecond datetime restated bare from server metadata",
       "migration live-schema guard type and charset rules against a real MariaDB @tier3 refuses: utf8mb4 column restated without a charset in a utf8 table from server metadata"
     ],
+    "03449cbd7e3a0746": [
+      "ATTEST seeded undelivered mirror response @regression @tier3 ignores the seeded row when the local request is absent",
+      "ATTEST seeded undelivered mirror response @regression @tier3 ignores the seeded row when the local request is already valid"
+    ],
     "037f439f3b60cf7b": [
       "migrate CLI status report @regression --status --json reports the ledger without applying migrations",
       "migrate CLI status report @regression --status prints only the text report and its summary",
@@ -18971,8 +18975,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1398,
-      "titleCount": 13898,
+      "fileCount": 1399,
+      "titleCount": 13900,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19069,6 +19073,7 @@
         "test/unit/actions/attest/callback_batch_position_below_gate.test.js": "1627468c01af8b39",
         "test/unit/actions/attest/canonical_signer_set.test.js": "4f4095f7fff521ab",
         "test/unit/actions/attest/mirror_apply_malformed_admission.test.js": "a37267dabef57ec2",
+        "test/unit/actions/attest/mirror_apply_seeded_row_not_pending.test.js": "03449cbd7e3a0746",
         "test/unit/actions/attest/mirror_signer_set_canonical.test.js": "125e47594c3f675e",
         "test/unit/actions/attest/rollcall.test.js": "e65e23a11e0b9d4f",
         "test/unit/actions/attest_relay.test.js": "75c1e0031337ed39",
