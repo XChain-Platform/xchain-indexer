@@ -337,6 +337,10 @@
       "PRICE price-range flag day @regression @tier3 the posture this node ships fails CLOSED on an unusable key, leaving the legacy behaviour",
       "PRICE price-range flag day @regression @tier3 the posture this node ships leaves mainnet inert at every instant, so the legacy path runs byte for byte"
     ],
+    "064be60bda83c679": [
+      "ANCHOR v3 checkpoint sequence binding below activation keeps the frozen fold valid with all-row watermark reads on mainnet",
+      "ANCHOR v3 checkpoint sequence binding below activation keeps the frozen fold valid with all-row watermark reads on testnet"
+    ],
     "066e3e1a7354e46d": [
       "ATTEST hub-mirror response applier @regression @tier3 bounded applicability read (utility.processAttestationResponses paging) applies the same rows paged as unpaged, when the cap prefix spans two pages",
       "ATTEST hub-mirror response applier @regression @tier3 bounded applicability read (utility.processAttestationResponses paging) orders the page by \u00a74.1 before it bounds it, and keysets rather than offsets",
@@ -19321,6 +19325,7 @@
         "test/unit/anchor/anchor_action_query.test/anchor_action_query_section_vs.test.js": "f110a0bd4d3b7f5b",
         "test/unit/anchor/anchor_archive_section_verdict.test.js": "63cd3cc2b8b75cb9",
         "test/unit/anchor/anchor_archive_sql_columns.test.js": "bab9c054a0998db8",
+        "test/unit/anchor/anchor_checkpoint_seq_bind_v3_below_gate.test.js": "064be60bda83c679",
         "test/unit/anchor/anchor_fold_sql_family.test.js": "20703ba8a82c0437",
         "test/unit/anchor/anchor_proof_client.test.js": "5ef99a2c3042bdaf",
         "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression.test.js": "c3487eec1e568310",
