@@ -17,20 +17,21 @@
  * Pure, deterministic, DB-free cryptographic primitives for the additive state
  * commitment (balance/state SMT), the per-block content Merkle root, and the
  * fixed top-level state root. Everything here is CONSENSUS-CRITICAL once the
- * §6 flag-day activates: the indexer (producer, src/stateCommitment.js) and the
- * xchain-sync follower (twin, src/BlockHasher.js) MUST compute byte-identical
- * roots from it, exactly as db.js getBlockHashes and BlockHasher are a pair.
+ * §6 flag-day activates. The indexer producer lives in src/state_commitment/,
+ * with its database integration in src/db/actions.js. The xchain-sync follower
+ * consumes its twin through src/client/block_hasher.js, while the audit tree is
+ * retained at src/server/merkle_tree.js. They MUST compute byte-identical roots.
  *
- * BYTE-ALIGNED TWIN: this file is copied verbatim into xchain-sync/src/merkle.js
- * (and a subset into xchain-sdk for client-side verification). Keep them
+ * BYTE-ALIGNED TWINS: the consensus modules carried by xchain-explorer and
+ * xchain-sdk support client-side verification. Keep the shared primitives
  * identical; the merkle-vectors golden + the xchain-e2e recompute-conformance
- * scenario guard the pair. Do not introduce wall-clock, locale, or float
- * dependence: SHA-256 over explicit byte layouts only.
+ * scenario guard them. Do not introduce wall-clock, locale, or float dependence:
+ * SHA-256 over explicit byte layouts only.
  *
- * Hardening (vs the legacy unsigned xchain-sync/src/MerkleTree.js, which is NOT
- * second-preimage safe and is audit-only): RFC 6962-style domain separation on
- * leaves (0x00) and internal nodes (0x01), a distinct empty-leaf constant (0x02),
- * fixed-shape trees (no Bitcoin duplicate-last for odd layers). See spec §2.6, §3.1.
+ * Hardening (vs the follower's legacy unsigned audit tree): RFC 6962-style
+ * domain separation on leaves (0x00) and internal nodes (0x01), a distinct
+ * empty-leaf constant (0x02), fixed-shape trees (no Bitcoin duplicate-last for
+ * odd layers). See spec §2.6, §3.1.
  *
  ********************************************************************/
 
