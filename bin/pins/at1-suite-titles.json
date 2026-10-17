@@ -2947,6 +2947,16 @@
       "shared list params rejects unsupported, lower-case, null, and non-object parameter values",
       "shared list params returns the exact record shape with a cloned utf8 byte-sorted member array"
     ],
+    "2b43cec5c7ef3f91": [
+      "dispense payment tally scale: over-charge @regression @tier1 both fills the payment covers settle",
+      "dispense payment tally scale: over-issuance @regression @tier1 the same payment settles exactly the TWO fills it covers",
+      "dispense payment tally scale: over-issuance @regression @tier1 the settled rows never sum past the payment",
+      "dispense payment tally scale: selection @regression @tier1 the batch pool and a native-coin trigger keep the legacy scale",
+      "dispense payment tally scale: selection @regression @tier1 the exact scale is the platform maximum token precision",
+      "dispense payment tally scale: unaffected settlements @regression @tier1 a native-coin trigger retains the legacy scale",
+      "dispense payment tally scale: unaffected settlements @regression @tier1 a token payment that fits 8 dp settles and records without widening",
+      "dispense payment tally scale: unaffected settlements @regression @tier1 the batch pool keeps the 8 dp scale it shares with COINPAY"
+    ],
     "2b4abedb79b40a38": [
       "bridge and policy barriers on a schema without the mirror tables @regression @tier1 asks the schema once, not once per refresh",
       "bridge and policy barriers on a schema without the mirror tables @regression @tier1 keeps both barriers CLOSED, which is the side that cannot fork",
@@ -3607,21 +3617,6 @@
       "ANCHOR v3 fold reissue SOURCE author accepts an exact duplicate found under the DOGE SOURCE address",
       "ANCHOR v3 fold reissue SOURCE author rejects a conflicting archive found under the DOGE SOURCE address",
       "ANCHOR v3 fold reissue SOURCE author retains the publisher pubkey lookup before activation"
-    ],
-    "32b91e3ceb72e5c2": [
-      "dispense payment tally scale: activation @regression @tier1 an unknown network or an unparseable time stays on the legacy scale",
-      "dispense payment tally scale: activation @regression @tier1 mainnet is ARMED AT GENESIS by the 2026-09-09 ruling",
-      "dispense payment tally scale: activation @regression @tier1 testnet and regtest run from genesis",
-      "dispense payment tally scale: activation @regression @tier1 the batch pool and a native-coin trigger keep the legacy scale even when armed",
-      "dispense payment tally scale: activation @regression @tier1 the exact scale is the platform maximum token precision",
-      "dispense payment tally scale: over-charge @regression @tier1 ABOVE the flag both fills the payment covers settle",
-      "dispense payment tally scale: over-charge @regression @tier1 BELOW the flag the first fill drains the whole payment and the second is refused",
-      "dispense payment tally scale: over-issuance @regression @tier1 ABOVE the flag the same payment settles exactly the TWO fills it covers",
-      "dispense payment tally scale: over-issuance @regression @tier1 ABOVE the flag the settled rows never sum past the payment",
-      "dispense payment tally scale: over-issuance @regression @tier1 BELOW the flag one payment settles all THREE (the replay case)",
-      "dispense payment tally scale: unaffected settlements @regression @tier1 a native-coin trigger is untouched by the gate",
-      "dispense payment tally scale: unaffected settlements @regression @tier1 a token payment that fits 8 dp settles and records identically on both sides",
-      "dispense payment tally scale: unaffected settlements @regression @tier1 the batch pool keeps the 8 dp scale it shares with COINPAY"
     ],
     "32d28eacf6d12ab7": [
       "getOrderInfoBatch() @regression @tier1 deep-equals per-row getOrderInfo while using four set queries",
@@ -17978,7 +17973,7 @@
   "scripts": {
     "test": {
       "fileCount": 1407,
-      "titleCount": 13932,
+      "titleCount": 13927,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18183,7 +18178,7 @@
         "test/unit/actions/market/dispense.test/lists.test.js": "9bc7fc9f3666e48b",
         "test/unit/actions/market/dispense.test/oracle_per_token.test.js": "2e4b5d254d43a046",
         "test/unit/actions/market/dispense.test/settlement_records.test.js": "d2042aa3438cc5fe",
-        "test/unit/actions/market/dispense_payment_tally_scale.test.js": "32b91e3ceb72e5c2",
+        "test/unit/actions/market/dispense_payment_tally_scale.test.js": "2b43cec5c7ef3f91",
         "test/unit/actions/market/dispenser.test.js": "ace5f36204b02c5a",
         "test/unit/actions/market/dispenser.test/cancel.test.js": "1294cc725207b2fb",
         "test/unit/actions/market/dispenser.test/create_paths.test.js": "f4fce0288f1b045f",
@@ -19756,7 +19751,7 @@
     },
     "test:regression": {
       "fileCount": 1064,
-      "titleCount": 11025,
+      "titleCount": 11020,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19970,7 +19965,7 @@
         "test/unit/actions/market/dispense.test/lists.test.js": "9bc7fc9f3666e48b",
         "test/unit/actions/market/dispense.test/oracle_per_token.test.js": "2e4b5d254d43a046",
         "test/unit/actions/market/dispense.test/settlement_records.test.js": "d2042aa3438cc5fe",
-        "test/unit/actions/market/dispense_payment_tally_scale.test.js": "32b91e3ceb72e5c2",
+        "test/unit/actions/market/dispense_payment_tally_scale.test.js": "2b43cec5c7ef3f91",
         "test/unit/actions/market/dispenser.test.js": "ace5f36204b02c5a",
         "test/unit/actions/market/dispenser.test/cancel.test.js": "1294cc725207b2fb",
         "test/unit/actions/market/dispenser.test/create_paths.test.js": "f4fce0288f1b045f",
@@ -20826,7 +20821,7 @@
     },
     "test:regression:fast": {
       "fileCount": 506,
-      "titleCount": 5618,
+      "titleCount": 5613,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20873,7 +20868,7 @@
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
-        "test/unit/actions/market/dispense_payment_tally_scale.test.js": "32b91e3ceb72e5c2",
+        "test/unit/actions/market/dispense_payment_tally_scale.test.js": "2b43cec5c7ef3f91",
         "test/unit/actions/market/dispenser_close.test.js": "b88f87cbbf13cf8b",
         "test/unit/actions/market/dispenser_settlement_idempotency.test.js": "2f5611f310786b32",
         "test/unit/actions/market/match_origin_open_activation.test.js": "81c33486bde89d47",
@@ -21338,7 +21333,7 @@
     },
     "test:regression:full": {
       "fileCount": 1064,
-      "titleCount": 11025,
+      "titleCount": 11020,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21552,7 +21547,7 @@
         "test/unit/actions/market/dispense.test/lists.test.js": "9bc7fc9f3666e48b",
         "test/unit/actions/market/dispense.test/oracle_per_token.test.js": "2e4b5d254d43a046",
         "test/unit/actions/market/dispense.test/settlement_records.test.js": "d2042aa3438cc5fe",
-        "test/unit/actions/market/dispense_payment_tally_scale.test.js": "32b91e3ceb72e5c2",
+        "test/unit/actions/market/dispense_payment_tally_scale.test.js": "2b43cec5c7ef3f91",
         "test/unit/actions/market/dispenser.test.js": "ace5f36204b02c5a",
         "test/unit/actions/market/dispenser.test/cancel.test.js": "1294cc725207b2fb",
         "test/unit/actions/market/dispenser.test/create_paths.test.js": "f4fce0288f1b045f",
