@@ -40,10 +40,9 @@
 --
 -- IDEMPOTENT AND NON-DESTRUCTIVE. CREATE TABLE IF NOT EXISTS only; no DROP, so a database
 -- whose boot-time verifyTables() already created the tables from src/sql/ records this as
--- applied without touching a row. Each block is copied VERBATIM from its fresh-build
--- definition in src/sql/, which is what keeps SHOW CREATE TABLE identical between a
--- migrated database and a fresh install (test/unit/sql-schema-column-parity.test.js
--- compares the two paths, columns, inline keys and the ENGINE tail alike).
+-- applied without touching a row. The column definitions in each block were copied verbatim
+-- from src/sql/ as of 2026-09-12. Later fresh-build schema changes belong in later migrations,
+-- not edits here.
 --
 -- HOW TO RUN
 --   node src/migrate.js --file 2026-09-12-bridge-tables.sql

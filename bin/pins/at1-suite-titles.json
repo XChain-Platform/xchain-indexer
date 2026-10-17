@@ -252,15 +252,6 @@
       "XCALL/VM protocol constants agree across vm/indexer/sdk the canonical xchain-documentation copy pins the same six values",
       "XCALL/VM protocol constants agree across vm/indexer/sdk this repo pins the six constants at the frozen values"
     ],
-    "049bade57f005021": [
-      "per-block balance delta collection @regression @tier1 accumulates by address and tick without mixing either key",
-      "per-block balance delta collection @regression @tier1 collects inserted credits and debits as opposite balance effects",
-      "per-block balance delta collection @regression @tier1 collects only new minus old when an existing credit row is replaced",
-      "per-block balance delta collection @regression @tier1 ignores escrows and writes made without an active block collector",
-      "per-block balance delta collection @regression @tier1 records nothing when the ledger DML fails",
-      "per-block balance delta collection @regression @tier1 replaces stale deltas whenever a block transaction opens",
-      "per-block balance delta collection @regression @tier1 reverses the replacement difference for a debit row"
-    ],
     "04f2b1458c348cb3": [
       "Programmable policy layer : Phase B enforcement @regression controllerActionClass : static action\u2192class map AIRDROP/DIVIDEND/SWEEP \u2192 transfer (bulk outbound moves are gated too)",
       "Programmable policy layer : Phase B enforcement @regression controllerActionClass : static action\u2192class map DESTROY \u2192 burn",
@@ -373,6 +364,29 @@
     "06ffa42905e141f0": [
       "protocol_changes VM lint nesting-depth row is active on regtest at genesis and unarmed on public networks",
       "protocol_changes VM lint nesting-depth row registers the per-chain height map"
+    ],
+    "075d905743406c40": [
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-06-03-unique-full-column-index-addresses.sql: heals from both its pre-rename and its license-header revision",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-06-09-cross-chain-matches-partial-fill-columns.sql: heals from both its pre-rename and its license-header revision",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-16-mirror-twin-bigint-unsigned-align.sql: executable SQL is unchanged from what the rebaseline was verified against",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-16-mirror-twin-bigint-unsigned-align.sql: heals from its pre-scrub revision",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-26-tokens-backfill-lock-mint-supply.sql: executable SQL is unchanged from what the rebaseline was verified against",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-26-tokens-backfill-lock-mint-supply.sql: heals from its pre-scrub revision",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-29-state-checkpoints-uq-chain-seq.sql: executable SQL is unchanged from what the rebaseline was verified against",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-29-state-checkpoints-uq-chain-seq.sql: heals from its pre-scrub revision",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-09-03-attestation-responses.sql: covers every pre-current revision and pins its residue",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-09-03-attestation-responses.sql: its convergence migrations exist and carry the key and the column",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-09-12-bridge-tables.sql: executable SQL is unchanged from what the rebaseline was verified against",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-09-12-bridge-tables.sql: heals every committed pre-correction revision",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-09-16-admission-height.sql: heals from its first, pre-comment-edit revision",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 every rebaseline `to` hash matches the committed file content (heals TOWARD the repo, never away from it)",
+      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 every rebaseline pins a `to` and one or more distinct 64-hex sha256 `from` values",
+      "runMigrations() checksum heal branch @regression @tier1 a fully current ledger produces no heal and no divergence log",
+      "runMigrations() checksum heal branch @regression @tier1 a ledger holding any older 2026-09-03-attestation-responses.sql revision heals with no content CHANGED",
+      "runMigrations() checksum heal branch @regression @tier1 a ledger holding the first admission-height revision heals to the current checksum with no manual SQL",
+      "runMigrations() checksum heal branch @regression @tier1 a never-re-keyed ledger heals name AND checksum in one pass",
+      "runMigrations() checksum heal branch @regression @tier1 an unpinned edit to a rebaselined file still trips the immutability guard",
+      "runMigrations() checksum heal branch @regression @tier1 the pre-rename ledger heals silently instead of logging content CHANGED"
     ],
     "079fb83998032d1b": [
       "HubDbSync ready frame harness certifies an older-hub ready frame after a full drain without retrying",
@@ -4625,31 +4639,6 @@
       "AnchorRecovery list snapshots @regression @tier2 registers list_snapshots for archive recovery",
       "AnchorRecovery list snapshots @regression @tier2 restores a legacy archive with no list_snapshots exactly as before",
       "AnchorRecovery list snapshots @regression @tier2 restores quorum-signed full and delta rows byte for byte"
-    ],
-    "4972b9a44736eba0": [
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-06-03-unique-full-column-index-addresses.sql: heals from both its pre-rename and its license-header revision",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-06-09-cross-chain-matches-partial-fill-columns.sql: heals from both its pre-rename and its license-header revision",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-16-mirror-twin-bigint-unsigned-align.sql: executable SQL is unchanged from what the rebaseline was verified against",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-16-mirror-twin-bigint-unsigned-align.sql: heals from its pre-scrub revision",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-26-tokens-backfill-lock-mint-supply.sql: executable SQL is unchanged from what the rebaseline was verified against",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-26-tokens-backfill-lock-mint-supply.sql: heals from its pre-scrub revision",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-29-state-checkpoints-uq-chain-seq.sql: executable SQL is unchanged from what the rebaseline was verified against",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-07-29-state-checkpoints-uq-chain-seq.sql: heals from its pre-scrub revision",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-09-03-attestation-responses.sql: covers every pre-current revision and pins its residue",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-09-03-attestation-responses.sql: its convergence migrations exist and carry the key and the column",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 2026-09-16-admission-height.sql: heals from its first, pre-comment-edit revision",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 every rebaseline `to` hash matches the committed file content (heals TOWARD the repo, never away from it)",
-      "Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1 every rebaseline pins a `to` and one or more distinct 64-hex sha256 `from` values",
-      "runMigrations() checksum heal branch @regression @tier1 a fully current ledger produces no heal and no divergence log",
-      "runMigrations() checksum heal branch @regression @tier1 a ledger holding any older 2026-09-03-attestation-responses.sql revision heals with no content CHANGED",
-      "runMigrations() checksum heal branch @regression @tier1 a ledger holding the first admission-height revision heals to the current checksum with no manual SQL",
-      "runMigrations() checksum heal branch @regression @tier1 a never-re-keyed ledger heals name AND checksum in one pass",
-      "runMigrations() checksum heal branch @regression @tier1 an unpinned edit to a rebaselined file still trips the immutability guard",
-      "runMigrations() checksum heal branch @regression @tier1 the pre-rename ledger heals silently instead of logging content CHANGED"
-    ],
-    "4982ff3988e6d5f9": [
-      "UNBIND exact wire value rule @regression ADDRESS format 1 (v1) treats only wire string 1 as unbind",
-      "UNBIND exact wire value rule @regression ISSUE format 6 (v6) treats only wire string 1 as unbind"
     ],
     "499b54ec6a7dfd34": [
       "Order_Match action handler @regression @tier2 allows match when GIVE_OWNERSHIP mirrors GET_OWNERSHIP (both 0)",
@@ -18826,8 +18815,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1379,
-      "titleCount": 13818,
+      "fileCount": 1378,
+      "titleCount": 13813,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19202,7 +19191,6 @@
         "test/unit/actions/token/token_supply_bound.test.js": "5c880597d1863312",
         "test/unit/actions/token/uncapped_max_supply.test.js": "40d8afc9cd271bab",
         "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js": "2d0e6bd90f6953d4",
-        "test/unit/actions/token/unbind_value_rule.test.js": "4982ff3988e6d5f9",
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
         "test/unit/actions/vm_runtime_dependencies.test.js": "1430f668b647634f",
         "test/unit/actions/vote/tick_existence_gate.test.js": "431d3e1700c16904",
@@ -19586,7 +19574,6 @@
         "test/unit/db/anchors/archive_head_pick_gate.test.js": "9edb73492cfca621",
         "test/unit/db/anchors/max_archive_batch_seq_by_author_predicate.test.js": "7f93503626a6b339",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "025a38c8bb9a00ab",
-        "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
@@ -19921,7 +19908,7 @@
         "test/unit/migration/migration_preconditions.test.js": "10419775b050d37c",
         "test/unit/migration/migration_runner.test.js": "d9e314d3e011cd02",
         "test/unit/migration/migration_runner.test/backdated_rename.test.js": "596a4924f6807b64",
-        "test/unit/migration/migration_runner.test/checksum_guards.test.js": "4972b9a44736eba0",
+        "test/unit/migration/migration_runner.test/checksum_guards.test.js": "075d905743406c40",
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "226ad08750f047f5",
         "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
@@ -20578,7 +20565,7 @@
     },
     "test:regression": {
       "fileCount": 961,
-      "titleCount": 10264,
+      "titleCount": 10266,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20936,7 +20923,6 @@
         "test/unit/actions/token/sweep/sweep_ticker_memoization.test.js": "856558ff8c380713",
         "test/unit/actions/token/uncapped_max_supply.test.js": "40d8afc9cd271bab",
         "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js": "2d0e6bd90f6953d4",
-        "test/unit/actions/token/unbind_value_rule.test.js": "4982ff3988e6d5f9",
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
         "test/unit/actions/xcall.test.js": "cdaf976c3205a143",
         "test/unit/actions/xcall.test/process_result.test.js": "23c7c709347d6c2b",
@@ -21347,7 +21333,7 @@
         "test/unit/migration/migration_preconditions.test.js": "10419775b050d37c",
         "test/unit/migration/migration_runner.test.js": "81c7c2c21a52ed26",
         "test/unit/migration/migration_runner.test/backdated_rename.test.js": "596a4924f6807b64",
-        "test/unit/migration/migration_runner.test/checksum_guards.test.js": "4972b9a44736eba0",
+        "test/unit/migration/migration_runner.test/checksum_guards.test.js": "075d905743406c40",
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "226ad08750f047f5",
         "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
@@ -21546,7 +21532,7 @@
     },
     "test:regression:fast": {
       "fileCount": 432,
-      "titleCount": 5130,
+      "titleCount": 5132,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
@@ -21873,7 +21859,7 @@
         "test/unit/migration/migration_preconditions.test.js": "10419775b050d37c",
         "test/unit/migration/migration_runner.test.js": "81c7c2c21a52ed26",
         "test/unit/migration/migration_runner.test/backdated_rename.test.js": "596a4924f6807b64",
-        "test/unit/migration/migration_runner.test/checksum_guards.test.js": "4972b9a44736eba0",
+        "test/unit/migration/migration_runner.test/checksum_guards.test.js": "075d905743406c40",
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "226ad08750f047f5",
         "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
@@ -21984,7 +21970,7 @@
     },
     "test:regression:full": {
       "fileCount": 961,
-      "titleCount": 10264,
+      "titleCount": 10266,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22342,7 +22328,6 @@
         "test/unit/actions/token/sweep/sweep_ticker_memoization.test.js": "856558ff8c380713",
         "test/unit/actions/token/uncapped_max_supply.test.js": "40d8afc9cd271bab",
         "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js": "2d0e6bd90f6953d4",
-        "test/unit/actions/token/unbind_value_rule.test.js": "4982ff3988e6d5f9",
         "test/unit/actions/token/unknown.test.js": "d7e6a9770d7f8d68",
         "test/unit/actions/xcall.test.js": "cdaf976c3205a143",
         "test/unit/actions/xcall.test/process_result.test.js": "23c7c709347d6c2b",
@@ -22753,7 +22738,7 @@
         "test/unit/migration/migration_preconditions.test.js": "10419775b050d37c",
         "test/unit/migration/migration_runner.test.js": "81c7c2c21a52ed26",
         "test/unit/migration/migration_runner.test/backdated_rename.test.js": "596a4924f6807b64",
-        "test/unit/migration/migration_runner.test/checksum_guards.test.js": "4972b9a44736eba0",
+        "test/unit/migration/migration_runner.test/checksum_guards.test.js": "075d905743406c40",
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "226ad08750f047f5",
         "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",

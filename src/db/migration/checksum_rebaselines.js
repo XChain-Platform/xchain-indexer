@@ -216,6 +216,17 @@ const MIGRATION_CHECKSUM_REBASELINES = {
         from: '069f0e73f1cb6179d0dcab361832204c96aa1cb4072454ddcd7e6a8acd2d31ab', // a0dd6d08, pre-tag
         to:   '37ff284b7f11f248e9f52979f70e5fe8f13c9cad7a7e719b4633866e8c81dc1a',
     },
+    // Scoped the bridge-table provenance claim to the column definitions as copied on
+    // 2026-09-12. Comment lines only; the four CREATE TABLE statements are byte-identical.
+    // The three predecessor hashes cover every committed spelling of the moved test paths.
+    '2026-09-12-bridge-tables.sql': {
+        from: [
+            'e4ef50910ca9ebc4582b1fbf1e3c6a151cb0b342c76a3949c7d0704729d8a6a7',
+            '3b2ad83e7ef63b9bfbad0cfd4d09befe7ffe501ae28a121f4ac7b7683da8f5cc',
+            '00b45c045b40bb8d2cbb778980b964bb490f8d53321178615e16922782495beb',
+        ],
+        to: '300201d9617dc15335237fe659800a08e9d0d03b735fd8f8d58d880d951d8133',
+    },
     // a06f8873 (2026-09-17) rewrote two comment lines of this already-applied file (the
     // header cited an internal spec path). Comment lines only; the executable SQL is
     // byte-identical, verified by diff against the first revision, 8c50c9d4. That revision
