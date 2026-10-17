@@ -411,6 +411,10 @@
     "residue": "e69c68de546b3fc19ac957a9ae371150d25eca6b4fce68f120d513f606c7c49a",
     "sha256": "ede707d68173a90925303f1c1ba534d0dc839cda677a77a728226fa3db81364a"
   },
+  "2026-10-17-dispenser-statuses-dispenser-action-idx.sql": {
+    "residue": "a79dc59b8d161ad2d564c42922aa339e439828c4efa3dd46356e9278b7a93926",
+    "sha256": "fea0bd480722af6fb878fc5e89c9d12fd5111c9d9d43ed17f0a4c6c66ecf2cbd"
+  },
   "2026-10-17-dispensers-sweeps-column-order.sql": {
     "residue": "247e1bca9106d62ec82abcc9d3a2da5b2e969d619a37940509fd192ad4ffd772",
     "sha256": "7890fcc366c7150af6b5b7f96ca8114cd8dc494840c4783586ee085d56d61277"
