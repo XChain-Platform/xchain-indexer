@@ -26,6 +26,8 @@ const { reportArchiveFailure } = require('./archive/archive_verdict.js');
 
 const FOLD_GATE = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const VERDICT_GATE = 'archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION';
+const HEAD_STATUS_GATE = 'archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION';
+const CHUNK_PARENT_STATUS_GATE = 'reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATUS_ACTIVATION';
 
 function archiveFailureIsSectionScoped(handler, version, height, coin){
     return Number(version) === 3 &&
@@ -62,7 +64,7 @@ function archiveFailureIsSectionScoped(handler, version, height, coin){
 // in src/protocol_changes/; do not re-argue it here.
 async function reassembleAtHead(handler, data, error, format){
     let admitUnverifiedHead = gateRegistry.activeAt(
-        'archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION',
+        HEAD_STATUS_GATE,
         handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null);
     if(!error &&
        (data['STATUS'] === 'valid' || (admitUnverifiedHead && data['STATUS'] === 'unverified')) &&
@@ -115,19 +117,28 @@ async function reassembleAtHead(handler, data, error, format){
     }
 }
 
+async function chunkParentStatusAdmitted(handler, data, parent){
+    if(!gateRegistry.activeAt(
+        CHUNK_PARENT_STATUS_GATE, handler.config['NETWORK'], null,
+        Number(data['BLOCK_INDEX']), null)) return true;
+
+    let status = await handler.indexerDb.getStatusString(parent.status_id);
+    if(status === 'valid') return true;
+    return status === 'unverified' && gateRegistry.activeAt(
+        HEAD_STATUS_GATE, handler.config['NETWORK'], null,
+        Number(parent.block_index_doge), null);
+}
+
 // When the last chunk lands, verify the reassembled archive against the
-// parent v1's signed CRC and flag the parent if the blob doesn't bind. Status
-// handling and completeness are IDENTICAL to the head-side gate above (via
-// aaq.archiveChunkCoverage): the completing chunk's own status is 'valid' here (a
-// chunk is never stored 'unverified', since only parseCheckpoint's snapshot-less
-// branch assigns that status, so the '|| unverified' term is unreachable on this
-// path and carries no flag day of its own; the head-side twin's 'unverified' term
-// IS gated, see the archive_head_unverified_gate_activation row in src/protocol_changes/, because there it is
-// reachable and preimage-moving). Completeness is decided by index coverage, never
-// by a bare chunk count, so a stray out-of-range orphan can neither pad an
-// incomplete set to length nor block a complete one.
+// parent v1's signed CRC and flag the parent if the blob doesn't bind. The
+// completing chunk must be usable first. Once CHUNK_PARENT_STATUS_GATE is active,
+// the parent must also have the valid or gated-unverified status the head-side
+// path admits. Completeness is decided by index coverage, never by a bare chunk
+// count, so a stray out-of-range orphan can neither pad an incomplete set to
+// length nor block a complete one.
 async function reassembleAtChunk(handler, data, parent, scope, error){
-    if(!error && parent && (data['STATUS'] === 'valid' || data['STATUS'] === 'unverified')){
+    if(!error && parent && (data['STATUS'] === 'valid' || data['STATUS'] === 'unverified') &&
+       await chunkParentStatusAdmitted(handler, data, parent)){
         let chunks = await handler.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
         let ordered = aaq.archiveChunkCoverage(chunks, Number(data['TOTAL_CHUNKS']));
         if(ordered){
