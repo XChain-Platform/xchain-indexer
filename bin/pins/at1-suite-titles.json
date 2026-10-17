@@ -11985,6 +11985,16 @@
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: two MINTs of the SAME tick \u2192 invalid: MINT (limit)",
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: unresolvable ticks share ONE bucket, so two of them reject"
     ],
+    "abdaaa8e11bc14ba": [
+      "capability snapshot proof binding @regression @tier1 holds another source, refuses another amount, and holds malformed row amounts",
+      "capability snapshot proof binding @regression @tier1 holds invalid and malformed sibling paths without throwing",
+      "capability snapshot proof binding @regression @tier1 holds malformed member collections and missing signer entries",
+      "capability snapshot proof binding @regression @tier1 holds malformed, unbound, and mismatched state roots",
+      "capability snapshot proof binding @regression @tier1 holds missing, malformed, and leaf-inconsistent commitments",
+      "capability snapshot proof binding @regression @tier1 holds proofs that are absent, at another block, or stamped with another version",
+      "capability snapshot proof binding @regression @tier1 refuses a verified non-member",
+      "capability snapshot proof binding @regression @tier1 verifies a real member on testnet, mainnet, and regtest"
+    ],
     "ac51d51746a87eae": [
       "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits a valid parent when the gate is active",
       "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits an unverified parent only when the head-side status gate admits it",
@@ -17968,8 +17978,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1406,
-      "titleCount": 13925,
+      "fileCount": 1407,
+      "titleCount": 13933,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18641,6 +18651,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
+        "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
