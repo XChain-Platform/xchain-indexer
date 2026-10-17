@@ -115,7 +115,10 @@ function collectAttestBatchHead(db, B){
         "SELECT p.action_index, s.status AS status, p.batch_total_chunks AS total_chunks, p.batch_crc32 AS crc32 FROM attests p " +
         "JOIN index_statuses s ON s.id = p.status_id AND s.status LIKE ? " +
         "JOIN actions pa ON pa.action_index = p.action_index " +
-        "WHERE p.version = ? AND p.batch_chunk_index = 0 AND ( " +
+        "WHERE p.version = ? AND p.batch_chunk_index = 0 AND EXISTS ( " +
+            "SELECT 1 FROM attests e " +
+            "WHERE e.version = ? AND e.request_id = p.request_id AND e.block_index = ? " +
+        ") AND ( " +
             "SELECT ca.block_index FROM attests c " +
             "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
             "JOIN actions ca ON ca.action_index = c.action_index AND ca.source_id = pa.source_id " +
@@ -123,7 +126,8 @@ function collectAttestBatchHead(db, B){
             "AND c.batch_total_chunks = p.batch_total_chunks AND c.batch_crc32 = p.batch_crc32 " +
             "ORDER BY c.action_index DESC LIMIT 1 " +
         ") = ? ORDER BY p.action_index ASC",
-        ['%' + ATTEST_BATCH_COMPLETION_STAMP, ATTEST_BATCH_HEAD_VERSION, ATTEST_BATCH_CONTINUATION_VERSION, B]);
+        ['%' + ATTEST_BATCH_COMPLETION_STAMP, ATTEST_BATCH_HEAD_VERSION,
+         ATTEST_BATCH_CONTINUATION_VERSION, B, ATTEST_BATCH_CONTINUATION_VERSION, B]);
 }
 
 module.exports = { collectIndexMapDelta, collectPollFinalize, collectTokenSupply, collectBetStatus, collectAttestBatchHead,
