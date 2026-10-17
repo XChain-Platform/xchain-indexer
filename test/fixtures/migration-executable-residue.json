@@ -414,5 +414,9 @@
   "2026-10-17-dispensers-sweeps-column-order.sql": {
     "residue": "247e1bca9106d62ec82abcc9d3a2da5b2e969d619a37940509fd192ad4ffd772",
     "sha256": "7890fcc366c7150af6b5b7f96ca8114cd8dc494840c4783586ee085d56d61277"
+  },
+  "2026-10-17-ledger-address-tick-amount-index.sql": {
+    "residue": "8acb44e5c2922e13f8b566eae00e397ba40465f283b0e27db4c0b7acac19b97f",
+    "sha256": "408e9db33ee786714822de03b3452eca278de54cb895bf1b58c664776bc6ac1f"
   }
 }

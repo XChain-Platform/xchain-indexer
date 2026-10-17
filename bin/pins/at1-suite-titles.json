@@ -159,6 +159,10 @@
       "public VOTE binding dry-run refusal falls through to the real engine for another action",
       "public VOTE binding dry-run refusal treats a lowercase action and an empty version as the same create"
     ],
+    "03398c9a5b04e1c7": [
+      "getMaxAnchorCheckpointSeq() version filter (#2239) parameterizes the version filter from the shared CHECKPOINT_VERSIONS constant",
+      "getMaxAnchorCheckpointSeq() version filter (#2239) still returns null when no watermark row exists"
+    ],
     "03399ab554f050dd": [
       "migration live-schema guard type and charset rules against a real MariaDB @tier3 allows: enum extended in a utf8 table from server metadata",
       "migration live-schema guard type and charset rules against a real MariaDB @tier3 allows: integer widened to an exact decimal from server metadata",
@@ -456,11 +460,6 @@
       "ROLLCALL epoch close (\u00a73.4) the eviction effect refunds through an ordinary unstakes row on the ordinary cooldown",
       "ROLLCALL epoch close (\u00a73.4) the eviction effect stamps every delegation of the source, or the DELEGATE branch keeps it in",
       "ROLLCALL epoch close (\u00a73.4) the eviction effect stamps the stake SOURCE-SCOPED and sweeps pending rows"
-    ],
-    "0854ad12bbb1e5ec": [
-      "Security: ATTEST response mirror boot guard network policy @regression @tier1 refuses an armed BTC mainnet boot without a hub database source",
-      "Security: ATTEST response mirror boot guard network policy @regression @tier1 refuses an armed BTC testnet boot without a hub database source",
-      "Security: ATTEST response mirror boot guard network policy @regression @tier1 warns and continues for an armed BTC regtest boot without a hub database source"
     ],
     "087297546f0ad980": [
       "ISSUE settlement owner history adds no extra address when the source keeps ownership",
@@ -3680,11 +3679,6 @@
       "batched COINPAY resolves its own payment output @regression @tier1 the A5 invariant: one payment settles ONE obligation, not N a payee with NO output in the transaction settles nothing",
       "batched COINPAY resolves its own payment output @regression @tier1 the A5 invariant: one payment settles ONE obligation, not N two obligations to a RESOLVED payee with one payment's worth: exactly one settles",
       "batched COINPAY resolves its own payment output @regression @tier1 the A5 invariant: one payment settles ONE obligation, not N two obligations to the ROW'S OWN payee with one payment's worth: exactly one settles"
-    ],
-    "39a4570af1805f2f": [
-      "Airdrop multi-leg native fee batch ledger and probe @regression @tier1 draws one leg fee from a BATCH_VALUE_LEDGER and rejects the unpaid second leg",
-      "Airdrop multi-leg native fee batch ledger and probe @regression @tier1 draws two leg fees from a fully funded BATCH_VALUE_LEDGER",
-      "Airdrop multi-leg native fee batch ledger and probe @regression @tier1 settles both legs during a FEE_PROBE without drawing from BATCH_VALUE_LEDGER"
     ],
     "39deaa3f8a62287c": [
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
@@ -11290,11 +11284,6 @@
       "getPendingAttestationRequests() LIMIT hardening @regression @tier1 hard-caps the limit at 500 regardless of caller",
       "getPendingAttestationRequests() LIMIT hardening @regression @tier1 still appends the provider_id + cursor args ahead of the bound limit"
     ],
-    "946de61532b4e65b": [
-      "DEX create token info reads @regression @tier2 DISPENSER does not read SUPPLY",
-      "DEX create token info reads @regression @tier2 ORDER does not read SUPPLY",
-      "DEX create token info reads @regression @tier2 SWAP does not read SUPPLY"
-    ],
     "947a8652e2bab804": [
       "roll-call unwind schema-gap guard @regression a pre-migration database with none of the tables tries each delete and does not throw",
       "roll-call unwind schema-gap guard @regression any other fault surfaces and stops the unwind before the verdicts go",
@@ -12962,14 +12951,6 @@
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: two MINTs of the SAME tick \u2192 invalid: MINT (limit)",
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: unresolvable ticks share ONE bucket, so two of them reject"
     ],
-    "ac51d51746a87eae": [
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits a valid parent when the gate is active",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits an unverified parent only when the head-side status gate admits it",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 is unarmed on public networks and opt-in on regtest",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keeps the deployed chunk-status-only rule while the gate is inert",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keys the new rule on the chunk height and the unverified admission on the parent height",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 rejects an invalid parent before reading chunks when the gate is active"
-    ],
     "ac937e0de4e25dbe": [
       "Indexer cross-node determinism baseline @regression @tier1 every block produced a ledger + actions consensus hash",
       "Indexer cross-node determinism baseline @regression @tier1 hash chain matches the committed baseline (no consensus drift)",
@@ -13523,14 +13504,6 @@
       "HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2 still filters hub-only columns the local mirror does not carry",
       "HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2 the per-leg reorg fences only ever move UP (a lowered fence would invite a stale delete)",
       "HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2 uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for cross_chain_matches"
-    ],
-    "b381b504f17eca5f": [
-      "getArchiveReplayWatermarks() counts unverified rows, so the watermark does not differ between mirrored and unmirrored nodes",
-      "getArchiveReplayWatermarks() keeps the default statement unchanged and narrows valid-only reads",
-      "getArchiveReplayWatermarks() parameterizes the version filter from the shared ARCHIVE_HEAD_VERSIONS constant",
-      "getArchiveReplayWatermarks() returns both watermarks from a SINGLE statement over the same row set",
-      "getArchiveReplayWatermarks() returns nulls on an empty result set rather than throwing",
-      "getArchiveReplayWatermarks() returns nulls when no archive row exists, leaving the guard inert"
     ],
     "b3af3a3b9c2e54df": [
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) an invalid signature leaves the request pending and writes NOTHING",
@@ -14537,6 +14510,13 @@
       "snapshot barrier scope filter, admission height versus effective time inert (no activation) a row admitted below B but effective after t(B) is NOT in scope",
       "snapshot barrier scope filter, admission height versus effective time inert (no activation) scopes by effective_time and never names the admission column",
       "snapshot barrier scope filter, admission height versus effective time the same rows and the same (t, B) select different blocks per arm early and late flip between the arms"
+    ],
+    "c40243db8bf9d81d": [
+      "getArchiveReplayWatermarks() counts unverified rows, so the watermark does not differ between mirrored and unmirrored nodes",
+      "getArchiveReplayWatermarks() parameterizes the version filter from the shared ARCHIVE_HEAD_VERSIONS constant",
+      "getArchiveReplayWatermarks() returns both watermarks from a SINGLE statement over the same row set",
+      "getArchiveReplayWatermarks() returns nulls on an empty result set rather than throwing",
+      "getArchiveReplayWatermarks() returns nulls when no archive row exists, leaving the guard inert"
     ],
     "c42ed8ba04b55a79": [
       "consensus rules digest sentinel comments does not claim the shipped registry has no far-future sentinel",
@@ -16345,9 +16325,6 @@
       "Swap_Match action handler @regression @tier2 transfers ownership on both sides for an ownership-for-ownership swap",
       "Swap_Match action handler @regression @tier2 uses first valid match and ignores subsequent matches"
     ],
-    "d9ee41171af5848b": [
-      "cancelled dispenser latest-status probe shape @regression @tier1 keys the correlated MAX probe by dispenser and orders the result by action"
-    ],
     "d9f449f3bb6fb396": [
       "API-key gate (src/api/auth_gate.js) @regression @tier1 keyEquals compares in constant time over equal lengths and refuses a length mismatch",
       "API-key gate (src/api/auth_gate.js) @regression @tier1 with a key configured, refuses a gated method anywhere in a batch without the key and passes it with",
@@ -17885,11 +17862,6 @@
       "Programmable policy layer : Phase B enforcement @regression maybeRunControllerGuard : control flow STAKE controller DENY reverts the action",
       "Programmable policy layer : Phase B enforcement @regression maybeRunControllerGuard : control flow STAKE routes to the 'stake' class and invokes the guard (stub now live)"
     ],
-    "eff168f8a3214dbb": [
-      "getMaxAnchorCheckpointSeq() version filter (#2239) keeps the default statement unchanged and narrows valid-only reads",
-      "getMaxAnchorCheckpointSeq() version filter (#2239) parameterizes the version filter from the shared CHECKPOINT_VERSIONS constant",
-      "getMaxAnchorCheckpointSeq() version filter (#2239) still returns null when no watermark row exists"
-    ],
     "f04d7472fea5effd": [
       "config currencies applies only the consensus coin and fiat currency lists",
       "config currencies produces an equal result when applied twice"
@@ -18194,11 +18166,6 @@
       "settleBetsBatch writes the same rows as the per-bet terminal writers @regression @tier1 leaves identical bets and bet_statuses rows across several chunks, repeats and a prior row",
       "settleBetsBatch writes the same rows as the per-bet terminal writers @regression @tier1 writes nothing for an empty list",
       "settleBetsBatch writes the same rows as the per-bet terminal writers @regression @tier1 writes one history row for a bet repeated inside the same chunk"
-    ],
-    "f4990631037844d2": [
-      "Security: ATTEST response mirror boot guard @regression @tier1 does not apply the BTC-only response-mirror refusal to another chain",
-      "Security: ATTEST response mirror boot guard @regression @tier1 does not apply the response-mirror refusal on unpinned mainnet",
-      "Security: ATTEST response mirror boot guard @regression @tier1 refuses BTC testnet without a hub database source"
     ],
     "f4d512605040b459": [
       "VM ledger-read loader: buildVmBalancesAndTokenInfo @regression @tier2 re-keys to nested symbol-keyed balances + loads tokenInfo, bounded by action_index"
@@ -18971,8 +18938,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1398,
-      "titleCount": 13898,
+      "fileCount": 1393,
+      "titleCount": 13881,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19026,7 +18993,6 @@
         "test/unit/actions/anchor/bundle_order/anchor_order_reason_helpers.test.js": "3277653238c8d36f",
         "test/unit/actions/anchor/bundle_order/bundle_order_cases.test.js": "22e147a7ae0e9cbb",
         "test/unit/actions/anchor/checkpoint_seq_bind_reason.test.js": "1292af054254884e",
-        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "ac51d51746a87eae",
         "test/unit/actions/anchor/v3/anchor_v3_archive_check.test.js": "90b635bde1229f56",
         "test/unit/actions/anchor/v3/anchor_v3_fold_rows.test.js": "78c42da2461e2b5b",
         "test/unit/actions/anchor/v3/anchor_v3_sections.test.js": "fae8eeba338baf48",
@@ -19169,7 +19135,6 @@
         "test/unit/actions/market/coinpay.test/order_finalisation.test.js": "f0b2b5a7508e3997",
         "test/unit/actions/market/coinpay.test/roles_and_ownership.test.js": "beeabd8d231e087a",
         "test/unit/actions/market/coinpay_expire.test.js": "e238e8b94beedf64",
-        "test/unit/actions/market/dex_token_info_supply_unread.test.js": "946de61532b4e65b",
         "test/unit/actions/market/dispense.test.js": "7f741fb793c49b56",
         "test/unit/actions/market/dispense.test/auto_close.test.js": "76c3e449cb5ec5c3",
         "test/unit/actions/market/dispense.test/fiat_pricing.test.js": "b98784bb1fb6c832",
@@ -19295,7 +19260,6 @@
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
-        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
@@ -19445,8 +19409,8 @@
         "test/unit/anchor/db_archive_head_predicate.test.js": "5a7b380e23fda375",
         "test/unit/anchor/db_create_anchor_action_publisher.test.js": "6c6f0fb39f3fe2e3",
         "test/unit/anchor/db_get_anchor_v1_by_batch_seq_tieorder.test.js": "b57e643add732c08",
-        "test/unit/anchor/db_get_archive_replay_watermarks.test.js": "b381b504f17eca5f",
-        "test/unit/anchor/db_get_max_anchor_checkpoint_seq_versions.test.js": "eff168f8a3214dbb",
+        "test/unit/anchor/db_get_archive_replay_watermarks.test.js": "c40243db8bf9d81d",
+        "test/unit/anchor/db_get_max_anchor_checkpoint_seq_versions.test.js": "03398c9a5b04e1c7",
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
         "test/unit/anchor/diagnostic_events.test.js": "3d9f64cbeacabe25",
         "test/unit/anchor/max_archive_batch_seq_by_author.test.js": "f8fbd67961145f14",
@@ -19838,7 +19802,6 @@
         "test/unit/db/markets/db_dispenser_caps_counts.test.js": "9f5d2796c9488281",
         "test/unit/db/markets/db_dispenser_delay_protocol_time.test.js": "6643e508ad4d2185",
         "test/unit/db/markets/db_dispenser_send_amount_compare.test.js": "f1ddf65d011713e5",
-        "test/unit/db/markets/db_find_cancelled_dispensers_probe_shape.test.js": "d9ee41171af5848b",
         "test/unit/db/markets/db_find_swap_matches_ownership_null.test.js": "dd59b59221db9c53",
         "test/unit/db/markets/db_list_remove_and_proven_use.test.js": "68b486a4bc90a3f7",
         "test/unit/db/markets/dex_fill_quantization_parity.test.js": "e5aec9d580642730",
@@ -20289,8 +20252,7 @@
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
         "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
-        "test/unit/security/configuration/response_mirror_boot_guard.test.js": "f4990631037844d2",
-        "test/unit/security/configuration/response_mirror_boot_guard_networks.test.js": "0854ad12bbb1e5ec",
+        "test/unit/security/configuration/response_mirror_boot_guard.test.js": "1eb17536e3364766",
         "test/unit/security/configuration/startup_validation.test.js": "9b13c5407b7bccf8",
         "test/unit/security/input-validation/negative_amounts.test.js": "d6f6a4b7d2e1a81e",
         "test/unit/security/input-validation/parameter_injection.test.js": "fe3fce070c5e1bad",
