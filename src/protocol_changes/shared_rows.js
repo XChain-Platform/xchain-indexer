@@ -136,6 +136,8 @@ const REGTEST_ARMING = {
         { env: 'XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION', label: 'VOTE V3 TICK EXISTENCE', armedHeight: 0, keys: ['regtest'] },
     'match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION':
         { env: 'XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION', label: 'MATCH ORIGIN OPEN', armedHeight: 0, keys: ['regtest'] },
+    'reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATUS_ACTIVATION':
+        { env: 'XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION', label: 'REASSEMBLE CHUNK PARENT STATUS', armedHeight: 0, keys: ['regtest'] },
 };
 
 // env name -> its reader. Each variable is read BY NAME, once, here: the
@@ -166,6 +168,7 @@ const ENV_READERS = {
     XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION: (env) => env.XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION,
     XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION: (env) => env.XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION,
     XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION: (env) => env.XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION,
+    XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION: (env) => env.XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION,
 };
 
 // The raw value of the rule's env variable, through its named reader.

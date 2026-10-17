@@ -12557,6 +12557,14 @@
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: two MINTs of the SAME tick \u2192 invalid: MINT (limit)",
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) D7: one MINT per DISTINCT token gate ON: unresolvable ticks share ONE bucket, so two of them reject"
     ],
+    "ac51d51746a87eae": [
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits a valid parent when the gate is active",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits an unverified parent only when the head-side status gate admits it",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 is unarmed on public networks and opt-in on regtest",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keeps the deployed chunk-status-only rule while the gate is inert",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keys the new rule on the chunk height and the unverified admission on the parent height",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 rejects an invalid parent before reading chunks when the gate is active"
+    ],
     "ac937e0de4e25dbe": [
       "Indexer cross-node determinism baseline @regression @tier1 every block produced a ledger + actions consensus hash",
       "Indexer cross-node determinism baseline @regression @tier1 hash chain matches the committed baseline (no consensus drift)",
@@ -18881,8 +18889,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1385,
-      "titleCount": 13845,
+      "fileCount": 1386,
+      "titleCount": 13851,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18933,6 +18941,7 @@
         "test/unit/actions/anchor/bundle_order/anchor_bundle_order_gate.test.js": "13b04af629143cd3",
         "test/unit/actions/anchor/bundle_order/anchor_order_reason_helpers.test.js": "3277653238c8d36f",
         "test/unit/actions/anchor/bundle_order/bundle_order_cases.test.js": "22e147a7ae0e9cbb",
+        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "ac51d51746a87eae",
         "test/unit/actions/anchor/v3/anchor_v3_archive_check.test.js": "90b635bde1229f56",
         "test/unit/actions/anchor/v3/anchor_v3_fold_rows.test.js": "78c42da2461e2b5b",
         "test/unit/actions/anchor/v3/anchor_v3_sections.test.js": "fae8eeba338baf48",
