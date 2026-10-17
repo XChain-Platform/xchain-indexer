@@ -23,7 +23,14 @@ function makeChain(xbridges) {
     const db = new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', { config, util });
     sinon.stub(db, 'createTicker').resolves(TICK_ID);
     sinon.stub(db, 'getTokenSupply').resolves('0');
+    // The stored tokens.bridged cache setTokenBridged wrote when the first lock applied.
+    db.stored = { bridged: xbridges.length > 0 ? 1 : 0 };
     db.doQuery = async (sql, args) => {
+        if (/^UPDATE tokens SET bridged=0/i.test(sql)) {
+            if (!xbridges.some(r => r.tick_id === TICK_ID && r.version === 3 && r.status === 'valid'))
+                db.stored.bridged = 0;
+            return [];
+        }
         if (/FROM\s+issues\s+i/i.test(sql))
             return [{ action_index: 1, tick: 'FUFU', owner: 'addr', decimals: 8, max_supply: '10', max_mint: '1', block_index: 1 }];
         if (/FROM xbridges x/i.test(sql))
@@ -59,6 +66,9 @@ describe('tokens.bridged derives from applied xbridges rows @regression', functi
         assert.strictEqual((await db.getTokenInfo('FUFU')).BRIDGED, 1);
 
         await rederive.purgeActionScopedTables(db, ['xbridges'], 10);
+        assert.strictEqual(db.stored.bridged, 1);
+        await rederive.rederiveTokenBridged(db);
+        assert.strictEqual(db.stored.bridged, 0);
 
         const fresh = makeChain([]);
         assert.strictEqual((await db.getTokenInfo('FUFU')).BRIDGED, (await fresh.getTokenInfo('FUFU')).BRIDGED);
@@ -69,6 +79,8 @@ describe('tokens.bridged derives from applied xbridges rows @regression', functi
         const live = [lock(10), lock(20)];
         const db   = makeChain(live);
         await rederive.purgeActionScopedTables(db, ['xbridges'], 15);
+        await rederive.rederiveTokenBridged(db);
+        assert.strictEqual(db.stored.bridged, 1);
         const fresh = makeChain([lock(10)]);
         assert.strictEqual((await db.getTokenInfo('FUFU')).BRIDGED, 1);
         assert.strictEqual((await fresh.getTokenInfo('FUFU')).BRIDGED, 1);

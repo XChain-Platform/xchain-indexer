@@ -59,7 +59,9 @@ module.exports = {
                 // The `bridged` bit is not an issues field. It is derived from the xbridges
                 // rows, which a rollback purges by action_index and a replay rewrites, so the
                 // answer matches a fresh replay of the same chain. The tokens.bridged column
-                // is a write-time cache and is never read.
+                // is a write-time cache that this read does not consult: a rollback clears it
+                // through rederiveTokenBridged, and it stays out of content parity because
+                // CONTENT_PARITY_IN_PLACE_COLUMNS lists it as an in-place column.
                 // Read the bit as of the same block_index / action_index point as the replay.
                 data['BRIDGED'] = (await issueReplay.hasAppliedLock(this, tick_id, block_index, action_index)) ? 1 : 0;
             }
