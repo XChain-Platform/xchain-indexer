@@ -53,12 +53,13 @@
 'use strict';
 
 // The 47 tickers measured FREE on every live chain and in both genesis manifests on
-// 2026-09-11, alphabetical, followed by the 6 that are squatted in the mainnet genesis
-// manifests and leave through the manifest edit. The two groups are kept in
-// that order, and apart, because their provenance differs: the first 47 are reserved
-// outright, while for the last 6 this guard only blocks NEW issuance and the bridge's
-// 'existing row not owned by the bridge role' refusal is the safety net until the
-// genesis manifest edit lands.
+// 2026-09-11, alphabetical, followed by the 6 that were squatted in the mainnet genesis
+// manifests. The two groups are kept in that order, and apart, because their provenance
+// differs: the first 47 were never held, while the last 6 were taken away from their
+// genesis holders by the 2026-10-17 manifest edit (operator ruling) so the bridge
+// can own those roots. With no row left to exist, all 53 are now refused outright on a
+// new ISSUE. Genesis rows are exempt from this guard (IS_GENESIS), so the manifests are
+// the one path a listed name could regain an owner; a unit test holds them clean.
 //
 // Frozen so that a caller holding the array cannot mutate the reserved set at runtime;
 // a membership test that could be edited in place is not a consensus rule.

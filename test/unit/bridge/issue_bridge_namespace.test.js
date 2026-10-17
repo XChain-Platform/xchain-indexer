@@ -201,8 +201,9 @@ describe('ISSUE tick namespace: the four-character floor and the reserved future
         });
 
         it('leaves an edit of one of the six reclaimed listed rows alone', async function(){
-            // Between this guard and the genesis manifest edit the six squatted
-            // rows still exist and still have owners; the guard blocks NEW issuance only.
+            // The guard blocks NEW issuance only: a listed name that already has a row keeps
+            // it. The six squatted genesis rows are gone since the 2026-10-17 manifest edit, but
+            // the rule still binds on any node that indexed them before its re-bootstrap.
             assert.strictEqual(await run({ params: edit('DASH'), existing: tokenRow('DASH') }), 'valid');
         });
 
@@ -240,6 +241,37 @@ describe('ISSUE tick namespace: the four-character floor and the reserved future
 
         it('is frozen, so no caller can edit a consensus membership test at runtime', async function(){
             assert.strictEqual(Object.isFrozen(RESERVED_FUTURE_ROOTS), true);
+        });
+    });
+});
+
+describe('ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus', function(){
+    afterEach(function(){ sinon.restore(); });
+
+    // Operator ruling 2026-10-17: BASE, DASH, HBAR, HOOD, HYPE and NEAR were
+    // taken away from their mainnet genesis holders and kept as reserved names for the
+    // chain bridges. With no row left, a fresh ISSUE of each one, in either case, and a
+    // re-ISSUE that names one, must all read the reserved verdict.
+    const TAKEN_FROM_GENESIS = ['BASE', 'DASH', 'HBAR', 'HOOD', 'HYPE', 'NEAR'];
+
+    describe('the six names taken out of the genesis manifests (ruling 2026-10-17)', function(){
+
+        it('lists each of the six as a reserved root', async function(){
+            for(const tick of TAKEN_FROM_GENESIS)
+                assert.strictEqual(isReservedFutureRoot(tick), true, tick + ' must stay a reserved root');
+        });
+
+        it('refuses a fresh ISSUE of each of the six, case-folded, and a re-ISSUE that names one', async function(){
+            for(const tick of TAKEN_FROM_GENESIS){
+                assert.strictEqual(await run({ params: create(tick) }), 'invalid: TICK (reserved)', 'ISSUE ' + tick);
+                assert.strictEqual(await run({ params: create(tick.toLowerCase()) }), 'invalid: TICK (reserved)', 'ISSUE ' + tick.toLowerCase());
+                assert.strictEqual(await run({ params: edit(tick), existing: null }), 'invalid: TICK (reserved)', 're-ISSUE ' + tick);
+            }
+        });
+
+        it('refuses a child of each of the six through the parent gate', async function(){
+            for(const tick of TAKEN_FROM_GENESIS)
+                assert.strictEqual(await run({ params: create(tick + '.ANY') }), 'invalid: TICK (parent unknown)', 'ISSUE ' + tick + '.ANY');
         });
     });
 });

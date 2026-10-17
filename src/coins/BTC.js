@@ -162,10 +162,19 @@ module.exports = {
             // plus airdropSetHash - the sha256 over the canonical `name:hash:amount` lines,
             // which genesis.js verifies before it credits anything - followed by a
             // bin/sync-coins.sh re-vendoring wave.
+            // Both hashes re-pinned 2026-10-13: the name registrations BASE,
+            // DASH, HBAR, HOOD, HYPE and NEAR left the CSV manifest so the bridge owns
+            // those chain roots, six rows out of 121,716. They were supply-0, balance-free
+            // name rows with no subassets and no post-genesis action on either chain, so
+            // nothing else in the manifest or the dump moved: the dump loses only those six
+            // names' rows and its ledger and contracts block hashes are unchanged.
+            // The six stay reserved names (RESERVED_FUTURE_ROOTS in xchain-indexer, operator
+            // ruling 2026-10-17): with no row left, a new ISSUE of any of them is refused
+            // wherever TICK_NAMESPACE_ACTIVATION binds (unarmed on mainnet today).
             genesis: {
                 block:      950000,
-                ledgerHash: 'f347a0499654b128dd0461441ed6341ac27a24b909d6ff6e3995db4e69dc23e5',
-                dumpHash:   'e416c382dd6951ce5c4da7e053f6dbb407ca3d966a513209eb59886dbe95e738',
+                ledgerHash: '13aeeebb9f2e27d507ca96fb7c54a1bfa98b9cc80c3feebd5d1ad022ce7e2b73',
+                dumpHash:   '85431c2c41d6442e38aa78af804148dd6ead207aca036f6e44fbf2bee8c2846e',
                 airdropPaths:         [],
                 airdropHashes:        [],
                 airdropAmounts:       [],

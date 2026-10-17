@@ -354,7 +354,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         const roots = require('../../../src/consensus/reserved_roots.js').RESERVED_FUTURE_ROOTS;
         assert.ok(Array.isArray(roots), 'RESERVED_FUTURE_ROOTS must be an array');
         assert.ok(Object.isFrozen(roots), 'RESERVED_FUTURE_ROOTS must be frozen; a reserved set a caller can push to is not a rule');
-        // 47 measured free on 2026-09-11 plus the 6 squatted in the mainnet genesis manifests.
+        // 47 measured free on 2026-09-11 plus the 6 taken out of the mainnet genesis manifests.
         assert.strictEqual(roots.length, 53, 'the surveyed list is 47 free names plus 6 reclaimed ones');
         for (const t of roots) {
             assert.ok(/^[A-Z]{2,}$/.test(t), 'reserved root ' + JSON.stringify(t) + ' is not an upper-case ticker; ' +

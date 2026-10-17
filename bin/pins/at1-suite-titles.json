@@ -8980,6 +8980,11 @@
       "Smoke: REST /status SM-05g: GET /status marks a future-stamped-block wait distinctly and stays 200",
       "Smoke: REST /status SM-05h: a real barrier defer is NOT reported as a future-stamp wait"
     ],
+    "83a384a2abacb9b3": [
+      "genesis manifests carry no reserved chain root @regression @consensus BTC-ledger.csv names no RESERVED_FUTURE_ROOTS root or child of one",
+      "genesis manifests carry no reserved chain root @regression @consensus DOGE-ledger.csv names no RESERVED_FUTURE_ROOTS root or child of one",
+      "genesis manifests carry no reserved chain root @regression @consensus still reserves the six names taken out of the manifests"
+    ],
     "83afe667cf1b13d5": [
       "LIST bulk item writes chunks a large membership into bounded statements",
       "LIST bulk item writes dedupes edits on item and status together",
@@ -18624,6 +18629,29 @@
       "HubDbSync content-keyed apply @regression @tier1 state_checkpoints ignores a colliding wire id and dedupes or upgrades on content",
       "HubDbSync content-keyed apply @regression @tier1 the price batch path also strips every wire id"
     ],
+    "fd5ba4d062e57afd": [
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) lets the reserved verdict win over the length verdict when a name is both",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) reads exactly as it does today below the flag",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) refuses a child of a reserved root through the parent gate, not through this guard",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) refuses a four-letter listed root the length floor does not cover",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) refuses a listed chain root from a user",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus RESERVED_FUTURE_ROOTS (AT6) refuses it case-folded, so the lower-case spelling cannot take the row",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus creation only (R8 (c), D50) leaves a caret id reference alone, which is always an edit of an existing row",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus creation only (R8 (c), D50) leaves an edit of a pre-flag three-character row alone",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus creation only (R8 (c), D50) leaves an edit of one of the six reclaimed listed rows alone",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus creation only (R8 (c), D50) still refuses a re-ISSUE of a listed name that does NOT exist",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus system-injected creation is exempt, which is how a bridge root row is made on a destination chain",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the four-character floor (AT6) admits a four-character new top-level name",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the four-character floor (AT6) measures the FULL tick, so a short child of a long parent passes",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the four-character floor (AT6) reads exactly as it does today below the flag",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the four-character floor (AT6) refuses a one-character new top-level name",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the four-character floor (AT6) refuses a three-character new top-level name",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the reserved set itself holds the 47 free roots plus the 6 reclaimed ones, none of them a live coin",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the reserved set itself is frozen, so no caller can edit a consensus membership test at runtime",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the six names taken out of the genesis manifests (ruling 2026-10-17) lists each of the six as a reserved root",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the six names taken out of the genesis manifests (ruling 2026-10-17) refuses a child of each of the six through the parent gate",
+      "ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus the six names taken out of the genesis manifests (ruling 2026-10-17) refuses a fresh ISSUE of each of the six, case-folded, and a re-ISSUE that names one"
+    ],
     "fd75cdd445f6e0af": [
       "protocol_changes/vm_twin/native_stack_terminal_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
       "protocol_changes/vm_twin/native_stack_terminal_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
@@ -18813,8 +18841,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1378,
-      "titleCount": 13811,
+      "fileCount": 1379,
+      "titleCount": 13817,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19398,7 +19426,7 @@
         "test/unit/bridge/issue/destroy_bridge_closures.test.js": "236d4672f067c253",
         "test/unit/bridge/issue/issue_bridge_storage.test.js": "2ecbbb8d214daa59",
         "test/unit/bridge/issue/xchain_btc_only_issue.test.js": "6e5d5732aa0d0c44",
-        "test/unit/bridge/issue_bridge_namespace.test.js": "46de38a2323753b3",
+        "test/unit/bridge/issue_bridge_namespace.test.js": "fd5ba4d062e57afd",
         "test/unit/bridge/issue_bridge_optin.test.js": "78f4d92179b7b8ca",
         "test/unit/bridge/issue_bridge_optin.test/policy_guards.test.js": "e1d270cff0ae3c90",
         "test/unit/bridge/policy/list_bridge_policy.test.js": "4c6fe17f3b81d78b",
@@ -19417,6 +19445,7 @@
         "test/unit/chain/genesis_airdrop.test.js": "fed4df525e9a9c09",
         "test/unit/chain/genesis_bridge_replay_pin.test.js": "00d1072d93378562",
         "test/unit/chain/genesis_dump.test.js": "20d80303d433525a",
+        "test/unit/chain/genesis_manifest_reserved_roots.test.js": "83a384a2abacb9b3",
         "test/unit/chain/harness_vm_block_rhythm.test.js": "c126f106c7f18f5a",
         "test/unit/chain/inject_protocol_token.test.js": "4a728b73bbd5b9f6",
         "test/unit/chain/mapper.test.js": "1c466720946854e2",
