@@ -170,6 +170,31 @@ module.exports = {
             Number(prevPubkeyId), Number(newPubkeyId), Number(blockIndex)]);
     },
 
+    async getContractStakeRotationOrigin(targetContractIndex, sourceId, tickId, pubkeyId){
+        let rows = await this.doQuery(
+            `SELECT r.stake_action_index, r.delegation_action_index,
+                    r.prev_signing_pubkey_id, r.new_signing_pubkey_id, r.block_index
+             FROM contract_delegation_rotations r
+                 JOIN contract_stakes t ON t.action_index = r.stake_action_index
+             WHERE r.target_table=?
+               AND t.target_contract_index=? AND t.source_id=? AND t.tick_id=?
+               AND t.signing_pubkey_id=?
+             ORDER BY r.block_index ASC, r.delegation_action_index ASC,
+                      r.stake_action_index ASC`,
+            ['contract_stakes', Number(targetContractIndex), sourceId, tickId, pubkeyId]);
+        if(rows.length === 0) return null;
+
+        let delegationActionIndex = null;
+        for(let row of rows){
+            if(String(row.new_signing_pubkey_id) === String(pubkeyId))
+                delegationActionIndex = Number(row.delegation_action_index);
+        }
+        return {
+            originalPubkeyId: Number(rows[0].prev_signing_pubkey_id),
+            delegationActionIndex
+        };
+    },
+
 };
 
 // The two passes of materializeContractDelegations, kept off the exported object so

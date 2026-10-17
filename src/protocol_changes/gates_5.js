@@ -325,3 +325,16 @@ addGate('reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATU
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION at read
 });
+
+// unstake_delegated_row_journal_activation
+// Height on the processing chain's own block_index. From it a contract UNSTAKE written under a
+// materialized delegated key appends rotation history for its cooldown row and any partial-stake
+// residual, so a later delegation revert restores the slot's original key on every surviving
+// row. Below it those new rows remain on the request key with no journal entry. Unarmed on
+// mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with
+// XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION (shared_rows.js).
+addGate('unstake_delegated_row_journal_activation.UNSTAKE_DELEGATED_ROW_JOURNAL_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION at read
+});
