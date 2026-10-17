@@ -642,6 +642,10 @@
       "price landing future-stamped block wait @regression @tier1 reads a landing wait on a future-stamped block as future_block_wait",
       "price landing future-stamped block wait @regression @tier1 takes no hold toward the ceiling while the landing wait is future-stamped"
     ],
+    "0c10b3d383a4d374": [
+      "Anchor v1 checkpoint sequence binding below gate @regression @tier3 keeps a mismatched checkpoint sequence valid on mainnet",
+      "Anchor v1 checkpoint sequence binding below gate @regression @tier3 keeps a mismatched checkpoint sequence valid on testnet"
+    ],
     "0c136d013ba41d36": [
       "ORDER and SWAP matching invariants @regression @tier1 classifies every match-touched row for action-scoped rollback",
       "ORDER and SWAP matching invariants @regression @tier1 conserves both assets exactly across seeded partial fills and payout splits",
@@ -18889,8 +18893,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1386,
-      "titleCount": 13847,
+      "fileCount": 1388,
+      "titleCount": 13851,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18928,6 +18932,7 @@
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "cd53417c159a33c6",
