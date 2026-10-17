@@ -138,12 +138,17 @@ class HubClient {
         let deadline = Number(CONFIG_ENV.HUB_CALL_DEADLINE_MS);
         this.callDeadlineMs = Number.isFinite(deadline) && deadline > 0 ? deadline : HUB_CALL_DEADLINE_MS;
         this.selectorAddressSource = null;
+        this.selectorCandidateSource = null;
     }
 
     setAddressSource(fn){
         this.selectorAddressSource = (typeof fn === 'function') ? fn : null;
         let selected = this.selectorAddressSource && this.selectorAddressSource();
         this.enabled = !!this.hubUrl || (typeof selected === 'string' && selected.length > 0);
+    }
+
+    setCandidateSource(fn){
+        this.selectorCandidateSource = (typeof fn === 'function') ? fn : null;
     }
 
     // Read the hub's operational params. The one method here that is NOT on the hub's
@@ -174,6 +179,17 @@ class HubClient {
                 block_time:   blockTime
             };
             if(chainId !== null && chainId !== undefined) params.chain_id = chainId;
+            let candidateStatus = this.selectorCandidateSource && this.selectorCandidateSource();
+            if(candidateStatus && candidateStatus.pinned === false &&
+               Array.isArray(candidateStatus.candidates)){
+                let results = await Promise.allSettled(candidateStatus.candidates.map((url) =>
+                    this.call('pushchaintip', params, undefined, url)));
+                for(let result of results){
+                    if(result.status === 'rejected')
+                        getLogger().warn('HubClient: pushChainTip failed:', result.reason);
+                }
+                return;
+            }
             await this.call('pushchaintip', params);
         } catch (err) {
             // Best-effort: log and continue

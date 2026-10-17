@@ -50,6 +50,7 @@ module.exports = {
         // Create hub client (for pushing chain tip and other cross-chain data to xchain-hub)
         this.hubClient = new HubClient();
         this.hubClient.setAddressSource(() => this.hubSelector.current());
+        this.hubClient.setCandidateSource(() => this.hubSelector.status());
 
         // DOGE anchor visibility for the BTC-side anchor/archive reward derivation. ANCHOR
         // lives on DOGE while the reward is minted here, so before paying, the derive pass
