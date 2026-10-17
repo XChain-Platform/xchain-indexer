@@ -172,8 +172,14 @@ describe('Cross_Settle settlement bounds: unarmed @regression @tier1', function 
     it('is the committed mainnet and testnet reading at every height', function () {
         stubGate(sinon, KEY, false).restore();
         const registry = require('../../../../../src/consensus/gate_registry.js');
-        for (const net of ['mainnet', 'testnet']) for (const coin of ['BTC', 'LTC', 'DOGE']) for (const h of [0, 1, 1e6, 9e9])
-            assert.strictEqual(registry.activeAt(KEY, net, coin, h, null), false, net + '/' + coin + '@' + h);
+        // The v0.24.0 cut arms testnet per chain; mainnet stays unarmed.
+        const TESTNET = { BTC: 156908, LTC: 4927400, DOGE: 68005165 };
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            for (const h of [0, 1, 1e6, 9e9])
+                assert.strictEqual(registry.activeAt(KEY, 'mainnet', coin, h, null), false, 'mainnet/' + coin + '@' + h);
+            assert.strictEqual(registry.activeAt(KEY, 'testnet', coin, TESTNET[coin] - 1, null), false, 'testnet/' + coin + ' below');
+            assert.strictEqual(registry.activeAt(KEY, 'testnet', coin, TESTNET[coin], null), true, 'testnet/' + coin + ' at');
+        }
         assert.strictEqual(registry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
     });
 });

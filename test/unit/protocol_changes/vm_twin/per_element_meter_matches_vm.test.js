@@ -48,16 +48,17 @@ function indexerEnabledAt(network, time) {
 }
 
 describe('protocol_changes/vm_twin/per_element_meter_matches_vm: activation parity @regression @tier1', function () {
-    it('registers the time-table row in part 5, unarmed on mainnet and testnet, live on regtest', function () {
+    it('registers the time-table row in part 5, unarmed on mainnet, armed on testnet at its v0.24.0 heights, live on regtest', function () {
         const row = ProtocolChanges.get(KEY);
         assert.deepStrictEqual(new ProtocolChanges({ config: {}, util: {} }).changes[NAME], row);
         assert.deepStrictEqual(table.find((entry) => entry[0] === NAME), [
-            NAME, '0.2.0', ProtocolChanges.UNARMED, ProtocolChanges.UNARMED, 0, 0, 0, 0,
+            NAME, '0.2.0', ProtocolChanges.UNARMED, 1792303200, 0, 0, 0, 0,
         ]);
         assert.strictEqual(ProtocolChanges.PER_ELEMENT_METER_MAINNET_TIME, ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.PER_ELEMENT_METER_TESTNET_TIME, ProtocolChanges.UNARMED);
+        // The v0.24.0 cut arms testnet at its shared change instant; mainnet stays unarmed.
+        assert.strictEqual(ProtocolChanges.PER_ELEMENT_METER_TESTNET_TIME, 1792303200);
         assert.strictEqual(ProtocolChanges.get('protocol_changes.PER_ELEMENT_METER_MAINNET_TIME'), ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.get('protocol_changes.PER_ELEMENT_METER_TESTNET_TIME'), ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.get('protocol_changes.PER_ELEMENT_METER_TESTNET_TIME'), 1792303200);
     });
 
     it('matches the VM instant on every network', function () {

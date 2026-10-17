@@ -13,19 +13,21 @@ describe('protocol_changes VM lint syntax-depth row', function () {
             'BTC:mainnet': UNARMED,
             'LTC:mainnet': UNARMED,
             'DOGE:mainnet': UNARMED,
-            'BTC:testnet': UNARMED,
-            'LTC:testnet': UNARMED,
-            'DOGE:testnet': UNARMED,
+            'BTC:testnet': 156908,
+            'LTC:testnet': 4927400,
+            'DOGE:testnet': 68005165,
             testnet: UNARMED,
             regtest: 0,
         });
     });
 
-    it('is active on regtest at genesis and dark on mainnet and testnet', function () {
+    it('is active on regtest at genesis, dark on mainnet, and armed on testnet from its v0.24.0 height', function () {
+        const TESTNET = { BTC: 156908, LTC: 4927400, DOGE: 68005165 };
         assert.strictEqual(registry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.strictEqual(registry.activeAt(KEY, 'mainnet', coin, UNARMED - 1, null), false, coin + ':mainnet');
-            assert.strictEqual(registry.activeAt(KEY, 'testnet', coin, UNARMED - 1, null), false, coin + ':testnet');
+            assert.strictEqual(registry.activeAt(KEY, 'testnet', coin, TESTNET[coin] - 1, null), false, coin + ':testnet below');
+            assert.strictEqual(registry.activeAt(KEY, 'testnet', coin, TESTNET[coin], null), true, coin + ':testnet at');
         }
     });
 });

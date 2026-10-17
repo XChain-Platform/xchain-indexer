@@ -106,7 +106,7 @@ function useRegtestArming() {
 
 describe('pass progress retirement: the activation row @regression', function () {
     useRegtestArming();
-    it('is a height row, unarmed on mainnet and testnet, inert on regtest unless the venue arms it', function () {
+    it('is a height row, unarmed on mainnet, armed on testnet at its v0.24.0 heights, inert on regtest unless the venue arms it', function () {
         assert.strictEqual(gateRegistry.registry.unitOf(KEY), 'height');
         delete process.env[ARM_ENV];
         for (const coin of ['BTC', 'LTC', 'DOGE'])
@@ -114,7 +114,9 @@ describe('pass progress retirement: the activation row @regression', function ()
         process.env[ARM_ENV] = 'armed';
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.strictEqual(gateRegistry.activeAt(KEY, 'mainnet', coin, 10000000, null), false, coin + ' mainnet');
-            assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', coin, 10000000, null), false, coin + ' testnet');
+            const TESTNET = { BTC: 156908, LTC: 4927400, DOGE: 68005165 };
+            assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', coin, TESTNET[coin] - 1, null), false, coin + ' testnet below');
+            assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', coin, TESTNET[coin], null), true, coin + ' testnet at');
             assert.strictEqual(gateRegistry.activeAt(KEY, 'regtest', coin, 0, null), true, coin + ' regtest');
         }
     });
