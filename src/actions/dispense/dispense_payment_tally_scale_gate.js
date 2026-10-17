@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Token-payment dispense tally scale flag-day.
+ * Token-payment dispense tally scale.
  *
  * THE DEFECT. actions/dispense.js keeps the non-batch payment tally at 8 dp:
  * `available` is bcsub(COIN_AMOUNT, consumed, 8), a fill's charge is
@@ -39,7 +39,7 @@
  *   and one at 0.000000004, drains the whole payment on the first and refuses
  *   the second.
  *
- * THE RULE. When active, the LOCAL (non-batch) tally for a token-denominated
+ * THE RULE. The LOCAL (non-batch) tally for a token-denominated
  * payment is kept at DISPENSE_TALLY_EXACT_SCALE (18), so no subtraction,
  * multiplication or accumulation in the tally rounds. Nothing else changes:
  * the pricing divides already run at 64 dp, and the fill count, the ownership
@@ -56,56 +56,18 @@
  * A NO-OP ON EVERY 8 dp PAYMENT, BY VALUE. bcsub/bcmul/bcadd at 18 dp agree
  * exactly with the same call at 8 dp whenever both operands are representable
  * at 8 dp, so a token dispense whose payment and unit price fit the native
- * scale settles identically above and below this gate. Only the sub-satoshi
- * amounts the defect actually misprices move, which is what keeps the flag day
- * narrow.
- *
- * IT IS STILL CONSENSUS-AFFECTING, which is why it is gated: it changes the
- * fill count a payment buys, so a valid dispense becomes a refusal and the
- * credits and escrow debits that dispense would have written are not written.
- * Those rows are block-hash preimages. Below the threshold the 8 dp tally runs
- * untouched and historical replay stays byte-identical.
- *
- * MAINNET IS ARMED AT GENESIS (operator ruling 2026-09-09), alongside
- * dispenser_amount_positivity_activation and
- * consolidation_leg_amount_activation. An activation instant in the past
- * re-prices committed blocks only where there are priced blocks to re-price,
- * and the audit this arming waited on has now been taken: read-only against
- * the live indexer databases on 2026-09-09, mainnet holds 0 dispensers and 0
- * dispenses, so no token-triggered dispense has ever settled there and the
- * exact tally is the identity function over every mainnet block committed so
- * far. BATCH_ISSUANCE_LIMITS arming mainnet at 2026-08-16 exposed the
- * defective tally but nothing exercised it. The proof is a per-chain OLD-vs-ON
- * replay witness, not this comment. testnet/regtest run from genesis, matching
- * every dispenser-family activation.
- *
- * Execution-path gate (action settlement), not a hashing-path change, so
- * indexer-only with no xchain-sync twin: xchain-sync replicates materialized
- * rows and never runs an action handler.
+ * scale settles identically. Only the sub-satoshi amounts the defect actually
+ * misprices move.
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('../../consensus/gate_registry');
+const { copy } = require('../../consensus/gate_registry');
 
 const DISPENSE_TALLY_EXACT_SCALE = copy('dispense_payment_tally_scale_activation.DISPENSE_TALLY_EXACT_SCALE');
 
 const DISPENSE_TALLY_LEGACY_SCALE = copy('dispense_payment_tally_scale_activation.DISPENSE_TALLY_LEGACY_SCALE');
 
-const DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION = copy('dispense_payment_tally_scale_activation.DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION');
-
-// Whether the exact token-payment tally binds for a block whose consensus
-// timestamp is `blockTime` on `network`. Below the threshold -> off (8 dp
-// tally, byte-identical historical replay). Unknown network or unparseable
-// timestamp -> off (safe: keeps deployed behavior).
-function isDispensePaymentTallyScaleActive(blockTime, network){
-    let t = parseInt(blockTime);
-    if(!Number.isFinite(t)) return false;
-    let threshold = DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION[network];
-    if(threshold === undefined) return false;
-    return t >= threshold;
-}
-
-// The scale the dispense payment tally should run at for a given block.
+// The scale the dispense payment tally should run at.
 //
 // `tokenDenominated` is the caller's answer to "is COIN_AMOUNT a token amount",
 // and `batchScoped` to "is this the shared batch pool". Both false-ish answers
@@ -118,20 +80,16 @@ function isDispensePaymentTallyScaleActive(blockTime, network){
 // and at 8 dp such a fill drains nothing, so the next dispenser behind the
 // address prices against the whole payment again. A coin payment priced in whole
 // satoshis settles identically at either scale, as above.
-function dispenseTallyScale(blockTime, network, tokenDenominated, batchScoped, fiatPricingExact){
+function dispenseTallyScale(tokenDenominated, batchScoped, fiatPricingExact){
     if(batchScoped)
         return DISPENSE_TALLY_LEGACY_SCALE;
     if(!tokenDenominated)
         return fiatPricingExact ? DISPENSE_TALLY_EXACT_SCALE : DISPENSE_TALLY_LEGACY_SCALE;
-    if(isDispensePaymentTallyScaleActive(blockTime, network))
-        return DISPENSE_TALLY_EXACT_SCALE;
-    return DISPENSE_TALLY_LEGACY_SCALE;
+    return DISPENSE_TALLY_EXACT_SCALE;
 }
 
 module.exports = {
     DISPENSE_TALLY_EXACT_SCALE,
     DISPENSE_TALLY_LEGACY_SCALE,
-    DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION,
-    isDispensePaymentTallyScaleActive,
     dispenseTallyScale
 };
