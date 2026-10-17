@@ -25,6 +25,7 @@ const path    = require('path');
 const addresses    = require('./addresses.js');
 const tickers      = require('./tickers.js');
 const expiredItems = require('./expired_items.js');
+const statusActionCache = require('./status_action_cache.js');
 
 module.exports = {
 
@@ -74,11 +75,18 @@ module.exports = {
 
     // Lookup a record in the `index_actions` table and return record id
     async getActionId(action){
+        const hit = statusActionCache.read(
+            this._statusActionIdCache, 'action', action, this.transactionConnection !== null);
+        if(hit !== undefined)
+            return hit;
         let id    = null;
         let query = "SELECT id FROM index_actions WHERE action=? LIMIT 1";
         let results = await this.doQuery(query, [action]);
         if(results.length > 0)
             id = Number(results[0].id);
+        if(id !== null)
+            statusActionCache.remember(
+                this._statusActionIdCache, 'action', action, id, this.transactionConnection !== null);
         return id;
     },
 
@@ -102,11 +110,18 @@ module.exports = {
 
     // Lookup a record in the `index_statuses` table and return record id
     async getStatusId(status){
+        const hit = statusActionCache.read(
+            this._statusActionIdCache, 'status', status, this.transactionConnection !== null);
+        if(hit !== undefined)
+            return hit;
         let id    = null;
         let query = "SELECT id FROM index_statuses WHERE status=? LIMIT 1";
         let results = await this.doQuery(query, [status]);
         if(results.length > 0)
             id = Number(results[0].id);
+        if(id !== null)
+            statusActionCache.remember(
+                this._statusActionIdCache, 'status', status, id, this.transactionConnection !== null);
         return id;
     },
 
