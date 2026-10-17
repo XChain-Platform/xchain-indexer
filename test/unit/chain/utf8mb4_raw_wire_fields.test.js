@@ -156,6 +156,10 @@ function astralColumns(doQuery, table) {
 // Every table.column a dated migration MODIFYs to utf8mb4, with the file it came from.
 function migrationWidens() {
     const seen = new Map();
+    const wanted = new Map(widenSet.UTF8MB4_RAW_FIELD_COLUMNS.map(entry => [
+        entry.table + '.' + entry.column,
+        normalizeSpec(widenSet.columnSpec(entry))
+    ]));
     for (const file of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort()) {
         const raw = stripComments(fs.readFileSync(path.join(MIG_DIR, file), 'utf8'));
         const mode = Database.prototype.migrationMode.call({}, fs.readFileSync(path.join(MIG_DIR, file), 'utf8'));
@@ -163,8 +167,13 @@ function migrationWidens() {
             const t = /ALTER\s+TABLE\s+`?(\w+)`?/i.exec(stmt);
             if (!t) continue;
             for (const m of stmt.matchAll(/\bMODIFY\s+(?:COLUMN\s+)?`?(\w+)`?([\s\S]*?)(?=,\s*MODIFY\s|,\s*ADD\s|,\s*DROP\s|$)/gi)) {
-                if (declaresUtf8mb4(m[2]))
-                    seen.set(t[1] + '.' + m[1], { file, mode, spec: normalizeSpec(m[2]) });
+                if (!declaresUtf8mb4(m[2])) continue;
+                const key = t[1] + '.' + m[1];
+                const spec = normalizeSpec(m[2].replace(/\s+(?:FIRST|AFTER\s+`?\w+`?)\s*$/i, ''));
+                const earlier = seen.get(key);
+                if (!earlier) seen.set(key, { file, mode, spec });
+                else if (spec !== wanted.get(key) && earlier.spec === wanted.get(key))
+                    seen.set(key, { file, mode: earlier.mode, spec });
             }
         }
     }
