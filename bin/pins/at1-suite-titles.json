@@ -4641,6 +4641,9 @@
       "Attest (ATTEST) @regression @tier3 v2: expire persists a sparse system expiry row without consulting the zero-conf activation",
       "Attest (ATTEST) @regression @tier3 v2: expire re-derives only for a row with no readable pin"
     ],
+    "47b5ee89067e58ec": [
+      "committed automatic migration key-dependent writes @regression @tier1 matches the reviewed file-to-table map"
+    ],
     "47d45f1d606adbef": [
       "controller completeness custody routing DEPOSIT accepts armed SOURCE and custody debits when the tick was guarded",
       "controller completeness custody routing DEPOSIT rejects an armed unguarded controlled SOURCE debit",
@@ -9841,6 +9844,14 @@
       "Anchor pre-activation status gate @regression @tier3 leaves the gate inert for an anchor below its own height",
       "Anchor pre-activation status gate @regression @tier3 reads the old spelling as a non-candidate, so the stamp is what changes the verdict",
       "Anchor pre-activation status gate @regression @tier3 stamps unverified below ANCHOR_ACTIVATION once the gate is active"
+    ],
+    "88d146e3a15c6889": [
+      "automatic migration unique-key witness @regression @tier1 finds each key-dependent write and ignores one inside a quoted literal",
+      "automatic migration unique-key witness @regression @tier1 ignores a key-dependent statement inside a quoted literal",
+      "automatic migration unique-key witness @regression @tier1 passes a live unique index with the same ordered column set under another name",
+      "automatic migration unique-key witness @regression @tier1 passes a table created earlier in the same file without reading live metadata",
+      "automatic migration unique-key witness @regression @tier1 refuses a missing declared unique index and names its complete remedy",
+      "automatic migration unique-key witness @regression @tier1 refuses a non-unique live index with the same columns"
     ],
     "88d6102dd7170497": [
       "shared-list table contracts @regression @tier1 baselines only when both shared-list tables are present",
@@ -18940,8 +18951,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1394,
-      "titleCount": 13881,
+      "fileCount": 1396,
+      "titleCount": 13888,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20038,6 +20049,8 @@
         "test/unit/migration/compat_gate_startup_tables.test.js": "4640ed78651b4c0e",
         "test/unit/migration/db_reconcile_auto_dedup_scope.test.js": "4212b5d3db36de1e",
         "test/unit/migration/db_reconcile_fulltext_index.test.js": "918fa176a8537ff6",
+        "test/unit/migration/key_witness/assert_unique_key_witness.test.js": "88d146e3a15c6889",
+        "test/unit/migration/key_witness/committed_auto_files.test.js": "47b5ee89067e58ec",
         "test/unit/migration/legacy_migrations_ported.test.js": "0ec0f41236d14b46",
         "test/unit/migration/migrate.test.js": "c26b3a8dec758d2c",
         "test/unit/migration/migrate_status.test.js": "149a444f9f541e90",
