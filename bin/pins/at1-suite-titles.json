@@ -16909,6 +16909,12 @@
       "Programmable policy layer : Phase B enforcement @regression maybeRunControllerGuard : control flow STAKE controller DENY reverts the action",
       "Programmable policy layer : Phase B enforcement @regression maybeRunControllerGuard : control flow STAKE routes to the 'stake' class and invokes the guard (stub now live)"
     ],
+    "efb099e2e746f08d": [
+      "train activation halt stall health @regression does not grade a train activation halt past the grace as wedged",
+      "train activation halt stall health @regression publishes the train activation halt class without rewriting it",
+      "train activation halt stall health @regression reports a train activation halt as degraded in the health payload",
+      "train activation halt stall health @regression still grades a non-train reason past the grace as wedged"
+    ],
     "eff168f8a3214dbb": [
       "getMaxAnchorCheckpointSeq() version filter (#2239) keeps the default statement unchanged and narrows valid-only reads",
       "getMaxAnchorCheckpointSeq() version filter (#2239) parameterizes the version filter from the shared CHECKPOINT_VERSIONS constant",
@@ -17973,8 +17979,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1406,
-      "titleCount": 13930,
+      "fileCount": 1407,
+      "titleCount": 13934,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19378,6 +19384,7 @@
         "test/unit/xchain_indexer/stall_health.test/barrier_mapping.test.js": "26506740301590af",
         "test/unit/xchain_indexer/stall_health.test/is_train_activation_halt.test.js": "67e9ad621c10ee25",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
+        "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
         "test/unit/xchain_indexer/stall_health_smoke_parity.test.js": "850d161466315079",
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
