@@ -98,6 +98,11 @@ class Order_Match {
                 // Reset the address/tickers/transactions list on each match
                 this.util.resetLists();
 
+                // Preserve the legacy final list reset, but stop scanning candidates once
+                // either running side of the taker has been exhausted.
+                if(this.util.bclte(order['GIVE_REMAINING'], 0) || this.util.bclte(order['GET_REMAINING'], 0))
+                    break;
+
                 // Gate, size and settle this candidate (order_match/match.js)
                 await this.fillMatch(data, orderInfo, matchInfo, order, match, lists);
             }
