@@ -7255,6 +7255,16 @@
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) settles the request fee at the synthesized action, which carries BLOCK_TIME (D60)",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) the chain-path v1 dispatch is untouched by the mirror marker"
     ],
+    "693d182bd9ca31ce": [
+      "capability snapshot proof trust pin builds the testnet and mainnet environment names",
+      "capability snapshot proof trust pin holds a configured next pin when the rotation block is invalid",
+      "capability snapshot proof trust pin ignores a rotation block when no next pin is configured",
+      "capability snapshot proof trust pin returns null for an unset or blank static pin",
+      "capability snapshot proof trust pin selects the next pin at and above the rotation block",
+      "capability snapshot proof trust pin selects the static pin below the rotation block",
+      "capability snapshot proof trust pin selects the static pin when no rotation is configured",
+      "capability snapshot proof trust pin uses the call-time environment reader by default"
+    ],
     "694d08dca6dd0abb": [
       "reorg catch-up cursor refresh (XChainIndexer.start REORG-6 recheck) STILL selects a genuinely new reorg against the refreshed cursor (real reorgs never missed)",
       "reorg catch-up cursor refresh (XChainIndexer.start REORG-6 recheck) does NOT re-select just-processed reorgs once the cursor is refreshed (the fix)",
@@ -17968,8 +17978,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1406,
-      "titleCount": 13925,
+      "fileCount": 1407,
+      "titleCount": 13933,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18641,6 +18651,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
+        "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
