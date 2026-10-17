@@ -172,10 +172,6 @@
       "migration live-schema guard type and charset rules against a real MariaDB @tier3 refuses: microsecond datetime restated bare from server metadata",
       "migration live-schema guard type and charset rules against a real MariaDB @tier3 refuses: utf8mb4 column restated without a charset in a utf8 table from server metadata"
     ],
-    "03449cbd7e3a0746": [
-      "ATTEST seeded undelivered mirror response @regression @tier3 ignores the seeded row when the local request is absent",
-      "ATTEST seeded undelivered mirror response @regression @tier3 ignores the seeded row when the local request is already valid"
-    ],
     "037f439f3b60cf7b": [
       "migrate CLI status report @regression --status --json reports the ledger without applying migrations",
       "migrate CLI status report @regression --status prints only the text report and its summary",
@@ -18516,6 +18512,15 @@
       "attest_response_canonical: hub/indexer twin produces byte-identical canonicals to the hub copy across both eras",
       "attest_response_canonical: hub/indexer twin rejects the same spellings as the hub copy"
     ],
+    "f9b440bdcd327076": [
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 also refuses Redundant row format",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes Compact when the column is not fully indexed",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes Dynamic row format",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes a 100-character utf8mb4 widening that fits within 767 bytes",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 passes when the live column is already utf8mb4",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 refuses the indexed files.name utf8mb4 widening on Compact",
+      "migration live-schema MODIFY guard: row format gate @regression @tier1 treats a missing row format as Dynamic"
+    ],
     "fa4bd1452ca551bd": [
       "bridge_settle: destination below its format-specific bridge sub-gate applies the same v2 row once the XCHAIN gate is active",
       "bridge_settle: destination below its format-specific bridge sub-gate applyBridgeTransfer defers a v2 row below XCHAIN_BRIDGE_ACTIVATION and writes nothing",
@@ -18976,7 +18981,7 @@
   "scripts": {
     "test": {
       "fileCount": 1399,
-      "titleCount": 13900,
+      "titleCount": 13905,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19073,7 +19078,6 @@
         "test/unit/actions/attest/callback_batch_position_below_gate.test.js": "1627468c01af8b39",
         "test/unit/actions/attest/canonical_signer_set.test.js": "4f4095f7fff521ab",
         "test/unit/actions/attest/mirror_apply_malformed_admission.test.js": "a37267dabef57ec2",
-        "test/unit/actions/attest/mirror_apply_seeded_row_not_pending.test.js": "03449cbd7e3a0746",
         "test/unit/actions/attest/mirror_signer_set_canonical.test.js": "125e47594c3f675e",
         "test/unit/actions/attest/rollcall.test.js": "e65e23a11e0b9d4f",
         "test/unit/actions/attest_relay.test.js": "75c1e0031337ed39",
@@ -20083,6 +20087,7 @@
         "test/unit/migration/migration_auto_index_key_length.test.js": "62321e67976f95c9",
         "test/unit/migration/migration_executable_residue.test.js": "acaf148f7d78ff56",
         "test/unit/migration/migration_precondition_baseline.test.js": "3892effc8fcf1240",
+        "test/unit/migration/migration_precondition_baseline.test/row_format_gate.test.js": "f9b440bdcd327076",
         "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js": "ad9b4cab9e7d3566",
         "test/unit/migration/migration_precondition_oracle_tick.test.js": "3067b102d53b0b5f",
         "test/unit/migration/migration_preconditions.test.js": "10419775b050d37c",
