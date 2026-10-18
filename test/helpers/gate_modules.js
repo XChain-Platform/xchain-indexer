@@ -85,7 +85,6 @@ const REPLACED_STEMS = Object.freeze([
     'dispenser_caps_activation',
     'dispenser_freshness_activation',
     'dispenser_freshness_shape_activation',
-    'dispenser_give_amount_activation',
     'dispenser_oracle_price_activation',
     'dispenser_ownership_cancel_activation',
     'gated_handoff_ref_activation',
