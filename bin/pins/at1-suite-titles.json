@@ -16279,6 +16279,17 @@
       "bridge_settle: proof acquisition after terminal guards refuses an already settled row without calling its proof fetcher",
       "bridge_settle: proof acquisition after terminal guards still defers a quorate due in leg when no checkpoint is held"
     ],
+    "e3e7ffb0929fda49": [
+      "capability snapshot proof startup pin refusal allows a valid _NEXT pin with a decimal safe integer _FROM",
+      "capability snapshot proof startup pin refusal allows an unarmed chain and one that resolves nothing from the mirror",
+      "capability snapshot proof startup pin refusal allows regtest and missing options",
+      "capability snapshot proof startup pin refusal allows startup with a valid static pin",
+      "capability snapshot proof startup pin refusal refuses a valid _NEXT pin with an invalid _FROM",
+      "capability snapshot proof startup pin refusal refuses armed testnet and mainnet startup without a pin",
+      "capability snapshot proof startup pin refusal refuses invalid and empty-array static pins with their parser errors",
+      "capability snapshot proof startup pin refusal turns environment reader failures into refusal messages",
+      "capability snapshot proof startup pin refusal uses the call-time process environment reader by default"
+    ],
     "e3eb231de5a57eeb": [
       "dispenser_fiat_pricing_activation: Mode A floor rule @regression @tier1 armed, a caller that supplies no block index keeps the unarmed count",
       "dispenser_fiat_pricing_activation: Mode A floor rule @regression @tier1 armed, a large payment is credited the documented count, not thirty-three over it",
@@ -18111,8 +18122,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1427,
-      "titleCount": 14028,
+      "fileCount": 1428,
+      "titleCount": 14037,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18789,6 +18800,7 @@
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin_refusal.test.js": "e3e7ffb0929fda49",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
         "test/unit/consensus/capability_snapshot_proof/trust_set.test.js": "b468c3fd3eff32ee",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
