@@ -9473,6 +9473,15 @@
       "XBRIDGE handler into the real writers, end to end @regression a refused v3 still leaves its row and never sets the bridged bit",
       "XBRIDGE handler into the real writers, end to end @regression a valid v3 lock leaves an xbridges row and a set bridged bit"
     ],
+    "8e4d20c221ea5d3b": [
+      "Send handler: caret-compacted handoff destination @regression @tier1 a REFUSED reference fails closed",
+      "Send handler: caret-compacted handoff destination @regression @tier1 a `^<id>` handoff resolving to the destination is accepted",
+      "Send handler: caret-compacted handoff destination @regression @tier1 a `^<id>` resolving to a DIFFERENT address is still rejected",
+      "Send handler: caret-compacted handoff destination @regression @tier1 a dangling reference the resolver returns unchanged fails closed",
+      "Send handler: caret-compacted handoff destination @regression @tier1 a full-address handoff still passes, and pays for no resolution",
+      "Send handler: caret-compacted handoff destination @regression @tier1 a full-address handoff to the WRONG address is still rejected",
+      "Send handler: caret-compacted handoff destination @regression @tier1 a v1 MESSAGE carrying the destination does not satisfy the gate"
+    ],
     "8e78b69ca3426aa3": [
       "state_root reserved sub-trees: gate is inert EXCEPT the armed set @regression the activation maps hold EXACTLY the armed set (arming is a code change, not config)"
     ],
@@ -18180,7 +18189,7 @@
   "scripts": {
     "test": {
       "fileCount": 1441,
-      "titleCount": 14068,
+      "titleCount": 14065,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18555,7 +18564,7 @@
         "test/unit/actions/token/mint_supply_windows_conformance.test.js": "4385266db12e6aae",
         "test/unit/actions/token/roundtrip_golden.test.js": "4c962f6b732dd447",
         "test/unit/actions/token/send.test.js": "77b99807f21ed82d",
-        "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "c4841dfff6c76d0b",
+        "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "8e4d20c221ea5d3b",
         "test/unit/actions/token/send.test/caret_pack_key.test.js": "8c38e904bee40cde",
         "test/unit/actions/token/send.test/gated_handoff_threshold.test.js": "e0e089fe173d451a",
         "test/unit/actions/token/send.test/gated_total_tick_id.test.js": "a90ce4f0b0c35676",

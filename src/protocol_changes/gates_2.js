@@ -34,15 +34,6 @@ addGate('contract_slash_active_first_activation.CONTRACT_SLASH_ACTIVE_FIRST_ACTI
     'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0,
 });
 
-// gated_handoff_ref_activation
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
-addGate('gated_handoff_ref_activation.GATED_HANDOFF_REF_ACTIVATION', 'time', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 SEND, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
-
 // ledger_amount_precision_activation
 // Scale the ledger stores amounts at once the rule is live. 18 is
 // MAX_TOKEN_DECIMALS: the finest precision any tick can be issued with, and the
