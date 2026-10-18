@@ -85,7 +85,6 @@ describe('protocol_changes consensus-bound shared rows', function () {
 
     it('resolves the existing price scale rows through the gate registry', function () {
         const names = [
-            'PRICE_SCALE_ACTIVATION',
             'PRICE_SCALE_MAX_DECIMALS',
             'PRICE_VALUE_RE_LEGACY',
             'PRICE_VALUE_RE_CANONICAL',

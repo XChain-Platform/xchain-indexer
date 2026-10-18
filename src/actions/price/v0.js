@@ -109,9 +109,9 @@ function resolveRoundBounds(config, data){
     // any of BTC/LTC/DOGE and their heights diverge.
     let pairPattern = pricePair.pricePairPattern(data['BLOCK_TIME'], config['NETWORK']);
 
-    // Price-value bound, resolved on the same key for the same reason. At/above its
-    // gate a price is canonical (no leading zeros, at most 8 decimals), which is the
-    // scale every producer already emits and bounds the string to 19 characters.
+    // Price-value bound. A price is canonical (no leading zeros, at most 8 decimals),
+    // which is the scale every producer already emits and bounds the string to 19
+    // characters.
     let pricePattern = priceScale.priceValuePattern(data['BLOCK_TIME'], config['NETWORK']);
 
     // Price-RANGE bound, resolved on the same key as the two above so all three are

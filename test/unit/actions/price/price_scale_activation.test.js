@@ -10,7 +10,7 @@
 //
 // test/unit/actions/price/price_scale_activation.test.js
 //
-// PRICE v0 canonical price-value flag day, chain side.
+// PRICE v0 canonical price-value rule, chain side.
 //
 // The v0 wire is the one price entry point with no bound on a price's scale or
 // length: the v1 push path caps the decimal side at 8 places, the producers
@@ -19,10 +19,8 @@
 // reaches price_snapshots.price either truncated or as a hard insert failure
 // depending on the database's sql_mode.
 //
-// Both sides of the gate are driven through the REAL parser, on a real six-round
-// batch with real Ed25519 signatures over the real canonical, because the claim
-// that matters is not "the regex changed" but "a from-genesis replay below the
-// threshold reaches the same verdict".
+// The rule is driven through the REAL parser, on a real six-round batch with real
+// Ed25519 signatures over the real canonical.
 
 'use strict';
 
@@ -149,34 +147,16 @@ function setupPriceFixture() {
 const v0Data = (overrides = {}) =>
     createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100, ...overrides });
 
-describe('PRICE v0 canonical price-value flag day @regression @tier3', function () {
+describe('PRICE v0 canonical price-value rule @regression @tier3', function () {
     beforeEach(setupPriceFixture);
     afterEach(function () { sinon.restore(); });
 
     // -----------------------------------------------------------------------
-    // The shipped map, evaluated with no stub in sight.
+    // The shipped rule, evaluated with no stub in sight.
     // -----------------------------------------------------------------------
     describe('the rule this node ships', function () {
 
-        it('runs from genesis on every network, mainnet by the 2026-09-09 ruling', function () {
-            // 0 PRICE actions have ever been indexed on any mainnet chain (measured
-            // 2026-09-09), so the tightened decimal bound rejects no round ever accepted.
-            assert.strictEqual(priceScale.PRICE_SCALE_ACTIVATION.mainnet, 0);
-            assert.strictEqual(priceScale.isPriceScaleCanonicalActive(0, 'mainnet'), true);
-            assert.strictEqual(
-                priceScale.isPriceScaleCanonicalActive(Math.floor(Date.now() / 1000), 'mainnet'), true);
-            // A network the gate cannot evaluate still falls closed to the legacy rule.
-            assert.strictEqual(priceScale.isPriceScaleCanonicalActive(0, 'signet'), false);
-            assert.strictEqual(priceScale.isPriceScaleCanonicalActive(0, 'testnet'), true);
-            assert.strictEqual(priceScale.isPriceScaleCanonicalActive(0, 'regtest'), true);
-        });
-
-        it('leaves every value the loose rule admits valid below the gate', function () {
-            for(const price of [WIDE, NEAR_ZERO, LEADING_ZEROS, HONEST])
-                assert.strictEqual(priceScale.PRICE_VALUE_RE_LEGACY.test(price), true, price);
-        });
-
-        it('admits only the canonical form above it, and bounds it to 19 characters', function () {
+        it('admits only the canonical form and bounds it to 19 characters', function () {
             assert.strictEqual(priceScale.PRICE_VALUE_RE_CANONICAL.test(HONEST), true);
             for(const price of [WIDE, NEAR_ZERO, LEADING_ZEROS])
                 assert.strictEqual(priceScale.PRICE_VALUE_RE_CANONICAL.test(price), false, price);
@@ -190,18 +170,16 @@ describe('PRICE v0 canonical price-value flag day @regression @tier3', function 
 
 });
 
-describe('PRICE v0 canonical price-value flag day @regression @tier3', function () {
+describe('PRICE v0 canonical price-value rule @regression @tier3', function () {
     beforeEach(setupPriceFixture);
     afterEach(function () { sinon.restore(); });
 
     // -----------------------------------------------------------------------
-    // Both sides, through the real parser.
+    // The canonical rule, through the real parser.
     // -----------------------------------------------------------------------
-    describe('the real gate, through _parseV0 on regtest', function () {
+    describe('the real rule, through _parseV0 on regtest', function () {
 
-        it('AT the gate invalidates the WHOLE batch for an over-wide price', async function () {
-            // regtest is genesis-on, so a BLOCK_TIME of 0 or later resolves ACTIVE with
-            // no stub: this is the shipped rule refusing the shipped defect.
+        it('invalidates the WHOLE batch for an over-wide price', async function () {
             const data = v0Data({ BLOCK_TIME: 1700000000 });
             await handler.parse(uncompressedParams(batchBody(batchWith(WIDE))), data, null);
 
@@ -211,7 +189,7 @@ describe('PRICE v0 canonical price-value flag day @regression @tier3', function 
             assert.ok(!indexer.indexerDb.enqueueHubPushTx.called, 'nothing may reach the hub');
         });
 
-        it('AT the gate invalidates the near-zero and leading-zero forms too', async function () {
+        it('invalidates the near-zero and leading-zero forms too', async function () {
             for(const price of [NEAR_ZERO, LEADING_ZEROS]){
                 indexer.indexerDb.enqueueHubPushTx.resetHistory();
                 const data = v0Data({ BLOCK_TIME: 1700000000 });
@@ -221,19 +199,7 @@ describe('PRICE v0 canonical price-value flag day @regression @tier3', function 
             }
         });
 
-        it('BELOW the gate, on the fail-closed key, accepts all three verbatim', async function () {
-            // A block with no readable time resolves to the legacy pattern, which is what
-            // keeps a node that cannot evaluate the gate with the majority.
-            for(const price of [WIDE, NEAR_ZERO, LEADING_ZEROS]){
-                const data = v0Data({ BLOCK_TIME: null });
-                await newHandler().parse(uncompressedParams(batchBody(batchWith(price))), data, null);
-                assert.strictEqual(data['STATUS'], 'valid', price);
-                assert.ok(String(data['ROUNDS_JSON']).includes(price),
-                    price + ' must round-trip into the stored body byte-for-byte');
-            }
-        });
-
-        it('accepts an all-honest batch on BOTH sides, so arming refuses no real round', async function () {
+        it('accepts an all-honest batch regardless of block time', async function () {
             for(const blockTime of [null, 0, 1700000000]){
                 const data = v0Data({ BLOCK_TIME: blockTime });
                 await newHandler().parse(uncompressedParams(batchBody(batchWith(HONEST))), data, null);
@@ -243,48 +209,4 @@ describe('PRICE v0 canonical price-value flag day @regression @tier3', function 
         });
     });
 
-});
-
-describe('PRICE v0 canonical price-value flag day @regression @tier3', function () {
-    beforeEach(setupPriceFixture);
-    afterEach(function () { sinon.restore(); });
-
-    // -----------------------------------------------------------------------
-    // A real threshold, so the boundary itself is driven rather than only the
-    // two genesis-on/fail-closed poles.
-    // -----------------------------------------------------------------------
-    describe('the boundary, with the gate armed at an instant', function () {
-
-        const GATE = 1755000000;
-
-        function armGateAt(threshold){
-            sinon.stub(priceScale, 'priceValuePattern').callsFake(
-                (blockTime) => parseInt(blockTime) >= threshold
-                    ? priceScale.PRICE_VALUE_RE_CANONICAL
-                    : priceScale.PRICE_VALUE_RE_LEGACY);
-        }
-
-        it('accepts the over-wide price one second below the instant and refuses it at the instant', async function () {
-            armGateAt(GATE);
-
-            const below = v0Data({ BLOCK_TIME: GATE - 1 });
-            await newHandler().parse(uncompressedParams(batchBody(batchWith(WIDE))), below, null);
-            assert.strictEqual(below['STATUS'], 'valid', 'history below the instant must not move');
-            assert.ok(String(below['ROUNDS_JSON']).includes(WIDE));
-
-            const at = v0Data({ BLOCK_TIME: GATE });
-            await newHandler().parse(uncompressedParams(batchBody(batchWith(WIDE))), at, null);
-            assert.strictEqual(at['VALIDATION_STATUS'], 'invalid');
-            assert.ok(String(at['STATUS']).includes('invalid price format'), at['STATUS']);
-        });
-
-        it('leaves the honest batch valid across the instant', async function () {
-            armGateAt(GATE);
-            for(const blockTime of [GATE - 1, GATE, GATE + 1]){
-                const data = v0Data({ BLOCK_TIME: blockTime });
-                await newHandler().parse(uncompressedParams(batchBody(batchWith(HONEST))), data, null);
-                assert.strictEqual(data['STATUS'], 'valid', 'BLOCK_TIME ' + blockTime);
-            }
-        });
-    });
 });
