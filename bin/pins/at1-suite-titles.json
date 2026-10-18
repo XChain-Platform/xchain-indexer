@@ -635,6 +635,12 @@
       "drives the opening passes against a recording context records only the genesis and delegation entries for an empty block",
       "drives the opening passes against a recording context records the exact call order for a three-transaction block"
     ],
+    "0b14a26bf2d65678": [
+      "Mode B create requires an effective oracle price @regression @tier2 an ownership create against a priced oracle opens and owes no fee output",
+      "Mode B create requires an effective oracle price @regression @tier2 covers a zero-escrow balance create too, not just ownership",
+      "Mode B create requires an effective oracle price @regression @tier2 leaves Mode A alone: no oracle named, no lookup attempted",
+      "Mode B create requires an effective oracle price @regression @tier2 rejects an ownership create naming an oracle with no effective price"
+    ],
     "0b3279bc0c8312d7": [
       "HubClient constructor defaults the config endpoint to the feed endpoint when unset",
       "HubClient constructor falls back to env vars when constructor args missing",
@@ -18181,7 +18187,7 @@
   "scripts": {
     "test": {
       "fileCount": 1441,
-      "titleCount": 14069,
+      "titleCount": 14068,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18597,7 +18603,7 @@
         "test/unit/activations/attest_relay_fee_activation.test.js": "71fab19d4d4b4dfb",
         "test/unit/activations/capability_min_stake_history.test.js": "a1bc8adce48d1864",
         "test/unit/activations/cross_chain_remote_token_gate.test.js": "d67fd006b4bcd8ff",
-        "test/unit/activations/dispenser_oracle_price_activation.test.js": "bbf4d90405bf6e71",
+        "test/unit/activations/dispenser_oracle_price_activation.test.js": "0b14a26bf2d65678",
         "test/unit/activations/dispenser_settlement_price_activation.test.js": "91fb11e60f21efba",
         "test/unit/activations/list/empty_allow_list_denies_activation.test.js": "97183ecc8d1ea3cb",
         "test/unit/activations/list/empty_allow_list_unlisted_order.test.js": "91a6fa301e9ddf29",
