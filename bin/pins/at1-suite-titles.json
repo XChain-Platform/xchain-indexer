@@ -5227,6 +5227,16 @@
       "VOTE tally invariants (delegation precedence + quadratic/dust floor) @regression @tier1 quadratic weighting / dust-floor participation gate a ballot below the min_vote_balance dust floor still counts weight but not toward min_voters participation",
       "VOTE tally invariants (delegation precedence + quadratic/dust floor) @regression @tier1 quadratic weighting / dust-floor participation gate quadratic mode weights every counted ballot by sqrt(close balance), not the raw balance"
     ],
+    "4c36acf6a4a72cbc": [
+      "Database.getActiveValidators() active-stake collation @regression @tier1 keeps bare validator ordering on mainnet",
+      "Database.getActiveValidators() active-stake collation @regression @tier1 keeps bare validator ordering on testnet",
+      "Database.getActiveValidators() active-stake collation @regression @tier1 keeps bare validator ordering when blockIndex is undefined",
+      "Database.getActiveValidators() active-stake collation @regression @tier1 pins binary validator ordering on regtest at the activation height",
+      "Database.getValidatorsByCapability() active-stake collation @regression @tier1 keeps bare validator ordering on mainnet",
+      "Database.getValidatorsByCapability() active-stake collation @regression @tier1 keeps bare validator ordering on testnet",
+      "Database.getValidatorsByCapability() active-stake collation @regression @tier1 keeps bare validator ordering when blockIndex is undefined",
+      "Database.getValidatorsByCapability() active-stake collation @regression @tier1 pins binary validator ordering on regtest at the activation height"
+    ],
     "4c3793a64504805c": [
       "XCHAIN price derivation: fill selection @regression computeWindowBounds() clamps the lower bound at 0 on a young chain rather than going negative",
       "XCHAIN price derivation: fill selection @regression computeWindowBounds() holds the confirmation buffer back from the reference height",
@@ -18059,8 +18069,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1417,
-      "titleCount": 13994,
+      "fileCount": 1418,
+      "titleCount": 14002,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18872,6 +18882,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_collation.test.js": "4c36acf6a4a72cbc",
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
@@ -19847,8 +19858,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1070,
-      "titleCount": 11045,
+      "fileCount": 1071,
+      "titleCount": 11053,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20473,6 +20484,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_collation.test.js": "4c36acf6a4a72cbc",
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
@@ -20923,8 +20935,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 510,
-      "titleCount": 5633,
+      "fileCount": 511,
+      "titleCount": 5641,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21139,6 +21151,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_collation.test.js": "4c36acf6a4a72cbc",
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
@@ -21439,8 +21452,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1070,
-      "titleCount": 11045,
+      "fileCount": 1071,
+      "titleCount": 11053,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22065,6 +22078,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_collation.test.js": "4c36acf6a4a72cbc",
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
