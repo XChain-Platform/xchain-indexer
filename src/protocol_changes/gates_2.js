@@ -89,15 +89,6 @@ addGate('list_owner_activation.LIST_OWNER_ACTIVATION', 'height', {
 });
 
 // oracle_preload_causality_activation
-// Per-chain activation, interpreted as the processing chain's OWN block_index
-// (the value db.getOracleDataForVM already caps on). Every network is
-// genesis-active; BTC is carved out below at any height.
-addGate('oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_ACTIVATION', 'height', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 contracts, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
-
 // The chain whose heights price_snapshots.reference_block records. Its height
 // cap is exact, so it never takes the time bound.
 addGate('oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN', 'constant', 'BTC');

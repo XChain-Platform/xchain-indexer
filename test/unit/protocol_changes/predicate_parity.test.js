@@ -57,8 +57,6 @@ const SKIPPED = {
 // The predicates measured to differ from activeAt(), with the first differing
 // input each, as found 2026-09-15 (the lane report of row 12 carries the same).
 const FINDINGS = {
-    'oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_ACTIVATION':
-        'the predicate answers false for the reference coin (BTC) at every height; the exclusion lives in the body, not the table',
     'price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION':
         'a floor, not a gate: isPriceBarrierRequired() answers true for an unknown network and any unevaluable input, where activeAt() answers false',
 };
@@ -110,15 +108,11 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
         for (const r of results) assert.ok(r.inputs >= 5, r.key + ' compared only ' + r.inputs + ' inputs');
         assert.strictEqual(results.filter((r) => r.verdict === 'EQUAL').length, TABLE.length - Object.keys(FINDINGS).length,
             'every tabled predicate but the findings compared EQUAL');
-        assert.ok(TABLE.length >= 36, 'too few predicates compared');
+        assert.ok(TABLE.length >= 35, 'too few predicates compared');
     });
 
-    it('the two findings differ for the recorded reason, not for a moved threshold', function () {
+    it('the finding differs for the recorded reason, not for a moved threshold', function () {
         const byKey = new Map(results.map((r) => [r.key, r]));
-        const preload = byKey.get('oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_ACTIVATION');
-        assert.strictEqual(preload.first.coin, 'BTC');
-        assert.strictEqual(preload.first.predicate, false);
-        assert.strictEqual(preload.first.activeAt, true);
         const floor = byKey.get('price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION');
         assert.strictEqual(floor.first.network, 'devnet');
         assert.strictEqual(floor.first.predicate, true);
