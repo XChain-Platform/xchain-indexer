@@ -117,10 +117,8 @@ async function reassembleAtHead(handler, data, error, format){
     }
 }
 
-async function chunkParentStatusAdmitted(handler, data, parent){
-    if(!gateRegistry.activeAt(
-        CHUNK_PARENT_STATUS_GATE, handler.config['NETWORK'], null,
-        Number(data['BLOCK_INDEX']), null)) return true;
+async function chunkParentStatusAdmitted(handler, data, parent, gateActive){
+    if(!gateActive) return true;
 
     let status = await handler.indexerDb.getStatusString(parent.status_id);
     if(status === 'valid') return true;
@@ -137,8 +135,11 @@ async function chunkParentStatusAdmitted(handler, data, parent){
 // count, so a stray out-of-range orphan can neither pad an incomplete set to
 // length nor block a complete one.
 async function reassembleAtChunk(handler, data, parent, scope, error){
+    let journal = gateRegistry.activeAt(
+        CHUNK_PARENT_STATUS_GATE, handler.config['NETWORK'], null,
+        Number(data['BLOCK_INDEX']), null);
     if(!error && parent && (data['STATUS'] === 'valid' || data['STATUS'] === 'unverified') &&
-       await chunkParentStatusAdmitted(handler, data, parent)){
+       await chunkParentStatusAdmitted(handler, data, parent, journal)){
         let chunks = await handler.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
         let ordered = aaq.archiveChunkCoverage(chunks, Number(data['TOTAL_CHUNKS']));
         if(ordered){
@@ -159,7 +160,7 @@ async function reassembleAtChunk(handler, data, parent, scope, error){
                         block_index:     data['BLOCK_INDEX']
                     },
                     actionIndex: Number(parent.action_index)
-                }, sectionScoped);
+                }, sectionScoped, journal);
             } else if(parent.match_count != null &&
                       gateRegistry.activeAt(
                           'archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION',
@@ -179,7 +180,7 @@ async function reassembleAtChunk(handler, data, parent, scope, error){
                         block_index:     data['BLOCK_INDEX']
                     },
                     actionIndex: Number(parent.action_index)
-                }, sectionScoped);
+                }, sectionScoped, journal);
             }
         }
     }
