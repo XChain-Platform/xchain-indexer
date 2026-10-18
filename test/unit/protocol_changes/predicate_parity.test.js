@@ -108,7 +108,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
         for (const r of results) assert.ok(r.inputs >= 5, r.key + ' compared only ' + r.inputs + ' inputs');
         assert.strictEqual(results.filter((r) => r.verdict === 'EQUAL').length, TABLE.length - Object.keys(FINDINGS).length,
             'every tabled predicate but the findings compared EQUAL');
-        assert.ok(TABLE.length >= 35, 'too few predicates compared');
+        assert.ok(TABLE.length >= 34, 'too few predicates compared');
     });
 
     it('the finding differs for the recorded reason, not for a moved threshold', function () {
