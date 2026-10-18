@@ -24,14 +24,11 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../..
 
 const Send       = require('../../../../../../src/actions/send/index.js');
 const Destroy    = require('../../../../../../src/actions/destroy/index.js');
-const {
-    GATE_OFF_NETWORK, SOURCE, DEST, DEST2, makeActionsCtx,
-} = require('./helpers/consolidation_leg_amount_suite.js');
+const { SOURCE, DEST, DEST2, makeActionsCtx } = require('./helpers/consolidation_leg_amount_suite.js');
 
 let indexer, handler, rows;
 
-async function parse(params, opts = {}) {
-    if (opts.network) indexer.config['NETWORK'] = opts.network;
+async function parse(params) {
     const data = createBaseData({ ACTION: 'SEND', FORMAT: params[0] | 0, SOURCE });
     await handler.parse(params, data, null);
     return data['STATUS'];
@@ -58,21 +55,17 @@ function validSendConsolidationCases() {
 
     afterEach(function () { sinon.restore(); });
 
-    it('two well-formed legs to one destination still consolidate, gate on', async function () {
+    it('two well-formed legs to one destination still consolidate', async function () {
         const status = await parse(['1', 'TEST', '50', DEST, '30', DEST, '']);
         assert.strictEqual(status, 'valid');
         assert.strictEqual(rows.length, 1);
         assert.strictEqual(indexer.util.bcformat(rows[0].AMOUNT, 0), '80');
     });
 
-    it('record order follows first-occurrence order, gate on and gate off alike', async function () {
+    it('record order follows first-occurrence order', async function () {
         const params = ['1', 'TEST', '5', DEST, '7', DEST2, '9', DEST, ''];
         await parse(params);
-        const on = rows.map(r => r.DESTINATION);
-        rows = [];
-        await parse(params, { network: GATE_OFF_NETWORK });
-        assert.deepStrictEqual(on, rows.map(r => r.DESTINATION));
-        assert.deepStrictEqual(on, [DEST, DEST2]);
+        assert.deepStrictEqual(rows.map(r => r.DESTINATION), [DEST, DEST2]);
     });
 }
 
@@ -95,8 +88,7 @@ function destroyLegValidationCases() {
 
     afterEach(function () { sinon.restore(); });
 
-    async function parse(params, opts = {}) {
-        if (opts.network) indexer.config['NETWORK'] = opts.network;
+    async function parse(params) {
         const data = createBaseData({ ACTION: 'DESTROY', FORMAT: params[0] | 0, SOURCE });
         await handler.parse(params, data, null);
         return data['STATUS'];
@@ -109,14 +101,7 @@ function destroyLegValidationCases() {
         assert.deepStrictEqual(rows.map(r => r.STATUS), ['invalid: AMOUNT (format)', 'invalid: AMOUNT (format)']);
     });
 
-    it('control: below the threshold the same two legs still burn a valid 1', async function () {
-        const status = await parse(['1', 'TEST', '0.5', 'TEST', '0.5', ''], { network: GATE_OFF_NETWORK });
-        assert.strictEqual(status, 'valid');
-        assert.strictEqual(rows.length, 1);
-        assert.strictEqual(indexer.util.bcformat(rows[0].AMOUNT, 0), '1');
-    });
-
-    it('two well-formed legs of one tick still consolidate, gate on', async function () {
+    it('two well-formed legs of one tick still consolidate', async function () {
         const status = await parse(['1', 'TEST', '20', 'TEST', '30', '']);
         assert.strictEqual(status, 'valid');
         assert.strictEqual(rows.length, 1);

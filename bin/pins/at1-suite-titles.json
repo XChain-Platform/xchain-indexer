@@ -3106,6 +3106,11 @@
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 DESTROY with insufficient balance is marked invalid",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 sanity check passes: supply == credits - debits == balances after ISSUE+MINT+SEND"
     ],
+    "2f45ed223b43de9e": [
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND a single 0.5 leg of a 0-decimals token is rejected (the rule that was being laundered)",
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND an honest sibling leg still settles beside a rejected one",
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND two 0.5 legs to one destination are each rejected instead of settling as 1"
+    ],
     "2f5611f310786b32": [
       "Dispenser settlement idempotency (double-refund guard) @regression @tier1 a settled dispenser is never refunded twice DISPENSER_CLOSE pushes no escrow/credit pair when the dispenser already settled as \"cancelled\"",
       "Dispenser settlement idempotency (double-refund guard) @regression @tier1 a settled dispenser is never refunded twice DISPENSER_CLOSE pushes no escrow/credit pair when the dispenser already settled as \"empty\"",
@@ -11823,6 +11828,12 @@
       "capability snapshot proof binding @regression @tier1 refuses a verified non-member",
       "capability snapshot proof binding @regression @tier1 verifies a real member on testnet, mainnet, and regtest"
     ],
+    "ac0c64e25ececd16": [
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 DESTROY two 0.5 legs of one tick are each rejected instead of merging to 1",
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 DESTROY two well-formed legs of one tick still consolidate",
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND record order follows first-occurrence order",
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND two well-formed legs to one destination still consolidate"
+    ],
     "ac937e0de4e25dbe": [
       "Indexer cross-node determinism baseline @regression @tier1 every block produced a ledger + actions consensus hash",
       "Indexer cross-node determinism baseline @regression @tier1 hash chain matches the committed baseline (no consensus drift)",
@@ -18193,7 +18204,7 @@
   "scripts": {
     "test": {
       "fileCount": 1439,
-      "titleCount": 14085,
+      "titleCount": 14082,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18531,8 +18542,8 @@
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "d5d2a5097677f9b1",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "0ab9e04fb9d1607d",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "586a3a620cef40a6",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "ac0c64e25ececd16",
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
