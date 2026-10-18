@@ -38,7 +38,7 @@ const EXPECTED = [
     'getpendingcrosschaincalls', 'getcrosschaincallresult',
     'getpricebatches', 'getattestbatches', 'getactionconfirmations', 'getanchoraction', 'getrollcallsigners',
     'getanchorconfirmations', 'getarchiveanchor', 'getreorghistory', 'getstakesourcebypubkey',
-    'getrollcalls', 'getrollcallabsences'
+    'getrollcalls', 'getrollcallabsences', 'getcapabilitystakeproof'
 ];
 
 function ctx(overrides = {}) {

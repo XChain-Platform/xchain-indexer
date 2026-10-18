@@ -26,7 +26,24 @@ const gatesFilter  = require('../../actions/attest/gates/rollcall_gates_filter.j
 const { getLogger } = require('../../observability/index.js');
 
 function buildCapabilitiesRpc(ctx){
-    return Object.assign({}, capabilityValidatorsRpc(ctx), fullNodeVerifiersRpc(ctx), stakeWeightsByCapabilityRpc(ctx));
+    return Object.assign({}, capabilityValidatorsRpc(ctx), fullNodeVerifiersRpc(ctx),
+        stakeWeightsByCapabilityRpc(ctx), capabilityStakeProofRpc(ctx));
+}
+
+function capabilityStakeProofRpc({ indexer }){
+    return {
+        async getcapabilitystakeproof({capability, block_index, pubkeys}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let db = indexer.indexerDb.apiView();
+            try {
+                return await db.getCapabilityStakeProof(capability, block_index, pubkeys);
+            } catch (err) {
+                getLogger().error('getcapabilitystakeproof error:', err);
+                return { error: 'failed to build capability stake proof' };
+            }
+        },
+    };
 }
 
 // Return the validator-set snapshot for a capability at a block boundary.
