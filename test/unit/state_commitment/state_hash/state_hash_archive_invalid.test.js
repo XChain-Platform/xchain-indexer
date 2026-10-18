@@ -14,15 +14,12 @@
  * anchor_actions rows in a real SQL engine.
  *
  * The class hashes invalid_archive stamps on archive-head parent rows, scoped to
- * the block the COMPLETING v2 chunk landed in. Two independent flag days gate it,
- * and this suite covers both:
+ * the block the COMPLETING v2 chunk landed in.
  *
  *   VERSION SET. It once selected `p.version = 1` only, so a stamp on a v6
  *   (publisher-bearing, ARCHIVE_REWARD flag-day) parent was invisible to the
- *   follower's recompute: a dropped upsert diverged with no halt. Widened to the
- *   shared ARCHIVE_HEAD_VERSIONS set behind ARCHIVE_INVALID_STATE_HASH
- *   (armed from genesis on every network: testnet by the 2026-08-11 ruling,
- *   mainnet by the 2026-09-09 one, where the class is empty either way).
+ *   follower's recompute: a dropped upsert diverged with no halt. It now always
+ *   uses the shared ARCHIVE_HEAD_VERSIONS set.
  *
  *   CHUNK-HEIGHT KEY. It scoped the completing chunk with `c.block_index`, a
  *   column NO v2 continuation row ever populates: `block_index` carries
@@ -53,7 +50,6 @@ const { makeAnchorDb } = require('../../../helpers/sqlAnchorDb');
 const {
     buildStateHashData,
     ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL,
-    ARCHIVE_INVALID_STATE_HASH_ACTIVATION, isArchiveInvalidStateHashActive,
     ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, isArchiveInvalidHeightKeyActive,
     ARCHIVE_CHUNK_HEIGHT_COL, ARCHIVE_CHUNK_HEIGHT_COL_LEGACY,
     POLL_FINALIZE_STATE_HASH_ACTIVATION, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
@@ -96,13 +92,6 @@ async function build(db){
     return { data, hash: util.getDataHash(data) };
 }
 
-// Temporarily set a regtest gate height around a body, always restoring it.
-async function withHeight(map, height, fn){
-    const prev = map.regtest;
-    map.regtest = height;
-    try { return await fn(); } finally { map.regtest = prev; }
-}
-
 function anchorSqlOf(captured){
     return captured.find(sql => sql.indexOf('anchor_actions p') !== -1);
 };
@@ -132,60 +121,6 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     it('shared constant: the chunk-height key is c.block_index_doge, the legacy key c.block_index', function(){
     assert.strictEqual(ARCHIVE_CHUNK_HEIGHT_COL, 'c.block_index_doge');
     assert.strictEqual(ARCHIVE_CHUNK_HEIGHT_COL_LEGACY, 'c.block_index');
-    });
-});
-
-describe('state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression', () => {
-    let pollPrev, tokenPrev, betPrev;
-    before(function(){
-    pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;  POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = 999999999;
-    tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
-    betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
-    abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
-    });
-    after(function(){
-    POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
-    TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
-    BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
-    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
-    });
-
-    it('version gate: regtest, every testnet chain AND every mainnet chain armed from genesis; fail-inert paths', function(){
-    assert.strictEqual(isArchiveInvalidStateHashActive(0, 'regtest'), true, 'regtest armed at 0');
-    for(const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet']){
-    const h = ARCHIVE_INVALID_STATE_HASH_ACTIVATION[key];
-    assert.ok(Number.isFinite(h), `${key} must carry a numeric height`);
-    }
-    // Testnet armed at genesis on ALL THREE chains by the 2026-08-11 operator ruling.
-    // Per-chain, because the widened class is keyed on the chain's own local height:
-    // one chain left inert would recompute a different preimage from its siblings.
-    for(const coin of ['BTC', 'LTC', 'DOGE']){
-    assert.strictEqual(ARCHIVE_INVALID_STATE_HASH_ACTIVATION[`${coin}:testnet`], 0,
-    `${coin}:testnet must be armed at genesis`);
-    assert.strictEqual(isArchiveInvalidStateHashActive(0, 'testnet', coin), true,
-    `${coin}:testnet active at block 0`);
-    // Still fails closed on an armed key: NaN must never read as ">= 0".
-    assert.strictEqual(isArchiveInvalidStateHashActive('not-a-number', 'testnet', coin), false);
-    }
-    // Mainnet armed at genesis by the 2026-09-09 ruling. Mainnet holds 0 archive chunks
-    // (measured 2026-09-09), so the widened predicate and the legacy v1-only one select
-    // the same empty class and arming from genesis leaves the deployed preimage alone.
-    // The from-genesis replay witness is the proof; the same NaN/unknown-network
-    // fail-inert paths must survive the arming.
-    for(const coin of ['BTC', 'LTC', 'DOGE']){
-    assert.strictEqual(ARCHIVE_INVALID_STATE_HASH_ACTIVATION[`${coin}:mainnet`], 0,
-    `${coin}:mainnet must be armed at genesis`);
-    assert.strictEqual(isArchiveInvalidStateHashActive(0, 'mainnet', coin), true,
-    `${coin}:mainnet active at block 0`);
-    assert.strictEqual(isArchiveInvalidStateHashActive(1, 'mainnet', coin), true,
-    `${coin}:mainnet stays on above genesis`);
-    assert.strictEqual(isArchiveInvalidStateHashActive('not-a-number', 'mainnet', coin), false,
-    `${coin}:mainnet must still fail closed on an unparseable height`);
-    }
-    assert.strictEqual(isArchiveInvalidStateHashActive(999999999, 'mainnet'), false, 'coin-less mainnet lookup stays inert');
-    assert.strictEqual(isArchiveInvalidStateHashActive(7, 'nonexistent', 'BTC'), false, 'unknown network -> off (safe)');
-    assert.strictEqual(isArchiveInvalidStateHashActive(7, null, 'BTC'), false);
-    assert.strictEqual(isArchiveInvalidStateHashActive('not-a-number', 'regtest'), false);
     });
 });
 
@@ -271,34 +206,17 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     } finally { db.close(); }
     });
 
-    it('below the version threshold: the class keeps the legacy v1-only predicate (preimage byte-identical pre-flag)', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 999999999, async () => {
-    const captured = [];
-    const db = makeAnchorDb(captured);
-    try {
-    const { data } = await build(db);
-    const sql = anchorSqlOf(captured);
-    assert.ok(sql, 'anchor_invalid class query must always run');
-    assert.ok(/p\.version = 1 /.test(sql), 'below the flag-day the predicate stays p.version = 1');
-    assert.ok(sql.indexOf(ARCHIVE_HEAD_VERSIONS_SQL) === -1, 'the widened set must NOT leak below the flag-day');
-    assert.deepStrictEqual(Object.keys(data), PREFEATURE_KEYS, 'key set unchanged (class always present)');
-    } finally { db.close(); }
-    });
-    });
-
-    it('at/after the version threshold: the class selects the shared archive-head set, key set unchanged', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
+    it('always selects the shared archive-head set, key set unchanged', async function(){
     const captured = [];
     const db = makeAnchorDb(captured);
     try {
     const { data } = await build(db);
     const sql = anchorSqlOf(captured);
     assert.ok(sql.indexOf('p.version ' + ARCHIVE_HEAD_VERSIONS_SQL) !== -1,
-    'the active predicate must be spliced from ARCHIVE_HEAD_VERSIONS, or an invalid_archive stamp on a future archive head stays invisible to the integrity hash');
-    assert.ok(!/p\.version = 1 /.test(sql), 'the hard-coded v1-only predicate must be gone when active');
+    'the predicate must be spliced from ARCHIVE_HEAD_VERSIONS, or an invalid_archive stamp on a future archive head stays invisible to the integrity hash');
+    assert.ok(!/p\.version = 1 /.test(sql), 'the hard-coded v1-only predicate must be gone');
     assert.deepStrictEqual(Object.keys(data), PREFEATURE_KEYS,
     'widening changes row selection only, never the preimage key set');
     } finally { db.close(); }
-    });
     });
 });

@@ -82,19 +82,6 @@ function checkpointSectionPredicate(alias){
     return alias + ".chain IS NOT NULL";
 }
 
-const ARCHIVE_INVALID_STATE_HASH_ACTIVATION = copy('stateHash.ARCHIVE_INVALID_STATE_HASH_ACTIVATION');
-
-// Whether the anchor_invalid class covers the full archive-head version set at
-// `blockIndex` on `network` for `coin`. Below the threshold / unknown network ->
-// off (safe; the class keeps its legacy v1-only selection, preimage unchanged).
-function isArchiveInvalidStateHashActive(blockIndex, network, coin){
-    let b = parseInt(blockIndex);
-    if(!Number.isFinite(b)) return false;
-    let threshold = _activationThreshold(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, network, coin);
-    if(threshold === undefined) return false;
-    return b >= threshold;
-}
-
 const ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION = copy('stateHash.ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION');
 
 const ARCHIVE_CHUNK_HEIGHT_COL = copy('stateHash.ARCHIVE_CHUNK_HEIGHT_COL');
@@ -130,7 +117,6 @@ module.exports = { STATE_HASH_VERSION,
                    BET_STATUS_STATE_HASH_ACTIVATION, isBetStatusStateHashActive,
                    ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL,
                    archiveHeadPredicate, checkpointSectionPredicate,
-                   ARCHIVE_INVALID_STATE_HASH_ACTIVATION, isArchiveInvalidStateHashActive,
                    ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, isArchiveInvalidHeightKeyActive,
                    ARCHIVE_CHUNK_HEIGHT_COL, ARCHIVE_CHUNK_HEIGHT_COL_LEGACY,
                    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION, isAttestBatchHeadStateHashActive };

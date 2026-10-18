@@ -554,6 +554,13 @@
       "LIST_TICK_COIN consumers @regression @consensus ISSUE coin-qualified root reservation leaves the historical colon ticker verdict unchanged below the gate",
       "LIST_TICK_COIN consumers @regression @consensus ISSUE coin-qualified root reservation refuses live and future coin roots without interning their ticker names"
     ],
+    "0a29eea0cdad8aed": [
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression always selects the shared archive-head set, key set unchanged",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression height-key gate: regtest and mainnet armed at genesis, testnet at real future flag days; fail-inert paths",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: ARCHIVE_HEAD_VERSIONS is [1] and renders IN (1)",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: the chunk-height key is c.block_index_doge, the legacy key c.block_index",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression the schema premise, checked against the real DDL: a v2 chunk row carries NULL block_index and a real block_index_doge"
+    ],
     "0a2fc0a50228f0e1": [
       "capability snapshot proof pinned set parser accepts a one-entry set",
       "capability snapshot proof pinned set parser accepts two sources and an uppercase public key",
@@ -5184,11 +5191,6 @@
       "Utility.validateOracleFee() - @regression @tier1 zero fee is the common case requires no output when FEE is absent entirely",
       "Utility.validateOracleFee() - @regression @tier1 zero fee is the common case requires no output when the oracle publishes FEE=0"
     ],
-    "4db50e18ffcab3aa": [
-      "anchor fold row predicates builds archive-head and checkpoint-section predicates for any alias",
-      "anchor fold row predicates limits activated class-6 rows to the configured archive-head versions",
-      "anchor fold row predicates uses the archive-head predicate only in the activated class-6 branch"
-    ],
     "4dc6ca50454deae6": [
       "XCALL action_format invariant (review item 2748) deadline-expiry mint (v2) carries the declared FORMAT 2, satisfying the invariant",
       "XCALL action_format invariant (review item 2748) mirror result-delivery mint carries no FORMAT (or one XCALL declares)",
@@ -8531,6 +8533,11 @@
       "SQL literal scanner ignores non-id orders and id qualified by a non-passed table",
       "SQL literal scanner joins template quasis with one placeholder per expression and retains the line",
       "SQL literal scanner throws a parse error that names the source file"
+    ],
+    "7da9f843f0c0949f": [
+      "anchor fold row predicates builds archive-head and checkpoint-section predicates for any alias",
+      "anchor fold row predicates limits class-6 rows to the configured archive-head versions",
+      "anchor fold row predicates uses the archive-head predicate in class 6"
     ],
     "7dcecc08d3d94927": [
       "anchor-reward derive set is INVARIANT under the barrier change @regression @tier1 derives the identical set, at the identical height, armed or inert",
@@ -18193,7 +18200,7 @@
   "scripts": {
     "test": {
       "fileCount": 1439,
-      "titleCount": 14085,
+      "titleCount": 14083,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18925,7 +18932,7 @@
         "test/unit/consensus/snapshot_checkpoint/canonical.test.js": "299c4ed3013e8a10",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
         "test/unit/consensus/stale_twin_module_refs.test.js": "25c3d82b177fdf7c",
-        "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "4db50e18ffcab3aa",
+        "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "7da9f843f0c0949f",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -19573,7 +19580,7 @@
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
         "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
-        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
+        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "0a29eea0cdad8aed",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/archive_match_count_class.test.js": "8a8d0afa6dccfafa",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
