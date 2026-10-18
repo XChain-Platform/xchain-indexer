@@ -309,3 +309,56 @@ describe('hub rate-limit handling on the price-push rails', function(){
         });
     });
 });
+
+// A hold taken straight from a header had no ceiling: one oversized Retry-After
+// or a misread epoch parked every push type until the process restarted.
+describe('hub rate-limit handling on the price-push rails', function(){
+    describe('HubPushQueue hold ceiling', function(){
+        afterEach(function(){ sinon.restore(); });
+
+        it('caps a day-long advertised wait at the longest per-row backoff and says so', async function(){
+            let warn = sinon.stub(console, 'warn');
+            sinon.useFakeTimers({ now: 2_000_000, toFake: ['Date'] });
+            let { q } = makeQueue(sinon.stub().rejects(throttleError(86_400_000)), batchRows(1));
+            await q.drain();
+            assert.strictEqual(q._throttledUntilMs, 2_000_000 + q.maxBackoffMs);
+            assert.ok(warn.args.some((a) => /clamp/i.test(String(a[0]))), 'the clamp is logged');
+        });
+
+        it('caps a decades-long wait from an epoch read as a delta', async function(){
+            sinon.stub(console, 'warn');
+            sinon.useFakeTimers({ now: 3_000_000, toFake: ['Date'] });
+            let { q } = makeQueue(sinon.stub().rejects(throttleError(1.76e12)), batchRows(1));
+            await q.drain();
+            assert.strictEqual(q._throttledUntilMs, 3_000_000 + q.maxBackoffMs);
+        });
+    });
+});
+
+// Many gateways send X-RateLimit-Reset as an absolute Unix time, not a delta.
+describe('hub rate-limit handling on the price-push rails', function(){
+    describe('readRateLimitHeaders reset forms', function(){
+        const NOW_SEC = 1_760_000_000;
+        beforeEach(function(){ sinon.useFakeTimers({ now: NOW_SEC * 1000, toFake: ['Date'] }); });
+        afterEach(function(){ sinon.restore(); });
+
+        it('reads an epoch reset as the time left until it', function(){
+            let rl = HubClient.readRateLimitHeaders({ 'x-ratelimit-reset': String(NOW_SEC + 30) });
+            assert.strictEqual(rl.retryAfterMs, 30000);
+        });
+
+        it('keeps a small reset value as delta seconds', function(){
+            assert.strictEqual(HubClient.readRateLimitHeaders({ 'ratelimit-reset': '30' }).retryAfterMs, 30000);
+        });
+
+        it('treats an epoch reset already in the past as no advertised wait', function(){
+            let rl = HubClient.readRateLimitHeaders({ 'x-ratelimit-reset': String(NOW_SEC - 100) });
+            assert.strictEqual(rl.retryAfterMs, null);
+        });
+
+        it('still prefers Retry-After over any reset header', function(){
+            let rl = HubClient.readRateLimitHeaders({ 'retry-after': '45', 'x-ratelimit-reset': String(NOW_SEC + 999) });
+            assert.strictEqual(rl.retryAfterMs, 45000);
+        });
+    });
+});

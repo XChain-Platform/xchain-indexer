@@ -4814,6 +4814,26 @@
       "protocolAddressRoles (consensus hash canonicalization) exports the expected role-field set",
       "protocolAddressRoles (consensus hash canonicalization) maps no address to two different roles (no collision)"
     ],
+    "443daccf4ca4d682": [
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub defaults the wait to a full window when the hub advertises none",
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub leaves an ordinary 200 JSON-RPC round trip exactly as it was",
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub names the limit from the headers when a legacy hub sends a plain-text 429",
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub names the status on any other non-2xx with a non-JSON body",
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub still reports a malformed 200 body as an invalid JSON response",
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub turns the hub's JSON-RPC 429 into a typed error naming the limit and the wait",
+      "hub rate-limit handling on the price-push rails HubPushQueue hold ceiling caps a day-long advertised wait at the longest per-row backoff and says so",
+      "hub rate-limit handling on the price-push rails HubPushQueue hold ceiling caps a decades-long wait from an epoch read as a delta",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub charges NO attempt for a throttled row: the hub never judged the payload",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub does not walk a capped price_round row toward failed on a throttle",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub falls back to a one-minute hold when the throttle advertises no wait",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub holds the whole queue for the advertised Retry-After, then drains again",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub still records the attempt for an ordinary (non-throttle) failure",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub stops the batch at the first 429 instead of pushing the other 49 rows into it",
+      "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms keeps a small reset value as delta seconds",
+      "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms reads an epoch reset as the time left until it",
+      "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms still prefers Retry-After over any reset header",
+      "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms treats an epoch reset already in the past as no advertised wait"
+    ],
     "4467a7e672e83aee": [
       "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 10 sub-commands at weight 25 exactly fill the budget",
       "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 11 sub-commands at weight 25 exceed it, as one record",
@@ -5338,20 +5358,6 @@
       "getlatestblock hub_push_delivered @regression @tier1 an undelivered push at 100 holds delivery at 99 even with delivered pushes at 101",
       "getlatestblock hub_push_delivered @regression @tier1 an undelivered push whose action is gone reports null",
       "getlatestblock hub_push_delivered @regression @tier1 an unresolvable block time reports null"
-    ],
-    "4bb859f5accff2bb": [
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub defaults the wait to a full window when the hub advertises none",
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub leaves an ordinary 200 JSON-RPC round trip exactly as it was",
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub names the limit from the headers when a legacy hub sends a plain-text 429",
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub names the status on any other non-2xx with a non-JSON body",
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub still reports a malformed 200 body as an invalid JSON response",
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub turns the hub's JSON-RPC 429 into a typed error naming the limit and the wait",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub charges NO attempt for a throttled row: the hub never judged the payload",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub does not walk a capped price_round row toward failed on a throttle",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub falls back to a one-minute hold when the throttle advertises no wait",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub holds the whole queue for the advertised Retry-After, then drains again",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub still records the attempt for an ordinary (non-throttle) failure",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub stops the batch at the first 429 instead of pushing the other 49 rows into it"
     ],
     "4c1dae4cf2168305": [
       "Unstake handler @regression @tier2 v0: partial unstake AMOUNT equal to the full balance is state-identical to the absent form",
@@ -18484,7 +18490,7 @@
   "scripts": {
     "test": {
       "fileCount": 1428,
-      "titleCount": 14034,
+      "titleCount": 14040,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19458,7 +19464,7 @@
         "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js": "e8f38215ae3e6079",
         "test/unit/hub/client/hub_client_response_settle.test.js": "e79ac0050019ab3e",
         "test/unit/hub/client/hub_client_terminal_rpc_error.test.js": "60e8dc05507d400b",
-        "test/unit/hub/client/hub_rate_limit.test.js": "4bb859f5accff2bb",
+        "test/unit/hub/client/hub_rate_limit.test.js": "443daccf4ca4d682",
         "test/unit/hub/client/hub_selector.test.js": "5eda3afa01cb5509",
         "test/unit/hub/hash_coverage.test.js": "74513e474bce99e9",
         "test/unit/hub/hash_coverage.test/attest_batch_link_excluded.test.js": "27767578c21e1894",
