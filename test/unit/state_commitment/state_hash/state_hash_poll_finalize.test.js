@@ -34,12 +34,12 @@ const assert  = require('assert');
 const Utility = require('../../../../src/utility');
 const {
     buildStateHashData, isPollFinalizeStateHashActive, POLL_FINALIZE_STATE_HASH_ACTIVATION,
-    TOKEN_SUPPLY_STATE_HASH_ACTIVATION, INDEX_MAP_STATE_HASH_ACTIVATION,
+    TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
     BET_STATUS_STATE_HASH_ACTIVATION, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
 } = require('../../../../src/consensus/state_hash');
 
 const util = new Utility();
-const PREFEATURE_KEYS = ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid', 'block_index', 'state_hash_version'];
+const PREFEATURE_KEYS = ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid', 'index_addresses_new', 'index_tickers_new', 'block_index', 'state_hash_version'];
 
 // db whose doQuery returns canned result-sets in CALL ORDER, getStatusId fixed.
 function dbFor(results, completedId){
@@ -48,11 +48,11 @@ function dbFor(results, completedId){
 }
 
 // With activationDelay=null (skips the 4 deactivation queries), completedId=null
-// (skips the credits query), and the index-map + token_supply regtest gates
-// disarmed for this suite (see before/after), the
+// (skips the credits query), and the token_supply regtest gate disarmed for this
+// suite (see before/after), the
 // doQuery call order is: slashes x4, request_status x2, cooldown x2,
-// anchor_invalid x1. The poll_finalize slot is appended when its gate is active.
-function baseResults(){ return [[], [], [], [], [], [], [], [], []]; }
+// anchor_invalid x1, index-map x2. The poll_finalize slot is appended when active.
+function baseResults(){ return [[], [], [], [], [], [], [], [], [], [], []]; }
 
 async function build(results){
     const data = await buildStateHashData(dbFor(results || baseResults(), null), 7,
@@ -82,17 +82,14 @@ let abhPrev;
 
 describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', () => {
     let tokenPrev;
-    let indexPrev;
     let betPrev;
     before(function(){
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest; TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = 999999999;
-    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;   BET_STATUS_STATE_HASH_ACTIVATION.regtest   = 999999999;
     abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = tokenPrev;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest   = betPrev;
     ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
@@ -134,17 +131,14 @@ describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', ()
 
 describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', () => {
     let tokenPrev;
-    let indexPrev;
     let betPrev;
     before(function(){
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest; TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = 999999999;
-    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;   BET_STATUS_STATE_HASH_ACTIVATION.regtest   = 999999999;
     abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = tokenPrev;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest   = betPrev;
     ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
@@ -157,7 +151,7 @@ describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', ()
     const s = await build(source);
     assert.deepStrictEqual(Object.keys(s.data),
     ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid',
-    'poll_finalize', 'block_index', 'state_hash_version'],
+    'index_addresses_new', 'index_tickers_new', 'poll_finalize', 'block_index', 'state_hash_version'],
     'active preimage inserts poll_finalize before block_index');
     assert.strictEqual(s.data.poll_finalize[0].winning_option, 1);
 
@@ -180,10 +174,4 @@ describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', ()
     assert.deepStrictEqual(tokenMap, POLL_FINALIZE_STATE_HASH_ACTIVATION,
     'POLL_FINALIZE and TOKEN_SUPPLY activation maps drifted; they were armed as one decision and must flip together');
     });
-});;
-
-// Isolate this suite from the token_supply class (also armed on regtest):
-
-// its query slot would shift the canned call-order mock.
-
-// (index-map likewise: armed on regtest since 2026-07-16)
+});

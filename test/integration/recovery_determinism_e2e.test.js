@@ -53,7 +53,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert = require('assert');
 
-const { buildStateHashData, INDEX_MAP_STATE_HASH_ACTIVATION } = require('../../src/consensus/state_hash');
+const { buildStateHashData } = require('../../src/consensus/state_hash');
 const {
     util, CHAIN, STAKE_SOURCE, EARN_BLOCK, COLLECT_BLOCK,
     indexMapChecksum, rewardRows, useRecoveredNodes, teardownRecoveredNodes,
@@ -111,28 +111,18 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
     this.timeout(120000);
     const nodes = useRecoveredNodes();
 
-    // Armed check: with the index-map class ARMED in state_hash, the recovered node must produce a
+    // With the index-map class in every state_hash, the recovered node must produce a
     // per-block state_hash byte-identical to the from-genesis node (no false halt), and the
-    // class must actually be folded in (armed hash differs from the inert hash). This is the
-    // enforcement the advisory checksum is promoted to: a divergent id map would change
+    // class must actually be folded in. This is the enforcement the advisory checksum is promoted
+    // to: a divergent id map would change
     // state_hash and HALT the follower; an identical map (the recovery guarantee) does not.
     it('(4) P4 armed: per-block state_hash is identical A vs B, and the id map is enforced', async function () {
         const opts = (network) => ({ activationDelay: null, gasTick: 'XCHAIN', network });
-        const prev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;
-        INDEX_MAP_STATE_HASH_ACTIVATION.regtest = 0;   // arm for this assertion only
-        try {
-            for (const b of CHAIN) {
-                const armedA = util.getDataHash(await buildStateHashData(nodes.A,    b.block, opts('regtest')));
-                const armedB = util.getDataHash(await buildStateHashData(nodes.Bbtc, b.block, opts('regtest')));
-                assert.strictEqual(armedB, armedA,
-                    'block ' + b.block + ': recovered state_hash must match from-genesis (no false halt)');
-                // The class is genuinely active: arming changes the hash vs inert (id map is folded in).
-                const inertA = util.getDataHash(await buildStateHashData(nodes.A, b.block, opts('mainnet')));   // mainnet placeholder = inert
-                assert.notStrictEqual(armedA, inertA,
-                    'block ' + b.block + ': armed state_hash must fold in the id map (differ from inert)');
-            }
-        } finally {
-            INDEX_MAP_STATE_HASH_ACTIVATION.regtest = prev;
+        for (const b of CHAIN) {
+            const hashA = util.getDataHash(await buildStateHashData(nodes.A,    b.block, opts('regtest')));
+            const hashB = util.getDataHash(await buildStateHashData(nodes.Bbtc, b.block, opts('regtest')));
+            assert.strictEqual(hashB, hashA,
+                'block ' + b.block + ': recovered state_hash must match from-genesis (no false halt)');
         }
     });
 

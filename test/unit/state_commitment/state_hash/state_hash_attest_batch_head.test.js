@@ -30,7 +30,7 @@ const assert  = require('assert');
 const Utility = require('../../../../src/utility');
 const {
     buildStateHashData, isAttestBatchHeadStateHashActive, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
-    POLL_FINALIZE_STATE_HASH_ACTIVATION, INDEX_MAP_STATE_HASH_ACTIVATION,
+    POLL_FINALIZE_STATE_HASH_ACTIVATION,
     BET_STATUS_STATE_HASH_ACTIVATION, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
 } = require('../../../../src/consensus/state_hash');
 const G   = require('../../../../src/consensus/state_hash/gated_sections');
@@ -38,7 +38,7 @@ const abw = require('../../../../src/actions/attest/attest_batch_wire.js');
 const { ATTEST_BATCH_COMPLETION_STAMP } = require('../../../../src/actions/attest/constants.js');
 
 const util = new Utility();
-const PREFEATURE_KEYS = ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid', 'block_index', 'state_hash_version'];
+const PREFEATURE_KEYS = ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid', 'index_addresses_new', 'index_tickers_new', 'block_index', 'state_hash_version'];
 const STAMPED = 'invalid: ATTEST_BATCH (reassembly CRC mismatch)' + ATTEST_BATCH_COMPLETION_STAMP;
 
 function dbFor(results, calls){
@@ -50,8 +50,9 @@ function dbFor(results, calls){
 }
 
 // activationDelay null and a null completed id skip the deactivation and credits
-// queries: slashes x4, request_status x2, cooldown x2, anchor_invalid x1 = 9 slots.
-function baseResults(){ return [[], [], [], [], [], [], [], [], []]; }
+// queries: slashes x4, request_status x2, cooldown x2, anchor_invalid x1,
+// index-map x2 = 11 slots.
+function baseResults(){ return [[], [], [], [], [], [], [], [], [], [], []]; }
 
 async function build(results, calls){
     const data = await buildStateHashData(dbFor(results || baseResults(), calls), 7,
@@ -60,7 +61,7 @@ async function build(results, calls){
 }
 
 describe('state_hash attest_batch_head class @regression', function(){
-    const maps = { poll: POLL_FINALIZE_STATE_HASH_ACTIVATION, index: INDEX_MAP_STATE_HASH_ACTIVATION,
+    const maps = { poll: POLL_FINALIZE_STATE_HASH_ACTIVATION,
                    bet: BET_STATUS_STATE_HASH_ACTIVATION, token: TOKEN_SUPPLY_STATE_HASH_ACTIVATION };
     let prev;
     before(function(){
@@ -93,7 +94,7 @@ describe('state_hash attest_batch_head class @regression', function(){
             const calls = [];
             const { data } = await build(null, calls);
             assert.deepStrictEqual(Object.keys(data), PREFEATURE_KEYS);
-            assert.strictEqual(calls.length, 9);
+            assert.strictEqual(calls.length, 11);
         } finally { ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = prevH; }
     });
 
@@ -104,10 +105,10 @@ describe('state_hash attest_batch_head class @regression', function(){
         const s = await build(source, calls);
         assert.deepStrictEqual(Object.keys(s.data),
             ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid',
-             'attest_batch_head', 'block_index', 'state_hash_version']);
+             'index_addresses_new', 'index_tickers_new', 'attest_batch_head', 'block_index', 'state_hash_version']);
         assert.deepStrictEqual(s.data.attest_batch_head, [{ action_index: 100, status: STAMPED }]);
-        assert.strictEqual(calls.length, 10);
-        assert.deepStrictEqual(calls[9].args,
+        assert.strictEqual(calls.length, 12);
+        assert.deepStrictEqual(calls[11].args,
             ['%' + ATTEST_BATCH_COMPLETION_STAMP, abw.ATTEST_BATCH_HEAD_VERSION,
              abw.ATTEST_BATCH_CONTINUATION_VERSION, 7, abw.ATTEST_BATCH_CONTINUATION_VERSION, 7]);
         const st = await build(stale);

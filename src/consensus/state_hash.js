@@ -188,8 +188,7 @@ async function buildStateHashData(db, blockIndex, opts){
     let credits        = await M.collectCredits(db, B, gasTick, completedStatusId);
     let anchor_invalid = await collectAnchorInvalid(db, B, network, coin);
 
-    let indexMapActive     = A.isIndexMapStateHashActive(B, network);
-    let indexMap           = indexMapActive ? await G.collectIndexMapDelta(db, B) : null;
+    let indexMap           = await G.collectIndexMapDelta(db, B);
     let pollFinalizeActive = A.isPollFinalizeStateHashActive(B, network, coin);
     let poll_finalize      = pollFinalizeActive ? await G.collectPollFinalize(db, B) : null;
     let tokenSupplyActive  = A.isTokenSupplyStateHashActive(B, network, coin);
@@ -204,11 +203,9 @@ async function buildStateHashData(db, blockIndex, opts){
     // make NULL-backfill of historical blocks poison every successor). Gated keys
     // are inserted (in fixed order, before block_index) ONLY when active, so an
     // inert block serializes byte-identically to the pre-feature preimage.
-    let preimage = { deactivations, slashes, request_status, cooldown, credits, anchor_invalid };
-    if(indexMapActive){
-        preimage.index_addresses_new = indexMap.index_addresses_new;
-        preimage.index_tickers_new   = indexMap.index_tickers_new;
-    }
+    let preimage = { deactivations, slashes, request_status, cooldown, credits, anchor_invalid,
+                     index_addresses_new: indexMap.index_addresses_new,
+                     index_tickers_new: indexMap.index_tickers_new };
     if(pollFinalizeActive) preimage.poll_finalize = poll_finalize;
     if(tokenSupplyActive)  preimage.token_supply  = token_supply;
     if(betStatusActive){
@@ -224,8 +221,6 @@ async function buildStateHashData(db, blockIndex, opts){
 module.exports = { buildStateHashData, STATE_HASH_VERSION,
                    DEACTIVATION_TABLES: M.DEACTIVATION_TABLES, SLASH_SPECS: M.SLASH_SPECS,
                    REQUEST_STATUS_TABLES: M.REQUEST_STATUS_TABLES, COOLDOWN_TABLES: M.COOLDOWN_TABLES,
-                   INDEX_MAP_STATE_HASH_ACTIVATION: A.INDEX_MAP_STATE_HASH_ACTIVATION,
-                   isIndexMapStateHashActive: A.isIndexMapStateHashActive,
                    POLL_FINALIZE_STATE_HASH_ACTIVATION: A.POLL_FINALIZE_STATE_HASH_ACTIVATION,
                    isPollFinalizeStateHashActive: A.isPollFinalizeStateHashActive,
                    TOKEN_SUPPLY_STATE_HASH_ACTIVATION: A.TOKEN_SUPPLY_STATE_HASH_ACTIVATION,

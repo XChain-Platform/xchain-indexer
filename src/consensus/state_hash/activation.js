@@ -23,19 +23,6 @@ const { copy } = require('../gate_registry');
 
 const STATE_HASH_VERSION = copy('stateHash.STATE_HASH_VERSION');
 
-const INDEX_MAP_STATE_HASH_ACTIVATION = copy('stateHash.INDEX_MAP_STATE_HASH_ACTIVATION');
-
-// Whether the index-map class is folded into state_hash at `blockIndex` on `network`.
-// Below the threshold / unknown network -> off (safe; the class is omitted and the
-// preimage stays byte-identical to the pre-feature shape).
-function isIndexMapStateHashActive(blockIndex, network){
-    let b = parseInt(blockIndex);
-    if(!Number.isFinite(b)) return false;
-    let threshold = INDEX_MAP_STATE_HASH_ACTIVATION[network];
-    if(threshold === undefined) return false;
-    return b >= threshold;
-}
-
 const POLL_FINALIZE_STATE_HASH_ACTIVATION = copy('stateHash.POLL_FINALIZE_STATE_HASH_ACTIVATION');
 
 // Resolve a per-chain activation threshold: '<COIN>:<network>' key first, then
@@ -138,7 +125,6 @@ function isAttestBatchHeadStateHashActive(blockIndex, network, coin){
 }
 
 module.exports = { STATE_HASH_VERSION,
-                   INDEX_MAP_STATE_HASH_ACTIVATION, isIndexMapStateHashActive,
                    POLL_FINALIZE_STATE_HASH_ACTIVATION, isPollFinalizeStateHashActive,
                    TOKEN_SUPPLY_STATE_HASH_ACTIVATION, isTokenSupplyStateHashActive,
                    BET_STATUS_STATE_HASH_ACTIVATION, isBetStatusStateHashActive,

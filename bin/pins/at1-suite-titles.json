@@ -3839,6 +3839,10 @@
       "protocol_changes/vm_twin/host_call_bounds_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
       "protocol_changes/vm_twin/host_call_bounds_matches_vm: activation parity @regression @tier1 registers the time-table row in part 5, unarmed on mainnet, armed on testnet at its v0.24.0 heights, live on regtest"
     ],
+    "356a7eb78db84942": [
+      "state_hash index-map class (id-determinism P4) @regression armed: an IDENTICAL id map hashes the same (no false halt across the recovery boundary)",
+      "state_hash index-map class (id-determinism P4) @regression armed: the id map is folded in, and a divergent id->address pair HALTS (different hash)"
+    ],
     "359bcfb442706852": [
       "Adversarial ^<id> resolution: dangling / malformed references @adversarial @tier1 a FLOAT ^1.5 is non-canonical -> null (never coerced onto an integer FK)",
       "Adversarial ^<id> resolution: dangling / malformed references @adversarial @tier1 a NEGATIVE ^-1 is non-canonical -> null",
@@ -18170,7 +18174,7 @@
   "scripts": {
     "test": {
       "fileCount": 1434,
-      "titleCount": 14072,
+      "titleCount": 14069,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19551,7 +19555,7 @@
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
         "test/unit/state_commitment/state_hash/state_hash_bet_status.test.js": "e285cca529713787",
-        "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "93c91f292d24175d",
+        "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "356a7eb78db84942",
         "test/unit/state_commitment/state_hash/state_hash_poll_finalize.test.js": "e3ed0f90fd114dfc",
         "test/unit/state_commitment/state_hash/state_hash_token_supply.test.js": "de2588208d06b802",
         "test/unit/state_subtree_activation.test.js": "a2343508ab4cdd95",
