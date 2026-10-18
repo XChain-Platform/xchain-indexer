@@ -4809,26 +4809,6 @@
       "protocolAddressRoles (consensus hash canonicalization) exports the expected role-field set",
       "protocolAddressRoles (consensus hash canonicalization) maps no address to two different roles (no collision)"
     ],
-    "443daccf4ca4d682": [
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub defaults the wait to a full window when the hub advertises none",
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub leaves an ordinary 200 JSON-RPC round trip exactly as it was",
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub names the limit from the headers when a legacy hub sends a plain-text 429",
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub names the status on any other non-2xx with a non-JSON body",
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub still reports a malformed 200 body as an invalid JSON response",
-      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub turns the hub's JSON-RPC 429 into a typed error naming the limit and the wait",
-      "hub rate-limit handling on the price-push rails HubPushQueue hold ceiling caps a day-long advertised wait at the longest per-row backoff and says so",
-      "hub rate-limit handling on the price-push rails HubPushQueue hold ceiling caps a decades-long wait from an epoch read as a delta",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub charges NO attempt for a throttled row: the hub never judged the payload",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub does not walk a capped price_round row toward failed on a throttle",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub falls back to a one-minute hold when the throttle advertises no wait",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub holds the whole queue for the advertised Retry-After, then drains again",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub still records the attempt for an ordinary (non-throttle) failure",
-      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub stops the batch at the first 429 instead of pushing the other 49 rows into it",
-      "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms keeps a small reset value as delta seconds",
-      "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms reads an epoch reset as the time left until it",
-      "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms still prefers Retry-After over any reset header",
-      "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms treats an epoch reset already in the past as no advertised wait"
-    ],
     "4467a7e672e83aee": [
       "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 10 sub-commands at weight 25 exactly fill the budget",
       "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 11 sub-commands at weight 25 exceed it, as one record",
@@ -5353,6 +5333,20 @@
       "getlatestblock hub_push_delivered @regression @tier1 an undelivered push at 100 holds delivery at 99 even with delivered pushes at 101",
       "getlatestblock hub_push_delivered @regression @tier1 an undelivered push whose action is gone reports null",
       "getlatestblock hub_push_delivered @regression @tier1 an unresolvable block time reports null"
+    ],
+    "4bb859f5accff2bb": [
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub defaults the wait to a full window when the hub advertises none",
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub leaves an ordinary 200 JSON-RPC round trip exactly as it was",
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub names the limit from the headers when a legacy hub sends a plain-text 429",
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub names the status on any other non-2xx with a non-JSON body",
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub still reports a malformed 200 body as an invalid JSON response",
+      "hub rate-limit handling on the price-push rails HubClient._call against a throttling hub turns the hub's JSON-RPC 429 into a typed error naming the limit and the wait",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub charges NO attempt for a throttled row: the hub never judged the payload",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub does not walk a capped price_round row toward failed on a throttle",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub falls back to a one-minute hold when the throttle advertises no wait",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub holds the whole queue for the advertised Retry-After, then drains again",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub still records the attempt for an ordinary (non-throttle) failure",
+      "hub rate-limit handling on the price-push rails HubPushQueue under a throttling hub stops the batch at the first 429 instead of pushing the other 49 rows into it"
     ],
     "4c1dae4cf2168305": [
       "Unstake handler @regression @tier2 v0: partial unstake AMOUNT equal to the full balance is state-identical to the absent form",
@@ -11353,10 +11347,6 @@
       "AnchorRecovery (full-parse recovery) @regression @tier2 _quorumVerified verify-then-mark ordering (Pkg 13 twin parity) counts a qualified signer whose valid sig is ordered AFTER a garbage one",
       "AnchorRecovery (full-parse recovery) @regression @tier2 _quorumVerified verify-then-mark ordering (Pkg 13 twin parity) still counts a repeated valid signer ONCE (dedupe intact)"
     ],
-    "9f0a9ff75d332065": [
-      "bridge proof block fault classification @regression @tier1 defers a real bridge proof error under the one reason the health verdicts match",
-      "bridge proof block fault classification @regression @tier1 grades that deferred block a bridge proof wait, never a wedge, with no barrier hold"
-    ],
     "9f1e3a4773262edd": [
       "graceful shutdown closeServer resolves on a missing or closeless server rather than hanging the drain",
       "graceful shutdown closeServer resolves once, and drops idle keep-alive sockets that would hold close() open",
@@ -11487,6 +11477,14 @@
     ],
     "a148644af845b9ca": [
       "LIST owner activation @regression @tier1 arms mainnet and regtest at genesis while preserving the per-chain testnet heights"
+    ],
+    "a169b0a24d09bcdc": [
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on mainnet at 1700000000",
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on mainnet at 1900000000",
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on regtest at 1700000000",
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on regtest at 1900000000",
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on testnet at 1700000000",
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on testnet at 1900000000"
     ],
     "a1bc8adce48d1864": [
       "capability MIN_STAKE as-of-block reconstruction @regression @tier2 amount arithmetic (as-of-block weight restoration) adds full-precision decimal strings, never JS doubles",
@@ -18118,7 +18116,7 @@
   "scripts": {
     "test": {
       "fileCount": 1427,
-      "titleCount": 14034,
+      "titleCount": 14032,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18334,6 +18332,7 @@
         "test/unit/actions/market/dispenser.test/freshness_oracle_shape.test.js": "32667c285d881516",
         "test/unit/actions/market/dispenser.test/freshness_proven_use.test.js": "14b50ce921f14971",
         "test/unit/actions/market/dispenser.test/oracle_fee.test.js": "13bc3a94cecac346",
+        "test/unit/actions/market/dispenser.test/oracle_price_every_network.test.js": "a169b0a24d09bcdc",
         "test/unit/actions/market/dispenser.test/refill_guard.test.js": "0e534b2440f8d999",
         "test/unit/actions/market/dispenser.test/refill_token_policy.test.js": "1c7af3ff7c39a754",
         "test/unit/actions/market/dispenser_amount_positivity.test.js": "ecf9f101aa70270a",
@@ -19091,7 +19090,7 @@
         "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js": "e8f38215ae3e6079",
         "test/unit/hub/client/hub_client_response_settle.test.js": "e79ac0050019ab3e",
         "test/unit/hub/client/hub_client_terminal_rpc_error.test.js": "60e8dc05507d400b",
-        "test/unit/hub/client/hub_rate_limit.test.js": "443daccf4ca4d682",
+        "test/unit/hub/client/hub_rate_limit.test.js": "4bb859f5accff2bb",
         "test/unit/hub/client/hub_selector.test.js": "5eda3afa01cb5509",
         "test/unit/hub/hash_coverage.test.js": "74513e474bce99e9",
         "test/unit/hub/hash_coverage.test/attest_batch_link_excluded.test.js": "27767578c21e1894",
@@ -19526,7 +19525,6 @@
         "test/unit/xchain_indexer/abandon_block_rollback_failure.test.js": "e6d68acf0746746c",
         "test/unit/xchain_indexer/apply_pending_reorgs.test.js": "1c8358d37961f103",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
-        "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
         "test/unit/xchain_indexer/decoder_halt_gate.test.js": "bbd13f49af6aeed8",
         "test/unit/xchain_indexer/indexer_poll_heartbeat.test.js": "3654541f666286e0",
@@ -19921,8 +19919,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1080,
-      "titleCount": 11079,
+      "fileCount": 1079,
+      "titleCount": 11077,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20994,7 +20992,6 @@
         "test/unit/utility/utility.test/validation.test.js": "f16d88684a803df3",
         "test/unit/utility/utility_log_amount.test.js": "3863f168f47cce2b",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
-        "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
         "test/unit/xchain_indexer/decoder_halt_gate.test.js": "bbd13f49af6aeed8",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
@@ -21007,8 +21004,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 519,
-      "titleCount": 5671,
+      "fileCount": 518,
+      "titleCount": 5669,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21523,7 +21520,6 @@
         "test/unit/utility/utility.test/format_and_ledger.test.js": "8c20f0a6066f53f4",
         "test/unit/utility/utility.test/validation.test.js": "f16d88684a803df3",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
-        "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
         "test/unit/xchain_indexer/decoder_halt_gate.test.js": "bbd13f49af6aeed8",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
@@ -21532,8 +21528,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1080,
-      "titleCount": 11079,
+      "fileCount": 1079,
+      "titleCount": 11077,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22605,7 +22601,6 @@
         "test/unit/utility/utility.test/validation.test.js": "f16d88684a803df3",
         "test/unit/utility/utility_log_amount.test.js": "3863f168f47cce2b",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
-        "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
         "test/unit/xchain_indexer/decoder_halt_gate.test.js": "bbd13f49af6aeed8",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
