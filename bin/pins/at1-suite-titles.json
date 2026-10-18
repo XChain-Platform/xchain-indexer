@@ -12685,6 +12685,9 @@
       "Regression: mariadb does not need the Node 22.12 require(esm) floor @regression require('mariadb') loads on the current runtime (sanity: matches the ledger's live-driver claim)",
       "Regression: mariadb does not need the Node 22.12 require(esm) floor @regression require('mariadb') loads with require(esm) disabled outright"
     ],
+    "b423b08c7bbc4432": [
+      "archive invalid collection on every configured network @regression selects the widened archive-head class for every coin, network and sampled block"
+    ],
     "b4324dc71e518116": [
       "ATTEST v5 head: the batch-completion marker @regression leaves an unmarked head where a batch simply has not completed",
       "ATTEST v5 head: the batch-completion marker @regression marks the quorum verdict too",
@@ -16361,6 +16364,11 @@
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch: a republish after a failed head a third encoding absorbs after two failed ones, so no fixed bound is involved",
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch: a republish after a failed head with no valid head, a slot the failed encoding holds still refuses another encoding's chunk"
     ],
+    "e4d6b37db2e1966e": [
+      "capability snapshot proof below-gate behavior @regression @tier1 keeps LTC and DOGE mirror-resolved capabilities unknown on mainnet and testnet",
+      "capability snapshot proof below-gate behavior @regression @tier1 keeps a BTC row above the local tip unknown without fetching a proof",
+      "capability snapshot proof below-gate behavior @regression @tier1 keeps an unconfigured BTC capability unknown without fetching a proof"
+    ],
     "e53e052972bf94f7": [
       "XBRIDGE escrow constants (consensus) carries BRIDGE_<COIN> for every other coin, and none for itself, on every network",
       "XBRIDGE escrow constants (consensus) every escrow literal is a valid address on its own chain and network",
@@ -18094,8 +18102,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1422,
-      "titleCount": 14021,
+      "fileCount": 1424,
+      "titleCount": 14025,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18768,6 +18776,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
+        "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
@@ -19460,6 +19469,7 @@
         "test/unit/state_commitment/state_commitment_name_memo_block_lifetime.test.js": "33652d5c8fc050a6",
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
+        "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/archive_match_count_class.test.js": "8a8d0afa6dccfafa",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
@@ -19893,8 +19903,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1074,
-      "titleCount": 11070,
+      "fileCount": 1077,
+      "titleCount": 11076,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20434,6 +20444,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
+        "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
@@ -20661,6 +20672,7 @@
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "c8995b58f82a9ced",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
+        "test/unit/hub/hub_db_sync/barriers/price_barrier_every_block.test.js": "c42a4364058c3b39",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
@@ -20932,6 +20944,7 @@
         "test/unit/state_commitment/state_commitment_name_memo_block_lifetime.test.js": "33652d5c8fc050a6",
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
+        "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
@@ -20973,8 +20986,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 514,
-      "titleCount": 5658,
+      "fileCount": 516,
+      "titleCount": 5663,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21133,6 +21146,7 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
+        "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
@@ -21301,6 +21315,7 @@
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "c8995b58f82a9ced",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
+        "test/unit/hub/hub_db_sync/barriers/price_barrier_every_block.test.js": "c42a4364058c3b39",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
@@ -21493,8 +21508,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1074,
-      "titleCount": 11070,
+      "fileCount": 1077,
+      "titleCount": 11076,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22034,6 +22049,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
+        "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
@@ -22261,6 +22277,7 @@
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "c8995b58f82a9ced",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
+        "test/unit/hub/hub_db_sync/barriers/price_barrier_every_block.test.js": "c42a4364058c3b39",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
@@ -22532,6 +22549,7 @@
         "test/unit/state_commitment/state_commitment_name_memo_block_lifetime.test.js": "33652d5c8fc050a6",
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
+        "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
