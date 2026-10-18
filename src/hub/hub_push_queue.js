@@ -347,10 +347,10 @@ class HubPushQueue {
              pushType === 'price_batch' || pushType === 'attest_batch');
     }
 
-    // Classify and record one failed delivery attempt. A 429 holds the WHOLE queue (the hub never judged the payload, so
-    // nothing here is charged an attempt), otherwise the row is persisted against
-    // either a finite cap (re-derivable pushes) or no cap at all (see
-    // isHubPushDurable's comment for why each push_type takes its cap).
+    // Classify and record one failed delivery attempt. A 429 holds the WHOLE queue, capped at maxBackoffMs so a memory-only
+    // hold taken from an oversized or epoch-style header cannot park every row type until restart (the hub never judged the
+    // payload, so nothing is charged an attempt); otherwise the row is persisted against either a finite cap (re-derivable
+    // pushes) or no cap at all (see isHubPushDurable's comment for why each push_type takes its cap).
     async recordHubPushFailure(row, err, attemptNo){
         let msg = String((err && err.message) || err).slice(0, 480);
         // A 429 is not a delivery attempt, it is the hub declining to look. Record
@@ -363,10 +363,11 @@ class HubPushQueue {
         // node's own host or private network never gets here at all: it exempts those
         // callers from the per-IP cap (HUB_RATE_LIMIT_EXEMPT_LOCAL).
         if(err && err.rateLimited){
-            let waitMs = Number.isFinite(err.retryAfterMs) && err.retryAfterMs > 0 ? err.retryAfterMs : 60000;
+            let askedMs = Number.isFinite(err.retryAfterMs) && err.retryAfterMs > 0 ? err.retryAfterMs : 60000;
+            let waitMs = Math.min(askedMs, this.maxBackoffMs);
             this._throttledUntilMs = Date.now() + waitMs;
-            getLogger().warn('HubPushQueue: hub rate-limited ' + row.push_type + ' row ' + row.id +
-                '; holding the queue ' + Math.round(waitMs / 1000) + 's (' + msg + ')');
+            getLogger().warn('HubPushQueue: hub rate-limited ' + row.push_type + ' row ' + row.id + '; holding the queue ' +
+                Math.round(waitMs / 1000) + 's' + (waitMs < askedMs ? ', clamped from ' + Math.round(askedMs / 1000) + 's' : '') + ' (' + msg + ')');
             return;
         }
         let isDurable = this.isHubPushDurable(row.push_type);
