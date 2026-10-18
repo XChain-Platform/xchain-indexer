@@ -21105,8 +21105,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 530,
-      "titleCount": 5716,
+      "fileCount": 531,
+      "titleCount": 5721,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21178,6 +21178,7 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
         "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
