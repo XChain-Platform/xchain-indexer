@@ -316,7 +316,10 @@ addGate('oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION', 'height', {
 // Unarmed on mainnet and testnet; regtest is armed from genesis.
 addGate('order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    testnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
+    testnet: 156908,
     regtest: 0,
 });
 // remote_token_admission_activation: admission by height for the remote-token pin. The
@@ -334,7 +337,10 @@ addGate('order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION',
 // waits about one xdex round window for the height watermark.
 addGate('remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    testnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
+    testnet: 156908,
     regtest: UNPINNED,   // ARMS by XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION at read
 });
 // stateHash: the state_hash class for the batch-completion stamp on a surviving v5 attest head.

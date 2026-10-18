@@ -82,9 +82,10 @@ describe('VOTE v3 TICK existence activation @regression @tier1', function () {
         assert.ok(indexer.indexerDb.createVoteDelegation.calledOnce);
     });
 
-    it('stays unarmed on testnet even when the regtest variable is armed', async function () {
+    it('stays unarmed on testnet below its v0.24.0 height even when the regtest variable is armed', async function () {
         process.env[ENV] = 'armed';
-        const { data, indexer } = await runUnknownTick('testnet', 5000000);
+        // The v0.24.0 cut arms BTC:testnet at 156908.
+        const { data, indexer } = await runUnknownTick('testnet', 156907);
         assert.strictEqual(data.STATUS, 'valid');
         assert.ok(indexer.indexerDb.createVoteDelegation.calledOnce);
     });
@@ -92,10 +93,11 @@ describe('VOTE v3 TICK existence activation @regression @tier1', function () {
     it('publishes the intended network activation table', function () {
         delete process.env[ENV];
         for (const network of ['mainnet', 'testnet', 'regtest'])
-            assert.strictEqual(gateRegistry.activeAt(KEY, network, 'BTC', 5000000, null), false, network);
+            assert.strictEqual(gateRegistry.activeAt(KEY, network, 'BTC', network === 'testnet' ? 156907 : 5000000, null), false, network);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 156908, null), true, 'testnet at its v0.24.0 height');
         process.env[ENV] = 'armed';
         assert.strictEqual(gateRegistry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
         assert.strictEqual(gateRegistry.activeAt(KEY, 'mainnet', 'BTC', 5000000, null), false);
-        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 5000000, null), false);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 156907, null), false);
     });
 });

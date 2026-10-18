@@ -24,7 +24,14 @@ const table = require('../../../../../src/protocol_changes/changes_5.js');
 const IDENTITY_PIN = path.resolve(__dirname, '../../../../../bin/pins/at1-consensus-identity.json');
 const NETWORKS = ['mainnet', 'testnet', 'regtest'];
 
-function describeMeterTwinParity({ name, slug, vmModule, activationExport, predicateExport }) {
+function describeMeterTwinParity({
+    name,
+    slug,
+    vmModule,
+    activationExport,
+    predicateExport,
+    registrationTitle = 'registers the time-table row in part 5, unarmed on mainnet and testnet, live on regtest',
+}) {
     const key = 'protocol_changes.changes.' + name;
     const mainnetKey = 'protocol_changes.' + name + '_MAINNET_TIME';
     const testnetKey = 'protocol_changes.' + name + '_TESTNET_TIME';
@@ -47,16 +54,16 @@ function describeMeterTwinParity({ name, slug, vmModule, activationExport, predi
     }
 
     describe('protocol_changes/vm_twin/' + slug + '_matches_vm: activation parity @regression @tier1', function () {
-        it('registers the time-table row in part 5, unarmed on mainnet and testnet, live on regtest', function () {
+        it(registrationTitle, function () {
             const row = ProtocolChanges.get(key);
             assert.deepStrictEqual(new ProtocolChanges({ config: {}, util: {} }).changes[name], row);
             assert.deepStrictEqual(table.find((entry) => entry[0] === name), [
-                name, '0.2.0', ProtocolChanges.UNARMED, ProtocolChanges.UNARMED, 0, 0, 0, 0,
+                name, '0.2.0', asRow(vmActivation.mainnet), asRow(vmActivation.testnet), 0, 0, 0, 0,
             ]);
-            assert.strictEqual(ProtocolChanges[name + '_MAINNET_TIME'], ProtocolChanges.UNARMED);
-            assert.strictEqual(ProtocolChanges[name + '_TESTNET_TIME'], ProtocolChanges.UNARMED);
-            assert.strictEqual(ProtocolChanges.get(mainnetKey), ProtocolChanges.UNARMED);
-            assert.strictEqual(ProtocolChanges.get(testnetKey), ProtocolChanges.UNARMED);
+            assert.strictEqual(ProtocolChanges[name + '_MAINNET_TIME'], asRow(vmActivation.mainnet));
+            assert.strictEqual(ProtocolChanges[name + '_TESTNET_TIME'], asRow(vmActivation.testnet));
+            assert.strictEqual(ProtocolChanges.get(mainnetKey), asRow(vmActivation.mainnet));
+            assert.strictEqual(ProtocolChanges.get(testnetKey), asRow(vmActivation.testnet));
         });
 
         it('matches the VM instant on every network', function () {

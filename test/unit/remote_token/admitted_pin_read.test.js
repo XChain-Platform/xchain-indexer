@@ -136,14 +136,17 @@ describe('remote_token_admission_activation registry row @regression @tier1', fu
     const active = (network, coin, h) => gateRegistry.activeAt(REMOTE_TOKEN_ADMISSION_KEY, network, coin, h, null);
     afterEach(() => { delete process.env[ARM]; });
 
-    it('is unarmed on mainnet and testnet at every height, whatever the regtest variable says', function () {
+    it('is unarmed on mainnet at every height and armed on testnet from its v0.24.0 height, whatever the regtest variable says', function () {
+        // The v0.24.0 cut arms testnet per chain; the hub reads the bare key at the BTC height.
+        const TESTNET = { null: 156908, BTC: 156908, LTC: 4927400, DOGE: 68005165 };
         for (const value of [undefined, 'armed', '0'])
-            for (const network of ['mainnet', 'testnet'])
-                for (const coin of [null, 'BTC', 'LTC', 'DOGE'])
-                    for (const h of [0, 1, 5000000, 9999999998]) {
-                        if (value === undefined) delete process.env[ARM]; else process.env[ARM] = value;
-                        assert.strictEqual(active(network, coin, h), false, network + ' ' + coin + ' ' + h + ' ' + value);
-                    }
+            for (const coin of [null, 'BTC', 'LTC', 'DOGE']) {
+                if (value === undefined) delete process.env[ARM]; else process.env[ARM] = value;
+                for (const h of [0, 1, 5000000, 9999999998])
+                    assert.strictEqual(active('mainnet', coin, h), false, 'mainnet ' + coin + ' ' + h + ' ' + value);
+                assert.strictEqual(active('testnet', coin, TESTNET[String(coin)] - 1), false, 'testnet ' + coin + ' below ' + value);
+                assert.strictEqual(active('testnet', coin, TESTNET[String(coin)]), true, 'testnet ' + coin + ' at ' + value);
+            }
     });
 
     it('leaves regtest unarmed unless the venue sets the variable', function () {

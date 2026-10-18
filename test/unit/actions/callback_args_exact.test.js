@@ -134,10 +134,10 @@ describe('CALLBACK_ARGS_EXACT: registry row @regression @tier1', function () {
 
     const row = () => CHANGES.find(r => r[0] === CALLBACK_ARGS_EXACT);
 
-    it('is declared unarmed on mainnet and testnet', function () {
+    it('is declared unarmed on mainnet and armed on testnet at the v0.24.0 instant', function () {
         assert.ok(row(), 'gate row missing');
         assert.strictEqual(row()[2], UNARMED, 'mainnet');
-        assert.strictEqual(row()[3], UNARMED, 'testnet');
+        assert.strictEqual(row()[3], 1792303200, 'testnet');
     });
 
     it('is genesis-active on regtest unless a venue sets CALLBACK_ARGS_EXACT_REGTEST_TIME', function () {
