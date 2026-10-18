@@ -14066,12 +14066,6 @@
       "createDestroy() - multi-destroy legs writes ONE ROW PER TICK LEG of a multi-destroy sharing one action_index",
       "createSend() - multi-send legs does not let a re-parse stamp one leg over every other leg of the same send"
     ],
-    "ca16e0fe306a77ff": [
-      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
-      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
-      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 pins the registry row in the consensus identity",
-      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 registers a per-chain height row, unarmed on mainnet and testnet, live on regtest"
-    ],
     "ca7df2a33ba1c8cc": [
       "src/sql schema parse-coverage @regression @tier1 actions.sql every parsed column has a name and a definition",
       "src/sql schema parse-coverage @regression @tier1 actions.sql is parseable by the drift reconciler (non-null)",
@@ -15442,6 +15436,16 @@
       "XChainIndexer hub config overlay poll re-applies and RESETS the cursor when the hub regresses (restore from an older snapshot)",
       "XChainIndexer hub config overlay poll re-applies on a watermark-only advance (standalone hub, seq stuck at 0)",
       "XChainIndexer hub config overlay poll ticks landing while a slow poll is in flight are skipped, and polling resumes after it settles"
+    ],
+    "d94045d298f4485f": [
+      "capability snapshot proof mirror judgement @regression @tier1 holds a throwing verifier and an unknown verifier verdict",
+      "capability snapshot proof mirror judgement @regression @tier1 holds fetch failures and missing proof responses",
+      "capability snapshot proof mirror judgement @regression @tier1 holds testnet with a missing or invalid trust pin",
+      "capability snapshot proof mirror judgement @regression @tier1 holds when fetchProof or the verifier is missing",
+      "capability snapshot proof mirror judgement @regression @tier1 marks unpinned regtest as first use with a null trust set",
+      "capability snapshot proof mirror judgement @regression @tier1 passes exact fetchProof and verifier arguments for a pinned row",
+      "capability snapshot proof mirror judgement @regression @tier1 passes verified, refused, and held verifier verdicts through",
+      "capability snapshot proof mirror judgement @regression @tier1 uses process.env when readEnv is omitted"
     ],
     "d95ae38162282a9d": [
       "HubPushQueue address retry adopts the first available address without clearing attempts",
@@ -18076,7 +18080,7 @@
   "scripts": {
     "test": {
       "fileCount": 1419,
-      "titleCount": 14006,
+      "titleCount": 14010,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18749,6 +18753,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
+        "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
@@ -19324,7 +19329,6 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "af3b13066b325fa8",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "d14b2a8196167f6c",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "58a722e0f4b362c8",
-        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_hook_row.test.js": "f959c69addce7dd8",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "d1bfe2b0906e9c21",
@@ -19865,8 +19869,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1072,
-      "titleCount": 11057,
+      "fileCount": 1071,
+      "titleCount": 11053,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20813,7 +20817,6 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "af3b13066b325fa8",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "d14b2a8196167f6c",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "58a722e0f4b362c8",
-        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "d1bfe2b0906e9c21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "fd75cdd445f6e0af",
@@ -20943,8 +20946,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 512,
-      "titleCount": 5645,
+      "fileCount": 511,
+      "titleCount": 5641,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21398,7 +21401,6 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "af3b13066b325fa8",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "d14b2a8196167f6c",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "58a722e0f4b362c8",
-        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "d1bfe2b0906e9c21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "fd75cdd445f6e0af",
@@ -21461,8 +21463,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1072,
-      "titleCount": 11057,
+      "fileCount": 1071,
+      "titleCount": 11053,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22409,7 +22411,6 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "af3b13066b325fa8",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "d14b2a8196167f6c",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "58a722e0f4b362c8",
-        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "d1bfe2b0906e9c21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "fd75cdd445f6e0af",
