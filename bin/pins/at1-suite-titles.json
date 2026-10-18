@@ -15468,6 +15468,16 @@
       "XChainIndexer hub config overlay poll re-applies on a watermark-only advance (standalone hub, seq stuck at 0)",
       "XChainIndexer hub config overlay poll ticks landing while a slow poll is in flight are skipped, and polling resumes after it settles"
     ],
+    "d94045d298f4485f": [
+      "capability snapshot proof mirror judgement @regression @tier1 holds a throwing verifier and an unknown verifier verdict",
+      "capability snapshot proof mirror judgement @regression @tier1 holds fetch failures and missing proof responses",
+      "capability snapshot proof mirror judgement @regression @tier1 holds testnet with a missing or invalid trust pin",
+      "capability snapshot proof mirror judgement @regression @tier1 holds when fetchProof or the verifier is missing",
+      "capability snapshot proof mirror judgement @regression @tier1 marks unpinned regtest as first use with a null trust set",
+      "capability snapshot proof mirror judgement @regression @tier1 passes exact fetchProof and verifier arguments for a pinned row",
+      "capability snapshot proof mirror judgement @regression @tier1 passes verified, refused, and held verifier verdicts through",
+      "capability snapshot proof mirror judgement @regression @tier1 uses process.env when readEnv is omitted"
+    ],
     "d95ae38162282a9d": [
       "HubPushQueue address retry adopts the first available address without clearing attempts",
       "HubPushQueue address retry reads a selector address from status when current is unavailable",
@@ -18075,8 +18085,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1419,
-      "titleCount": 14006,
+      "fileCount": 1420,
+      "titleCount": 14014,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18749,6 +18759,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
+        "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
@@ -19865,8 +19876,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1072,
-      "titleCount": 11057,
+      "fileCount": 1073,
+      "titleCount": 11065,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20406,6 +20417,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
+        "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "e23f4b08d34e0b5a",
@@ -20943,8 +20955,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 512,
-      "titleCount": 5645,
+      "fileCount": 513,
+      "titleCount": 5653,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21103,6 +21115,7 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
+        "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
@@ -21461,8 +21474,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1072,
-      "titleCount": 11057,
+      "fileCount": 1073,
+      "titleCount": 11065,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22002,6 +22015,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
+        "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "e23f4b08d34e0b5a",
