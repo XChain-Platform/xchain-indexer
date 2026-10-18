@@ -20006,7 +20006,7 @@
     },
     "test:regression": {
       "fileCount": 1093,
-      "titleCount": 11117,
+      "titleCount": 11110,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21641,7 +21641,7 @@
     },
     "test:regression:full": {
       "fileCount": 1093,
-      "titleCount": 11117,
+      "titleCount": 11110,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
