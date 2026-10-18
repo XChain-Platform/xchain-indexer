@@ -12698,6 +12698,19 @@
       "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is unarmed on production networks and active from regtest genesis",
       "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 registers the 0.2.0 row and both network constants"
     ],
+    "b468c3fd3eff32ee": [
+      "capability snapshot proof trust set allows first use on regtest only when no pin is configured",
+      "capability snapshot proof trust set holds a regtest rotation with a bad _FROM value",
+      "capability snapshot proof trust set holds a testnet rotation with a bad _FROM value",
+      "capability snapshot proof trust set holds an invalid _NEXT pin after rotation",
+      "capability snapshot proof trust set holds an invalid regtest pin instead of treating it as first use",
+      "capability snapshot proof trust set holds blank, invalid, and empty-array testnet pins",
+      "capability snapshot proof trust set holds testnet and mainnet when no pin is configured",
+      "capability snapshot proof trust set uses a valid regtest pin",
+      "capability snapshot proof trust set uses a valid static pin",
+      "capability snapshot proof trust set uses the default reader through process.env",
+      "capability snapshot proof trust set uses the static pin below _FROM and the _NEXT pin at and above it"
+    ],
     "b4a3dee34b8a056b": [
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT creates credit, updates balance, and increments token supply",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT exceeding MAX_MINT is marked invalid",
@@ -18046,8 +18059,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1416,
-      "titleCount": 13983,
+      "fileCount": 1417,
+      "titleCount": 13994,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18723,6 +18736,7 @@
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
+        "test/unit/consensus/capability_snapshot_proof/trust_set.test.js": "b468c3fd3eff32ee",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
