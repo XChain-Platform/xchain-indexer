@@ -11551,6 +11551,11 @@
       "Send handler: gated total by resolved tick ID @regression @tier1 ignores malformed placeholder legs from already-invalid actions",
       "Send handler: gated total by resolved tick ID @regression @tier1 requires handoffs when spelling variants together cross the threshold"
     ],
+    "a91a550211543e4a": [
+      "ANCHOR v3 checkpoint sequence binding @regression @tier1 keeps binding inert and reads all rows below activation",
+      "ANCHOR v3 checkpoint sequence binding @regression @tier1 reads checkpoint and archive watermarks from valid rows at activation",
+      "ANCHOR v3 checkpoint sequence binding @regression @tier1 refuses a mismatched fold section at activation"
+    ],
     "a92457ce41a222af": [
       "FORMAT_VERSION boundary tests (via ISSUE) @regression @tier2 TS-14: FORMAT_VERSION = 0 (control) is valid",
       "FORMAT_VERSION boundary tests (via ISSUE) @regression @tier2 TS-14: FORMAT_VERSION = 255 (max value getFormatVersion accepts, but unknown to Issue) is invalid",
@@ -18187,8 +18192,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1436,
-      "titleCount": 14086,
+      "fileCount": 1437,
+      "titleCount": 14089,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18228,6 +18233,7 @@
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "cd53417c159a33c6",
