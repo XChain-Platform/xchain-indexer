@@ -213,15 +213,6 @@ addGate('dispense_payment_tally_scale_activation.DISPENSE_TALLY_EXACT_SCALE', 'c
 // keeps. Also the render width of the dispenses row below.
 addGate('dispense_payment_tally_scale_activation.DISPENSE_TALLY_LEGACY_SCALE', 'constant', 8);
 
-// dispenser_amount_positivity_activation
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
-addGate('dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION', 'time', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
-
 // dispenser_caps_activation
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']). Mainnet flips at the coordinated 2.0.0 contract-era

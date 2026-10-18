@@ -8,13 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Dispenser amount-positivity flag-day (the dispenser_amount_positivity_activation row).
-//
-// Every gated case carries its own FAILURE-REPRODUCING CONTROL: the same input with
-// the gate forced off, asserted to still produce the ORIGINAL defective outcome. A
-// suite that only asserted the post-fix verdict would pass identically if the harness
-// never reached the defective path at all, and both readings must stay pinned anyway
-// because the gate's whole purpose is byte-identical replay below the threshold.
+// Dispenser amount-positivity rules.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -23,7 +17,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const { createBaseData } = require('../../../fixtures/mocks');
 const {
-    GATE_OFF_NETWORK, OWNER_ADDR, BLOCK_TIME, EXPIRATION,
+    OWNER_ADDR, BLOCK_TIME, EXPIRATION,
     makeDispenser, freshDispenserCreateSuite,
 } = require('./dispenser_amount_positivity.test/helpers/dispenser_amount_positivity_suite.js');
 
@@ -36,8 +30,6 @@ function freshCreateSuite() {
 // GET_TICK empty is the ordinary native-coin dispenser, so getTokenInfo is never
 // loaded and the pre-existing format rule (a conjunct on it) short-circuits.
 async function createWithGetAmount(getAmount, opts = {}) {
-    if (opts.network)
-        indexer.config['NETWORK'] = opts.network;
     const fiatCode   = opts.fiatCode   || '';
     const fiatAmount = opts.fiatAmount || '';
     const params = String(
@@ -52,28 +44,18 @@ function nativeCoinPriceCases() {
     beforeEach(freshCreateSuite);
     afterEach(function () { sinon.restore(); });
 
-    it('a valid native-coin price is still accepted with the gate on', async function () {
+    it('accepts a valid native-coin price', async function () {
         assert.strictEqual(await createWithGetAmount('0.01'), 'valid');
     });
 
-    it('rejects a NEGATIVE native-coin price, which nothing rejected before', async function () {
+    it('rejects a NEGATIVE native-coin price', async function () {
         assert.strictEqual(await createWithGetAmount('-0.5'), 'invalid: GET_AMOUNT (format)');
-    });
-
-    it('control: the same negative price is still ACCEPTED below the threshold', async function () {
-        // The pre-fix outcome, and the byte-identical-replay guarantee. If this ever
-        // reads 'invalid: ...' the gate has stopped gating; if the case above ever
-        // reads 'valid' the rule has stopped binding. Neither can pass vacuously.
-        assert.strictEqual(await createWithGetAmount('-0.5', { network: GATE_OFF_NETWORK }), 'valid');
     });
 
     it('rejects a NON-NUMERIC native-coin price', async function () {
         assert.strictEqual(await createWithGetAmount('abc'), 'invalid: GET_AMOUNT (format)');
     });
 
-    it('control: the same non-numeric price is still ACCEPTED below the threshold', async function () {
-        assert.strictEqual(await createWithGetAmount('abc', { network: GATE_OFF_NETWORK }), 'valid');
-    });
 }
 
 function nativeCoinPriceBoundaryCases() {
