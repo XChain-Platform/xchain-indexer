@@ -20019,8 +20019,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1091,
-      "titleCount": 11114,
+      "fileCount": 1093,
+      "titleCount": 11124,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20571,7 +20571,9 @@
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
@@ -21116,8 +21118,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 528,
-      "titleCount": 5713,
+      "fileCount": 530,
+      "titleCount": 5723,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21285,7 +21287,9 @@
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
@@ -21650,8 +21654,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1091,
-      "titleCount": 11114,
+      "fileCount": 1093,
+      "titleCount": 11124,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22202,7 +22206,9 @@
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
