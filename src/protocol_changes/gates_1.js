@@ -83,23 +83,6 @@ addGate('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION', 'heig
     regtest: 0,           // armed from genesis
 });
 
-// archive_head_unverified_gate_activation
-// Per-network activation, interpreted against the DOGE block_index the v1
-// archive head landed in. Every network is armed from genesis. Changing any value
-// here is a consensus change: read the header block first.
-addGate('archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION', 'height', {
-    // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history
-    // (0 archive chunks, measured 2026-09-09). Pinned at genesis in the same wave as the
-    // class-6 height-key repair, which this key is never moved apart from.
-    mainnet: 0,
-    // Armed from genesis. Safe on a chain with history ONLY where that chain's indexer
-    // state is rebuilt from the chain itself, because a rebuild recomputes every block
-    // under this rule and so leaves nothing indexed under the narrower one to contradict.
-    // That rebuild is a precondition of this height, not a consequence of it.
-    testnet: 0,
-    regtest: 0,           // armed from genesis: fresh regtest stacks exercise the widened gate end to end
-});
-
 // attest_admission_activation
 // Per-network activation height (LOCAL COPY of the canonical map in
 // xchain-documentation/protocol/constants.js). Compared against the request's own

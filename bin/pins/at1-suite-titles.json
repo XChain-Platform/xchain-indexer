@@ -6126,6 +6126,18 @@
       "HubDbSync pre-rail barrier (D5) @regression @tier1 a block where the rail is behind waits, and clears when the mirror catches up, not on a timeout",
       "HubDbSync pre-rail barrier (D5) @regression @tier1 a block with no price rail at its height opens immediately, never entering the wait queue"
     ],
+    "5c969c0d766afbe1": [
+      "Anchor head-side reassembly gate @regression chunks-before-head, corrupt blob: head-side gate flags the head invalid_archive",
+      "Anchor head-side reassembly gate @regression chunks-before-head, sound blob: head-side gate verifies and does not flag",
+      "Anchor head-side reassembly gate @regression complete set plus a stray out-of-range chunk, corrupt blob: coverage still runs the check",
+      "Anchor head-side reassembly gate @regression head-first ordering unchanged: no chunks stored yet means no head-side stamp",
+      "Anchor head-side reassembly gate @regression stray out-of-range chunk masking a missing index: count would fire, coverage does not",
+      "Anchor head-side reassembly gate @regression unverified head (snapshot-less node), chunks-before-head, corrupt blob: still flags invalid_archive",
+      "Anchor head-side reassembly gate @regression unverified head, chunks-before-head, sound blob: verifies and does not flag",
+      "Anchor head-side reassembly gate: unverified flag-day @regression gate ARMED (mainnet, shipped map), unverified head, corrupt blob: stamps from genesis",
+      "Anchor head-side reassembly gate: unverified flag-day @regression gate ARMED (regtest), unverified head, corrupt blob: stamps",
+      "Anchor head-side reassembly gate: unverified flag-day @regression gate ARMED (testnet), unverified head, corrupt blob: stamps from genesis"
+    ],
     "5c9d499784cf2193": [
       "[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression @tier1 \"fresh\" answer shape (grants the exception) \u2014 must be null, never a throw rejects a non-numeric height as fresh (string height -> null), never coerces it",
       "[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression @tier1 \"fresh\" answer shape (grants the exception) \u2014 must be null, never a throw returns null when height is missing from the result object",
@@ -9124,6 +9136,14 @@
       "indexer API auth: JSON-RPC batch gate with INDEXER_API_KEY configured passes a public-only batch with no key",
       "indexer API auth: JSON-RPC batch gate with no key and ALLOW_UNAUTHED=false (fail closed) 401s a gated batch",
       "indexer API auth: JSON-RPC batch gate with no key and ALLOW_UNAUTHED=true (keyless escape hatch) passes a gated batch (explicitly keyless)"
+    ],
+    "86748d9830bb6043": [
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits a valid parent when the gate is active",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits an unverified parent when the parent-status gate is active",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 is unarmed on public networks and opt-in on regtest",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keeps the deployed chunk-status-only rule while the gate is inert",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keys the new rule on the chunk height",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 rejects an invalid parent before reading chunks when the gate is active"
     ],
     "86e3b95c0a42a9c6": [
       "anchor reward gates treat an UNPINNED threshold as inert @regression @tier2 isAnchorRewardActive is off at every height when the threshold is null",
@@ -18188,7 +18208,7 @@
   "scripts": {
     "test": {
       "fileCount": 1436,
-      "titleCount": 14086,
+      "titleCount": 14081,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18230,7 +18250,7 @@
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
-        "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "cd53417c159a33c6",
+        "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "5c969c0d766afbe1",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/anchor_reward_family.test.js": "45cd36a015e28085",
@@ -18245,7 +18265,7 @@
         "test/unit/actions/anchor/bundle_order/anchor_order_reason_helpers.test.js": "3277653238c8d36f",
         "test/unit/actions/anchor/bundle_order/bundle_order_cases.test.js": "22e147a7ae0e9cbb",
         "test/unit/actions/anchor/checkpoint_seq_bind_reason.test.js": "1292af054254884e",
-        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "ac51d51746a87eae",
+        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "86748d9830bb6043",
         "test/unit/actions/anchor/v3/anchor_v3_archive_check.test.js": "90b635bde1229f56",
         "test/unit/actions/anchor/v3/anchor_v3_fold_rows.test.js": "78c42da2461e2b5b",
         "test/unit/actions/anchor/v3/anchor_v3_sections.test.js": "fae8eeba338baf48",

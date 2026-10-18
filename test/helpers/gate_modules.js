@@ -77,7 +77,6 @@ const GATE_MODULE_PATHS = Object.freeze({
 const REPLACED_STEMS = Object.freeze([
     'anchor_activation',
     'archive_batch_author_activation',
-    'archive_head_unverified_gate_activation',
     'attest_admission_activation',
     'consolidation_leg_amount_activation',
     'dispense_cancelling_match_activation',

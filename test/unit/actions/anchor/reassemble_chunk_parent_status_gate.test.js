@@ -21,7 +21,6 @@ const gateRegistry = require('../../../../src/consensus/gate_registry.js');
 const { stubActiveAt, stubGate } = require('../../../helpers/gate_modules.js');
 
 const PARENT_STATUS_GATE = 'reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATUS_ACTIVATION';
-const HEAD_STATUS_GATE = 'archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION';
 
 function makeHandler(parentStatus){
     const stamp = sinon.stub().resolves();
@@ -56,9 +55,8 @@ function parentRow(height = 100){
     };
 }
 
-async function run(parentStatus, parentGate, headGate, data = chunkData(), parent = parentRow()){
+async function run(parentStatus, parentGate, data = chunkData(), parent = parentRow()){
     stubActiveAt(sinon, PARENT_STATUS_GATE, parentGate);
-    stubActiveAt(sinon, HEAD_STATUS_GATE, headGate);
     const made = makeHandler(parentStatus);
     await reassembly.reassembleAtChunk(made.handler, data, parent, null, null);
     return made;
@@ -74,37 +72,31 @@ describe('ANCHOR chunk-side reassembly parent-status gate @regression @tier1', f
     });
 
     it('keeps the deployed chunk-status-only rule while the gate is inert', async function () {
-        const { handler, stamp } = await run('invalid: insufficient valid signatures', false, false);
+        const { handler, stamp } = await run('invalid: insufficient valid signatures', false);
         assert.deepStrictEqual(stamp.args, [[41, 'invalid_archive']]);
         assert.strictEqual(handler.indexerDb.getStatusString.called, false);
     });
 
     it('admits a valid parent when the gate is active', async function () {
-        const { handler, stamp } = await run('valid', true, false);
+        const { handler, stamp } = await run('valid', true);
         assert.deepStrictEqual(stamp.args, [[41, 'invalid_archive', true]]);
         assert.ok(handler.indexerDb.getStatusString.calledOnceWithExactly(7));
     });
 
     it('rejects an invalid parent before reading chunks when the gate is active', async function () {
-        const { handler, stamp } = await run('invalid: insufficient valid signatures', true, true);
+        const { handler, stamp } = await run('invalid: insufficient valid signatures', true);
         assert.strictEqual(stamp.called, false);
         assert.strictEqual(handler.indexerDb.getAnchorChunks.called, false);
     });
 
-    it('admits an unverified parent only when the head-side status gate admits it', async function () {
-        const below = await run('unverified', true, false);
-        assert.strictEqual(below.stamp.called, false);
-        sinon.restore();
-
-        const active = await run('unverified', true, true);
+    it('admits an unverified parent when the parent-status gate is active', async function () {
+        const active = await run('unverified', true);
         assert.deepStrictEqual(active.stamp.args, [[41, 'invalid_archive', true]]);
     });
 
-    it('keys the new rule on the chunk height and the unverified admission on the parent height', async function () {
+    it('keys the new rule on the chunk height', async function () {
         const parentStatus = stubGate(sinon, PARENT_STATUS_GATE, false);
         parentStatus.callsFake((key, network, coin, height) => Number(height) >= 101);
-        const headStatus = stubGate(sinon, HEAD_STATUS_GATE, false);
-        headStatus.callsFake((key, network, coin, height) => Number(height) >= 100);
         const made = makeHandler('unverified');
 
         await reassembly.reassembleAtChunk(
@@ -112,6 +104,5 @@ describe('ANCHOR chunk-side reassembly parent-status gate @regression @tier1', f
 
         assert.deepStrictEqual(made.stamp.args, [[41, 'invalid_archive', true]]);
         assert.ok(parentStatus.calledWith('regtest', null, 101, null));
-        assert.ok(headStatus.calledWith('regtest', null, 100, null));
     });
 });
