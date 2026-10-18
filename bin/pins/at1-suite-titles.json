@@ -3389,6 +3389,15 @@
       "protocol_changes anchor bundle order row lists the activation in SHARED_GATES exactly once",
       "protocol_changes anchor bundle order row pins the activation map"
     ],
+    "332f0f0c3276df91": [
+      "capability snapshot proof database wiring @regression @tier1 allows regtest first use and emits one warning line",
+      "capability snapshot proof database wiring @regression @tier1 holds at the gate when no proof fetcher is available",
+      "capability snapshot proof database wiring @regression @tier1 keeps a mirror-resolved row below the gate on the legacy path",
+      "capability snapshot proof database wiring @regression @tier1 keeps the BTC re-derivation path unchanged when the proof gate is active",
+      "capability snapshot proof database wiring @regression @tier1 never derives the checkpoint trust set from mirrored capability rows",
+      "capability snapshot proof database wiring @regression @tier1 passes verified, refused, and held proof verdicts through at the gate",
+      "capability snapshot proof database wiring @regression @tier1 uses the static pin below rotation and the next pin from its block onward"
+    ],
     "33482fac9151bf27": [
       "Dispenser action handler @regression @tier2 GET_ADDRESS different from SOURCE validation (freshness) GET_ADDRESS with DISPENSER_PREFERENCE=2 allows any opener",
       "Dispenser action handler @regression @tier2 GET_ADDRESS different from SOURCE validation (freshness) local path (freshness flag-day active, regtest genesis) fresh GET_ADDRESS (no prior XChain activity) is allowed, and the tracker is NOT consulted",
@@ -3766,6 +3775,11 @@
     "39deaa3f8a62287c": [
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
+    ],
+    "39e97c7b93d617e8": [
+      "capability snapshot proof startup pin wiring @regression @tier1 does not refuse an unarmed chain, BTC, or regtest",
+      "capability snapshot proof startup pin wiring @regression @tier1 refuses an armed mirror-backed testnet with an invalid pin",
+      "capability snapshot proof startup pin wiring @regression @tier1 refuses an armed mirror-backed testnet with no pin and names rotation variables"
     ],
     "3a25c746f0ad7a91": [
       "database session time zone @regression @tier1 pins direct and pooled connections to UTC"
@@ -18187,8 +18201,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1439,
-      "titleCount": 14080,
+      "fileCount": 1441,
+      "titleCount": 14090,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18873,10 +18887,12 @@
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/startup_pin_refusal.test.js": "e3e7ffb0929fda49",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
         "test/unit/consensus/capability_snapshot_proof/trust_set.test.js": "b468c3fd3eff32ee",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
