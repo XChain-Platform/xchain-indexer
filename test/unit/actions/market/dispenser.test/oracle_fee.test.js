@@ -186,8 +186,9 @@ describe('Dispenser action handler @regression @tier2', function () {
             // oracle_price x GIVE_ESCROW, and an ownership dispenser must carry an empty
             // GIVE_ESCROW. The oracle price IS still read, because the effective-price
             // rule is a validity precondition on the create rather than part of the fee
-            // (see dispenser_oracle_price_activation.js); what must not happen is a fee
-            // being demanded. No TX_OUTPUTS are supplied, so a charge would reject.
+            // (see the requireEffectiveOraclePrice check in
+            // src/actions/dispenser/validate_format.js); what must not happen is a fee being
+            // demanded. No TX_OUTPUTS are supplied, so a charge would reject.
             const getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
             indexer.indexerDb.getOraclePrice = getOraclePrice;
             indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
