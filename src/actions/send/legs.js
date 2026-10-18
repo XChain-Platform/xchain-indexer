@@ -90,11 +90,9 @@ module.exports = {
     // A leg whose RAW amount fails its tick's format is held OUT of the merge, on its own key,
     // so it reaches the per-leg format check below instead of being summed into a total that
     // passes. bcadd formats to the tick's DECIMALS, so two 0.5 legs of a 0-decimals token
-    // merged to '1' and settled while either leg alone was rejected. Gated per chain
-    // (the consolidation_leg_amount_activation row in src/protocol_changes/): below the threshold the legacy key and merge
-    // run unchanged and historical replay stays byte-identical.
+    // merged to '1' and settled while either leg alone was rejected.
     //
-    // Above the threshold BOTH key shapes are prefixed ('k' merge key, 'i' held-out leg), so a
+    // BOTH key shapes are prefixed ('k' merge key, 'i' held-out leg), so a
     // DESTINATION chosen to spell a held-out leg's key cannot collide with one. Prefixing every
     // key uniformly leaves insertion order (and so the emitted record order) unchanged.
     consolidateSendLegs(sends, ticks, data){
@@ -103,15 +101,13 @@ module.exports = {
         let totalTickIdRule = gateRegistry.activeAt('send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
         this._gatedActionTotals = totalTickIdRule ? this.gatedTotalsByTickId(sends, ticks, data) : null;
 
-        let legAmountRule = gateRegistry.activeAt('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
         let keys = {};
         for(let idx in sends){
             let [tick, amount, destination, memo] = sends[idx];
             let key = destination + '|' + tick;
-            if(legAmountRule)
-                key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
-                    ? 'i|' + idx
-                    : 'k|' + key;
+            key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
+                ? 'i|' + idx
+                : 'k|' + key;
             // An unknown TICK maps to false in `ticks`; it merges at 0 decimals, as an unlooked-up
             // one does, and validation then refuses the leg. Passing false through would make
             // bcadd's precision NaN, which throws and halts the block.
