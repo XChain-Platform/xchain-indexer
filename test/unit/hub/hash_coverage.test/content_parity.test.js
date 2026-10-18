@@ -153,7 +153,7 @@ describe('Hash coverage guard @regression', function () {
     describe('content-parity coverage declaration', function () {
         it('in-place parity columns stay declared apart and match every order_matches UPDATE', function () {
             assert.deepStrictEqual(lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS, {
-                anchor_actions:       ['status_id'],
+                anchor_actions:       ['status_id', 'pre_archive_status_id'],
                 attests:              ['request_status', 'resolved_block', 'callback_execute_action_index',
                                        'status_id'],
                 bet_feeds:            ['feed_status_id', 'closed_block', 'terminal_block'],

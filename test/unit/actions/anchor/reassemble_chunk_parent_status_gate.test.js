@@ -81,7 +81,7 @@ describe('ANCHOR chunk-side reassembly parent-status gate @regression @tier1', f
 
     it('admits a valid parent when the gate is active', async function () {
         const { handler, stamp } = await run('valid', true, false);
-        assert.deepStrictEqual(stamp.args, [[41, 'invalid_archive']]);
+        assert.deepStrictEqual(stamp.args, [[41, 'invalid_archive', true]]);
         assert.ok(handler.indexerDb.getStatusString.calledOnceWithExactly(7));
     });
 
@@ -97,7 +97,7 @@ describe('ANCHOR chunk-side reassembly parent-status gate @regression @tier1', f
         sinon.restore();
 
         const active = await run('unverified', true, true);
-        assert.deepStrictEqual(active.stamp.args, [[41, 'invalid_archive']]);
+        assert.deepStrictEqual(active.stamp.args, [[41, 'invalid_archive', true]]);
     });
 
     it('keys the new rule on the chunk height and the unverified admission on the parent height', async function () {
@@ -110,7 +110,7 @@ describe('ANCHOR chunk-side reassembly parent-status gate @regression @tier1', f
         await reassembly.reassembleAtChunk(
             made.handler, chunkData(101), parentRow(100), null, null);
 
-        assert.deepStrictEqual(made.stamp.args, [[41, 'invalid_archive']]);
+        assert.deepStrictEqual(made.stamp.args, [[41, 'invalid_archive', true]]);
         assert.ok(parentStatus.calledWith('regtest', null, 101, null));
         assert.ok(headStatus.calledWith('regtest', null, 100, null));
     });
