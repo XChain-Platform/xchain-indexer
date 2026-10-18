@@ -80,7 +80,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
     });
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
-        assert.strictEqual(REPLACED.size, 32, 'the W4 census of 21 predicate-only shims plus the 11 predicate-only twins of W5');
+        assert.strictEqual(REPLACED.size, 31, 'the W4 census of 21 predicate-only shims plus the 11 predicate-only twins of W5');
         assert.strictEqual(REGISTRY_ONLY.size, 84, 'the registry-only gate census moved');
         assert.ok(REGISTRY_ONLY.has('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'),
             'the cross-chain remote-token gate is registry-only');

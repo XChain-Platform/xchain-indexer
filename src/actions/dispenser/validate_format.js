@@ -173,10 +173,9 @@ module.exports = {
         // through the fee path, and checking every edit unconditionally would newly reject
         // expiration-only or list-only edits on a dispenser whose oracle is perfectly fine.
         //
-        // Gated (see the dispenser_oracle_price_activation row in src/protocol_changes/): this rejects creates the ungated
-        // engine accepts, so replay below the flag-day stays byte-identical.
+        // The FIAT_DISPENSER_PRICING protocol change remains the activation condition
+        // for this validity rule.
         if(!error && format==0 && !this.util.isNull(data['ORACLE_ADDRESS']) &&
-           gateRegistry.activeAt('dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
            await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', data['BLOCK_INDEX'])){
             let priceDb = (this.actions && this.actions.hubDb) || this.indexerDb;
             let priceCheck = await this.util.requireEffectiveOraclePrice(data['BLOCK_TIME'], {

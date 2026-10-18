@@ -251,15 +251,6 @@ addGate('dispenser_freshness_shape_activation.DISPENSER_FRESHNESS_SHAPE_ACTIVATI
     regtest:        0,      // genesis-active so the venue exercises the strict path
 });
 
-// dispenser_oracle_price_activation
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
-addGate('dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION', 'time', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
-
 // dispenser_ownership_cancel_activation
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']). Mainnet flips at the coordinated 2.0.0 contract-era

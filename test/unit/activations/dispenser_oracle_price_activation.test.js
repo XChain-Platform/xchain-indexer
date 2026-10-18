@@ -13,16 +13,10 @@
  **********************************************************************
  * test/unit/activations/dispenser_oracle_price_activation.test.js
  *
- * Mode B create-time effective-oracle-price flag-day. Mainnet is ARMED AT
- * GENESIS by the 2026-09-09 operator ruling: mainnet carries 0 dispensers and 0
- * dispenses (measured 2026-09-09), so a create-acceptance tightening at height
- * 0 has no create to re-judge and forks no from-genesis replay. The row itself
- * (dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION) is
- * pinned by the v2 fingerprint and compared row by row by the registry suites;
- * since W4 the create path reads it through activeAt() by that key, so the
- * "below the gate" case stubs the registry read rather than a shim predicate.
+ * Mode B create-time effective-oracle-price validity coverage. The requirement
+ * applies whenever FIAT_DISPENSER_PRICING is enabled.
  *
- * The behavior the gate arms is pinned below: the precondition is a validity
+ * The behavior is pinned below: the precondition is a validity
  * rule that must run on a create carrying an ORACLE_ADDRESS whatever it escrows,
  * where before it only ran as a side effect of the GIVE_ESCROW>0 fee path and so
  * never ran at all on an ownership dispenser (whose GIVE_ESCROW must be empty).
@@ -35,7 +29,6 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const gateRegistry = require('../../../src/consensus/gate_registry');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 const Dispenser = require('../../../src/actions/dispenser/index.js');
 
@@ -55,8 +48,7 @@ const ownershipParams = () => String(
 const modeBData = () => createBaseData(
     { ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
-// The rule the gate arms, exercised through the real create path. Regtest is
-// genesis-active, so these run above the gate unless the predicate is stubbed off.
+// The validity rule exercised through the real create path.
 describe('Mode B create requires an effective oracle price @regression @tier2', function () {
     beforeEach(function () {
         indexer    = createMockIndexer();
@@ -110,62 +102,6 @@ describe('Mode B create requires an effective oracle price @regression @tier2', 
 
         assert.strictEqual(data['STATUS'], 'invalid: ORACLE_ADDRESS (no effective oracle price)');
         sinon.assert.notCalled(indexer.indexerDb.setTokenEscrow);
-    });
-});
-
-describe('Mode B create requires an effective oracle price @regression @tier2', function () {
-    beforeEach(function () {
-        indexer    = createMockIndexer();
-        actionsCtx = {
-            config:          indexer.config,
-            util:            indexer.util,
-            mapper:          indexer.mapper,
-            decoderDb:       indexer.decoderDb,
-            indexerDb:       indexer.indexerDb,
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true),
-            },
-            processAction: sinon.stub().resolves(),
-        };
-        dispenser = new Dispenser(actionsCtx);
-
-        indexer.indexerDb.getTokenInfo
-            .withArgs('JDOG', sinon.match.any, sinon.match.any)
-            .resolves(createTokenInfo({ TICK: 'JDOG', TICK_ID: 10, DECIMALS: 0,
-                ALLOW_LIST: null, BLOCK_LIST: null, OWNER: OWNER_ADDR }));
-        indexer.indexerDb.getTokenInfo
-            .withArgs('', sinon.match.any, sinon.match.any).resolves(null);
-        indexer.indexerDb.getTokenInfo
-            .withArgs(null, sinon.match.any, sinon.match.any).resolves(null);
-        indexer.indexerDb.getTokenInfo
-            .withArgs(undefined, sinon.match.any, sinon.match.any).resolves(null);
-
-        indexer.indexerDb.getAddressBalances.resolves({ 10: '0', 99: '999999999' });
-        indexer.indexerDb.isActionAllowed.resolves(true);
-        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-        indexer.indexerDb.getTickerId.resolves(99);
-        indexer.indexerDb.isOwnershipEscrowed.resolves(false);
-        indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
-        // Settleable rows: a DISPENSE at BLOCK_TIME pairs this oracle price with this snapshot.
-        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000', timestamp: BLOCK_TIME - 7200 }]);
-        indexer.indexerDb.getOraclePricesInTimeRange = sinon.stub().resolves([{ price: '0.05', effectiveAt: BLOCK_TIME - 3600 }]);
-    });
-
-    afterEach(function () { sinon.restore(); });
-
-    it('still accepts that same create BELOW the gate (replay stays byte-identical)', async function () {
-        // Historical blocks must re-evaluate exactly as they did, so below the flag-day
-        // the legacy acceptance runs even though the oracle has published nothing.
-        sinon.stub(gateRegistry, 'activeAt').callThrough()
-            .withArgs('dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION').returns(false);
-        indexer.indexerDb.getOraclePrice = sinon.stub().resolves(null);
-
-        const data = modeBData();
-        await dispenser.parse(ownershipParams(), data, false);
-
-        assert.strictEqual(data['STATUS'], 'valid', data['STATUS']);
-        sinon.assert.calledOnce(indexer.indexerDb.setTokenEscrow);
     });
 });
 
