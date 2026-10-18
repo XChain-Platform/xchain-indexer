@@ -132,7 +132,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "278796962385b78f7b3ec57d211fd0da2ae23bfb09faf8a0abbcca7cc63705cf",
+      "hash": "4acc7ba7dcea03d214a1a8cf8da9fcf469f71a9cd5b37302fdeb0b3314d4fb1b",
       "twins": [],
       "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
@@ -2225,6 +2225,13 @@
       "from": "a1200eb419e15af92ce69e0e0df8f95971d66a3e3c43bd37d9b059ad854b6e32",
       "to": "278796962385b78f7b3ec57d211fd0da2ae23bfb09faf8a0abbcca7cc63705cf",
       "reason": "add the VM toString size meter twin row",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "278796962385b78f7b3ec57d211fd0da2ae23bfb09faf8a0abbcca7cc63705cf",
+      "to": "4acc7ba7dcea03d214a1a8cf8da9fcf469f71a9cd5b37302fdeb0b3314d4fb1b",
+      "reason": "Split the indexer-only registry rows into a sixth part file",
       "date": "2026-10-18"
     }
   ]

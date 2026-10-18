@@ -36,6 +36,8 @@ const {
 } = require(vmTarget);
 
 const asRow = (time) => (time === null ? ProtocolChanges.UNARMED : time);
+// The v0.25.0 cut arms testnet at block time 1792416600.
+const TESTNET_TIME = 1792416600;
 
 function indexerEnabledAt(network, time) {
     const pc = new ProtocolChanges({ config: { NETWORK: network }, util: {}, decoderDb: { getBlockTime: async () => time } });
@@ -43,16 +45,16 @@ function indexerEnabledAt(network, time) {
 }
 
 describe('protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1', function () {
-    it('registers the part 5 row unarmed on production networks and live on regtest', function () {
+    it('registers the part 5 row unarmed on mainnet, armed on testnet at its v0.25.0 instant, and live on regtest', function () {
         const row = ProtocolChanges.get(KEY);
         assert.deepStrictEqual(new ProtocolChanges({ config: {}, util: {} }).changes[NAME], row);
         assert.deepStrictEqual(table.find((entry) => entry[0] === NAME), [
-            NAME, '0.2.0', ProtocolChanges.UNARMED, ProtocolChanges.UNARMED, 0, 0, 0, 0,
+            NAME, '0.2.0', ProtocolChanges.UNARMED, TESTNET_TIME, 0, 0, 0, 0,
         ]);
         assert.strictEqual(ProtocolChanges.STRING_RESULT_METER_MAINNET_TIME, ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.STRING_RESULT_METER_TESTNET_TIME, ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.STRING_RESULT_METER_TESTNET_TIME, TESTNET_TIME);
         assert.strictEqual(ProtocolChanges.get('protocol_changes.STRING_RESULT_METER_MAINNET_TIME'), ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.get('protocol_changes.STRING_RESULT_METER_TESTNET_TIME'), ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.get('protocol_changes.STRING_RESULT_METER_TESTNET_TIME'), TESTNET_TIME);
     });
 
     it('matches the VM instant on every network', function () {
@@ -63,10 +65,12 @@ describe('protocol_changes/vm_twin/string_result_meter_matches_vm: activation pa
         }
     });
 
-    it('agrees with the VM predicate at the production sentinel and regtest genesis', async function () {
-        for (const network of ['mainnet', 'testnet']) {
-            assert.strictEqual(await indexerEnabledAt(network, ProtocolChanges.UNARMED - 1), false, network);
-            assert.strictEqual(vmActivationAt(network, ProtocolChanges.UNARMED - 1), false, network);
+    it('agrees with the VM predicate at the mainnet sentinel, the testnet instant and regtest genesis', async function () {
+        assert.strictEqual(await indexerEnabledAt('mainnet', ProtocolChanges.UNARMED - 1), false, 'mainnet');
+        assert.strictEqual(vmActivationAt('mainnet', ProtocolChanges.UNARMED - 1), false, 'mainnet');
+        for (const time of [TESTNET_TIME - 1, TESTNET_TIME]) {
+            assert.strictEqual(await indexerEnabledAt('testnet', time), time >= TESTNET_TIME, 'testnet ' + time);
+            assert.strictEqual(vmActivationAt('testnet', time), time >= TESTNET_TIME, 'testnet ' + time);
         }
         assert.strictEqual(await indexerEnabledAt('regtest', 0), true);
         assert.strictEqual(vmActivationAt('regtest', 0), true);

@@ -54,14 +54,17 @@ function freshUnstake(){
 afterEach(function () { sinon.restore(); });
 
 describe('UNSTAKE delegated-row journal gate @regression @tier1', function () {
-    it('ships unarmed on live networks and supports the regtest drill override', function () {
+    it('ships unarmed on mainnet, armed on testnet at its v0.25.0 heights, and supports the regtest drill override', function () {
         const saved = process.env[ENV];
         try {
             delete process.env[ENV];
             assert.strictEqual(gateRegistry.get(GATE).mainnet, UNARMED);
             assert.strictEqual(gateRegistry.get(GATE).testnet, UNARMED);
+            // The v0.25.0 cut arms BTC:testnet at 157040.
+            assert.strictEqual(gateRegistry.get(GATE)['BTC:testnet'], 157040);
             assert.strictEqual(gateRegistry.activeAt(GATE, 'mainnet', 'BTC', 1e9, null), false);
-            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'BTC', 1e9, null), false);
+            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'BTC', 157039, null), false);
+            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'BTC', 157040, null), true);
             process.env[ENV] = '0';
             assert.strictEqual(gateRegistry.activeAt(GATE, 'regtest', 'BTC', 1, null), true);
         } finally {

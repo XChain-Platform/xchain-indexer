@@ -48,15 +48,15 @@ function indexerActivationAt(network, coin, height) {
 }
 
 describe('protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1', function () {
-    it('registers a per-chain height row, unarmed on mainnet and testnet, live on regtest', function () {
+    it('registers a per-chain height row, unarmed on mainnet, armed on testnet at its v0.25.0 heights, live on regtest', function () {
         assert.strictEqual(ProtocolChanges.registry.unitOf(KEY), 'height');
         assert.deepStrictEqual(indexerActivation(), {
             'BTC:mainnet': ProtocolChanges.UNARMED,
             'LTC:mainnet': ProtocolChanges.UNARMED,
             'DOGE:mainnet': ProtocolChanges.UNARMED,
-            'BTC:testnet': ProtocolChanges.UNARMED,
-            'LTC:testnet': ProtocolChanges.UNARMED,
-            'DOGE:testnet': ProtocolChanges.UNARMED,
+            'BTC:testnet': 157040,
+            'LTC:testnet': 4928000,
+            'DOGE:testnet': 68008400,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
         });

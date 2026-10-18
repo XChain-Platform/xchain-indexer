@@ -47,16 +47,18 @@ function indexerEnabledAt(network, time) {
 }
 
 describe('protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1', function () {
-    it('registers the time-table row in part 5, unarmed on production networks and live on regtest', function () {
+    it('registers the time-table row in part 5, unarmed on mainnet, armed on testnet at its v0.25.0 instant, live on regtest', function () {
+        // The v0.25.0 cut arms testnet at block time 1792416600.
+        const TESTNET_TIME = 1792416600;
         const row = ProtocolChanges.get(KEY);
         assert.deepStrictEqual(new ProtocolChanges({ config: {}, util: {} }).changes[NAME], row);
         assert.deepStrictEqual(table.find((entry) => entry[0] === NAME), [
-            NAME, '0.2.0', ProtocolChanges.UNARMED, ProtocolChanges.UNARMED, 0, 0, 0, 0,
+            NAME, '0.2.0', ProtocolChanges.UNARMED, TESTNET_TIME, 0, 0, 0, 0,
         ]);
         assert.strictEqual(ProtocolChanges.STRING_RECEIVER_METER_MAINNET_TIME, ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.STRING_RECEIVER_METER_TESTNET_TIME, ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.STRING_RECEIVER_METER_TESTNET_TIME, TESTNET_TIME);
         assert.strictEqual(ProtocolChanges.get('protocol_changes.STRING_RECEIVER_METER_MAINNET_TIME'), ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.get('protocol_changes.STRING_RECEIVER_METER_TESTNET_TIME'), ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.get('protocol_changes.STRING_RECEIVER_METER_TESTNET_TIME'), TESTNET_TIME);
     });
 
     it('matches the VM instant on every network', function () {

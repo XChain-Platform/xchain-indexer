@@ -1016,6 +1016,14 @@
       "PRICE v0 canonical price-value rule @regression @tier3 the real rule, through _parseV0 on regtest invalidates the near-zero and leading-zero forms too",
       "PRICE v0 canonical price-value rule @regression @tier3 the rule this node ships admits only the canonical form and bounds it to 19 characters"
     ],
+    "11a6bfdbba48cf64": [
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits a valid parent when the gate is active",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits an unverified parent when the parent-status gate is active",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 is unarmed on mainnet, armed on testnet at its v0.25.0 heights, and opt-in on regtest",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keeps the deployed chunk-status-only rule while the gate is inert",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keys the new rule on the chunk height",
+      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 rejects an invalid parent before reading chunks when the gate is active"
+    ],
     "11f1e52cf591cb04": [
       "protocol_changes: amounts, price, and contracts regtest overlay @regression @tier1 leaves committed values in place when every variable is refused",
       "protocol_changes: amounts, price, and contracts regtest overlay @regression @tier1 leaves the four committed regtest values unchanged when all variables are unset",
@@ -1786,12 +1794,6 @@
       "Mapper @regression @tier3 leaves a null ticker out of the batched call",
       "Mapper @regression @tier3 passes an empty list to createActionMappings when addresses list is empty"
     ],
-    "1c4b0938dade2f9a": [
-      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 agrees with the VM predicate on each side of every armed instant",
-      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 matches the VM instant on every network",
-      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
-      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 registers the time-table row in part 5, unarmed on mainnet and testnet, live on regtest"
-    ],
     "1c56af9b1dbd9f0c": [
       "late anchor reward derive counter does not log for an on-time or early derive",
       "late anchor reward derive counter logs one diagnostic with reward identity when the derive is late",
@@ -2070,14 +2072,6 @@
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_CALLBACK_TIMELOCK flag-day (/ finalize\u2192callback timelock) v0 create gate INACTIVE: CALLBACK_DELAY_BLOCKS is ignored (nulled), poll stays valid like on a legacy node",
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_CALLBACK_TIMELOCK flag-day (/ finalize\u2192callback timelock) v2 finalize deferral delay > 0: the callback is DEFERRED (due block stamped, no EXECUTE injected at finalize)",
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_CALLBACK_TIMELOCK flag-day (/ finalize\u2192callback timelock) v2 finalize deferral delay null/0: the callback fires immediately at finalize (legacy path)"
-    ],
-    "21dad44164074d03": [
-      "ANCHOR checkpoint sequence binding gate @regression @tier1 arms regtest at the height named by the environment",
-      "ANCHOR checkpoint sequence binding gate @regression @tier1 binds every v3 section after activation",
-      "ANCHOR checkpoint sequence binding gate @regression @tier1 binds v0 validation after activation",
-      "ANCHOR checkpoint sequence binding gate @regression @tier1 binds v1 validation after activation",
-      "ANCHOR checkpoint sequence binding gate @regression @tier1 exposes the canonical-safe binding reason beside the activation",
-      "ANCHOR checkpoint sequence binding gate @regression @tier1 ships unarmed on public networks and inert on regtest"
     ],
     "21de5f7673077383": [
       "mirrored ids stay out of consensus reads catches a concatenated violating literal",
@@ -2692,6 +2686,13 @@
       "list address reference parser identifies exactly the items accepted by addressRefId",
       "list address reference parser rejects non-canonical caret references and non-reference values",
       "list address reference parser returns the canonical positive integer digits without numeric coercion"
+    ],
+    "295a3effe07fecc5": [
+      "Database.getContractStakeRotationOrigin() for UNSTAKE journaling @regression @tier1 keeps the first key and the last delegation that installed the current key",
+      "UNSTAKE delegated-row journal gate @regression @tier1 journals a full UNSTAKE cooldown row from its original key for later restoration",
+      "UNSTAKE delegated-row journal gate @regression @tier1 journals both rows produced by a partial UNSTAKE under the delegated key",
+      "UNSTAKE delegated-row journal gate @regression @tier1 ships unarmed on mainnet, armed on testnet at its v0.25.0 heights, and supports the regtest drill override",
+      "UNSTAKE delegated-row journal gate @regression @tier1 writes no synthetic rotation when the current slot has no rotation origin"
     ],
     "2987ec28ce152583": [
       "AIRDROP ticker-list holder collection adds nothing for a null or undefined holders answer",
@@ -4069,6 +4070,12 @@
       "pass progress retirement: the XEXEC dispatch pass @regression on mainnet, replays the pass unchanged",
       "pass progress retirement: the XEXEC dispatch pass @regression on testnet, replays the pass unchanged"
     ],
+    "3e92f1e1c8de66f0": [
+      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 agrees with the VM predicate on each side of every armed instant",
+      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 matches the VM instant on every network",
+      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
+      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 registers the time-table row in part 5, unarmed on mainnet, armed on testnet at its v0.25.0 instant, live on regtest"
+    ],
     "3edaebe4951561d7": [
       "XChainIndexer._priceMirrorHorizon @regression @tier2 anchors on the decoder first block when nothing is indexed yet",
       "XChainIndexer._priceMirrorHorizon @regression @tier2 answers null rather than throwing when a read faults",
@@ -4580,6 +4587,10 @@
       "LEGACY_ANCHOR_REWARD_PIN mints a pinned tuple while the gate is off",
       "LEGACY_ANCHOR_REWARD_PIN mints an unpinned tuple with the gate on",
       "LEGACY_ANCHOR_REWARD_PIN skips a pinned tuple once the gate is on"
+    ],
+    "46583f298dcec09f": [
+      "protocol_changes active-stake collation gate @regression @tier1 is inert when height is null or non-finite",
+      "protocol_changes active-stake collation gate @regression @tier1 registers a height gate unarmed on mainnet, armed on testnet at its v0.25.0 heights, and active from regtest genesis"
     ],
     "4675f3133a96b7c1": [
       "mirror-admission replay witness each side resolves, from the env the parent hands it, the era A3 expects",
@@ -7245,6 +7256,12 @@
       "Callback @regression @tier3 native-coin fee payment rejects an invalid native-coin fee (validation.valid=false)",
       "Callback @regression @tier3 native-coin fee payment rejects when native-coin output is required but absent (rejected)"
     ],
+    "6bb97e3d469d3a8d": [
+      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 agrees with the VM predicate at the mainnet sentinel, the testnet instant and regtest genesis",
+      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 matches the VM instant on every network",
+      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
+      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 registers the part 5 row unarmed on mainnet, armed on testnet at its v0.25.0 instant, and live on regtest"
+    ],
     "6bcd0a7ad37149c4": [
       "ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @tier2 a filter that dropped somebody but left the set servable does NOT reject",
       "ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @tier2 fires the GENERIC literal when the set was simply too small",
@@ -7254,13 +7271,6 @@
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 filters ONLY the attestation capability",
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 keeps the echo fields and the response shape",
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 reconstructs the raw request height as block_index + CANONICAL_REORG_BUFFER"
-    ],
-    "6bd5b0bdb615a5df": [
-      "Database.getContractStakeRotationOrigin() for UNSTAKE journaling @regression @tier1 keeps the first key and the last delegation that installed the current key",
-      "UNSTAKE delegated-row journal gate @regression @tier1 journals a full UNSTAKE cooldown row from its original key for later restoration",
-      "UNSTAKE delegated-row journal gate @regression @tier1 journals both rows produced by a partial UNSTAKE under the delegated key",
-      "UNSTAKE delegated-row journal gate @regression @tier1 ships unarmed on live networks and supports the regtest drill override",
-      "UNSTAKE delegated-row journal gate @regression @tier1 writes no synthetic rotation when the current slot has no rotation origin"
     ],
     "6bdb8d1115c4bce2": [
       "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs fit the budget exactly and all of them dispatch",
@@ -8782,6 +8792,12 @@
       "AnchorRecovery checkpoint and price tables @regression @tier2 rejects an object-form batch proof that lacks price quorum",
       "AnchorRecovery checkpoint and price tables @regression @tier2 uses the ABP archive key orders and only the full writer restores both tables"
     ],
+    "816161175d723844": [
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 pins the registry row in the consensus identity",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 registers a per-chain height row, unarmed on mainnet, armed on testnet at its v0.25.0 heights, live on regtest"
+    ],
     "816d9a465e12ae5b": [
       "hub mirror validity-read table classifications @regression @tier1 classifies every validity read outside the global state watermark",
       "hub mirror validity-read table classifications @regression @tier1 classifies remote token snapshots only under its height watermark",
@@ -9056,6 +9072,12 @@
       "Database.updateBalances (parallelized) @unit @regression passes the rollback flag through to each updateAddressBalance call",
       "Database.updateBalances (parallelized) @unit @regression runs address updates sequentially (one fully completes before the next starts)"
     ],
+    "8631561396ca1ece": [
+      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 agrees with the VM predicate on armed and unarmed networks",
+      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 matches the VM instant on every network",
+      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
+      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 registers the time-table row in part 5, unarmed on mainnet, armed on testnet at its v0.25.0 instant, live on regtest"
+    ],
     "8643007e19b6fe3d": [
       "indexer API auth: JSON-RPC batch gate with INDEXER_API_KEY configured 401s a gated call mixed with a public call in a batch",
       "indexer API auth: JSON-RPC batch gate with INDEXER_API_KEY configured 401s a gated call smuggled inside a BATCH with no key",
@@ -9064,14 +9086,6 @@
       "indexer API auth: JSON-RPC batch gate with INDEXER_API_KEY configured passes a public-only batch with no key",
       "indexer API auth: JSON-RPC batch gate with no key and ALLOW_UNAUTHED=false (fail closed) 401s a gated batch",
       "indexer API auth: JSON-RPC batch gate with no key and ALLOW_UNAUTHED=true (keyless escape hatch) passes a gated batch (explicitly keyless)"
-    ],
-    "86748d9830bb6043": [
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits a valid parent when the gate is active",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits an unverified parent when the parent-status gate is active",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 is unarmed on public networks and opt-in on regtest",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keeps the deployed chunk-status-only rule while the gate is inert",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keys the new rule on the chunk height",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 rejects an invalid parent before reading chunks when the gate is active"
     ],
     "86e3b95c0a42a9c6": [
       "anchor reward gates treat an UNPINNED threshold as inert @regression @tier2 isAnchorRewardActive is off at every height when the threshold is null",
@@ -9812,12 +9826,6 @@
       "ANCHOR v3 archive check returns the v1 reason for a body CRC mismatch",
       "ANCHOR v3 archive check returns the v1 reason for a non-numeric batch sequence"
     ],
-    "90c77ffe11302b77": [
-      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 agrees with the VM predicate at the production sentinel and regtest genesis",
-      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 matches the VM instant on every network",
-      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
-      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 registers the part 5 row unarmed on production networks and live on regtest"
-    ],
     "90d17d67d210861e": [
       "the admission map rides the on-chain price wire one slot per round (rows 17 and 26) the on-chain batch action, driven through the real parser a batch below the activation is on exactly the same road, so nothing regressed",
       "the admission map rides the on-chain price wire one slot per round (rows 17 and 26) the on-chain batch action, driven through the real parser below the activation there is no slot: a trailing field still INVALIDATES the batch",
@@ -10123,12 +10131,6 @@
       "HubClient hub-rejection classification throws on {accepted:false} validator snapshot unavailable so the durable row is retried, not deleted",
       "HubClient hub-rejection classification throws on {error} aggregator still booting so the durable row is retried, not deleted",
       "HubClient hub-rejection classification throws on {error} handler exception so the durable row is retried, not deleted"
-    ],
-    "921055a6da19b0a7": [
-      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 agrees with the VM predicate on armed and unarmed networks",
-      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 matches the VM instant on every network",
-      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
-      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 registers the time-table row in part 5, unarmed on production networks and live on regtest"
     ],
     "9227d0e83b5535c1": [
       "protocol-change registry is prototype-free @regression @tier1 addChange uniqueness is not confused by an inherited member accepts a change whose name collides with a prototype member",
@@ -13568,6 +13570,14 @@
       "Controller-bound token: Phase-1 single-column model retired @regression the single-column CONTROLLER no longer rides the token-edit formats CONTROLLER lives only on the dedicated binding format (6)",
       "Controller-bound token: Phase-1 single-column model retired @regression the single-column CONTROLLER no longer rides the token-edit formats ISSUE format 0 (full) does not carry CONTROLLER"
     ],
+    "c262ebb8f7e7ced1": [
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 arms regtest at the height named by the environment",
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 binds every v3 section after activation",
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 binds v0 validation after activation",
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 binds v1 validation after activation",
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 exposes the canonical-safe binding reason beside the activation",
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 ships unarmed on mainnet, armed on testnet at its v0.25.0 heights, and inert on regtest"
+    ],
     "c26b3a8dec758d2c": [
       "migrate CLI --file targeting @regression --file scopes the run to the named migration (passes opts.only)",
       "migrate CLI --file targeting @regression --file with no value exits 2 before building a DB handle",
@@ -14074,12 +14084,6 @@
       "createDestroy() - multi-destroy legs separates legs of the same TICK carrying different memos (FORMAT 2)",
       "createDestroy() - multi-destroy legs writes ONE ROW PER TICK LEG of a multi-destroy sharing one action_index",
       "createSend() - multi-send legs does not let a re-parse stamp one leg over every other leg of the same send"
-    ],
-    "ca16e0fe306a77ff": [
-      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
-      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
-      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 pins the registry row in the consensus identity",
-      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 registers a per-chain height row, unarmed on mainnet and testnet, live on regtest"
     ],
     "ca7df2a33ba1c8cc": [
       "src/sql schema parse-coverage @regression @tier1 actions.sql every parsed column has a name and a definition",
@@ -15712,10 +15716,6 @@
       "Escrow release negation parity @regression @tier1 SWAP_EXPIRE releases an 18-dp amount bit-exactly",
       "Escrow release negation parity @regression @tier1 negative control: JS unary minus on the same value DOES lose precision",
       "Escrow release negation parity @regression @tier1 no action handler negates a ledger amount with JS unary minus (source scan)"
-    ],
-    "db0f22ae2fc52ee3": [
-      "protocol_changes active-stake collation gate @regression @tier1 is inert when height is null or non-finite",
-      "protocol_changes active-stake collation gate @regression @tier1 registers a height gate unarmed on public networks and active from regtest genesis"
     ],
     "db44a08889a20bc8": [
       "HubDbSync price barrier while the mirror is behind @regression @tier1 times out when the mirror never catches up",
@@ -18221,7 +18221,7 @@
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
-        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "c262ebb8f7e7ced1",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
@@ -18244,7 +18244,7 @@
         "test/unit/actions/anchor/bundle_order/anchor_order_reason_helpers.test.js": "3277653238c8d36f",
         "test/unit/actions/anchor/bundle_order/bundle_order_cases.test.js": "22e147a7ae0e9cbb",
         "test/unit/actions/anchor/checkpoint_seq_bind_reason.test.js": "1292af054254884e",
-        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "86748d9830bb6043",
+        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "11a6bfdbba48cf64",
         "test/unit/actions/anchor/v3/anchor_v3_archive_check.test.js": "90b635bde1229f56",
         "test/unit/actions/anchor/v3/anchor_v3_fold_rows.test.js": "78c42da2461e2b5b",
         "test/unit/actions/anchor/v3/anchor_v3_sections.test.js": "fae8eeba338baf48",
@@ -18957,7 +18957,7 @@
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
         "test/unit/contracts/stake_snapshot_strings.test.js": "a0a533092c7a2e98",
-        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "6bd5b0bdb615a5df",
+        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "295a3effe07fecc5",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/constructor_gas_ceiling_exhausted.test.js": "3cdde43380ba5754",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
@@ -19413,7 +19413,7 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "b06e6a79b9e81a02",
         "test/unit/protocol/protocol_changes.test/unusable_block_time.test.js": "cb3e0ef54d91ff54",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
-        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "46583f298dcec09f",
         "test/unit/protocol_changes/anchor/anchor_bundle_order_row.test.js": "332212f43d474164",
         "test/unit/protocol_changes/anchor/anchor_fold_rows.test.js": "2d944feb25011092",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
@@ -19449,7 +19449,7 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "4b19ce0a35e2bbd5",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "3544425276a8f2df",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "6a9eb32db4ae5462",
-        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "816161175d723844",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_hook_row.test.js": "f959c69addce7dd8",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "9d2780219faaef21",
@@ -19457,9 +19457,9 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
-        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
-        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
-        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "1c4b0938dade2f9a",
+        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
+        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "6bb97e3d469d3a8d",
+        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
@@ -20079,7 +20079,7 @@
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
-        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "c262ebb8f7e7ced1",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
@@ -20091,7 +20091,7 @@
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "162227ac9894db7b",
-        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "86748d9830bb6043",
+        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "11a6bfdbba48cf64",
         "test/unit/actions/anchor_golden_vectors.test.js": "0249295e69b670ed",
         "test/unit/actions/attest.test.js": "47a7d48351777a8c",
         "test/unit/actions/attest.test/broadcast_fee_reimbursement.test.js": "3fa5267a27e03ef7",
@@ -20604,7 +20604,7 @@
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
-        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "6bd5b0bdb615a5df",
+        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "295a3effe07fecc5",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/constructor_gas_ceiling_exhausted.test.js": "3cdde43380ba5754",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
@@ -20940,7 +20940,7 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "b06e6a79b9e81a02",
         "test/unit/protocol/protocol_changes.test/unusable_block_time.test.js": "cb3e0ef54d91ff54",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
-        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "46583f298dcec09f",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
@@ -20966,16 +20966,16 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "4b19ce0a35e2bbd5",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "3544425276a8f2df",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "6a9eb32db4ae5462",
-        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "816161175d723844",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "9d2780219faaef21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "cf6d90b5bf31b6c8",
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
-        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
-        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
-        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "1c4b0938dade2f9a",
+        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
+        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "6bb97e3d469d3a8d",
+        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
@@ -21115,13 +21115,13 @@
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
-        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "c262ebb8f7e7ced1",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "162227ac9894db7b",
-        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "86748d9830bb6043",
+        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "11a6bfdbba48cf64",
         "test/unit/actions/attest.test/responsible_set_gates.test.js": "90165b8ec993c4e6",
         "test/unit/actions/attest/attest_relay_reject_slot.test.js": "12aed4d69023d84d",
         "test/unit/actions/attest/attest_response_verify_vectors.test.js": "695202d293f2583e",
@@ -21297,7 +21297,7 @@
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
-        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "6bd5b0bdb615a5df",
+        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "295a3effe07fecc5",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/constructor_gas_ceiling_exhausted.test.js": "3cdde43380ba5754",
         "test/unit/contracts/vm_stake_snapshot_decimal_strings.test.js": "af56bad14283ad0f",
@@ -21545,7 +21545,7 @@
         "test/unit/protocol/list_reference_validity_gate.test.js": "75196e85b9673333",
         "test/unit/protocol/price_time_gate.test.js": "3ba5b094789a13b1",
         "test/unit/protocol/protocol_change_registry_prototype.test.js": "9227d0e83b5535c1",
-        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "46583f298dcec09f",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
@@ -21571,16 +21571,16 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "4b19ce0a35e2bbd5",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "3544425276a8f2df",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "6a9eb32db4ae5462",
-        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "816161175d723844",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "9d2780219faaef21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "cf6d90b5bf31b6c8",
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
-        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
-        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
-        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "1c4b0938dade2f9a",
+        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
+        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "6bb97e3d469d3a8d",
+        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
@@ -21716,7 +21716,7 @@
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
-        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "c262ebb8f7e7ced1",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
@@ -21728,7 +21728,7 @@
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "162227ac9894db7b",
-        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "86748d9830bb6043",
+        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "11a6bfdbba48cf64",
         "test/unit/actions/anchor_golden_vectors.test.js": "0249295e69b670ed",
         "test/unit/actions/attest.test.js": "47a7d48351777a8c",
         "test/unit/actions/attest.test/broadcast_fee_reimbursement.test.js": "3fa5267a27e03ef7",
@@ -22241,7 +22241,7 @@
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
-        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "6bd5b0bdb615a5df",
+        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "295a3effe07fecc5",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/constructor_gas_ceiling_exhausted.test.js": "3cdde43380ba5754",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
@@ -22577,7 +22577,7 @@
         "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js": "b06e6a79b9e81a02",
         "test/unit/protocol/protocol_changes.test/unusable_block_time.test.js": "cb3e0ef54d91ff54",
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
-        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "db0f22ae2fc52ee3",
+        "test/unit/protocol_changes/active_stake_collation_gate.test.js": "46583f298dcec09f",
         "test/unit/protocol_changes/apply_length_meter_row.test.js": "f092fa21a185e502",
         "test/unit/protocol_changes/assembler.test.js": "ee1365d37c917234",
         "test/unit/protocol_changes/bet_feed_list_edit_row.test.js": "ea62056189a4fc7e",
@@ -22603,16 +22603,16 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "4b19ce0a35e2bbd5",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "3544425276a8f2df",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "6a9eb32db4ae5462",
-        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "816161175d723844",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "9d2780219faaef21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "cf6d90b5bf31b6c8",
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
-        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
-        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
-        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "1c4b0938dade2f9a",
+        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
+        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "6bb97e3d469d3a8d",
+        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",

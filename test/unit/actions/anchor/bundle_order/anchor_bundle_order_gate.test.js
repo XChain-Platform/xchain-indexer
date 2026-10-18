@@ -35,7 +35,9 @@ function setNetwork(network) {
 
 async function parseBundle(network, overrides = {}) {
     setNetwork(network);
-    const blockIndex = overrides.blockIndex || 70000000;
+    // Testnet sits above the bundle-order height and below the v0.25.0 DOGE:testnet
+    // checkpoint-sequence binding arm (68008400), which these fixtures do not satisfy.
+    const blockIndex = overrides.blockIndex || (network === 'testnet' ? 68008399 : 70000000);
     const data = createBaseData({
         ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE', BLOCK_INDEX: blockIndex
     });

@@ -20,7 +20,8 @@ const CAPABILITIES = ['cross_chain', 'oracle_publish', 'price', 'attestation'];
 
 function snapshotRow(capability = 'oracle_publish'){
     return {
-        snapshot_block: 900000,
+        // Below the v0.25.0 BTC:testnet capability-proof arm (157040); mainnet stays unarmed.
+        snapshot_block: 157039,
         capability,
         signing_pubkey: 'a'.repeat(64),
         source: 'src1',
