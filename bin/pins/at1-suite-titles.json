@@ -5418,6 +5418,18 @@
       "05 \u2013 Chain Reorganization @regression @tier3 3. replacement blocks after reorg produce correct final balances",
       "05 \u2013 Chain Reorganization @regression @tier3 4. reorg to first block clears all subsequent state"
     ],
+    "4c6831ed3b0c998a": [
+      "capability snapshot proof verifier @regression @tier1 accepts and rejects pinned sets with the sync parser rules",
+      "capability snapshot proof verifier @regression @tier1 holds absent and mis-addressed responses before examining signatures",
+      "capability snapshot proof verifier @regression @tier1 holds checkpoints for another chain, network, or buried block",
+      "capability snapshot proof verifier @regression @tier1 holds commitments that do not hash to their member leaf",
+      "capability snapshot proof verifier @regression @tier1 holds missing and invalid stake member proofs",
+      "capability snapshot proof verifier @regression @tier1 holds proofs with a wrong block, root, or state-root version",
+      "capability snapshot proof verifier @regression @tier1 judges matching, changed, and multi-source snapshot rows",
+      "capability snapshot proof verifier @regression @tier1 refuses verified non-membership",
+      "capability snapshot proof verifier @regression @tier1 requires a trusted stake-weighted checkpoint quorum",
+      "capability snapshot proof verifier @regression @tier1 requires every listed first-use signature to be valid and at least one"
+    ],
     "4c6fe17f3b81d78b": [
       "LIST bridge policy rules @regression @consensus any-coin items (TOKEN_POLICY_INHERITANCE_ACTIVATION) admits a foreign-coin item at/above the flag",
       "LIST bridge policy rules @regression @consensus any-coin items (TOKEN_POLICY_INHERITANCE_ACTIVATION) records a foreign-coin item invalid below the flag",
@@ -18111,8 +18123,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1427,
-      "titleCount": 14028,
+      "fileCount": 1428,
+      "titleCount": 14038,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18791,6 +18803,7 @@
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
         "test/unit/consensus/capability_snapshot_proof/trust_set.test.js": "b468c3fd3eff32ee",
+        "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
