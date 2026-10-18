@@ -61,6 +61,8 @@ const {
     STRING_RESULT_METER_TESTNET_TIME,
     STRING_RECEIVER_METER_MAINNET_TIME,
     STRING_RECEIVER_METER_TESTNET_TIME,
+    TOSTRING_SIZE_METER_MAINNET_TIME,
+    TOSTRING_SIZE_METER_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -200,6 +202,10 @@ const CHANGES = [
     // STRING_RESULT_METER mirrors the VM's block-time activation table.
     ['STRING_RESULT_METER', '0.2.0', STRING_RESULT_METER_MAINNET_TIME,
         STRING_RESULT_METER_TESTNET_TIME, 0, 0, 0, 0],
+
+    // TOSTRING_SIZE_METER mirrors the VM's block-time activation table.
+    ['TOSTRING_SIZE_METER', '0.2.0', TOSTRING_SIZE_METER_MAINNET_TIME,
+        TOSTRING_SIZE_METER_TESTNET_TIME, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;

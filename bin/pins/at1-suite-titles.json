@@ -1780,6 +1780,12 @@
       "Mapper @regression @tier3 leaves a null ticker out of the batched call",
       "Mapper @regression @tier3 passes an empty list to createActionMappings when addresses list is empty"
     ],
+    "1c4b0938dade2f9a": [
+      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 agrees with the VM predicate on each side of every armed instant",
+      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 matches the VM instant on every network",
+      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
+      "protocol_changes/vm_twin/tostring_size_meter_matches_vm: activation parity @regression @tier1 registers the time-table row in part 5, unarmed on mainnet and testnet, live on regtest"
+    ],
     "1c56af9b1dbd9f0c": [
       "late anchor reward derive counter does not log for an on-time or early derive",
       "late anchor reward derive counter logs one diagnostic with reward identity when the derive is late",
@@ -5746,6 +5752,21 @@
       "BET_EXPIRE refunds open bets through one batched terminal write @regression @tier2 flips every open bet in one settleBetsBatch call and never per bet",
       "BET_EXPIRE refunds open bets through one batched terminal write @regression @tier2 still calls the batch writer with an empty list when the feed has no open bets"
     ],
+    "56c77d1cdb0da4c3": [
+      "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
+      "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM GAS_CEILING_SUCCESS_ACTIVATION matches the indexer GAS_CEILING_SUCCESS row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM REST_PATTERN_METER gate flips at the indexer REST_PATTERN_METER row instant per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM STRING_RESULT_METER_ACTIVATION matches the indexer STRING_RESULT_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM TOSTRING_SIZE_METER_ACTIVATION matches the indexer TOSTRING_SIZE_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
+      "consensus parameters are frozen (track 8 guard) @regression the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp",
+      "consensus parameters are frozen (track 8 guard) @regression vmFailureStatus maps every VM error into the frozen closed token set"
+    ],
     "56d2189dafc1f3bf": [
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 a BATCH does NOT bound EXECUTE, so two of them really do reach the handler",
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 batch.js stamps each subcommand its own 0-based BATCH_POSITION",
@@ -8357,20 +8378,6 @@
       "protocol_changes unarmed rows use the named sentinel @regression @tier1 detects a stray all-nines value without treating prose as a value",
       "protocol_changes unarmed rows use the named sentinel @regression @tier1 has no bare sentinel in the bridge, list, or archive rollback rows",
       "protocol_changes unarmed rows use the named sentinel @regression @tier1 names the supply-zero mainnet time sentinel"
-    ],
-    "7c28aac5a542baf1": [
-      "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
-      "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM GAS_CEILING_SUCCESS_ACTIVATION matches the indexer GAS_CEILING_SUCCESS row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM REST_PATTERN_METER gate flips at the indexer REST_PATTERN_METER row instant per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM STRING_RESULT_METER_ACTIVATION matches the indexer STRING_RESULT_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
-      "consensus parameters are frozen (track 8 guard) @regression the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp",
-      "consensus parameters are frozen (track 8 guard) @regression vmFailureStatus maps every VM error into the frozen closed token set"
     ],
     "7c6586e0777e9c99": [
       "BET bounded latch+expire pass @regression @tier2 a max-size feed always fits a full budget (no wedge), and zero-bet feeds are row-bounded",
@@ -18187,8 +18194,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1441,
-      "titleCount": 14076,
+      "fileCount": 1442,
+      "titleCount": 14081,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18882,7 +18889,7 @@
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/consensus_rules_digest_twin_bytes.test.js": "c8d4c432d417022a",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
@@ -19463,6 +19470,7 @@
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
+        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "1c4b0938dade2f9a",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
@@ -20005,8 +20013,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1093,
-      "titleCount": 11110,
+      "fileCount": 1094,
+      "titleCount": 11115,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20561,7 +20569,7 @@
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
         "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
@@ -20978,6 +20986,7 @@
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
+        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "1c4b0938dade2f9a",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
@@ -21104,8 +21113,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 530,
-      "titleCount": 5721,
+      "fileCount": 531,
+      "titleCount": 5725,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21582,6 +21591,7 @@
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
+        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "1c4b0938dade2f9a",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
@@ -21640,8 +21650,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1093,
-      "titleCount": 11110,
+      "fileCount": 1094,
+      "titleCount": 11115,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22196,7 +22206,7 @@
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
         "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
@@ -22613,6 +22623,7 @@
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
+        "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "1c4b0938dade2f9a",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
