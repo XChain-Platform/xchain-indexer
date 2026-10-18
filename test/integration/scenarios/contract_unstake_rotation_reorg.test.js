@@ -68,6 +68,10 @@ function makeDb(util, config) {
     const db = Object.create(Database.prototype);
     Object.assign(db, {
         config, util, indexer: null, _internCache: null, transactionConnection: null,
+        _statusActionIdCache: {
+            committed: { status: new Map(), action: new Map() },
+            pending:   { status: new Map(), action: new Map() },
+        },
         suppressIndexIdCreation: false, deterministicIndexingStarted: false,
         doQuery: (sql, args) => indexerQuery(sql, args),
         isActionAllowed: async () => true,
