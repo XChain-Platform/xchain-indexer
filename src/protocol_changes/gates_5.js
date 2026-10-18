@@ -78,6 +78,23 @@ addGate('resource_fault_signal_heights.RESOURCE_FAULT_SIGNAL_ACTIVATION', 'heigh
     regtest: 0,
 });
 
+// host_fault_halt_heights
+// Per-chain height on the processing chain's own block_index. At or after it the VM
+// halts deterministically when a host fault escapes the execution boundary. Below it
+// the prior host-fault behavior replays exactly as before. Unarmed on mainnet and
+// testnet until a release names heights. MUST equal xchain-vm
+// HOST_FAULT_HALT_ACTIVATION, whose null is this row's UNARMED.
+addGate('host_fault_halt_heights.HOST_FAULT_HALT_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
 // host_error_stack_strip_heights
 // Per-chain height on the processing chain's own block_index. At or after it the VM
 // rethrows an error a host gateway function threw as a fresh in-isolate error of the
