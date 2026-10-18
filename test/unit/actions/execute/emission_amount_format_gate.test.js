@@ -89,9 +89,10 @@ describe('VM emission amount format gate @regression @tier1', function(){
         assert.strictEqual(String(await round(makeExecute(), '0x10')), '16');
     });
 
-    it('mainnet and testnet are unarmed', async function(){
+    it('mainnet is unarmed and testnet is unarmed below its v0.24.0 height', async function(){
         process.env[ENV] = 'armed';
-        for(const net of ['mainnet', 'testnet'])
-            assert.strictEqual(String(await round(makeExecute(net), 'NaN', 1e9)), '0', net);
+        assert.strictEqual(String(await round(makeExecute('mainnet'), 'NaN', 1e9)), '0', 'mainnet');
+        assert.strictEqual(String(await round(makeExecute('testnet'), 'NaN', 156907)), '0', 'testnet below');
+        await assert.rejects(round(makeExecute('testnet'), 'NaN', 156908), /quantity \(format\)/, 'testnet at its height');
     });
 });

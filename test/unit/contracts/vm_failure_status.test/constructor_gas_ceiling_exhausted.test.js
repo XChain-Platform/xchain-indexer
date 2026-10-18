@@ -98,12 +98,14 @@ describe('DEPLOY constructor gas clamp on every path @regression @tier1', functi
     });
 
     it('replays the raw overshoot before the activation, exactly as the unclamped settle did', async function () {
+        // The v0.24.0 cut arms testnet at BTC 156908, LTC 4927400 and DOGE 68005165, so testnet replays below them.
+        const BELOW = { mainnet: { BTC: 99999999, LTC: 99999999, DOGE: 99999999 }, testnet: { BTC: 156907, LTC: 4927399, DOGE: 68005164 } };
         for (let network of ['mainnet', 'testnet']) {
             for (let coin of ['BTC', 'LTC', 'DOGE']) {
-                let failed = await settle(network, coin, 99999999, { success: false, error: 'error: x', gasUsed: OVERSHOOT });
+                let failed = await settle(network, coin, BELOW[network][coin], { success: false, error: 'error: x', gasUsed: OVERSHOOT });
                 assert.strictEqual(failed.totalGas, GAS_COST + OVERSHOOT, coin + ':' + network);
                 assert.strictEqual(failed.error, 'invalid: constructor failed: error: x');
-                let succeeded = await settle(network, coin, 99999999, { success: true, error: null, gasUsed: GAS_CEILING + 9 });
+                let succeeded = await settle(network, coin, BELOW[network][coin], { success: true, error: null, gasUsed: GAS_CEILING + 9 });
                 assert.strictEqual(succeeded.totalGas, GAS_COST + GAS_CEILING + 9, coin + ':' + network);
             }
         }
