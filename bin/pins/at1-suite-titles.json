@@ -16359,6 +16359,11 @@
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch: a republish after a failed head a third encoding absorbs after two failed ones, so no fixed bound is involved",
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch: a republish after a failed head with no valid head, a slot the failed encoding holds still refuses another encoding's chunk"
     ],
+    "e4d6b37db2e1966e": [
+      "capability snapshot proof below-gate behavior @regression @tier1 keeps LTC and DOGE mirror-resolved capabilities unknown on mainnet and testnet",
+      "capability snapshot proof below-gate behavior @regression @tier1 keeps a BTC row above the local tip unknown without fetching a proof",
+      "capability snapshot proof below-gate behavior @regression @tier1 keeps an unconfigured BTC capability unknown without fetching a proof"
+    ],
     "e53e052972bf94f7": [
       "XBRIDGE escrow constants (consensus) carries BRIDGE_<COIN> for every other coin, and none for itself, on every network",
       "XBRIDGE escrow constants (consensus) every escrow literal is a valid address on its own chain and network",
@@ -18092,8 +18097,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1421,
-      "titleCount": 14019,
+      "fileCount": 1422,
+      "titleCount": 14022,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18766,6 +18771,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
+        "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
