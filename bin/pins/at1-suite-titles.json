@@ -3488,6 +3488,10 @@
       "protocol_changes/vm_twin/host_call_bounds_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
       "protocol_changes/vm_twin/host_call_bounds_matches_vm: activation parity @regression @tier1 registers the time-table row in part 5, unarmed on mainnet, armed on testnet at its v0.24.0 heights, live on regtest"
     ],
+    "356a7eb78db84942": [
+      "state_hash index-map class (id-determinism P4) @regression armed: an IDENTICAL id map hashes the same (no false halt across the recovery boundary)",
+      "state_hash index-map class (id-determinism P4) @regression armed: the id map is folded in, and a divergent id->address pair HALTS (different hash)"
+    ],
     "359bcfb442706852": [
       "Adversarial ^<id> resolution: dangling / malformed references @adversarial @tier1 a FLOAT ^1.5 is non-canonical -> null (never coerced onto an integer FK)",
       "Adversarial ^<id> resolution: dangling / malformed references @adversarial @tier1 a NEGATIVE ^-1 is non-canonical -> null",
@@ -5265,6 +5269,10 @@
     "4e8f8ab1fecbfb96": [
       "consensus/vm_lint_destructure_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
       "consensus/vm_lint_destructure_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
+    ],
+    "4e9f9a967a5f9812": [
+      "ANCHOR v1 checkpoint sequence binding @regression @tier1 reads both replay watermarks from valid rows only at the gate",
+      "ANCHOR v1 checkpoint sequence binding @regression @tier1 refuses the archive head reason returned at the gate"
     ],
     "4ea28f17e16f01bd": [
       "getEffectiveUnprocessedCallResults same-DB deployment: MAX_SAFE_INTEGER cap threads through unchanged (caller needs full set)",
@@ -7320,6 +7328,12 @@
       "policy apply by shared-list reference creates a fresh full-copy list instead of editing a shared pointer",
       "policy apply by shared-list reference keeps legacy rows byte-identical above and below the consumer gate",
       "policy apply by shared-list reference points a copy at a foreign mirror with one ISSUE 5 leg and no LIST leg"
+    ],
+    "6d32e4c3df3140f6": [
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 keeps the all-status watermark immediately before activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 reads only valid checkpoint rows for a bound section at activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 refuses a noncanonical bound sequence at activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 refuses a section whose sequence differs from its snapshot at activation"
     ],
     "6d4320fffe6e67ab": [
       "protocol_changes consensus-bound indexer rows @regression @tier1 keeps gates_1.js at or under 400 lines",
@@ -10159,13 +10173,6 @@
       "EQUIV XCALL canonical (WI-2 bump 2) is driven in the legacy arm: admission columns are ignored in BOTH phases",
       "EQUIV XCALL canonical (WI-2 bump 2) result at/above the flag-day \u2192 header-wrapped with its OWN round id"
     ],
-    "93c91f292d24175d": [
-      "state_hash index-map class (id-determinism P4) @regression armed: an IDENTICAL id map hashes the same (no false halt across the recovery boundary)",
-      "state_hash index-map class (id-determinism P4) @regression armed: the id map is folded in, and a divergent id->address pair HALTS (different hash)",
-      "state_hash index-map class (id-determinism P4) @regression gate: every network armed at genesis (height 0, regtest via); at/above threshold activates",
-      "state_hash index-map class (id-determinism P4) @regression inert: preimage is byte-identical to the pre-feature shape (no index-map keys)",
-      "state_hash index-map class (id-determinism P4) @regression inert: state_hash is BLIND to the id map (a divergent map hashes the same)"
-    ],
     "93d204b9c442eeda": [
       "Destroy @regression @tier1 format 1: multi-destroy full valid multi-destroy: createDestroy called for each distinct TICK",
       "Destroy @regression @tier1 multi-destroy consolidation different MEMOs for same TICK produce separate destroys",
@@ -11571,6 +11578,11 @@
       "Send handler: gated total by resolved tick ID @regression @tier1 ignores malformed placeholder legs from already-invalid actions",
       "Send handler: gated total by resolved tick ID @regression @tier1 requires handoffs when spelling variants together cross the threshold"
     ],
+    "a91a550211543e4a": [
+      "ANCHOR v3 checkpoint sequence binding @regression @tier1 keeps binding inert and reads all rows below activation",
+      "ANCHOR v3 checkpoint sequence binding @regression @tier1 reads checkpoint and archive watermarks from valid rows at activation",
+      "ANCHOR v3 checkpoint sequence binding @regression @tier1 refuses a mismatched fold section at activation"
+    ],
     "a92457ce41a222af": [
       "FORMAT_VERSION boundary tests (via ISSUE) @regression @tier2 TS-14: FORMAT_VERSION = 0 (control) is valid",
       "FORMAT_VERSION boundary tests (via ISSUE) @regression @tier2 TS-14: FORMAT_VERSION = 255 (max value getFormatVersion accepts, but unknown to Issue) is invalid",
@@ -11810,14 +11822,6 @@
       "capability snapshot proof binding @regression @tier1 holds proofs that are absent, at another block, or stamped with another version",
       "capability snapshot proof binding @regression @tier1 refuses a verified non-member",
       "capability snapshot proof binding @regression @tier1 verifies a real member on testnet, mainnet, and regtest"
-    ],
-    "ac51d51746a87eae": [
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits a valid parent when the gate is active",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 admits an unverified parent only when the head-side status gate admits it",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 is unarmed on public networks and opt-in on regtest",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keeps the deployed chunk-status-only rule while the gate is inert",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keys the new rule on the chunk height and the unverified admission on the parent height",
-      "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 rejects an invalid parent before reading chunks when the gate is active"
     ],
     "ac937e0de4e25dbe": [
       "Indexer cross-node determinism baseline @regression @tier1 every block produced a ledger + actions consensus hash",
@@ -14664,23 +14668,6 @@
       "dropRefRowsFromFirst throws a TypeError on bad arguments",
       "dropRefRowsFromFirst uses the lowest ref seq regardless of input order",
       "policy ref settle reasons exist with distinct text"
-    ],
-    "cd53417c159a33c6": [
-      "Anchor head-side reassembly gate @regression chunks-before-head, corrupt blob: head-side gate flags the head invalid_archive",
-      "Anchor head-side reassembly gate @regression chunks-before-head, sound blob: head-side gate verifies and does not flag",
-      "Anchor head-side reassembly gate @regression complete set plus a stray out-of-range chunk, corrupt blob: coverage still runs the check",
-      "Anchor head-side reassembly gate @regression head-first ordering unchanged: no chunks stored yet means no head-side stamp",
-      "Anchor head-side reassembly gate @regression stray out-of-range chunk masking a missing index: count would fire, coverage does not",
-      "Anchor head-side reassembly gate @regression unverified head (snapshot-less node), chunks-before-head, corrupt blob: still flags invalid_archive",
-      "Anchor head-side reassembly gate @regression unverified head, chunks-before-head, sound blob: verifies and does not flag",
-      "Anchor head-side reassembly gate: unverified flag-day @regression every network is armed at 0, mainnet included since the 2026-09-09 ruling",
-      "Anchor head-side reassembly gate: unverified flag-day @regression gate ARMED (mainnet, shipped map), unverified head, corrupt blob: stamps from genesis",
-      "Anchor head-side reassembly gate: unverified flag-day @regression gate ARMED (regtest), unverified head, corrupt blob: stamps",
-      "Anchor head-side reassembly gate: unverified flag-day @regression gate ARMED (testnet), unverified head, corrupt blob: stamps from genesis",
-      "Anchor head-side reassembly gate: unverified flag-day @regression gate INERT (mainnet, key pinned inert), VALID head, corrupt blob: the always-on half of the gate still stamps",
-      "Anchor head-side reassembly gate: unverified flag-day @regression gate INERT (mainnet, key pinned inert), unverified head, corrupt blob: deployed valid-only rule stands, no stamp",
-      "Anchor head-side reassembly gate: unverified flag-day @regression the gate is keyed on the HEAD's own DOGE height: one block below the threshold is inert",
-      "Anchor head-side reassembly gate: unverified flag-day @regression the gate read is fail-closed on a junk height or an unknown network"
     ],
     "cd82da214987858b": [
       "Rollback.runRollbackTransaction keeps the step error when the rollback also fails control: a clean rollback still rethrows the step error and logs no rollback fault",
@@ -18207,8 +18194,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1436,
-      "titleCount": 14081,
+      "fileCount": 1439,
+      "titleCount": 14087,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18246,8 +18233,11 @@
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "5c969c0d766afbe1",
@@ -19591,7 +19581,7 @@
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
         "test/unit/state_commitment/state_hash/state_hash_bet_status.test.js": "e285cca529713787",
-        "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "93c91f292d24175d",
+        "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "356a7eb78db84942",
         "test/unit/state_commitment/state_hash/state_hash_poll_finalize.test.js": "e3ed0f90fd114dfc",
         "test/unit/state_commitment/state_hash/state_hash_token_supply.test.js": "de2588208d06b802",
         "test/unit/state_subtree_activation.test.js": "a2343508ab4cdd95",
@@ -20020,8 +20010,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1088,
-      "titleCount": 11120,
+      "fileCount": 1091,
+      "titleCount": 11121,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20098,15 +20088,18 @@
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
-        "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "cd53417c159a33c6",
+        "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "5c969c0d766afbe1",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "162227ac9894db7b",
-        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "ac51d51746a87eae",
+        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "86748d9830bb6043",
         "test/unit/actions/anchor_golden_vectors.test.js": "0249295e69b670ed",
         "test/unit/actions/attest.test.js": "47a7d48351777a8c",
         "test/unit/actions/attest.test/broadcast_fee_reimbursement.test.js": "144c10625486ea84",
@@ -21076,7 +21069,7 @@
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
         "test/unit/state_commitment/state_hash/state_hash_bet_status.test.js": "e285cca529713787",
-        "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "93c91f292d24175d",
+        "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "356a7eb78db84942",
         "test/unit/state_commitment/state_hash/state_hash_poll_finalize.test.js": "e3ed0f90fd114dfc",
         "test/unit/state_commitment/state_hash/state_hash_token_supply.test.js": "de2588208d06b802",
         "test/unit/state_subtree_activation.test.js": "a2343508ab4cdd95",
@@ -21114,8 +21107,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 525,
-      "titleCount": 5709,
+      "fileCount": 528,
+      "titleCount": 5718,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21128,9 +21121,12 @@
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "162227ac9894db7b",
-        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "ac51d51746a87eae",
+        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "86748d9830bb6043",
         "test/unit/actions/attest.test/responsible_set_gates.test.js": "90165b8ec993c4e6",
         "test/unit/actions/attest/attest_relay_reject_slot.test.js": "12aed4d69023d84d",
         "test/unit/actions/attest/attest_response_verify_vectors.test.js": "695202d293f2583e",
@@ -21645,8 +21641,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1088,
-      "titleCount": 11120,
+      "fileCount": 1091,
+      "titleCount": 11121,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21723,15 +21719,18 @@
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
-        "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "cd53417c159a33c6",
+        "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "5c969c0d766afbe1",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "162227ac9894db7b",
-        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "ac51d51746a87eae",
+        "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "86748d9830bb6043",
         "test/unit/actions/anchor_golden_vectors.test.js": "0249295e69b670ed",
         "test/unit/actions/attest.test.js": "47a7d48351777a8c",
         "test/unit/actions/attest.test/broadcast_fee_reimbursement.test.js": "144c10625486ea84",
@@ -22701,7 +22700,7 @@
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
         "test/unit/state_commitment/state_hash/state_hash_bet_status.test.js": "e285cca529713787",
-        "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "93c91f292d24175d",
+        "test/unit/state_commitment/state_hash/state_hash_index_map.test.js": "356a7eb78db84942",
         "test/unit/state_commitment/state_hash/state_hash_poll_finalize.test.js": "e3ed0f90fd114dfc",
         "test/unit/state_commitment/state_hash/state_hash_token_supply.test.js": "de2588208d06b802",
         "test/unit/state_subtree_activation.test.js": "a2343508ab4cdd95",
