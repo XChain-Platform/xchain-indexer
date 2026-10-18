@@ -34,6 +34,7 @@ const { buildCapabilitiesRpc } = require('../../../../src/api/rpc/capabilities.j
 
 const CAPABILITY = 'price';
 const HEIGHT = 90210;
+const STATE_ROOT = '703f06aaeff3d74cfae24f2d6f924b1cb865e4b5cd6e9d2d68bc927b6e28a99f';
 const PK_ONE = '11'.repeat(32);
 const PK_TWO = '22'.repeat(32);
 const PK_ABSENT = '33'.repeat(32);
@@ -66,6 +67,7 @@ async function proofFixture(){
     ]);
     const stakesRoot = await smt.buildFull(entries);
     const rootRow = {
+        state_root: STATE_ROOT,
         balances_root: M.toHex(M.EMPTY_SMT_ROOT),
         stakes_root: stakesRoot,
         contract_state_root: null
@@ -110,7 +112,7 @@ function assertEnvelope(answer, rootRow, total){
     });
     assert.strictEqual(
         M.toHex(M.stateRoot(answer.sub_roots)),
-        M.toHex(M.stateRoot(rootRow)));
+        rootRow.state_root);
     assertMemberProofs(answer, rootRow);
     assert.strictEqual(answer.total, total);
     assert.strictEqual(M.verifySmtProof(rootRow.stakes_root,
