@@ -28,11 +28,10 @@ const Utility = require('../../../../src/utility');
 const {
     buildStateHashData, isBetStatusStateHashActive, BET_STATUS_STATE_HASH_ACTIVATION, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
     POLL_FINALIZE_STATE_HASH_ACTIVATION, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
-    INDEX_MAP_STATE_HASH_ACTIVATION,
 } = require('../../../../src/consensus/state_hash');
 
 const util = new Utility();
-const PREFEATURE_KEYS = ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid', 'block_index', 'state_hash_version'];
+const PREFEATURE_KEYS = ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid', 'index_addresses_new', 'index_tickers_new', 'block_index', 'state_hash_version'];
 
 // db whose doQuery returns canned result-sets in CALL ORDER, getStatusId fixed null.
 function dbFor(results){
@@ -42,9 +41,13 @@ function dbFor(results){
 
 // With activationDelay=null (skips the deactivation queries) and no completed
 // status id (skips the credits query), the base call order is: slashes x4,
-// request_status x2, cooldown x2, anchor_invalid x1 = 9 slots; the 2 BET
+// request_status x2, cooldown x2, anchor_invalid x1, index-map x2 = 11 slots; the 2 BET
 // slots are appended when armed.
-function baseResults(){ return [[], [], [], [], [], [], [], [], []]; }
+// The first appended result represents feed terminal state; the second represents
+// individual settlement state. Keeping both positions explicit ensures an empty
+// class cannot accidentally consume rows intended for the other class, while the
+// shared eleven-result prefix continues to model every unconditional state class.
+function baseResults(){ return [[], [], [], [], [], [], [], [], [], [], []]; }
 
 async function build(opts, results){
     const data = await buildStateHashData(dbFor(results || baseResults()), 7, opts);
@@ -60,22 +63,19 @@ async function withArmed(height, fn){
 let abhPrev;
 
 describe('state_hash BET status-flip class (P4) @regression', () => {
-    let pollPrev, tokenPrev, indexPrev, betPrev;
+    let pollPrev, tokenPrev, betPrev;
     before(function(){
     pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;
-    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = 999999999;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = 999999999;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = 999999999;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = 999999999;
     abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = tokenPrev;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = betPrev;
     ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
@@ -95,7 +95,7 @@ describe('state_hash BET status-flip class (P4) @regression', () => {
     const opts = { activationDelay: null, network: 'regtest', coin: 'BTC' };
     const a = await build(opts);
     assert.deepStrictEqual(Object.keys(a.data), PREFEATURE_KEYS);
-    // Same 9 base slots; a latch the class would have seen changes nothing
+    // Same 11 base slots; a latch the class would have seen changes nothing
     const b = await build(opts, baseResults()); // mock rows never reached: queries not issued
     assert.strictEqual(a.hash, b.hash);
     });
@@ -118,22 +118,19 @@ describe('state_hash BET status-flip class (P4) @regression', () => {
 });
 
 describe('state_hash BET status-flip class (P4) @regression', () => {
-    let pollPrev, tokenPrev, indexPrev, betPrev;
+    let pollPrev, tokenPrev, betPrev;
     before(function(){
     pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;
-    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = 999999999;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = 999999999;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = 999999999;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = 999999999;
     abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = tokenPrev;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = betPrev;
     ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
@@ -151,12 +148,4 @@ describe('state_hash BET status-flip class (P4) @regression', () => {
     assert.notStrictEqual(a.hash, b.hash);
     });
     });
-});;
-
-// Isolate from the sibling armed-on-regtest classes (their query slots
-
-// would shift the canned call order; their keys would break the shape
-
-// assertions). The BET class itself is disarmed suite-locally too, so the
-
-// inert tests exercise the below-threshold shape; withArmed re-arms.
+});

@@ -184,7 +184,7 @@
     },
     "stateHash": {
       "path": "src/consensus/state_hash.js",
-      "hash": "5ac03b6746c93bc0615d0a4d857f5eb4861c44aa5890ee60e922794ed29bc785",
+      "hash": "a47cbbadb6e1f624c3dde36feb74985ba2a066c1cb5e1f09d17e8540f9c28515",
       "twins": [
         "xchain-sync"
       ]
@@ -2187,6 +2187,13 @@
       "id": "price_scale_activation",
       "from": "49dd656650002b1570d1e1733f140f37f4ffd334ebeeae9daf6d9ff6f2cbf2ef",
       "to": "35f58aae3ea07744fbbf63c26f43db78d67c99c3d3a98baed66b7ca9ac95dc6d",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "stateHash",
+      "from": "5ac03b6746c93bc0615d0a4d857f5eb4861c44aa5890ee60e922794ed29bc785",
+      "to": "a47cbbadb6e1f624c3dde36feb74985ba2a066c1cb5e1f09d17e8540f9c28515",
       "reason": "XC\u002d3351 gate retirement",
       "date": "2026-10-18"
     }

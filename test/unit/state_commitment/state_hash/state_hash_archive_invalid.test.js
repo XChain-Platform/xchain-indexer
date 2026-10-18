@@ -57,11 +57,11 @@ const {
     ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, isArchiveInvalidHeightKeyActive,
     ARCHIVE_CHUNK_HEIGHT_COL, ARCHIVE_CHUNK_HEIGHT_COL_LEGACY,
     POLL_FINALIZE_STATE_HASH_ACTIVATION, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
-    INDEX_MAP_STATE_HASH_ACTIVATION, BET_STATUS_STATE_HASH_ACTIVATION, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
+    BET_STATUS_STATE_HASH_ACTIVATION, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
 } = require('../../../../src/consensus/state_hash');
 
 const util = new Utility();
-const PREFEATURE_KEYS = ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid', 'block_index', 'state_hash_version'];
+const PREFEATURE_KEYS = ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid', 'index_addresses_new', 'index_tickers_new', 'block_index', 'state_hash_version'];
 
 // The block every test hashes at, and the DOGE height the completing chunk lands in.
 const B = 7;
@@ -110,18 +110,16 @@ function anchorSqlOf(captured){
 let abhPrev;
 
 describe('state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression', () => {
-    let pollPrev, tokenPrev, indexPrev, betPrev;
+    let pollPrev, tokenPrev, betPrev;
     before(function(){
     pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;  POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = 999999999;
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
-    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;      INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
     abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
     ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
@@ -138,18 +136,16 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
 });
 
 describe('state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression', () => {
-    let pollPrev, tokenPrev, indexPrev, betPrev;
+    let pollPrev, tokenPrev, betPrev;
     before(function(){
     pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;  POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = 999999999;
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
-    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;      INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
     abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
     ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
@@ -194,18 +190,16 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
 });
 
 describe('state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression', () => {
-    let pollPrev, tokenPrev, indexPrev, betPrev;
+    let pollPrev, tokenPrev, betPrev;
     before(function(){
     pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;  POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = 999999999;
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
-    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;      INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
     abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
     ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
@@ -251,18 +245,16 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
 });
 
 describe('state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression', () => {
-    let pollPrev, tokenPrev, indexPrev, betPrev;
+    let pollPrev, tokenPrev, betPrev;
     before(function(){
     pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;  POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = 999999999;
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
-    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;      INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
     abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
     ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
