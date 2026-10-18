@@ -267,14 +267,16 @@ describe('MATCH origin-open activation @regression @tier1', function () {
         ]);
     });
 
-    it('arms regtest at the configured boundary and never arms live networks', function () {
+    it('arms regtest at the configured boundary, never mainnet, and testnet from its v0.24.0 height', function () {
         process.env[ENV] = '200';
 
         assert.strictEqual(gateRegistry.activeAt(GATE, 'regtest', 'BTC', 199, null), false);
         assert.strictEqual(gateRegistry.activeAt(GATE, 'regtest', 'BTC', 200, null), true);
         assert.strictEqual(gateRegistry.activeAt(GATE, 'regtest', 'BTC', 201, null), true);
         assert.strictEqual(gateRegistry.activeAt(GATE, 'mainnet', 'BTC', 999999999, null), false);
-        assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'BTC', 999999999, null), false);
+        // The v0.24.0 cut arms BTC:testnet at 156908.
+        assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'BTC', 156907, null), false);
+        assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'BTC', 156908, null), true);
     });
 
     for(const network of ['mainnet', 'testnet']) {

@@ -141,7 +141,7 @@ const CHANGES = [
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 0, 0, 0, 0],
     // EMISSION_DEPTH_EXECUTE_ONLY: only an EXECUTE emission stamps the incremented CALL_DEPTH;
     // other emissions keep the emitter's depth. Unarmed on every network until a release cut pins an instant.
-    ['EMISSION_DEPTH_EXECUTE_ONLY', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
+    ['EMISSION_DEPTH_EXECUTE_ONLY', '0.2.0', UNARMED, 1792303200, UNARMED, 0, 0, 0],
     ['STAKE_SNAPSHOT_DECIMAL_STRINGS','0.2.0', STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME,
         STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME, 0, 0, 0, 0],
 
@@ -149,18 +149,18 @@ const CHANGES = [
     // reads the wrapper chain row of each v3 archive (db/anchors getArchiveReplayWatermarks).
     // A v3 archive head row carries no checkpoint_seq, so below the flag the watermark only
     // ever sees v1 heads. Judged by the block that carries the ANCHOR. Unarmed on every network.
-    ['ARCHIVE_REPLAY_WRAPPER_WATERMARK', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
+    ['ARCHIVE_REPLAY_WRAPPER_WATERMARK', '0.2.0', UNARMED, 1792303200, UNARMED, 0, 0, 0],
 
     // LEGACY_ANCHOR_REWARD_PIN: below the flag the anchor reward mint ignores the legacy
     // pin list. At or above it, a reward tuple pinned in legacy_reward_pins.json is not
     // minted again. Judged by the BTC block that derives the reward. Unarmed on every network.
-    ['LEGACY_ANCHOR_REWARD_PIN', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
+    ['LEGACY_ANCHOR_REWARD_PIN', '0.2.0', UNARMED, 1792303200, UNARMED, 0, 0, 0],
 
     // GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS: the controller-guard stake snapshot
     // (actions/execute/controller_guard.js) hands the VM decimal strings, as the primary
     // EXECUTE path does under STAKE_SNAPSHOT_DECIMAL_STRINGS. Unarmed on mainnet and
     // testnet; regtest is inert unless a venue sets GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME.
-    ['GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS', '0.2.0', UNARMED, UNARMED,
+    ['GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS', '0.2.0', UNARMED, 1792303200,
         () => regtestTimeOverride('GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME')() || UNARMED, 0, 0, 0],
 
     // HOST_CALL_BOUNDS: mirrors xchain-vm HOST_CALL_BOUNDS_ACTIVATION, judged by block time. From the
@@ -184,7 +184,7 @@ const CHANGES = [
     // '|' and split again before the VM, which is how they ran before. Judged by the block that
     // injects the callback. Unarmed on mainnet and testnet; genesis-active on regtest unless a
     // venue sets CALLBACK_ARGS_EXACT_REGTEST_TIME.
-    ['CALLBACK_ARGS_EXACT', '0.2.0', UNARMED, UNARMED,
+    ['CALLBACK_ARGS_EXACT', '0.2.0', UNARMED, 1792303200,
         regtestTimeOverride('CALLBACK_ARGS_EXACT_REGTEST_TIME'), 0, 0, 0],
 ];
 

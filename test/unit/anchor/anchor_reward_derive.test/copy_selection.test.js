@@ -146,12 +146,14 @@ describe('anchor reward copies: armed selection @regression @tier1', function ()
 describe('anchor reward copies: the derive pass and its gate @regression @tier1', function () {
     afterEach(function () { delete process.env[ENV]; sinon.restore(); });
 
-    it('is UNARMED on mainnet and testnet and UNPINNED on regtest, armed only by the variable', function () {
+    it('is UNARMED on mainnet, armed on testnet from its v0.24.0 height, and UNPINNED on regtest, armed only by the variable', function () {
+        // The v0.24.0 cut arms BTC:testnet at 156908; the probes below sit under it.
         for (const net of ['mainnet', 'testnet', 'regtest'])
-            assert.strictEqual(gateRegistry.activeAt(KEY, net, 'BTC', 5000000, null), false, net);
+            assert.strictEqual(gateRegistry.activeAt(KEY, net, 'BTC', net === 'testnet' ? 156907 : 5000000, null), false, net);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 156908, null), true, 'testnet at its height');
         process.env[ENV] = 'armed';
         assert.strictEqual(gateRegistry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
-        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 5000000, null), false);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 156907, null), false);
     });
 
     it('reads the kept rows unarmed and every copy armed', async function () {

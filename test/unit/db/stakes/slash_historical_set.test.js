@@ -173,11 +173,13 @@ describe('slash_historical_set_activation: armed, a past-height read is unchange
 describe('slash_historical_set_activation: unarmed @regression @tier1', function () {
     afterEach(function () { delete process.env[ENV]; sinon.restore(); });
 
-    it('is UNARMED on mainnet and testnet and UNPINNED on regtest, armed only by the variable', function () {
+    it('is UNARMED on mainnet, armed on testnet from its v0.24.0 height, and UNPINNED on regtest, armed only by the variable', function () {
         const reg = require('../../../../src/consensus/gate_registry');
         const KEY = 'slash_historical_set_activation.SLASH_HISTORICAL_SET_ACTIVATION';
+        // The v0.24.0 cut arms BTC:testnet at 156908; the probes below sit under it.
         for (const net of ['mainnet', 'testnet', 'regtest'])
-            assert.strictEqual(reg.activeAt(KEY, net, 'BTC', 5000000, null), false, net);
+            assert.strictEqual(reg.activeAt(KEY, net, 'BTC', net === 'testnet' ? 156907 : 5000000, null), false, net);
+        assert.strictEqual(reg.activeAt(KEY, 'testnet', 'BTC', 156908, null), true, 'testnet at its height');
         process.env[ENV] = 'armed';
         assert.strictEqual(reg.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
         assert.strictEqual(reg.activeAt(KEY, 'mainnet', 'BTC', 5000000, null), false);

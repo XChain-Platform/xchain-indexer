@@ -27,28 +27,29 @@ const KEY = 'gas_ceiling_exhausted_heights.GAS_CEILING_EXHAUSTED_ACTIVATION';
 const PART = path.join(__dirname, '..', '..', '..', '..', 'src', 'protocol_changes', 'gates_5.js');
 
 describe('protocol_changes GAS_CEILING_EXHAUSTED_ACTIVATION row @regression @tier1', function () {
-    it('registers a frozen per-chain height map, unarmed on mainnet and testnet, live on regtest', function () {
+    it('registers a frozen per-chain height map, unarmed on mainnet, armed on testnet at its v0.24.0 heights, live on regtest', function () {
         assert.strictEqual(ProtocolChanges.registry.unitOf(KEY), 'height');
         const row = ProtocolChanges.get(KEY);
         assert.deepStrictEqual(row, {
             'BTC:mainnet': ProtocolChanges.UNARMED,
             'LTC:mainnet': ProtocolChanges.UNARMED,
             'DOGE:mainnet': ProtocolChanges.UNARMED,
-            'BTC:testnet': ProtocolChanges.UNARMED,
-            'LTC:testnet': ProtocolChanges.UNARMED,
-            'DOGE:testnet': ProtocolChanges.UNARMED,
+            'BTC:testnet': 156908,
+            'LTC:testnet': 4927400,
+            'DOGE:testnet': 68005165,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
         });
         assert.strictEqual(Object.isFrozen(row), true);
     });
 
-    it('stays dark on every mainnet and testnet chain and is active from regtest genesis', function () {
-        for (const network of ['mainnet', 'testnet']) {
-            for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                assert.strictEqual(ProtocolChanges.activeAt(KEY, network, coin, ProtocolChanges.UNARMED - 1, null),
-                    false, coin + ':' + network);
-            }
+    it('stays dark on mainnet, arms testnet from its v0.24.0 height, and is active from regtest genesis', function () {
+        const TESTNET = { BTC: 156908, LTC: 4927400, DOGE: 68005165 };
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'mainnet', coin, ProtocolChanges.UNARMED - 1, null),
+                false, coin + ':mainnet');
+            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, TESTNET[coin] - 1, null), false, coin + ':testnet below');
+            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, TESTNET[coin], null), true, coin + ':testnet at');
         }
         assert.strictEqual(ProtocolChanges.activeAt(KEY, 'regtest', 'BTC', -1, null), false);
         assert.strictEqual(ProtocolChanges.activeAt(KEY, 'regtest', 'BTC', 0, null), true);

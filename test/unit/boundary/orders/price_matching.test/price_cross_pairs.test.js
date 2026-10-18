@@ -51,11 +51,14 @@ const fourBids = (u) => [
 
 function registerRowTests() {
     describe('the row', function () {
-        it('is unarmed on mainnet and testnet and active from regtest genesis, for every coin and for the hub read', function () {
+        it('is unarmed on mainnet, armed on testnet from its v0.24.0 height and active from regtest genesis, for every coin and for the hub read', function () {
+            // The v0.24.0 cut arms testnet per chain; the hub reads the bare key at the BTC height.
+            const TESTNET = { BTC: 156908, LTC: 4927400, DOGE: 68005165, null: 156908 };
             for (const coin of ['BTC', 'LTC', 'DOGE', null]) {
                 const c = String(coin);
                 assert.strictEqual(gateRegistry.activeAt(PRICE_CROSS_KEY, 'mainnet', coin, FAR_HEIGHT, null), false, c + ' mainnet');
-                assert.strictEqual(gateRegistry.activeAt(PRICE_CROSS_KEY, 'testnet', coin, FAR_HEIGHT, null), false, c + ' testnet');
+                assert.strictEqual(gateRegistry.activeAt(PRICE_CROSS_KEY, 'testnet', coin, TESTNET[c] - 1, null), false, c + ' testnet below');
+                assert.strictEqual(gateRegistry.activeAt(PRICE_CROSS_KEY, 'testnet', coin, TESTNET[c], null), true, c + ' testnet at');
                 assert.strictEqual(gateRegistry.activeAt(PRICE_CROSS_KEY, 'regtest', coin, 0, null), true, c + ' regtest genesis');
             }
         });
