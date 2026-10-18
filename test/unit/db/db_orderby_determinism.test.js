@@ -165,6 +165,13 @@ const ALLOWLIST = [
                 'b.outcome is unique per returned row (a total order by construction). ' +
                 'Non-consensus besides: an explorer/ops pool listing, never a settlement input ' +
                 '(settlement recomputes pools from getOpenBetsByFeed, action_index ASC).'
+    },
+    {
+        clause: 'r.block_index ASC, r.delegation_action_index ASC, r.stake_action_index ASC',
+        reason: 'getContractStakeRotationOrigin: the query pins target_table and one stake slot. ' +
+                'Each materialization pass rewrites a surviving stake row at most once for a ' +
+                'delegation, so (block, delegation action, stake action) is unique within the ' +
+                'pinned target_table and the three ordered columns already form a total order.'
     }
 ];
 

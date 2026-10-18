@@ -52,9 +52,9 @@ addGate('gas_ceiling_exhausted_heights.GAS_CEILING_EXHAUSTED_ACTIVATION', 'heigh
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -68,6 +68,23 @@ addGate('gas_ceiling_exhausted_heights.GAS_CEILING_EXHAUSTED_ACTIVATION', 'heigh
 // Unarmed on mainnet and testnet until a release names heights. MUST equal xchain-vm
 // RESOURCE_FAULT_SIGNAL_ACTIVATION, whose null is this row's UNARMED.
 addGate('resource_fault_signal_heights.RESOURCE_FAULT_SIGNAL_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// host_fault_halt_heights
+// Per-chain height on the processing chain's own block_index. At or after it the VM
+// halts deterministically when a host fault escapes the execution boundary. Below it
+// the prior host-fault behavior replays exactly as before. Unarmed on mainnet and
+// testnet until a release names heights. MUST equal xchain-vm
+// HOST_FAULT_HALT_ACTIVATION, whose null is this row's UNARMED.
+addGate('host_fault_halt_heights.HOST_FAULT_HALT_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
@@ -90,9 +107,9 @@ addGate('host_error_stack_strip_heights.HOST_ERROR_STACK_STRIP_ACTIVATION', 'hei
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -109,9 +126,9 @@ addGate('json_stringify_reentry_heights.JSON_STRINGIFY_REENTRY_ACTIVATION', 'hei
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -128,9 +145,9 @@ addGate('native_stack_terminal_heights.NATIVE_STACK_TERMINAL_ACTIVATION', 'heigh
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -143,6 +160,9 @@ addGate('native_stack_terminal_heights.NATIVE_STACK_TERMINAL_ACTIVATION', 'heigh
 // block. Below it all three replay as before. Unarmed on mainnet and testnet; regtest from genesis.
 addGate('vote_settlement_exact_activation.VOTE_SETTLEMENT_EXACT_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -157,6 +177,9 @@ addGate('vote_settlement_exact_activation.VOTE_SETTLEMENT_EXACT_ACTIVATION', 'he
 // regtest from genesis.
 addGate('settlement_bounds_activation.SETTLEMENT_BOUNDS_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -174,6 +197,9 @@ addGate('settlement_bounds_activation.SETTLEMENT_BOUNDS_ACTIVATION', 'height', {
 // src/consensus/pass_retirement/index.js.
 addGate('pass_progress_retirement_activation.PASS_PROGRESS_RETIREMENT_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION at read
 });
@@ -188,6 +214,9 @@ addGate('pass_progress_retirement_activation.PASS_PROGRESS_RETIREMENT_ACTIVATION
 // is UNPINNED: a venue arms it with XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION (shared_rows.js).
 addGate('slash_historical_set_activation.SLASH_HISTORICAL_SET_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION at read
 });
@@ -204,6 +233,9 @@ addGate('slash_historical_set_activation.SLASH_HISTORICAL_SET_ACTIVATION', 'heig
 // XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION (shared_rows.js).
 addGate('anchor_reward_copy_selection_activation.ANCHOR_REWARD_COPY_SELECTION_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION at read
 });
@@ -220,6 +252,9 @@ addGate('anchor_reward_copy_selection_activation.ANCHOR_REWARD_COPY_SELECTION_AC
 // (shared_rows.js).
 addGate('token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION at read
 });
@@ -238,6 +273,9 @@ addGate('token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTI
 // (shared_rows.js).
 addGate('dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICING_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION at read
 });
@@ -255,6 +293,9 @@ addGate('dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICING_ACTIVATION', '
 // selection and the bound live in src/consensus/bridge_settle/policy_order.js.
 addGate('bridge_policy_apply_order_activation.BRIDGE_POLICY_APPLY_ORDER_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION at read
 });
@@ -269,6 +310,9 @@ addGate('bridge_policy_apply_order_activation.BRIDGE_POLICY_APPLY_ORDER_ACTIVATI
 // XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION (shared_rows.js).
 addGate('vm_emission_amount_format_activation.VM_EMISSION_AMOUNT_FORMAT_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION at read
 });
@@ -284,6 +328,9 @@ addGate('vm_emission_amount_format_activation.VM_EMISSION_AMOUNT_FORMAT_ACTIVATI
 // venue arms it with XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION (shared_rows.js).
 addGate('execute_fee_cap_activation.EXECUTE_FEE_CAP_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION at read
 });
@@ -296,6 +343,9 @@ addGate('execute_fee_cap_activation.EXECUTE_FEE_CAP_ACTIVATION', 'height', {
 // arms it with XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION (shared_rows.js).
 addGate('vote_v3_tick_existence_activation.VOTE_V3_TICK_EXISTENCE_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION at read
 });
@@ -310,6 +360,9 @@ addGate('vote_v3_tick_existence_activation.VOTE_V3_TICK_EXISTENCE_ACTIVATION', '
 // it with XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION (shared_rows.js).
 addGate('match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION at read
 });
@@ -324,4 +377,24 @@ addGate('reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATU
     mainnet: UNARMED,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION at read
+});
+
+// unstake_delegated_row_journal_activation
+// Height on the processing chain's own block_index. From it a contract UNSTAKE under a delegated key journals
+// its rows so a delegation revert restores the original key. Unarmed live; regtest arms by
+// XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION (shared_rows.js).
+addGate('unstake_delegated_row_journal_activation.UNSTAKE_DELEGATED_ROW_JOURNAL_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION at read
+});
+
+// active_stake_collation_activation
+// Height on the reading chain's own block_index. From it validator-set reads pin the binary
+// collation. Below it they use the legacy collation. Unarmed on mainnet and testnet; regtest
+// is active from genesis with no venue arming overlay.
+addGate('active_stake_collation_activation.ACTIVE_STAKE_COLLATION_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
 });

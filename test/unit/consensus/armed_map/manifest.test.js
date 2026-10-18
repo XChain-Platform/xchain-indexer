@@ -144,7 +144,7 @@ describe('armed_map/manifest: the row list', function () {
         const keys = manifest.ENTRIES.map((e) => e[0]);
         assert.deepStrictEqual(keys.slice(0, registryKeys.length), registryKeys);
         assert.deepStrictEqual(keys.slice(registryKeys.length), manifest.VM_EXPORT_NAMES.concat(manifest.VM_ACCESSORS_EXPORT_NAMES).map((n) => 'xchain-vm.' + n));
-        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 19);
+        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 20);
         assert.deepStrictEqual(manifest.VM_ACCESSORS_EXPORT_NAMES, ['ACCESSOR_OWN_KEY_ACTIVATION']);
     });
 
@@ -266,7 +266,7 @@ describe('armed_map/manifest: collectRows', function () {
         assertArmedHeightRow(row);
     });
 
-    it('carries the nested EXECUTE gas-sum height row, armed on regtest only', function () {
+    it('carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights', function () {
         const key = 'nested_execute_gas_sum_activation.NESTED_EXECUTE_GAS_SUM_ACTIVATION';
         // Resolved through the manifest entry itself, so the case does not depend on
         // the VM mirror rows collectRows() also loads.
@@ -277,7 +277,9 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(Object.keys(row).sort(),
             ['BTC:mainnet', 'BTC:testnet', 'DOGE:mainnet', 'DOGE:testnet', 'LTC:mainnet', 'LTC:testnet', 'regtest', 'testnet']);
         assert.strictEqual(row.regtest, 0);
-        for (const k of Object.keys(row)) if (k !== 'regtest') assert.strictEqual(row[k], ProtocolChanges.UNARMED, k);
+        // The v0.24.0 cut arms the three per-chain testnet keys; mainnet and the bare testnet key stay unarmed.
+        const ARMED = { 'BTC:testnet': 156908, 'LTC:testnet': 4927400, 'DOGE:testnet': 68005165 };
+        for (const k of Object.keys(row)) if (k !== 'regtest') assert.strictEqual(row[k], ARMED[k] || ProtocolChanges.UNARMED, k);
         assert.strictEqual(ProtocolChanges.registry.unitOf(key), 'height');
         // The fingerprint covers the row: collectRows() is the production armed map, so the
         // gate has to be in it and its digest has to come out of the fingerprint of that map.

@@ -42,8 +42,10 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.strictEqual((await optsFor('regtest', 0)).enforceLintSyntaxDepth, true);
         });
 
-        it('passes enforceLintSyntaxDepth false on testnet and mainnet while the row is unarmed', async function () {
-            assert.strictEqual((await optsFor('testnet', 9999999998)).enforceLintSyntaxDepth, false);
+        it('passes enforceLintSyntaxDepth false on mainnet and on testnet below its v0.24.0 height', async function () {
+            // The v0.24.0 cut arms BTC:testnet at 156908; the fixture is a BTC indexer.
+            assert.strictEqual((await optsFor('testnet', 156907)).enforceLintSyntaxDepth, false);
+            assert.strictEqual((await optsFor('testnet', 156908)).enforceLintSyntaxDepth, true);
             assert.strictEqual((await optsFor('mainnet', 9999999998)).enforceLintSyntaxDepth, false);
         });
     });

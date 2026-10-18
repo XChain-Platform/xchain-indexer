@@ -25,14 +25,14 @@ function db(){
 const proof = { proveMined: async () => 'verified' };
 
 describe('LEGACY_ANCHOR_REWARD_PIN', function(){
-    it('is declared unarmed on every network', function(){
+    it('is declared unarmed on mainnet and regtest and armed on testnet at the v0.24.0 instant', function(){
         let row = CHANGES.find((c) => c[0] === 'LEGACY_ANCHOR_REWARD_PIN');
         assert.ok(row);
         let { UNARMED } = require('../../../src/protocol_changes/core.js');
         // row = [name, version, mainnet_time, testnet_time, regtest_time, mainnet_block, testnet_block, regtest_block]
         assert.strictEqual(row.length, 8);
         assert.strictEqual(row[2], UNARMED);
-        assert.strictEqual(row[3], UNARMED);
+        assert.strictEqual(row[3], 1792303200);
         assert.strictEqual(row[4], UNARMED);
         assert.deepStrictEqual(row.slice(5), [0, 0, 0]);
     });

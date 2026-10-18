@@ -21,13 +21,10 @@
 
 'use strict';
 
-// The relay flag day (BTC-anchored SNAPSHOT_BLOCK plane) and the refused-slot rule
-// (whether a refused v3 withholds its row so the id it named stays free for the
-// honest relay; block-TIME plane, armed at genesis on every network) are registry
-// rows read by literal key (W5).
+// The relay flag day uses the BTC-anchored SNAPSHOT_BLOCK plane. Refused v3 rows
+// are withheld unconditionally so the id they name stays free for the honest relay.
 const gateRegistry = require('../../../consensus/gate_registry');
 const ATTEST_RELAY_KEY = 'attest_relay_activation.ATTEST_RELAY_ACTIVATION';
-const RELAY_REJECT_SLOT_KEY = 'attest_relay_reject_slot_activation.ATTEST_RELAY_REJECT_SLOT_ACTIVATION';
 const { getLogger } = require('../../../observability/index.js');
 const { HOME_CHAIN, ALLOWED_ORIGIN_CHAINS } = require('../constants.js');
 
@@ -258,12 +255,8 @@ module.exports = {
         // id rides the wire, so a stored refusal answers that guard for the federation's
         // real relay and drops it silently and permanently. Same shape as the two other
         // ways a v3 fails to be a relay (wrong chain, below activation): nothing
-        // persisted, nothing hashed, the verdict still on the action row. Flag-day
-        // gated by the RELAY_REJECT_SLOT_KEY registry row in
-        // src/protocol_changes/shared_rows_1.js (block-TIME plane, armed at genesis
-        // on every network).
-        let withholdRefusal = (data['REQUEST_STATUS'] === 'rejected') &&
-            gateRegistry.activeAt(RELAY_REJECT_SLOT_KEY, this.config['NETWORK'], null, null, data['BLOCK_TIME']);
+        // persisted, nothing hashed, the verdict still on the action row.
+        let withholdRefusal = data['REQUEST_STATUS'] === 'rejected';
         if(!withholdRefusal)
             await this.indexerDb.createAttestationRequest(data);
     }

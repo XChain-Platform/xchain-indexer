@@ -273,11 +273,18 @@ const SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME = 1791804379;
 // Mirrors xchain-vm HOST_CALL_BOUNDS_ACTIVATION, whose null is UNARMED here: both production
 // networks stay inert until a release names an instant, and regtest is set on the row.
 const HOST_CALL_BOUNDS_MAINNET_TIME = UNARMED;
-const HOST_CALL_BOUNDS_TESTNET_TIME = UNARMED;
+const HOST_CALL_BOUNDS_TESTNET_TIME = 1792303200;
 // Mirrors xchain-vm PER_ELEMENT_METER_ACTIVATION, whose null is UNARMED here: both production
 // networks stay inert until a release names an instant, and regtest is set on the row.
 const PER_ELEMENT_METER_MAINNET_TIME = UNARMED;
-const PER_ELEMENT_METER_TESTNET_TIME = UNARMED;
+const PER_ELEMENT_METER_TESTNET_TIME = 1792303200;
+// Mirrors xchain-vm STRING_RESULT_METER_ACTIVATION.
+const STRING_RESULT_METER_MAINNET_TIME = UNARMED;
+const STRING_RESULT_METER_TESTNET_TIME = UNARMED;
+// Mirrors xchain-vm STRING_RECEIVER_METER_ACTIVATION, whose null is UNARMED here:
+// production networks stay inert, and regtest is set on the row.
+const STRING_RECEIVER_METER_MAINNET_TIME = UNARMED;
+const STRING_RECEIVER_METER_TESTNET_TIME = UNARMED;
 
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
@@ -325,4 +332,8 @@ module.exports = {
     HOST_CALL_BOUNDS_TESTNET_TIME,
     PER_ELEMENT_METER_MAINNET_TIME,
     PER_ELEMENT_METER_TESTNET_TIME,
+    STRING_RESULT_METER_MAINNET_TIME,
+    STRING_RESULT_METER_TESTNET_TIME,
+    STRING_RECEIVER_METER_MAINNET_TIME,
+    STRING_RECEIVER_METER_TESTNET_TIME,
 };

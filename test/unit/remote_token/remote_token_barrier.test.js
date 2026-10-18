@@ -181,7 +181,9 @@ describe('remote-token pin barrier, HubDbSync height wait @regression @tier1', f
         process.env[ARM] = 'armed';
         try { assert.strictEqual(gateRegistry.activeAt(REMOTE_TOKEN_ADMISSION_KEY, 'regtest', 'LTC', 0, null), true); }
         finally { delete process.env[ARM]; }
-        assert.strictEqual(gateRegistry.activeAt(REMOTE_TOKEN_ADMISSION_KEY, 'testnet', 'LTC', 9999999998, null), false);
+        // The v0.24.0 cut arms LTC:testnet at 4927400.
+        assert.strictEqual(gateRegistry.activeAt(REMOTE_TOKEN_ADMISSION_KEY, 'testnet', 'LTC', 4927399, null), false);
+        assert.strictEqual(gateRegistry.activeAt(REMOTE_TOKEN_ADMISSION_KEY, 'testnet', 'LTC', 4927400, null), true);
         assert.strictEqual(gateRegistry.activeAt(REMOTE_TOKEN_ADMISSION_KEY, 'mainnet', 'LTC', 9999999998, null), false);
     });
 });

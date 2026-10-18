@@ -337,14 +337,14 @@ module.exports = {
     // section-scoped update: an archive head is a single-body v1 row at section 0
     // anyway, and a per-section stamp would let one action hold two verdicts, which no
     // reader is built to reconcile.
-    async setAnchorArchiveStatus(actionIndex, status){
+    async setAnchorArchiveStatus(actionIndex, status, journal){
         let status_id = await this.createStatus(status);
-        await writeArchiveStatus(this, actionIndex, status_id, false);
+        await writeArchiveStatus(this, actionIndex, status_id, false, journal);
     },
 
-    async setAnchorArchiveRowStatus(actionIndex, status){
+    async setAnchorArchiveRowStatus(actionIndex, status, journal){
         let status_id = await this.createStatus(status);
-        await writeArchiveStatus(this, actionIndex, status_id, true);
+        await writeArchiveStatus(this, actionIndex, status_id, true, journal);
     },
 
 
