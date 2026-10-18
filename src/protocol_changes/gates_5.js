@@ -274,16 +274,8 @@ addGate('dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICING_ACTIVATION', '
 });
 
 // bridge_policy_apply_order_activation
-// Height on the chain's own block_index. From it the bridge settle pass selects token policy
-// snapshots only for ticks with a bridged copy on this chain (a local token row, or a due lock
-// in-leg that creates one), before the XPOLICY_MAX_PER_BLOCK cap, so snapshots for ticks bridged
-// elsewhere stop taking every slot. From the same height a tick's snapshots apply in contiguous
-// policy_seq order: a seq waits while an earlier one is neither applied nor recorded refused, a
-// seq at or below the applied one never applies, and a seq still waiting
-// XPOLICY_SEQ_GAP_BOUND_S of block time past its own effective_time applies over the gap. Below
-// it the pass replays as before. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a
-// venue arms it with XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION (shared_rows.js). The
-// selection and the bound live in src/consensus/bridge_settle/policy_order.js.
+// Height on the chain's own block_index. From it the bridge settle pass selects token policy snapshots only for ticks with a bridged copy on this chain (a local token row, or a due lock in-leg that creates one), before the XPOLICY_MAX_PER_BLOCK cap, so snapshots for ticks bridged elsewhere stop taking every slot. From the same height a tick's snapshots apply in contiguous policy_seq order: a seq waits while an earlier one is neither applied nor recorded refused, a seq at or below the applied one never applies, and a seq still waiting XPOLICY_SEQ_GAP_BOUND_S of block time past its own effective_time applies over the gap.
+// Below it the pass replays as before. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION (shared_rows.js). The selection and the bound live in src/consensus/bridge_settle/policy_order.js.
 addGate('bridge_policy_apply_order_activation.BRIDGE_POLICY_APPLY_ORDER_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -311,14 +303,8 @@ addGate('vm_emission_amount_format_activation.VM_EMISSION_AMOUNT_FORMAT_ACTIVATI
 });
 
 // execute_fee_cap_activation
-// Height on the chain's own block_index. From it an EXECUTE's XCHAIN-balance fee debit is
-// capped at the GAS the caller holds when the run settles, floored at zero, so the debit never
-// leaves the caller's balance negative; the run's outcome and its metered gas stand. Below it
-// the full metered fee is debited, as before: the state commitment reads end-of-block nets, so
-// a block whose later action re-credits the caller commits with the uncapped debit, and below
-// STATE_COMMITMENT_ACTIVATION a negative balance commits, so capping without a height would
-// change committed balances. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a
-// venue arms it with XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION (shared_rows.js).
+// Height on the chain's own block_index. From it an EXECUTE's XCHAIN-balance fee debit is capped at the GAS the caller holds when the run settles, floored at zero, so the debit never leaves the caller's balance negative; the run's outcome and its metered gas stand. Below it the full metered fee is debited, as before: the state commitment reads end-of-block nets, so a block whose later action re-credits the caller commits with the uncapped debit, and below STATE_COMMITMENT_ACTIVATION a negative balance commits, so capping without a height would change committed balances.
+// Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION (shared_rows.js).
 addGate('execute_fee_cap_activation.EXECUTE_FEE_CAP_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -386,6 +372,14 @@ addGate('active_stake_collation_activation.ACTIVE_STAKE_COLLATION_ACTIVATION', '
 
 // Copies a response's BATCH_POSITION into its callback EXECUTE context.
 addGate('attest_callback_batch_position_activation.ATTEST_CALLBACK_BATCH_POSITION_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// airdrop_native_fee_tally_activation
+// Height on the processing chain's own block_index. From it a non-BATCH multi-leg AIRDROP pays native fees from one action tally, and a fee probe quotes the summed fee without drawing it. Below it each leg reads the output independently. Unarmed on mainnet and testnet; regtest from genesis.
+addGate('airdrop_native_fee_tally_activation.AIRDROP_NATIVE_FEE_TALLY_ACTIVATION', 'height', {
     mainnet: UNARMED,
     testnet: UNARMED,
     regtest: 0,

@@ -9366,6 +9366,13 @@
       "Send handler: caret-id pack keying @regression @tier1 INERT: the legacy lookup by the caret spelling finds no pack and the SEND passes",
       "Send handler: caret-id pack keying @regression @tier1 the new row is unarmed on mainnet and armed on testnet and regtest"
     ],
+    "8c68aac253d8f04e": [
+      "Airdrop multi-leg native fee action tally @regression @tier1 draws one non-BATCH native output across the legs and records their summed fee",
+      "Airdrop multi-leg native fee action tally @regression @tier1 leaves XCHAIN-balance fee settlement on the existing per-leg path",
+      "Airdrop multi-leg native fee action tally @regression @tier1 leaves a BATCH_VALUE_LEDGER on the existing per-leg path at the gate height",
+      "Airdrop multi-leg native fee action tally @regression @tier1 makes a FEE_PROBE quote the summed fee without drawing the action tally",
+      "Airdrop multi-leg native fee action tally @regression @tier1 rejects the unpaid second non-BATCH leg after the first leg draws the output"
+    ],
     "8c6b69def3f9000c": [
       "price-batch-query (getpricebatches) buildPriceBatchesResponse answers an empty range with an empty list, never null",
       "price-batch-query (getpricebatches) buildPriceBatchesResponse flags a full page as truncated so the caller pages instead of reading it as complete",
@@ -13704,18 +13711,6 @@
       "Utility isCryptoAddress() boundary tests @regression @tier3 isCryptoAddress: valid bech32 P2WPKH (20-byte program) \u2192 valid",
       "Utility isCryptoAddress() boundary tests @regression @tier3 isCryptoAddress: valid bech32 P2WSH (32-byte program) \u2192 valid",
       "Utility isCryptoAddress() boundary tests @regression @tier3 isCryptoAddress: valid bech32m P2TR (taproot) \u2192 valid"
-    ],
-    "c4841dfff6c76d0b": [
-      "Send handler: caret-compacted handoff destination @regression @tier1 ARMED (mainnet, shipped map): the same transaction is accepted since the 2026-09-09 ruling",
-      "Send handler: caret-compacted handoff destination @regression @tier1 ARMED: a REFUSED reference fails closed",
-      "Send handler: caret-compacted handoff destination @regression @tier1 ARMED: a `^<id>` handoff resolving to the destination is accepted",
-      "Send handler: caret-compacted handoff destination @regression @tier1 ARMED: a `^<id>` resolving to a DIFFERENT address is still rejected",
-      "Send handler: caret-compacted handoff destination @regression @tier1 ARMED: a dangling reference the resolver returns unchanged fails closed",
-      "Send handler: caret-compacted handoff destination @regression @tier1 ARMED: a full-address handoff still passes, and pays for no resolution",
-      "Send handler: caret-compacted handoff destination @regression @tier1 ARMED: a full-address handoff to the WRONG address is still rejected",
-      "Send handler: caret-compacted handoff destination @regression @tier1 ARMED: a v1 MESSAGE carrying the destination does not satisfy the gate",
-      "Send handler: caret-compacted handoff destination @regression @tier1 UNARMED (key pinned inert): a full-address handoff still passes",
-      "Send handler: caret-compacted handoff destination @regression @tier1 UNARMED (key pinned inert): the same transaction is still rejected below the flag day"
     ],
     "c4b143a4fd63fe51": [
       "Issue handler @regression @tier1 ALLOW_LIST / BLOCK_LIST validation invalid ALLOW_LIST reference \u2192 invalid",
@@ -18188,8 +18183,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1441,
-      "titleCount": 14065,
+      "fileCount": 1442,
+      "titleCount": 14070,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18523,6 +18518,7 @@
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "d5d2a5097677f9b1",
@@ -20006,8 +20002,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1093,
-      "titleCount": 11102,
+      "fileCount": 1094,
+      "titleCount": 11104,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20340,6 +20336,7 @@
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
@@ -20381,7 +20378,7 @@
         "test/unit/actions/token/mint_supply_windows_conformance.test.js": "4385266db12e6aae",
         "test/unit/actions/token/roundtrip_golden.test.js": "d2b9349d772cf8e9",
         "test/unit/actions/token/send.test.js": "77b99807f21ed82d",
-        "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "c4841dfff6c76d0b",
+        "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "8e4d20c221ea5d3b",
         "test/unit/actions/token/send.test/caret_pack_key.test.js": "8c38e904bee40cde",
         "test/unit/actions/token/send.test/gated_handoff_threshold.test.js": "e0e089fe173d451a",
         "test/unit/actions/token/send.test/gated_total_tick_id.test.js": "a90ce4f0b0c35676",
@@ -21105,8 +21102,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 530,
-      "titleCount": 5716,
+      "fileCount": 531,
+      "titleCount": 5718,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21178,6 +21175,7 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
         "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
@@ -21200,7 +21198,7 @@
         "test/unit/actions/token/mint.test/destination.test.js": "c1ef0fe71cbe3da1",
         "test/unit/actions/token/mint_supply_windows_conformance.test.js": "4385266db12e6aae",
         "test/unit/actions/token/send.test.js": "77b99807f21ed82d",
-        "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "c4841dfff6c76d0b",
+        "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "8e4d20c221ea5d3b",
         "test/unit/actions/token/send.test/caret_pack_key.test.js": "8c38e904bee40cde",
         "test/unit/actions/token/send.test/gated_handoff_threshold.test.js": "e0e089fe173d451a",
         "test/unit/actions/token/send.test/gated_total_tick_id.test.js": "a90ce4f0b0c35676",
@@ -21641,8 +21639,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1093,
-      "titleCount": 11102,
+      "fileCount": 1094,
+      "titleCount": 11104,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21975,6 +21973,7 @@
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
@@ -22016,7 +22015,7 @@
         "test/unit/actions/token/mint_supply_windows_conformance.test.js": "4385266db12e6aae",
         "test/unit/actions/token/roundtrip_golden.test.js": "d2b9349d772cf8e9",
         "test/unit/actions/token/send.test.js": "77b99807f21ed82d",
-        "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "c4841dfff6c76d0b",
+        "test/unit/actions/token/send.test/caret_handoff_destination.test.js": "8e4d20c221ea5d3b",
         "test/unit/actions/token/send.test/caret_pack_key.test.js": "8c38e904bee40cde",
         "test/unit/actions/token/send.test/gated_handoff_threshold.test.js": "e0e089fe173d451a",
         "test/unit/actions/token/send.test/gated_total_tick_id.test.js": "a90ce4f0b0c35676",

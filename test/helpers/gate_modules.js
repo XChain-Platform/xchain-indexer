@@ -193,6 +193,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'unstake_delegated_row_journal_activation',
     'active_stake_collation_activation',
     'attest_callback_batch_position_activation',
+    'airdrop_native_fee_tally_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

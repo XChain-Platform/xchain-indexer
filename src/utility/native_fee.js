@@ -27,34 +27,35 @@ const { CONFIG_ENV } = require('../config.js');
 const { findFeeOutput } = require('./fee_output.js');
 const { maxPriceAgeSecondsAt } = require('./price_age/oracle_price_age.js');
 
-// Batch-cumulative native-fee accounting (BATCH_ISSUANCE_LIMITS).
+// Cumulative native-fee accounting.
 //
 // TX_OUTPUTS is TRANSACTION-level state that the batch loop preserves across every
 // sub-command, and nothing decrements it. So before this, each sub-command judged the
 // SAME untouched fee output from zero: a batch of 100 ORDERs paid one ORDER's fee.
-// batch.js seeds data['BATCH_VALUE_LEDGER'] (only when the flag is active, and only
-// before its baseKeys snapshot so the per-command field clear preserves it); this is
-// where the native-fee half of that tally is read, and drawNativeFeeOutput below is where
-// it is written.
+// batch.js seeds data['BATCH_VALUE_LEDGER'] for BATCH sub-commands. AIRDROP supplies an
+// action-local NATIVE_FEE_LEDGER for its non-BATCH legs after its own flag day. This is
+// where either tally is read, and drawNativeFeeOutput below is where it is written.
 //
-// The key's ABSENCE is both the flag gate and the not-a-batch case: with no ledger
-// every line below collapses to the pre-existing behavior, which is exactly what a
-// non-BATCH transaction and a pre-flag-day BATCH must still see, byte for byte.
+// With neither ledger every line below collapses to the pre-existing behavior, which is
+// exactly what every other non-BATCH transaction and a pre-flag-day BATCH must still see.
 //
 // data['FEE_PROBE'] marks the read-only public feequote path. A probe must never read
 // or write the ledger: it is a dry run over a synthetic transaction, and letting the
 // public quote API mutate consensus state is the sharpest edge here.
-function nativeFeeLedger(data){
-    return (!data['FEE_PROBE'] && data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
-               ? data['BATCH_VALUE_LEDGER'] : null;
+function nativeFeeLedger(data, fees){
+    if(data['FEE_PROBE']) return null;
+    if(data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
+        return data['BATCH_VALUE_LEDGER'];
+    return (fees['NATIVE_FEE_LEDGER'] && typeof fees['NATIVE_FEE_LEDGER'] === 'object')
+        ? fees['NATIVE_FEE_LEDGER'] : null;
 }
 
-// Judge what is left of the fee output against the band and, inside a BATCH, draw this
-// command's share of the pool. The tail of validateNativeCoinFee, which calls it once the
-// output, the oracle prices and the band are all in hand; returns that method's verdict.
+// Judge what is left of the fee output against the band and draw this command or leg's
+// share when a ledger is present. The tail of validateNativeCoinFee calls it once the
+// output, oracle prices and band are all in hand; returns that method's verdict.
 function drawNativeFeeOutput(util, ledger, available, paidAmount, band, prices, coin){
     // `available` is `paidAmount` verbatim when no ledger is in play, so the error text
-    // is unchanged off the batch path; mid-batch it reports what is actually left rather
+    // is unchanged without a ledger; mid-tally it reports what is actually left rather
     // than the full output, which no longer belongs to this command alone.
     if(util.bclt(available, band.minAcceptable)){
         return { valid: false, error: 'insufficient native coin fee (paid: ' + util.bcformat(available, 8) +
@@ -196,7 +197,8 @@ module.exports = {
         }
 
         // Get the XCHAIN fee amount (already calculated by the action handler)
-        let xchainAmount = this.bcnum(fees['AMOUNT']);
+        let xchainAmount = this.bcnum(Object.prototype.hasOwnProperty.call(fees, 'NATIVE_FEE_AMOUNT')
+            ? fees['NATIVE_FEE_AMOUNT'] : fees['AMOUNT']);
         if(this.bclte(xchainAmount, 0)){
             // No fee required; accept. A command that owes nothing spends none of the
             // batch fee pool, so this path deliberately reads and writes no ledger, and
@@ -205,8 +207,8 @@ module.exports = {
             return { valid: true, nativeCoinAmount: '0', oracleRound: 0 };
         }
 
-        // The batch fee pool when this command runs inside a BATCH, else null (nativeFeeLedger).
-        let ledger    = nativeFeeLedger(data);
+        // The cumulative fee pool for a BATCH command or AIRDROP leg, else null.
+        let ledger    = nativeFeeLedger(data, fees);
         let available = ledger ? this.bcsub(paidAmount, ledger['nativeFeeConsumed'], 8) : paidAmount;
         if(ledger && this.bclte(available, 0)){
             // Earlier sub-commands spent the whole fee output: to this command the pool
