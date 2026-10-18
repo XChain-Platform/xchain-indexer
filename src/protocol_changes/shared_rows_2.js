@@ -309,16 +309,6 @@ addGate('price_pair_activation.PRICE_PAIR_RE_WIDE', 'constant', /^[A-Z]{3,6}\/[A
 // Decimal-side bound in force at/above the gate. The producers' bcformat width.
 addGate('price_scale_activation.PRICE_SCALE_MAX_DECIMALS', 'constant', 8);
 
-// Per-network activation TIME, keyed on the action's own block time.
-//
-// ARMED at genesis on every network, mainnet by the 2026-09-09 ruling on the measurement
-// the header records (0 PRICE actions ever indexed on any mainnet chain).
-addGate('price_scale_activation.PRICE_SCALE_ACTIVATION', 'time', {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 PRICE actions, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
-
 // The two price-value matchers. Anchored and without the /g flag so .test()
 // carries no lastIndex state between calls.
 //

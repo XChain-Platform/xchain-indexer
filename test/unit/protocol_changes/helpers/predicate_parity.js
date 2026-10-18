@@ -55,7 +55,6 @@ const TABLE = [
     ['price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION', 'landingActiveAt', ['height']],
     ['price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION', 'strictLandingActiveAt', ['height']],
     ['price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION', 'isPricePairWideningActive', ['time', 'network']],
-    ['price_scale_activation.PRICE_SCALE_ACTIVATION', 'isPriceScaleCanonicalActive', ['time', 'network']],
     ['price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION', 'isPriceV1CanonicalActive', ['time', 'network', 'coin']],
     ['price_zero_validity_activation.PRICE_ZERO_VALIDITY_ACTIVATION', 'isPriceZeroValidityActive', ['time', 'network']],
     ['rollcall_activation.ROLLCALL_ACTIVATION', 'isRollcallActive', ['height', 'network']],

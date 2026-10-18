@@ -128,7 +128,6 @@ const GATES = [
     ['archive_match_count_activation',       'ARCHIVE_MATCH_COUNT_ACTIVATION'],
     ['anchor_bundle_order_activation',       'ANCHOR_BUNDLE_ORDER_ACTIVATION'],
     ['price_pair_activation.js',            'PRICE_PAIR_WIDEN_ACTIVATION'],
-    ['price_scale_activation',              'PRICE_SCALE_ACTIVATION'],
     // The consensus wire-format bounds that gate selects between: canon says a change is
     // "a one-line edit here plus the byte-equal edit in the vendored copies", so lock them.
     ['price_pair_activation.js',            'PRICE_PAIR_TICKER_MAX_LEGACY'],
