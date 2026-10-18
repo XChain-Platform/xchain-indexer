@@ -100,7 +100,6 @@ const REPLACED_STEMS = Object.freeze([
     'vm_exec_lint_activation',
     'vm_lint_global_alias_activation',
     'attest_relay_activation',
-    'attest_relay_reject_slot_activation',
     'attest_response_mirror_activation',
     'attest_zero_conf_activation',
     'checkpoint_commitment_activation',
