@@ -22,5 +22,6 @@ describeMeterTwinParity({
     vmModule: 'src/index/per_element_meter.js',
     activationExport: 'PER_ELEMENT_METER_ACTIVATION',
     predicateExport: 'isPerElementMeterActive',
+    testnetTime: 1792303200,
     registrationTitle: 'registers the time-table row in part 5, unarmed on mainnet, armed on testnet at its v0.24.0 heights, live on regtest',
 });

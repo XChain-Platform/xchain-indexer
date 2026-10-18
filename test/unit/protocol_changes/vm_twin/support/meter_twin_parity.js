@@ -30,6 +30,8 @@ function describeMeterTwinParity({
     vmModule,
     activationExport,
     predicateExport,
+    mainnetTime = null,
+    testnetTime = null,
     registrationTitle = 'registers the time-table row in part 5, unarmed on mainnet and testnet, live on regtest',
 }) {
     const key = 'protocol_changes.changes.' + name;
@@ -43,6 +45,8 @@ function describeMeterTwinParity({
     const vmActivation = vm[activationExport];
     const vmActivationAt = vm[predicateExport];
     const asRow = (time) => (time === null ? ProtocolChanges.UNARMED : time);
+    const expectedMainnetTime = asRow(mainnetTime);
+    const expectedTestnetTime = asRow(testnetTime);
 
     function indexerEnabledAt(network, time) {
         const pc = new ProtocolChanges({
@@ -58,12 +62,12 @@ function describeMeterTwinParity({
             const row = ProtocolChanges.get(key);
             assert.deepStrictEqual(new ProtocolChanges({ config: {}, util: {} }).changes[name], row);
             assert.deepStrictEqual(table.find((entry) => entry[0] === name), [
-                name, '0.2.0', asRow(vmActivation.mainnet), asRow(vmActivation.testnet), 0, 0, 0, 0,
+                name, '0.2.0', expectedMainnetTime, expectedTestnetTime, 0, 0, 0, 0,
             ]);
-            assert.strictEqual(ProtocolChanges[name + '_MAINNET_TIME'], asRow(vmActivation.mainnet));
-            assert.strictEqual(ProtocolChanges[name + '_TESTNET_TIME'], asRow(vmActivation.testnet));
-            assert.strictEqual(ProtocolChanges.get(mainnetKey), asRow(vmActivation.mainnet));
-            assert.strictEqual(ProtocolChanges.get(testnetKey), asRow(vmActivation.testnet));
+            assert.strictEqual(ProtocolChanges[name + '_MAINNET_TIME'], expectedMainnetTime);
+            assert.strictEqual(ProtocolChanges[name + '_TESTNET_TIME'], expectedTestnetTime);
+            assert.strictEqual(ProtocolChanges.get(mainnetKey), expectedMainnetTime);
+            assert.strictEqual(ProtocolChanges.get(testnetKey), expectedTestnetTime);
         });
 
         it('matches the VM instant on every network', function () {
