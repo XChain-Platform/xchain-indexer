@@ -209,13 +209,6 @@ addGate('caret_ref_strict_activation.CARET_REF_STRICT_ACTIVATION', 'height', {
     regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the reject end to end
 });
 
-// consolidation_leg_amount_activation
-// Per-network activation, interpreted against the block's consensus timestamp (data['BLOCK_TIME']).
-addGate('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION', 'time', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 SEND, 0 DESTROY, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
 addGate('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984, 'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0 });
 addGate('send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION', 'time', { mainnet: UNARMED, testnet: 1791804379, 'BTC:testnet': 1791804379, 'LTC:testnet': 1791804379, 'DOGE:testnet': 1791804379, regtest: 0 });
 // dispense_cancelling_match_activation

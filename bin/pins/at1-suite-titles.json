@@ -554,6 +554,13 @@
       "LIST_TICK_COIN consumers @regression @consensus ISSUE coin-qualified root reservation leaves the historical colon ticker verdict unchanged below the gate",
       "LIST_TICK_COIN consumers @regression @consensus ISSUE coin-qualified root reservation refuses live and future coin roots without interning their ticker names"
     ],
+    "0a29eea0cdad8aed": [
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression always selects the shared archive-head set, key set unchanged",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression height-key gate: regtest and mainnet armed at genesis, testnet at real future flag days; fail-inert paths",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: ARCHIVE_HEAD_VERSIONS is [1] and renders IN (1)",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: the chunk-height key is c.block_index_doge, the legacy key c.block_index",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression the schema premise, checked against the real DDL: a v2 chunk row carries NULL block_index and a real block_index_doge"
+    ],
     "0a2fc0a50228f0e1": [
       "capability snapshot proof pinned set parser accepts a one-entry set",
       "capability snapshot proof pinned set parser accepts two sources and an uppercase public key",
@@ -593,13 +600,6 @@
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController leaves the BTC bill untouched by the clamp even when the balance is below the fee",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController refuses on BTC when the source cannot cover the guard gas ceiling",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController still refuses on BTC when the source holds less than the ceiling but more than zero"
-    ],
-    "0ab9e04fb9d1607d": [
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND a single 0.5 leg of a 0-decimals token is rejected (the rule that was being laundered)",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND an honest sibling leg still settles beside a rejected one",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND control: below the threshold that same pair rounds into a single 11-token send",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND control: below the threshold the same two legs still settle as one valid 1-token send",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND two 0.5 legs to one destination are each rejected instead of settling as 1"
     ],
     "0ae3946ca8dca208": [
       "shared-list due planning and membership steps @regression @tier1 builds version 1 only when no mirror membership exists",
@@ -3121,6 +3121,11 @@
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 DESTROY with insufficient balance is marked invalid",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 sanity check passes: supply == credits - debits == balances after ISSUE+MINT+SEND"
     ],
+    "2f45ed223b43de9e": [
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND a single 0.5 leg of a 0-decimals token is rejected (the rule that was being laundered)",
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND an honest sibling leg still settles beside a rejected one",
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND two 0.5 legs to one destination are each rejected instead of settling as 1"
+    ],
     "2f5611f310786b32": [
       "Dispenser settlement idempotency (double-refund guard) @regression @tier1 a settled dispenser is never refunded twice DISPENSER_CLOSE pushes no escrow/credit pair when the dispenser already settled as \"cancelled\"",
       "Dispenser settlement idempotency (double-refund guard) @regression @tier1 a settled dispenser is never refunded twice DISPENSER_CLOSE pushes no escrow/credit pair when the dispenser already settled as \"empty\"",
@@ -3398,6 +3403,15 @@
       "protocol_changes anchor bundle order row keeps all three shared parts at or under 400 lines and rollcall out of part 2",
       "protocol_changes anchor bundle order row lists the activation in SHARED_GATES exactly once",
       "protocol_changes anchor bundle order row pins the activation map"
+    ],
+    "332f0f0c3276df91": [
+      "capability snapshot proof database wiring @regression @tier1 allows regtest first use and emits one warning line",
+      "capability snapshot proof database wiring @regression @tier1 holds at the gate when no proof fetcher is available",
+      "capability snapshot proof database wiring @regression @tier1 keeps a mirror-resolved row below the gate on the legacy path",
+      "capability snapshot proof database wiring @regression @tier1 keeps the BTC re-derivation path unchanged when the proof gate is active",
+      "capability snapshot proof database wiring @regression @tier1 never derives the checkpoint trust set from mirrored capability rows",
+      "capability snapshot proof database wiring @regression @tier1 passes verified, refused, and held proof verdicts through at the gate",
+      "capability snapshot proof database wiring @regression @tier1 uses the static pin below rotation and the next pin from its block onward"
     ],
     "33482fac9151bf27": [
       "Dispenser action handler @regression @tier2 GET_ADDRESS different from SOURCE validation (freshness) GET_ADDRESS with DISPENSER_PREFERENCE=2 allows any opener",
@@ -3776,6 +3790,11 @@
     "39deaa3f8a62287c": [
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
+    ],
+    "39e97c7b93d617e8": [
+      "capability snapshot proof startup pin wiring @regression @tier1 does not refuse an unarmed chain, BTC, or regtest",
+      "capability snapshot proof startup pin wiring @regression @tier1 refuses an armed mirror-backed testnet with an invalid pin",
+      "capability snapshot proof startup pin wiring @regression @tier1 refuses an armed mirror-backed testnet with no pin and names rotation variables"
     ],
     "3a25c746f0ad7a91": [
       "database session time zone @regression @tier1 pins direct and pooled connections to UTC"
@@ -5199,11 +5218,6 @@
       "Utility.validateOracleFee() - @regression @tier1 zero fee is the common case requires no output when FEE is absent entirely",
       "Utility.validateOracleFee() - @regression @tier1 zero fee is the common case requires no output when the oracle publishes FEE=0"
     ],
-    "4db50e18ffcab3aa": [
-      "anchor fold row predicates builds archive-head and checkpoint-section predicates for any alias",
-      "anchor fold row predicates limits activated class-6 rows to the configured archive-head versions",
-      "anchor fold row predicates uses the archive-head predicate only in the activated class-6 branch"
-    ],
     "4dc6ca50454deae6": [
       "XCALL action_format invariant (review item 2748) deadline-expiry mint (v2) carries the declared FORMAT 2, satisfying the invariant",
       "XCALL action_format invariant (review item 2748) mirror result-delivery mint carries no FORMAT (or one XCALL declares)",
@@ -5823,13 +5837,6 @@
       "Supply & amount boundary tests @regression @tier1 AMT-10: Maximum precision arithmetic (18 decimals) MINT AMOUNT=0.000000000000000001 (smallest unit) fills last slot \u2192 valid",
       "Supply & amount boundary tests @regression @tier1 AMT-11: MINT at per-address cap minted so far=49, AMOUNT=1 \u2192 exactly at cap \u2192 valid",
       "Supply & amount boundary tests @regression @tier1 AMT-11: MINT at per-address cap minted so far=50, AMOUNT=1 \u2192 one over cap (MINT_ADDRESS_MAX=50) \u2192 invalid"
-    ],
-    "586a3a620cef40a6": [
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 DESTROY control: below the threshold the same two legs still burn a valid 1",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 DESTROY two 0.5 legs of one tick are each rejected instead of merging to 1",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 DESTROY two well-formed legs of one tick still consolidate, gate on",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND record order follows first-occurrence order, gate on and gate off alike",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND two well-formed legs to one destination still consolidate, gate on"
     ],
     "58706b2a54fa0008": [
       "JSON-RPC body guard (Express 5 / body-parser 2.x regression) does not crash WITH the guard (GET -> not 500)",
@@ -8546,6 +8553,11 @@
       "SQL literal scanner ignores non-id orders and id qualified by a non-passed table",
       "SQL literal scanner joins template quasis with one placeholder per expression and retains the line",
       "SQL literal scanner throws a parse error that names the source file"
+    ],
+    "7da9f843f0c0949f": [
+      "anchor fold row predicates builds archive-head and checkpoint-section predicates for any alias",
+      "anchor fold row predicates limits class-6 rows to the configured archive-head versions",
+      "anchor fold row predicates uses the archive-head predicate in class 6"
     ],
     "7dcecc08d3d94927": [
       "anchor-reward derive set is INVARIANT under the barrier change @regression @tier1 derives the identical set, at the identical height, armed or inert",
@@ -11615,15 +11627,6 @@
       "MINT block window boundary tests @regression @tier2 TS-09: MINT at exactly MINT_STOP_BLOCK (block 200) is valid",
       "MINT block window boundary tests @regression @tier2 TS-10: MINT one block after MINT_STOP_BLOCK (block 201) is invalid"
     ],
-    "a9282f9a155afa44": [
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression at/after the version threshold: the class selects the shared archive-head set, key set unchanged",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression below the version threshold: the class keeps the legacy v1-only predicate (preimage byte-identical pre-flag)",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression height-key gate: regtest and mainnet armed at genesis, testnet at real future flag days; fail-inert paths",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: ARCHIVE_HEAD_VERSIONS is [1] and renders IN (1)",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: the chunk-height key is c.block_index_doge, the legacy key c.block_index",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression the schema premise, checked against the real DDL: a v2 chunk row carries NULL block_index and a real block_index_doge",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression version gate: regtest, every testnet chain AND every mainnet chain armed from genesis; fail-inert paths"
-    ],
     "a938df8c15b84eb3": [
       "action-scoped price barrier _evaluatePriceBarrier (the block loop's decision) an escalated block waits even though it is empty",
       "action-scoped price barrier _evaluatePriceBarrier (the block loop's decision) carries the predicate's malformed-input soundness into the loop",
@@ -11845,6 +11848,12 @@
       "capability snapshot proof binding @regression @tier1 holds proofs that are absent, at another block, or stamped with another version",
       "capability snapshot proof binding @regression @tier1 refuses a verified non-member",
       "capability snapshot proof binding @regression @tier1 verifies a real member on testnet, mainnet, and regtest"
+    ],
+    "ac0c64e25ececd16": [
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 DESTROY two 0.5 legs of one tick are each rejected instead of merging to 1",
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 DESTROY two well-formed legs of one tick still consolidate",
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND record order follows first-occurrence order",
+      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND two well-formed legs to one destination still consolidate"
     ],
     "ac937e0de4e25dbe": [
       "Indexer cross-node determinism baseline @regression @tier1 every block produced a ledger + actions consensus hash",
@@ -18234,8 +18243,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1439,
-      "titleCount": 14078,
+      "fileCount": 1441,
+      "titleCount": 14083,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18573,8 +18582,8 @@
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "d5d2a5097677f9b1",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "0ab9e04fb9d1607d",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "586a3a620cef40a6",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "ac0c64e25ececd16",
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
@@ -18920,10 +18929,12 @@
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/startup_pin_refusal.test.js": "e3e7ffb0929fda49",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
         "test/unit/consensus/capability_snapshot_proof/trust_set.test.js": "b468c3fd3eff32ee",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
@@ -18967,7 +18978,7 @@
         "test/unit/consensus/snapshot_checkpoint/canonical.test.js": "299c4ed3013e8a10",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
         "test/unit/consensus/stale_twin_module_refs.test.js": "25c3d82b177fdf7c",
-        "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "4db50e18ffcab3aa",
+        "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "7da9f843f0c0949f",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -19615,7 +19626,7 @@
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
         "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
-        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
+        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "0a29eea0cdad8aed",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/archive_match_count_class.test.js": "8a8d0afa6dccfafa",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
@@ -20050,8 +20061,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1091,
-      "titleCount": 11119,
+      "fileCount": 1093,
+      "titleCount": 11124,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20388,8 +20399,8 @@
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "0ab9e04fb9d1607d",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "586a3a620cef40a6",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "ac0c64e25ececd16",
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
@@ -20602,7 +20613,9 @@
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
@@ -21104,7 +21117,7 @@
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
         "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
-        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
+        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "0a29eea0cdad8aed",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
@@ -21147,8 +21160,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 528,
-      "titleCount": 5716,
+      "fileCount": 530,
+      "titleCount": 5723,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21222,8 +21235,8 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "0ab9e04fb9d1607d",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "586a3a620cef40a6",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "ac0c64e25ececd16",
         "test/unit/actions/token/broadcast.test/fee_length_gate.test.js": "51b3468275b1d232",
         "test/unit/actions/token/destroy.test.js": "85f55ffbe5c712da",
         "test/unit/actions/token/destroy.test/destroy_behaviors.test.js": "93d204b9c442eeda",
@@ -21316,7 +21329,9 @@
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
@@ -21681,8 +21696,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1091,
-      "titleCount": 11119,
+      "fileCount": 1093,
+      "titleCount": 11124,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22019,8 +22034,8 @@
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "0ab9e04fb9d1607d",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "586a3a620cef40a6",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "ac0c64e25ececd16",
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
@@ -22233,7 +22248,9 @@
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
@@ -22735,7 +22752,7 @@
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
         "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
-        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
+        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "0a29eea0cdad8aed",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",

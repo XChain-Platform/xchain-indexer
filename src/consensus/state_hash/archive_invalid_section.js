@@ -20,11 +20,9 @@
  * per-block stream. Resolved via the status name (not status_id) to stay
  * id-independent across nodes.
  *
- * Version predicate GATED: legacy v1-only below the ARCHIVE_INVALID_STATE_HASH
- * activation, the full ARCHIVE_HEAD_VERSIONS set at/after it, so the pre-flag
- * preimage stays byte-identical.
+ * The version predicate covers the full ARCHIVE_HEAD_VERSIONS set.
  *
- * Chunk-height key ALSO GATED, on its own separate flag day: the legacy
+ * The chunk-height key remains gated on its own separate flag day: the legacy
  * `c.block_index` key is NEVER populated on a v2 continuation row, so this
  * class matched nothing on every node from the day it landed. At/after
  * ARCHIVE_INVALID_HEIGHT_KEY it uses `c.block_index_doge`, the height the
@@ -33,13 +31,11 @@
  *
  ********************************************************************/
 
-const { isArchiveInvalidStateHashActive, isArchiveInvalidHeightKeyActive,
-        archiveHeadPredicate, ARCHIVE_HEAD_VERSIONS_SQL,
+const { isArchiveInvalidHeightKeyActive, archiveHeadPredicate, ARCHIVE_HEAD_VERSIONS_SQL,
         ARCHIVE_CHUNK_HEIGHT_COL, ARCHIVE_CHUNK_HEIGHT_COL_LEGACY } = require('./activation');
 const { tolerantQuery } = require('./tolerant_query');
 
 async function collectAnchorInvalid(db, B, network, coin){
-    let archiveInvalidActive = isArchiveInvalidStateHashActive(B, network, coin);
     let chunkHeightCol = isArchiveInvalidHeightKeyActive(B, network, coin)
                             ? ARCHIVE_CHUNK_HEIGHT_COL : ARCHIVE_CHUNK_HEIGHT_COL_LEGACY;
     return tolerantQuery(db,
@@ -47,9 +43,7 @@ async function collectAnchorInvalid(db, B, network, coin){
         "JOIN anchor_actions c ON c.version = 2 AND c.match_batch_seq = p.match_batch_seq " +
         "JOIN index_statuses s ON s.id = p.status_id AND s.status = 'invalid_archive' " +
         "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
-        "WHERE " + (archiveInvalidActive
-            ? archiveHeadPredicate('p') + " AND p.version " + ARCHIVE_HEAD_VERSIONS_SQL
-            : "p.version = 1") +
+        "WHERE " + archiveHeadPredicate('p') + " AND p.version " + ARCHIVE_HEAD_VERSIONS_SQL +
         " AND " + chunkHeightCol + " BETWEEN ? AND ? " +
         "ORDER BY p.action_index ASC",
         [B, B]);

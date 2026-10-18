@@ -53,8 +53,8 @@ function archiveFailureIsSectionScoped(handler, version, height, coin){
 // A MIRRORED node holding the snapshot may instead have the quorum branch in
 // quorum.js set an error, in which case reassembly does not run and no stamp lands.
 // A snapshot-less node's same head is 'unverified' with error null and does run.
-// invalid_archive is projected by stateHash.js class 6, so both arrival paths must
-// apply the same valid-or-unverified admission rule.
+// The unconditional anchor_invalid state-hash class projects invalid_archive, so
+// both arrival paths must apply the same valid-or-unverified admission rule.
 async function reassembleAtHead(handler, data, error, format){
     if(!error &&
        (data['STATUS'] === 'valid' || data['STATUS'] === 'unverified') &&
