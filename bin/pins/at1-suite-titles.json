@@ -14066,6 +14066,12 @@
       "createDestroy() - multi-destroy legs writes ONE ROW PER TICK LEG of a multi-destroy sharing one action_index",
       "createSend() - multi-send legs does not let a re-parse stamp one leg over every other leg of the same send"
     ],
+    "ca16e0fe306a77ff": [
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 pins the registry row in the consensus identity",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 registers a per-chain height row, unarmed on mainnet and testnet, live on regtest"
+    ],
     "ca7df2a33ba1c8cc": [
       "src/sql schema parse-coverage @regression @tier1 actions.sql every parsed column has a name and a definition",
       "src/sql schema parse-coverage @regression @tier1 actions.sql is parseable by the drift reconciler (non-null)",
@@ -18079,8 +18085,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1419,
-      "titleCount": 14010,
+      "fileCount": 1420,
+      "titleCount": 14014,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19329,6 +19335,7 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "af3b13066b325fa8",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "d14b2a8196167f6c",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "58a722e0f4b362c8",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_hook_row.test.js": "f959c69addce7dd8",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "d1bfe2b0906e9c21",
@@ -19869,8 +19876,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1071,
-      "titleCount": 11053,
+      "fileCount": 1073,
+      "titleCount": 11065,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20410,6 +20417,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
+        "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "e23f4b08d34e0b5a",
@@ -20817,6 +20825,7 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "af3b13066b325fa8",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "d14b2a8196167f6c",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "58a722e0f4b362c8",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "d1bfe2b0906e9c21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "fd75cdd445f6e0af",
@@ -20946,8 +20955,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 511,
-      "titleCount": 5641,
+      "fileCount": 513,
+      "titleCount": 5653,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21106,6 +21115,7 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
+        "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
@@ -21401,6 +21411,7 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "af3b13066b325fa8",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "d14b2a8196167f6c",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "58a722e0f4b362c8",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "d1bfe2b0906e9c21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "fd75cdd445f6e0af",
@@ -21463,8 +21474,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1071,
-      "titleCount": 11053,
+      "fileCount": 1073,
+      "titleCount": 11065,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22004,6 +22015,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
+        "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "e23f4b08d34e0b5a",
@@ -22411,6 +22423,7 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "af3b13066b325fa8",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "d14b2a8196167f6c",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "58a722e0f4b362c8",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "d1bfe2b0906e9c21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "fd75cdd445f6e0af",
