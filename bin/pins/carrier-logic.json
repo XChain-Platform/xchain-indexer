@@ -120,7 +120,7 @@
     },
     "price_scale_activation": {
       "path": "src/consensus/gates/price_scale_gate.js",
-      "hash": "49dd656650002b1570d1e1733f140f37f4ffd334ebeeae9daf6d9ff6f2cbf2ef",
+      "hash": "35f58aae3ea07744fbbf63c26f43db78d67c99c3d3a98baed66b7ca9ac95dc6d",
       "twins": [
         "xchain-hub"
       ]
@@ -2180,6 +2180,13 @@
       "id": "attest_request_cap_activation",
       "from": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
       "to": "9566f5894ba3646e02944034e55166813cef72e5d0d2c7ba0e8469488c4e061b",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "price_scale_activation",
+      "from": "49dd656650002b1570d1e1733f140f37f4ffd334ebeeae9daf6d9ff6f2cbf2ef",
+      "to": "35f58aae3ea07744fbbf63c26f43db78d67c99c3d3a98baed66b7ca9ac95dc6d",
       "reason": "XC\u002d3351 gate retirement",
       "date": "2026-10-18"
     }

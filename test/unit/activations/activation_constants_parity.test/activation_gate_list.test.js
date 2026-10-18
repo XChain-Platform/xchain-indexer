@@ -49,6 +49,7 @@ const NO_CANONICAL_MAP = new Set([
     'ledger_amount_precision_activation',
     'oracle_preload_causality_activation',
     'price_batching_floor_activation',
+    'price_scale_activation',
     'price_zero_validity_activation',
     'slash_grid_activation',
     'stake_weight_collation_activation',
