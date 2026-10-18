@@ -27,7 +27,7 @@
     },
     "attest_request_cap_activation": {
       "path": "src/actions/attest/gates/attest_request_cap_gate.js",
-      "hash": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
+      "hash": "9566f5894ba3646e02944034e55166813cef72e5d0d2c7ba0e8469488c4e061b",
       "twins": []
     },
     "attest_responsible_widening_activation": {
@@ -2174,6 +2174,13 @@
       "from": "3f6e7dd23d559d376dabbd3d9f7b109151efb6eee27b649044d2619e146f3f7c",
       "to": "a1200eb419e15af92ce69e0e0df8f95971d66a3e3c43bd37d9b059ad854b6e32",
       "reason": "export the string receiver meter activation constants",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "attest_request_cap_activation",
+      "from": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
+      "to": "9566f5894ba3646e02944034e55166813cef72e5d0d2c7ba0e8469488c4e061b",
+      "reason": "XC\u002d3351 gate retirement",
       "date": "2026-10-18"
     }
   ]
