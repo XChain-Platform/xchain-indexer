@@ -132,6 +132,7 @@ describe('consensus identity GATES field and pin comparison', function () {
         const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
         const keys = [
             'resource_fault_signal_heights.RESOURCE_FAULT_SIGNAL_ACTIVATION',
+            'host_fault_halt_heights.HOST_FAULT_HALT_ACTIVATION',
             'host_error_stack_strip_heights.HOST_ERROR_STACK_STRIP_ACTIVATION',
             'protocol_changes.changes.HOST_CALL_BOUNDS',
             'protocol_changes.HOST_CALL_BOUNDS_MAINNET_TIME',

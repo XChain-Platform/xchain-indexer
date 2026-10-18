@@ -77,6 +77,7 @@ function graceFor(stallReason, graceMs, priceLandingGraceMs){
 function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null){
     if(!stallReason) return false;
     if(stallReason === BRIDGE_PROOF_BARRIER) return false;
+    if(isTrainActivationHalt(stallReason)) return false;
     if(lastBlockCommittedAt == null) return false;
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
     let windowStart = Number.isFinite(barrierHoldSinceMs) ? Math.max(lastBlockCommittedAt, barrierHoldSinceMs) : lastBlockCommittedAt;
@@ -110,6 +111,8 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 //                         with stallClearsAt naming the instant it can first move.
 //   'bridge_proof_wait' - waiting for a quorum-established bridge checkpoint or proof;
 //                         never graded wedged, and it builds no barrier hold.
+//   'train_activation_halt' - halted at a rule-set boundary until the node is updated;
+//                             never graded wedged because a restart cannot clear it.
 //   'price_landing_wait' - waiting on the other landing chains' landed times, judged
 //                         against its own priceLandingGraceMs; wedged once that passes.
 //   'barrier_defer'     - a real barrier defer (mirror behind, host fault), still
@@ -120,6 +123,7 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null){
     if(!stallReason) return 'none';
     if(stallReason === BRIDGE_PROOF_BARRIER) return 'bridge_proof_wait';
+    if(isTrainActivationHalt(stallReason)) return 'train_activation_halt';
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
     if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs, priceLandingGraceMs, barrierHoldSinceMs)) return 'wedged';
     if(stallReason === PRICE_LANDING_BARRIER) return 'price_landing_wait';

@@ -76,11 +76,9 @@ module.exports = {
         // payments. GIVE_ESCROW is deliberately NOT constrained here: an empty
         // escrow is a legitimate open-now-refill-later dispenser, and with a
         // positive GIVE_AMOUNT the clamp drives the multiplier to 0 so the dispense
-        // settles invalid and consumes nothing. Gated (the
-        // dispenser_give_amount_activation row): this rejects creates the ungated
-        // engine accepts, so replay below the flag-day stays byte-identical.
+        // settles invalid and consumes nothing. Rejecting the create here keeps
+        // that invalid dispenser from entering the engine.
         if(!error && format==0 && !isOwnershipGive &&
-           gateRegistry.activeAt('dispenser_give_amount_activation.DISPENSER_GIVE_AMOUNT_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
            (this.util.isNull(data['GIVE_AMOUNT']) || !this.util.bcgt(data['GIVE_AMOUNT'], '0')))
             error = "invalid: GIVE_AMOUNT (required and greater than 0 when GIVE_OWNERSHIP=0)";
 

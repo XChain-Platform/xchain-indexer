@@ -21,12 +21,23 @@
 
 const { archiveHeadPredicate } = require('../../consensus/state_hash');
 
-async function writeArchiveStatus(db, actionIndex, statusId, archiveHeadOnly){
+async function writeArchiveStatus(db, actionIndex, statusId, archiveHeadOnly, journal){
     if(archiveHeadOnly){
+        if(journal === true){
+            return await db.doQuery(
+                "UPDATE anchor_actions a SET a.pre_archive_status_id = IF(a.status_id = ?, a.pre_archive_status_id, a.status_id), a.status_id = ? WHERE a.action_index = ? AND " +
+                archiveHeadPredicate('a'),
+                [statusId, statusId, actionIndex]);
+        }
         return await db.doQuery(
             "UPDATE anchor_actions a SET a.status_id = ? WHERE a.action_index = ? AND " +
             archiveHeadPredicate('a'),
             [statusId, actionIndex]);
+    }
+    if(journal === true){
+        return await db.doQuery(
+            "UPDATE anchor_actions SET pre_archive_status_id = IF(status_id = ?, pre_archive_status_id, status_id), status_id = ? WHERE action_index = ?",
+            [statusId, statusId, actionIndex]);
     }
     return await db.doQuery(
         "UPDATE anchor_actions SET status_id = ? WHERE action_index = ?",

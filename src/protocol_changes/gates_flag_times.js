@@ -72,6 +72,10 @@ const {
     HOST_CALL_BOUNDS_TESTNET_TIME,
     PER_ELEMENT_METER_MAINNET_TIME,
     PER_ELEMENT_METER_TESTNET_TIME,
+    STRING_RESULT_METER_MAINNET_TIME,
+    STRING_RESULT_METER_TESTNET_TIME,
+    STRING_RECEIVER_METER_MAINNET_TIME,
+    STRING_RECEIVER_METER_TESTNET_TIME,
 } = require('./flag_times.js');
 const {
     BATCH_ISSUANCE_LIMITS_MAINNET_TIME,
@@ -133,6 +137,10 @@ addGate('protocol_changes.HOST_CALL_BOUNDS_MAINNET_TIME', 'constant', HOST_CALL_
 addGate('protocol_changes.HOST_CALL_BOUNDS_TESTNET_TIME', 'constant', HOST_CALL_BOUNDS_TESTNET_TIME);
 addGate('protocol_changes.PER_ELEMENT_METER_MAINNET_TIME', 'constant', PER_ELEMENT_METER_MAINNET_TIME);
 addGate('protocol_changes.PER_ELEMENT_METER_TESTNET_TIME', 'constant', PER_ELEMENT_METER_TESTNET_TIME);
+addGate('protocol_changes.STRING_RESULT_METER_MAINNET_TIME', 'constant', STRING_RESULT_METER_MAINNET_TIME);
+addGate('protocol_changes.STRING_RESULT_METER_TESTNET_TIME', 'constant', STRING_RESULT_METER_TESTNET_TIME);
+addGate('protocol_changes.STRING_RECEIVER_METER_MAINNET_TIME', 'constant', STRING_RECEIVER_METER_MAINNET_TIME);
+addGate('protocol_changes.STRING_RECEIVER_METER_TESTNET_TIME', 'constant', STRING_RECEIVER_METER_TESTNET_TIME);
 
 // vm_lint_destructure_heights
 addGate('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION', 'height', {
@@ -156,9 +164,9 @@ addGate('vm_lint_syntax_depth_heights.VM_LINT_SYNTAX_DEPTH_ACTIVATION', 'height'
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -168,9 +176,9 @@ addGate('nested_execute_gas_sum_activation.NESTED_EXECUTE_GAS_SUM_ACTIVATION', '
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 156908,
+    'LTC:testnet': 4927400,
+    'DOGE:testnet': 68005165,
     testnet: UNARMED,
     regtest: 0,
 });

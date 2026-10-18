@@ -83,7 +83,8 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
     // and a pin that moved with a drill lever would be a test of the launcher. The pinned value
     // is the fleet's: every shipped process reads the unarmed maps.
     it('digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet (and again at the 16:33Z ladder re-cut, and again when LTC:testnet mirror admission shipped null under dq4 (a))', function () {
-        // Moved again when the v0.23.0 cut armed its testnet flag days; re-derived with the
+        // Moved again when the v0.23.0 cut armed its testnet flag days, and again when the
+        // v0.24.0 cut armed its testnet heights and instant; re-derived with the
         // command above, equal to the hub suite's value.
         // Every gate module still on disk, not just the admission one: the family's arming
         // lever is shared, so the anchor-attest gate resolves from the same variable and a
@@ -103,7 +104,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             for (const [p] of saved) delete require.cache[p];
             const fresh = require('../../../../../src/consensus_rules_digest.js');
             assert.strictEqual(fresh.computeConsensusRulesDigest().digest,
-                'be489ce1ea0f7d6d809efdbeb973b985905aec4281592ff3bf770b21394d9354',
+                'cac4806586d5e35020f85dd9f0a6b8106f9838a259c9a4b94a6c6cecb2678c06',
                 'the consensus rules digest moved; a gate was added, removed, reordered or re-armed');
         } finally {
             for (const [p, mod] of saved) { if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod; }

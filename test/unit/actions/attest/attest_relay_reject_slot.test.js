@@ -26,9 +26,7 @@
  *
  * So this file runs the REAL createAttestationRequest and the REAL relay
  * lookups against an in-memory attests table, and asserts on the rows that
- * survive rather than on the calls that were made. Both sides of the flag day
- * are driven: with the gate off the failure reproduces exactly, which is what
- * makes the gate-on case evidence rather than a tautology.
+ * survive rather than on the calls that were made.
  */
 
 'use strict';
@@ -45,12 +43,8 @@ const Attest          = require('../../../../src/actions/attest/index.js');
 const Database        = require('../../../../src/db');
 const swq             = require('../../../../src/consensus/stake_weighted_quorum.js');
 const ed25519         = require('../../../../src/consensus/ed25519.js');
-// The relay flag day and the refused-slot rule are registry rows (W5), stubbed
-// through activeAt() by their keys and read back through the registry.
-const gateRegistry    = require('../../../../src/consensus/gate_registry');
 const { stubActiveAt } = require('../../../helpers/gate_modules.js');
 const RELAY_KEY = 'attest_relay_activation.ATTEST_RELAY_ACTIVATION';
-const REJECT_SLOT_KEY = 'attest_relay_reject_slot_activation.ATTEST_RELAY_REJECT_SLOT_ACTIVATION';
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
@@ -167,8 +161,7 @@ function setupRelayFixture() {
     sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
     sinon.stub(ed25519, 'verify').returns(true);
     stubActiveAt(sinon, RELAY_KEY, true);
-    // Keep the dropped-row warning out of the suite's output; it is also the
-    // product's own signal that the defect fired, so the legacy case asserts on it.
+    // Keep any dropped-row warning out of the suite's output.
     warn = sinon.stub(console, 'warn');
 }
 
@@ -191,24 +184,7 @@ describe('a refused ATTEST v3 and the request_id slot @regression @tier1', funct
     beforeEach(setupRelayFixture);
     afterEach(function () { sinon.restore(); });
 
-    it('below the flag day the refusal is stored and the honest relay never persists', async function () {
-        stubActiveAt(sinon, REJECT_SLOT_KEY, false);
-
-        const { griefData, relayData } = await runGriefThenRelay();
-
-        assert.ok(String(griefData['STATUS']).startsWith('invalid:'), 'the grief wire is refused');
-        assert.strictEqual(relayData['STATUS'], 'valid', 'the federation wire is admitted');
-        assert.strictEqual(relayData['REQUEST_STATUS'], 'pending');
-
-        assert.strictEqual(table.rows.length, 1, 'only the refusal reached the table');
-        assert.strictEqual(table.rows[0].request_status, 'rejected');
-        assert.strictEqual(pendingRows().length, 0,
-            'the admitted relay was dropped by the single-v0 guard: no pending row exists');
-        assert.ok(warn.getCalls().some(c => String(c.args[0]).includes('duplicate v0 for request_id')),
-            'the drop is silent apart from this warning');
-    });
-
-    it('at and above it the refusal persists nothing and the honest relay materializes', async function () {
+    it('the refusal persists nothing and the honest relay materializes', async function () {
         const { griefData, relayData } = await runGriefThenRelay();
 
         assert.ok(String(griefData['STATUS']).startsWith('invalid:'),
@@ -247,29 +223,4 @@ describe('a refused ATTEST v3 and the request_id slot @regression @tier1', funct
         assert.strictEqual(pendingRows().length, 1);
     });
 
-    it('the real gate is genesis-active on mainnet, testnet and regtest', function () {
-        sinon.restore();
-        const map = gateRegistry.get(REJECT_SLOT_KEY);
-        // A block-TIME row: the clock goes in activeAt's time slot.
-        const active = (t, network) => gateRegistry.activeAt(REJECT_SLOT_KEY, network, null, null, t);
-
-        // ARMED at genesis by the 2026-09-09 ruling: mainnet holds 0 attestations
-        // (measured 2026-09-09), so no v3 refusal has ever claimed a slot there and
-        // withholding one is identity over the indexed history.
-        assert.strictEqual(map.mainnet, 0, 'mainnet is armed at genesis');
-        // Either sentinel reads back as "still unarmed" at the GoLiveGate.
-        assert.notStrictEqual(map.mainnet, 9999999999);
-        assert.notStrictEqual(map.mainnet, 999999999);
-        assert.strictEqual(active(map.mainnet, 'mainnet'), true);
-        assert.strictEqual(active(0, 'mainnet'), true);
-        // A live mainnet block time, well above the threshold.
-        assert.strictEqual(active(1788000000, 'mainnet'), true);
-        assert.strictEqual(active(0, 'testnet'), true);
-        assert.strictEqual(active(0, 'regtest'), true);
-        // Fail closed, never open: an unknown network or an unreadable timestamp keeps
-        // the deployed behaviour rather than activating a consensus rule early.
-        assert.strictEqual(active(9999999999, 'signet'), false);
-        assert.strictEqual(active('not-a-time', 'regtest'), false);
-        assert.strictEqual(active(undefined, 'regtest'), false);
-    });
 });

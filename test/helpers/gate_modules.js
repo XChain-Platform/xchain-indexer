@@ -85,7 +85,6 @@ const REPLACED_STEMS = Object.freeze([
     'dispenser_caps_activation',
     'dispenser_freshness_activation',
     'dispenser_freshness_shape_activation',
-    'dispenser_give_amount_activation',
     'dispenser_oracle_price_activation',
     'dispenser_ownership_cancel_activation',
     'gated_handoff_ref_activation',
@@ -101,7 +100,6 @@ const REPLACED_STEMS = Object.freeze([
     'vm_exec_lint_activation',
     'vm_lint_global_alias_activation',
     'attest_relay_activation',
-    'attest_relay_reject_slot_activation',
     'attest_response_mirror_activation',
     'attest_zero_conf_activation',
     'checkpoint_commitment_activation',
@@ -178,6 +176,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'action_admission_dispatched_only',
     'anchor_fold_reissue_source_author_activation',
     'resource_fault_signal_heights',
+    'host_fault_halt_heights',
     'host_error_stack_strip_heights',
     'json_stringify_reentry_heights',
     'native_stack_terminal_heights',
@@ -196,6 +195,8 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'vote_v3_tick_existence_activation',
     'match_origin_open_activation',
     'reassemble_chunk_parent_status_activation',
+    'unstake_delegated_row_journal_activation',
+    'active_stake_collation_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

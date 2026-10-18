@@ -57,6 +57,10 @@ const {
     HOST_CALL_BOUNDS_TESTNET_TIME,
     PER_ELEMENT_METER_MAINNET_TIME,
     PER_ELEMENT_METER_TESTNET_TIME,
+    STRING_RESULT_METER_MAINNET_TIME,
+    STRING_RESULT_METER_TESTNET_TIME,
+    STRING_RECEIVER_METER_MAINNET_TIME,
+    STRING_RECEIVER_METER_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -141,7 +145,7 @@ const CHANGES = [
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 0, 0, 0, 0],
     // EMISSION_DEPTH_EXECUTE_ONLY: only an EXECUTE emission stamps the incremented CALL_DEPTH;
     // other emissions keep the emitter's depth. Unarmed on every network until a release cut pins an instant.
-    ['EMISSION_DEPTH_EXECUTE_ONLY', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
+    ['EMISSION_DEPTH_EXECUTE_ONLY', '0.2.0', UNARMED, 1792303200, UNARMED, 0, 0, 0],
     ['STAKE_SNAPSHOT_DECIMAL_STRINGS','0.2.0', STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME,
         STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME, 0, 0, 0, 0],
 
@@ -149,18 +153,18 @@ const CHANGES = [
     // reads the wrapper chain row of each v3 archive (db/anchors getArchiveReplayWatermarks).
     // A v3 archive head row carries no checkpoint_seq, so below the flag the watermark only
     // ever sees v1 heads. Judged by the block that carries the ANCHOR. Unarmed on every network.
-    ['ARCHIVE_REPLAY_WRAPPER_WATERMARK', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
+    ['ARCHIVE_REPLAY_WRAPPER_WATERMARK', '0.2.0', UNARMED, 1792303200, UNARMED, 0, 0, 0],
 
     // LEGACY_ANCHOR_REWARD_PIN: below the flag the anchor reward mint ignores the legacy
     // pin list. At or above it, a reward tuple pinned in legacy_reward_pins.json is not
     // minted again. Judged by the BTC block that derives the reward. Unarmed on every network.
-    ['LEGACY_ANCHOR_REWARD_PIN', '0.2.0', UNARMED, UNARMED, UNARMED, 0, 0, 0],
+    ['LEGACY_ANCHOR_REWARD_PIN', '0.2.0', UNARMED, 1792303200, UNARMED, 0, 0, 0],
 
     // GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS: the controller-guard stake snapshot
     // (actions/execute/controller_guard.js) hands the VM decimal strings, as the primary
     // EXECUTE path does under STAKE_SNAPSHOT_DECIMAL_STRINGS. Unarmed on mainnet and
     // testnet; regtest is inert unless a venue sets GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME.
-    ['GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS', '0.2.0', UNARMED, UNARMED,
+    ['GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS', '0.2.0', UNARMED, 1792303200,
         () => regtestTimeOverride('GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME')() || UNARMED, 0, 0, 0],
 
     // HOST_CALL_BOUNDS: mirrors xchain-vm HOST_CALL_BOUNDS_ACTIVATION, judged by block time. From the
@@ -178,14 +182,24 @@ const CHANGES = [
     ['PER_ELEMENT_METER', '0.2.0', PER_ELEMENT_METER_MAINNET_TIME,
         PER_ELEMENT_METER_TESTNET_TIME, 0, 0, 0, 0],
 
+    // STRING_RECEIVER_METER: mirrors xchain-vm STRING_RECEIVER_METER_ACTIVATION, judged by
+    // block time. The corrected String receiver and alias metering stays unarmed on mainnet
+    // and testnet; regtest is active from genesis.
+    ['STRING_RECEIVER_METER', '0.2.0', STRING_RECEIVER_METER_MAINNET_TIME,
+        STRING_RECEIVER_METER_TESTNET_TIME, 0, 0, 0, 0],
+
     // CALLBACK_ARGS_EXACT: an ATTEST, XCALL or binding VOTE callback runs with the argument
     // array its injector built, so a '|' inside a provider response, a callee return value or a
     // callback param stays inside its own argument. Below the flag the arguments are joined on
     // '|' and split again before the VM, which is how they ran before. Judged by the block that
     // injects the callback. Unarmed on mainnet and testnet; genesis-active on regtest unless a
     // venue sets CALLBACK_ARGS_EXACT_REGTEST_TIME.
-    ['CALLBACK_ARGS_EXACT', '0.2.0', UNARMED, UNARMED,
+    ['CALLBACK_ARGS_EXACT', '0.2.0', UNARMED, 1792303200,
         regtestTimeOverride('CALLBACK_ARGS_EXACT_REGTEST_TIME'), 0, 0, 0],
+
+    // STRING_RESULT_METER mirrors the VM's block-time activation table.
+    ['STRING_RESULT_METER', '0.2.0', STRING_RESULT_METER_MAINNET_TIME,
+        STRING_RESULT_METER_TESTNET_TIME, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;

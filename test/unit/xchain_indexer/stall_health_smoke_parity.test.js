@@ -30,6 +30,7 @@ describe('smoke status stall-health parity', function () {
         'vm_executor_unavailable',
         'bridge_proof_barrier',
         'train_activation_halt: rule set 3 required at 900',
+        'train_activation_halt: minimum node release required',
         'train_activation_halt: train_activation: the activation gate itself failed to evaluate (x); refusing to advance',
     ];
     const COMMIT_TIMES = [null, NOW - 120001, NOW - 120000, NOW - 1, NOW + 1];

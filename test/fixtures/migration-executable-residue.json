@@ -201,7 +201,7 @@
   },
   "2026-08-12-validator-rewards-derive-block-index.sql": {
     "residue": "babc8155515b1ed7a4613605e0c5e67cfdc4defa29dfae5b6c51d31273cc61ea",
-    "sha256": "a911c38ca928743bb65c763c8143a5a3ad63de18da72b32da83a4971c1735ed8"
+    "sha256": "a4e6d570b9b42b4ebf4d3348a0bfc177b3270991bdc54ae96140c17377e17067"
   },
   "2026-08-13-anchor-reward-attestations-doge-anchor-txid.sql": {
     "residue": "f4a81464164fd2f991e6da95ff89fffe61031e1f668c96174ef6c7aca05c15fa",
