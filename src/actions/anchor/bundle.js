@@ -25,12 +25,15 @@ const gateRegistry = require('../../consensus/gate_registry');
 
 const { getLogger } = require('../../observability/index.js');
 
+const CHECKPOINT_SEQ_BIND_GATE =
+    'anchor_checkpoint_seq_bind_activation.ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVATION';
+
 // Positional extraction. A section is 13 fixed slots (CHAIN .. SIG_COUNT) plus
 // 2*SIG_COUNT signature slots, so the cursor walks the sections and lands on the
 // publisher tail. No length cap on SECTION_COUNT is needed: a forged count runs
 // out of params on the first section it cannot fill, which fails the shape checks
 // below and stops the walk.
-function walkSections(handler, params, data, error){
+function walkSections(handler, params, data, checkpointSeqBind, error){
     let sections = [];
     let cursor   = 4;
     let prevChain = null;
@@ -45,6 +48,8 @@ function walkSections(handler, params, data, error){
         for(let i = 0; i < Number(data['SECTION_COUNT']); i++){
             let s = validate.readSection(params, cursor, i, data['NETWORK']);
             let reason = handler.validateSectionShape(s, seenChains);
+            let bindReason = checkpointSeqBind && validate.checkpointSeqBindReason(s);
+            if(!reason) reason = bindReason;
             if(reason){ error = 'invalid: SECTION ' + i + ' ' + reason; break; }
             reason = enforceOrder && validate.sectionOrderReason(prevChain, s);
             if(reason){ error = 'invalid: SECTION ' + i + ' ' + reason; break; }
@@ -68,10 +73,10 @@ function walkSections(handler, params, data, error){
 // re-broadcast that can only produce a duplicate row, while a genuinely lower seq
 // is something the hub's selector cannot emit (its MAX subquery only ever climbs),
 // so it is a replay or a forgery. Under the all-or-nothing verdict it takes the whole bundle down.
-async function checkSectionSeqs(handler, sections, error){
+async function checkSectionSeqs(handler, sections, validOnly, error){
     if(!error){
         for(let s of sections){
-            let maxSeq = await handler.indexerDb.getMaxAnchorCheckpointSeq(s.CHAIN, s.NETWORK);
+            let maxSeq = await handler.indexerDb.getMaxAnchorCheckpointSeq(s.CHAIN, s.NETWORK, validOnly);
             if(maxSeq !== null && Number(s.CHECKPOINT_SEQ) < maxSeq){
                 error = 'invalid: SECTION ' + s.SECTION_INDEX +
                         ' CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
@@ -150,7 +155,10 @@ async function recordBundle(handler, data, sections, publisherSigs, error){
 async function parseBundleAction(handler, params, data, error){
     error = validate.validateBundleHeader(handler.config, params, data, error);
 
-    let walk = walkSections(handler, params, data, error);
+    let checkpointSeqBind = gateRegistry.activeAt(CHECKPOINT_SEQ_BIND_GATE,
+        handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
+
+    let walk = walkSections(handler, params, data, checkpointSeqBind, error);
     let sections = walk.sections;
     error = walk.error;
 
@@ -168,7 +176,7 @@ async function parseBundleAction(handler, params, data, error){
     let publisherSigs = tail.publisherSigs;
     error = tail.error;
 
-    error = await checkSectionSeqs(handler, sections, error);
+    error = await checkSectionSeqs(handler, sections, checkpointSeqBind, error);
 
     let oracleSetFor = quorum.makeOracleSetResolver(handler);
     let verdict = await quorum.verifySections(handler, data, sections, oracleSetFor, error);

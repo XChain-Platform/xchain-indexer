@@ -7309,6 +7309,12 @@
       "policy apply by shared-list reference keeps legacy rows byte-identical above and below the consumer gate",
       "policy apply by shared-list reference points a copy at a foreign mirror with one ISSUE 5 leg and no LIST leg"
     ],
+    "6d32e4c3df3140f6": [
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 keeps the all-status watermark immediately before activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 reads only valid checkpoint rows for a bound section at activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 refuses a noncanonical bound sequence at activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 refuses a section whose sequence differs from its snapshot at activation"
+    ],
     "6d4320fffe6e67ab": [
       "protocol_changes consensus-bound indexer rows @regression @tier1 keeps gates_1.js at or under 400 lines",
       "protocol_changes consensus-bound indexer rows @regression @tier1 pins the BROADCAST FEE length flag day",
@@ -18187,8 +18193,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1436,
-      "titleCount": 14086,
+      "fileCount": 1437,
+      "titleCount": 14090,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18226,6 +18232,7 @@
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
