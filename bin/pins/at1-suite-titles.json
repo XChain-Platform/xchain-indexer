@@ -9360,6 +9360,13 @@
       "Send handler: caret-id pack keying @regression @tier1 INERT: the legacy lookup by the caret spelling finds no pack and the SEND passes",
       "Send handler: caret-id pack keying @regression @tier1 the new row is unarmed on mainnet and armed on testnet and regtest"
     ],
+    "8c68aac253d8f04e": [
+      "Airdrop multi-leg native fee action tally @regression @tier1 draws one non-BATCH native output across the legs and records their summed fee",
+      "Airdrop multi-leg native fee action tally @regression @tier1 leaves XCHAIN-balance fee settlement on the existing per-leg path",
+      "Airdrop multi-leg native fee action tally @regression @tier1 leaves a BATCH_VALUE_LEDGER on the existing per-leg path at the gate height",
+      "Airdrop multi-leg native fee action tally @regression @tier1 makes a FEE_PROBE quote the summed fee without drawing the action tally",
+      "Airdrop multi-leg native fee action tally @regression @tier1 rejects the unpaid second non-BATCH leg after the first leg draws the output"
+    ],
     "8c6b69def3f9000c": [
       "price-batch-query (getpricebatches) buildPriceBatchesResponse answers an empty range with an empty list, never null",
       "price-batch-query (getpricebatches) buildPriceBatchesResponse flags a full page as truncated so the caller pages instead of reading it as complete",
@@ -18180,8 +18187,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1441,
-      "titleCount": 14069,
+      "fileCount": 1442,
+      "titleCount": 14074,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18515,6 +18522,7 @@
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "d5d2a5097677f9b1",

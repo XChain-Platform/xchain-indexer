@@ -93,10 +93,12 @@ class Airdrop {
 
         // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
+        let nativeFeeTally = this.createAirdropNativeFeeTally(data);
 
         // Store original error value
         // Array of credits and debits
-        let ctx = { ticks, balances, gasTick, gasInfo, fees, origError: error, credits: [], debits: [] };
+        let ctx = { ticks, balances, gasTick, gasInfo, fees, nativeFeeTally,
+            origError: error, credits: [], debits: [] };
 
         // Loop through airdrops and process each
         for(let idx in airdrops){
@@ -148,7 +150,7 @@ class Airdrop {
         airdrop['DEBIT'] = (!error) ? this.util.bcmul(recipients.size, airdrop['AMOUNT'], tokenInfo['DECIMALS']) : 0;
 
         // Price the per-tx FEE (airdrop/fees.js), then stage the DEBIT (airdrop/settle.js)
-        await this.priceAirdropLeg(recipients, ctx.fees, data);
+        await this.priceAirdropLeg(recipients, ctx.fees, data, ctx.nativeFeeTally);
         let staged = this.stageAirdropLeg(airdrop, tokenInfo, ctx, error);
 
         // Controller guard on the aggregate outbound move (airdrop/controller_guard.js)
