@@ -20,7 +20,6 @@ const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 const Attest          = require('../../src/actions/attest/index.js');
 const swq             = require('../../src/consensus/stake_weighted_quorum.js');
 const { stubActiveAt } = require('./gate_modules.js');
-const attestBcastFee  = require('../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 // The response-mirror flag day is a registry row (W5); its key, for the stubs below.
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 // Same module instance Attest holds a reference to (Node module cache); stubbing
@@ -128,10 +127,6 @@ function setUpAttestHandler() {
     // 'valid'; the gate's own describe below re-enables it. (regtest arms the
     // gate at genesis, so this must be stubbed off here, mirroring swq above.)
     stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', false);
-    // Same treatment for the leader broadcast-fee carve-out: regtest arms it at genesis, so
-    // the fixtures above would otherwise settle through the carve-out path and every
-    // legacy split assertion would move. Its own describe below re-enables it.
-    sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
     // And the response-mirror flag day, which regtest also arms at genesis. Above it
     // an on-chain v1 is rejected outright and the broadcast-fee carve-out is retired,
     // so leaving it armed would move every legacy v1 and fee fixture in this file at

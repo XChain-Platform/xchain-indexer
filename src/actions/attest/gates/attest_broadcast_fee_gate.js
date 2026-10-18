@@ -10,16 +10,16 @@
  *
  **********************************************************************
  *
- * ATTEST leader broadcast-fee reimbursement flag-day (framework spec §11).
+ * ATTEST leader broadcast-fee reimbursement constants (framework spec §11).
  *
  * §11 says the leader that broadcasts an ATTEST v1 response "additionally
- * receives the native-coin equivalent of response_broadcast_native_fee". Until
- * this gate the leader ate that fee: the whole v0 escrow was released to the
+ * receives the native-coin equivalent of response_broadcast_native_fee". Before
+ * reimbursement was introduced the leader ate that fee: the whole v0 escrow was released to the
  * REWARD pool and split equally across the responsible set, with nothing set
  * aside for the party that actually paid a miner to carry the response.
  *
- * At/above the activation height the fulfilled settle carves a broadcast
- * reimbursement out of the escrow FIRST and pays it to a single member, then
+ * A fulfilled settle carves a broadcast reimbursement out of the escrow FIRST
+ * and pays it to a single member, then
  * splits what is left. Three pieces make that re-derivable offline by any
  * replaying indexer, which is the whole bar here (the retired RewardTracker
  * lesson: a hub-side push that offline verifiers cannot re-derive is not an
@@ -58,49 +58,17 @@
  *      pocket. Hence a shipped conservative default AND a HARD_MAX no operator
  *      overlay can exceed.
  *
- * WHY A FLAG-DAY. §11 pays out of the v0 escrow, so this changes v0 escrow
- * computation for every fee-bearing request that settles at/above the height.
- * Below it, the legacy full-escrow-to-the-split behaviour is preserved verbatim
- * so a from-genesis replay stays bit-identical.
- *
- * ACTIVATION PLANE: LOCAL BLOCK HEIGHT of the SETTLING action, and unlike the
- * ATTEST_ADMISSION gate that is safe here without qualification. The
- * reimbursement can only ever fire where the responsible set is non-empty, and
- * computeResponsibleSet (actions/attest/responsible_set.js) returns [] on every
- * chain but BTC by construction (capability staking is BTC-only). So the only
- * chain that can reach this predicate is the one whose local height IS the BTC
- * height the threshold is denominated in.
- *
- * EVERY NETWORK IS ARMED AT GENESIS. The four sub-decisions this gate encodes
- * were pinned by the operator on 2026-08-11 and the height was named by the
- * 2026-09-09 ruling: 0 attestations have ever been recorded on any mainnet
- * chain (measured 2026-09-09), so there is no settle whose escrow split this
- * reinterprets and the from-genesis replay witness proves the identity.
- *
- * LOCAL COPY of the canonical maps in xchain-documentation/protocol/
+ * LOCAL COPY of the canonical map in xchain-documentation/protocol/
  * constants.js; kept value-identical by test/unit/activationConstantsParity.test.js.
- * A one-sided edit forks the ATTEST fee settle at the flag-day.
+ * A one-sided edit changes the ATTEST fee settle.
  *
  ********************************************************************/
 
 'use strict';
 
-const { get, copy, activeAt } = require('../../../consensus/gate_registry');
-
-const ATTEST_BROADCAST_FEE_ACTIVATION = copy('attest_broadcast_fee_activation.ATTEST_BROADCAST_FEE_ACTIVATION');
+const { copy } = require('../../../consensus/gate_registry');
 
 const ATTEST_BROADCAST_FEE_CAP = copy('attest_broadcast_fee_activation.ATTEST_BROADCAST_FEE_CAP');
-
-// Whether the leader broadcast-fee carve-out is in effect for a settle at `blockIndex`
-// on `network`. Below the threshold (or an inert null / unknown network) -> off, and the
-// legacy full-escrow split stays byte-identical.
-function isAttestBroadcastFeeActive(blockIndex, network){
-    let b = parseInt(blockIndex);
-    if(!Number.isFinite(b)) return false;
-    let threshold = ATTEST_BROADCAST_FEE_ACTIVATION[network];
-    if(threshold === null || threshold === undefined) return false;
-    return b >= threshold;
-}
 
 // Satoshi grid every cap is parsed onto: native-coin amounts are satoshi-precision
 // everywhere else in this codebase, so a cap is an integer count of satoshis end to end
@@ -157,8 +125,6 @@ function broadcastFeeCapNative(providerId, providerDef){
 }
 
 module.exports = {
-    ATTEST_BROADCAST_FEE_ACTIVATION,
     ATTEST_BROADCAST_FEE_CAP,
-    isAttestBroadcastFeeActive,
     broadcastFeeCapNative
 };
