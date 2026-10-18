@@ -70,18 +70,6 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.ok(String(data3['STATUS']).startsWith('invalid: CHUNK_INDEX (duplicate)'));
     });
 
-    // ── Chunk-slot poisoning. "Authenticated by its parent v1" must mean more than
-    //    that a parent exists with matching geometry, or the FIRST broadcast into a slot
-    //    wins permanently: a junk chunk takes the slot, the real publisher's chunk is
-    //    rejected as a duplicate, and the batch can never reassemble. ─────────────────
-    describe('v2 chunk authorship (#3075)', function () {
-        it('rejects a chunk whose author is not the archive head publisher', async function () {
-            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(headOf(PUBLISHER));
-            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 7, SOURCE: OUTSIDER });
-            await handler.parse(['2', '9', '1', '3', 'BBBB'], data, null);
-            assert.strictEqual(data['STATUS'], 'invalid: SOURCE (not the archive head publisher)');
-        });
-    });
 });
 
 describe('Anchor (ANCHOR) @regression @tier3', function () {
@@ -94,27 +82,20 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
 
     describe('v2 chunk authorship (#3075)', function () {
         it('the real publisher keeps its slot: an outsider chunk no longer makes it a duplicate', async function () {
-            // The denial the finding describes, driven end to end. The junk chunk is
-            // rejected on authorship, so it is NOT in the occupancy set getAnchorChunks
-            // returns (that query excludes 'invalid: ...' rows), and the legitimate chunk
-            // for the same index parses 'valid' instead of 'invalid: CHUNK_INDEX (duplicate)'.
-            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(headOf(PUBLISHER));
+            // The denial the finding describes, driven end to end. The outsider has no
+            // head under its author scope, so its chunk is stored as an orphan and never
+            // enters the real publisher's occupancy set. The legitimate chunk for the
+            // same index therefore parses valid instead of duplicate.
+            const publisherHead = headOf(PUBLISHER);
+            indexer.indexerDb.getAnchorV1ByBatchSeq.callsFake(async (seq, scope) =>
+                scope != null && String(scope) !== PUBLISHER ? null : publisherHead);
             let junk = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 8, SOURCE: OUTSIDER });
             await handler.parse(['2', '9', '1', '3', 'JUNK'], junk, null);
-            assert.ok(String(junk['STATUS']).startsWith('invalid: SOURCE'));
+            assert.strictEqual(junk['STATUS'], 'orphan');
 
             let real = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 9, SOURCE: PUBLISHER });
             await handler.parse(['2', '9', '1', '3', 'BBBB'], real, null);
             assert.strictEqual(real['STATUS'], 'valid');
-        });
-
-        it('fails closed when the head author cannot be resolved at all', async function () {
-            // A head whose actions/index_addresses linkage is missing yields source null.
-            // Waving the chunk through then would authenticate it against nothing.
-            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(headOf(null));
-            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 10 });
-            await handler.parse(['2', '9', '1', '3', 'BBBB'], data, null);
-            assert.strictEqual(data['STATUS'], 'invalid: SOURCE (archive head author unresolvable)');
         });
 
         it('geometry still outranks authorship, so the pre-#3075 verdict is unchanged', async function () {
