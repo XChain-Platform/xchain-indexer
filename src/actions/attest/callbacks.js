@@ -22,7 +22,11 @@
 'use strict';
 
 const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('../../consensus/exec_context.js');
+const gateRegistry = require('../../consensus/gate_registry');
 const { getLogger } = require('../../observability/index.js');
+
+const CALLBACK_BATCH_POSITION_GATE =
+    'attest_callback_batch_position_activation.ATTEST_CALLBACK_BATCH_POSITION_ACTIVATION';
 
 module.exports = {
     // Inject the contract callback for a relayed response. The 'ok' path is the v1
@@ -59,6 +63,8 @@ module.exports = {
         // post-SYNTH_EXEC_TX_HASH the builder throws rather than let a hashless
         // context reach the VM.
         let synthActive = await this.actions.protocolChanges.isEnabled(SYNTH_EXEC_TX_HASH, responseData['BLOCK_INDEX']);
+        let copyBatchPosition = gateRegistry.activeAt(CALLBACK_BATCH_POSITION_GATE,
+            this.config['NETWORK'], this.config['CHAIN'], responseData['BLOCK_INDEX'], null);
         let emissionData = buildInjectedExecContext({
             chain:         chain,
             network:       this.config['NETWORK'],
@@ -72,7 +78,8 @@ module.exports = {
             callback:      true,
             extra: {
                 TX_INDEX: responseData['TX_INDEX'],
-                TX_VOUT:  responseData['TX_VOUT']
+                TX_VOUT:  responseData['TX_VOUT'],
+                ...(copyBatchPosition ? { BATCH_POSITION: responseData['BATCH_POSITION'] } : {})
             }
         });
 

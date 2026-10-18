@@ -197,6 +197,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'reassemble_chunk_parent_status_activation',
     'unstake_delegated_row_journal_activation',
     'active_stake_collation_activation',
+    'attest_callback_batch_position_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
