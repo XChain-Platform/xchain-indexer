@@ -13,9 +13,9 @@
  * Publisher scoping of the reorg 'invalid_archive' reset, driven against REAL
  * anchor_actions rows in a real SQL engine.
  *
- * MATCH_BATCH_SEQ is not a batch key. Once archive batches are publisher-scoped
- * (the archive_batch_author_activation registry row) two publishers hold two live batches under
- * one seq, each with its own head and its own chunks stored 'valid'. The reset
+ * MATCH_BATCH_SEQ is not a complete batch key. Archive batches are publisher-scoped,
+ * so two publishers can hold two live batches under one seq, each with its own head
+ * and its own chunks stored 'valid'. The reset
  * self-joins head to chunk on the seq alone, so one publisher's orphaned chunk
  * resets the OTHER publisher's head, whose batch survives the reorg intact and
  * whose stamp a from-genesis replay still re-derives.
@@ -47,9 +47,6 @@ const {
     isArchiveRollbackAuthorScopeActive,
     archiveAuthorScopeJoin,
 } = require('../../../src/consensus/gates/archive_rollback_author_scope_gate.js');
-const ARCHIVE_BATCH_AUTHOR_ACTIVATION = require('../../../src/consensus/gate_registry')
-    .get('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION');
-
 const SQL_DIR = path.join(__dirname, '..', '..', '..', 'src', 'sql');
 const BATCH_SEQ = 7;
 // The rollback target, and the action index the orphaned range starts at.
@@ -195,19 +192,6 @@ describe('archive invalid_archive reset: publisher scoping @regression', functio
             assert.strictEqual(isArchiveRollbackAuthorScopeActive('not-a-height', 'regtest'), false);
         });
 
-        // Author equality is the exact batch key only where anchor.js scopes a chunk set to
-        // the head's OWN author. Below that height the set is scoped to the CANONICAL head's
-        // author, so the term would suppress a reset that is genuinely owed.
-        it('never arms a network below its own ARCHIVE_BATCH_AUTHOR height', function(){
-            for(const network of Object.keys(ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION)){
-                const batchAuthor = ARCHIVE_BATCH_AUTHOR_ACTIVATION[network];
-                assert.strictEqual(typeof batchAuthor, 'number',
-                    network + ' has no ARCHIVE_BATCH_AUTHOR height to order against');
-                assert.ok(ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION[network] >= batchAuthor,
-                    network + ': the rollback author scope must never arm below ARCHIVE_BATCH_AUTHOR (' +
-                    batchAuthor + '), or a head stamped by the head-side gate loses a reset it is owed');
-            }
-        });
     });
 });
 

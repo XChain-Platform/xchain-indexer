@@ -184,9 +184,9 @@ class AnchorRecovery {
         // order or two nodes persist divergent finalized content. Break the tie on action_index
         // ASC - unique + consensus-visible on this single-network table - mirroring the live head
         // pick (db.getAnchorV1ByBatchSeq) and the chunk-assembly query below.
-        // The head's AUTHOR rides along (LEFT joined, so the row set is unchanged): under
-        // the publisher-scoped flag day a head reassembles its own publisher's
-        // chunks, and recovery has to reassemble the same set the live path did or a
+        // The head's AUTHOR rides along (LEFT joined, so the row set is unchanged):
+        // each head reassembles its own publisher's chunks, and recovery has to
+        // reassemble the same set the live path did or a
         // recovery-fed node diverges from a mirror-fed one. Resolved through
         // actions.source_id, authoritative for auth, exactly like the live head pick.
         let v1s = await this.db.doQuery(
@@ -247,17 +247,14 @@ class AnchorRecovery {
 
     // ── Per-batch verification ──────────────────────────────────────────────────
 
-    // The author this head's chunk set is scoped to, or null while the
-    // publisher-scoped flag day is inert for the batch. `network` comes off the anchor
-    // row itself, never a process-level default: the parse path rejects an ANCHOR whose
-    // NETWORK is not this indexer's ('invalid: NETWORK (not this network)'), so every
-    // replayable row already carries the network the live gate resolved against.
+    // The author this head's chunk set is scoped to, or null when the canonical head
+    // cannot be resolved. The canonical lookup matches the live parse path so recovery
+    // and live indexing select a publisher from the same deterministic starting row.
     async archiveAuthorScope(v1){
         let gate = await this.db.doQuery(ARCHIVE_HEAD_GATE_SQL,
             [foldArchiveHeadFloor(v1.network, 'DOGE'), Number(v1.match_batch_seq)]);
         let head = (gate && gate.length > 0) ? gate[0] : null;
         if(!head) return null;
-        if(!gateRegistry.activeAt('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION', v1.network, null, Number(head.block_index_doge), null)) return null;
         return String(v1.source || '');
     }
 
@@ -276,14 +273,12 @@ class AnchorRecovery {
             // the canonical archive head count at all. Lowest action_index wins per
             // index, deterministically. Mirrors the v1 status join above and
             // rollback.js's valid-chunk self-join; do NOT loosen to unfiltered.
-            // At/after the publisher-scoped flag day the batch key is
-            // (match_batch_seq, head author), so THIS head reassembles the chunks of its
-            // own publisher and a junk head squatting the seq can no longer filter them
-            // out. Gated on the batch's canonical head (earliest v1 row, the one row
-            // resolved identically on every node without consulting status), byte-for-byte
-            // the anchor the live parse path uses, so recovery and the live path never
-            // apply different rules to the same batch. Below fold activation the legacy
-            // canonical-head candidate set is preserved.
+            // The batch key is (match_batch_seq, head author), so THIS head reassembles
+            // the chunks of its own publisher and a junk head squatting the seq cannot filter them
+            // out. The batch's canonical head (earliest v1 row, the one row resolved
+            // identically on every node without consulting status) is byte-for-byte the
+            // anchor the live parse path uses, so recovery and live indexing never apply
+            // different rules to the same batch.
             let scope = await this.archiveAuthorScope(v1);
             let rows = (scope !== null)
                 ? await this.db.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [Number(v1.match_batch_seq), scope])

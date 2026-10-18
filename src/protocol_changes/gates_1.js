@@ -73,16 +73,6 @@ addGate('anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTI
 // anchor_archive_fold_term_activation
 addGate('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984, 'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0 });
 
-// archive_batch_author_activation
-// Per-network activation, interpreted against the DOGE block_index of the batch's
-// canonical archive head. Every network is armed from genesis, so all three run the
-// publisher-scoped rule end to end.
-addGate('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION', 'height', {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 archive chunks, measured 2026-09-09)
-    testnet: 0,           // ARMED at genesis 2026-08-14 per the 2026-08-11 operator ruling; the re-genesised testnet has no pre-flag history to keep byte-identical
-    regtest: 0,           // armed from genesis
-});
-
 // attest_admission_activation
 // Per-network activation height (LOCAL COPY of the canonical map in
 // xchain-documentation/protocol/constants.js). Compared against the request's own

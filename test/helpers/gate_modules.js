@@ -76,7 +76,6 @@ const GATE_MODULE_PATHS = Object.freeze({
 // exports these rows; callers spell the key at the call site.
 const REPLACED_STEMS = Object.freeze([
     'anchor_activation',
-    'archive_batch_author_activation',
     'attest_admission_activation',
     'dispense_cancelling_match_activation',
     'dispenser_amount_positivity_activation',
