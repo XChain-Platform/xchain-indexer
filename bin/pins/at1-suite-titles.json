@@ -13078,13 +13078,6 @@
       "shared list storage reads returns the destination of the newest transfer after two transfers",
       "shared list storage reads returns valid shares in action order and ignores an invalid share"
     ],
-    "bbf4d90405bf6e71": [
-      "Mode B create requires an effective oracle price @regression @tier2 an ownership create against a priced oracle opens and owes no fee output",
-      "Mode B create requires an effective oracle price @regression @tier2 covers a zero-escrow balance create too, not just ownership",
-      "Mode B create requires an effective oracle price @regression @tier2 leaves Mode A alone: no oracle named, no lookup attempted",
-      "Mode B create requires an effective oracle price @regression @tier2 rejects an ownership create naming an oracle with no effective price",
-      "Mode B create requires an effective oracle price @regression @tier2 still accepts that same create BELOW the gate (replay stays byte-identical)"
-    ],
     "bc0fdae14389c0fc": [
       "automatic migration unique-key witness @regression @tier1 finds each key-dependent write and ignores one inside a quoted literal",
       "automatic migration unique-key witness @regression @tier1 ignores a key-dependent statement inside a quoted literal",
@@ -20005,7 +19998,7 @@
     },
     "test:regression": {
       "fileCount": 1093,
-      "titleCount": 11103,
+      "titleCount": 11102,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20415,7 +20408,7 @@
         "test/unit/activations/activation_constants_parity.test/sentinel_coin_isolation.test.js": "d27e69ca0f3eb0d0",
         "test/unit/activations/anchor_reward_null_threshold.test.js": "86e3b95c0a42a9c6",
         "test/unit/activations/capability_min_stake_history.test.js": "a1bc8adce48d1864",
-        "test/unit/activations/dispenser_oracle_price_activation.test.js": "bbf4d90405bf6e71",
+        "test/unit/activations/dispenser_oracle_price_activation.test.js": "0b14a26bf2d65678",
         "test/unit/activations/dispenser_settlement_price_activation.test.js": "91fb11e60f21efba",
         "test/unit/activations/list/empty_allow_list_denies_activation.test.js": "97183ecc8d1ea3cb",
         "test/unit/activations/list/list_address_ref_activation.test.js": "53655c2e28eca03d",
@@ -21640,7 +21633,7 @@
     },
     "test:regression:full": {
       "fileCount": 1093,
-      "titleCount": 11103,
+      "titleCount": 11102,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22050,7 +22043,7 @@
         "test/unit/activations/activation_constants_parity.test/sentinel_coin_isolation.test.js": "d27e69ca0f3eb0d0",
         "test/unit/activations/anchor_reward_null_threshold.test.js": "86e3b95c0a42a9c6",
         "test/unit/activations/capability_min_stake_history.test.js": "a1bc8adce48d1864",
-        "test/unit/activations/dispenser_oracle_price_activation.test.js": "bbf4d90405bf6e71",
+        "test/unit/activations/dispenser_oracle_price_activation.test.js": "0b14a26bf2d65678",
         "test/unit/activations/dispenser_settlement_price_activation.test.js": "91fb11e60f21efba",
         "test/unit/activations/list/empty_allow_list_denies_activation.test.js": "97183ecc8d1ea3cb",
         "test/unit/activations/list/list_address_ref_activation.test.js": "53655c2e28eca03d",
