@@ -594,13 +594,6 @@
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController refuses on BTC when the source cannot cover the guard gas ceiling",
       "guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1 the reservation site in _invokeController still refuses on BTC when the source holds less than the ceiling but more than zero"
     ],
-    "0ab9e04fb9d1607d": [
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND a single 0.5 leg of a 0-decimals token is rejected (the rule that was being laundered)",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND an honest sibling leg still settles beside a rejected one",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND control: below the threshold that same pair rounds into a single 11-token send",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND control: below the threshold the same two legs still settle as one valid 1-token send",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND two 0.5 legs to one destination are each rejected instead of settling as 1"
-    ],
     "0ae3946ca8dca208": [
       "shared-list due planning and membership steps @regression @tier1 builds version 1 only when no mirror membership exists",
       "shared-list due planning and membership steps @regression @tier1 caps rows after deterministic list and sequence ordering",
@@ -5813,13 +5806,6 @@
       "Supply & amount boundary tests @regression @tier1 AMT-10: Maximum precision arithmetic (18 decimals) MINT AMOUNT=0.000000000000000001 (smallest unit) fills last slot \u2192 valid",
       "Supply & amount boundary tests @regression @tier1 AMT-11: MINT at per-address cap minted so far=49, AMOUNT=1 \u2192 exactly at cap \u2192 valid",
       "Supply & amount boundary tests @regression @tier1 AMT-11: MINT at per-address cap minted so far=50, AMOUNT=1 \u2192 one over cap (MINT_ADDRESS_MAX=50) \u2192 invalid"
-    ],
-    "586a3a620cef40a6": [
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 DESTROY control: below the threshold the same two legs still burn a valid 1",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 DESTROY two 0.5 legs of one tick are each rejected instead of merging to 1",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 DESTROY two well-formed legs of one tick still consolidate, gate on",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND record order follows first-occurrence order, gate on and gate off alike",
-      "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND two well-formed legs to one destination still consolidate, gate on"
     ],
     "58706b2a54fa0008": [
       "JSON-RPC body guard (Express 5 / body-parser 2.x regression) does not crash WITH the guard (GET -> not 500)",
@@ -20020,7 +20006,7 @@
     },
     "test:regression": {
       "fileCount": 1091,
-      "titleCount": 11119,
+      "titleCount": 11116,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20357,8 +20343,8 @@
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "0ab9e04fb9d1607d",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "586a3a620cef40a6",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "ac0c64e25ececd16",
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
@@ -21117,7 +21103,7 @@
     },
     "test:regression:fast": {
       "fileCount": 528,
-      "titleCount": 5716,
+      "titleCount": 5713,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21191,8 +21177,8 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "0ab9e04fb9d1607d",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "586a3a620cef40a6",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "ac0c64e25ececd16",
         "test/unit/actions/token/broadcast.test/fee_length_gate.test.js": "51b3468275b1d232",
         "test/unit/actions/token/destroy.test.js": "85f55ffbe5c712da",
         "test/unit/actions/token/destroy.test/destroy_behaviors.test.js": "93d204b9c442eeda",
@@ -21651,7 +21637,7 @@
     },
     "test:regression:full": {
       "fileCount": 1091,
-      "titleCount": 11119,
+      "titleCount": 11116,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21988,8 +21974,8 @@
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "0ab9e04fb9d1607d",
-        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "586a3a620cef40a6",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
+        "test/unit/actions/token/amounts/consolidation_leg_amount.test/leg_validation.test.js": "ac0c64e25ececd16",
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
