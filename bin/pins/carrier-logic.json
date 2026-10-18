@@ -103,7 +103,7 @@
     },
     "oracle_preload_causality_activation": {
       "path": "src/db/prices/oracle_preload_causality_gate.js",
-      "hash": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
+      "hash": "90b414005e4ee0d387068f8f7b0f547573dbde1c4672d71ced5057331be4a5be",
       "twins": []
     },
     "price_batching_floor_activation": {
@@ -2194,6 +2194,13 @@
       "id": "stateHash",
       "from": "5ac03b6746c93bc0615d0a4d857f5eb4861c44aa5890ee60e922794ed29bc785",
       "to": "a47cbbadb6e1f624c3dde36feb74985ba2a066c1cb5e1f09d17e8540f9c28515",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "oracle_preload_causality_activation",
+      "from": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
+      "to": "90b414005e4ee0d387068f8f7b0f547573dbde1c4672d71ced5057331be4a5be",
       "reason": "XC\u002d3351 gate retirement",
       "date": "2026-10-18"
     }

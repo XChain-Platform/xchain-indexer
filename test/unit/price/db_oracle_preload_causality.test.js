@@ -17,15 +17,12 @@
  * blockCap taken from the PROCESSING chain's height, while reference_block is a
  * BTC anchor on every row. On LTC and DOGE the local height sits far above any
  * anchor, so the bound matches the whole table and a contract observes rounds
- * the hub finalized AFTER the block it executes in. At/after the activation
- * height each read carries an additional `block_timestamp <= ?` bound; the
- * reference chain is carved out at every height because its own height cap is
- * exact.
- *
- * The gate arm and the inert arm are both driven against the same fake rows:
- * the fake reads the PREDICATES OUT OF THE SQL TEXT and applies the bound
- * arguments positionally, so a read that loses its bound keeps the future round
- * and fails the test rather than being graded against an assumption.
+ * the hub finalized AFTER the block it executes in. Each read carries an
+ * additional `block_timestamp <= ?` bound; the reference chain is carved out
+ * because its own height cap is exact. The fake reads the PREDICATES OUT OF THE
+ * SQL TEXT and applies the bound arguments positionally, so a read that loses
+ * its bound keeps the future round and fails the test rather than being graded
+ * against an assumption.
  */
 
 'use strict';
@@ -134,36 +131,9 @@ function callFor(db, which){
 const blockCountAge = () => beforeEach(function(){ holdSecondsBasisInert(sinon); });
 afterEach(function(){ sinon.restore(); });
 
-// Mainnet is armed at genesis by the 2026-09-09 ruling, so the network name alone
-// no longer reaches the inert arm. Pin THIS key inert for the duration of a call
-// and leave every other mainnet gate the preload consults at its live value, so
-// the legacy arm being compared against is the one the fleet actually ran.
-const HOUSE_SENTINEL = 9999999999;
-async function belowFlag(fn){
-    const map   = pca.ORACLE_PRELOAD_CAUSALITY_ACTIVATION;
-    const saved = map.mainnet;
-    map.mainnet = HOUSE_SENTINEL;
-    try { return await fn(); }
-    finally { map.mainnet = saved; }
-}
-
 describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tier1', function(){
     blockCountAge();
     describe('behaviour: does the preload admit a round finalized after the block', function(){
-        it('INERT arm (LTC mainnet, key pinned inert): the future round reaches the VM, which is the defect', async function(){
-            const db  = dbFor('mainnet', 'LTC');
-            // A local LTC height far above every BTC anchor, so `reference_block <= ?`
-            // matches both rows and bounds nothing.
-            const out = await belowFlag(() => db.getOracleDataForVM(3154250, BLOCK_TIME, 0));
-
-            assert.strictEqual(out.prices['BTC/USD'].roundNumber, 2,
-                'unarmed: getPrice() answers with the round finalized after this block');
-            assert.ok(out.rounds['BTC/USD']['2'],
-                'unarmed: getPriceAtRound() carries the future round too');
-            assert.strictEqual(callFor(db, 'age').args[0], 3154250,
-                'unarmed: the age query keeps its armed-but-vacuous height cap');
-        });
-
         it('ARMED arm (LTC mainnet, genesis-active since the 2026-09-09 ruling): the future round is gone', async function(){
             // The same venue with the shipped key. Mainnet holds 0 contracts (measured
             // 2026-09-09), so no committed block ever read the unbounded preload, and
@@ -247,19 +217,6 @@ describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tie
                     which + ': adding the bound must not remove the existing one (the row set may only shrink)');
         });
 
-        it('inert: every read is byte-identical to the pre-gate call', async function(){
-            const db = dbFor('mainnet', 'DOGE');
-            await belowFlag(() => db.getOracleDataForVM(6319000, BLOCK_TIME, 0));
-
-            for(const which of Object.keys(READS)){
-                const c = callFor(db, which);
-                assert.doesNotMatch(c.query, /block_timestamp <= \?/,
-                    which + ': below the height the query text must not change');
-                assert.ok(!(c.args || []).includes(BLOCK_TIME),
-                    which + ': below the height the arguments must not change');
-            }
-        });
-
         it('an unusable block time falls back to the height-capped path', async function(){
             const db = dbFor('regtest', 'LTC');
             await db.getOracleDataForVM(3154250, 'not-a-time', 0);
@@ -279,19 +236,14 @@ describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tie
             assert.strictEqual(pca.isOraclePreloadCausalityActive(999999999, 'mainnet', 'BTC'), false);
         });
 
-        it('regtest and testnet are genesis-active off the reference chain', function(){
+        it('all networks are active off the reference chain', function(){
             assert.strictEqual(pca.isOraclePreloadCausalityActive(0, 'regtest', 'LTC'), true);
             assert.strictEqual(pca.isOraclePreloadCausalityActive(0, 'testnet', 'DOGE'), true);
+            assert.strictEqual(pca.isOraclePreloadCausalityActive(0, 'stagenet', 'LTC'), true);
             assert.strictEqual(pca.isOraclePreloadCausalityActive(999999, 'regtest', 'DOGE'), true);
         });
 
-        it('mainnet is ARMED AT GENESIS by the 2026-09-09 ruling, off the reference chain', function(){
-            assert.strictEqual(pca.ORACLE_PRELOAD_CAUSALITY_ACTIVATION.mainnet, 0,
-                'mainnet holds 0 contracts (measured 2026-09-09), so the bound is identity ' +
-                'over the indexed history and genesis is the height');
-            // Either sentinel reads back as "still unarmed" at the GoLiveGate.
-            assert.notStrictEqual(pca.ORACLE_PRELOAD_CAUSALITY_ACTIVATION.mainnet, 9999999999);
-            assert.notStrictEqual(pca.ORACLE_PRELOAD_CAUSALITY_ACTIVATION.mainnet, 999999999);
+        it('mainnet stays active off the reference chain', function(){
             assert.strictEqual(pca.isOraclePreloadCausalityActive(0, 'mainnet', 'DOGE'), true);
             assert.strictEqual(pca.isOraclePreloadCausalityActive(6319000, 'mainnet', 'DOGE'), true);
             assert.strictEqual(pca.isOraclePreloadCausalityActive(3154250, 'mainnet', 'LTC'), true);
@@ -301,8 +253,7 @@ describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tie
             assert.strictEqual(pca.isOraclePreloadCausalityActive(0, 'mainnet', 'BTC'), false);
         });
 
-        it('unknown network or unparseable height is off (keeps deployed behavior)', function(){
-            assert.strictEqual(pca.isOraclePreloadCausalityActive(0, 'stagenet', 'LTC'), false);
+        it('an unparseable height is off (keeps deployed behavior)', function(){
             assert.strictEqual(pca.isOraclePreloadCausalityActive('nonsense', 'regtest', 'LTC'), false);
             assert.strictEqual(pca.isOraclePreloadCausalityActive(undefined, 'regtest', 'LTC'), false);
         });

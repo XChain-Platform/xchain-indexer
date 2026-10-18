@@ -11343,6 +11343,14 @@
       "Database.slashContractStake() mid-cooldown double-count guard @regression @tier1 routes a mid-cooldown slash to contract_unstakes only (never the deactivated phantom)",
       "Database.slashContractStake() mid-cooldown double-count guard @regression @tier1 still slashes an active (never-unstaked) staker from contract_stakes (Pass 1)"
     ],
+    "a460780fdf0740d7": [
+      "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 activeAt() refuses the ruleset row rather than guessing a version",
+      "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 every predicate is EQUAL to activeAt() on every sampled input, except the pinned findings",
+      "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 every replaced row is still a registry row and has no module left in src/ to read it through",
+      "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 keeps anchor archive folding inactive on live networks and active at regtest genesis",
+      "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 the finding differs for the recorded reason, not for a moved threshold",
+      "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 the table names every height, time and epoch row once, or the row is listed as skipped"
+    ],
     "a4c5e76f1b00c73b": [
       "COINPAY settlement clears its ORDER_MATCH the handler calls a match-scoped writer, not the order-scoped one",
       "COINPAY settlement clears its ORDER_MATCH the obligation is still marked fulfilled alongside it",
@@ -16963,6 +16971,19 @@
       "bridge_settle: refused transfers and the per-block cap settles a good row that sorts behind a full cap of quorum refusals",
       "bridge_settle: refused transfers and the per-block cap still caps the rows that apply at XBRIDGE_MAX_PER_BLOCK"
     ],
+    "ec9017feddfaeda6": [
+      "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 activation-module predicate all networks are active off the reference chain",
+      "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 activation-module predicate an unparseable height is off (keeps deployed behavior)",
+      "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 activation-module predicate mainnet stays active off the reference chain",
+      "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 activation-module predicate the reference chain is off at every height on every network",
+      "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 behaviour: does the preload admit a round finalized after the block ARMED arm (LTC mainnet, genesis-active since the 2026-09-09 ruling): the future round is gone",
+      "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 behaviour: does the preload admit a round finalized after the block ARMED arm (LTC regtest, genesis-active): the future round is gone from every view",
+      "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 behaviour: does the preload admit a round finalized after the block BTC is unchanged: the exact height cap already excludes the later round",
+      "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 behaviour: does the preload admit a round finalized after the block the age a future row produces is never negative once the bound is armed",
+      "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 gate: which SQL each of the four reads emits an unusable block time falls back to the height-capped path",
+      "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 gate: which SQL each of the four reads emits armed: ALL FOUR reads carry the time bound, with the block time bound to it",
+      "VM oracle preload causality gate (getOracleDataForVM) @regression @tier1 gate: which SQL each of the four reads emits armed: the height cap is kept alongside the time bound, never swapped out"
+    ],
     "ecaebb857eb828c0": [
       "Xcall (XCALL) @regression @tier3 resultSuppressesExpiry FALSE for an unknown local request",
       "Xcall (XCALL) @regression @tier3 resultSuppressesExpiry FALSE for another network (belt-and-suspenders)",
@@ -18195,7 +18216,7 @@
   "scripts": {
     "test": {
       "fileCount": 1439,
-      "titleCount": 14087,
+      "titleCount": 14085,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19375,7 +19396,7 @@
         "test/unit/perf/noise_floor.test.js": "cf3bcc3e4ee7e191",
         "test/unit/price/db_max_batch_block_time.test.js": "3d123bd6ea062c1b",
         "test/unit/price/db_oracle_preload_admission.test.js": "f1cc18dc206de823",
-        "test/unit/price/db_oracle_preload_causality.test.js": "f722342a7f6bc67a",
+        "test/unit/price/db_oracle_preload_causality.test.js": "ec9017feddfaeda6",
         "test/unit/price/db_oracle_preload_monotone_key.test.js": "35e26beb860c4323",
         "test/unit/price/db_oracle_round_window.test.js": "547b276e75268fee",
         "test/unit/price/db_oracle_snapshot_age_causality.test.js": "54fd86289db48f29",
@@ -19438,7 +19459,7 @@
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
-        "test/unit/protocol_changes/predicate_parity.test.js": "37ab3be95bcd2e64",
+        "test/unit/protocol_changes/predicate_parity.test.js": "a460780fdf0740d7",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
