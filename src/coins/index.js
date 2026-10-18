@@ -44,6 +44,7 @@ const COIN_FILES = {
     BTC:  require('./BTC.js'),
     LTC:  require('./LTC.js'),
     DOGE: require('./DOGE.js'),
+    KAS:  require('./KAS.js'),   // new: non-Bitcoin family, wireFormat 'kaspa'
 };
 
 const ALLOWED_COINS = Object.keys(COIN_FILES);
