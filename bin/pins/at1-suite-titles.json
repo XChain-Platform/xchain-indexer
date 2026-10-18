@@ -12242,16 +12242,6 @@
       "list share leg injection rejects non-array legs before injection",
       "list share leg injection returns empty indexes without injecting an empty plan"
     ],
-    "af47dfc14d6003c2": [
-      "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count 'Infinity' and 'NaN' keep their legacy insufficient-funds verdict",
-      "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count a negative fill count settles INVALID with the gate on",
-      "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count a non-numeric GET_AMOUNT settles INVALID instead of wedging, ungated",
-      "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count a positive fill count is unaffected by the gate",
-      "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count a zero fill count keeps its legacy status text on both sides of the gate",
-      "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count control: a non-numeric GET_AMOUNT THROWS out of the raw divide",
-      "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count control: the arithmetic behind a negative fill count is real",
-      "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count control: the same negative fill count still settles VALID below the threshold"
-    ],
     "af56bad14283ad0f": [
       "getContractStakeDataForVM decimal strings @regression @tier1 preserves legacy BigNumber amounts before activation",
       "getContractStakeDataForVM decimal strings @regression @tier1 returns only canonical plain-decimal amount strings once active"
@@ -17003,16 +16993,6 @@
       "DEPLOY meta verdicts (CONTRACT_META_REQUIRED) @regression @tier1 what reaches createContract (seam S3) a valid deploy with conforming meta passes all four META_* keys",
       "DEPLOY meta verdicts (CONTRACT_META_REQUIRED) @regression @tier1 what reaches createContract (seam S3) an INVALID deploy writes four NULLs even though its row is still created"
     ],
-    "ecf9f101aa70270a": [
-      "Dispenser amount positivity @regression @tier2 DISPENSER create: native-coin GET_AMOUNT a valid native-coin price is still accepted with the gate on",
-      "Dispenser amount positivity @regression @tier2 DISPENSER create: native-coin GET_AMOUNT control: the same negative price is still ACCEPTED below the threshold",
-      "Dispenser amount positivity @regression @tier2 DISPENSER create: native-coin GET_AMOUNT control: the same non-numeric price is still ACCEPTED below the threshold",
-      "Dispenser amount positivity @regression @tier2 DISPENSER create: native-coin GET_AMOUNT does not fire the positivity rule on a FIAT-priced dispenser",
-      "Dispenser amount positivity @regression @tier2 DISPENSER create: native-coin GET_AMOUNT rejects a NEGATIVE native-coin price, which nothing rejected before",
-      "Dispenser amount positivity @regression @tier2 DISPENSER create: native-coin GET_AMOUNT rejects a NON-NUMERIC native-coin price",
-      "Dispenser amount positivity @regression @tier2 DISPENSER create: native-coin GET_AMOUNT rejects a ZERO or empty price on a dispenser that names its own price",
-      "Dispenser amount positivity @regression @tier2 DISPENSER create: native-coin GET_AMOUNT rejects a price finer than COIN_DECIMALS"
-    ],
     "ed046892e95da65f": [
       "contract_state_root: incremental equals full build @regression key insertion order does not change the root (the SMT is key-addressed)",
       "contract_state_root: shadow-compute window @regression ARMED WINS: a height that is both shadowing and armed shadows nothing",
@@ -20023,7 +20003,7 @@
     },
     "test:regression": {
       "fileCount": 1093,
-      "titleCount": 11110,
+      "titleCount": 11107,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20256,8 +20236,8 @@
         "test/unit/actions/market/dispenser.test/oracle_price_every_network.test.js": "a169b0a24d09bcdc",
         "test/unit/actions/market/dispenser.test/refill_guard.test.js": "0e534b2440f8d999",
         "test/unit/actions/market/dispenser.test/refill_token_policy.test.js": "1c7af3ff7c39a754",
-        "test/unit/actions/market/dispenser_amount_positivity.test.js": "ecf9f101aa70270a",
-        "test/unit/actions/market/dispenser_amount_positivity.test/settlement.test.js": "af47dfc14d6003c2",
+        "test/unit/actions/market/dispenser_amount_positivity.test.js": "428bc07288797dba",
+        "test/unit/actions/market/dispenser_amount_positivity.test/settlement.test.js": "e7cf9c1086608c4d",
         "test/unit/actions/market/dispenser_close.test.js": "d44cf9f8cf86cabc",
         "test/unit/actions/market/dispenser_divergence_metrics.test.js": "766c92cd1805711b",
         "test/unit/actions/market/dispenser_expire.test.js": "090805c45b5b3a5b",
@@ -21658,7 +21638,7 @@
     },
     "test:regression:full": {
       "fileCount": 1093,
-      "titleCount": 11110,
+      "titleCount": 11107,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21891,8 +21871,8 @@
         "test/unit/actions/market/dispenser.test/oracle_price_every_network.test.js": "a169b0a24d09bcdc",
         "test/unit/actions/market/dispenser.test/refill_guard.test.js": "0e534b2440f8d999",
         "test/unit/actions/market/dispenser.test/refill_token_policy.test.js": "1c7af3ff7c39a754",
-        "test/unit/actions/market/dispenser_amount_positivity.test.js": "ecf9f101aa70270a",
-        "test/unit/actions/market/dispenser_amount_positivity.test/settlement.test.js": "af47dfc14d6003c2",
+        "test/unit/actions/market/dispenser_amount_positivity.test.js": "428bc07288797dba",
+        "test/unit/actions/market/dispenser_amount_positivity.test/settlement.test.js": "e7cf9c1086608c4d",
         "test/unit/actions/market/dispenser_close.test.js": "d44cf9f8cf86cabc",
         "test/unit/actions/market/dispenser_divergence_metrics.test.js": "766c92cd1805711b",
         "test/unit/actions/market/dispenser_expire.test.js": "090805c45b5b3a5b",
