@@ -93,12 +93,12 @@ module.exports = {
 
         // Get information on the GIVE and GET tokens
         let info = (format==0) ? data : dispenserInfo;
-        let giveTokenInfo = await this.indexerDb.getTokenInfo(info['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let giveTokenInfo = await this.indexerDb.getTokenInfo(info['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
         let getTokenInfo  = false;
 
         // Get the GET token info if this is the correct COIN network
         if(info['GET_COIN'] == this.config['COIN'] && !this.util.isNull(info['GET_TICK']))
-            getTokenInfo = await this.indexerDb.getTokenInfo(info['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            getTokenInfo = await this.indexerDb.getTokenInfo(info['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
 
         // Get source address balances and preferences
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);

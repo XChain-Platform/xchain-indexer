@@ -160,20 +160,17 @@ module.exports = {
     // The scale every tally read, charge and accumulation below runs at, and whether a
     // Mode A fill is charged its exact cost (fiatFillPrice in pricing_paths.js).
     resolveDispenseTallyScale(ctx){
-    let { data, block_time, block_index } = ctx;
+    let { data, block_index } = ctx;
 
         // Scale every tally read, charge and accumulation below runs at.
         //
         // 8 dp holds a native-coin payment exactly and ROUNDS a token one: a SEND
         // trigger carries the sent tick's own amount, and a tick may be issued with up
-        // to MAX_TOKEN_DECIMALS. Gated, because it changes the fill count a payment buys
-        // (dispense_payment_tally_scale_gate.js carries the two rounding failures
-        // and the unarmed-mainnet argument). The batch pool is excluded there: it counts
-        // the transaction's coin settlement value and coinpay.js formats it at 8 dp.
+        // to MAX_TOKEN_DECIMALS. The exact scale prevents that rounding. The batch pool
+        // is excluded: it counts the transaction's coin settlement value and coinpay.js
+        // formats it at 8 dp.
         let fiatPricing = this.util.isFiatPricingActive(block_index);
         let tallyScale = tallyScaleActivation.dispenseTallyScale(
-            block_time,
-            this.config['NETWORK'],
             data['DISPENSE_TYPE'] === 'SEND',
             Object.prototype.hasOwnProperty.call(data, 'BATCH_VALUE_LEDGER'),
             fiatPricing);
@@ -182,4 +179,3 @@ module.exports = {
     ctx.fiatExactTally = fiatPricing && tallyScale === tallyScaleActivation.DISPENSE_TALLY_EXACT_SCALE;
     },
 };
-

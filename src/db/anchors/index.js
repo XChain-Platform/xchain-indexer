@@ -35,6 +35,7 @@ const arKey = require('../../actions/anchor/anchor_reward_key.js');
 // this mixin in anchors/, so createAnchorAction reads as the upsert it is.
 const { anchorActionRow } = require('./anchor_action_row.js');
 const { archiveHeadPickPredicate, foldArchiveHeadFloor } = require('./archive_head_pick.js');
+const { writeArchiveStatus } = require('./archive_status_journal.js');
 
 module.exports = {
 
@@ -183,18 +184,19 @@ module.exports = {
     // Highest VALID checkpoint_seq recorded for (chain, network) - the ANCHOR
     // replay guard. Only status 'valid'/'unverified' rows count (an 'invalid: ...'
     // replay attempt must not poison the watermark).
-    async getMaxAnchorCheckpointSeq(chain, network){
+    async getMaxAnchorCheckpointSeq(chain, network, validOnly){
         // Version set is the single source of truth in anchor_action_query.js
         // (shared with getAnchorActionByCheckpoint + the RPC) so the replay
         // watermark can never drift from the checkpoint-bearing definition
         // (a hand-copied literal here once omitted a live checkpoint version, freezing the guard).
         let versions = ANCHOR_CHECKPOINT_VERSIONS;
+        let statuses = validOnly ? `'valid'` : `'valid', 'unverified'`;
         let query = `SELECT MAX(a.checkpoint_seq) AS max_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
                      WHERE a.chain = ? AND a.network = ?
                        AND a.version IN (${versions.map(() => '?').join(', ')})
-                       AND s.status IN ('valid', 'unverified')`;
+                       AND s.status IN (${statuses})`;
         let rows = await this.doQuery(query, [chain, network, ...versions]);
         return (rows.length > 0 && rows[0].max_seq != null) ? Number(rows[0].max_seq) : null;
     },
@@ -259,10 +261,11 @@ module.exports = {
     // A v3 archive head row stores no checkpoint_seq, so the wrapper row is the only
     // place a v3 archive's post-fold checkpoint seq lives. It has no match_batch_seq,
     // so the batch watermark is unchanged.
-    async getArchiveReplayWatermarks(wrapperRows){
+    async getArchiveReplayWatermarks(wrapperRows, validOnly){
         let versions = ARCHIVE_HEAD_VERSIONS;
         let wrapper = wrapperRows
             ? ` OR (a.version = 3 AND a.chain IS NOT NULL AND a.total_chunks IS NOT NULL)` : ``;
+        let statuses = validOnly ? `'valid'` : `'valid', 'unverified'`;
         // Every branch is parenthesised and the whole row set is grouped once, so the
         // status filter below applies to the wrapper branch exactly as to the others.
         let rowSet = `(${archiveHeadPredicate('a')}) OR (a.version IN (${versions.map(() => '?').join(', ')}))${wrapper}`;
@@ -271,7 +274,7 @@ module.exports = {
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
                      WHERE (${rowSet})
-                       AND s.status IN ('valid', 'unverified')`;
+                       AND s.status IN (${statuses})`;
         let rows = await this.doQuery(query, versions);
         let row  = rows.length > 0 ? rows[0] : {};
         return {
@@ -334,17 +337,14 @@ module.exports = {
     // section-scoped update: an archive head is a single-body v1 row at section 0
     // anyway, and a per-section stamp would let one action hold two verdicts, which no
     // reader is built to reconcile.
-    async setAnchorArchiveStatus(actionIndex, status){
+    async setAnchorArchiveStatus(actionIndex, status, journal){
         let status_id = await this.createStatus(status);
-        await this.doQuery("UPDATE anchor_actions SET status_id = ? WHERE action_index = ?", [status_id, actionIndex]);
+        await writeArchiveStatus(this, actionIndex, status_id, false, journal);
     },
 
-    async setAnchorArchiveRowStatus(actionIndex, status){
+    async setAnchorArchiveRowStatus(actionIndex, status, journal){
         let status_id = await this.createStatus(status);
-        await this.doQuery(
-            "UPDATE anchor_actions a SET a.status_id = ? WHERE a.action_index = ? AND " +
-            archiveHeadPredicate('a'),
-            [status_id, actionIndex]);
+        await writeArchiveStatus(this, actionIndex, status_id, true, journal);
     },
 
 

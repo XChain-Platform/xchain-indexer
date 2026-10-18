@@ -108,6 +108,14 @@ function initIndexIdState(self){
     // clears it in a finally; normal block processing leaves it null (path unchanged).
     // Caret ^<id> references are never cached (they take a distinct resolution path).
     self._internCache = null;
+
+    // Status and action ids are permanent after commit, but an open transaction can
+    // observe ids that rollback will un-assign. Keep those answers isolated until the
+    // transaction commits so dry runs cannot leave reusable ids in process memory.
+    self._statusActionIdCache = {
+        committed: { status: new Map(), action: new Map() },
+        pending:   { status: new Map(), action: new Map() }
+    };
 }
 
 // The per-block read memos and the recovery reward hook gate.

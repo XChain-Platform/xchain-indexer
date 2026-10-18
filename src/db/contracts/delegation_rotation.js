@@ -120,6 +120,29 @@ module.exports = {
         return applied;
     },
 
+    async getContractStakeRotationOrigin(targetContractIndex, sourceId, tickId, pubkeyId){
+        let rows = await this.doQuery(
+            `SELECT r.stake_action_index, r.delegation_action_index,
+                    r.prev_signing_pubkey_id, r.new_signing_pubkey_id, r.block_index
+             FROM contract_delegation_rotations r
+                 JOIN contract_stakes t ON t.action_index = r.stake_action_index
+             WHERE r.target_table=?
+               AND t.target_contract_index=? AND t.source_id=? AND t.tick_id=?
+               AND t.signing_pubkey_id=?
+             ORDER BY r.block_index ASC, r.delegation_action_index ASC, r.stake_action_index ASC`,
+            ['contract_stakes', Number(targetContractIndex), Number(sourceId), Number(tickId), Number(pubkeyId)]);
+        if(rows.length === 0) return null;
+        let delegationActionIndex = null;
+        for(let row of rows){
+            if(Number(row.new_signing_pubkey_id) === Number(pubkeyId))
+                delegationActionIndex = Number(row.delegation_action_index);
+        }
+        return {
+            originalPubkeyId: Number(rows[0].prev_signing_pubkey_id),
+            delegationActionIndex
+        };
+    },
+
     // True when `pubkeyId` is held by a contract stake outside this (target, source, tick) slot,
     // or by any active contract delegation. Guards the revert pass: handing a slot back its
     // original key while someone else holds that key would merge two owners into one staker

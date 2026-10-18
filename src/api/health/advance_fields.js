@@ -58,9 +58,12 @@ function advanceFields(indexer, now){
         // pinned at ~6 blocks and stallReason naming whichever time-keyed barrier is waiting.
         waitingOnFutureBlock: waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now),
         // Single machine-readable verdict on the block counter, so a monitor reads one field
-        // instead of joining three: 'none' | 'future_block_wait' | 'barrier_defer' | 'wedged',
-        // refined by publishedStallClass into 'upstream_halted' / 'rollcall_proof_wait' /
-        // 'rollcall_proof_stuck' exactly as GET /status publishes it.
+        // instead of joining three. stallClassOf returns 'none' | 'future_block_wait' |
+        // 'bridge_proof_wait' | 'price_landing_wait' | 'barrier_defer' | 'wedged', then
+        // publishedStallClass can refine it to 'upstream_halted' | 'rollcall_proof_wait' |
+        // 'rollcall_proof_stuck', exactly as GET /status publishes it. The source of truth is
+        // stallClassOf and publishedStallClass in src/XChainIndexer/stall_health.js; check those
+        // functions rather than relying on this summary.
         stallClass:       publishedStallClass(
                               stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
                                            indexer.healthStallGraceMs, now, indexer.stallClearsAt,

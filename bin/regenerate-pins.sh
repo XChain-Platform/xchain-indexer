@@ -48,6 +48,15 @@ suite_titles() {
   node bin/suite-title-map.js --script test --out "$fresh" >&2
   status=$?
   if [ "$status" -ne 0 ]; then rm -f bin/pins/.at1-suite-titles.json.new; return "$status"; fi
+  node bin/suite-title-map.js --script test:regression --out "$fresh" >&2
+  status=$?
+  if [ "$status" -ne 0 ]; then rm -f bin/pins/.at1-suite-titles.json.new; return "$status"; fi
+  node bin/suite-title-map.js --script test:regression:fast --out "$fresh" >&2
+  status=$?
+  if [ "$status" -ne 0 ]; then rm -f bin/pins/.at1-suite-titles.json.new; return "$status"; fi
+  node bin/suite-title-map.js --script test:regression:full --out "$fresh" >&2
+  status=$?
+  if [ "$status" -ne 0 ]; then rm -f bin/pins/.at1-suite-titles.json.new; return "$status"; fi
   if cmp -s "$fresh" bin/pins/at1-suite-titles.json; then rm -f bin/pins/.at1-suite-titles.json.new; return 0; fi
   mv "$fresh" bin/pins/at1-suite-titles.json
 }

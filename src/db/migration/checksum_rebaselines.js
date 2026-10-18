@@ -164,17 +164,18 @@ const MIGRATION_CHECKSUM_REBASELINES = {
     // The header claimed mode=manual coordinated the fleet; it cannot (the drift
     // reconciler converges all three objects at verifyTables(), before runMigrations()
     // reads the gate), so the WHY/mode block was rewritten to state what the tag does
-    // and does not do. Comment lines only: the three ALTER TABLE statements are
-    // byte-identical, verified by comparing the comment-stripped residue. Both of the
-    // file's pre-current committed revisions are listed - afee252f (the original) and
-    // 758fc1db (a comment cleanup) - since each fleet DB recorded whichever it applied
+    // and does not do. The auto retag now reflects that the reconciler applies the same
+    // idempotent objects first. Comment lines only: the three ALTER TABLE statements are
+    // byte-identical, verified by comparing the comment-stripped residue. All three
+    // pre-current revisions are listed since each fleet DB recorded whichever it applied
     // first; on any database that never applied the file by hand the entry is inert.
     '2026-08-12-validator-rewards-derive-block-index.sql': {
         from: [
             '8f6f8b6bae2026128b0b298892fc0b5601a67f2ff12cc05fb4da9ae9cfdd1100', // afee252f, as authored
             '8496c4f75647ad9768d8128e8f9341e3d4de9a1db5ca2f66d4328762ab0a9ec3', // 758fc1db, comment cleanup
+            'a911c38ca928743bb65c763c8143a5a3ad63de18da72b32da83a4971c1735ed8', // prior header rewrite
         ],
-        to: 'a911c38ca928743bb65c763c8143a5a3ad63de18da72b32da83a4971c1735ed8',
+        to: 'a4e6d570b9b42b4ebf4d3348a0bfc177b3270991bdc54ae96140c17377e17067',
     },
     // The same 758fc1db comment cleanup (internal-reference scrub) caught three more
     // already-applied files, and unlike the entry above these were never rebaselined, so
