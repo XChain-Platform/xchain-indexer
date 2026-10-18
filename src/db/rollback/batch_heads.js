@@ -78,7 +78,8 @@ module.exports = {
                         JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
                         ${authorScope}
                         JOIN index_statuses us ON us.status = 'unverified'
-                        SET p.status_id = us.id
+                        SET p.status_id = COALESCE(p.pre_archive_status_id, us.id),
+                            p.pre_archive_status_id = NULL
                         WHERE p.version ${ARCHIVE_HEAD_VERSIONS_SQL}
                           AND p.action_index < ?
                           AND ${archiveHeadPredicate('p')}`;

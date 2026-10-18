@@ -70,6 +70,7 @@ CREATE TABLE anchor_actions (
     publisher            VARCHAR(64),                     -- elected PUBLISHER pubkey carried by the v0/v1 tail; NULL for v2
     publisher_attestations MEDIUMTEXT,                    -- JSON [{pubkey,sig}] RAW wire XANCPUB tail (v0/v1), UNVERIFIED transport not the quorum-verified subset (#3076); consumers must re-verify. NULL for v2 and for a degraded v1 tail carrying ATTEST_SIG_COUNT 0
     status_id            BIGINT UNSIGNED,                 -- FK to index_statuses
+    pre_archive_status_id BIGINT UNSIGNED DEFAULT NULL,   -- status before a gated invalid_archive stamp; cleared by rollback
     block_index_doge     BIGINT UNSIGNED NOT NULL,        -- DOGE block the ANCHOR action landed in (rollback anchor)
     PRIMARY KEY (action_index, section_index)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

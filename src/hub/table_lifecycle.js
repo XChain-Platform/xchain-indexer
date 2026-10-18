@@ -261,7 +261,7 @@ const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({
 // as updated-rows class 8 and re-derived on reorg. No hash commits it yet; a gated
 // state_hash term would, and would retire this entry.
 const CONTENT_PARITY_IN_PLACE_COLUMNS = Object.freeze({
-    anchor_actions:       Object.freeze(['status_id']),
+    anchor_actions:       Object.freeze(['status_id', 'pre_archive_status_id']),
     attests:              Object.freeze(['request_status', 'resolved_block', 'callback_execute_action_index',
                                          'status_id']),
     bet_feeds:            Object.freeze(['feed_status_id', 'closed_block', 'terminal_block']),
