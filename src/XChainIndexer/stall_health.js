@@ -25,6 +25,7 @@
 const { BRIDGE_PROOF_BARRIER } = require('../consensus/bridge_proof_client/stall.js');
 const PRICE_LANDING_BARRIER = 'price_landing_barrier';
 const ROLLCALL_PROOF_REASON = 'rollcall_proof_unavailable';
+const CAPABILITY_PROOF_REASON = 'capability_proof_unavailable';
 // Marks a safety halt raised while evaluating or enforcing train activation.
 const TRAIN_ACTIVATION_HALT_PREFIX = 'train_activation_halt:';
 
@@ -148,6 +149,8 @@ function publishedStallClass(baseClass, stallReason, { decoderReorgHalted = fals
     if(!stallReason && decoderReorgHalted) return 'upstream_halted';
     if(stallReason === ROLLCALL_PROOF_REASON)
         return ceilingExceeded ? 'rollcall_proof_stuck' : 'rollcall_proof_wait';
+    if(stallReason === CAPABILITY_PROOF_REASON)
+        return ceilingExceeded ? 'capability_proof_stuck' : 'capability_proof_wait';
     return baseClass;
 }
 
