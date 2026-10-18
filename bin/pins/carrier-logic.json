@@ -544,6 +544,13 @@
       "date": "2026-09-15"
     },
     {
+      "id": "price_batching_floor_activation",
+      "from": "b58de6c4d13f4f23a238cf24c6d038dc063ab2f0e21f319684bc22193b7cc8ad",
+      "to": null,
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
       "id": "protocol_changes",
       "from": null,
       "to": "8e06189278b7d3cf84acf54aed12d6cc98d10baecdb0c5822749cacc29021ee3",
