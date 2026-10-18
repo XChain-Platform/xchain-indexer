@@ -265,17 +265,6 @@ addGate('mirror_admission_activation.CANONICAL_HEIGHT_RE', 'constant', /^(?:0|[1
 // this list.
 addGate('mirror_admission_activation.ADMIT_COLUMN_CHAINS', 'constant', ['BTC', 'LTC', 'DOGE']);
 
-// price_batching_floor_activation
-// Per-network pre-batch era floor, as a unix-second block time. 0 (or an
-// absent/unknown network) means the barrier applies at every block. A
-// '<COIN>:<network>' key wins over the bare network key, so one chain's rail
-// start can differ from its siblings' without splitting the map.
-addGate('price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION', 'time', {
-    mainnet: 0,
-    testnet: 0,
-    regtest: 0,
-});
-
 // price_pair_activation
 // Ticker-side bounds either side of the gate (LOCAL COPY, see header).
 addGate('price_pair_activation.PRICE_PAIR_TICKER_MAX_LEGACY', 'constant', 5);

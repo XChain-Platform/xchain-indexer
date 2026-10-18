@@ -31,7 +31,6 @@ const { HUB_SYNC_WATERMARK_GRACE_S, resolveWatermarkGrace, resolveBarrierHoldCei
         resolveWatermarkStallMs } = require('./watermark_config.js');
 const { PRICE_BATCH_APPLY_ROWS, BOOTSTRAP_PROGRESS_INTERVAL_MS,
         PRICE_MIRROR_LOOKBACK_S } = require('./mirror_bounds.js');
-const { priceEraFloorS } = require('../../consensus/gates/price_batching_floor_gate.js');
 
 function initStreamWatermarks(sync) {
     // Stream-position watermark: the hub's "you have received everything I
@@ -203,15 +202,6 @@ function initPriceMirrorBound(sync, options) {
 function initPriceDrainState(sync, options) {
     initPriceBufferState(sync);
     initPriceMirrorBound(sync, options);
-
-    // Pre-batch era floor: the instant this network's price rail began. Blocks below
-    // it hold no eligible price round on ANY node, so both price barriers resolve
-    // immediately for them instead of waiting out a timeout that nothing can open
-    // (see price_batching_floor_activation.js). 0 = no pre-batch era recognized,
-    // which is every network as shipped and the barrier behaviour that deploys today.
-    // Resolved once here rather than per block: the map is a frozen fleet-wide
-    // constant, and both barrier paths run on every transaction-bearing block.
-    sync._priceEraFloorS       = priceEraFloorS(sync.network, sync.coin);
 }
 
 function initTransportState(sync, options) {

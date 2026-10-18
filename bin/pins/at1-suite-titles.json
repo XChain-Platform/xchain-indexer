@@ -9104,6 +9104,13 @@
       "effective lists in open cross-chain orders leaves creation list ids unchanged below the export gate",
       "effective lists in open cross-chain orders resolves edited allow and block lists for orders and swaps"
     ],
+    "87bf2ed9ea81cf61": [
+      "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 activeAt() refuses the ruleset row rather than guessing a version",
+      "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 every predicate is EQUAL to activeAt() on every sampled input, except the pinned findings",
+      "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 every replaced row is still a registry row and has no module left in src/ to read it through",
+      "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 keeps anchor archive folding inactive on live networks and active at regtest genesis",
+      "protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1 the table names every height, time and epoch row once, or the row is listed as skipped"
+    ],
     "883ed5c19fe43878": [
       "HubPushQueue _isDue() caps backoff at maxBackoffMs",
       "HubPushQueue _isDue() returns false when within backoff window",
@@ -15724,6 +15731,10 @@
       "protocol_changes active-stake collation gate @regression @tier1 is inert when height is null or non-finite",
       "protocol_changes active-stake collation gate @regression @tier1 registers a height gate unarmed on public networks and active from regtest genesis"
     ],
+    "db44a08889a20bc8": [
+      "HubDbSync price barrier while the mirror is behind @regression @tier1 times out when the mirror never catches up",
+      "HubDbSync price barrier while the mirror is behind @regression @tier1 waits while the mirror is behind, and clears when the mirror catches up, not on a timeout"
+    ],
     "db4cdd7dac8b8bff": [
       "04 Spike Load handles repeated micro-spikes (bursty traffic)",
       "04 Spike Load handles spike from 1 tx/block to 100 tx/block without errors"
@@ -18187,8 +18198,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1441,
-      "titleCount": 14076,
+      "fileCount": 1440,
+      "titleCount": 14067,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19251,8 +19262,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_mirror_network_scope.test.js": "4d2ba3a3a978c98f",
         "test/unit/hub/hub_db_sync/hub_db_sync_parts.test.js": "4c736f16e3ee95d8",
         "test/unit/hub/hub_db_sync/hub_db_sync_pollmode_watermark.test.js": "79cbf784dc4c07c4",
-        "test/unit/hub/hub_db_sync/hub_db_sync_pre_batch_era_floor.test.js": "3df297a740e13cca",
-        "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "5c88721f4a21ab7f",
+        "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "db44a08889a20bc8",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "84eaa71efc4f6934",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e2dd68fbffb9df1b",
@@ -19433,7 +19443,7 @@
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
-        "test/unit/protocol_changes/predicate_parity.test.js": "a460780fdf0740d7",
+        "test/unit/protocol_changes/predicate_parity.test.js": "87bf2ed9ea81cf61",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
         "test/unit/protocol_changes/price_v1/price_v1_shared_rows.test.js": "5137f155d19696aa",
         "test/unit/protocol_changes/regtest_overlay/amounts_contracts_overlay.test.js": "11f1e52cf591cb04",
