@@ -435,7 +435,6 @@
       "src/consensus/gates/mirror_admission_gate.js",
       "src/consensus/gates/mirror_admission_margin_boundary.js",
       "src/consensus/gates/mirror_admission_margin_gate.js",
-      "src/consensus/gates/price_batching_floor_gate.js",
       "src/consensus/gates/price_pair_gate.js",
       "src/consensus/gates/price_scale_gate.js",
       "src/consensus/gates/rollcall_gate.js",
@@ -11856,24 +11855,6 @@
           "kind": "text",
           "form": "shell-arg",
           "raw": "src/consensus/gates/mirror_admission_margin_gate.js",
-          "via": "f"
-        }
-      ]
-    },
-    "src/consensus/gates/price_batching_floor_gate.js": {
-      "exists": true,
-      "referenceCount": 1,
-      "referringRepos": [
-        "platform-tooling"
-      ],
-      "referrers": [
-        {
-          "repo": "platform-tooling",
-          "file": "platform-tooling/claude/bin/reconcile-twins.sh",
-          "line": 439,
-          "kind": "text",
-          "form": "shell-arg",
-          "raw": "src/consensus/gates/price_batching_floor_gate.js",
           "via": "f"
         }
       ]

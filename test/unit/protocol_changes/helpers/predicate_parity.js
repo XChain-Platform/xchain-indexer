@@ -49,7 +49,6 @@ const TABLE = [
     ['mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION', 'isMirrorAdmissionProducerActive', ['coin', 'network', 'height']],
     ['mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION', 'isMirrorAdmissionConsumerActive', ['coin', 'network', 'height']],
     ['mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION', 'isChainMarginActive', ['coin', 'network', 'height']],
-    ['price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION', 'isPriceBarrierRequired', ['time', 'network', 'coin']],
     ['price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION', 'landingActiveAt', ['height']],
     ['price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION', 'strictLandingActiveAt', ['height']],
     ['price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION', 'isPricePairWideningActive', ['time', 'network']],

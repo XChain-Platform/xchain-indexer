@@ -106,11 +106,6 @@
       "hash": "90b414005e4ee0d387068f8f7b0f547573dbde1c4672d71ced5057331be4a5be",
       "twins": []
     },
-    "price_batching_floor_activation": {
-      "path": "src/consensus/gates/price_batching_floor_gate.js",
-      "hash": "b58de6c4d13f4f23a238cf24c6d038dc063ab2f0e21f319684bc22193b7cc8ad",
-      "twins": []
-    },
     "price_pair_activation": {
       "path": "src/consensus/gates/price_pair_gate.js",
       "hash": "c778017dabf21259172555b6c911324ce8602d713bfb732c5a4e5563a7927c7e",
@@ -2215,6 +2210,13 @@
       "id": "attest_broadcast_fee_activation",
       "from": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
       "to": "3556f756a087fc67d197b5893184525d923b45a11f213c73396893448e497758",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "price_batching_floor_activation",
+      "from": "b58de6c4d13f4f23a238cf24c6d038dc063ab2f0e21f319684bc22193b7cc8ad",
+      "to": null,
       "reason": "XC\u002d3351 gate retirement",
       "date": "2026-10-18"
     },

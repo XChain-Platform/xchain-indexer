@@ -57,7 +57,7 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 
 HUB_FILES="hub_db_sync.js hub_schema_version.js hub_client/hub_list.js hub_client/hub_list_refresh.js"
 HUB_DIRS="hub_db_sync"
-DEP_FILES="consensus/gates/price_batching_floor_gate.js consensus/gates/mirror_admission_gate.js consensus/gates/mirror_admission_margin_gate.js"
+DEP_FILES="consensus/gates/mirror_admission_gate.js consensus/gates/mirror_admission_margin_gate.js"
 # What DEP_FILES require, relative to the consumer's src/: present or the modules
 # cannot load (see the header).
 REGISTRY_ENTRY="consensus/gate_registry.js"

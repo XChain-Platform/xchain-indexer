@@ -56,10 +56,7 @@ const SKIPPED = {
 
 // The predicates measured to differ from activeAt(), with the first differing
 // input each, as found 2026-09-15 (the lane report of row 12 carries the same).
-const FINDINGS = {
-    'price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION':
-        'a floor, not a gate: isPriceBarrierRequired() answers true for an unknown network and any unevaluable input, where activeAt() answers false',
-};
+const FINDINGS = {};
 
 describe('protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1', function () {
     let results;
@@ -108,15 +105,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
         for (const r of results) assert.ok(r.inputs >= 5, r.key + ' compared only ' + r.inputs + ' inputs');
         assert.strictEqual(results.filter((r) => r.verdict === 'EQUAL').length, TABLE.length - Object.keys(FINDINGS).length,
             'every tabled predicate but the findings compared EQUAL');
-        assert.ok(TABLE.length >= 34, 'too few predicates compared');
-    });
-
-    it('the finding differs for the recorded reason, not for a moved threshold', function () {
-        const byKey = new Map(results.map((r) => [r.key, r]));
-        const floor = byKey.get('price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION');
-        assert.strictEqual(floor.first.network, 'devnet');
-        assert.strictEqual(floor.first.predicate, true);
-        assert.strictEqual(floor.first.activeAt, false);
+        assert.ok(TABLE.length >= 33, 'too few predicates compared');
     });
 
     it('activeAt() refuses the ruleset row rather than guessing a version', function () {

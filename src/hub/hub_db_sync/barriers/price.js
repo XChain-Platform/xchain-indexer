@@ -24,7 +24,6 @@
  ********************************************************************/
 
 const { getLogger } = require('../../../observability/index.js');
-const { isPreBatchEraFloor } = require('../../../consensus/gates/price_batching_floor_gate.js');
 const { strictHubRead } = require('../mirror_write.js');
 
 module.exports = {
@@ -153,14 +152,6 @@ module.exports = {
         // Nothing to wait on when sync is disabled (single-host: the local hub DB is the hub
         // itself, always current) or the target is not a finite height.
         if (!this.enabled || !Number.isFinite(blockHeight)) return Promise.resolve(this.priceSyncHeight);
-        // PRE-BATCH ERA. No price round existed on this network at this block's time, so
-        // the eligible set is empty on every node and there is nothing to wait for: the
-        // barrier resolves rather than paying its full timeout on a block no round can
-        // ever cover (the chain-only replay cost, measured 2026-09-09). This precedes
-        // notePriceMirrorFloor deliberately - such a block reads no round at all, so it
-        // is not evidence that a bounded mirror is short, and tripping a full re-mirror on
-        // it is part of the same replay cost.
-        if (isPreBatchEraFloor(blockTime, this._priceEraFloorS)) return Promise.resolve(this.priceSyncHeight);
         // Before judging the block, judge the mirror against the block.
         this.notePriceMirrorFloor(blockTime);
         if (this.priceSyncSatisfied(blockHeight, blockTime)) return Promise.resolve(this.priceSyncHeight);
@@ -255,8 +246,6 @@ module.exports = {
     waitForPriceSyncTime(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.priceSyncMaxTimestamp);
-        // PRE-BATCH ERA, same escape and same ordering as the height barrier above.
-        if (isPreBatchEraFloor(blockTime, this._priceEraFloorS)) return Promise.resolve(this.priceSyncMaxTimestamp);
         this.notePriceMirrorFloor(blockTime);            // same check as the height barrier
         if (this.priceTimeSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.priceSyncMaxTimestamp);
 
