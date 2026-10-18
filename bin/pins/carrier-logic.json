@@ -137,7 +137,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "a1200eb419e15af92ce69e0e0df8f95971d66a3e3c43bd37d9b059ad854b6e32",
+      "hash": "278796962385b78f7b3ec57d211fd0da2ae23bfb09faf8a0abbcca7cc63705cf",
       "twins": [],
       "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
@@ -2216,6 +2216,13 @@
       "from": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
       "to": "3556f756a087fc67d197b5893184525d923b45a11f213c73396893448e497758",
       "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "a1200eb419e15af92ce69e0e0df8f95971d66a3e3c43bd37d9b059ad854b6e32",
+      "to": "278796962385b78f7b3ec57d211fd0da2ae23bfb09faf8a0abbcca7cc63705cf",
+      "reason": "add the VM toString size meter twin row",
       "date": "2026-10-18"
     }
   ]
