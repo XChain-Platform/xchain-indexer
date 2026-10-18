@@ -13699,6 +13699,10 @@
       "snapshot barrier scope filter, admission height versus effective time inert (no activation) scopes by effective_time and never names the admission column",
       "snapshot barrier scope filter, admission height versus effective time the same rows and the same (t, B) select different blocks per arm early and late flip between the arms"
     ],
+    "c42a4364058c3b39": [
+      "HubDbSync price barriers apply to every block @regression @tier1 queues both barriers for every network, coin, and tested block time",
+      "HubDbSync price barriers apply to every block @regression @tier1 re-floors a bounded mirror for the earliest block on every network"
+    ],
     "c42ed8ba04b55a79": [
       "consensus rules digest sentinel comments does not claim the shipped registry has no far-future sentinel",
       "consensus rules digest sentinel comments names the shipped mainnet sentinel examples at the canonical constant"
@@ -18092,8 +18096,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1421,
-      "titleCount": 14019,
+      "fileCount": 1422,
+      "titleCount": 14021,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19088,6 +19092,7 @@
         "test/unit/hub/hub_db_sync/barriers/bridge_policy_timeout_message.test.js": "0c5504ff31a9de9c",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "c8995b58f82a9ced",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
+        "test/unit/hub/hub_db_sync/barriers/price_barrier_every_block.test.js": "c42a4364058c3b39",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
