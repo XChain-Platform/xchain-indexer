@@ -76,7 +76,6 @@ const GATE_MODULE_PATHS = Object.freeze({
 // exports these rows; callers spell the key at the call site.
 const REPLACED_STEMS = Object.freeze([
     'anchor_activation',
-    'archive_batch_author_activation',
     'attest_admission_activation',
     'dispense_cancelling_match_activation',
     'dispenser_caps_activation',
@@ -114,6 +113,7 @@ const REPLACED_STEMS = Object.freeze([
 // callers read the row through activeAt() by its literal key from the start.
 // Kept apart from REPLACED_STEMS so that list stays the W4 and W5 census.
 const REGISTRY_ONLY_STEMS = Object.freeze([
+    'capability_snapshot_proof_activation',
     'anchor_checkpoint_seq_bind_activation',
     'anchor_archive_fold_term_activation',
     'anchor_empty_fold_reject_activation',

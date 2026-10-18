@@ -296,8 +296,7 @@ module.exports = {
         // halves of the carve-out in one place: the caller writes no `attest_bcast` row,
         // leaves `splitPool` as the untouched escrow, and the WHOLE escrow splits among
         // the signers, so per-signer amounts RISE by exactly the retired carve-out for a
-        // post-activation request. Below the height nothing here is reached differently
-        // and the legacy ledger is byte-identical.
+        // mirror-era request. Legacy requests continue through the carve-out below.
         //
         // Judged on the REQUEST's own block through the one era predicate, never on the
         // settling action's: a request admitted under the legacy rules settles under them
@@ -305,9 +304,6 @@ module.exports = {
         // handler and the mirror applier use. The mirror applier settles through this same
         // routine, so its fee split is retired here too rather than in a second place.
         if(this.isMirrorEraRequest(request)) return '0';
-
-        if(!attestBcastFee.isAttestBroadcastFeeActive(data['BLOCK_INDEX'], this.config['NETWORK']))
-            return '0';
 
         let providerId  = String(request.provider_id || '');
         let capNative   = attestBcastFee.broadcastFeeCapNative(

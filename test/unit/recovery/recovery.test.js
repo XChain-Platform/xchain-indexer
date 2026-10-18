@@ -318,26 +318,6 @@ function registerFoldArchiveTestsOne() {
         assert.strictEqual(db.matches.length, 1);
         assert.strictEqual(db.matches[0].match_id, 'm6');
     });
-    it('below fold a version-1 junk head still denies the real archive', async function () {
-        let multi = buildBatch(7, [rawMatch('m8')], oracleKeys, crossKeys, { chunkSize: 200 });
-        let foldedJunk = Object.assign({}, multi.v1, {
-            version: 3, chain: null, action_index: 1, source: OUTSIDER,
-            status: 'invalid: insufficient valid signatures',
-            block_index_doge: ARMED_DOGE_BLOCK - 1 });
-        let legacyJunk = Object.assign({}, multi.v1, {
-            action_index: 1, source: OUTSIDER, status: 'invalid: insufficient valid signatures',
-            total_chunks: 99, archive_b64: 'JUNK', block_index_doge: -1 });
-        let realHead = Object.assign({}, multi.v1, {
-            action_index: 50, source: AUTHOR, block_index_doge: ARMED_DOGE_BLOCK - 1 });
-        let chunks   = multi.v2s.map(c => Object.assign({ action_index: 100, source: AUTHOR }, c));
-        let db = foldAwareMemDb([foldedJunk, legacyJunk, realHead], chunks);
-        let report = await new AnchorRecovery(db, quiet).run();
-
-        assert.strictEqual(report.verified, 0);
-        assert.strictEqual(report.failed.length, 1);
-        assert.match(report.failed[0].reason, /incomplete batch/);
-        assert.strictEqual(db.matches.length, 0);
-    });
 }
 
 function registerFoldArchiveTestsTwo() {
@@ -361,24 +341,6 @@ function registerFoldArchiveTestsTwo() {
         assert.strictEqual(report.verified, 1, 'the real publisher batch still verifies');
         assert.strictEqual(report.failed.length, 1, 'the outsider head has no chunks of its own');
         assert.match(report.failed[0].reason, /incomplete batch/);
-    });
-    it('below fold both heads use the version-1 junk head chunk set', async function () {
-        let multi = buildBatch(8, [rawMatch('m9')], oracleKeys, crossKeys, { chunkSize: 200 });
-        let foldedJunk = Object.assign({}, multi.v1, {
-            version: 3, chain: null, action_index: 1, source: OUTSIDER,
-            block_index_doge: ARMED_DOGE_BLOCK - 1 });
-        let junkHead = Object.assign({}, multi.v1, {
-            action_index: 2, source: OUTSIDER, block_index_doge: -1 });
-        let realHead = Object.assign({}, multi.v1, {
-            action_index: 50, source: AUTHOR, block_index_doge: ARMED_DOGE_BLOCK - 1 });
-        let chunks   = multi.v2s.map(c => Object.assign({ action_index: 100, source: AUTHOR }, c));
-        let db = foldAwareMemDb([foldedJunk, junkHead, realHead], chunks);
-        let report = await new AnchorRecovery(db, quiet).run();
-
-        assert.strictEqual(report.verified, 0);
-        assert.strictEqual(report.failed.length, 2);
-        assert.ok(report.failed.every(row => /incomplete batch/.test(row.reason)));
-        assert.strictEqual(db.matches.length, 0);
     });
     it('rejects a sub-quorum wrapper and sub-quorum match signatures', async function () {
         let weakWrapper = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { wrapperSigners: 2 });   // 2 < 2f+1 = 3

@@ -28,7 +28,6 @@ const { createBaseData } = require('../../../../fixtures/mocks');
 
 const { stubActiveAt } = require('../../../../helpers/gate_modules.js');
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
-const attestBcastFee  = require('../../../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 
 const { PUBKEY_A, SIG_A, REQ_ID, BODY, BLOCK_TIME, requestRow } = require('./helpers/rows.js');
 const { applyData, setupEffects } = require('./helpers/effects_fixture.js');
@@ -83,7 +82,6 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             // so BLOCK_TIME's remaining consumer on this path is the injected callback
             // context, which is asserted below and is just as load-bearing: a callback
             // running at the wrong time is consensus-visible contract state.
-            attestBcastFee.isAttestBroadcastFeeActive.returns(true);
             indexer.util.getFeeOraclePrices = sinon.stub().resolves({ error: 'no prices' });
 
             const data = applyData({}, {}, { fee_amount: '10' });
@@ -110,11 +108,10 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
 
         it('retires the broadcast-fee carve-out: no attest_bcast, whole escrow to the signers', async function () {
             // A mirror-applied response was never broadcast by anyone, so there is no
-            // miner fee to reimburse. The carve-out flag day is ARMED here on purpose:
-            // what this asserts is that the mirror era retires it anyway, and that the
+            // miner fee to reimburse. The carve-out applies to every legacy request:
+            // what this asserts is that the mirror era retires it, and that the
             // retirement reaches the APPLIER, which settles through the same routine the
             // chain handler does.
-            attestBcastFee.isAttestBroadcastFeeActive.returns(true);
             indexer.util.getFeeOraclePrices = sinon.stub().resolves({
                 coinUsdPrice: '50000', xchainUsdPrice: '2.5', oracleRound: 7,
             });

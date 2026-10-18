@@ -38,7 +38,6 @@ const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks')
 const Attest          = require('../../../../src/actions/attest/index.js');
 const swq             = require('../../../../src/consensus/stake_weighted_quorum.js');
 const { stubActiveAt } = require('../../../helpers/gate_modules.js');
-const attestBcastFee  = require('../../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 // The SAME module object actions/attest/request.js closed over at require time, which is
 // what makes a sinon stub here reach inside the handler.
@@ -86,7 +85,6 @@ describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @t
         });
         indexer.util.resetLists();
         sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-        sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
         stubActiveAt(sinon, RESPONSE_MIRROR_KEY, false);
         // The gate this row's literal lives behind.
         stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', true);
@@ -144,7 +142,6 @@ describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @t
         });
         indexer.util.resetLists();
         sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-        sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
         stubActiveAt(sinon, RESPONSE_MIRROR_KEY, false);
         // The gate this row's literal lives behind.
         stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', true);
@@ -193,7 +190,6 @@ describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @t
         });
         indexer.util.resetLists();
         sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-        sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
         stubActiveAt(sinon, RESPONSE_MIRROR_KEY, false);
         // The gate this row's literal lives behind.
         stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', true);

@@ -25,7 +25,6 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const { createBaseData } = require('../../../fixtures/mocks');
-const attestBcastFee = require('../../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 // The response-mirror flag day is a registry row (W5), stubbed through activeAt()
 // by its key; the fixture's beforeEach holds it OFF and the cases below drive it.
 const { stubGate } = require('../../../helpers/gate_modules.js');
@@ -158,10 +157,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
         describe('broadcast-fee retirement', function () {
             beforeEach(function () {
-                // The carve-out flag day is ARMED throughout this describe: what is under
-                // test is that the mirror era retires it anyway, not that an unarmed gate
-                // pays nothing.
-                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
                 indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
                 sinon.stub(indexer.util, 'getFeeOraclePrices').resolves({
                     coinUsdPrice: COIN_USD, xchainUsdPrice: XCHAIN_USD, oracleRound: 7,
@@ -214,10 +209,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
         describe('broadcast-fee retirement', function () {
             beforeEach(function () {
-                // The carve-out flag day is ARMED throughout this describe: what is under
-                // test is that the mirror era retires it anyway, not that an unarmed gate
-                // pays nothing.
-                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
                 indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
                 sinon.stub(indexer.util, 'getFeeOraclePrices').resolves({
                     coinUsdPrice: COIN_USD, xchainUsdPrice: XCHAIN_USD, oracleRound: 7,
