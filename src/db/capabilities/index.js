@@ -26,6 +26,7 @@ const { requireStakeWeight } = require('../shared.js');
 // The capabilities mixin is cut into parts by behaviour under capabilities/; this entry merges them
 // back into the one method set db/index.js installs, at the position those methods held here.
 const effectiveStake = require('./effective_stake.js');
+const stakeProof = require('./stake_proof.js');
 
 function validatorQueryLimit(config){
     let limit = Number(config['VALIDATOR_QUERY_LIMIT']);
@@ -115,6 +116,7 @@ module.exports = {
     },
 
     ...effectiveStake,
+    ...stakeProof,
 
     // Read the hub-mirrored SOURCE-KEYED weights for a capability at a snapshot block
     // (non-BTC chains). Carries `source` so the verifier can dedupe by staking address.
