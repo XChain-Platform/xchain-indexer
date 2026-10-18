@@ -90,35 +90,12 @@ const { get, copy, activeAt } = require('../gate_registry');
 
 const PRICE_SCALE_MAX_DECIMALS = copy('price_scale_activation.PRICE_SCALE_MAX_DECIMALS');
 
-const PRICE_SCALE_ACTIVATION = copy('price_scale_activation.PRICE_SCALE_ACTIVATION');
-
 const PRICE_VALUE_RE_LEGACY = copy('price_scale_activation.PRICE_VALUE_RE_LEGACY');
 const PRICE_VALUE_RE_CANONICAL = copy('price_scale_activation.PRICE_VALUE_RE_CANONICAL');
 const PRICE_V1_CANONICAL_ACTIVATION = copy('price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION');
 const PRICE_V1_FEE_RE_CANONICAL = copy('price_scale_activation.PRICE_V1_FEE_RE_CANONICAL');
 const PRICE_V1_VALUE_MAX_LENGTH = copy('price_scale_activation.PRICE_V1_VALUE_MAX_LENGTH');
 const PRICE_V1_FEE_MAX_LENGTH = copy('price_scale_activation.PRICE_V1_FEE_MAX_LENGTH');
-
-// Whether the canonical form binds for an action at `blockTime` on `network`.
-//
-// Fails CLOSED on anything it cannot evaluate: an unparseable time or an
-// unrecognized network yields false, i.e. the legacy pattern. Closed is the safe
-// direction because the legacy pattern is what the deployed fleet enforces, so a
-// node that cannot evaluate the gate stays with the majority instead of
-// unilaterally refusing a round everyone else accepts.
-function isPriceScaleCanonicalActive(blockTime, network){
-    // Reject the empty-ish values BEFORE Number(), which maps null, '' and false
-    // to a perfectly finite 0. On a genesis-on network (threshold 0) that 0 reads
-    // as ACTIVE, so a missing block time would silently tighten the bound instead
-    // of failing closed as this function promises.
-    if(blockTime === null || blockTime === undefined || blockTime === '' || typeof blockTime === 'boolean')
-        return false;
-    let t = Number(blockTime);
-    if(!Number.isFinite(t)) return false;
-    let threshold = PRICE_SCALE_ACTIVATION[network];
-    if(threshold === undefined) return false;
-    return t >= threshold;
-}
 
 // `coin` is optional so existing network-only consumers retain the bare-key fallback.
 function isPriceV1CanonicalActive(blockTime, network, coin){
@@ -148,8 +125,7 @@ function isCanonicalPriceV1Fee(fee){
 
 // The price-value matcher in force for an action at `blockTime` on `network`.
 function priceValuePattern(blockTime, network){
-    return isPriceScaleCanonicalActive(blockTime, network)
-        ? PRICE_VALUE_RE_CANONICAL : PRICE_VALUE_RE_LEGACY;
+    return PRICE_VALUE_RE_CANONICAL;
 }
 
 // Whether `price` is a well-formed PRICE v0 price value at `blockTime` on
@@ -162,14 +138,12 @@ function isValidPriceValue(price, blockTime, network){
 
 module.exports = {
     PRICE_SCALE_MAX_DECIMALS,
-    PRICE_SCALE_ACTIVATION,
     PRICE_VALUE_RE_LEGACY,
     PRICE_VALUE_RE_CANONICAL,
     PRICE_V1_CANONICAL_ACTIVATION,
     PRICE_V1_FEE_RE_CANONICAL,
     PRICE_V1_VALUE_MAX_LENGTH,
     PRICE_V1_FEE_MAX_LENGTH,
-    isPriceScaleCanonicalActive,
     isPriceV1CanonicalActive,
     isCanonicalPriceV1Value,
     isCanonicalPriceV1Fee,
