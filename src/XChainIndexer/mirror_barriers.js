@@ -30,6 +30,7 @@ const {
     remoteTokenAdmissionActive,
     REMOTE_TOKEN_RETRY_STALL_REASON
 } = require('../actions/cross_chain_remote_token.js');
+const CAPABILITY_PROOF_REASON = 'capability_proof_unavailable';
 
 module.exports = {
 
@@ -295,6 +296,14 @@ module.exports = {
     // for a missing snapshot. Defers the block on timeout, same as the barriers above.
     async deferOnSnapshotSync(blockToParse, blockTime){
         if(this.hubDbSync){
+            try {
+                await this.hubDbSync.waitForCapabilityProof(this.priceSyncTimeoutMs);
+            } catch(err){
+                getLogger().warn('Deferring block ' + blockToParse + ' (capability proof): ', err);
+                this.stallReason = CAPABILITY_PROOF_REASON;
+                this.stallClearsAt = null;
+                return true;
+            }
             try {
                 await this.hubDbSync.waitForSnapshotSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
             } catch(err){

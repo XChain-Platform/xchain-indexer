@@ -376,3 +376,7 @@ module.exports = {
     },
 
 };
+
+// Reused by proof-producing database reads without installing another public
+// method on Database.prototype when credits/index.js spreads this mixin.
+Object.defineProperty(module.exports, 'subRootsOf', { value: subRootsOf });
