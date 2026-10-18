@@ -184,7 +184,7 @@
     },
     "stateHash": {
       "path": "src/consensus/state_hash.js",
-      "hash": "a47cbbadb6e1f624c3dde36feb74985ba2a066c1cb5e1f09d17e8540f9c28515",
+      "hash": "86741bb5a7e5716261b9e46ccdad8f73d75195c75e3a4ef097f48a7467d8797b",
       "twins": [
         "xchain-sync"
       ]
@@ -2201,6 +2201,13 @@
       "id": "oracle_preload_causality_activation",
       "from": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
       "to": "90b414005e4ee0d387068f8f7b0f547573dbde1c4672d71ced5057331be4a5be",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "stateHash",
+      "from": "a47cbbadb6e1f624c3dde36feb74985ba2a066c1cb5e1f09d17e8540f9c28515",
+      "to": "86741bb5a7e5716261b9e46ccdad8f73d75195c75e3a4ef097f48a7467d8797b",
       "reason": "XC\u002d3351 gate retirement",
       "date": "2026-10-18"
     },

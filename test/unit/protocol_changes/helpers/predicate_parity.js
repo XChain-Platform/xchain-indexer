@@ -62,7 +62,6 @@ const TABLE = [
     ['stake_weight_collation_activation.STAKE_WEIGHT_COLLATION_ACTIVATION', 'isStakeWeightBinCollationActive', ['height', 'network', 'coin']],
     ['stake_weighted_quorum.STAKE_WEIGHTED_QUORUM_ACTIVATION', 'isStakeWeightedQuorumActive', ['height', 'network']],
     ['stateHash.ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION', 'isArchiveInvalidHeightKeyActive', ['height', 'network', 'coin']],
-    ['stateHash.ARCHIVE_INVALID_STATE_HASH_ACTIVATION', 'isArchiveInvalidStateHashActive', ['height', 'network', 'coin']],
     ['stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION', 'isAttestBatchHeadStateHashActive', ['height', 'network', 'coin']],
     ['stateHash.BET_STATUS_STATE_HASH_ACTIVATION', 'isBetStatusStateHashActive', ['height', 'network', 'coin']],
     ['stateHash.POLL_FINALIZE_STATE_HASH_ACTIVATION', 'isPollFinalizeStateHashActive', ['height', 'network', 'coin']],

@@ -29,8 +29,6 @@ const Utility = require('../../../../../src/utility');
 const { makeAnchorDb } = require('../../../../helpers/sqlAnchorDb');
 const {
     buildStateHashData,
-    ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL,
-    ARCHIVE_INVALID_STATE_HASH_ACTIVATION, isArchiveInvalidStateHashActive,
     ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, isArchiveInvalidHeightKeyActive,
     ARCHIVE_CHUNK_HEIGHT_COL, ARCHIVE_CHUNK_HEIGHT_COL_LEGACY,
     POLL_FINALIZE_STATE_HASH_ACTIVATION, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
@@ -102,7 +100,6 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     });
 
     it('height key INERT: a real stamped batch selects ZERO rows, because c.block_index is NULL on the chunk', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
     await withHeight(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, 999999999, async () => {
     const captured = [];
     const db = makeAnchorDb(captured);
@@ -117,10 +114,8 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     } finally { db.close(); }
     });
     });
-    });
 
     it('height key ARMED: the same real rows now yield the stamped parent, ordered by action_index', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
     await withHeight(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, 0, async () => {
     const captured = [];
     const db = makeAnchorDb(captured);
@@ -137,7 +132,6 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     [{ action_index: 90, status: 'invalid_archive' }, { action_index: 100, status: 'invalid_archive' }],
     'every stamped archive head in the block is selected, in action_index order');
     } finally { db.close(); }
-    });
     });
     });
 });
@@ -158,7 +152,6 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     });
 
     it('height key ARMED: a completing chunk in ANOTHER block is out of scope (the class stays per-block)', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
     await withHeight(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, 0, async () => {
     const db = makeAnchorDb();
     try {
@@ -174,10 +167,8 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     } finally { db.close(); }
     });
     });
-    });
 
     it('height key ARMED: a non-valid completing chunk does not stamp (rejected duplicate stays out of scope)', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
     await withHeight(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, 0, async () => {
     const db = makeAnchorDb();
     try {
@@ -191,7 +182,6 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     assert.deepStrictEqual(data.anchor_invalid, [],
     'only a valid completing chunk scopes the stamp; a rejected duplicate must not');
     } finally { db.close(); }
-    });
     });
     });
 });
@@ -212,7 +202,6 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     });
 
     it('active: a real stamped parent folds into state_hash; a follower that drops it HALTS (different hash)', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
     await withHeight(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, 0, async () => {
     const stamped = makeAnchorDb();
     const dropped = makeAnchorDb();
@@ -239,7 +228,6 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     'a dropped invalid_archive upsert MUST change state_hash so the follower halts');
     assert.strictEqual(s2.hash, s.hash, 'identical stamps hash identically (no false halt)');
     } finally { stamped.close(); dropped.close(); again.close(); }
-    });
     });
     });
 });

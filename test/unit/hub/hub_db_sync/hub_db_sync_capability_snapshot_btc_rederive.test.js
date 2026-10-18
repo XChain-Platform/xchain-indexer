@@ -40,6 +40,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const srb    = require('../../../../src/consensus/snapshot_reorg_buffer.js');
+const changes = require('../../../../src/consensus/gate_registry.js');
 const {
     SNAP_BLOCK, snapshotRow, dbFor, syncFor, historyDb, DEACTIVATED, PRE_TOPUP,
 } = require('./hub_db_sync_capability_snapshot_btc_rederive.test/helpers/fixtures.js');
@@ -146,10 +147,14 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
 
             assert.strictEqual(inserted.length, 1, 'an unreached block is unknown, never a forgery');
         });
+}); });
 
+describe('capability_snapshots BTC re-derivation fence @regression @tier2', function () { describe('everything the node cannot disprove still mirrors', function () {
         it('applies every row on a chain that resolves FROM the mirror', async function () {
             // The honest limit of this step: off BTC there are no local capability stakes,
-            // so the mirror is the authority and cannot be checked against itself.
+            // so below the proof gate the row still applies without a local stake read.
+            sinon.stub(changes, 'activeAt').withArgs(
+                'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION').returns(false);
             const { db, seen }       = dbFor('DOGE');
             const { sync, inserted } = syncFor(db);
 

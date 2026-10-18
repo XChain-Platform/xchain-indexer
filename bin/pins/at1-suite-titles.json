@@ -554,6 +554,13 @@
       "LIST_TICK_COIN consumers @regression @consensus ISSUE coin-qualified root reservation leaves the historical colon ticker verdict unchanged below the gate",
       "LIST_TICK_COIN consumers @regression @consensus ISSUE coin-qualified root reservation refuses live and future coin roots without interning their ticker names"
     ],
+    "0a29eea0cdad8aed": [
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression always selects the shared archive-head set, key set unchanged",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression height-key gate: regtest and mainnet armed at genesis, testnet at real future flag days; fail-inert paths",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: ARCHIVE_HEAD_VERSIONS is [1] and renders IN (1)",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: the chunk-height key is c.block_index_doge, the legacy key c.block_index",
+      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression the schema premise, checked against the real DDL: a v2 chunk row carries NULL block_index and a real block_index_doge"
+    ],
     "0a2fc0a50228f0e1": [
       "capability snapshot proof pinned set parser accepts a one-entry set",
       "capability snapshot proof pinned set parser accepts two sources and an uppercase public key",
@@ -1430,6 +1437,21 @@
       "state_checkpoints split-brain fence parity (#3096) @regression @tier1 indexer mirror: block_index is NOT part of the fence",
       "state_checkpoints split-brain fence parity (#3096) @regression @tier1 indexer mirror: unique key is exactly (chain, network, checkpoint_seq)",
       "state_checkpoints split-brain fence parity (#3096) @regression @tier1 the tightening migration exists and is manual, not auto-applied at boot"
+    ],
+    "1727262103280d4f": [
+      "AnchorRecovery (full-parse recovery) @regression @tier2 a junk ORPHAN chunk from an outsider never enters the reassembly (#3075)",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 a junk head reassembles only its own chunks, so it still fails",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 a junk head squatting the batch seq no longer denies the real archive",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 a rejected junk v2 chunk neither blocks the batch nor enters the reassembly (#2269)",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 a retraction after a finalize moves only the status, never the signed content (#3208)",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 an orphan chunk from the head publisher still counts (#3075 does not reject orphans)",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 latest-status-wins: a later batch retracts an earlier finalized match",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 rejects a corrupted CRC and an incomplete chunk set",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 rejects a sub-quorum wrapper and sub-quorum match signatures",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 revive-wins: a later batch re-finalizes a retracted match with NEW content (#3208)",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 round-trips a chunked batch: matches + both capability sets rebuilt",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 skips anchor rows the chain parse recorded as invalid (status filter, not replayed)",
+      "AnchorRecovery (full-parse recovery) @regression @tier2 the empty-archive log names exactly ARCHIVE_HEAD_VERSIONS, never a retired wire"
     ],
     "172d465274d6a2b5": [
       "AnchorProofClient v3 fold binding @regression @tier2 a fold and an unrelated v0 bundle on one transaction judges each against its own header",
@@ -3371,6 +3393,15 @@
       "protocol_changes anchor bundle order row lists the activation in SHARED_GATES exactly once",
       "protocol_changes anchor bundle order row pins the activation map"
     ],
+    "332f0f0c3276df91": [
+      "capability snapshot proof database wiring @regression @tier1 allows regtest first use and emits one warning line",
+      "capability snapshot proof database wiring @regression @tier1 holds at the gate when no proof fetcher is available",
+      "capability snapshot proof database wiring @regression @tier1 keeps a mirror-resolved row below the gate on the legacy path",
+      "capability snapshot proof database wiring @regression @tier1 keeps the BTC re-derivation path unchanged when the proof gate is active",
+      "capability snapshot proof database wiring @regression @tier1 never derives the checkpoint trust set from mirrored capability rows",
+      "capability snapshot proof database wiring @regression @tier1 passes verified, refused, and held proof verdicts through at the gate",
+      "capability snapshot proof database wiring @regression @tier1 uses the static pin below rotation and the next pin from its block onward"
+    ],
     "33482fac9151bf27": [
       "Dispenser action handler @regression @tier2 GET_ADDRESS different from SOURCE validation (freshness) GET_ADDRESS with DISPENSER_PREFERENCE=2 allows any opener",
       "Dispenser action handler @regression @tier2 GET_ADDRESS different from SOURCE validation (freshness) local path (freshness flag-day active, regtest genesis) fresh GET_ADDRESS (no prior XChain activity) is allowed, and the tracker is NOT consulted",
@@ -3748,6 +3779,11 @@
     "39deaa3f8a62287c": [
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
+    ],
+    "39e97c7b93d617e8": [
+      "capability snapshot proof startup pin wiring @regression @tier1 does not refuse an unarmed chain, BTC, or regtest",
+      "capability snapshot proof startup pin wiring @regression @tier1 refuses an armed mirror-backed testnet with an invalid pin",
+      "capability snapshot proof startup pin wiring @regression @tier1 refuses an armed mirror-backed testnet with no pin and names rotation variables"
     ],
     "3a25c746f0ad7a91": [
       "database session time zone @regression @tier1 pins direct and pooled connections to UTC"
@@ -5180,11 +5216,6 @@
       "Utility.validateOracleFee() - @regression @tier1 the quote and the consensus check cannot disagree the API endpoint delegates rather than recomputing",
       "Utility.validateOracleFee() - @regression @tier1 zero fee is the common case requires no output when FEE is absent entirely",
       "Utility.validateOracleFee() - @regression @tier1 zero fee is the common case requires no output when the oracle publishes FEE=0"
-    ],
-    "4db50e18ffcab3aa": [
-      "anchor fold row predicates builds archive-head and checkpoint-section predicates for any alias",
-      "anchor fold row predicates limits activated class-6 rows to the configured archive-head versions",
-      "anchor fold row predicates uses the archive-head predicate only in the activated class-6 branch"
     ],
     "4dc6ca50454deae6": [
       "XCALL action_format invariant (review item 2748) deadline-expiry mint (v2) carries the declared FORMAT 2, satisfying the invariant",
@@ -6989,18 +7020,6 @@
       "a contract stake locks tokens rather than destroying them the capability slash releases the bond per OWNER and hands the array to the writer",
       "a contract stake locks tokens rather than destroying them the contract slash releases the escrow it burns, keyed to the staker"
     ],
-    "68f29416f8abccb2": [
-      "ANCHOR archive batch capture by a junk head @regression @tier1 a chunk with no resolvable author of its own lands orphan, never authenticated",
-      "ANCHOR archive batch capture by a junk head @regression @tier1 a head landing last reassembles its own chunks, not the junk head's",
-      "ANCHOR archive batch capture by a junk head @regression @tier1 a junk head's bogus TOTAL_CHUNKS no longer invalidates the legitimate chunks",
-      "ANCHOR archive batch capture by a junk head @regression @tier1 a single-publisher batch is unaffected: the head is its own canonical head",
-      "ANCHOR archive batch capture by a junk head @regression @tier1 activation is network-keyed and armed at genesis on regtest, testnet and mainnet",
-      "ANCHOR archive batch capture by a junk head @regression @tier1 is INERT below the flag day: the legacy canonical-head rule still applies",
-      "ANCHOR archive batch capture by a junk head @regression @tier1 reassembly binds to the batch's own head CRC, not the junk head's",
-      "ANCHOR archive batch capture by a junk head @regression @tier1 the attacker cannot squat a slot in the real publisher's batch",
-      "ANCHOR archive batch capture by a junk head @regression @tier1 the author-scoped chunk query keeps every filter the canonical-head one has",
-      "ANCHOR archive batch capture by a junk head @regression @tier1 the real publisher's chunk survives a junk head that squats the batch seq"
-    ],
     "690190be91ce63e9": [
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) an errored (expired-status) row flips the request to errored",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) defers the callback to the relay leg for a relay-materialized request",
@@ -8422,6 +8441,11 @@
       "SQL literal scanner ignores non-id orders and id qualified by a non-passed table",
       "SQL literal scanner joins template quasis with one placeholder per expression and retains the line",
       "SQL literal scanner throws a parse error that names the source file"
+    ],
+    "7da9f843f0c0949f": [
+      "anchor fold row predicates builds archive-head and checkpoint-section predicates for any alias",
+      "anchor fold row predicates limits class-6 rows to the configured archive-head versions",
+      "anchor fold row predicates uses the archive-head predicate in class 6"
     ],
     "7dcecc08d3d94927": [
       "anchor-reward derive set is INVARIANT under the barrier change @regression @tier1 derives the identical set, at the identical height, armed or inert",
@@ -10639,6 +10663,14 @@
     "9a956c93c1e1307c": [
       "HubDbSync failover move reset resets only hub-specific state to fresh pinned-mode values and is idempotent"
     ],
+    "9ab84ca78e7a8f1b": [
+      "Anchor (ANCHOR) @regression @tier3 v1 single-chunk: CRC binds the archive, valid blob accepted, mismatch rejected",
+      "Anchor (ANCHOR) @regression @tier3 v2 chunk authorship (#3075) an orphan chunk is still stored unjudged: there is no head to authenticate against",
+      "Anchor (ANCHOR) @regression @tier3 v2 chunk authorship (#3075) geometry still outranks authorship, so the pre-#3075 verdict is unchanged",
+      "Anchor (ANCHOR) @regression @tier3 v2 chunk authorship (#3075) the real publisher keeps its slot: an outsider chunk no longer makes it a duplicate",
+      "Anchor (ANCHOR) @regression @tier3 v2 continuation stores, orphans without a parent v1, and rejects duplicates",
+      "Anchor (ANCHOR) @regression @tier3 v2 reassembly: the final chunk triggers CRC verification and flags a bad batch"
+    ],
     "9b13c5407b7bccf8": [
       "Security: VM runtime boot refusal @regression @tier4 SEC-43: Actions construction refuses when the VM binding cannot load",
       "Security: VM runtime boot refusal @regression @tier4 SEC-44: the refusal names the binding, its format and this host",
@@ -11561,15 +11593,6 @@
       "MINT block window boundary tests @regression @tier2 TS-08: MINT one block before MINT_START_BLOCK (block 49) is invalid",
       "MINT block window boundary tests @regression @tier2 TS-09: MINT at exactly MINT_STOP_BLOCK (block 200) is valid",
       "MINT block window boundary tests @regression @tier2 TS-10: MINT one block after MINT_STOP_BLOCK (block 201) is invalid"
-    ],
-    "a9282f9a155afa44": [
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression at/after the version threshold: the class selects the shared archive-head set, key set unchanged",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression below the version threshold: the class keeps the legacy v1-only predicate (preimage byte-identical pre-flag)",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression height-key gate: regtest and mainnet armed at genesis, testnet at real future flag days; fail-inert paths",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: ARCHIVE_HEAD_VERSIONS is [1] and renders IN (1)",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: the chunk-height key is c.block_index_doge, the legacy key c.block_index",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression the schema premise, checked against the real DDL: a v2 chunk row carries NULL block_index and a real block_index_doge",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression version gate: regtest, every testnet chain AND every mainnet chain armed from genesis; fail-inert paths"
     ],
     "a938df8c15b84eb3": [
       "action-scoped price barrier _evaluatePriceBarrier (the block loop's decision) an escalated block waits even though it is empty",
@@ -12848,23 +12871,6 @@
       "push_generation stamping on hub-pinned federation reads (item 2367) @regression getpendingcrosschaincalls reads the generation BEFORE the rows (HUB-RETRACT-1 ordering)",
       "push_generation stamping on hub-pinned federation reads (item 2367) @regression getpendingcrosschaincalls reads the source-chain push generation"
     ],
-    "b803fe70b3727ead": [
-      "AnchorRecovery (full-parse recovery) @regression @tier2 a junk ORPHAN chunk from an outsider never enters the reassembly (#3075)",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 a junk head reassembles only its own chunks, so it still fails",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 a junk head squatting the batch seq no longer denies the real archive",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 a rejected junk v2 chunk neither blocks the batch nor enters the reassembly (#2269)",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 a retraction after a finalize moves only the status, never the signed content (#3208)",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 an orphan chunk from the head publisher still counts (#3075 does not reject orphans)",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 below fold a version-1 junk head still denies the real archive",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 below fold both heads use the version-1 junk head chunk set",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 latest-status-wins: a later batch retracts an earlier finalized match",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 rejects a corrupted CRC and an incomplete chunk set",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 rejects a sub-quorum wrapper and sub-quorum match signatures",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 revive-wins: a later batch re-finalizes a retracted match with NEW content (#3208)",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 round-trips a chunked batch: matches + both capability sets rebuilt",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 skips anchor rows the chain parse recorded as invalid (status filter, not replayed)",
-      "AnchorRecovery (full-parse recovery) @regression @tier2 the empty-archive log names exactly ARCHIVE_HEAD_VERSIONS, never a retired wire"
-    ],
     "b85c12080a6c6211": [
       "bridge_settle: row-fields refusals and the per-block cap preserves the legacy cap behavior before activation",
       "bridge_settle: row-fields refusals and the per-block cap settles the good row behind 25 malformed rows after activation"
@@ -13973,6 +13979,16 @@
       "SQL quote walkers honour backslash escapes @regression @tier1 splits INSERT-with-\\' then DROP into two statements, not one",
       "SQL quote walkers honour backslash escapes @regression @tier1 still treats a doubled quote as an escape"
     ],
+    "c8859268348d65b0": [
+      "ANCHOR archive batch capture by a junk head @regression @tier1 a chunk with no resolvable author of its own lands orphan, never authenticated",
+      "ANCHOR archive batch capture by a junk head @regression @tier1 a head landing last reassembles its own chunks, not the junk head's",
+      "ANCHOR archive batch capture by a junk head @regression @tier1 a junk head's bogus TOTAL_CHUNKS no longer invalidates the legitimate chunks",
+      "ANCHOR archive batch capture by a junk head @regression @tier1 a single-publisher batch is unaffected: the head is its own canonical head",
+      "ANCHOR archive batch capture by a junk head @regression @tier1 reassembly binds to the batch's own head CRC, not the junk head's",
+      "ANCHOR archive batch capture by a junk head @regression @tier1 the attacker cannot squat a slot in the real publisher's batch",
+      "ANCHOR archive batch capture by a junk head @regression @tier1 the author-scoped chunk query keeps every filter the canonical-head one has",
+      "ANCHOR archive batch capture by a junk head @regression @tier1 the real publisher's chunk survives a junk head that squats the batch seq"
+    ],
     "c8995b58f82a9ced": [
       "hub_db_sync bridge content shortcut and empty-mirror paths @regression @tier1 bridge: an out-leg stamped with a longer margin does not open the shortcut, an in-leg does",
       "hub_db_sync bridge content shortcut and empty-mirror paths @regression @tier1 bridge: the empty-mirror path waits for a drained connection",
@@ -14895,16 +14911,6 @@
       "09 Fee Spike (mempool backlog drain) indexes the whole backlog as VALID (guards against measuring rejections)",
       "09 Fee Spike (mempool backlog drain) keeps per-transaction cost growing no faster than the ledger",
       "09 Fee Spike (mempool backlog drain) leaves quiet blocks no slower than the ledger growth explains"
-    ],
-    "d02af0af67a03e53": [
-      "archive invalid_archive reset: publisher scoping @regression against a real SQL engine changes nothing for a single-publisher batch, scoped or not",
-      "archive invalid_archive reset: publisher scoping @regression against a real SQL engine scoped, a chunk with no resolvable author resets nothing",
-      "archive invalid_archive reset: publisher scoping @regression against a real SQL engine scoped, a surviving chunk below the orphaned range still resets nothing",
-      "archive invalid_archive reset: publisher scoping @regression against a real SQL engine scoped, the orphaned chunk resets only its own publisher's head",
-      "archive invalid_archive reset: publisher scoping @regression against a real SQL engine unscoped, one publisher's orphaned chunk resets the other publisher's surviving head",
-      "archive invalid_archive reset: publisher scoping @regression the flag day is armed on mainnet and testnet (2026-09-09 ruling) carries the ruled heights, and splices the author term exactly at each one",
-      "archive invalid_archive reset: publisher scoping @regression the flag day is armed on mainnet and testnet (2026-09-09 ruling) never arms a network below its own ARCHIVE_BATCH_AUTHOR height",
-      "archive invalid_archive reset: publisher scoping @regression the flag day is armed on mainnet and testnet (2026-09-09 ruling) reads inactive for an unknown or omitted network and an unparseable height"
     ],
     "d0606b4e6fd77999": [
       "DISPENSE native-tick match gate (findMatchingDispensers wrong-asset settlement) @regression @tier1 gate: native branch predicate mainnet at/after the flag-day constrains the native branch to get_tick_id IS NULL",
@@ -16715,16 +16721,6 @@
       "Price v2 (PRICE batch) @regression @tier3 storage (step 5) stores rounds_json in the snake-cased per-round shape sql/prices.sql documents",
       "Price v2 (PRICE batch) @regression @tier3 storage (step 5) stores the batch signature set in sigs_json, lowercased"
     ],
-    "e80bd7614da629b4": [
-      "Anchor (ANCHOR) @regression @tier3 v1 single-chunk: CRC binds the archive, valid blob accepted, mismatch rejected",
-      "Anchor (ANCHOR) @regression @tier3 v2 chunk authorship (#3075) an orphan chunk is still stored unjudged: there is no head to authenticate against",
-      "Anchor (ANCHOR) @regression @tier3 v2 chunk authorship (#3075) fails closed when the head author cannot be resolved at all",
-      "Anchor (ANCHOR) @regression @tier3 v2 chunk authorship (#3075) geometry still outranks authorship, so the pre-#3075 verdict is unchanged",
-      "Anchor (ANCHOR) @regression @tier3 v2 chunk authorship (#3075) rejects a chunk whose author is not the archive head publisher",
-      "Anchor (ANCHOR) @regression @tier3 v2 chunk authorship (#3075) the real publisher keeps its slot: an outsider chunk no longer makes it a duplicate",
-      "Anchor (ANCHOR) @regression @tier3 v2 continuation stores, orphans without a parent v1, and rejects duplicates",
-      "Anchor (ANCHOR) @regression @tier3 v2 reassembly: the final chunk triggers CRC verification and flags a bad batch"
-    ],
     "e8571b4e4ce9eb18": [
       "getBlockTime() fail-loud fault handling (#898) RETHROWS an infrastructure fault (lock-wait timeout 1205) instead of returning false",
       "getBlockTime() fail-loud fault handling (#898) absorbs a benign missing-table fault (1146) as false and does not cache it",
@@ -16807,6 +16803,15 @@
       "HubDbSync failover when no candidate is caught up serves from the current hub after the grace when no candidate is caught up",
       "HubDbSync failover when no candidate is caught up still moves off a not-caught-up hub while a candidate is untried",
       "HubDbSync failover when no candidate is caught up stops moving once every candidate reported not caught up"
+    ],
+    "e9e0aa249fa308f0": [
+      "archive invalid_archive reset: publisher scoping @regression against a real SQL engine changes nothing for a single-publisher batch, scoped or not",
+      "archive invalid_archive reset: publisher scoping @regression against a real SQL engine scoped, a chunk with no resolvable author resets nothing",
+      "archive invalid_archive reset: publisher scoping @regression against a real SQL engine scoped, a surviving chunk below the orphaned range still resets nothing",
+      "archive invalid_archive reset: publisher scoping @regression against a real SQL engine scoped, the orphaned chunk resets only its own publisher's head",
+      "archive invalid_archive reset: publisher scoping @regression against a real SQL engine unscoped, one publisher's orphaned chunk resets the other publisher's surviving head",
+      "archive invalid_archive reset: publisher scoping @regression the flag day is armed on mainnet and testnet (2026-09-09 ruling) carries the ruled heights, and splices the author term exactly at each one",
+      "archive invalid_archive reset: publisher scoping @regression the flag day is armed on mainnet and testnet (2026-09-09 ruling) reads inactive for an unknown or omitted network and an unparseable height"
     ],
     "e9f1f22d99694ca4": [
       "ATTEST batch chunk read: the publisher partition and its row limit (row 59) @regression carries no author term and no limit when nothing is scoped, the legacy shape",
@@ -18182,8 +18187,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1439,
-      "titleCount": 14075,
+      "fileCount": 1441,
+      "titleCount": 14076,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18213,7 +18218,7 @@
         "test/unit/actions/actions_class/install_methods.test.js": "13e1f9bf869b82b9",
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
-        "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "e80bd7614da629b4",
+        "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "afd595adc550c449",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
@@ -18229,7 +18234,7 @@
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "5c969c0d766afbe1",
-        "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
+        "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/anchor_reward_family.test.js": "45cd36a015e28085",
         "test/unit/actions/anchor/archive/anchor_archive_failure_report.test.js": "7875766421d5118b",
@@ -18868,10 +18873,12 @@
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/startup_pin_refusal.test.js": "e3e7ffb0929fda49",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
         "test/unit/consensus/capability_snapshot_proof/trust_set.test.js": "b468c3fd3eff32ee",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
@@ -18915,7 +18922,7 @@
         "test/unit/consensus/snapshot_checkpoint/canonical.test.js": "299c4ed3013e8a10",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
         "test/unit/consensus/stale_twin_module_refs.test.js": "25c3d82b177fdf7c",
-        "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "4db50e18ffcab3aa",
+        "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "7da9f843f0c0949f",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -19461,7 +19468,7 @@
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
-        "test/unit/recovery/recovery.test.js": "b803fe70b3727ead",
+        "test/unit/recovery/recovery.test.js": "1727262103280d4f",
         "test/unit/recovery/recovery.test/admit_block_columns.test.js": "33d276ce0f8066c0",
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
@@ -19507,7 +19514,7 @@
         "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "a7b9a30696b4da72",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
         "test/unit/rollback/rollback.test/transaction_and_rearm.test.js": "294f6ca3123cda7e",
-        "test/unit/rollback/rollback_archive_author_scope.test.js": "d02af0af67a03e53",
+        "test/unit/rollback/rollback_archive_author_scope.test.js": "e9e0aa249fa308f0",
         "test/unit/rollback/rollback_attest_batch_head_reset.test.js": "2a0df26fd3c8d653",
         "test/unit/rollback/rollback_attest_batch_retraction.test.js": "68011ffa60463425",
         "test/unit/rollback/rollback_attestation_stats.test.js": "14805a79dfc17ca6",
@@ -19563,7 +19570,7 @@
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
         "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
-        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
+        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "0a29eea0cdad8aed",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/archive_match_count_class.test.js": "8a8d0afa6dccfafa",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
@@ -19998,8 +20005,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1091,
-      "titleCount": 11109,
+      "fileCount": 1093,
+      "titleCount": 11117,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20070,7 +20077,7 @@
         "test/unit/actions/actions_class/install_methods.test.js": "13e1f9bf869b82b9",
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
-        "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "e80bd7614da629b4",
+        "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "afd595adc550c449",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
@@ -20084,7 +20091,7 @@
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "5c969c0d766afbe1",
-        "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
+        "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "162227ac9894db7b",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "86748d9830bb6043",
@@ -20550,7 +20557,9 @@
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
@@ -20974,7 +20983,7 @@
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
-        "test/unit/recovery/recovery.test.js": "b803fe70b3727ead",
+        "test/unit/recovery/recovery.test.js": "1727262103280d4f",
         "test/unit/recovery/recovery.test/admit_block_columns.test.js": "33d276ce0f8066c0",
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
@@ -21007,7 +21016,7 @@
         "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "a7b9a30696b4da72",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
         "test/unit/rollback/rollback.test/transaction_and_rearm.test.js": "294f6ca3123cda7e",
-        "test/unit/rollback/rollback_archive_author_scope.test.js": "d02af0af67a03e53",
+        "test/unit/rollback/rollback_archive_author_scope.test.js": "e9e0aa249fa308f0",
         "test/unit/rollback/rollback_attest_batch_head_reset.test.js": "2a0df26fd3c8d653",
         "test/unit/rollback/rollback_attestation_stats.test.js": "14805a79dfc17ca6",
         "test/unit/rollback/rollback_collect_capture_race.test.js": "85fb363232b73584",
@@ -21052,7 +21061,7 @@
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
         "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
-        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
+        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "0a29eea0cdad8aed",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
@@ -21095,8 +21104,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 528,
-      "titleCount": 5713,
+      "fileCount": 530,
+      "titleCount": 5721,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21112,7 +21121,7 @@
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
-        "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
+        "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "162227ac9894db7b",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "86748d9830bb6043",
         "test/unit/actions/attest.test/responsible_set_gates.test.js": "90165b8ec993c4e6",
@@ -21264,7 +21273,9 @@
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
@@ -21629,8 +21640,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1091,
-      "titleCount": 11109,
+      "fileCount": 1093,
+      "titleCount": 11117,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21701,7 +21712,7 @@
         "test/unit/actions/actions_class/install_methods.test.js": "13e1f9bf869b82b9",
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
-        "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "e80bd7614da629b4",
+        "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "afd595adc550c449",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
@@ -21715,7 +21726,7 @@
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "5c969c0d766afbe1",
-        "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
+        "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "162227ac9894db7b",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "86748d9830bb6043",
@@ -22181,7 +22192,9 @@
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "4c6831ed3b0c998a",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "332f0f0c3276df91",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
@@ -22605,7 +22618,7 @@
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
-        "test/unit/recovery/recovery.test.js": "b803fe70b3727ead",
+        "test/unit/recovery/recovery.test.js": "1727262103280d4f",
         "test/unit/recovery/recovery.test/admit_block_columns.test.js": "33d276ce0f8066c0",
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
@@ -22638,7 +22651,7 @@
         "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "a7b9a30696b4da72",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
         "test/unit/rollback/rollback.test/transaction_and_rearm.test.js": "294f6ca3123cda7e",
-        "test/unit/rollback/rollback_archive_author_scope.test.js": "d02af0af67a03e53",
+        "test/unit/rollback/rollback_archive_author_scope.test.js": "e9e0aa249fa308f0",
         "test/unit/rollback/rollback_attest_batch_head_reset.test.js": "2a0df26fd3c8d653",
         "test/unit/rollback/rollback_attestation_stats.test.js": "14805a79dfc17ca6",
         "test/unit/rollback/rollback_collect_capture_race.test.js": "85fb363232b73584",
@@ -22683,7 +22696,7 @@
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
         "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
-        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
+        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "0a29eea0cdad8aed",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",

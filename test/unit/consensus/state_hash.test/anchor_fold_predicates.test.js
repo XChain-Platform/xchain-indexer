@@ -25,21 +25,14 @@ function makeDb(captured){
     };
 }
 
-async function anchorInvalidSql(gateHeight){
+async function anchorInvalidSql(){
     const captured = [];
-    const activation = stateHash.ARCHIVE_INVALID_STATE_HASH_ACTIVATION;
-    const previous = activation.regtest;
-    activation.regtest = gateHeight;
-    try {
-        await stateHash.buildStateHashData(makeDb(captured), 7, {
-            activationDelay: null,
-            gasTick: null,
-            network: 'regtest',
-            coin: 'BTC',
-        });
-    } finally {
-        activation.regtest = previous;
-    }
+    await stateHash.buildStateHashData(makeDb(captured), 7, {
+        activationDelay: null,
+        gasTick: null,
+        network: 'regtest',
+        coin: 'BTC',
+    });
     return captured.find(sql => sql.includes('anchor_actions p'));
 }
 
@@ -59,20 +52,17 @@ describe('anchor fold row predicates', function(){
         );
     });
 
-    it('uses the archive-head predicate only in the activated class-6 branch', async function(){
-        const activeSql = await anchorInvalidSql(0);
-        assert.ok(activeSql.includes('WHERE ' + stateHash.archiveHeadPredicate('p')));
-        assert.ok(activeSql.includes('p.version ' + stateHash.ARCHIVE_HEAD_VERSIONS_SQL));
-        assert.ok(!activeSql.includes(' OR p.version <> 2'));
-        assert.ok(activeSql.includes('c.version = 2'));
-        assert.ok(!activeSql.includes('WHERE p.version IN'));
-
-        const legacySql = await anchorInvalidSql(8);
-        assert.ok(legacySql.includes('WHERE p.version = 1'));
-        assert.ok(!legacySql.includes('p.match_batch_seq IS NOT NULL'));
+    it('uses the archive-head predicate in class 6', async function(){
+        const sql = await anchorInvalidSql();
+        assert.ok(sql.includes('WHERE ' + stateHash.archiveHeadPredicate('p')));
+        assert.ok(sql.includes('p.version ' + stateHash.ARCHIVE_HEAD_VERSIONS_SQL));
+        assert.ok(!sql.includes(' OR p.version <> 2'));
+        assert.ok(sql.includes('c.version = 2'));
+        assert.ok(!sql.includes('WHERE p.version IN'));
+        assert.ok(!sql.includes('WHERE p.version = 1'));
     });
 
-    it('limits activated class-6 rows to the configured archive-head versions', async function(){
+    it('limits class-6 rows to the configured archive-head versions', async function(){
         const db = makeAnchorDb();
         const invalidId = db.status('invalid_archive');
         const validId = db.status('valid');

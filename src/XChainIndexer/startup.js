@@ -37,9 +37,29 @@ const UtxoTracker  = require('../chain/utxo_tracker.js');
 const Genesis      = require('../chain/genesis.js');
 const { getLogger } = require('../observability/index.js');
 const { CONFIG_ENV } = require('../config.js');
+const { usesCapabilitySnapshot } = require('../db/shared.js');
+const { startupPinRefusal } = require('../consensus/capability_snapshot_proof/startup_pin_refusal.js');
 
 const ATTEST_RESPONSE_MIRROR_KEY =
     'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
+const CAPABILITY_SNAPSHOT_PROOF_KEY =
+    'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION';
+const MIRRORED_CAPABILITIES = ['cross_chain', 'oracle_publish', 'price', 'attestation'];
+
+function assertCapabilitySnapshotPin(){
+    const network = this.config['NETWORK'];
+    const coin = this.config['COIN'];
+    const row = changes.get(CAPABILITY_SNAPSHOT_PROOF_KEY);
+    const coinKey = 'BTC:' + network;
+    const threshold = Object.prototype.hasOwnProperty.call(row, coinKey) ? row[coinKey] : row[network];
+    const refusal = startupPinRefusal({
+        network,
+        resolvesFromMirror: MIRRORED_CAPABILITIES.some(
+            capability => usesCapabilitySnapshot(this.config, capability)),
+        gateArmed: typeof threshold === 'number' && threshold !== changes.UNARMED,
+    });
+    if(refusal) this.util.throwError(refusal);
+}
 
 module.exports = {
 
@@ -71,6 +91,8 @@ module.exports = {
     // Open the decoder and indexer databases, then either the hub database (with its
     // optional mirror) or, when none is configured, the local-price-source check.
     connectDatabases(){
+        assertCapabilitySnapshotPin.call(this);
+
         // Establish database connections
         this.decoderDb = new database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass, this);
         this.indexerDb = new database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass, this);
@@ -84,6 +106,9 @@ module.exports = {
             this.checkLocalPriceSource();
         }
     },
+
+    // An armed proof gate on a live mirror-backed chain requires a checkpoint validator pin.
+    assertCapabilitySnapshotPin,
 
     // The hub database connection, plus the WebSocket mirror when HUB_DB_SYNC_ENABLED.
     connectHubDatabase(){
