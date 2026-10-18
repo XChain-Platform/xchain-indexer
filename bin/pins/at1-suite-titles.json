@@ -10408,6 +10408,12 @@
       "HubClient hub-rejection classification throws on {error} aggregator still booting so the durable row is retried, not deleted",
       "HubClient hub-rejection classification throws on {error} handler exception so the durable row is retried, not deleted"
     ],
+    "921055a6da19b0a7": [
+      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 agrees with the VM predicate on armed and unarmed networks",
+      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 matches the VM instant on every network",
+      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
+      "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 registers the time-table row in part 5, unarmed on production networks and live on regtest"
+    ],
     "9227d0e83b5535c1": [
       "protocol-change registry is prototype-free @regression @tier1 addChange uniqueness is not confused by an inherited member accepts a change whose name collides with a prototype member",
       "protocol-change registry is prototype-free @regression @tier1 every network, since the gate fields are what NaN out resolves no prototype member on mainnet",
@@ -18107,8 +18113,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1425,
-      "titleCount": 14028,
+      "fileCount": 1426,
+      "titleCount": 14032,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19368,6 +19374,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",

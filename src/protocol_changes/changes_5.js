@@ -59,6 +59,8 @@ const {
     PER_ELEMENT_METER_TESTNET_TIME,
     STRING_RESULT_METER_MAINNET_TIME,
     STRING_RESULT_METER_TESTNET_TIME,
+    STRING_RECEIVER_METER_MAINNET_TIME,
+    STRING_RECEIVER_METER_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -179,6 +181,12 @@ const CHANGES = [
     // per element. Unarmed on mainnet and testnet; regtest is active from genesis.
     ['PER_ELEMENT_METER', '0.2.0', PER_ELEMENT_METER_MAINNET_TIME,
         PER_ELEMENT_METER_TESTNET_TIME, 0, 0, 0, 0],
+
+    // STRING_RECEIVER_METER: mirrors xchain-vm STRING_RECEIVER_METER_ACTIVATION, judged by
+    // block time. The corrected String receiver and alias metering stays unarmed on mainnet
+    // and testnet; regtest is active from genesis.
+    ['STRING_RECEIVER_METER', '0.2.0', STRING_RECEIVER_METER_MAINNET_TIME,
+        STRING_RECEIVER_METER_TESTNET_TIME, 0, 0, 0, 0],
 
     // CALLBACK_ARGS_EXACT: an ATTEST, XCALL or binding VOTE callback runs with the argument
     // array its injector built, so a '|' inside a provider response, a callee return value or a
