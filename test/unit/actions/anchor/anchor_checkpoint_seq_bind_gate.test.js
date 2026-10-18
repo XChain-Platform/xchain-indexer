@@ -39,12 +39,12 @@ describe('ANCHOR checkpoint sequence binding gate @regression @tier1', function 
             const row = gateRegistry.get(GATE);
             assert.strictEqual(row.mainnet, UNARMED);
             assert.strictEqual(row.testnet, UNARMED);
-            // The v0.25.0 cut arms DOGE:testnet at 68008400.
-            assert.strictEqual(row['DOGE:testnet'], 68008400);
+            // The v0.25.0 cut arms DOGE:testnet at 68008790.
+            assert.strictEqual(row['DOGE:testnet'], 68008790);
             assert.strictEqual(row.regtest, UNPINNED);
             assert.strictEqual(gateRegistry.activeAt(GATE, 'mainnet', 'DOGE', 1e9, null), false);
-            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'DOGE', 68008399, null), false);
-            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'DOGE', 68008400, null), true);
+            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'DOGE', 68008789, null), false);
+            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'DOGE', 68008790, null), true);
             assert.strictEqual(gateRegistry.activeAt(GATE, 'regtest', 'DOGE', 1e9, null), false);
         } finally {
             restoreEnv(saved);

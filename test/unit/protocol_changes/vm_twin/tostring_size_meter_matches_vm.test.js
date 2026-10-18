@@ -22,6 +22,6 @@ describeMeterTwinParity({
     vmModule: 'src/index/tostring_size_meter.js',
     activationExport: 'TOSTRING_SIZE_METER_ACTIVATION',
     predicateExport: 'isToStringSizeMeterActive',
-    testnetTime: 1792416600,
+    testnetTime: 1792432800,
     registrationTitle: 'registers the time-table row in part 5, unarmed on mainnet, armed on testnet at its v0.25.0 instant, live on regtest',
 });

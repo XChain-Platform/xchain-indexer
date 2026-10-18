@@ -36,8 +36,8 @@ const {
 } = require(vmTarget);
 
 const asRow = (time) => (time === null ? ProtocolChanges.UNARMED : time);
-// The v0.25.0 cut arms testnet at block time 1792416600.
-const TESTNET_TIME = 1792416600;
+// The v0.25.0 cut arms testnet at block time 1792432800.
+const TESTNET_TIME = 1792432800;
 
 function indexerEnabledAt(network, time) {
     const pc = new ProtocolChanges({ config: { NETWORK: network }, util: {}, decoderDb: { getBlockTime: async () => time } });

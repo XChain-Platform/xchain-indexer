@@ -32,8 +32,8 @@ const Database          = require('../../../../src/db');
 const HubDbSync         = require('../../../../src/hub/hub_db_sync.js');
 
 // The BTC-anchored boundary the hub locked this validator set at, below the v0.25.0
-// BTC:testnet capability-proof arm (157040) so the LTC and DOGE nodes still mirror unchecked.
-const SNAP_BLOCK = 157039;
+// BTC:testnet capability-proof arm (157053) so the LTC and DOGE nodes still mirror unchecked.
+const SNAP_BLOCK = 157052;
 
 // This node's own authoritative stake rows at SNAP_BLOCK, in the shape
 // stakeWeightsWithCap reads them (weight = the SOURCE aggregate, carried on every

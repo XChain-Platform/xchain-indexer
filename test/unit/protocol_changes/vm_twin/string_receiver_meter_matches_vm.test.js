@@ -48,8 +48,8 @@ function indexerEnabledAt(network, time) {
 
 describe('protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1', function () {
     it('registers the time-table row in part 5, unarmed on mainnet, armed on testnet at its v0.25.0 instant, live on regtest', function () {
-        // The v0.25.0 cut arms testnet at block time 1792416600.
-        const TESTNET_TIME = 1792416600;
+        // The v0.25.0 cut arms testnet at block time 1792432800.
+        const TESTNET_TIME = 1792432800;
         const row = ProtocolChanges.get(KEY);
         assert.deepStrictEqual(new ProtocolChanges({ config: {}, util: {} }).changes[NAME], row);
         assert.deepStrictEqual(table.find((entry) => entry[0] === NAME), [

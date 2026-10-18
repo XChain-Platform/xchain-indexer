@@ -54,9 +54,9 @@ describe('protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity
             'BTC:mainnet': ProtocolChanges.UNARMED,
             'LTC:mainnet': ProtocolChanges.UNARMED,
             'DOGE:mainnet': ProtocolChanges.UNARMED,
-            'BTC:testnet': 157040,
-            'LTC:testnet': 4928000,
-            'DOGE:testnet': 68008400,
+            'BTC:testnet': 157053,
+            'LTC:testnet': 4928170,
+            'DOGE:testnet': 68008790,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
         });

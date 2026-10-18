@@ -18,8 +18,8 @@ const KEY = 'active_stake_collation_activation.ACTIVE_STAKE_COLLATION_ACTIVATION
 
 describe('protocol_changes active-stake collation gate @regression @tier1', function () {
     it('registers a height gate unarmed on mainnet, armed on testnet at its v0.25.0 heights, and active from regtest genesis', function () {
-        // The v0.25.0 cut arms BTC:testnet 157040, LTC:testnet 4928000, DOGE:testnet 68008400.
-        const TESTNET = { BTC: 157040, LTC: 4928000, DOGE: 68008400 };
+        // The v0.25.0 cut arms BTC:testnet 157053, LTC:testnet 4928170, DOGE:testnet 68008790.
+        const TESTNET = { BTC: 157053, LTC: 4928170, DOGE: 68008790 };
         assert.strictEqual(registry.registry.unitOf(KEY), 'height');
         assert.deepStrictEqual(registry.get(KEY), {
             mainnet: registry.UNARMED,

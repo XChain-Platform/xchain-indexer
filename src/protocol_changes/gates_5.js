@@ -89,9 +89,9 @@ addGate('host_fault_halt_heights.HOST_FAULT_HALT_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
-    'BTC:testnet': 157040,
-    'LTC:testnet': 4928000,
-    'DOGE:testnet': 68008400,
+    'BTC:testnet': 157053,
+    'LTC:testnet': 4928170,
+    'DOGE:testnet': 68008790,
     testnet: UNARMED,
     regtest: 0,
 });
