@@ -35,6 +35,7 @@ const { getLogger } = require('../../observability/index.js');
 // Wire-field validation and settlement, installed onto Unstake.prototype below
 const validatePart = require('./validate.js');
 const settlePart   = require('./settle.js');
+const rotatedKeyJournalPart = require('./rotated_key_journal.js');
 
 class Unstake {
 
@@ -216,8 +217,8 @@ class Unstake {
         error = await this.validateContractTarget(data, error);
 
         // Load the stakeable target contract and SOURCE's undeactivated stake on it, then check sleep
-        let contractInfo, totalAmount;
-        ({ error, contractInfo, totalAmount } = await this.findContractStake(data, error));
+        let contractInfo, contractStake, totalAmount;
+        ({ error, contractInfo, contractStake, totalAmount } = await this.findContractStake(data, error));
 
         // Optional partial AMOUNT, gated by PARTIAL_UNSTAKE_COLLECT. Same
         // semantics as the v0 lane; precision is bounded by the staked token's own
@@ -250,6 +251,8 @@ class Unstake {
         if(status === 'valid')
             await this.sweepContractStake(data, totalAmount, requestedAmount, tickDecimals, activationDelay);
 
+        await this.journalRotatedContractRows(data, status, contractStake, requestedAmount !== null);
+
         // Tickers/addresses tracking (no credits/debits at unstake time; funds are released by block-end sweep)
         // (unstake/settle.js)
         await this.postLedgerChanges(data, data['TICK']);
@@ -271,19 +274,20 @@ class Unstake {
         }
 
         // Verify the (target, pubkey, tick) has an active contract-stake owned by SOURCE
+        let contractStake = null;
         let totalAmount = '0';
         if(!error){
-            let aggregate = await this.indexerDb.getActiveContractStakeByPubkey(
+            contractStake = await this.indexerDb.getActiveContractStakeByPubkey(
                 data['TARGET_CONTRACT_INDEX'], data['SIGNING_PUBKEY'], data['TICK'], data['BLOCK_INDEX'], {undeactivatedOnly: true}
             );
-            if(!aggregate){
+            if(!contractStake){
                 error = 'invalid: SIGNING_PUBKEY (no active stake on contract for this tick)';
             } else {
                 let sourceId = await this.indexerDb.getAddressId(data['SOURCE']);
-                if(sourceId === null || Number(sourceId) !== Number(aggregate.source_id))
+                if(sourceId === null || Number(sourceId) !== Number(contractStake.source_id))
                     error = 'invalid: SOURCE (does not own this stake)';
                 else
-                    totalAmount = aggregate.amount;
+                    totalAmount = contractStake.amount;
             }
         }
 
@@ -291,7 +295,7 @@ class Unstake {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        return { error, contractInfo, totalAmount };
+        return { error, contractInfo, contractStake, totalAmount };
     }
 
     // UNSTAKE v1 cooldown: sets COOLDOWN_END_BLOCK and returns the error, which the strict
@@ -363,7 +367,7 @@ class Unstake {
 // produced: the parse methods reach them as this.<method>, suites can stub them through
 // Unstake.prototype, and for-in over a handler stays empty. Same install as db/index.js uses
 // for its query mixins.
-for(const part of [validatePart, settlePart]){
+for(const part of [validatePart, settlePart, rotatedKeyJournalPart]){
     const descriptors = Object.getOwnPropertyDescriptors(part);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
     Object.defineProperties(Unstake.prototype, descriptors);

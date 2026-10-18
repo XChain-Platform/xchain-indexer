@@ -379,6 +379,16 @@ addGate('reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATU
     regtest: UNPINNED,   // ARMS by XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION at read
 });
 
+// unstake_delegated_row_journal_activation
+// Height on the processing chain's own block_index. From it a contract UNSTAKE under a delegated key journals
+// its rows so a delegation revert restores the original key. Unarmed live; regtest arms by
+// XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION (shared_rows.js).
+addGate('unstake_delegated_row_journal_activation.UNSTAKE_DELEGATED_ROW_JOURNAL_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION at read
+});
+
 // active_stake_collation_activation
 // Height on the reading chain's own block_index. From it validator-set reads pin the binary
 // collation. Below it they use the legacy collation. Unarmed on mainnet and testnet; regtest

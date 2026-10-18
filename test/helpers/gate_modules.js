@@ -100,7 +100,6 @@ const REPLACED_STEMS = Object.freeze([
     'vm_exec_lint_activation',
     'vm_lint_global_alias_activation',
     'attest_relay_activation',
-    'attest_relay_reject_slot_activation',
     'attest_response_mirror_activation',
     'attest_zero_conf_activation',
     'checkpoint_commitment_activation',
@@ -196,6 +195,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'vote_v3_tick_existence_activation',
     'match_origin_open_activation',
     'reassemble_chunk_parent_status_activation',
+    'unstake_delegated_row_journal_activation',
     'active_stake_collation_activation',
 ]);
 

@@ -57,6 +57,8 @@ const {
     HOST_CALL_BOUNDS_TESTNET_TIME,
     PER_ELEMENT_METER_MAINNET_TIME,
     PER_ELEMENT_METER_TESTNET_TIME,
+    STRING_RESULT_METER_MAINNET_TIME,
+    STRING_RESULT_METER_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -186,6 +188,10 @@ const CHANGES = [
     // venue sets CALLBACK_ARGS_EXACT_REGTEST_TIME.
     ['CALLBACK_ARGS_EXACT', '0.2.0', UNARMED, 1792303200,
         regtestTimeOverride('CALLBACK_ARGS_EXACT_REGTEST_TIME'), 0, 0, 0],
+
+    // STRING_RESULT_METER mirrors the VM's block-time activation table.
+    ['STRING_RESULT_METER', '0.2.0', STRING_RESULT_METER_MAINNET_TIME,
+        STRING_RESULT_METER_TESTNET_TIME, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;

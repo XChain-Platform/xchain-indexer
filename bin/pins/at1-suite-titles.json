@@ -1073,6 +1073,10 @@
       "Callback @regression @tier3 holder allow/block list filtering excludes holders on the CALLBACK_TICK BLOCK_LIST",
       "Callback @regression @tier3 holder allow/block list filtering rejects a callback that would debit a holder without compensation"
     ],
+    "12aed4d69023d84d": [
+      "a refused ATTEST v3 and the request_id slot @regression @tier1 an admitted relay still holds its id against a second admitted one",
+      "a refused ATTEST v3 and the request_id slot @regression @tier1 the refusal persists nothing and the honest relay materializes"
+    ],
     "12da3a56447a42df": [
       "Database.sanityCheck() is blind to NULL tick_id ledger rows (NULL-tick halt question) @regression @tier1 does no aggregate work and does NOT throw when the block's only ledger row has a NULL tick_id",
       "Database.sanityCheck() is blind to NULL tick_id ledger rows (NULL-tick halt question) @regression @tier1 joins the touched-tick set to tokens AND index_tickers with NULL-eliminating INNER JOINs",
@@ -2124,12 +2128,6 @@
       "BATCH MINT cap maxMintsPerDistinctTick() returns zero without reading the database for an empty list",
       "BATCH MINT cap probeTickerId() restores suppression and propagates a lookup error",
       "BATCH MINT cap probeTickerId() suppresses id creation during the lookup and restores it afterward"
-    ],
-    "1eb17536e3364766": [
-      "Security: ATTEST response mirror boot guard @regression @tier1 does not apply the BTC-only response-mirror refusal to another chain",
-      "Security: ATTEST response mirror boot guard @regression @tier1 does not apply the response-mirror refusal on unpinned mainnet",
-      "Security: ATTEST response mirror boot guard @regression @tier1 refuses BTC regtest without a hub database source",
-      "Security: ATTEST response mirror boot guard @regression @tier1 refuses BTC testnet without a hub database source"
     ],
     "1ee272a3d0a523fd": [
       "coverage ratchet floors coverage includes files not loaded by the test suite",
@@ -7564,6 +7562,13 @@
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 keeps the echo fields and the response shape",
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 reconstructs the raw request height as block_index + CANONICAL_REORG_BUFFER"
     ],
+    "6bd5b0bdb615a5df": [
+      "Database.getContractStakeRotationOrigin() for UNSTAKE journaling @regression @tier1 keeps the first key and the last delegation that installed the current key",
+      "UNSTAKE delegated-row journal gate @regression @tier1 journals a full UNSTAKE cooldown row from its original key for later restoration",
+      "UNSTAKE delegated-row journal gate @regression @tier1 journals both rows produced by a partial UNSTAKE under the delegated key",
+      "UNSTAKE delegated-row journal gate @regression @tier1 ships unarmed on live networks and supports the regtest drill override",
+      "UNSTAKE delegated-row journal gate @regression @tier1 writes no synthetic rotation when the current slot has no rotation origin"
+    ],
     "6bdb8d1115c4bce2": [
       "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs fit the budget exactly and all of them dispatch",
       "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs from a paying source are admitted, so the WEIGHT is what rejects 9",
@@ -8674,6 +8679,20 @@
       "protocol_changes unarmed rows use the named sentinel @regression @tier1 detects a stray all-nines value without treating prose as a value",
       "protocol_changes unarmed rows use the named sentinel @regression @tier1 has no bare sentinel in the bridge, list, or archive rollback rows",
       "protocol_changes unarmed rows use the named sentinel @regression @tier1 names the supply-zero mainnet time sentinel"
+    ],
+    "7c28aac5a542baf1": [
+      "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
+      "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM GAS_CEILING_SUCCESS_ACTIVATION matches the indexer GAS_CEILING_SUCCESS row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM REST_PATTERN_METER gate flips at the indexer REST_PATTERN_METER row instant per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM STRING_RESULT_METER_ACTIVATION matches the indexer STRING_RESULT_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
+      "consensus parameters are frozen (track 8 guard) @regression the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp",
+      "consensus parameters are frozen (track 8 guard) @regression vmFailureStatus maps every VM error into the frozen closed token set"
     ],
     "7c6586e0777e9c99": [
       "BET bounded latch+expire pass @regression @tier2 a max-size feed always fits a full budget (no wedge), and zero-bet feeds are row-bounded",
@@ -10076,6 +10095,12 @@
       "ANCHOR v3 archive check rejects an upper-case batch CRC on format before any CRC compare",
       "ANCHOR v3 archive check returns the v1 reason for a body CRC mismatch",
       "ANCHOR v3 archive check returns the v1 reason for a non-numeric batch sequence"
+    ],
+    "90c77ffe11302b77": [
+      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 agrees with the VM predicate at the production sentinel and regtest genesis",
+      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 matches the VM instant on every network",
+      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 mirrors the VM value in the armed map and pins every row in the consensus identity",
+      "protocol_changes/vm_twin/string_result_meter_matches_vm: activation parity @regression @tier1 registers the part 5 row unarmed on production networks and live on regtest"
     ],
     "90d17d67d210861e": [
       "the admission map rides the on-chain price wire one slot per round (rows 17 and 26) the on-chain batch action, driven through the real parser a batch below the activation is on exactly the same road, so nothing regressed",
@@ -12684,11 +12709,18 @@
       "Regression: mariadb does not need the Node 22.12 require(esm) floor @regression require('mariadb') loads on the current runtime (sanity: matches the ledger's live-driver claim)",
       "Regression: mariadb does not need the Node 22.12 require(esm) floor @regression require('mariadb') loads with require(esm) disabled outright"
     ],
+    "b423b08c7bbc4432": [
+      "archive invalid collection on every configured network @regression selects the widened archive-head class for every coin, network and sampled block"
+    ],
     "b4324dc71e518116": [
       "ATTEST v5 head: the batch-completion marker @regression leaves an unmarked head where a batch simply has not completed",
       "ATTEST v5 head: the batch-completion marker @regression marks the quorum verdict too",
       "ATTEST v5 head: the batch-completion marker @regression marks the reassembly verdict a completing chunk stamps on a surviving head",
       "ATTEST v5 head: the batch-completion marker @regression never marks a verdict written on the head itself"
+    ],
+    "b4443ec53650d3cb": [
+      "automatic migration unique-key witness against live metadata @tier3 passes when the key-dependent target does not exist live",
+      "automatic migration unique-key witness against live metadata @tier3 refuses a same-column non-unique index and passes after the unique key is live"
     ],
     "b45c9bbea3117e41": [
       "Actions.processAction() @regression @tier3 calls resetLists even when action is UNKNOWN",
@@ -13153,12 +13185,6 @@
       "oracle sync barrier grace @regression @tier1 holds a block with no covering oracle row until the stream passes block_time + 120",
       "oracle sync barrier grace @regression @tier1 pins the frozen oracle grace to ordinary stream lag",
       "oracle sync barrier grace @regression @tier1 still waits on an unbootstrapped mirror regardless of stream time"
-    ],
-    "bc9ce02cba3248b5": [
-      "a refused ATTEST v3 and the request_id slot @regression @tier1 an admitted relay still holds its id against a second admitted one",
-      "a refused ATTEST v3 and the request_id slot @regression @tier1 at and above it the refusal persists nothing and the honest relay materializes",
-      "a refused ATTEST v3 and the request_id slot @regression @tier1 below the flag day the refusal is stored and the honest relay never persists",
-      "a refused ATTEST v3 and the request_id slot @regression @tier1 the real gate is genesis-active on mainnet, testnet and regtest"
     ],
     "bca3b10d92c38f7f": [
       "HubDbSync pinned reconnect harness restores the installed fake timer",
@@ -13691,6 +13717,10 @@
       "snapshot barrier scope filter, admission height versus effective time inert (no activation) a row admitted below B but effective after t(B) is NOT in scope",
       "snapshot barrier scope filter, admission height versus effective time inert (no activation) scopes by effective_time and never names the admission column",
       "snapshot barrier scope filter, admission height versus effective time the same rows and the same (t, B) select different blocks per arm early and late flip between the arms"
+    ],
+    "c42a4364058c3b39": [
+      "HubDbSync price barriers apply to every block @regression @tier1 queues both barriers for every network, coin, and tested block time",
+      "HubDbSync price barriers apply to every block @regression @tier1 re-floors a bounded mirror for the earliest block on every network"
     ],
     "c42ed8ba04b55a79": [
       "consensus rules digest sentinel comments does not claim the shipped registry has no far-future sentinel",
@@ -16146,19 +16176,6 @@
       "Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2 seller order state transitions open seller order is not finalised (no cancelling/expiring state)",
       "Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2 sweep-destination routing routes released tokens to sweep destination when seller is in cancelling"
     ],
-    "e23f4b08d34e0b5a": [
-      "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
-      "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM GAS_CEILING_SUCCESS_ACTIVATION matches the indexer GAS_CEILING_SUCCESS row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM REST_PATTERN_METER gate flips at the indexer REST_PATTERN_METER row instant per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
-      "consensus parameters are frozen (track 8 guard) @regression the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp",
-      "consensus parameters are frozen (track 8 guard) @regression vmFailureStatus maps every VM error into the frozen closed token set"
-    ],
     "e285cca529713787": [
       "state_hash BET status-flip class (P4) @regression armed: a settlement flip folds into bet_status and changes the hash",
       "state_hash BET status-flip class (P4) @regression armed: the flips fold in and a dropped latch yields a DIFFERENT hash (follower halts)",
@@ -16351,6 +16368,11 @@
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch: a republish after a failed head a second chunk for a high slot of the republish is still a duplicate",
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch: a republish after a failed head a third encoding absorbs after two failed ones, so no fixed bound is involved",
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch: a republish after a failed head with no valid head, a slot the failed encoding holds still refuses another encoding's chunk"
+    ],
+    "e4d6b37db2e1966e": [
+      "capability snapshot proof below-gate behavior @regression @tier1 keeps LTC and DOGE mirror-resolved capabilities unknown on mainnet and testnet",
+      "capability snapshot proof below-gate behavior @regression @tier1 keeps a BTC row above the local tip unknown without fetching a proof",
+      "capability snapshot proof below-gate behavior @regression @tier1 keeps an unconfigured BTC capability unknown without fetching a proof"
     ],
     "e53e052972bf94f7": [
       "XBRIDGE escrow constants (consensus) carries BRIDGE_<COIN> for every other coin, and none for itself, on every network",
@@ -18085,8 +18107,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1420,
-      "titleCount": 14014,
+      "fileCount": 1425,
+      "titleCount": 14028,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18169,7 +18191,7 @@
         "test/unit/actions/attest/attest_batch_wire.test/batch_wire_integrity.test.js": "97bf913f9dd24731",
         "test/unit/actions/attest/attest_batch_wire_era.test.js": "e0d973ff4aec540d",
         "test/unit/actions/attest/attest_relay_fee_settle.test.js": "adb5316356f3bdf8",
-        "test/unit/actions/attest/attest_relay_reject_slot.test.js": "bc9ce02cba3248b5",
+        "test/unit/actions/attest/attest_relay_reject_slot.test.js": "12aed4d69023d84d",
         "test/unit/actions/attest/attest_response_applier.test.js": "5774b46381706d23",
         "test/unit/actions/attest/attest_response_applier.test/applier_pass.test.js": "73755c9a0427e7f1",
         "test/unit/actions/attest/attest_response_applier.test/bounded_read.test.js": "066e3e1a7354e46d",
@@ -18759,6 +18781,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
+        "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
@@ -18767,7 +18790,7 @@
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "e23f4b08d34e0b5a",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/consensus_rules_digest_twin_bytes.test.js": "c8d4c432d417022a",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
@@ -18845,6 +18868,7 @@
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
         "test/unit/contracts/stake_snapshot_strings.test.js": "a0a533092c7a2e98",
+        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "6bd5b0bdb615a5df",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/constructor_gas_ceiling_exhausted.test.js": "3cdde43380ba5754",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
@@ -19080,6 +19104,7 @@
         "test/unit/hub/hub_db_sync/barriers/bridge_policy_timeout_message.test.js": "0c5504ff31a9de9c",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "c8995b58f82a9ced",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
+        "test/unit/hub/hub_db_sync/barriers/price_barrier_every_block.test.js": "c42a4364058c3b39",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
@@ -19343,6 +19368,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
@@ -19449,6 +19475,7 @@
         "test/unit/state_commitment/state_commitment_name_memo_block_lifetime.test.js": "33652d5c8fc050a6",
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
+        "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/archive_match_count_class.test.js": "8a8d0afa6dccfafa",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
@@ -19511,8 +19538,8 @@
       }
     },
     "test:boundary": {
-      "fileCount": 17,
-      "titleCount": 126,
+      "fileCount": 19,
+      "titleCount": 205,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
@@ -19524,6 +19551,8 @@
         "test/unit/boundary/dispensers/dispense_edges.test.js": "7e457f205314fbb1",
         "test/unit/boundary/fees/fee_boundaries.test.js": "8f50c8a77b36be7e",
         "test/unit/boundary/orders/price_matching.test.js": "989a272bb081a6ec",
+        "test/unit/boundary/orders/price_matching.test/price_cross_decimals.test.js": "916604828a97a5f6",
+        "test/unit/boundary/orders/price_matching.test/price_cross_pairs.test.js": "c32423e09ba7f532",
         "test/unit/boundary/strings/description_memo.test.js": "f38fccd022199129",
         "test/unit/boundary/strings/tick_length.test.js": "dd70ffce416a91f1",
         "test/unit/boundary/timestamps/expiration.test.js": "ceb089ccfe0e6c34",
@@ -19640,8 +19669,8 @@
       }
     },
     "test:integration": {
-      "fileCount": 68,
-      "titleCount": 425,
+      "fileCount": 70,
+      "titleCount": 434,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
@@ -19655,12 +19684,14 @@
         "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
         "test/integration/markets_native_coin_migration.test.js": "3bd193539b3a5957",
         "test/integration/migration_live_schema_guard.test.js": "afa55fee6bb13a1b",
+        "test/integration/migration_live_schema_guard.test/key_witness.test.js": "b4443ec53650d3cb",
         "test/integration/migration_live_schema_guard.test/mirror_id_unsigned_replay.test.js": "a72e499d4d3447f1",
         "test/integration/migration_live_schema_guard_types.test.js": "03399ab554f050dd",
         "test/integration/recovery_determinism_e2e.test.js": "93feeb5e228978f0",
         "test/integration/recovery_id_determinism.test.js": "fbd3ebb10d8f9886",
         "test/integration/rollback_scoped_orphan_sweeps.test.js": "64df71b9d8671b60",
         "test/integration/scenarios/29_contract_meta_flag_day_replay.test.js": "71cab2563defad19",
+        "test/integration/scenarios/contract_unstake_rotation_reorg.test.js": "225195122cf06515",
         "test/integration/scenarios/controller_stake/16_controller_permissions.test.js": "962f6a39837cb4b7",
         "test/integration/scenarios/controller_stake/17_slash_equivocation.test.js": "777803f5fbe4f02a",
         "test/integration/scenarios/controller_stake/19_controller_all_class.test.js": "4d073f3215090592",
@@ -19714,8 +19745,8 @@
       }
     },
     "test:integration:ci": {
-      "fileCount": 68,
-      "titleCount": 425,
+      "fileCount": 70,
+      "titleCount": 434,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
@@ -19729,12 +19760,14 @@
         "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
         "test/integration/markets_native_coin_migration.test.js": "3bd193539b3a5957",
         "test/integration/migration_live_schema_guard.test.js": "afa55fee6bb13a1b",
+        "test/integration/migration_live_schema_guard.test/key_witness.test.js": "b4443ec53650d3cb",
         "test/integration/migration_live_schema_guard.test/mirror_id_unsigned_replay.test.js": "a72e499d4d3447f1",
         "test/integration/migration_live_schema_guard_types.test.js": "03399ab554f050dd",
         "test/integration/recovery_determinism_e2e.test.js": "93feeb5e228978f0",
         "test/integration/recovery_id_determinism.test.js": "fbd3ebb10d8f9886",
         "test/integration/rollback_scoped_orphan_sweeps.test.js": "64df71b9d8671b60",
         "test/integration/scenarios/29_contract_meta_flag_day_replay.test.js": "71cab2563defad19",
+        "test/integration/scenarios/contract_unstake_rotation_reorg.test.js": "225195122cf06515",
         "test/integration/scenarios/controller_stake/16_controller_permissions.test.js": "962f6a39837cb4b7",
         "test/integration/scenarios/controller_stake/17_slash_equivocation.test.js": "777803f5fbe4f02a",
         "test/integration/scenarios/controller_stake/19_controller_all_class.test.js": "4d073f3215090592",
@@ -19876,8 +19909,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1073,
-      "titleCount": 11065,
+      "fileCount": 1078,
+      "titleCount": 11079,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19982,7 +20015,7 @@
         "test/unit/actions/attest/attest_batch_wire.test/batch_wire_integrity.test.js": "97bf913f9dd24731",
         "test/unit/actions/attest/attest_batch_wire_era.test.js": "e0d973ff4aec540d",
         "test/unit/actions/attest/attest_relay_fee_settle.test.js": "adb5316356f3bdf8",
-        "test/unit/actions/attest/attest_relay_reject_slot.test.js": "bc9ce02cba3248b5",
+        "test/unit/actions/attest/attest_relay_reject_slot.test.js": "12aed4d69023d84d",
         "test/unit/actions/attest/attest_response_applier.test.js": "5774b46381706d23",
         "test/unit/actions/attest/attest_response_applier.test/applier_pass.test.js": "73755c9a0427e7f1",
         "test/unit/actions/attest/attest_response_applier.test/bounded_read.test.js": "066e3e1a7354e46d",
@@ -20417,10 +20450,11 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
+        "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "e23f4b08d34e0b5a",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
@@ -20465,6 +20499,7 @@
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
+        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "6bd5b0bdb615a5df",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/constructor_gas_ceiling_exhausted.test.js": "3cdde43380ba5754",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
@@ -20643,6 +20678,7 @@
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "c8995b58f82a9ced",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
+        "test/unit/hub/hub_db_sync/barriers/price_barrier_every_block.test.js": "c42a4364058c3b39",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
@@ -20832,6 +20868,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
@@ -20914,6 +20951,7 @@
         "test/unit/state_commitment/state_commitment_name_memo_block_lifetime.test.js": "33652d5c8fc050a6",
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
+        "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
@@ -20955,8 +20993,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 513,
-      "titleCount": 5653,
+      "fileCount": 517,
+      "titleCount": 5665,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20971,7 +21009,7 @@
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "ac51d51746a87eae",
         "test/unit/actions/attest.test/responsible_set_gates.test.js": "90165b8ec993c4e6",
-        "test/unit/actions/attest/attest_relay_reject_slot.test.js": "bc9ce02cba3248b5",
+        "test/unit/actions/attest/attest_relay_reject_slot.test.js": "12aed4d69023d84d",
         "test/unit/actions/attest/attest_response_verify_vectors.test.js": "695202d293f2583e",
         "test/unit/actions/attest/attest_response_verify_vectors.test/capability_read.test.js": "94ee2fc5a1183871",
         "test/unit/actions/attest/attest_response_verify_vectors.test/mirror_era_canonical.test.js": "f96db63e0a31c835",
@@ -21115,6 +21153,7 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
+        "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
@@ -21139,6 +21178,7 @@
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
+        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "6bd5b0bdb615a5df",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/constructor_gas_ceiling_exhausted.test.js": "3cdde43380ba5754",
         "test/unit/contracts/vm_stake_snapshot_decimal_strings.test.js": "af56bad14283ad0f",
@@ -21282,6 +21322,7 @@
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "c8995b58f82a9ced",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
+        "test/unit/hub/hub_db_sync/barriers/price_barrier_every_block.test.js": "c42a4364058c3b39",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
@@ -21418,6 +21459,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
@@ -21474,8 +21516,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1073,
-      "titleCount": 11065,
+      "fileCount": 1078,
+      "titleCount": 11079,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21580,7 +21622,7 @@
         "test/unit/actions/attest/attest_batch_wire.test/batch_wire_integrity.test.js": "97bf913f9dd24731",
         "test/unit/actions/attest/attest_batch_wire_era.test.js": "e0d973ff4aec540d",
         "test/unit/actions/attest/attest_relay_fee_settle.test.js": "adb5316356f3bdf8",
-        "test/unit/actions/attest/attest_relay_reject_slot.test.js": "bc9ce02cba3248b5",
+        "test/unit/actions/attest/attest_relay_reject_slot.test.js": "12aed4d69023d84d",
         "test/unit/actions/attest/attest_response_applier.test.js": "5774b46381706d23",
         "test/unit/actions/attest/attest_response_applier.test/applier_pass.test.js": "73755c9a0427e7f1",
         "test/unit/actions/attest/attest_response_applier.test/bounded_read.test.js": "066e3e1a7354e46d",
@@ -22015,10 +22057,11 @@
         "test/unit/consensus/blockhash_conformance_twin.test.js": "6ac6af20f1a3c64d",
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
+        "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "e23f4b08d34e0b5a",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "7c28aac5a542baf1",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
@@ -22063,6 +22106,7 @@
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
+        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "6bd5b0bdb615a5df",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/constructor_gas_ceiling_exhausted.test.js": "3cdde43380ba5754",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
@@ -22241,6 +22285,7 @@
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "c8995b58f82a9ced",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
+        "test/unit/hub/hub_db_sync/barriers/price_barrier_every_block.test.js": "c42a4364058c3b39",
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
@@ -22430,6 +22475,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
@@ -22512,6 +22558,7 @@
         "test/unit/state_commitment/state_commitment_name_memo_block_lifetime.test.js": "33652d5c8fc050a6",
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
+        "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
@@ -22553,8 +22600,8 @@
       }
     },
     "test:security": {
-      "fileCount": 12,
-      "titleCount": 134,
+      "fileCount": 13,
+      "titleCount": 136,
       "files": {
         "test/security/http-surface/auth_gate.test.js": "55856394f174fcb5",
         "test/security/http-surface/auth_gate.test/rate_limit_headers.test.js": "c62e802a0e07ff21",
@@ -22562,7 +22609,8 @@
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
         "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
-        "test/unit/security/configuration/response_mirror_boot_guard.test.js": "1eb17536e3364766",
+        "test/unit/security/configuration/response_mirror_boot_guard.test.js": "f4990631037844d2",
+        "test/unit/security/configuration/response_mirror_boot_guard_networks.test.js": "0854ad12bbb1e5ec",
         "test/unit/security/configuration/startup_validation.test.js": "9b13c5407b7bccf8",
         "test/unit/security/input-validation/negative_amounts.test.js": "d6f6a4b7d2e1a81e",
         "test/unit/security/input-validation/parameter_injection.test.js": "fe3fce070c5e1bad",
