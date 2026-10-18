@@ -228,7 +228,7 @@ module.exports = {
         return { error, set: admissionSet };
     },
 
-    // Per-block admission caps (flag-day gated). An admitted
+    // Per-block admission caps. An admitted
     // request obliges REDUNDANCY validators to make a provider call, which for the
     // `llm` provider is a real invoice on each operator's own vendor account, while
     // the requester pays the same flat VM_ATTEST_REQUEST gas either way. Fees bound
@@ -244,7 +244,7 @@ module.exports = {
     // request, so a structurally invalid one never consumes a capped slot. Same
     // LOCAL-HEIGHT plane as the responsible-set gate directly above.
     async requestCapError(data, error){
-        if(!error && attestRequestCap.isAttestRequestCapActive(data['BLOCK_INDEX'], this.config['NETWORK'])){
+        if(!error){
             let caps   = attestRequestCap.ATTEST_REQUEST_CAPS;
             let counts = await this.indexerDb.getAttestationAdmissionCounts(
                 data['BLOCK_INDEX'], data['ACTION_INDEX'], data['CONTRACT_INDEX']);

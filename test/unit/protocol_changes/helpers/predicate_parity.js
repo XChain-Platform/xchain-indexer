@@ -43,7 +43,6 @@ const TABLE = [
     ['anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION', 'isArchiveRewardActive', ['height', 'network']],
     ['archive_rollback_author_scope_activation.ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION', 'isArchiveRollbackAuthorScopeActive', ['height', 'network']],
     ['attest_broadcast_fee_activation.ATTEST_BROADCAST_FEE_ACTIVATION', 'isAttestBroadcastFeeActive', ['height', 'network']],
-    ['attest_request_cap_activation.ATTEST_REQUEST_CAP_ACTIVATION', 'isAttestRequestCapActive', ['height', 'network']],
     ['caret_ref_strict_activation.CARET_REF_STRICT_ACTIVATION', 'isCaretRefStrictActive', ['height', 'network', 'coin']],
     ['dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION', 'isDispenserSendAmountCompareActive', ['height', 'network', 'coin']],
     ['equivocation_header.EQUIV_HEADER_ACTIVATION', 'isEquivHeaderActive', ['height', 'network']],
