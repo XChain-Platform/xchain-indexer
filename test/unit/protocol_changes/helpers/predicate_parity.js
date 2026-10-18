@@ -45,7 +45,6 @@ const TABLE = [
     ['attest_broadcast_fee_activation.ATTEST_BROADCAST_FEE_ACTIVATION', 'isAttestBroadcastFeeActive', ['height', 'network']],
     ['attest_request_cap_activation.ATTEST_REQUEST_CAP_ACTIVATION', 'isAttestRequestCapActive', ['height', 'network']],
     ['caret_ref_strict_activation.CARET_REF_STRICT_ACTIVATION', 'isCaretRefStrictActive', ['height', 'network', 'coin']],
-    ['dispense_payment_tally_scale_activation.DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION', 'isDispensePaymentTallyScaleActive', ['time', 'network']],
     ['dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION', 'isDispenserSendAmountCompareActive', ['height', 'network', 'coin']],
     ['equivocation_header.EQUIV_HEADER_ACTIVATION', 'isEquivHeaderActive', ['height', 'network']],
     ['ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION', 'isLedgerAmountPrecisionActive', ['height', 'network', 'coin']],

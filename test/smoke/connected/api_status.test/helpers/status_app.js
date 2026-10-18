@@ -23,6 +23,11 @@
 const http       = require('http');
 const express    = require('express');
 const helmet     = require('helmet');
+const TRAIN_ACTIVATION_HALT_PREFIX = 'train_activation_halt:';
+
+function isTrainActivationHalt(stallReason){
+    return typeof stallReason === 'string' && stallReason.startsWith(TRAIN_ACTIVATION_HALT_PREFIX);
+}
 
 // Standalone copy of src/XChainIndexer.js stallWedged (the smoke harness deliberately
 // reconstructs the route rather than importing the module, which pulls in native DB
@@ -30,6 +35,7 @@ const helmet     = require('helmet');
 function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
     if(!stallReason) return false;
     if(stallReason === 'bridge_proof_barrier') return false;
+    if(isTrainActivationHalt(stallReason)) return false;
     if(lastBlockCommittedAt == null) return false;
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
     return (now - lastBlockCommittedAt) > graceMs;
@@ -46,6 +52,7 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
     if(!stallReason) return 'none';
     if(stallReason === 'bridge_proof_barrier') return 'bridge_proof_wait';
+    if(isTrainActivationHalt(stallReason)) return 'train_activation_halt';
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
     if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs)) return 'wedged';
     return 'barrier_defer';

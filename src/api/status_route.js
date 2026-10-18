@@ -31,7 +31,7 @@ const { hubConsensusHashFields } = require('./health/hub_fields');
 // Pure verdict modules, required directly rather than through the XChainIndexer class
 // the route is handed, so a stub class in a test still gets the real rule.
 const { barrierHoldMs, barrierCeilingExceeded, publishedStallClass } = require('../XChainIndexer/stall_health.js');
-const { attributedStallReason } = require('./health/stall_fields');
+const { attributedStallReason, trainActivationReport } = require('./health/stall_fields');
 const { readinessVerdict } = require('../XChainIndexer/readiness/verdict.js');
 
 // The coin node tip for chainLag, or the empty shape when the indexer cannot read one
@@ -209,9 +209,10 @@ function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock,
         waitingOnFutureBlock: futureWait,
         // Single machine-readable verdict on the counter, so a probe does not have to
         // join stallReason/degraded/stallClearsAt: 'none' | 'future_block_wait' |
-        // 'bridge_proof_wait' | 'price_landing_wait' | 'barrier_defer' | 'wedged', plus the
-        // two a restart cannot clear (publishedStallClass): 'upstream_halted' and
-        // 'rollcall_proof_wait', escalating to 'rollcall_proof_stuck' past the hold ceiling.
+        // 'bridge_proof_wait' | 'train_activation_halt' | 'price_landing_wait' |
+        // 'barrier_defer' | 'wedged', plus the two a restart cannot clear
+        // (publishedStallClass): 'upstream_halted' and 'rollcall_proof_wait', escalating
+        // to 'rollcall_proof_stuck' past the hold ceiling.
         stallClass:   publishedStallClass(stallClass, indexer.stallReason, { decoderReorgHalted: halted,
             ceilingExceeded: barrierCeilingExceeded(indexer.barrierHold, indexer.barrierHoldCeilingMs, now) }),
         ...readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexerDbUnreachable, chainTip })
@@ -232,6 +233,8 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hubConfigStale:       hubConfigStale,
         schemaReady:          indexer.schemaReady === true,
+        // /status and the health payload publish the same train activation verdict object.
+        train_activation:     trainActivationReport(indexer),
         hubMirror:            hubMirror,
         ...pollHeartbeatFields(indexer),
         ...hubConsensusHashFields(indexer)

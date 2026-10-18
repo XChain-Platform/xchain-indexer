@@ -60,9 +60,9 @@ async function loadTokens(handler, st){
     let getTokenInfo  = false;
     // Look up the GIVE and GET token records that the checks below rely on
     if(format==0){
-        giveTokenInfo = await handler.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        giveTokenInfo = await handler.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
         if(data['GET_COIN']==handler.config['COIN']){
-            getTokenInfo = await handler.indexerDb.getTokenInfo(data['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            getTokenInfo = await handler.indexerDb.getTokenInfo(data['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
         }
         // (Cross-chain GET_TICK lives on another COIN network; it cannot be validated
         //  locally. The xchain-hub federation validates it before matching/settlement.)

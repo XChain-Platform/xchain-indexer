@@ -81,7 +81,7 @@ describe('/status schemaReady', function(){
         assert.strictEqual(statusFor(true).schemaReady, true);
         const keys = Object.keys(bootingStatus);
         assert.deepStrictEqual(keys.slice(keys.indexOf('schemaReady'), keys.indexOf('schemaReady') + 4),
-            ['schemaReady', 'hubMirror', 'pollSilent', 'lastPollAt']);
+            ['schemaReady', 'train_activation', 'hubMirror', 'pollSilent']);
     });
 
     it('stays false through table verification and flips after migrations finish', async function(){

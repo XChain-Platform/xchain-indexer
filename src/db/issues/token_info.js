@@ -26,7 +26,7 @@ module.exports = {
     // @param {tick}            string  Ticker name or Ticker ID
     // @param {block_index}     integer Block Index 
     // @param {action_index}    integer action_index of action
-    async getTokenInfo(tick, block_index, action_index){
+    async getTokenInfo(tick, block_index, action_index, options = {}){
         let data = false,
             sql  = '',
             args = [];
@@ -67,7 +67,7 @@ module.exports = {
             }
         }
         // Get token supply at the given action_index
-        if(data)
+        if(data && options.supply !== false)
             data['SUPPLY'] = await this.getTokenSupply(tick, block_index, action_index);
         return data;
     },

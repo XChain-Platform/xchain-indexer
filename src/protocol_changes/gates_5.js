@@ -342,3 +342,13 @@ addGate('reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATU
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION at read
 });
+
+// active_stake_collation_activation
+// Height on the reading chain's own block_index. From it validator-set reads pin the binary
+// collation. Below it they use the legacy collation. Unarmed on mainnet and testnet; regtest
+// is active from genesis with no venue arming overlay.
+addGate('active_stake_collation_activation.ACTIVE_STAKE_COLLATION_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
