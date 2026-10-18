@@ -7505,6 +7505,13 @@
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 keeps the echo fields and the response shape",
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 reconstructs the raw request height as block_index + CANONICAL_REORG_BUFFER"
     ],
+    "6bd5b0bdb615a5df": [
+      "Database.getContractStakeRotationOrigin() for UNSTAKE journaling @regression @tier1 keeps the first key and the last delegation that installed the current key",
+      "UNSTAKE delegated-row journal gate @regression @tier1 journals a full UNSTAKE cooldown row from its original key for later restoration",
+      "UNSTAKE delegated-row journal gate @regression @tier1 journals both rows produced by a partial UNSTAKE under the delegated key",
+      "UNSTAKE delegated-row journal gate @regression @tier1 ships unarmed on live networks and supports the regtest drill override",
+      "UNSTAKE delegated-row journal gate @regression @tier1 writes no synthetic rotation when the current slot has no rotation origin"
+    ],
     "6bdb8d1115c4bce2": [
       "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs fit the budget exactly and all of them dispatch",
       "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs from a paying source are admitted, so the WEIGHT is what rejects 9",
@@ -18075,8 +18082,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1419,
-      "titleCount": 14006,
+      "fileCount": 1420,
+      "titleCount": 14011,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18834,6 +18841,7 @@
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
         "test/unit/contracts/slash_contract_stake_order_gate.test.js": "c18d29a26d5a4f54",
         "test/unit/contracts/stake_snapshot_strings.test.js": "a0a533092c7a2e98",
+        "test/unit/contracts/unstake_rotated_key_row_journal.test.js": "6bd5b0bdb615a5df",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/constructor_gas_ceiling_exhausted.test.js": "3cdde43380ba5754",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",

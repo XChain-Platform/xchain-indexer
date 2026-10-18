@@ -138,6 +138,8 @@ const REGTEST_ARMING = {
         { env: 'XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION', label: 'MATCH ORIGIN OPEN', armedHeight: 0, keys: ['regtest'] },
     'reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATUS_ACTIVATION':
         { env: 'XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION', label: 'REASSEMBLE CHUNK PARENT STATUS', armedHeight: 0, keys: ['regtest'] },
+    'unstake_delegated_row_journal_activation.UNSTAKE_DELEGATED_ROW_JOURNAL_ACTIVATION':
+        { env: 'XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION', label: 'UNSTAKE DELEGATED ROW JOURNAL', armedHeight: 0, keys: ['regtest'] },
 };
 
 // env name -> its reader. Each variable is read BY NAME, once, here: the
@@ -169,6 +171,7 @@ const ENV_READERS = {
     XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION: (env) => env.XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION,
     XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION: (env) => env.XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION,
     XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION: (env) => env.XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION,
+    XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION: (env) => env.XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION,
 };
 
 // The raw value of the rule's env variable, through its named reader.
