@@ -422,5 +422,9 @@
   "2026-10-17-ledger-address-tick-amount-index.sql": {
     "residue": "8acb44e5c2922e13f8b566eae00e397ba40465f283b0e27db4c0b7acac19b97f",
     "sha256": "408e9db33ee786714822de03b3452eca278de54cb895bf1b58c664776bc6ac1f"
+  },
+  "2026-10-18-anchor-actions-pre-archive-status.sql": {
+    "residue": "bdcf54cd1178917a537dc2fcebe60acd86e78acea0646b92f0f30c71c768f119",
+    "sha256": "29ace5abd9378dad83304568beb08945eb352022d250c66e677a0c04e5ed81ac"
   }
 }
