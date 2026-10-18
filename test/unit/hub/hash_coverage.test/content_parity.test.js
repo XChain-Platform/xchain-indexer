@@ -105,7 +105,8 @@ describe('Hash coverage guard @regression', function () {
             // deleted loser WITHOUT naming id, so each side mints its own and
             // ClientApplier.ignoreTables makes that permanent.
             assert.deepStrictEqual(Object.keys(lifecycle.CONTENT_PARITY_EXCLUDED_COLUMNS).sort(),
-                ['blocks', 'contract_emissions', 'contract_state', 'sync_meta', 'validator_rewards']);
+                ['attests', 'blocks', 'contract_emissions', 'contract_state', 'sync_meta', 'validator_rewards']);
+            assert.deepStrictEqual(lifecycle.CONTENT_PARITY_EXCLUDED_COLUMNS.attests, ['batch_action_index']);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('blocks'), ['id']);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('contract_emissions'), ['id']);
             assert.deepStrictEqual(lifecycle.contentParityExcludedColumns('contract_state'), ['state_key_bin']);
@@ -154,7 +155,7 @@ describe('Hash coverage guard @regression', function () {
             assert.deepStrictEqual(lifecycle.CONTENT_PARITY_IN_PLACE_COLUMNS, {
                 anchor_actions:       ['status_id'],
                 attests:              ['request_status', 'resolved_block', 'callback_execute_action_index',
-                                       'batch_action_index', 'status_id'],
+                                       'status_id'],
                 bet_feeds:            ['feed_status_id', 'closed_block', 'terminal_block'],
                 bets:                 ['bet_status_id', 'settled_block'],
                 contract_delegations: ['deactivation_block'],
