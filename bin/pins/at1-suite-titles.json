@@ -5266,6 +5266,10 @@
       "consensus/vm_lint_destructure_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
       "consensus/vm_lint_destructure_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
     ],
+    "4e9f9a967a5f9812": [
+      "ANCHOR v1 checkpoint sequence binding @regression @tier1 reads both replay watermarks from valid rows only at the gate",
+      "ANCHOR v1 checkpoint sequence binding @regression @tier1 refuses the archive head reason returned at the gate"
+    ],
     "4ea28f17e16f01bd": [
       "getEffectiveUnprocessedCallResults same-DB deployment: MAX_SAFE_INTEGER cap threads through unchanged (caller needs full set)",
       "getEffectiveUnprocessedCallResults same-DB deployment: one SQL statement pushes NOT EXISTS + ORDER BY + LIMIT",
@@ -7308,6 +7312,12 @@
       "policy apply by shared-list reference creates a fresh full-copy list instead of editing a shared pointer",
       "policy apply by shared-list reference keeps legacy rows byte-identical above and below the consumer gate",
       "policy apply by shared-list reference points a copy at a foreign mirror with one ISSUE 5 leg and no LIST leg"
+    ],
+    "6d32e4c3df3140f6": [
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 keeps the all-status watermark immediately before activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 reads only valid checkpoint rows for a bound section at activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 refuses a noncanonical bound sequence at activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 refuses a section whose sequence differs from its snapshot at activation"
     ],
     "6d4320fffe6e67ab": [
       "protocol_changes consensus-bound indexer rows @regression @tier1 keeps gates_1.js at or under 400 lines",
@@ -18192,8 +18202,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1437,
-      "titleCount": 14089,
+      "fileCount": 1439,
+      "titleCount": 14095,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18231,7 +18241,9 @@
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
@@ -20006,8 +20018,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1088,
-      "titleCount": 11120,
+      "fileCount": 1091,
+      "titleCount": 11129,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20084,8 +20096,11 @@
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "cd53417c159a33c6",
@@ -21100,8 +21115,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 525,
-      "titleCount": 5709,
+      "fileCount": 528,
+      "titleCount": 5718,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21114,6 +21129,9 @@
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "162227ac9894db7b",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "ac51d51746a87eae",
@@ -21631,8 +21649,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1088,
-      "titleCount": 11120,
+      "fileCount": 1091,
+      "titleCount": 11129,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21709,8 +21727,11 @@
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "cd53417c159a33c6",
