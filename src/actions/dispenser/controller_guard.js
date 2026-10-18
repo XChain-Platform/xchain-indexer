@@ -54,7 +54,7 @@ module.exports = {
         let isRefill = format==2 && dispenserInfo && giveTokenInfo &&
                        !this.util.isNull(data['GIVE_ESCROW']) && this.util.bcgt(data['GIVE_ESCROW'], 0);
         if(!error && isRefill && await this.actions.protocolChanges.isEnabled('DISPENSER_REFILL', data['BLOCK_INDEX'])){
-            let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
             let result  = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
                 actionType:   'DISPENSER_REFILL',
                 tick:         dispenserInfo['GIVE_TICK'],
@@ -74,7 +74,7 @@ module.exports = {
         }
 
         if(!error && format==0 && giveTokenInfo){
-            let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
             let result  = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
                 actionType:   'DISPENSER_CREATE',
                 tick:         data['GIVE_TICK'],
