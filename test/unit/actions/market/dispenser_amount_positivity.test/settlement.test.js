@@ -58,23 +58,13 @@ function fillCountCases() {
         assert.strictEqual(multiplier == 0, false, 'the legacy equality gate does not catch -1');
     });
 
-    it('a negative fill count settles INVALID with the gate on', async function () {
+    it('a negative fill count settles INVALID', async function () {
         const rec = await settle({ GET_AMOUNT: '-0.5' });
         assert.ok(rec, 'a dispense row was recorded');
         assert.strictEqual(rec['STATUS'], 'invalid: insufficient funds ');
     });
 
-    it('control: the same negative fill count still settles VALID below the threshold', async function () {
-        // The original defect, reproduced: status valid carrying a NEGATIVE give_amount,
-        // which the GIVE_REMAINING recompute subtracts and thereby manufactures escrow.
-        const rec = await settle({ GET_AMOUNT: '-0.5' }, { network: GATE_OFF_NETWORK });
-        assert.ok(rec, 'a dispense row was recorded');
-        assert.strictEqual(rec['STATUS'], 'valid');
-        assert.ok(indexer.util.bclt(rec['GIVE_AMOUNT'], '0'),
-            `expected the legacy path to record a negative give_amount, got ${rec['GIVE_AMOUNT']}`);
-    });
-
-    it('a positive fill count is unaffected by the gate', async function () {
+    it('accepts a positive fill count', async function () {
         const rec = await settle({}, { coinAmount: '0.02' });
         assert.strictEqual(rec['STATUS'], 'valid');
         assert.strictEqual(String(rec['GIVE_AMOUNT']), '2');
@@ -90,10 +80,10 @@ function invalidGetAmountCases() {
         sinon.restore();
     });
 
-    it('a zero fill count keeps its legacy status text on both sides of the gate', async function () {
-        // The status string is persisted, so the gated reading must not reword it.
+    it('a zero fill count keeps its legacy status text across networks', async function () {
+        // The status string is persisted, so the unconditional reading must not reword it.
         // An empty escrow drives the capacity clamp to a zero fill count, which is the
-        // only route to this gate that a payment below GET_AMOUNT does not short-circuit.
+        // only route to this check that a payment below GET_AMOUNT does not short-circuit.
         const on  = await settle({ GIVE_REMAINING: '0' }, { coinAmount: '0.01' });
         assert.strictEqual(on['STATUS'], 'invalid: insufficient funds ');
         indexer.indexerDb.createDispense.resetHistory();

@@ -11,7 +11,9 @@
 
 const assert = require('assert');
 const mathjs = require('mathjs');
+const bcMath = require('../../../src/utility/bcmath.js');
 const valueChecks = require('../../../src/utility/validation/value_checks.js');
+const amountValidation = require('../../../src/utility/validation/amount_validation.js');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 const orderValidation = require('../../../src/actions/order/validate.js');
 const swapValidation = require('../../../src/actions/swap/validate.js');
@@ -21,7 +23,9 @@ const betValidation = require('../../../src/actions/bet/validate.js');
 
 const exactUtil = Object.assign({
     isNull(value){ return value === null || value === undefined || value === ''; },
-}, valueChecks);
+}, bcMath, valueChecks, {
+    isValidAmountFormat: amountValidation.isValidAmountFormat,
+});
 
 function protocolChanges(enabled){
     return { isEnabled: async (name) => {
@@ -81,7 +85,7 @@ describe('exact integer wire fields @regression @tier1', function(){
     it('gates DISPENSER integer wire spellings', async function(){
         const handler = baseHandler(true);
         Object.assign(handler, dispenserValidation);
-        const ctx = { data: { BLOCK_INDEX: 8, EXPIRATION: '1.0' }, error: null, format: 0, getTokenInfo: false };
+        const ctx = { data: { BLOCK_INDEX: 8, EXPIRATION: '1.0', GET_AMOUNT: '1' }, error: null, format: 0, getTokenInfo: false };
         await handler.validateAddressAndExpirationFields(ctx);
         assert.strictEqual(ctx.error, 'invalid: EXPIRATION (format)');
 

@@ -106,18 +106,16 @@ module.exports = {
         // Verify a NATIVE-COIN-priced GET_AMOUNT against COIN_DECIMALS, as order.js resolves
         // its native side. The rule above is a conjunct on getTokenInfo, which an empty
         // GET_TICK never loads, so that shape reached storage with no sign or precision
-        // check. Gated (the dispenser_amount_positivity_activation row): it rejects creates
-        // the ungated engine accepts, so replay below the threshold stays byte-identical.
-        let getAmountPositivity = gateRegistry.activeAt('dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
-        if(!error && format==0 && getAmountPositivity && this.util.isNull(data['GET_TICK']) &&
+        // check. Native-coin dispensers therefore use the chain's coin precision.
+        if(!error && format==0 && this.util.isNull(data['GET_TICK']) &&
            !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(this.config['COIN_DECIMALS'], data['GET_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GET_AMOUNT (format)";
 
         // Require a strictly-positive GET_AMOUNT on a dispenser that names its own price,
         // mirroring the same positive-amount rule at order.js. Skipped for FIAT and oracle
         // dispensers, where the price comes from FIAT_AMOUNT or the oracle round and an
-        // empty GET_AMOUNT is legitimate. Gated for the same reason as the rule above.
-        if(!error && format==0 && getAmountPositivity &&
+        // empty GET_AMOUNT is legitimate.
+        if(!error && format==0 &&
            this.util.isNull(data['FIAT_CODE']) && this.util.isNull(data['ORACLE_ADDRESS']) &&
            !this.util.bcgt(data['GET_AMOUNT'], '0'))
             error = "invalid: GET_AMOUNT (must be positive)";

@@ -226,8 +226,8 @@ module.exports = {
                     // inputs that do is "no node commits this block at all", so no committed
                     // history can contain one. The GIVE_REMAINING clamp below bounds the
                     // saturated count to the dispenser's real capacity.
-                    // Reject a GET_AMOUNT bcdiv cannot divide by, which a native-coin create
-                    // accepted unchecked (dispenser_amount_positivity_activation.js).
+                    // Reject a GET_AMOUNT bcdiv cannot divide by. This also protects replay
+                    // of native-coin dispensers created before the format check was enforced.
                     // Catch, not pre-screen: throw-exact by construction, so it changes only
                     // the inputs that wedge the block loop, and ungated for the same reason
                     // as bcfloorSaturating above. An isNumeric() screen is NOT equivalent (it
@@ -252,4 +252,3 @@ module.exports = {
     },
 
 };
-
