@@ -22,6 +22,11 @@
  ********************************************************************/
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
+const gateRegistry = require('../../consensus/gate_registry.js');
+
+const CHECKPOINT_SEQ_BIND_GATE =
+    'anchor_checkpoint_seq_bind_activation.ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVATION';
+const CHECKPOINT_SEQ_BIND_HEIGHT = Symbol('anchorCheckpointSeqBindHeight');
 
 // A v0 section's fixed slots (CHAIN .. SIG_COUNT), ahead of its signature pairs.
 const SECTION_FIXED_FIELDS = 13;
@@ -75,6 +80,10 @@ function validateHeadShape(config, data, error){
             error = 'invalid: BATCH_CRC32 (format)';
         else if(!data['ARCHIVE_B64'] || !/^[0-9a-zA-Z_-]+$/.test(String(data['ARCHIVE_B64'])))
             error = 'invalid: ARCHIVE_B64 (format)';
+    }
+    if(!error && checkpointSeqBindActive(config, data['BLOCK_INDEX'])){
+        const reason = checkpointSeqBindReason(data);
+        if(reason) error = 'invalid: ' + reason;
     }
     return error;
 }
@@ -153,12 +162,16 @@ function validateBundleHeader(config, params, data, error){
     // Verify SECTION_COUNT is a whole number of at least one (a bundle with no sections commits nothing)
     if(!error && (!/^[0-9]+$/.test(String(data['SECTION_COUNT'])) || Number(data['SECTION_COUNT']) < 1))
         error = 'invalid: SECTION_COUNT (format)';
+    Object.defineProperty(params, CHECKPOINT_SEQ_BIND_HEIGHT, {
+        value: checkpointSeqBindActive(config, data['BLOCK_INDEX']) ? Number(data['BLOCK_INDEX']) : null,
+        configurable: true,
+    });
     return error;
 }
 
 // One v0 section's fixed fields, read positionally from `cursor`.
 function readSection(params, cursor, i, network){
-    return {
+    const section = {
         FORMAT:                    0,
         SECTION_INDEX:             i,
         NETWORK:                   network,
@@ -179,6 +192,10 @@ function readSection(params, cursor, i, network){
         BLOCK_MERKLE_ROOT:         String(params[cursor + 10] || '').toLowerCase(),
         BLOCK_MERKLE_VERSION:      params[cursor + 11]
     };
+    if(params[CHECKPOINT_SEQ_BIND_HEIGHT] !== undefined)
+        Object.defineProperty(section, CHECKPOINT_SEQ_BIND_HEIGHT,
+            { value: params[CHECKPOINT_SEQ_BIND_HEIGHT], configurable: true });
+    return section;
 }
 
 // One v0 section's signature list, after its fixed fields. The error names the
@@ -241,6 +258,11 @@ function checkpointSeqBindReason(s){
     return null;
 }
 
+function checkpointSeqBindActive(config, blockIndex){
+    return gateRegistry.activeAt(CHECKPOINT_SEQ_BIND_GATE,
+        config && config['NETWORK'], config && config['COIN'], Number(blockIndex), null);
+}
+
 // Shape-check one v0 section's fixed fields. Returns the failure reason (which the
 // caller prefixes with 'SECTION n ') or null when the section is well formed. Split
 // out so the reason strings stay in one place and read the same as the archive leg's.
@@ -275,6 +297,10 @@ function sectionShapeReason(s, seenChains){
     if(!/^[0-9]+$/.test(String(s.STATE_ROOT_VERSION)) ||
        !/^[0-9]+$/.test(String(s.BLOCK_MERKLE_VERSION)))
         return 'STATE_ROOT_VERSION / BLOCK_MERKLE_VERSION (format)';
+    const bindHeight = s[CHECKPOINT_SEQ_BIND_HEIGHT] === undefined ? s.SNAPSHOT_BLOCK :
+        s[CHECKPOINT_SEQ_BIND_HEIGHT];
+    if(bindHeight !== null && checkpointSeqBindActive({ NETWORK: s.NETWORK, COIN: 'DOGE' }, bindHeight))
+        return checkpointSeqBindReason(s);
     return null;
 }
 

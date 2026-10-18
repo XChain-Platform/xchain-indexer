@@ -117,6 +117,7 @@ const REPLACED_STEMS = Object.freeze([
 // callers read the row through activeAt() by its literal key from the start.
 // Kept apart from REPLACED_STEMS so that list stays the W4 and W5 census.
 const REGISTRY_ONLY_STEMS = Object.freeze([
+    'anchor_checkpoint_seq_bind_activation',
     'anchor_archive_fold_term_activation',
     'anchor_empty_fold_reject_activation',
     'cooldown_maturity_escrow_reversal_activation',

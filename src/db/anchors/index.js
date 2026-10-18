@@ -36,6 +36,16 @@ const arKey = require('../../actions/anchor/anchor_reward_key.js');
 const { anchorActionRow } = require('./anchor_action_row.js');
 const { archiveHeadPickPredicate, foldArchiveHeadFloor } = require('./archive_head_pick.js');
 const { writeArchiveStatus } = require('./archive_status_journal.js');
+const gateRegistry = require('../../consensus/gate_registry.js');
+
+const CHECKPOINT_SEQ_BIND_GATE =
+    'anchor_checkpoint_seq_bind_activation.ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVATION';
+
+function checkpointSeqBindValidOnly(db, requested){
+    if(requested !== undefined) return requested === true;
+    return gateRegistry.activeAt(CHECKPOINT_SEQ_BIND_GATE,
+        db.config['NETWORK'], db.config['COIN'], Number(db.blockIndex), null);
+}
 
 module.exports = {
 
@@ -190,7 +200,7 @@ module.exports = {
         // watermark can never drift from the checkpoint-bearing definition
         // (a hand-copied literal here once omitted a live checkpoint version, freezing the guard).
         let versions = ANCHOR_CHECKPOINT_VERSIONS;
-        let statuses = validOnly ? `'valid'` : `'valid', 'unverified'`;
+        let statuses = checkpointSeqBindValidOnly(this, validOnly) ? `'valid'` : `'valid', 'unverified'`;
         let query = `SELECT MAX(a.checkpoint_seq) AS max_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
@@ -265,7 +275,7 @@ module.exports = {
         let versions = ARCHIVE_HEAD_VERSIONS;
         let wrapper = wrapperRows
             ? ` OR (a.version = 3 AND a.chain IS NOT NULL AND a.total_chunks IS NOT NULL)` : ``;
-        let statuses = validOnly ? `'valid'` : `'valid', 'unverified'`;
+        let statuses = checkpointSeqBindValidOnly(this, validOnly) ? `'valid'` : `'valid', 'unverified'`;
         // Every branch is parenthesised and the whole row set is grouped once, so the
         // status filter below applies to the wrapper branch exactly as to the others.
         let rowSet = `(${archiveHeadPredicate('a')}) OR (a.version IN (${versions.map(() => '?').join(', ')}))${wrapper}`;

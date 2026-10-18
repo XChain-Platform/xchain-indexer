@@ -329,11 +329,10 @@ addGate('execute_fee_cap_activation.EXECUTE_FEE_CAP_ACTIVATION', 'height', {
 });
 
 // vote_v3_tick_existence_activation
-// Height on the chain's own block_index. From it a VOTE v3 delegation names an issued
-// TICK: the false result getTokenInfo returns for an unknown ticker is refused instead of
-// passing the null-only legacy check and storing a delegation row. Below it the old verdict
-// replays exactly. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue
-// arms it with XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION (shared_rows.js).
+// Height on the chain's own block_index. From it a VOTE v3 delegation names an issued TICK:
+// the false result getTokenInfo returns for an unknown ticker is refused instead of passing
+// the null-only legacy check and storing a delegation row. Below it the old verdict replays
+// exactly. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION (shared_rows.js).
 addGate('vote_v3_tick_existence_activation.VOTE_V3_TICK_EXISTENCE_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -344,13 +343,10 @@ addGate('vote_v3_tick_existence_activation.VOTE_V3_TICK_EXISTENCE_ACTIVATION', '
 });
 
 // match_origin_open_activation
-// Height on the chain's own block_index. From it ORDER_MATCH and SWAP_MATCH re-read the
-// originating offer and return before candidate lookup unless its latest status is open.
-// This covers a LIST rematch plan whose earlier step made a later planned origin terminal
-// and the match an ORDER or SWAP cancel dispatches from the offer it just cancelled, so
-// escrow already settled or refunded is not settled again. Below it both handlers replay
-// as before. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms
-// it with XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION (shared_rows.js).
+// Height on the chain's own block_index. From it ORDER_MATCH and SWAP_MATCH re-read the originating offer and return before candidate
+// lookup unless its latest status is open. This covers a LIST rematch plan whose earlier step made a later planned origin terminal and the
+// match an ORDER or SWAP cancel dispatches from the offer it just cancelled, so escrow already settled or refunded is not settled again.
+// Below it both handlers replay as before. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION (shared_rows.js).
 addGate('match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -361,11 +357,9 @@ addGate('match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION', 'height', {
 });
 
 // reassemble_chunk_parent_status_activation
-// Height on the completing continuation chunk's DOGE block_index. From it chunk-side
-// archive reassembly runs only when its parent head has the same valid or gated-unverified
-// status the head-side path admits. Below it the continuation's own status remains the only
-// status guard. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms
-// it with XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION (shared_rows.js).
+// Height on the completing continuation chunk's DOGE block_index. From it chunk-side archive reassembly runs only when its parent head has
+// the same valid or gated-unverified status the head-side path admits. Below it the continuation's own status remains the only status guard.
+// Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION (shared_rows.js).
 addGate('reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATUS_ACTIVATION', 'height', {
     mainnet: UNARMED,
     testnet: UNARMED,
@@ -373,19 +367,25 @@ addGate('reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATU
 });
 
 // unstake_delegated_row_journal_activation
-// Height on the processing chain's own block_index. From it a contract UNSTAKE under a delegated key journals
-// its rows so a delegation revert restores the original key. Unarmed live; regtest arms by
-// XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION (shared_rows.js).
+// Height on the processing chain's own block_index. From it a contract UNSTAKE under a delegated key journals its rows so a delegation
+// revert restores the original key. Unarmed live; regtest arms by XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION (shared_rows.js).
 addGate('unstake_delegated_row_journal_activation.UNSTAKE_DELEGATED_ROW_JOURNAL_ACTIVATION', 'height', {
     mainnet: UNARMED,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION at read
 });
 
+// anchor_checkpoint_seq_bind_activation
+// From its ANCHOR DOGE height each sequence equals its canonical safe-integer snapshot block. Unarmed live.
+addGate('anchor_checkpoint_seq_bind_activation.ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_ANCHOR_CHECKPOINT_SEQ_BIND_REGTEST_ACTIVATION at read
+});
+
 // active_stake_collation_activation
-// Height on the reading chain's own block_index. From it validator-set reads pin the binary
-// collation. Below it they use the legacy collation. Unarmed on mainnet and testnet; regtest
-// is active from genesis with no venue arming overlay.
+// Height on the reading chain's own block_index. From it validator-set reads pin the binary collation. Below it they use the legacy
+// collation. Unarmed on mainnet and testnet; regtest is active from genesis with no venue arming overlay.
 addGate('active_stake_collation_activation.ACTIVE_STAKE_COLLATION_ACTIVATION', 'height', {
     mainnet: UNARMED,
     testnet: UNARMED,

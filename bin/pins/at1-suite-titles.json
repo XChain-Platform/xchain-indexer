@@ -2290,6 +2290,14 @@
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_CALLBACK_TIMELOCK flag-day (/ finalize\u2192callback timelock) v2 finalize deferral delay > 0: the callback is DEFERRED (due block stamped, no EXECUTE injected at finalize)",
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_CALLBACK_TIMELOCK flag-day (/ finalize\u2192callback timelock) v2 finalize deferral delay null/0: the callback fires immediately at finalize (legacy path)"
     ],
+    "21dad44164074d03": [
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 arms regtest at the height named by the environment",
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 binds every v3 section after activation",
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 binds v0 validation after activation",
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 binds v1 validation after activation",
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 exposes the canonical-safe binding reason beside the activation",
+      "ANCHOR checkpoint sequence binding gate @regression @tier1 ships unarmed on public networks and inert on regtest"
+    ],
     "21de5f7673077383": [
       "mirrored ids stay out of consensus reads catches a concatenated violating literal",
       "mirrored ids stay out of consensus reads catches a property-held violating literal",
@@ -6386,6 +6394,12 @@
       "mirror-admission margin boundary uses the old margin when the chain margin is null",
       "mirror-admission margin boundary uses the old margin when the chain margin is undefined"
     ],
+    "5ad7de460a40010a": [
+      "getMaxAnchorCheckpointSeq() version filter (#2239) keeps the default statement unchanged and narrows valid-only reads",
+      "getMaxAnchorCheckpointSeq() version filter (#2239) narrows an omitted valid-only argument at the bind activation height",
+      "getMaxAnchorCheckpointSeq() version filter (#2239) parameterizes the version filter from the shared CHECKPOINT_VERSIONS constant",
+      "getMaxAnchorCheckpointSeq() version filter (#2239) still returns null when no watermark row exists"
+    ],
     "5b35d1c52a77c442": [
       "observability console patching and environment parsing defaults metrics off and enables HTTP metrics only with metrics",
       "observability console patching and environment parsing normalizes the metrics path and delegates log environment parsing unchanged",
@@ -9891,6 +9905,15 @@
       "recovery v3 fold wrapper section lookup picks the sibling chain section whose signatures equal the head",
       "recovery v3 fold wrapper section lookup rejects a head with no matching wrapper section"
     ],
+    "8ecf7954eb704db6": [
+      "getArchiveReplayWatermarks() counts unverified rows, so the watermark does not differ between mirrored and unmirrored nodes",
+      "getArchiveReplayWatermarks() keeps the default statement unchanged and narrows valid-only reads",
+      "getArchiveReplayWatermarks() narrows an omitted valid-only argument at the bind activation height",
+      "getArchiveReplayWatermarks() parameterizes the version filter from the shared ARCHIVE_HEAD_VERSIONS constant",
+      "getArchiveReplayWatermarks() returns both watermarks from a SINGLE statement over the same row set",
+      "getArchiveReplayWatermarks() returns nulls on an empty result set rather than throwing",
+      "getArchiveReplayWatermarks() returns nulls when no archive row exists, leaving the guard inert"
+    ],
     "8f02c7885f4b9349": [
       "touch guards env routing @regression has no process.env read of its own; the config home does the read",
       "touch guards env routing @regression re-reads INDEXER_TOUCH_GUARD on every call, so a flip on a running node takes effect",
@@ -12951,14 +12974,6 @@
       "HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2 still filters hub-only columns the local mirror does not carry",
       "HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2 the per-leg reorg fences only ever move UP (a lowered fence would invite a stale delete)",
       "HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2 uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for cross_chain_matches"
-    ],
-    "b381b504f17eca5f": [
-      "getArchiveReplayWatermarks() counts unverified rows, so the watermark does not differ between mirrored and unmirrored nodes",
-      "getArchiveReplayWatermarks() keeps the default statement unchanged and narrows valid-only reads",
-      "getArchiveReplayWatermarks() parameterizes the version filter from the shared ARCHIVE_HEAD_VERSIONS constant",
-      "getArchiveReplayWatermarks() returns both watermarks from a SINGLE statement over the same row set",
-      "getArchiveReplayWatermarks() returns nulls on an empty result set rather than throwing",
-      "getArchiveReplayWatermarks() returns nulls when no archive row exists, leaving the guard inert"
     ],
     "b3af3a3b9c2e54df": [
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.4 effects (attest/mirror_apply.js applyMirroredResponse) an invalid signature leaves the request pending and writes NOTHING",
@@ -17491,11 +17506,6 @@
       "train activation halt stall health @regression reports a train activation halt as degraded in the health payload",
       "train activation halt stall health @regression still grades a non-train reason past the grace as wedged"
     ],
-    "eff168f8a3214dbb": [
-      "getMaxAnchorCheckpointSeq() version filter (#2239) keeps the default statement unchanged and narrows valid-only reads",
-      "getMaxAnchorCheckpointSeq() version filter (#2239) parameterizes the version filter from the shared CHECKPOINT_VERSIONS constant",
-      "getMaxAnchorCheckpointSeq() version filter (#2239) still returns null when no watermark row exists"
-    ],
     "f04d7472fea5effd": [
       "config currencies applies only the consensus coin and fiat currency lists",
       "config currencies produces an equal result when applied twice"
@@ -18542,7 +18552,7 @@
   "scripts": {
     "test": {
       "fileCount": 1435,
-      "titleCount": 14078,
+      "titleCount": 14086,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18579,6 +18589,7 @@
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
@@ -19020,8 +19031,8 @@
         "test/unit/anchor/db_archive_head_predicate.test.js": "5a7b380e23fda375",
         "test/unit/anchor/db_create_anchor_action_publisher.test.js": "6c6f0fb39f3fe2e3",
         "test/unit/anchor/db_get_anchor_v1_by_batch_seq_tieorder.test.js": "b57e643add732c08",
-        "test/unit/anchor/db_get_archive_replay_watermarks.test.js": "b381b504f17eca5f",
-        "test/unit/anchor/db_get_max_anchor_checkpoint_seq_versions.test.js": "eff168f8a3214dbb",
+        "test/unit/anchor/db_get_archive_replay_watermarks.test.js": "8ecf7954eb704db6",
+        "test/unit/anchor/db_get_max_anchor_checkpoint_seq_versions.test.js": "5ad7de460a40010a",
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
         "test/unit/anchor/diagnostic_events.test.js": "3d9f64cbeacabe25",
         "test/unit/anchor/max_archive_batch_seq_by_author.test.js": "f8fbd67961145f14",
@@ -20353,8 +20364,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1086,
-      "titleCount": 11108,
+      "fileCount": 1087,
+      "titleCount": 11114,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20430,6 +20441,7 @@
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
@@ -21445,8 +21457,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 523,
-      "titleCount": 5697,
+      "fileCount": 524,
+      "titleCount": 5703,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21458,6 +21470,7 @@
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "68f29416f8abccb2",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "ac51d51746a87eae",
         "test/unit/actions/attest.test/responsible_set_gates.test.js": "90165b8ec993c4e6",
@@ -21974,8 +21987,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1086,
-      "titleCount": 11108,
+      "fileCount": 1087,
+      "titleCount": 11114,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22051,6 +22064,7 @@
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
