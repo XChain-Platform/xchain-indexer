@@ -131,8 +131,8 @@ const CONFIG_ENV = Object.freeze({
 
 // Return process.env[key] as it is NOW, never a copy taken at load. CONFIG_ENV
 // above is frozen at load on purpose; this accessor serves the few reads a
-// running process must re-take on every call (the regtest-only COINPay override
-// getConfig() resolves per call, a poll interval changed after start). It is the
+// running process must re-take on every call (the regtest-only COINPay override,
+// CHECKPOINT_VALIDATORS_BTC_<NETWORK> pins, a poll interval changed after start). It is the
 // one computed process.env read in this file, so its parts under src/config/
 // and its callers never touch process.env themselves.
 function readEnvNow(key){
