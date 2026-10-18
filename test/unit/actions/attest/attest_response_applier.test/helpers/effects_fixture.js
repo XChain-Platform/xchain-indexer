@@ -21,7 +21,6 @@ const { createMockIndexer, createBaseData } = require('../../../../../fixtures/m
 const Attest   = require('../../../../../../src/actions/attest/index.js');
 const swq     = require('../../../../../../src/consensus/stake_weighted_quorum.js');
 const { stubActiveAt } = require('../../../../../helpers/gate_modules.js');
-const attestBcastFee  = require('../../../../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 const ed25519 = require('../../../../../../src/consensus/ed25519.js');
 
 const { PUBKEY_A, REQ_ID, BLOCK_TIME, mirrorRow, requestRow } = require('./rows.js');
@@ -57,7 +56,7 @@ function applyData(overrides = {}, rowOverrides = {}, requestOverrides = {}) {
 
 /**
  * A fresh handler over a mock indexer with the attestation DB stubbed and the
- * quorum, admission and broadcast-fee flag days held off, built in each effects
+ * quorum and admission flag days held off, built in each effects
  * block's beforeEach; the block's afterEach restores it with sinon.restore().
  * @returns {{indexer, actionsCtx, handler, executeStub}}
  */
@@ -81,7 +80,6 @@ function setupEffects() {
     indexer.util.resetLists();
     sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
     stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', false);
-    sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
     sinon.stub(ed25519, 'verify').returns(true);
     return { indexer, actionsCtx, handler, executeStub };
 }

@@ -22,7 +22,7 @@
     },
     "attest_broadcast_fee_activation": {
       "path": "src/actions/attest/gates/attest_broadcast_fee_gate.js",
-      "hash": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
+      "hash": "3556f756a087fc67d197b5893184525d923b45a11f213c73396893448e497758",
       "twins": []
     },
     "attest_request_cap_activation": {
@@ -2208,6 +2208,13 @@
       "id": "stateHash",
       "from": "a47cbbadb6e1f624c3dde36feb74985ba2a066c1cb5e1f09d17e8540f9c28515",
       "to": "86741bb5a7e5716261b9e46ccdad8f73d75195c75e3a4ef097f48a7467d8797b",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "attest_broadcast_fee_activation",
+      "from": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
+      "to": "3556f756a087fc67d197b5893184525d923b45a11f213c73396893448e497758",
       "reason": "XC\u002d3351 gate retirement",
       "date": "2026-10-18"
     }

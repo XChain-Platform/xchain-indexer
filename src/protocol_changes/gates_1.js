@@ -87,28 +87,7 @@ addGate('attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', 'height', {
     regtest: 0,
 });
 
-// attest_broadcast_fee_activation
-// Per-network activation height (LOCAL COPY of the canonical map in
-// xchain-documentation/protocol/constants.js). Compared against the LOCAL block_index
-// of the SETTLING action (the ATTEST v1 response, or the v4 relay response), which is
-// the block whose oracle price the conversion reads and the block the reward rows are
-// stamped with.
-// TESTNET ARMED AT 0, operator-ratified 2026-08-18 under the standing ruling that every
-// platform feature must be ACTIVE on testnet, so nothing is found dormant after release.
-// Safe by direct measurement rather than assumption: this gate only changes how a
-// fulfilled ATTEST settle splits its escrow, and
-// the live explorer reports `total: 0` attestation rows EVER recorded on BTC, LTC and DOGE
-// testnet alike (/{TBTC,TLTC,TDOGE}/api/attestations, checked 2026-08-18). No settle has
-// ever happened on testnet, so there is no reward split to reinterpret and replay stays
-// byte-identical. MAINNET was measured the same way on 2026-09-09 and armed at genesis by
-// that day's ruling: 0 attestation rows on BTC, LTC and DOGE mainnet, so no settle exists
-// there either and a from-genesis replay is the witness.
-addGate('attest_broadcast_fee_activation.ATTEST_BROADCAST_FEE_ACTIVATION', 'height', {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 attestations, measured 2026-09-09)
-    testnet: 0,           // ARMED at genesis (operator-ratified 2026-08-18; zero historical attestation settles, so nothing is reinterpreted)
-    regtest: 0,           // ARMED at genesis on regtest so the e2e venue exercises the carve-out
-});
-
+// attest_broadcast_fee_activation cap
 // Per-provider broadcast-fee allowance, denominated in NATIVE coin (whole coins, not
 // satoshis), LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js.
 //

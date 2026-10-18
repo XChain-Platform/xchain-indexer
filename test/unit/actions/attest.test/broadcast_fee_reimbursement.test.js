@@ -24,7 +24,6 @@ const assert = require('assert');
 const sinon = require('sinon');
 const crypto = require('crypto');
 
-const attestBcastFee = require('../../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../../src/consensus/ed25519.js');
@@ -44,8 +43,7 @@ function rewardsByType(type) {
 
 // Leader broadcast-fee reimbursement. The escrow pays the
 // broadcaster its native-coin cost back BEFORE the equal split, converted to XCHAIN
-// at the settle block's oracle price, bounded by a per-provider cap, and gated on a
-// flag-day so replay below the height is byte-identical to the pre-flag ledger.
+// at the settle block's oracle price and bounded by a per-provider cap.
 describe('Attest (ATTEST) @regression @tier3', function () {
     beforeEach(setUpHandler);
     afterEach(() => sinon.restore());
@@ -53,7 +51,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         describe('§11: leader broadcast-fee reimbursement', function () {
             beforeEach(function () {
                 sinon.stub(ed25519, 'verify').returns(true);
-                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
                 // Production XCHAIN genesis is 8dp; the carve-out and the split floor to the
                 // same grid, so assert on that grid rather than the 0dp regtest default.
                 indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
@@ -102,7 +99,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
             beforeEach(function () {
                 sinon.stub(ed25519, 'verify').returns(true);
-                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
                 // Production XCHAIN genesis is 8dp; the carve-out and the split floor to the
                 // same grid, so assert on that grid rather than the 0dp regtest default.
                 indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
@@ -148,7 +144,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         describe('§11: leader broadcast-fee reimbursement', function () {
             beforeEach(function () {
                 sinon.stub(ed25519, 'verify').returns(true);
-                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
                 // Production XCHAIN genesis is 8dp; the carve-out and the split floor to the
                 // same grid, so assert on that grid rather than the 0dp regtest default.
                 indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
@@ -191,7 +186,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         describe('§11: leader broadcast-fee reimbursement', function () {
             beforeEach(function () {
                 sinon.stub(ed25519, 'verify').returns(true);
-                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
                 // Production XCHAIN genesis is 8dp; the carve-out and the split floor to the
                 // same grid, so assert on that grid rather than the 0dp regtest default.
                 indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
@@ -212,16 +206,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 assert.strictEqual(rewardsByType('attest_fee').length, 0, 'nothing left to split');
             });
 
-            it('below the flag-day the whole escrow still goes to the split (replay parity)', async function () {
-                attestBcastFee.isAttestBroadcastFeeActive.returns(false);
-                indexer.indexerDb.getAttestationRequestById.resolves(feeRequestRow({ redundancy: 1 }));
-                const data = v1FeeData();
-                await handler.parse(v1FeeParams([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
-
-                assert.strictEqual(rewardsByType('attest_bcast').length, 0);
-                assert.strictEqual(rewardsByType('attest_fee')[0].amount, '6');
-                assert.ok(indexer.util.getFeeOraclePrices.notCalled, 'no oracle read below the gate');
-            });
         });
     });
 });
@@ -233,7 +217,6 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         describe('§11: leader broadcast-fee reimbursement', function () {
             beforeEach(function () {
                 sinon.stub(ed25519, 'verify').returns(true);
-                attestBcastFee.isAttestBroadcastFeeActive.returns(true);
                 // Production XCHAIN genesis is 8dp; the carve-out and the split floor to the
                 // same grid, so assert on that grid rather than the 0dp regtest default.
                 indexer.indexerDb.getTokenDecimalPrecision.resolves(8);

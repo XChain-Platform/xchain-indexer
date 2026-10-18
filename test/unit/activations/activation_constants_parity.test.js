@@ -92,10 +92,8 @@ const GATES = [
     // which requests are admitted, so a one-sided edit changes consensus behavior.
     ['attest_request_cap_activation',       'ATTEST_REQUEST_CAPS'],
     ['attest_relay_activation.js',          'ATTEST_RELAY_ACTIVATION'],
-    ['attest_broadcast_fee_activation',     'ATTEST_BROADCAST_FEE_ACTIVATION'],
     // Not an activation MAP but a consensus constant the same gate reads: the cap clamps the
-    // escrow carve-out, so a one-sided edit changes the amount paid at the flag-day exactly as a
-    // one-sided height edit changes when it is paid.
+    // escrow carve-out, so a one-sided edit changes the amount paid at settle.
     ['attest_broadcast_fee_activation',     'ATTEST_BROADCAST_FEE_CAP'],
     ['attest_responsible_widening_activation.js',      'ATTEST_RESPONSIBLE_WIDENING_ACTIVATION'],
     // Not an activation MAP but the consensus constants the same gate reads: the ladder's

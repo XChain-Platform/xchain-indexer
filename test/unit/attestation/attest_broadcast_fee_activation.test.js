@@ -8,10 +8,8 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Attestation leader broadcast fee. Two consensus surfaces live in this
-// module and both are asserted here: the flag-day predicate that decides WHEN the
-// leader broadcast-fee carve-out applies, and the per-provider cap resolver that
-// decides HOW MUCH it may ever be. The cap is the bound that keeps a hostile
+// Attestation leader broadcast fee. The per-provider cap resolver decides how much
+// the leader broadcast-fee carve-out may ever be. The cap is the bound that keeps a hostile
 // ATTESTATION.PROVIDERS overlay from draining a request author's escrow into the
 // leader's pocket, so the HARD_MAX clamp is the load-bearing assertion in the file.
 
@@ -19,50 +17,6 @@
 
 const assert = require('assert');
 const abf    = require('../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
-
-describe('ATTEST broadcast-fee activation (spec §11) @regression', function () {
-
-    describe('isAttestBroadcastFeeActive', function () {
-
-        it('is ARMED at genesis on mainnet by the 2026-09-09 ruling', function () {
-            // 0 attestations have ever been recorded on any mainnet chain (measured
-            // 2026-09-09), so no settle exists whose escrow split this reinterprets.
-            assert.strictEqual(abf.ATTEST_BROADCAST_FEE_ACTIVATION.mainnet, 0);
-            for (const h of [0, 1, 961000, 999999999])
-                assert.strictEqual(abf.isAttestBroadcastFeeActive(h, 'mainnet'), true,
-                    'a genesis-armed mainnet must be active at ' + h);
-        });
-
-        it('is armed from genesis on testnet and regtest so both exercise the carve-out', function () {
-            // testnet 0 is operator-ratified (2026-08-18) and safe by MEASUREMENT: this gate
-            // only changes how a fulfilled settle splits its escrow, and the live explorer
-            // reports zero attestation rows ever recorded on any testnet chain, so there is
-            // no historical reward split to reinterpret.
-            for (const net of ['testnet', 'regtest']) {
-                assert.strictEqual(abf.ATTEST_BROADCAST_FEE_ACTIVATION[net], 0, net + ' must be armed at genesis');
-                assert.strictEqual(abf.isAttestBroadcastFeeActive(0, net), true);
-                assert.strictEqual(abf.isAttestBroadcastFeeActive(12345, net), true);
-            }
-        });
-
-        it('an unknown network fails closed rather than defaulting to on', function () {
-            assert.strictEqual(abf.isAttestBroadcastFeeActive(999999, 'signet'), false);
-            assert.strictEqual(abf.isAttestBroadcastFeeActive(999999, undefined), false);
-        });
-
-        it('an unparseable height fails closed', function () {
-            for (const h of [null, undefined, 'nope', NaN, {}])
-                assert.strictEqual(abf.isAttestBroadcastFeeActive(h, 'regtest'), false);
-        });
-
-        it('uses >= semantics at the threshold block itself', function () {
-            // Exercised through a network whose threshold is a real number; regtest's 0 is
-            // the only armed one shipped, so the boundary is genesis.
-            assert.strictEqual(abf.isAttestBroadcastFeeActive(-1, 'regtest'), false);
-            assert.strictEqual(abf.isAttestBroadcastFeeActive(0, 'regtest'), true);
-        });
-    });
-});
 
 describe('ATTEST broadcast-fee activation (spec §11) @regression', function () {
     describe('broadcastFeeCapNative', function () {
