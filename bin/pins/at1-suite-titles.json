@@ -11478,6 +11478,14 @@
     "a148644af845b9ca": [
       "LIST owner activation @regression @tier1 arms mainnet and regtest at genesis while preserving the per-chain testnet heights"
     ],
+    "a169b0a24d09bcdc": [
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on mainnet at 1700000000",
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on mainnet at 1900000000",
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on regtest at 1700000000",
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on regtest at 1900000000",
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on testnet at 1700000000",
+      "Dispenser effective oracle price on every network @regression @tier2 enforces the Mode B create rule on testnet at 1900000000"
+    ],
     "a1bc8adce48d1864": [
       "capability MIN_STAKE as-of-block reconstruction @regression @tier2 amount arithmetic (as-of-block weight restoration) adds full-precision decimal strings, never JS doubles",
       "capability MIN_STAKE as-of-block reconstruction @regression @tier2 amount arithmetic (as-of-block weight restoration) compares by value, so 5 and 5.00000000 are the same weight",
@@ -18107,8 +18115,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1426,
-      "titleCount": 14026,
+      "fileCount": 1427,
+      "titleCount": 14032,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18324,6 +18332,7 @@
         "test/unit/actions/market/dispenser.test/freshness_oracle_shape.test.js": "32667c285d881516",
         "test/unit/actions/market/dispenser.test/freshness_proven_use.test.js": "14b50ce921f14971",
         "test/unit/actions/market/dispenser.test/oracle_fee.test.js": "13bc3a94cecac346",
+        "test/unit/actions/market/dispenser.test/oracle_price_every_network.test.js": "a169b0a24d09bcdc",
         "test/unit/actions/market/dispenser.test/refill_guard.test.js": "0e534b2440f8d999",
         "test/unit/actions/market/dispenser.test/refill_token_policy.test.js": "1c7af3ff7c39a754",
         "test/unit/actions/market/dispenser_amount_positivity.test.js": "ecf9f101aa70270a",
