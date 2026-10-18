@@ -78,7 +78,6 @@ const REPLACED_STEMS = Object.freeze([
     'anchor_activation',
     'archive_batch_author_activation',
     'attest_admission_activation',
-    'consolidation_leg_amount_activation',
     'dispense_cancelling_match_activation',
     'dispenser_amount_positivity_activation',
     'dispenser_caps_activation',
