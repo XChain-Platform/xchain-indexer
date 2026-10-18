@@ -52,6 +52,9 @@ function dbFor(results, completedId){
 // suite (see before/after), the
 // doQuery call order is: slashes x4, request_status x2, cooldown x2,
 // anchor_invalid x1, index-map x2. The poll_finalize slot is appended when active.
+// This fixed prefix makes the activation boundary observable as one additional
+// read, while empty index maps retain their canonical preimage keys throughout
+// every below-threshold and active comparison in this isolated fixture.
 function baseResults(){ return [[], [], [], [], [], [], [], [], [], [], []]; }
 
 async function build(results){

@@ -43,6 +43,10 @@ function dbFor(results){
 // status id (skips the credits query), the base call order is: slashes x4,
 // request_status x2, cooldown x2, anchor_invalid x1, index-map x2 = 11 slots; the 2 BET
 // slots are appended when armed.
+// The first appended result represents feed terminal state; the second represents
+// individual settlement state. Keeping both positions explicit ensures an empty
+// class cannot accidentally consume rows intended for the other class, while the
+// shared eleven-result prefix continues to model every unconditional state class.
 function baseResults(){ return [[], [], [], [], [], [], [], [], [], [], []]; }
 
 async function build(opts, results){

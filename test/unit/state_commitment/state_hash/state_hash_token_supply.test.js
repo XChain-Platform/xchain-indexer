@@ -49,6 +49,7 @@ function dbFor(results, completedId){
 // this suite (see before/after), the
 // doQuery call order is: slashes x4, request_status x2, cooldown x2,
 // anchor_invalid x1, index-map x2. The token_supply slot is appended when active.
+// Empty index maps remain present in every canonical preimage exercised here.
 function baseResults(){ return [[], [], [], [], [], [], [], [], [], [], []]; }
 
 async function build(results){

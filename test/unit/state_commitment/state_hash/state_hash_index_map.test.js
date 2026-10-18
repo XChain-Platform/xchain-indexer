@@ -34,6 +34,8 @@ const {
 
 const util = new Utility();
 // db whose doQuery returns canned result-sets in CALL ORDER, getStatusId fixed.
+// This deliberately exposes only the database contract consumed by the builder.
+// An unexpected read returns undefined, making query-order drift fail visibly.
 function dbFor(results, completedId){
     let i = 0;
     return { doQuery: async () => results[i++], getStatusId: async () => (completedId === undefined ? null : completedId) };
@@ -43,8 +45,13 @@ function dbFor(results, completedId){
 // (skips the credits query), buildStateHashData's doQuery call order is:
 //   slashes x4, request_status x2, cooldown x2, anchor_invalid x1, [index_addresses, index_tickers]
 // So 9 canned empties cover the base classes; the 2 index-map slots follow them.
+// The index rows are ordered by their numeric ids in production SQL.
+// Supplying explicit arrays here models that canonical ordering without a database.
+// Address and ticker maps occupy distinct keys because their id domains differ.
 function baseResults(){ return [[], [], [], [], [], [], [], [], []]; }
 
+// Hashing the complete returned object exercises both preimage shape and content.
+// A shape-only assertion could miss values omitted during JSON serialization.
 async function build(opts, results){
     const data = await buildStateHashData(dbFor(results || baseResults(), null), 7, opts);
     return { data, hash: util.getDataHash(data) };
@@ -72,6 +79,9 @@ describe('state_hash index-map class (id-determinism P4) @regression', () => {
 
     it('armed: the id map is folded in, and a divergent id->address pair HALTS (different hash)', async function(){
     // Same address string, DIFFERENT deterministic id == the recovery-offset / ^id fork.
+    // The ticker row remains identical, isolating the address-id divergence under test.
+    // Both replicas otherwise receive the same block index and empty state classes.
+    // Therefore any hash difference is attributable to the persisted address mapping.
     const fromGenesis = baseResults().concat([[{ id: 1, address: 'bc1qSrc' }], [{ id: 2, tick: 'TOKA' }]]);
     const recovered   = baseResults().concat([[{ id: 3, address: 'bc1qSrc' }], [{ id: 2, tick: 'TOKA' }]]);
 
@@ -88,6 +98,9 @@ describe('state_hash index-map class (id-determinism P4) @regression', () => {
     });
 
     it('armed: an IDENTICAL id map hashes the same (no false halt across the recovery boundary)', async function(){
+    // Fresh array copies prevent either build from sharing mutable result containers.
+    // Equality proves stable maps do not create recovery-only consensus divergence.
+    // The comparison also pins deterministic serialization across repeated fixture builds.
     const mapRows = baseResults().concat([[{ id: 1, address: 'bc1qSrc' }], [{ id: 2, tick: 'TOKA' }]]);
     const a = await build({ activationDelay: null, gasTick: 'XCHAIN', network: 'regtest' }, mapRows.map(r => r.slice()));
     const b = await build({ activationDelay: null, gasTick: 'XCHAIN', network: 'regtest' }, mapRows.map(r => r.slice()));
