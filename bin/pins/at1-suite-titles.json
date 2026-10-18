@@ -19916,8 +19916,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1078,
-      "titleCount": 11079,
+      "fileCount": 1079,
+      "titleCount": 11083,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20875,6 +20875,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
@@ -21000,8 +21001,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 517,
-      "titleCount": 5665,
+      "fileCount": 518,
+      "titleCount": 5669,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21466,6 +21467,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
@@ -21523,8 +21525,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1078,
-      "titleCount": 11079,
+      "fileCount": 1079,
+      "titleCount": 11083,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22482,6 +22484,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "921055a6da19b0a7",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "90c77ffe11302b77",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
