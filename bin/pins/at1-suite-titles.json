@@ -15437,6 +15437,16 @@
       "XChainIndexer hub config overlay poll re-applies on a watermark-only advance (standalone hub, seq stuck at 0)",
       "XChainIndexer hub config overlay poll ticks landing while a slow poll is in flight are skipped, and polling resumes after it settles"
     ],
+    "d94045d298f4485f": [
+      "capability snapshot proof mirror judgement @regression @tier1 holds a throwing verifier and an unknown verifier verdict",
+      "capability snapshot proof mirror judgement @regression @tier1 holds fetch failures and missing proof responses",
+      "capability snapshot proof mirror judgement @regression @tier1 holds testnet with a missing or invalid trust pin",
+      "capability snapshot proof mirror judgement @regression @tier1 holds when fetchProof or the verifier is missing",
+      "capability snapshot proof mirror judgement @regression @tier1 marks unpinned regtest as first use with a null trust set",
+      "capability snapshot proof mirror judgement @regression @tier1 passes exact fetchProof and verifier arguments for a pinned row",
+      "capability snapshot proof mirror judgement @regression @tier1 passes verified, refused, and held verifier verdicts through",
+      "capability snapshot proof mirror judgement @regression @tier1 uses process.env when readEnv is omitted"
+    ],
     "d95ae38162282a9d": [
       "HubPushQueue address retry adopts the first available address without clearing attempts",
       "HubPushQueue address retry reads a selector address from status when current is unavailable",
@@ -18069,8 +18079,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1418,
-      "titleCount": 14002,
+      "fileCount": 1419,
+      "titleCount": 14010,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18743,6 +18753,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
+        "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
