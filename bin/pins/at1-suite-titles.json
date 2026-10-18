@@ -5266,6 +5266,10 @@
       "consensus/vm_lint_destructure_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
       "consensus/vm_lint_destructure_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
     ],
+    "4e9f9a967a5f9812": [
+      "ANCHOR v1 checkpoint sequence binding @regression @tier1 reads both replay watermarks from valid rows only at the gate",
+      "ANCHOR v1 checkpoint sequence binding @regression @tier1 refuses the archive head reason returned at the gate"
+    ],
     "4ea28f17e16f01bd": [
       "getEffectiveUnprocessedCallResults same-DB deployment: MAX_SAFE_INTEGER cap threads through unchanged (caller needs full set)",
       "getEffectiveUnprocessedCallResults same-DB deployment: one SQL statement pushes NOT EXISTS + ORDER BY + LIMIT",
@@ -18187,8 +18191,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1436,
-      "titleCount": 14086,
+      "fileCount": 1437,
+      "titleCount": 14088,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18227,6 +18231,7 @@
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "21dad44164074d03",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
         "test/unit/actions/anchor/anchor_doge_attestation_pass_removed.test.js": "2a48ae7712d6f6d1",
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
