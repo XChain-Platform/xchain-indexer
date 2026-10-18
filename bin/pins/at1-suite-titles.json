@@ -11590,15 +11590,6 @@
       "MINT block window boundary tests @regression @tier2 TS-09: MINT at exactly MINT_STOP_BLOCK (block 200) is valid",
       "MINT block window boundary tests @regression @tier2 TS-10: MINT one block after MINT_STOP_BLOCK (block 201) is invalid"
     ],
-    "a9282f9a155afa44": [
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression at/after the version threshold: the class selects the shared archive-head set, key set unchanged",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression below the version threshold: the class keeps the legacy v1-only predicate (preimage byte-identical pre-flag)",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression height-key gate: regtest and mainnet armed at genesis, testnet at real future flag days; fail-inert paths",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: ARCHIVE_HEAD_VERSIONS is [1] and renders IN (1)",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression shared constant: the chunk-height key is c.block_index_doge, the legacy key c.block_index",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression the schema premise, checked against the real DDL: a v2 chunk row carries NULL block_index and a real block_index_doge",
-      "state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression version gate: regtest, every testnet chain AND every mainnet chain armed from genesis; fail-inert paths"
-    ],
     "a938df8c15b84eb3": [
       "action-scoped price barrier _evaluatePriceBarrier (the block loop's decision) an escalated block waits even though it is empty",
       "action-scoped price barrier _evaluatePriceBarrier (the block loop's decision) carries the predicate's malformed-input soundness into the loop",
@@ -20013,7 +20004,7 @@
     },
     "test:regression": {
       "fileCount": 1091,
-      "titleCount": 11116,
+      "titleCount": 11114,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21066,7 +21057,7 @@
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
         "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
-        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
+        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "0a29eea0cdad8aed",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
@@ -21644,7 +21635,7 @@
     },
     "test:regression:full": {
       "fileCount": 1091,
-      "titleCount": 11116,
+      "titleCount": 11114,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22697,7 +22688,7 @@
         "test/unit/state_commitment/state_commitment_orphan_stats.test.js": "eb393cd2ff1c041a",
         "test/unit/state_commitment/state_commitment_touch_guard.test.js": "149dc185f8d8c5bf",
         "test/unit/state_commitment/state_hash/archive_invalid_every_network.test.js": "b423b08c7bbc4432",
-        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "a9282f9a155afa44",
+        "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test.js": "0a29eea0cdad8aed",
         "test/unit/state_commitment/state_hash/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js": "450cc14eea77d305",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_head.test.js": "95dc191db8213672",
         "test/unit/state_commitment/state_hash/state_hash_attest_batch_stamp_gap.test.js": "a2ec1bc77812ee2a",
