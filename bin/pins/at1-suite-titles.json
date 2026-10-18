@@ -5300,6 +5300,16 @@
       "VOTE tally invariants (delegation precedence + quadratic/dust floor) @regression @tier1 quadratic weighting / dust-floor participation gate a ballot below the min_vote_balance dust floor still counts weight but not toward min_voters participation",
       "VOTE tally invariants (delegation precedence + quadratic/dust floor) @regression @tier1 quadratic weighting / dust-floor participation gate quadratic mode weights every counted ballot by sqrt(close balance), not the raw balance"
     ],
+    "4c36acf6a4a72cbc": [
+      "Database.getActiveValidators() active-stake collation @regression @tier1 keeps bare validator ordering on mainnet",
+      "Database.getActiveValidators() active-stake collation @regression @tier1 keeps bare validator ordering on testnet",
+      "Database.getActiveValidators() active-stake collation @regression @tier1 keeps bare validator ordering when blockIndex is undefined",
+      "Database.getActiveValidators() active-stake collation @regression @tier1 pins binary validator ordering on regtest at the activation height",
+      "Database.getValidatorsByCapability() active-stake collation @regression @tier1 keeps bare validator ordering on mainnet",
+      "Database.getValidatorsByCapability() active-stake collation @regression @tier1 keeps bare validator ordering on testnet",
+      "Database.getValidatorsByCapability() active-stake collation @regression @tier1 keeps bare validator ordering when blockIndex is undefined",
+      "Database.getValidatorsByCapability() active-stake collation @regression @tier1 pins binary validator ordering on regtest at the activation height"
+    ],
     "4c3793a64504805c": [
       "XCHAIN price derivation: fill selection @regression computeWindowBounds() clamps the lower bound at 0 on a young chain rather than going negative",
       "XCHAIN price derivation: fill selection @regression computeWindowBounds() holds the confirmation buffer back from the reference height",
@@ -12720,6 +12730,19 @@
       "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is unarmed on production networks and active from regtest genesis",
       "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 registers the 0.2.0 row and both network constants"
     ],
+    "b468c3fd3eff32ee": [
+      "capability snapshot proof trust set allows first use on regtest only when no pin is configured",
+      "capability snapshot proof trust set holds a regtest rotation with a bad _FROM value",
+      "capability snapshot proof trust set holds a testnet rotation with a bad _FROM value",
+      "capability snapshot proof trust set holds an invalid _NEXT pin after rotation",
+      "capability snapshot proof trust set holds an invalid regtest pin instead of treating it as first use",
+      "capability snapshot proof trust set holds blank, invalid, and empty-array testnet pins",
+      "capability snapshot proof trust set holds testnet and mainnet when no pin is configured",
+      "capability snapshot proof trust set uses a valid regtest pin",
+      "capability snapshot proof trust set uses a valid static pin",
+      "capability snapshot proof trust set uses the default reader through process.env",
+      "capability snapshot proof trust set uses the static pin below _FROM and the _NEXT pin at and above it"
+    ],
     "b4a3dee34b8a056b": [
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT creates credit, updates balance, and increments token supply",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT exceeding MAX_MINT is marked invalid",
@@ -14059,6 +14082,12 @@
       "createDestroy() - multi-destroy legs separates legs of the same TICK carrying different memos (FORMAT 2)",
       "createDestroy() - multi-destroy legs writes ONE ROW PER TICK LEG of a multi-destroy sharing one action_index",
       "createSend() - multi-send legs does not let a re-parse stamp one leg over every other leg of the same send"
+    ],
+    "ca16e0fe306a77ff": [
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 pins the registry row in the consensus identity",
+      "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 registers a per-chain height row, unarmed on mainnet and testnet, live on regtest"
     ],
     "ca7df2a33ba1c8cc": [
       "src/sql schema parse-coverage @regression @tier1 actions.sql every parsed column has a name and a definition",
@@ -18046,8 +18075,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1416,
-      "titleCount": 13983,
+      "fileCount": 1419,
+      "titleCount": 14006,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18723,6 +18752,7 @@
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
+        "test/unit/consensus/capability_snapshot_proof/trust_set.test.js": "b468c3fd3eff32ee",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
@@ -18858,6 +18888,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_collation.test.js": "4c36acf6a4a72cbc",
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
@@ -19293,6 +19324,7 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "4b19ce0a35e2bbd5",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "3544425276a8f2df",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "6a9eb32db4ae5462",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_hook_row.test.js": "f959c69addce7dd8",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "9d2780219faaef21",
@@ -19833,8 +19865,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1070,
-      "titleCount": 11045,
+      "fileCount": 1072,
+      "titleCount": 11057,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20459,6 +20491,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_collation.test.js": "4c36acf6a4a72cbc",
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
@@ -20780,6 +20813,7 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "4b19ce0a35e2bbd5",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "3544425276a8f2df",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "6a9eb32db4ae5462",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "9d2780219faaef21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "cf6d90b5bf31b6c8",
@@ -20909,8 +20943,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 510,
-      "titleCount": 5633,
+      "fileCount": 512,
+      "titleCount": 5645,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21125,6 +21159,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_collation.test.js": "4c36acf6a4a72cbc",
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
@@ -21363,6 +21398,7 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "4b19ce0a35e2bbd5",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "3544425276a8f2df",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "6a9eb32db4ae5462",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "9d2780219faaef21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "cf6d90b5bf31b6c8",
@@ -21425,8 +21461,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1070,
-      "titleCount": 11045,
+      "fileCount": 1072,
+      "titleCount": 11057,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22051,6 +22087,7 @@
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
         "test/unit/db/db_queries.test/action_index.test.js": "a5fe8fbdb529d759",
         "test/unit/db/db_queries.test/action_index_table.test.js": "4a5921f5821d5361",
+        "test/unit/db/db_queries.test/active_stake_collation.test.js": "4c36acf6a4a72cbc",
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "71b90611d824d1ea",
@@ -22372,6 +22409,7 @@
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "4b19ce0a35e2bbd5",
         "test/unit/protocol_changes/vm_twin/host_call_bounds_matches_vm.test.js": "3544425276a8f2df",
         "test/unit/protocol_changes/vm_twin/host_error_stack_strip_matches_vm.test.js": "6a9eb32db4ae5462",
+        "test/unit/protocol_changes/vm_twin/host_fault_halt_matches_vm.test.js": "ca16e0fe306a77ff",
         "test/unit/protocol_changes/vm_twin/iter_set_meter_row.test.js": "9438d4f37cf64159",
         "test/unit/protocol_changes/vm_twin/json_stringify_reentry_matches_vm.test.js": "9d2780219faaef21",
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "cf6d90b5bf31b6c8",
