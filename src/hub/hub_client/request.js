@@ -39,11 +39,22 @@ function readRateLimitHeaders(headers){
     headers = headers || {};
     let limit  = parseInt(headers['ratelimit-limit'] || headers['x-ratelimit-limit'], 10);
     let retry  = parseInt(headers['retry-after'], 10);
-    if(!Number.isFinite(retry)) retry = parseInt(headers['ratelimit-reset'] || headers['x-ratelimit-reset'], 10);
+    if(!Number.isFinite(retry)) retry = resetDeltaSeconds(headers['ratelimit-reset'] || headers['x-ratelimit-reset']);
     return {
         limit:        Number.isFinite(limit) ? limit : null,
         retryAfterMs: Number.isFinite(retry) && retry >= 0 ? retry * 1000 : null
     };
+}
+
+// Seconds until a reset header's moment, or NaN when it names none still ahead.
+// Many gateways send X-RateLimit-Reset as an absolute Unix time, which read as a
+// delta parks the queue for decades; no real delta comes near 1e9 s (31 years).
+const EPOCH_RESET_FLOOR_SEC = 1e9;
+function resetDeltaSeconds(value){
+    let reset = parseInt(value, 10);
+    if(!Number.isFinite(reset) || reset <= EPOCH_RESET_FLOOR_SEC) return reset;
+    let left = reset - Math.floor(Date.now() / 1000);
+    return left > 0 ? left : NaN;
 }
 
 // Stamp an error as a throttle so callers can hold off instead of burning a

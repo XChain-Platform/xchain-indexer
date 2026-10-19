@@ -144,7 +144,7 @@ describe('armed_map/manifest: the row list', function () {
         const keys = manifest.ENTRIES.map((e) => e[0]);
         assert.deepStrictEqual(keys.slice(0, registryKeys.length), registryKeys);
         assert.deepStrictEqual(keys.slice(registryKeys.length), manifest.VM_EXPORT_NAMES.concat(manifest.VM_ACCESSORS_EXPORT_NAMES).map((n) => 'xchain-vm.' + n));
-        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 17);
+        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 21);
         assert.deepStrictEqual(manifest.VM_ACCESSORS_EXPORT_NAMES, ['ACCESSOR_OWN_KEY_ACTIVATION']);
     });
 

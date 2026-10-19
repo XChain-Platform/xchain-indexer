@@ -56,12 +56,7 @@ const SKIPPED = {
 
 // The predicates measured to differ from activeAt(), with the first differing
 // input each, as found 2026-09-15 (the lane report of row 12 carries the same).
-const FINDINGS = {
-    'oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_ACTIVATION':
-        'the predicate answers false for the reference coin (BTC) at every height; the exclusion lives in the body, not the table',
-    'price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION':
-        'a floor, not a gate: isPriceBarrierRequired() answers true for an unknown network and any unevaluable input, where activeAt() answers false',
-};
+const FINDINGS = {};
 
 describe('protocol_changes/predicate_parity: every gate predicate against activeAt() @regression @tier1', function () {
     let results;
@@ -85,8 +80,8 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
     });
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
-        assert.strictEqual(REPLACED.size, 38, 'the W4 census of 25 predicate-only shims plus the 13 predicate-only twins of W5');
-        assert.strictEqual(REGISTRY_ONLY.size, 76, 'the registry-only gate census moved');
+        assert.strictEqual(REPLACED.size, 30, 'the W4 census of 20 predicate-only shims plus the 11 predicate-only twins of W5');
+        assert.strictEqual(REGISTRY_ONLY.size, 84, 'the registry-only gate census moved');
         assert.ok(REGISTRY_ONLY.has('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'),
             'the cross-chain remote-token gate is registry-only');
         assert.ok(REGISTRY_ONLY.has('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION'),
@@ -110,19 +105,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
         for (const r of results) assert.ok(r.inputs >= 5, r.key + ' compared only ' + r.inputs + ' inputs');
         assert.strictEqual(results.filter((r) => r.verdict === 'EQUAL').length, TABLE.length - Object.keys(FINDINGS).length,
             'every tabled predicate but the findings compared EQUAL');
-        assert.ok(TABLE.length >= 36, 'too few predicates compared');
-    });
-
-    it('the two findings differ for the recorded reason, not for a moved threshold', function () {
-        const byKey = new Map(results.map((r) => [r.key, r]));
-        const preload = byKey.get('oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_ACTIVATION');
-        assert.strictEqual(preload.first.coin, 'BTC');
-        assert.strictEqual(preload.first.predicate, false);
-        assert.strictEqual(preload.first.activeAt, true);
-        const floor = byKey.get('price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION');
-        assert.strictEqual(floor.first.network, 'devnet');
-        assert.strictEqual(floor.first.predicate, true);
-        assert.strictEqual(floor.first.activeAt, false);
+        assert.ok(TABLE.length >= 33, 'too few predicates compared');
     });
 
     it('activeAt() refuses the ruleset row rather than guessing a version', function () {

@@ -217,47 +217,6 @@ addGate('stateHash.REQUEST_STATUS_TABLES', 'constant', ['attests', 'xcalls']);
 
 addGate('stateHash.COOLDOWN_TABLES', 'constant', ['unstakes', 'contract_unstakes']);
 
-// ── Index-map state-hash flag-day (id-determinism P4) ────────────────────────
-// Promotes the index_addresses / index_tickers id->string MAP from the advisory
-// /status checksum (BlockHasher.computeIndexMapChecksum) to an ENFORCED per-block
-// class of this replication-integrity hash: the follower recomputes state_hash and
-// HALTS on mismatch, so an id-map divergence (a wire ^id resolving to a different
-// entity, or a recovered node that built a different map) is caught at the block
-// that introduced it instead of silently forking.
-//
-// This is the ONE place state_hash deliberately hashes the surrogate id (not just
-// the resolved string): the id IS the value under protection. It is sound only
-// because the compaction + F1a work made every id-assignment path deterministic
-// (in-block dense counter + rollback; recovery stages by string and the apply hook
-// assigns the deterministic id) - so a from-genesis node and a recovered node now
-// produce byte-identical (id, address) pairs over the same chain.
-//
-// Per-block DELTA (block_index = B), mirroring the rest of this preimage's per-block
-// shape: the rows whose deterministic id was first assigned at B. A cumulative
-// checksum would chain every block on all history (the credits-chaining trap the
-// header warns about); the delta catches a divergence at its origin block.
-//
-// Gated on the chain's OWN local block_index (like state_commitment_activation, not
-// the BTC-anchored snapshot_block): each chain arms at its own flag-day height.
-// Landed DEFAULT INERT (placeholder 999999999) so shipping the class was a strict
-// no-op on the live fleet - the class is omitted from the preimage below the
-// threshold, leaving state_hash byte-identical to the pre-feature shape. Armed
-// fleet-atomically (real per-chain heights) exactly as WI-2 / state_commitment
-// did; regtest was the last inert key (armed 2026-07-16). No
-// STATE_HASH_VERSION bump: a block is unambiguously pre- or post-activation on a
-// given network, so the two preimage shapes cannot collide.
-addGate('stateHash.INDEX_MAP_STATE_HASH_ACTIVATION', 'height', {
-    // Heights are the chain's OWN local block_index at/after which the index-map
-    // folds into state_hash. One-way door: once a chain crosses its height, any
-    // process still on a different height computes a divergent state_hash and a
-    // follower HALTS, so every indexer + sync process must run this exact map
-    // BEFORE the chain reaches the height. Keep this map byte-identical to the
-    // xchain-{indexer,sync}/src/stateHash.js twin.
-    mainnet: 0,           // ARMED at the genesis launch reindex (folds from genesis, no mid-chain flag-day)
-    testnet: 0,           // ARMED at the genesis launch reindex (clean reseed accompanies it)
-    regtest: 0,           // ARMED from genesis 2026-07-16: fresh stacks exercise the class end to end; pre-existing regtest venues need a clean reseed
-});
-
 // ── VOTE poll-finalization state-hash flag-day ────────────────────────────────
 // Promotes the polls finalization flip (VOTE v2 mutates a SURVIVING polls row
 // terminal IN PLACE) from an unhashed updated_rows mutation to an ENFORCED
@@ -265,10 +224,9 @@ addGate('stateHash.INDEX_MAP_STATE_HASH_ACTIVATION', 'height', {
 // class where a follower silently dropping the flip upsert diverged with no halt
 // (the attests/xcalls v0 flips have had this coverage from the start).
 //
-// Same gating model as INDEX_MAP_STATE_HASH_ACTIVATION above (keyed on the
-// chain's OWN local block_index), but ARMED MID-CHAIN, which forces per-chain
-// keys: unlike the genesis-armed index-map class, one shared 'mainnet' height
-// cannot fit BTC (~957k) and DOGE (~6.28M) simultaneously. Lookup is
+// Keyed on the chain's OWN local block_index and ARMED MID-CHAIN, which forces
+// per-chain keys: one shared 'mainnet' height cannot fit BTC (~957k) and DOGE
+// (~6.28M) simultaneously. Lookup is
 // '<COIN>:<network>' first, then the bare network key (regtest keeps one key;
 // unknown -> inert). ARMED 2026-07-07 at tip + margin per chain: the whole
 // fleet (every indexer + sync process) MUST run this map before the EARLIEST
@@ -359,35 +317,4 @@ addGate('stateHash.ARCHIVE_HEAD_VERSIONS', 'constant', [1]);
 // The IN list of ARCHIVE_HEAD_VERSIONS above; the two move together.
 addGate('stateHash.ARCHIVE_HEAD_VERSIONS_SQL', 'constant', 'IN (1)');
 
-// ── invalid_archive archive-head-coverage state-hash flag-day ─────────────────
-// Widens the anchor_invalid state-hash class (class 6 below) from a hard-coded
-// v1 parent to whatever ARCHIVE_HEAD_VERSIONS holds, closing the integrity-hash
-// blind spot where an invalid_archive stamp on a non-v1 archive head was invisible
-// to the follower's recompute (a follower silently dropping that upsert diverged
-// with no halt). With the version set restarted the two predicates coincide (the
-// archive head IS v1 again), so the gate is inert in effect and kept only so the
-// widening stays landed for the next archive version. Changes the class's row
-// selection, hence the hashed preimage, so it
-// is gated exactly like POLL_FINALIZE above (per-chain keys on the chain's OWN
-// local block_index). No STATE_HASH_VERSION bump: a block is unambiguously pre-
-// or post-activation on a given network. Keep byte-identical to the xchain-sync
-// twin; every indexer AND sync process on a network must run this code, since a
-// straggler on the v1-only predicate recomputes a different preimage and halts.
-// TESTNET IS ARMED AT 0 (operator ruling 2026-08-11, applied 2026-08-14): the
-// re-genesised testnet carries no pre-flag blocks, so there is no legacy preimage
-// to stay byte-identical with, and arming at genesis made testnet the network that
-// exercises the widened class first. MAINNET IS ARMED AT 0 by the 2026-09-09
-// ruling: mainnet holds 0 archive chunks (measured 2026-09-09), so the widened
-// predicate and the legacy v1-only one select the same empty class and the
-// genesis-armed preimage is identical to the deployed one; the 56 DOGE ANCHOR
-// actions on record are checked by the from-genesis replay witness.
-addGate('stateHash.ARCHIVE_INVALID_STATE_HASH_ACTIVATION', 'height', {
-    'BTC:mainnet':  0,          // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 archive chunks, measured 2026-09-09)
-    'LTC:mainnet':  0,
-    'DOGE:mainnet': 0,
-    'BTC:testnet':  0,          // armed from genesis 2026-08-11 ruling
-    'LTC:testnet':  0,          // armed from genesis 2026-08-11 ruling
-    'DOGE:testnet': 0,          // armed from genesis 2026-08-11 ruling
-    regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the widened class end to end
-});
 // SHARED-GATES END

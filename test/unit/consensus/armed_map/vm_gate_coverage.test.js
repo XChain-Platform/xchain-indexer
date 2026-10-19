@@ -25,6 +25,7 @@ const VM_GATE_NAME = /(?:_ACTIVATION|_GATE_BLOCK_TIME)$/;
 
 const ALIASES = {
     JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME: 'JSON_STRINGIFY_HOOK_ACTIVATION',
+    TOSTRING_SIZE_METER_GATE_BLOCK_TIME: 'TOSTRING_SIZE_METER_ACTIVATION',
 };
 
 const REGISTRY_TWINS = {
@@ -40,7 +41,9 @@ const REGISTRY_TWINS = {
     RESOURCE_FAULT_SIGNAL_ACTIVATION: 'resource_fault_signal_heights.RESOURCE_FAULT_SIGNAL_ACTIVATION',
 };
 
-const KNOWN_GAPS = {};
+// A gap is a gate whose indexer twin has not landed yet; the twin moves it out of this map.
+const KNOWN_GAPS = {
+};
 
 function vmGateExportNames(holder) {
     const names = new Set();

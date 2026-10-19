@@ -18,14 +18,15 @@
 // authorship rule, whose effect was that the real publisher's own chunks were
 // filtered out and the archive never reassembled.
 //
-// The fix scopes the archive batch to its PUBLISHER: the batch key becomes
+// Archive batches are always scoped to their PUBLISHER: the batch key is
 // (match_batch_seq, head author), so a chunk is judged against the earliest head
 // authored by the SAME address, and a foreign head governs nothing. That is
-// status-agnostic (no mirrored/unmirrored fork) and deterministic. It moves
-// consensus-visible verdicts, so it is flag-day gated: armed at genesis on regtest,
-// on testnet (2026-08-11 operator ruling) and, since the 2026-09-09 ruling, on
-// mainnet, where the indexed history carries 0 archive chunks (measured 2026-09-09)
-// and the publisher-scoped rule is therefore identity over it.
+// status-agnostic (no mirrored/unmirrored fork) and deterministic. These tests
+// exercise both arrival orders because continuation chunks may precede their head:
+// chunks already stored as orphans must become the real publisher's reassembly set,
+// while chunks belonging to a foreign head remain in that publisher's separate set.
+// They also pin the slot-occupancy rule: a foreign publisher cannot reserve a chunk
+// index in the real publisher's batch, even when its transaction lands first.
 
 process.env.INDEXER_COIN = 'DOGE';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -39,29 +40,15 @@ const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks')
 const Anchor  = require('../../../../src/actions/anchor/index.js');
 const ed25519 = require('../../../../src/consensus/ed25519.js');
 const swq     = require('../../../../src/consensus/stake_weighted_quorum.js');
-const gateRegistry = require('../../../../src/consensus/gate_registry');
-const { stubActiveAt } = require('../../../helpers/gate_modules.js');
-const AUTHOR_KEY = 'archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION';
-const ANCHOR_KEY = 'anchor_activation.ANCHOR_ACTIVATION';
 
 const PUBLISHER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const ATTACKER  = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
 
-// The DOGE height the archive head landed at (anchor_actions.block_index_doge, NOT
-// block_index, which is the CHECKPOINTED height on the checkpointed chain). At/after
-// the regtest activation, which is armed at 0. Every network is armed at genesis
-// now, so the legacy pins reach the pre-flag-day rule by pinning THIS key inert on
-// a mainnet venue for the duration of the call (belowFlag), which leaves the ANCHOR
-// activation gate the fixture heights depend on exactly as the fleet runs it.
+// The DOGE height the archive head landed at (anchor_actions.block_index_doge, not
+// block_index, which is the checkpointed height on a different chain). The rule no
+// longer changes at a height, but a realistic landed height keeps the fixture shape
+// aligned with rows read from anchor_actions.
 const ARMED_BLOCK = 500;
-
-// The registry row is frozen, so the key is answered inert by stubbing the read
-// for the duration of the call rather than by editing a table.
-async function belowFlag(fn) {
-    const stub = stubActiveAt(sinon, AUTHOR_KEY, false);
-    try { return await fn(); }
-    finally { stub.restore(); }
-}
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG      = '1'.repeat(128);
@@ -258,22 +245,6 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
         assert.strictEqual(scopedPicks.length, 0, 'no re-pick when the canonical head is already the right one');
     });
 
-    // ── Flag-day pins ────────────────────────────────────────────────────────────
-    it('is INERT below the flag day: the legacy canonical-head rule still applies', async function () {
-        indexer.config = Object.assign({}, indexer.config, { NETWORK: 'mainnet' });
-        handler = new Anchor(indexer);
-        seedJunkHeadAheadOfTheRealOne(3);
-        // AT the ANCHOR activation height: the activation gate runs before every flag day,
-        // so a default (low) mainnet height would be rejected as pre-restart and this case
-        // would never reach the rule it is pinning. ARCHIVE_BATCH_AUTHOR is pinned inert
-        // for this call only, since mainnet is armed at genesis in the shipped map.
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 40, SOURCE: PUBLISHER,
-                                    BLOCK_INDEX: gateRegistry.get(ANCHOR_KEY).mainnet });
-        await belowFlag(() => handler.parse(['2', '9', '1', '3', 'BBBB'], data, null));
-        assert.strictEqual(data['STATUS'], 'invalid: TOTAL_CHUNKS (does not match parent v1)',
-            'below the flag day the pre-existing (capturable) verdict must be reproduced byte for byte');
-    });
-
 });
 
 describe('ANCHOR archive batch capture by a junk head @regression @tier1', function () {
@@ -295,38 +266,13 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
             'the per-index dedupe tie-break must stay deterministic');
         // Same select list as the legacy query: callers read `source` off both.
         assert.ok(scoped.startsWith(one(q.ARCHIVE_CHUNK_SET_SQL).slice(0, 60)));
-        // The flag-day anchor query resolves the CANONICAL head, status-agnostically.
+        // The starting query resolves the CANONICAL head, status-agnostically.
         const gate = one(q.ARCHIVE_HEAD_GATE_SQL);
         assert.match(gate, /ORDER BY h\.action_index ASC/i);
         assert.match(gate, /LIMIT 1/i);
         assert.doesNotMatch(gate, /status/i, 'the gate anchor must not depend on status (mirror-dependent)');
         assert.match(gate, /block_index_doge/i,
-            'the flag day is a height on the chain the ANCHOR lands on, not the checkpointed height');
+            'the lookup floor is a height on the chain the ANCHOR lands on, not the checkpointed height');
         assert.doesNotMatch(gate, /\bh\.block_index\b(?!_doge)/i);
-    });
-
-    it('activation is network-keyed and armed at genesis on regtest, testnet and mainnet', function () {
-        const at = (height, network) => gateRegistry.activeAt(AUTHOR_KEY, network, null, height, null);
-        assert.strictEqual(at(0, 'regtest'), true);
-        // Testnet armed at genesis by the 2026-08-11 operator ruling: the publisher-scoped
-        // rule is live from block 0 there, so the rule was exercised on a real network
-        // before mainnet took a height.
-        assert.strictEqual(gateRegistry.get(AUTHOR_KEY).testnet, 0);
-        assert.strictEqual(at(0, 'testnet'), true);
-        assert.strictEqual(at(999999998, 'testnet'), true);
-        // Mainnet armed at genesis by the 2026-09-09 ruling: 0 archive chunks on mainnet
-        // (measured 2026-09-09), so the rule is identity over the indexed history.
-        assert.strictEqual(gateRegistry.get(AUTHOR_KEY).mainnet, 0);
-        // Either sentinel reads back as "still unarmed" at the GoLiveGate.
-        assert.notStrictEqual(gateRegistry.get(AUTHOR_KEY).mainnet, 999999999);
-        assert.notStrictEqual(gateRegistry.get(AUTHOR_KEY).mainnet, 9999999999);
-        assert.strictEqual(at(0, 'mainnet'), true);
-        assert.strictEqual(at(999999998, 'mainnet'), true);
-        assert.strictEqual(at(NaN, 'regtest'), false);
-        // Fails closed on mainnet too, now that its threshold is 0: NaN is not ">= 0".
-        assert.strictEqual(at(NaN, 'mainnet'), false);
-        // Fails closed on an armed network too: NaN must never read as ">= 0".
-        assert.strictEqual(at(NaN, 'testnet'), false);
-        assert.strictEqual(at(0, 'nosuchnet'), false);
     });
 });

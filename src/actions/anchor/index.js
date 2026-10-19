@@ -81,6 +81,8 @@ const { walkFoldSections } = require('./v3/v3_sections.js');
 const { foldArchiveReason } = require('./v3/v3_archive_check.js');
 const { archiveCanonicalSuffix, signsExtendedCanonical, extendSectionCanonicalBase } = require('./v3_canonical.js');
 const { recordFoldAction } = require('./v3/v3_record.js');
+const CHECKPOINT_SEQ_BIND_GATE =
+    'anchor_checkpoint_seq_bind_activation.ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVATION';
 function foldHeaderReason(config, data, error){
     if(error) return error;
     if(String(data['NETWORK']) !== String(config['NETWORK'] || '')) return 'invalid: NETWORK (not this network)';
@@ -94,8 +96,14 @@ function foldHeaderReason(config, data, error){
 }
 async function checkFoldSeqs(handler, data, sections, archive, error){
     if(error) return error;
+    let validOnly = gateRegistry.activeAt(CHECKPOINT_SEQ_BIND_GATE,
+        handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
     for(let section of sections){
-        let maximum = await handler.indexerDb.getMaxAnchorCheckpointSeq(section.CHAIN, section.NETWORK);
+        if(validOnly){
+            let reason = validate.checkpointSeqBindReason(section);
+            if(reason) return 'invalid: SECTION ' + section.SECTION_INDEX + ' ' + reason;
+        }
+        let maximum = await handler.indexerDb.getMaxAnchorCheckpointSeq(section.CHAIN, section.NETWORK, validOnly);
         if(maximum !== null && Number(section.CHECKPOINT_SEQ) < maximum)
             return 'invalid: SECTION ' + section.SECTION_INDEX + ' CHECKPOINT_SEQ ' +
                 '(stale; replay of an older checkpoint)';
@@ -104,7 +112,7 @@ async function checkFoldSeqs(handler, data, sections, archive, error){
     let wrapper = sections[Number(archive.WRAPPER_SECTION_INDEX)];
     let wrapperRows = await handler.actions.protocolChanges.isEnabled(
         'ARCHIVE_REPLAY_WRAPPER_WATERMARK', Number(data['BLOCK_INDEX']));
-    let watermark = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows);
+    let watermark = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows, validOnly);
     let batchStale = watermark.batchSeq !== null && Number(archive.MATCH_BATCH_SEQ) < watermark.batchSeq;
     let checkpointStale = watermark.checkpointSeq !== null && Number(wrapper.CHECKPOINT_SEQ) < watermark.checkpointSeq;
     return batchStale && checkpointStale ?
@@ -351,20 +359,16 @@ class Anchor {
         return validate.sectionShapeReason(s, seenChains);
     }
 
-    // The author an archive batch's chunk set is scoped to, or null when the
-    // publisher-scoped flag day is not active for this batch, in which case every
-    // caller keeps the legacy canonical-head behavior.
+    // The author an archive batch's chunk set is scoped to, or null when no canonical
+    // head exists for the batch.
     //
-    // The gate is anchored to the batch's CANONICAL head (earliest archive-head row for the
-    // seq): it is the one row every node resolves identically without consulting
-    // status, so head-side and chunk-side verdicts for one batch always apply the SAME
-    // rule. No head at all means no batch to scope, hence null. The height is
-    // block_index_doge (where the ANCHOR landed), never block_index (the CHECKPOINTED
-    // height on the checkpointed chain, a different chain's scale entirely).
+    // The lookup starts from the batch's CANONICAL head (earliest archive-head row for
+    // the seq): it is the one row every node resolves identically without consulting
+    // status, so head-side and chunk-side verdicts for one batch always use the same
+    // deterministic starting point. No head at all means no batch to scope, hence null.
     async archiveAuthorScope(batchSeq, source){
         let canonical = await this.indexerDb.getAnchorV1ByBatchSeq(Number(batchSeq));
         if(!canonical) return null;
-        if(!gateRegistry.activeAt('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION', this.config['NETWORK'], null, Number(canonical.block_index_doge), null)) return null;
         return String(source || '');
     }
 

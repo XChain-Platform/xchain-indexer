@@ -29,10 +29,28 @@
 const swqCap = require('../../consensus/gates/swq_source_cap_gate');
 const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 const srb = require('../../consensus/snapshot_reorg_buffer.js');
+const gateRegistry = require('../../consensus/gate_registry.js');
+const mirrorJudgement = require('../../consensus/capability_snapshot_proof/mirror_judgement.js');
+const capabilityProof = require('../../consensus/capability_snapshot_proof/verify.js');
 const { getLogger } = require('../../observability/index.js');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { requireStakeWeight, normalizeStakeAmount, usesCapabilitySnapshot } = require('../shared.js');
+
+const CAPABILITY_SNAPSHOT_PROOF_ACTIVATION =
+    'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION';
+
+async function judgeMirrorResolvedRow(db, row, capability, opts){
+    if(!gateRegistry.activeAt(CAPABILITY_SNAPSHOT_PROOF_ACTIVATION,
+        db.config['NETWORK'], 'BTC', row.snapshot_block, 0))
+        return { verdict: 'unknown', reason: 'this chain resolves ' + capability + ' from the mirror' };
+    let proofOpts = Object.assign({}, opts, { network: db.config['NETWORK'] });
+    let result = await mirrorJudgement.judgeMirroredCapabilityRow(
+        row, proofOpts, capabilityProof.verifyCapabilitySnapshotProof);
+    if(result.firstUse)
+        getLogger().warn('Capability snapshot proof is using an unpinned regtest checkpoint validator set for first use.');
+    return result;
+}
 
 module.exports = {
 
@@ -176,13 +194,14 @@ module.exports = {
     // legitimately withheld simply are not examined. Completeness (a row the hub SHOULD
     // have served and did not) is NOT checkable without knowing the hub's MIN_STAKE and is
     // deliberately out of scope for this step.
-    async verifyCapabilitySnapshotRow(row){
+    async verifyCapabilitySnapshotRow(row, opts){
         if(!row) return { verdict: 'unknown', reason: 'no row' };
         let capability = row.capability == null ? '' : String(row.capability);
         // A chain that RESOLVES this capability from the mirror has no local stakes to
-        // re-derive from; asking it would compare the mirror against itself.
+        // re-derive from. Once the proof gate reaches the row's BTC watermark, judge the
+        // hub proof against an operator pin instead of comparing the mirror with itself.
         if(usesCapabilitySnapshot(this.config, capability))
-            return { verdict: 'unknown', reason: 'this chain resolves ' + capability + ' from the mirror' };
+            return judgeMirrorResolvedRow(this, row, capability, opts);
         if(!this.isCapabilityConfigured(capability))
             return { verdict: 'unknown', reason: 'capability ' + capability + ' is not configured on this node' };
         let block = Number(row.snapshot_block);

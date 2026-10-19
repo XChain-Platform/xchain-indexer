@@ -19,9 +19,26 @@
  *
  ********************************************************************/
 
+const gateRegistry = require('../../consensus/gate_registry');
+
+const NATIVE_FEE_TALLY_GATE = 'airdrop_native_fee_tally_activation.AIRDROP_NATIVE_FEE_TALLY_ACTIVATION';
+
 // Installed onto Airdrop.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
+
+    // A non-BATCH native-fee AIRDROP gets one action-local tally after the flag day.
+    // BATCH keeps using its transaction ledger, and XCHAIN-balance fees keep the legacy path.
+    createAirdropNativeFeeTally(data){
+        let inBatch = Object.prototype.hasOwnProperty.call(data, 'BATCH_POSITION') ||
+            (data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object');
+        let active = gateRegistry.activeAt(NATIVE_FEE_TALLY_GATE, this.config['NETWORK'],
+            this.config['COIN'], Number(data['BLOCK_INDEX']), null);
+        let native = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']) === 'native';
+        return (!inBatch && active && native)
+            ? { nativeFeeConsumed: '0', xchainFee: '0', gasCost: '0' }
+            : null;
+    },
 
     // Read the wire parameters into legs, by FORMAT: 0 a single airdrop, 1 a brief multi-airdrop
     // to one LIST, 2 a full multi-airdrop, 3 a full multi-airdrop carrying a MEMO per leg

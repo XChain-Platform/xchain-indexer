@@ -28,6 +28,7 @@
 const { getLogger } = require('../../observability/index.js');
 const { CROSS_CHAIN_TABLES, REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT,
         REFUSED_ROW_NAMED_CAP } = require('./mirror_tables.js');
+const { capabilitySnapshotKey } = require('./mirror_bounds.js');
 
 module.exports = {
 
@@ -287,24 +288,46 @@ module.exports = {
     //   - Every non-refusal (unreached block, unconfigured capability, truncated set,
     //     a read that threw, no authoritative db wired) applies the row. An unjudgeable
     //     row must never become a permanent mirror hole.
-    async refuseUnprovenCapabilitySnapshot(row) {
+    async refuseUnprovenCapabilitySnapshot(row, options) {
+        let rowKey = capabilitySnapshotKey(row);
+        if (this._capabilityProofRetryApproved.delete(rowKey)) return false;
         let db = this.authoritativeStakeDb();
         // The explorer's vendored display mirror carries no such db and no such method.
         if (!db || typeof db.verifyCapabilitySnapshotRow !== 'function') return false;
         let verdict;
         try {
-            verdict = await db.verifyCapabilitySnapshotRow(row);
+            let fetchProof = options && typeof options.fetchProof === 'function'
+                ? options.fetchProof : this.fetchCapabilitySnapshotProof.bind(this);
+            verdict = await db.verifyCapabilitySnapshotRow(row, { fetchProof: fetchProof });
         } catch (e) {
             // A failed re-derivation is not evidence of a forgery.
             getLogger().warn('HubDbSync: capability_snapshots re-derivation failed, applying row unchecked: ' +
                 (e && e.message ? e.message : e));
             return false;
         }
+        if (options) options.verdict = verdict && verdict.verdict;
+        if (verdict && verdict.verdict === 'held') {
+            this.holdCapabilitySnapshot(row);
+            if (this._bootstrapping && !(options && options.retainHold))
+                throw new Error('capability snapshot held pending proof');
+            return true;
+        }
+        if (!(options && options.retainHold)) {
+            this._capabilityProofHolds.delete(rowKey);
+            this.releaseCapabilityProofWaiters();
+        }
         if (!verdict || verdict.verdict !== 'refused') return false;
         getLogger().error('HubDbSync: REFUSED a capability_snapshots row this node can disprove from its own ' +
             'stakes - ' + verdict.reason + '. The hub is serving a validator set that contradicts the chain; ' +
             'off-BTC nodes cannot see this and will have mirrored it.');
         return true;
+    },
+
+    fetchCapabilitySnapshotProof(snapshotBlock, capability, pubkeys) {
+        return this.httpGet('/hub-db/snapshot/capability_snapshot_proof?snapshot_block=' +
+            encodeURIComponent(String(snapshotBlock)) + '&capability=' +
+            encodeURIComponent(String(capability)) + '&pubkeys=' +
+            encodeURIComponent((Array.isArray(pubkeys) ? pubkeys : []).map(String).join(',')));
     },
 
     // Report the refusals counted for `table` since the last report, one line per foreign

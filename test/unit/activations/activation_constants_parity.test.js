@@ -88,15 +88,12 @@ const GATES = [
     ['checkpoint_commitment_activation.js', 'CHECKPOINT_COMMITMENT_ACTIVATION'],
     ['cross_chain_royalty_activation.js',   'CROSS_CHAIN_ROYALTY_ACTIVATION'],
     ['attest_admission_activation',         'ATTEST_ADMISSION_ACTIVATION'],
-    ['attest_request_cap_activation',       'ATTEST_REQUEST_CAP_ACTIVATION'],
     // Not an activation MAP but the consensus constants that gate reads: the caps decide
-    // which requests are admitted at the flag-day exactly as the heights decide when.
+    // which requests are admitted, so a one-sided edit changes consensus behavior.
     ['attest_request_cap_activation',       'ATTEST_REQUEST_CAPS'],
     ['attest_relay_activation.js',          'ATTEST_RELAY_ACTIVATION'],
-    ['attest_broadcast_fee_activation',     'ATTEST_BROADCAST_FEE_ACTIVATION'],
     // Not an activation MAP but a consensus constant the same gate reads: the cap clamps the
-    // escrow carve-out, so a one-sided edit changes the amount paid at the flag-day exactly as a
-    // one-sided height edit changes when it is paid.
+    // escrow carve-out, so a one-sided edit changes the amount paid at settle.
     ['attest_broadcast_fee_activation',     'ATTEST_BROADCAST_FEE_CAP'],
     ['attest_responsible_widening_activation.js',      'ATTEST_RESPONSIBLE_WIDENING_ACTIVATION'],
     // Not an activation MAP but the consensus constants the same gate reads: the ladder's
@@ -129,7 +126,6 @@ const GATES = [
     ['archive_match_count_activation',       'ARCHIVE_MATCH_COUNT_ACTIVATION'],
     ['anchor_bundle_order_activation',       'ANCHOR_BUNDLE_ORDER_ACTIVATION'],
     ['price_pair_activation.js',            'PRICE_PAIR_WIDEN_ACTIVATION'],
-    ['price_scale_activation',              'PRICE_SCALE_ACTIVATION'],
     // The consensus wire-format bounds that gate selects between: canon says a change is
     // "a one-line edit here plus the byte-equal edit in the vendored copies", so lock them.
     ['price_pair_activation.js',            'PRICE_PAIR_TICKER_MAX_LEGACY'],

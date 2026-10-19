@@ -57,6 +57,12 @@ const {
     HOST_CALL_BOUNDS_TESTNET_TIME,
     PER_ELEMENT_METER_MAINNET_TIME,
     PER_ELEMENT_METER_TESTNET_TIME,
+    STRING_RESULT_METER_MAINNET_TIME,
+    STRING_RESULT_METER_TESTNET_TIME,
+    STRING_RECEIVER_METER_MAINNET_TIME,
+    STRING_RECEIVER_METER_TESTNET_TIME,
+    TOSTRING_SIZE_METER_MAINNET_TIME,
+    TOSTRING_SIZE_METER_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -178,6 +184,12 @@ const CHANGES = [
     ['PER_ELEMENT_METER', '0.2.0', PER_ELEMENT_METER_MAINNET_TIME,
         PER_ELEMENT_METER_TESTNET_TIME, 0, 0, 0, 0],
 
+    // STRING_RECEIVER_METER: mirrors xchain-vm STRING_RECEIVER_METER_ACTIVATION, judged by
+    // block time. The corrected String receiver and alias metering stays unarmed on mainnet
+    // and testnet; regtest is active from genesis.
+    ['STRING_RECEIVER_METER', '0.2.0', STRING_RECEIVER_METER_MAINNET_TIME,
+        STRING_RECEIVER_METER_TESTNET_TIME, 0, 0, 0, 0],
+
     // CALLBACK_ARGS_EXACT: an ATTEST, XCALL or binding VOTE callback runs with the argument
     // array its injector built, so a '|' inside a provider response, a callee return value or a
     // callback param stays inside its own argument. Below the flag the arguments are joined on
@@ -186,6 +198,14 @@ const CHANGES = [
     // venue sets CALLBACK_ARGS_EXACT_REGTEST_TIME.
     ['CALLBACK_ARGS_EXACT', '0.2.0', UNARMED, 1792303200,
         regtestTimeOverride('CALLBACK_ARGS_EXACT_REGTEST_TIME'), 0, 0, 0],
+
+    // STRING_RESULT_METER mirrors the VM's block-time activation table.
+    ['STRING_RESULT_METER', '0.2.0', STRING_RESULT_METER_MAINNET_TIME,
+        STRING_RESULT_METER_TESTNET_TIME, 0, 0, 0, 0],
+
+    // TOSTRING_SIZE_METER mirrors the VM's block-time activation table.
+    ['TOSTRING_SIZE_METER', '0.2.0', TOSTRING_SIZE_METER_MAINNET_TIME,
+        TOSTRING_SIZE_METER_TESTNET_TIME, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;

@@ -324,6 +324,40 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
     });
 
+    it('the bundled VM STRING_RESULT_METER_ACTIVATION matches the indexer STRING_RESULT_METER row per network', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        assert.ok(vm && full,
+            'STRING_RESULT_METER coupling requires the full xchain-vm package surface: ' +
+            (pkgErr ? String(pkgErr.message) : 'package not present') +
+            (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+        const gate = vm.STRING_RESULT_METER_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export STRING_RESULT_METER_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.STRING_RESULT_METER');
+        const asRow = (t) => (t === null ? pc.UNARMED : t);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
+    });
+
+    it('the bundled VM TOSTRING_SIZE_METER_ACTIVATION matches the indexer TOSTRING_SIZE_METER row per network', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        assert.ok(vm && full,
+            'TOSTRING_SIZE_METER coupling requires the full xchain-vm package surface: ' +
+            (pkgErr ? String(pkgErr.message) : 'package not present') +
+            (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+        const gate = vm.TOSTRING_SIZE_METER_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export TOSTRING_SIZE_METER_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.TOSTRING_SIZE_METER');
+        const asRow = (t) => (t === null ? pc.UNARMED : t);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
+    });
+
     it('the bundled VM REST_PATTERN_METER gate flips at the indexer REST_PATTERN_METER row instant per network', function(){
         // The VM meters rest destructuring and the indexer refuses banned-rest deploys on
         // one flag day with its own future instant, so it sits outside GATE_EXPORTS above.

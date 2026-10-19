@@ -54,7 +54,6 @@ const GATE_MODULE_PATHS = Object.freeze({
     mainnet_launch_activation: 'consensus/gates/mainnet_launch_gate.js',
     mirror_admission_activation: 'consensus/gates/mirror_admission_gate.js',
     mirror_admission_margin_activation: 'consensus/gates/mirror_admission_margin_gate.js',
-    price_batching_floor_activation: 'consensus/gates/price_batching_floor_gate.js',
     price_pair_activation: 'consensus/gates/price_pair_gate.js',
     price_scale_activation: 'consensus/gates/price_scale_gate.js',
     rollcall_activation: 'consensus/gates/rollcall_gate.js',
@@ -76,19 +75,12 @@ const GATE_MODULE_PATHS = Object.freeze({
 // exports these rows; callers spell the key at the call site.
 const REPLACED_STEMS = Object.freeze([
     'anchor_activation',
-    'archive_batch_author_activation',
-    'archive_head_unverified_gate_activation',
     'attest_admission_activation',
-    'consolidation_leg_amount_activation',
     'dispense_cancelling_match_activation',
-    'dispenser_amount_positivity_activation',
     'dispenser_caps_activation',
     'dispenser_freshness_activation',
     'dispenser_freshness_shape_activation',
-    'dispenser_give_amount_activation',
-    'dispenser_oracle_price_activation',
     'dispenser_ownership_cancel_activation',
-    'gated_handoff_ref_activation',
     'list_owner_activation',
     'oracle_snapshot_age_causality_activation',
     'oracle_stale_round_visibility_activation',
@@ -101,7 +93,6 @@ const REPLACED_STEMS = Object.freeze([
     'vm_exec_lint_activation',
     'vm_lint_global_alias_activation',
     'attest_relay_activation',
-    'attest_relay_reject_slot_activation',
     'attest_response_mirror_activation',
     'attest_zero_conf_activation',
     'checkpoint_commitment_activation',
@@ -119,6 +110,8 @@ const REPLACED_STEMS = Object.freeze([
 // callers read the row through activeAt() by its literal key from the start.
 // Kept apart from REPLACED_STEMS so that list stays the W4 and W5 census.
 const REGISTRY_ONLY_STEMS = Object.freeze([
+    'capability_snapshot_proof_activation',
+    'anchor_checkpoint_seq_bind_activation',
     'anchor_archive_fold_term_activation',
     'anchor_empty_fold_reject_activation',
     'cooldown_maturity_escrow_reversal_activation',
@@ -178,6 +171,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'action_admission_dispatched_only',
     'anchor_fold_reissue_source_author_activation',
     'resource_fault_signal_heights',
+    'host_fault_halt_heights',
     'host_error_stack_strip_heights',
     'json_stringify_reentry_heights',
     'native_stack_terminal_heights',
@@ -195,6 +189,11 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'execute_fee_cap_activation',
     'vote_v3_tick_existence_activation',
     'match_origin_open_activation',
+    'reassemble_chunk_parent_status_activation',
+    'unstake_delegated_row_journal_activation',
+    'active_stake_collation_activation',
+    'attest_callback_batch_position_activation',
+    'airdrop_native_fee_tally_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

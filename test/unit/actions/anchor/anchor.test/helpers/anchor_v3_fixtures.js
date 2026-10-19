@@ -45,6 +45,8 @@ function addArchive(params, bundle, opts) {
 function v3Params(opts = {}) {
     const bundle = vectors.fixture.bundle_v3;
     const sections = (opts.sections === undefined ? bundle.sections : opts.sections)
+        .map(section => Object.assign({}, section,
+            opts.sectionOverrides && opts.sectionOverrides[section.chain]))
         .slice().sort((a, b) => a.chain < b.chain ? -1 : a.chain > b.chain ? 1 : 0);
     const params = ['3', String(bundle.network), String(bundle.snapshot_block), String(sections.length)];
     for (const section of sections) addSection(params, section);

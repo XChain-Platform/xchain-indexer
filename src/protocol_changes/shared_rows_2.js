@@ -265,17 +265,6 @@ addGate('mirror_admission_activation.CANONICAL_HEIGHT_RE', 'constant', /^(?:0|[1
 // this list.
 addGate('mirror_admission_activation.ADMIT_COLUMN_CHAINS', 'constant', ['BTC', 'LTC', 'DOGE']);
 
-// price_batching_floor_activation
-// Per-network pre-batch era floor, as a unix-second block time. 0 (or an
-// absent/unknown network) means the barrier applies at every block. A
-// '<COIN>:<network>' key wins over the bare network key, so one chain's rail
-// start can differ from its siblings' without splitting the map.
-addGate('price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION', 'time', {
-    mainnet: 0,
-    testnet: 0,
-    regtest: 0,
-});
-
 // price_pair_activation
 // Ticker-side bounds either side of the gate (LOCAL COPY, see header).
 addGate('price_pair_activation.PRICE_PAIR_TICKER_MAX_LEGACY', 'constant', 5);
@@ -308,16 +297,6 @@ addGate('price_pair_activation.PRICE_PAIR_RE_WIDE', 'constant', /^[A-Z]{3,6}\/[A
 // price_scale_activation
 // Decimal-side bound in force at/above the gate. The producers' bcformat width.
 addGate('price_scale_activation.PRICE_SCALE_MAX_DECIMALS', 'constant', 8);
-
-// Per-network activation TIME, keyed on the action's own block time.
-//
-// ARMED at genesis on every network, mainnet by the 2026-09-09 ruling on the measurement
-// the header records (0 PRICE actions ever indexed on any mainnet chain).
-addGate('price_scale_activation.PRICE_SCALE_ACTIVATION', 'time', {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 PRICE actions, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
 
 // The two price-value matchers. Anchored and without the /g flag so .test()
 // carries no lastIndex state between calls.

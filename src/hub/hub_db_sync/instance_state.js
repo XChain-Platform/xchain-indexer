@@ -324,6 +324,14 @@ function initChainIdentityState(sync) {
     sync._chainIdProbedIds     = new Set();
     sync._foreignHubChainNoted = false;
 
+    sync._capabilityProofHolds         = new Map();
+    sync._capabilityProofWaiters       = [];
+    sync._capabilityProofRetryTimer    = null;
+    sync._capabilityProofRetrying      = false;
+    sync._capabilityProofRetryApproved = new Set();
+    sync._capabilityProofHoldCapNoted  = false;
+    sync._capabilityProofOverflow      = false;
+
     // Pending waitForSnapshotSync() resolvers. Unlike the match barrier (a cached
     // scalar max(effective_time)), snapshot-presence is set-dependent: a match can
     // only be settled once the capability_snapshots row set for its snapshot_block is

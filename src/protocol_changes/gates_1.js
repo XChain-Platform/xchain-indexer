@@ -73,33 +73,6 @@ addGate('anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTI
 // anchor_archive_fold_term_activation
 addGate('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984, 'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0 });
 
-// archive_batch_author_activation
-// Per-network activation, interpreted against the DOGE block_index of the batch's
-// canonical archive head. Every network is armed from genesis, so all three run the
-// publisher-scoped rule end to end.
-addGate('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION', 'height', {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 archive chunks, measured 2026-09-09)
-    testnet: 0,           // ARMED at genesis 2026-08-14 per the 2026-08-11 operator ruling; the re-genesised testnet has no pre-flag history to keep byte-identical
-    regtest: 0,           // armed from genesis
-});
-
-// archive_head_unverified_gate_activation
-// Per-network activation, interpreted against the DOGE block_index the v1
-// archive head landed in. Every network is armed from genesis. Changing any value
-// here is a consensus change: read the header block first.
-addGate('archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION', 'height', {
-    // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history
-    // (0 archive chunks, measured 2026-09-09). Pinned at genesis in the same wave as the
-    // class-6 height-key repair, which this key is never moved apart from.
-    mainnet: 0,
-    // Armed from genesis. Safe on a chain with history ONLY where that chain's indexer
-    // state is rebuilt from the chain itself, because a rebuild recomputes every block
-    // under this rule and so leaves nothing indexed under the narrower one to contradict.
-    // That rebuild is a precondition of this height, not a consequence of it.
-    testnet: 0,
-    regtest: 0,           // armed from genesis: fresh regtest stacks exercise the widened gate end to end
-});
-
 // attest_admission_activation
 // Per-network activation height (LOCAL COPY of the canonical map in
 // xchain-documentation/protocol/constants.js). Compared against the request's own
@@ -114,28 +87,7 @@ addGate('attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', 'height', {
     regtest: 0,
 });
 
-// attest_broadcast_fee_activation
-// Per-network activation height (LOCAL COPY of the canonical map in
-// xchain-documentation/protocol/constants.js). Compared against the LOCAL block_index
-// of the SETTLING action (the ATTEST v1 response, or the v4 relay response), which is
-// the block whose oracle price the conversion reads and the block the reward rows are
-// stamped with.
-// TESTNET ARMED AT 0, operator-ratified 2026-08-18 under the standing ruling that every
-// platform feature must be ACTIVE on testnet, so nothing is found dormant after release.
-// Safe for the same MEASURED reason as ATTEST_REQUEST_CAP_ACTIVATION rather than by
-// assumption: this gate only changes how a fulfilled ATTEST settle splits its escrow, and
-// the live explorer reports `total: 0` attestation rows EVER recorded on BTC, LTC and DOGE
-// testnet alike (/{TBTC,TLTC,TDOGE}/api/attestations, checked 2026-08-18). No settle has
-// ever happened on testnet, so there is no reward split to reinterpret and replay stays
-// byte-identical. MAINNET was measured the same way on 2026-09-09 and armed at genesis by
-// that day's ruling: 0 attestation rows on BTC, LTC and DOGE mainnet, so no settle exists
-// there either and a from-genesis replay is the witness.
-addGate('attest_broadcast_fee_activation.ATTEST_BROADCAST_FEE_ACTIVATION', 'height', {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 attestations, measured 2026-09-09)
-    testnet: 0,           // ARMED at genesis (operator-ratified 2026-08-18; zero historical attestation settles, so nothing is reinterpreted)
-    regtest: 0,           // ARMED at genesis on regtest so the e2e venue exercises the carve-out
-});
-
+// attest_broadcast_fee_activation cap
 // Per-provider broadcast-fee allowance, denominated in NATIVE coin (whole coins, not
 // satoshis), LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js.
 //
@@ -164,17 +116,7 @@ addGate('attest_broadcast_fee_activation.ATTEST_BROADCAST_FEE_CAP', 'constant', 
     },
 });
 
-// attest_request_cap_activation
-// Per-network activation height (LOCAL COPY of the canonical map in
-// xchain-documentation/protocol/constants.js). Compared against the request's own
-// LOCAL block_index on its own chain.
-addGate('attest_request_cap_activation.ATTEST_REQUEST_CAP_ACTIVATION', 'height', {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 attestations, measured 2026-09-09)
-    testnet: 0,           // ARMED at genesis (operator-ratified 2026-08-18; zero historical attestations, so nothing is reinterpreted)
-    regtest: 0,           // ARMED at genesis so the e2e venue exercises the cap
-});
-
-// The cap VALUES; the map above decides WHEN they apply (LOCAL COPY, parity-tested).
+// The cap values (LOCAL COPY, parity-tested).
 //
 // perContract bounds one contract's share of a block, so a single busy (or hostile)
 // contract cannot take the whole ceiling and starve every other contract's requests.
@@ -246,13 +188,6 @@ addGate('caret_ref_strict_activation.CARET_REF_STRICT_ACTIVATION', 'height', {
     regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the reject end to end
 });
 
-// consolidation_leg_amount_activation
-// Per-network activation, interpreted against the block's consensus timestamp (data['BLOCK_TIME']).
-addGate('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION', 'time', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 SEND, 0 DESTROY, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
 addGate('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 156230, 'LTC:testnet': 4912984, 'DOGE:testnet': 67989993, testnet: UNARMED, regtest: 0 });
 addGate('send_gated_total_tick_id_activation.SEND_GATED_TOTAL_TICK_ID_ACTIVATION', 'time', { mainnet: UNARMED, testnet: 1791804379, 'BTC:testnet': 1791804379, 'LTC:testnet': 1791804379, 'DOGE:testnet': 1791804379, regtest: 0 });
 // dispense_cancelling_match_activation
@@ -277,23 +212,6 @@ addGate('dispense_payment_tally_scale_activation.DISPENSE_TALLY_EXACT_SCALE', 'c
 // The scale the tally has always used, and the scale a native-coin payment
 // keeps. Also the render width of the dispenses row below.
 addGate('dispense_payment_tally_scale_activation.DISPENSE_TALLY_LEGACY_SCALE', 'constant', 8);
-
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']), matching the dispenser-family cohort.
-addGate('dispense_payment_tally_scale_activation.DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION', 'time', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
-
-// dispenser_amount_positivity_activation
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
-addGate('dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION', 'time', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
 
 // dispenser_caps_activation
 // Per-network activation, interpreted against the block's consensus timestamp
@@ -331,24 +249,6 @@ addGate('dispenser_freshness_shape_activation.DISPENSER_FRESHNESS_SHAPE_ACTIVATI
     mainnet:        null,   // INERT: a coin with no entry above inherits the inert posture
     testnet:        0,      // genesis-active: the tracker path is unreachable there, nothing replays differently
     regtest:        0,      // genesis-active so the venue exercises the strict path
-});
-
-// dispenser_give_amount_activation
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
-addGate('dispenser_give_amount_activation.DISPENSER_GIVE_AMOUNT_ACTIVATION', 'time', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
-
-// dispenser_oracle_price_activation
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
-addGate('dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION', 'time', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
 });
 
 // dispenser_ownership_cancel_activation

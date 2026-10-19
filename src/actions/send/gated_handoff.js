@@ -19,8 +19,6 @@
  *
  ********************************************************************/
 
-const gateRegistry = require('../../consensus/gate_registry');
-
 // Installed onto Send.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
@@ -88,10 +86,8 @@ module.exports = {
         // Siblings hold WIRE parameters (batch.js splits the raw command and
         // resolves no address references), while the SDK compacts a MESSAGE
         // DESTINATION to `^<id>` for any already-indexed recipient, so a byte
-        // compare misses the ordinary wallet-composed handoff. Above the flag
-        // day a caret spelling is resolved first; plane and arming state beside the
-        // gated_handoff_ref_activation row in src/protocol_changes/.
-        let refRule = gateRegistry.activeAt('gated_handoff_ref_activation.GATED_HANDOFF_REF_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
+        // compare misses the ordinary wallet-composed handoff. A caret spelling
+        // is resolved first.
 
         for(let s of siblings){
             if(s.action !== 'MESSAGE') continue;
@@ -104,7 +100,7 @@ module.exports = {
             // Caret-only, so a full-address handoff costs no extra read, and
             // fail-closed on both edges: a rejected reference and a value still
             // caret-prefixed after resolution match nothing.
-            if(refRule && dest.substring(0,1) === '^'){
+            if(dest.substring(0,1) === '^'){
                 let destRef = await this.indexerDb.resolveAddressRefChecked(dest, data['BLOCK_INDEX']);
                 if(destRef.rejected) continue;
                 dest = String(destRef.value || '');

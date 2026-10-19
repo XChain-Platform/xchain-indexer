@@ -191,18 +191,12 @@ module.exports = {
 
     // At least one whole unit must be dispensable.
     checkDispenseFillCount(ctx, row){
-    let { block_time } = ctx;
         let multiplier = row.multiplier;
         let error = row.error;
 
-            // Verify at least one unit can be dispensed (multiplier > 0). The legacy
-            // reading tests equality, so a NEGATIVE count settles valid having skipped every
-            // downstream guard, and the GIVE_REMAINING recompute then subtracts a negative
-            // (the dispenser_amount_positivity_activation row's note in src/protocol_changes/
-            // carries the chain and the gating argument). Guard the fill COUNT, not a price
-            // field: three producers feed it.
-            let rejectNonPositiveFill = gateRegistry.activeAt('dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION', this.config['NETWORK'], null, null, block_time);
-            if(!error && (rejectNonPositiveFill ? !this.util.bcgt(multiplier, '0') : multiplier == 0))
+            // Verify at least one unit can be dispensed (multiplier > 0). Guard the fill
+            // count, not a price field, because three pricing paths produce it.
+            if(!error && !this.util.bcgt(multiplier, '0'))
                 error = 'invalid: insufficient funds ';
 
         row.error = error;

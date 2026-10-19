@@ -28,13 +28,16 @@ const { archiveReissueRefusal } = require('./archive_reissue_guard.js');
 
 const { getLogger } = require('../../../observability/index.js');
 
-async function checkReplayGuards(handler, data, error){
+const CHECKPOINT_SEQ_BIND_GATE =
+    'anchor_checkpoint_seq_bind_activation.ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVATION';
+
+async function checkReplayGuards(handler, data, error, validOnly){
     // Replay guards: never accept a seq BELOW the recorded max. Equal is allowed: a v0
     // and its v1 share the same checkpoint_seq by design (same wrapper), and an exact
     // replay is signature-bound to identical content, so it can only produce a harmless
     // duplicate row.
     if(!error){
-        let maxSeq = await handler.indexerDb.getMaxAnchorCheckpointSeq(data['CHAIN'], data['NETWORK']);
+        let maxSeq = await handler.indexerDb.getMaxAnchorCheckpointSeq(data['CHAIN'], data['NETWORK'], validOnly);
         if(maxSeq !== null && Number(data['CHECKPOINT_SEQ']) < maxSeq)
             error = 'invalid: CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
     }
@@ -62,7 +65,7 @@ async function checkReplayGuards(handler, data, error){
     if(!error){
         let wrapperRows = await handler.actions.protocolChanges.isEnabled(
             'ARCHIVE_REPLAY_WRAPPER_WATERMARK', Number(data['BLOCK_INDEX']));
-        let wm = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows);
+        let wm = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows, validOnly);
         let batchStale      = (wm.batchSeq !== null && Number(data['MATCH_BATCH_SEQ']) < wm.batchSeq);
         let checkpointStale = (wm.checkpointSeq !== null && Number(data['CHECKPOINT_SEQ']) < wm.checkpointSeq);
         if(batchStale && checkpointStale)
@@ -128,6 +131,12 @@ async function parseArchiveHead(handler, params, data, error, format){
 
     // Structural validation
     error = validate.validateHeadShape(handler.config, data, error);
+    let checkpointSeqBind = gateRegistry.activeAt(CHECKPOINT_SEQ_BIND_GATE,
+        handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
+    if(checkpointSeqBind){
+        let reason = validate.checkpointSeqBindReason(data);
+        if(!error && reason) error = 'invalid: ' + reason;
+    }
     // Parse the signature list, then the publisher tail it locates
     let root = validate.parseHeadSigs(params, sigBase, error);
     let sigs = root.sigs;
@@ -136,7 +145,7 @@ async function parseArchiveHead(handler, params, data, error, format){
     let publisherSigs = tail.publisherSigs;
     error = tail.error;
 
-    error = await checkReplayGuards(handler, data, error);
+    error = await checkReplayGuards(handler, data, error, checkpointSeqBind);
 
     // v1 archive integrity (single-chunk batches verify inline; chunked batches verify
     // at reassembly when the last v2 arrives)

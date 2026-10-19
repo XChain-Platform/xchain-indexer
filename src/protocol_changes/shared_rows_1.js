@@ -340,15 +340,6 @@ addGate('attest_relay_activation.ATTEST_RELAY_ACTIVATION', 'height', {
     regtest: 0,
 });
 
-// attest_relay_reject_slot_activation
-// Per-network activation, interpreted against the LANDING block's consensus
-// timestamp (data['BLOCK_TIME']) on the home chain.
-addGate('attest_relay_reject_slot_activation.ATTEST_RELAY_REJECT_SLOT_ACTIVATION', 'time', {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 attestations, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-});
-
 // attest_response_mirror_activation
 // Per-network activation height (LOCAL COPY, parity-tested). Compared against
 // the ATTEST v0 request's own BTC block_index (the v3's, for a relayed request).

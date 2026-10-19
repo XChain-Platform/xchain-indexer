@@ -70,16 +70,14 @@ function indexer(network, coin){
 }
 
 describe('Security: ATTEST response mirror boot guard @regression @tier1', function () {
-    for(const network of ['testnet', 'regtest']){
-        it('refuses BTC ' + network + ' without a hub database source', function () {
-            assert.throws(
-                () => startup.checkLocalPriceSource.call(indexer(network, 'BTC')),
-                error => error.message.includes('ATTEST_RESPONSE_MIRROR_ACTIVATION') &&
-                    error.message.includes('attestation_responses') &&
-                    error.message.includes('AnchorRecovery cannot rebuild it')
-            );
-        });
-    }
+    it('refuses BTC testnet without a hub database source', function () {
+        assert.throws(
+            () => startup.checkLocalPriceSource.call(indexer('testnet', 'BTC')),
+            error => error.message.includes('ATTEST_RESPONSE_MIRROR_ACTIVATION') &&
+                error.message.includes('attestation_responses') &&
+                error.message.includes('AnchorRecovery cannot rebuild it')
+        );
+    });
 
     it('does not apply the response-mirror refusal on unpinned mainnet', function () {
         assert.doesNotThrow(

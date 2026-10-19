@@ -22,12 +22,12 @@
     },
     "attest_broadcast_fee_activation": {
       "path": "src/actions/attest/gates/attest_broadcast_fee_gate.js",
-      "hash": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
+      "hash": "3556f756a087fc67d197b5893184525d923b45a11f213c73396893448e497758",
       "twins": []
     },
     "attest_request_cap_activation": {
       "path": "src/actions/attest/gates/attest_request_cap_gate.js",
-      "hash": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
+      "hash": "9566f5894ba3646e02944034e55166813cef72e5d0d2c7ba0e8469488c4e061b",
       "twins": []
     },
     "attest_responsible_widening_activation": {
@@ -66,7 +66,7 @@
     },
     "dispense_payment_tally_scale_activation": {
       "path": "src/actions/dispense/dispense_payment_tally_scale_gate.js",
-      "hash": "f97c0346f8a4a506e78aae6f6e6c88418f2a7d872ce21f06f2036d69946ccd1c",
+      "hash": "4ef246800ca989ef3a42f847da1aec8018941fbd44cb4d546af269cb46f1a649",
       "twins": []
     },
     "dispenser_send_amount_compare_activation": {
@@ -103,12 +103,7 @@
     },
     "oracle_preload_causality_activation": {
       "path": "src/db/prices/oracle_preload_causality_gate.js",
-      "hash": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
-      "twins": []
-    },
-    "price_batching_floor_activation": {
-      "path": "src/consensus/gates/price_batching_floor_gate.js",
-      "hash": "b58de6c4d13f4f23a238cf24c6d038dc063ab2f0e21f319684bc22193b7cc8ad",
+      "hash": "90b414005e4ee0d387068f8f7b0f547573dbde1c4672d71ced5057331be4a5be",
       "twins": []
     },
     "price_pair_activation": {
@@ -120,7 +115,7 @@
     },
     "price_scale_activation": {
       "path": "src/consensus/gates/price_scale_gate.js",
-      "hash": "49dd656650002b1570d1e1733f140f37f4ffd334ebeeae9daf6d9ff6f2cbf2ef",
+      "hash": "35f58aae3ea07744fbbf63c26f43db78d67c99c3d3a98baed66b7ca9ac95dc6d",
       "twins": [
         "xchain-hub"
       ]
@@ -137,7 +132,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "101cb384c5e074ee6686347333319a4be02024e2d8c179aff9f2d58f8bb7768f",
+      "hash": "4acc7ba7dcea03d214a1a8cf8da9fcf469f71a9cd5b37302fdeb0b3314d4fb1b",
       "twins": [],
       "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
@@ -184,7 +179,7 @@
     },
     "stateHash": {
       "path": "src/consensus/state_hash.js",
-      "hash": "5ac03b6746c93bc0615d0a4d857f5eb4861c44aa5890ee60e922794ed29bc785",
+      "hash": "86741bb5a7e5716261b9e46ccdad8f73d75195c75e3a4ef097f48a7467d8797b",
       "twins": [
         "xchain-sync"
       ]
@@ -2154,6 +2149,90 @@
       "to": "f97c0346f8a4a506e78aae6f6e6c88418f2a7d872ce21f06f2036d69946ccd1c",
       "reason": "The dispense tally scale gate takes the fiat pricing activation as a fifth argument.",
       "date": "2026-10-15"
+    },
+    {
+      "id": "dispense_payment_tally_scale_activation",
+      "from": "f97c0346f8a4a506e78aae6f6e6c88418f2a7d872ce21f06f2036d69946ccd1c",
+      "to": "4ef246800ca989ef3a42f847da1aec8018941fbd44cb4d546af269cb46f1a649",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-17"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "101cb384c5e074ee6686347333319a4be02024e2d8c179aff9f2d58f8bb7768f",
+      "to": "3f6e7dd23d559d376dabbd3d9f7b109151efb6eee27b649044d2619e146f3f7c",
+      "reason": "string result meter registry twin",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "3f6e7dd23d559d376dabbd3d9f7b109151efb6eee27b649044d2619e146f3f7c",
+      "to": "a1200eb419e15af92ce69e0e0df8f95971d66a3e3c43bd37d9b059ad854b6e32",
+      "reason": "export the string receiver meter activation constants",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "attest_request_cap_activation",
+      "from": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
+      "to": "9566f5894ba3646e02944034e55166813cef72e5d0d2c7ba0e8469488c4e061b",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "price_scale_activation",
+      "from": "49dd656650002b1570d1e1733f140f37f4ffd334ebeeae9daf6d9ff6f2cbf2ef",
+      "to": "35f58aae3ea07744fbbf63c26f43db78d67c99c3d3a98baed66b7ca9ac95dc6d",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "stateHash",
+      "from": "5ac03b6746c93bc0615d0a4d857f5eb4861c44aa5890ee60e922794ed29bc785",
+      "to": "a47cbbadb6e1f624c3dde36feb74985ba2a066c1cb5e1f09d17e8540f9c28515",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "oracle_preload_causality_activation",
+      "from": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
+      "to": "90b414005e4ee0d387068f8f7b0f547573dbde1c4672d71ced5057331be4a5be",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "stateHash",
+      "from": "a47cbbadb6e1f624c3dde36feb74985ba2a066c1cb5e1f09d17e8540f9c28515",
+      "to": "86741bb5a7e5716261b9e46ccdad8f73d75195c75e3a4ef097f48a7467d8797b",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "attest_broadcast_fee_activation",
+      "from": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
+      "to": "3556f756a087fc67d197b5893184525d923b45a11f213c73396893448e497758",
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "price_batching_floor_activation",
+      "from": "b58de6c4d13f4f23a238cf24c6d038dc063ab2f0e21f319684bc22193b7cc8ad",
+      "to": null,
+      "reason": "XC\u002d3351 gate retirement",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "a1200eb419e15af92ce69e0e0df8f95971d66a3e3c43bd37d9b059ad854b6e32",
+      "to": "278796962385b78f7b3ec57d211fd0da2ae23bfb09faf8a0abbcca7cc63705cf",
+      "reason": "add the VM toString size meter twin row",
+      "date": "2026-10-18"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "278796962385b78f7b3ec57d211fd0da2ae23bfb09faf8a0abbcca7cc63705cf",
+      "to": "4acc7ba7dcea03d214a1a8cf8da9fcf469f71a9cd5b37302fdeb0b3314d4fb1b",
+      "reason": "Split the indexer-only registry rows into a sixth part file",
+      "date": "2026-10-18"
     }
   ]
 }

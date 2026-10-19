@@ -72,6 +72,12 @@ const { loadSplits, compareWithSplits } = require('./suite_title_map/split_map.j
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const MOCHA_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'mocha');
+const DRY_RUN_DB_ENV = {
+    TEST_DB_HOST: '127.0.0.1',
+    TEST_DB_PORT: '3306',
+    TEST_DB_USER: 'suite_title_dry_run',
+    TEST_DB_PASS: 'not-a-credential-no-connection-is-opened',
+};
 
 /**
  * A shell-ish split that keeps quoted globs whole. The scripts are plain
@@ -151,9 +157,11 @@ function collect(scriptName, script) {
     // the same suites twice and make one rename look like two.
     if (parsed.composite) return { composite: parsed.composite };
 
+    // Mocha --dry-run opens no connection; these values only satisfy load-time
+    // guards in integration suites that validate the database environment.
     const res = spawnSync(MOCHA_BIN, ['--dry-run', '--reporter', 'json', ...parsed.args], {
         cwd: REPO_ROOT,
-        env: { ...process.env, ...parsed.env },
+        env: { ...DRY_RUN_DB_ENV, ...process.env, ...parsed.env },
         maxBuffer: 256 * 1024 * 1024,
         encoding: 'utf8',
     });

@@ -14,10 +14,6 @@
 'use strict';
 
 const sinon = require('sinon');
-// Any network the registry row (consolidation_leg_amount_activation, read by the
-// SEND and DESTROY leg mergers through activeAt) does not carry reads as OFF, which
-// is how these tests reach the legacy behavior without editing a threshold.
-const GATE_OFF_NETWORK = 'no-such-network';
 
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DEST   = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
@@ -38,4 +34,4 @@ function makeActionsCtx(indexer) {
     };
 }
 
-module.exports = { GATE_OFF_NETWORK, SOURCE, DEST, DEST2, makeActionsCtx };
+module.exports = { SOURCE, DEST, DEST2, makeActionsCtx };

@@ -49,7 +49,7 @@ async function runListingGuard(handler, st){
     let guardFee = 0;
     // Run the GIVE token's controller guard before allowing this token to be listed for sale
     if(!error && format==0 && giveTokenInfo){
-        let gasInfo = await handler.indexerDb.getTokenInfo(handler.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let gasInfo = await handler.indexerDb.getTokenInfo(handler.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
         let result  = await handler.util.maybeRunControllerGuard(handler.actions, handler.indexerDb, {
             actionType:   'SWAP_CREATE',
             tick:         data['GIVE_TICK'],

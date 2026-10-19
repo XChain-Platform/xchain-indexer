@@ -76,11 +76,9 @@ module.exports = {
         // payments. GIVE_ESCROW is deliberately NOT constrained here: an empty
         // escrow is a legitimate open-now-refill-later dispenser, and with a
         // positive GIVE_AMOUNT the clamp drives the multiplier to 0 so the dispense
-        // settles invalid and consumes nothing. Gated (the
-        // dispenser_give_amount_activation row): this rejects creates the ungated
-        // engine accepts, so replay below the flag-day stays byte-identical.
+        // settles invalid and consumes nothing. Rejecting the create here keeps
+        // that invalid dispenser from entering the engine.
         if(!error && format==0 && !isOwnershipGive &&
-           gateRegistry.activeAt('dispenser_give_amount_activation.DISPENSER_GIVE_AMOUNT_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
            (this.util.isNull(data['GIVE_AMOUNT']) || !this.util.bcgt(data['GIVE_AMOUNT'], '0')))
             error = "invalid: GIVE_AMOUNT (required and greater than 0 when GIVE_OWNERSHIP=0)";
 
@@ -108,18 +106,16 @@ module.exports = {
         // Verify a NATIVE-COIN-priced GET_AMOUNT against COIN_DECIMALS, as order.js resolves
         // its native side. The rule above is a conjunct on getTokenInfo, which an empty
         // GET_TICK never loads, so that shape reached storage with no sign or precision
-        // check. Gated (the dispenser_amount_positivity_activation row): it rejects creates
-        // the ungated engine accepts, so replay below the threshold stays byte-identical.
-        let getAmountPositivity = gateRegistry.activeAt('dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
-        if(!error && format==0 && getAmountPositivity && this.util.isNull(data['GET_TICK']) &&
+        // check. Native-coin dispensers therefore use the chain's coin precision.
+        if(!error && format==0 && this.util.isNull(data['GET_TICK']) &&
            !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(this.config['COIN_DECIMALS'], data['GET_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GET_AMOUNT (format)";
 
         // Require a strictly-positive GET_AMOUNT on a dispenser that names its own price,
         // mirroring the same positive-amount rule at order.js. Skipped for FIAT and oracle
         // dispensers, where the price comes from FIAT_AMOUNT or the oracle round and an
-        // empty GET_AMOUNT is legitimate. Gated for the same reason as the rule above.
-        if(!error && format==0 && getAmountPositivity &&
+        // empty GET_AMOUNT is legitimate.
+        if(!error && format==0 &&
            this.util.isNull(data['FIAT_CODE']) && this.util.isNull(data['ORACLE_ADDRESS']) &&
            !this.util.bcgt(data['GET_AMOUNT'], '0'))
             error = "invalid: GET_AMOUNT (must be positive)";
@@ -177,10 +173,9 @@ module.exports = {
         // through the fee path, and checking every edit unconditionally would newly reject
         // expiration-only or list-only edits on a dispenser whose oracle is perfectly fine.
         //
-        // Gated (see the dispenser_oracle_price_activation row in src/protocol_changes/): this rejects creates the ungated
-        // engine accepts, so replay below the flag-day stays byte-identical.
+        // The FIAT_DISPENSER_PRICING protocol change remains the activation condition
+        // for this validity rule.
         if(!error && format==0 && !this.util.isNull(data['ORACLE_ADDRESS']) &&
-           gateRegistry.activeAt('dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
            await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', data['BLOCK_INDEX'])){
             let priceDb = (this.actions && this.actions.hubDb) || this.indexerDb;
             let priceCheck = await this.util.requireEffectiveOraclePrice(data['BLOCK_TIME'], {

@@ -25,7 +25,16 @@
 // and every mixin read the same instance of each.
 const { usesCapabilitySnapshot } = require('../shared.js');
 
+const gateRegistry = require('../../consensus/gate_registry');
+const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 const { getLogger } = require('../../observability/index.js');
+
+function activeStakeOrderCollate(config, blockIndex){
+    let active = gateRegistry.activeAt(
+        'active_stake_collation_activation.ACTIVE_STAKE_COLLATION_ACTIVATION',
+        config['NETWORK'], config['COIN'], blockIndex, null);
+    return stakeWeightCollation.stakeWeightCollate(active);
+}
 
 // The row filter one getActiveStakeByPubkey mode adds, as the SQL suffix and the binds it
 // appends in order. No blockIndex means no filter: every valid row of the pubkey counts.
@@ -218,9 +227,10 @@ module.exports = {
         // additive-until-revoked semantics) with no MIN_STAKE floor: the
         // governance quorum is over every staker's effective keys.
         let eff = this.effectiveCapabilitySetSql(valid_id, blockIndex, '0');
+        let orderCollate = activeStakeOrderCollate(this.config, blockIndex);
         let query = `SELECT pubkey, MAX(total) AS total FROM (${eff.sql}) eff
                      GROUP BY pubkey
-                     ORDER BY pubkey
+                     ORDER BY pubkey${orderCollate}
                      LIMIT ?`;
         let rows = await this.doQuery(query, [...eff.args, limit]);
         let truncated = rows.length >= limit;
@@ -297,9 +307,10 @@ module.exports = {
         // upgrade, not a per-node override.
         let limit = this.config['VALIDATOR_QUERY_LIMIT'];
         let eff = this.effectiveCapabilitySetSql(valid_id, blockIndex, minStake);
+        let orderCollate = activeStakeOrderCollate(this.config, blockIndex);
         let query = `SELECT pubkey, MAX(total) AS total FROM (${eff.sql}) eff
                      GROUP BY pubkey
-                     ORDER BY pubkey
+                     ORDER BY pubkey${orderCollate}
                      LIMIT ?`;
         let rows = await this.doQuery(query, [...eff.args, limit]);
         let truncated = rows.length >= limit;

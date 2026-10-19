@@ -29,12 +29,10 @@ const Utility = require('../../../../../src/utility');
 const { makeAnchorDb } = require('../../../../helpers/sqlAnchorDb');
 const {
     buildStateHashData,
-    ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL,
-    ARCHIVE_INVALID_STATE_HASH_ACTIVATION, isArchiveInvalidStateHashActive,
     ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, isArchiveInvalidHeightKeyActive,
     ARCHIVE_CHUNK_HEIGHT_COL, ARCHIVE_CHUNK_HEIGHT_COL_LEGACY,
     POLL_FINALIZE_STATE_HASH_ACTIVATION, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
-    INDEX_MAP_STATE_HASH_ACTIVATION, BET_STATUS_STATE_HASH_ACTIVATION, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
+    BET_STATUS_STATE_HASH_ACTIVATION, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
 } = require('../../../../../src/consensus/state_hash');
 
 const util = new Utility();
@@ -87,24 +85,21 @@ function anchorSqlOf(captured){
 let abhPrev;
 
 describe('state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression', () => {
-    let pollPrev, tokenPrev, indexPrev, betPrev;
+    let pollPrev, tokenPrev, betPrev;
     before(function(){
     pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;  POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = 999999999;
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
-    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;      INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
     abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
     ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('height key INERT: a real stamped batch selects ZERO rows, because c.block_index is NULL on the chunk', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
     await withHeight(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, 999999999, async () => {
     const captured = [];
     const db = makeAnchorDb(captured);
@@ -119,10 +114,8 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     } finally { db.close(); }
     });
     });
-    });
 
     it('height key ARMED: the same real rows now yield the stamped parent, ordered by action_index', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
     await withHeight(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, 0, async () => {
     const captured = [];
     const db = makeAnchorDb(captured);
@@ -141,28 +134,24 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     } finally { db.close(); }
     });
     });
-    });
 });
 
 describe('state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression', () => {
-    let pollPrev, tokenPrev, indexPrev, betPrev;
+    let pollPrev, tokenPrev, betPrev;
     before(function(){
     pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;  POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = 999999999;
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
-    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;      INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
     abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
     ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('height key ARMED: a completing chunk in ANOTHER block is out of scope (the class stays per-block)', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
     await withHeight(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, 0, async () => {
     const db = makeAnchorDb();
     try {
@@ -178,10 +167,8 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     } finally { db.close(); }
     });
     });
-    });
 
     it('height key ARMED: a non-valid completing chunk does not stamp (rejected duplicate stays out of scope)', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
     await withHeight(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, 0, async () => {
     const db = makeAnchorDb();
     try {
@@ -197,28 +184,24 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     } finally { db.close(); }
     });
     });
-    });
 });
 
 describe('state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression', () => {
-    let pollPrev, tokenPrev, indexPrev, betPrev;
+    let pollPrev, tokenPrev, betPrev;
     before(function(){
     pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;  POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = 999999999;
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
-    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;      INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
     abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
-    INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
     ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('active: a real stamped parent folds into state_hash; a follower that drops it HALTS (different hash)', async function(){
-    await withHeight(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, 0, async () => {
     await withHeight(ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, 0, async () => {
     const stamped = makeAnchorDb();
     const dropped = makeAnchorDb();
@@ -245,7 +228,6 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     'a dropped invalid_archive upsert MUST change state_hash so the follower halts');
     assert.strictEqual(s2.hash, s.hash, 'identical stamps hash identically (no false halt)');
     } finally { stamped.close(); dropped.close(); again.close(); }
-    });
     });
     });
 });

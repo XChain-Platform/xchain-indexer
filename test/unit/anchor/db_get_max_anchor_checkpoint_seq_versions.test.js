@@ -74,4 +74,48 @@ describe('getMaxAnchorCheckpointSeq() version filter (#2239)', function () {
         sinon.stub(db, 'doQuery').resolves([{ max_seq: null }]);
         assert.strictEqual(await db.getMaxAnchorCheckpointSeq('BTC', 'regtest'), null);
     });
+
+    it('keeps the default statement unchanged and narrows valid-only reads', async function () {
+        const db   = makeDb();
+        const stub = sinon.stub(db, 'doQuery').resolves([{ max_seq: 42 }]);
+
+        await db.getMaxAnchorCheckpointSeq('BTC', 'regtest');
+        await db.getMaxAnchorCheckpointSeq('BTC', 'regtest', false);
+        await db.getMaxAnchorCheckpointSeq('BTC', 'regtest', true);
+
+        assert.deepStrictEqual(stub.secondCall.args, stub.firstCall.args,
+                  'an omitted or false valid-only argument must produce the same statement and values');
+        assert.ok(/status\s+IN\s*\(\s*'valid'\s*,\s*'unverified'\s*\)/i.test(stub.firstCall.args[0]),
+                  'default reads must continue to include unverified rows');
+        assert.ok(/status\s+IN\s*\(\s*'valid'\s*\)/i.test(stub.thirdCall.args[0]),
+                  'valid-only reads must include valid rows');
+        assert.ok(!/unverified/i.test(stub.thirdCall.args[0]),
+                  'valid-only reads must exclude unverified rows');
+        assert.deepStrictEqual(stub.thirdCall.args[1], stub.firstCall.args[1],
+                  'valid-only reads must keep the existing bound values');
+    });
+
+    it('narrows an omitted valid-only argument at the bind activation height', async function () {
+        const env = 'XC_ANCHOR_CHECKPOINT_SEQ_BIND_REGTEST_ACTIVATION';
+        const saved = process.env[env];
+        try {
+            process.env[env] = '7';
+            const db = makeDb();
+            const stub = sinon.stub(db, 'doQuery').resolves([{ max_seq: 42 }]);
+
+            db.blockIndex = 6;
+            await db.getMaxAnchorCheckpointSeq('BTC', 'regtest');
+            assert.ok(/unverified/i.test(stub.firstCall.args[0]));
+
+            db.blockIndex = 7;
+            await db.getMaxAnchorCheckpointSeq('BTC', 'regtest');
+            assert.ok(!/unverified/i.test(stub.secondCall.args[0]));
+
+            await db.getMaxAnchorCheckpointSeq('BTC', 'regtest', false);
+            assert.ok(/unverified/i.test(stub.thirdCall.args[0]));
+        } finally {
+            if(saved === undefined) delete process.env[env];
+            else process.env[env] = saved;
+        }
+    });
 });

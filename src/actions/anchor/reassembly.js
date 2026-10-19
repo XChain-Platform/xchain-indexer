@@ -26,6 +26,7 @@ const { reportArchiveFailure } = require('./archive/archive_verdict.js');
 
 const FOLD_GATE = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const VERDICT_GATE = 'archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION';
+const CHUNK_PARENT_STATUS_GATE = 'reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATUS_ACTIVATION';
 
 function archiveFailureIsSectionScoped(handler, version, height, coin){
     return Number(version) === 3 &&
@@ -43,29 +44,20 @@ function archiveFailureIsSectionScoped(handler, version, height, coin){
 // the chunk-side path (via aaq.archiveChunkCoverage) so results stay deterministic
 // across nodes.
 //
-// The head's own status may be 'valid' OR, at/after the flag day below,
-// 'unverified': a node with no mirrored oracle_publish snapshot stores every archive
+// The head's own status may be 'valid' or 'unverified': a node with no mirrored
+// oracle_publish snapshot stores every archive
 // head 'unverified', yet the head still carries the same signed BATCH_CRC32 and the
 // chunk-side path verifies regardless of the parent head's status, so 'valid' alone
 // leaves the ordering nondeterminism open on exactly those nodes.
 //
-// That widening is GATED, and must never be re-landed ungated (operator ruling
-// 2026-08-16). It is preimage-moving and it does not move the two node classes
-// together: a MIRRORED node holding the snapshot has a THIRD outcome on the same
-// head (the quorum branch in quorum.js sets error = 'invalid: insufficient signer stake' /
-// 'insufficient valid signatures'), on which this gate never runs and no stamp
-// lands, while a snapshot-less node's same head is 'unverified' with error null and
-// DOES stamp. invalid_archive is projected by stateHash.js class 6, so ungated the
-// two classes silently fork wherever ARCHIVE_INVALID_STATE_HASH_ACTIVATION is armed.
-// Rationale and the pinning train live beside the registry row
-// archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION
-// in src/protocol_changes/; do not re-argue it here.
+// A MIRRORED node holding the snapshot may instead have the quorum branch in
+// quorum.js set an error, in which case reassembly does not run and no stamp lands.
+// A snapshot-less node's same head is 'unverified' with error null and does run.
+// The unconditional anchor_invalid state-hash class projects invalid_archive, so
+// both arrival paths must apply the same valid-or-unverified admission rule.
 async function reassembleAtHead(handler, data, error, format){
-    let admitUnverifiedHead = gateRegistry.activeAt(
-        'archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION',
-        handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null);
     if(!error &&
-       (data['STATUS'] === 'valid' || (admitUnverifiedHead && data['STATUS'] === 'unverified')) &&
+       (data['STATUS'] === 'valid' || data['STATUS'] === 'unverified') &&
        Number(data['TOTAL_CHUNKS']) > 1){
         // At/after the publisher-scoped-archive flag day, the head reassembles its OWN
         // publisher's chunks. Below it, the canonical-head rule (whatever it selects) is kept.
@@ -115,19 +107,27 @@ async function reassembleAtHead(handler, data, error, format){
     }
 }
 
+async function chunkParentStatusAdmitted(handler, data, parent, gateActive){
+    if(!gateActive) return true;
+
+    let status = await handler.indexerDb.getStatusString(parent.status_id);
+    if(status === 'valid') return true;
+    return status === 'unverified';
+}
+
 // When the last chunk lands, verify the reassembled archive against the
-// parent v1's signed CRC and flag the parent if the blob doesn't bind. Status
-// handling and completeness are IDENTICAL to the head-side gate above (via
-// aaq.archiveChunkCoverage): the completing chunk's own status is 'valid' here (a
-// chunk is never stored 'unverified', since only parseCheckpoint's snapshot-less
-// branch assigns that status, so the '|| unverified' term is unreachable on this
-// path and carries no flag day of its own; the head-side twin's 'unverified' term
-// IS gated, see the archive_head_unverified_gate_activation row in src/protocol_changes/, because there it is
-// reachable and preimage-moving). Completeness is decided by index coverage, never
-// by a bare chunk count, so a stray out-of-range orphan can neither pad an
-// incomplete set to length nor block a complete one.
+// parent v1's signed CRC and flag the parent if the blob doesn't bind. The
+// completing chunk must be usable first. Once CHUNK_PARENT_STATUS_GATE is active,
+// the parent must also have the valid or unverified status the head-side
+// path admits. Completeness is decided by index coverage, never by a bare chunk
+// count, so a stray out-of-range orphan can neither pad an incomplete set to
+// length nor block a complete one.
 async function reassembleAtChunk(handler, data, parent, scope, error){
-    if(!error && parent && (data['STATUS'] === 'valid' || data['STATUS'] === 'unverified')){
+    let journal = gateRegistry.activeAt(
+        CHUNK_PARENT_STATUS_GATE, handler.config['NETWORK'], null,
+        Number(data['BLOCK_INDEX']), null);
+    if(!error && parent && (data['STATUS'] === 'valid' || data['STATUS'] === 'unverified') &&
+       await chunkParentStatusAdmitted(handler, data, parent, journal)){
         let chunks = await handler.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
         let ordered = aaq.archiveChunkCoverage(chunks, Number(data['TOTAL_CHUNKS']));
         if(ordered){
@@ -148,7 +148,7 @@ async function reassembleAtChunk(handler, data, parent, scope, error){
                         block_index:     data['BLOCK_INDEX']
                     },
                     actionIndex: Number(parent.action_index)
-                }, sectionScoped);
+                }, sectionScoped, journal);
             } else if(parent.match_count != null &&
                       gateRegistry.activeAt(
                           'archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION',
@@ -168,7 +168,7 @@ async function reassembleAtChunk(handler, data, parent, scope, error){
                         block_index:     data['BLOCK_INDEX']
                     },
                     actionIndex: Number(parent.action_index)
-                }, sectionScoped);
+                }, sectionScoped, journal);
             }
         }
     }

@@ -201,7 +201,7 @@
   },
   "2026-08-12-validator-rewards-derive-block-index.sql": {
     "residue": "babc8155515b1ed7a4613605e0c5e67cfdc4defa29dfae5b6c51d31273cc61ea",
-    "sha256": "a911c38ca928743bb65c763c8143a5a3ad63de18da72b32da83a4971c1735ed8"
+    "sha256": "a4e6d570b9b42b4ebf4d3348a0bfc177b3270991bdc54ae96140c17377e17067"
   },
   "2026-08-13-anchor-reward-attestations-doge-anchor-txid.sql": {
     "residue": "f4a81464164fd2f991e6da95ff89fffe61031e1f668c96174ef6c7aca05c15fa",
@@ -386,5 +386,45 @@
   "2026-10-08-token-bridge-fields.sql": {
     "residue": "54620667c5ff1aa2276a60683d248023cb8427ec9bb577b7616bcd874e32f1f8",
     "sha256": "64127c01e9b417496f324fa8c54393b811679b0550e16e5b9d4b5f44e428692b"
+  },
+  "2026-10-09-bet-edits.sql": {
+    "residue": "71a24b0a53a6d0f08b9a34c9447eddc51532423befe13c159ff708e1056c1d29",
+    "sha256": "42f56e7739af089ac4ecc11e87ef74fffa08f2610695b9f85d2e38728be3e53c"
+  },
+  "2026-10-09-remote-token-snapshots.sql": {
+    "residue": "906882ca799b38025a42403e8bbdc13fbb0f295efec2d6e1959c53559f85af09",
+    "sha256": "a399854d4c45d7c3021ab84b53834b78d3fb64430b1dadcc4754db4af27212f6"
+  },
+  "2026-10-14-anchor-block-doge-and-checkpoint-block-idx.sql": {
+    "residue": "27885cce2ec1df18d26cc5656428a3adb5ed2ca57f23139c964e926fc31c0d63",
+    "sha256": "419964d1d4775019f12bd1f7e2481b5e3b16bffcc661fc5d6a3aa201d854ab73"
+  },
+  "2026-10-14-price-snapshots-refchain-block-idx.sql": {
+    "residue": "bee235bc78115dae11f4dfa5327320d94e06965e40cafa86f345e7b5456acecd",
+    "sha256": "4f0c81c084e065acbed9fe205d95b392cc9e63d900308bcb3c4afabae67db9e1"
+  },
+  "2026-10-14-remote-token-admission.sql": {
+    "residue": "d6d39c60107cbb10eb8969ba04e6a8be620205c02d71fdd3f44554889e134c65",
+    "sha256": "f334a72ce620b84221354506b0dd885d3cda3f9457b81068b7d7b531b6115439"
+  },
+  "2026-10-15-anchor-reward-attestation-copies.sql": {
+    "residue": "e69c68de546b3fc19ac957a9ae371150d25eca6b4fce68f120d513f606c7c49a",
+    "sha256": "ede707d68173a90925303f1c1ba534d0dc839cda677a77a728226fa3db81364a"
+  },
+  "2026-10-17-dispenser-statuses-dispenser-action-idx.sql": {
+    "residue": "a79dc59b8d161ad2d564c42922aa339e439828c4efa3dd46356e9278b7a93926",
+    "sha256": "fea0bd480722af6fb878fc5e89c9d12fd5111c9d9d43ed17f0a4c6c66ecf2cbd"
+  },
+  "2026-10-17-dispensers-sweeps-column-order.sql": {
+    "residue": "247e1bca9106d62ec82abcc9d3a2da5b2e969d619a37940509fd192ad4ffd772",
+    "sha256": "7890fcc366c7150af6b5b7f96ca8114cd8dc494840c4783586ee085d56d61277"
+  },
+  "2026-10-17-ledger-address-tick-amount-index.sql": {
+    "residue": "8acb44e5c2922e13f8b566eae00e397ba40465f283b0e27db4c0b7acac19b97f",
+    "sha256": "408e9db33ee786714822de03b3452eca278de54cb895bf1b58c664776bc6ac1f"
+  },
+  "2026-10-18-anchor-actions-pre-archive-status.sql": {
+    "residue": "bdcf54cd1178917a537dc2fcebe60acd86e78acea0646b92f0f30c71c768f119",
+    "sha256": "29ace5abd9378dad83304568beb08945eb352022d250c66e677a0c04e5ed81ac"
   }
 }

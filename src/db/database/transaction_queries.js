@@ -27,6 +27,7 @@
 'use strict';
 
 const { getLogger } = require('../../observability/index.js');
+const statusActionCache = require('../index_tables/status_action_cache.js');
 
 module.exports = {
 
@@ -72,6 +73,7 @@ module.exports = {
                 // caller will be given. In the finally so a throw out of rollback() cannot
                 // skip it.
                 this.clearSmtNameCaches();
+                statusActionCache.clearPending(this._statusActionIdCache);
                 this.releaseTxLock();
             }
         }
@@ -82,6 +84,7 @@ module.exports = {
         if(this.transactionConnection != null){
             try {
                 await this.transactionConnection.commit();
+                statusActionCache.promotePending(this._statusActionIdCache);
                 await this.transactionConnection.release();
                 this.transactionConnection = null;
                 // Fence any zombie of the block that just committed (M-16).
@@ -98,6 +101,7 @@ module.exports = {
                     this._txEpoch++;
                     // A failed commit aborts, so its id assignments are gone too.
                     this.clearSmtNameCaches();
+                    statusActionCache.clearPending(this._statusActionIdCache);
                     this.releaseTxLock();
                 }
                 this.util.throwError('commitTransaction error=' + e);

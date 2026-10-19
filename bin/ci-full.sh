@@ -202,6 +202,21 @@ suite_title_pin() {
   XCHAIN_DOCS_DIR="$docs_snapshot" \
     node bin/suite-title-map.js --script test --compare bin/pins/at1-suite-titles.json
   status=$?
+  if [ "$status" -eq 0 ]; then
+    XCHAIN_DOCS_DIR="$docs_snapshot" \
+      node bin/suite-title-map.js --script test:regression --compare bin/pins/at1-suite-titles.json
+    status=$?
+  fi
+  if [ "$status" -eq 0 ]; then
+    XCHAIN_DOCS_DIR="$docs_snapshot" \
+      node bin/suite-title-map.js --script test:regression:fast --compare bin/pins/at1-suite-titles.json
+    status=$?
+  fi
+  if [ "$status" -eq 0 ]; then
+    XCHAIN_DOCS_DIR="$docs_snapshot" \
+      node bin/suite-title-map.js --script test:regression:full --compare bin/pins/at1-suite-titles.json
+    status=$?
+  fi
   rm -rf -- "$docs_snapshot"
   return "$status"
 }

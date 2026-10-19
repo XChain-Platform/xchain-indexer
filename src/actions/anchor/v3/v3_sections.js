@@ -24,7 +24,9 @@ function walkFoldSections(handler, split, data, error){
     for(let i = 0; i < split.sections.length; i++){
         const slice = split.sections[i];
         const section = validate.readSection(slice, 0, i, data.NETWORK);
-        const reason = handler.validateSectionShape(section, seenChains);
+        let reason = handler.validateSectionShape(section, seenChains);
+        const bindingReason = validate.checkpointSeqBindReason(section);
+        if(reason && reason === bindingReason) reason = null;
         if(reason) return { error: 'invalid: SECTION ' + i + ' ' + reason, sections };
 
         const parsed = validate.parseSectionSigs(slice, 0, i);

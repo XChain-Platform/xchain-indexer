@@ -22,8 +22,6 @@
 
 'use strict';
 
-const gateRegistry = require('../../consensus/gate_registry');
-
 // The legs one DESTROY names, in wire order. A VERSION error still yields one leg, so a
 // refused action leaves its row in the destroys table.
 function buildDestroys(params, format, error){
@@ -80,21 +78,17 @@ async function loadTicks(destroys, data){
 
 // Consolidate destroys by TICK and MEMO.
 //
-// Same rule and same gate as the SEND leg merge: a leg whose RAW amount fails its tick's
+// Same rule as the SEND leg merge: a leg whose RAW amount fails its tick's
 // format is held out of the merge on its own key, so it reaches the per-leg format check
-// below rather than being summed into a passing total. Below the threshold the legacy key
-// and merge run unchanged (the consolidation_leg_amount_activation row's note in
-// src/protocol_changes/ carries the rationale).
+// below rather than being summed into a passing total.
 function consolidateLegs(destroys, ticks, data){
-    let legAmountRule = gateRegistry.activeAt('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
     let keys = {};
     for(let idx in destroys){
         let [tick, amount, memo] = destroys[idx];
         let key = tick + '|' + memo;
-        if(legAmountRule)
-            key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
-                ? 'i|' + idx
-                : 'k|' + key;
+        key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
+            ? 'i|' + idx
+            : 'k|' + key;
         // An unknown TICK maps to false in `ticks`; it merges at 0 decimals, as an unlooked-up
         // one does, and validation then refuses the leg. Passing false through would make
         // bcadd's precision NaN, which throws and halts the block.

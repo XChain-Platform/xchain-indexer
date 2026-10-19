@@ -233,8 +233,14 @@ const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
 // the source id is IGNOREd on the reward_unique key and the replica keeps its
 // own forever. The eight restored columns stay in the preimage and reward_unique
 // still identifies the row, so nothing the two sides must agree on drops out.
+// `attests.batch_action_index` is a best-effort display link stamped from the
+// hub mirror. It is deliberately not a coverage signal: a legacy v1 row keeps
+// NULL forever, and a mirror-era row can miss the stamp depending on when the
+// batch and response bind. The response body and valid v5/v6 batch still prove
+// the published window independently, so replicas need not agree on this link.
 // Hashing any of these would turn a by-design difference into a permanent alarm.
 const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({
+    attests:            Object.freeze(['batch_action_index']),
     blocks:             Object.freeze(['id']),
     contract_emissions: Object.freeze(['id']),
     contract_state:     Object.freeze(['state_key_bin']),
@@ -255,9 +261,9 @@ const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({
 // as updated-rows class 8 and re-derived on reorg. No hash commits it yet; a gated
 // state_hash term would, and would retire this entry.
 const CONTENT_PARITY_IN_PLACE_COLUMNS = Object.freeze({
-    anchor_actions:       Object.freeze(['status_id']),
+    anchor_actions:       Object.freeze(['status_id', 'pre_archive_status_id']),
     attests:              Object.freeze(['request_status', 'resolved_block', 'callback_execute_action_index',
-                                         'batch_action_index', 'status_id']),
+                                         'status_id']),
     bet_feeds:            Object.freeze(['feed_status_id', 'closed_block', 'terminal_block']),
     bets:                 Object.freeze(['bet_status_id', 'settled_block']),
     contract_delegations: Object.freeze(['deactivation_block']),
