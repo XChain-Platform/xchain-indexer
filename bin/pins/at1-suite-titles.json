@@ -2387,6 +2387,15 @@
       "Attest (ATTEST) @regression @tier3 v1: response accepts a v1 signed by the deterministic responsible set",
       "Attest (ATTEST) @regression @tier3 v1: response rejects a v1 signed by a capable-but-not-responsible validator coalition"
     ],
+    "24db8fd13c2a120f": [
+      "utf8mb4 inventory sync to xchain-sync exits 1 from --check on a stale copy and 0 after --write",
+      "utf8mb4 inventory sync to xchain-sync marks the canonical file as the canonical inventory",
+      "utf8mb4 inventory sync to xchain-sync refuses to render when the canonical file lost its provenance paragraph",
+      "utf8mb4 inventory sync to xchain-sync renders a copy that differs from the canonical file only in the provenance paragraph",
+      "utf8mb4 inventory sync to xchain-sync reports a hand-edited copy as stale",
+      "utf8mb4 inventory sync to xchain-sync reports a missing copy, writes it, then reports it in sync",
+      "utf8mb4 inventory sync to xchain-sync reports a stale copy after the canonical file changes"
+    ],
     "24ec309dd1a13c7d": [
       "DEPOSIT custody guard pre-activation bypass @regression @tier2 runs the denying token guard through the shared guard utility",
       "DEPOSIT custody guard pre-activation bypass @regression @tier2 settles past a denying transfer controller bound to SOURCE",
@@ -18228,8 +18237,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1445,
-      "titleCount": 14109,
+      "fileCount": 1446,
+      "titleCount": 14116,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18866,6 +18875,7 @@
         "test/unit/chain/price_landing_clear.test.js": "503930e8be155f18",
         "test/unit/chain/price_read_predicate.test.js": "a938df8c15b84eb3",
         "test/unit/chain/retention.test.js": "ee1e1f0374328eab",
+        "test/unit/chain/utf8mb4_columns_sync.test.js": "24db8fd13c2a120f",
         "test/unit/chain/utf8mb4_raw_wire_fields.test.js": "534e6d3195bb81fd",
         "test/unit/chain/utf8mb4_user_text_columns.test.js": "5760ac49e2afb048",
         "test/unit/chain/utxo_tracker.test.js": "e5731bfbefafe58c",
