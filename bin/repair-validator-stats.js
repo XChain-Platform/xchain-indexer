@@ -31,7 +31,7 @@
  * missed_count is charged by the reorg recompute's countExpiredMisses (pinned
  * responsible set first, else the weighted, buried, floor-filtered re-derive).
  *
- * Usage:  node scripts/repair-validator-stats.js
+ * Usage:  node bin/repair-validator-stats.js
  *
  ********************************************************************/
 

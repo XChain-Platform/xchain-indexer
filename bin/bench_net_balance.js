@@ -22,7 +22,7 @@
  * Reads connection settings from the indexer environment (INDEXER_DB_HOST/PORT/
  * NAME/USER/PASS, INDEXER_COIN, INDEXER_NETWORK).
  *
- * Usage:  node scripts/bench_net_balance.js [--keys N] [--repeat R] [--db NAME] [--json]
+ * Usage:  node bin/bench_net_balance.js [--keys N] [--repeat R] [--db NAME] [--json]
  *
  ********************************************************************/
 
