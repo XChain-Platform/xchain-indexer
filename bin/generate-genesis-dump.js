@@ -34,7 +34,7 @@ const { decoderQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require(path.join(SETUP, 'db-connection'));
 const DecoderSeeder = require(path.join(SETUP, 'decoder-seeder'));
 const { initIndexer, destroyIndexer } = require(path.join(SETUP, 'indexer-launcher'));
-const GenesisDump = require(path.join(__dirname, '..', 'src', 'chain', 'genesis_dump'));
+const GenesisDump = require(path.join(__dirname, '..', 'src', 'chain', 'genesis_dump.js'));
 
 const outFile = process.argv[2];
 if(!outFile){
