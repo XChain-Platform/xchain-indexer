@@ -32,16 +32,19 @@ function restoreEnv(saved){
 }
 
 describe('ANCHOR checkpoint sequence binding gate @regression @tier1', function () {
-    it('ships unarmed on public networks and inert on regtest', function () {
+    it('ships unarmed on mainnet, armed on testnet at its v0.25.0 heights, and inert on regtest', function () {
         const saved = process.env[ENV];
         try {
             delete process.env[ENV];
             const row = gateRegistry.get(GATE);
             assert.strictEqual(row.mainnet, UNARMED);
             assert.strictEqual(row.testnet, UNARMED);
+            // The v0.25.0 cut arms DOGE:testnet at 68009330.
+            assert.strictEqual(row['DOGE:testnet'], 68009330);
             assert.strictEqual(row.regtest, UNPINNED);
             assert.strictEqual(gateRegistry.activeAt(GATE, 'mainnet', 'DOGE', 1e9, null), false);
-            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'DOGE', 1e9, null), false);
+            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'DOGE', 68009329, null), false);
+            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'DOGE', 68009330, null), true);
             assert.strictEqual(gateRegistry.activeAt(GATE, 'regtest', 'DOGE', 1e9, null), false);
         } finally {
             restoreEnv(saved);
