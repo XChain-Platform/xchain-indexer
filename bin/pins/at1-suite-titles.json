@@ -3802,6 +3802,11 @@
     "3a25c746f0ad7a91": [
       "database session time zone @regression @tier1 pins direct and pooled connections to UTC"
     ],
+    "3a581170e0daad5f": [
+      "capability snapshot proof held-reason diagnostic @regression @tier1 logs a held row once a minute per row with its reason",
+      "capability snapshot proof held-reason diagnostic @regression @tier1 names the reason when the hub proof fetch fails on a mirror-resolved row",
+      "capability snapshot proof held-reason diagnostic @regression @tier1 never throws when the logger does"
+    ],
     "3a74a7a67892c521": [
       "hub config poll helpers becomes stale only after the exclusive limit",
       "hub config poll helpers derives the staleness limit from an interval override",
@@ -18191,8 +18196,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1442,
-      "titleCount": 14078,
+      "fileCount": 1443,
+      "titleCount": 14081,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18875,6 +18880,7 @@
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
+        "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
@@ -20010,8 +20016,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1094,
-      "titleCount": 11112,
+      "fileCount": 1095,
+      "titleCount": 11115,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20561,6 +20567,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
+        "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
@@ -21110,8 +21117,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 531,
-      "titleCount": 5726,
+      "fileCount": 532,
+      "titleCount": 5729,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21278,6 +21285,7 @@
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
+        "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
@@ -21647,8 +21655,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1094,
-      "titleCount": 11112,
+      "fileCount": 1095,
+      "titleCount": 11115,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22198,6 +22206,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
+        "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
