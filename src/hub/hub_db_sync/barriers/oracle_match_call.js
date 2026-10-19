@@ -307,13 +307,18 @@ module.exports = {
     },
 
     // ADMISSION ERA: the cross_chain_calls height watermark for this chain has reached
-    // B - 4, replacing both clock cases exactly as the match member above. The empty-mirror
-    // escape needs a drained connection and the content shortcut reads the rows this chain
-    // applies, both for the reasons given at the match member and refreshCallSyncTimestamp.
+    // B - 4, or a hub that has published admission evidence has streamed through blockTime
+    // plus grace without producing another row. The empty-mirror escape needs a drained
+    // connection and the content shortcut reads the rows this chain applies, both for the
+    // reasons given at the match member and refreshCallSyncTimestamp.
     callSyncSatisfied(blockTime, blockHeight = null) {
         if (this.callBootstrapped && this._bootstrapDrained && this.callSyncTimestamp === null) return true;
-        if (this.admissionActiveAt(blockHeight))
+        const streamSatisfied = this.callBootstrapped &&
+            this.streamWatermark >= blockTime + this.callWatermarkGraceS;
+        if (this.admissionActiveAt(blockHeight)) {
+            if (this.admissionStreamSatisfied('cross_chain_calls', streamSatisfied)) return true;
             return this.callBootstrapped && this.heightSatisfied('cross_chain_calls', blockHeight);
+        }
         if (this.callGatedSyncTimestamp !== null && this.callGatedSyncTimestamp !== undefined &&
             this.callGatedSyncTimestamp >= blockTime) return true;
         // Stream watermark escape: a relay row is broadcast the moment the hub
@@ -327,7 +332,7 @@ module.exports = {
         // now + a forward relay margin, so a call row lands ahead of the time it
         // applies at; CrossChainDexEngine stamps the finalization instant), so the
         // two barriers must be tunable apart even while the values are equal.
-        if (this.callBootstrapped && this.streamWatermark >= blockTime + this.callWatermarkGraceS) return true;
+        if (streamSatisfied) return true;
         return false;
     },
 
