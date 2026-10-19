@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-18
+
+### Added
+- Added the capability snapshot proof check with a pinned trust set and a stake proof RPC, deferred on every network for this train.
+- Added the checkpoint sequence binding, stake collation, attest callback batch position, airdrop fee tally and unstake journal activations.
+- Added the chunk reassembly parent status and host fault halt activations and mirrored the three VM string meter activations.
+- Published the train activation in status and classified a train activation halt as degraded.
+
+### Changed
+- Armed all of these on testnet and left them unarmed on mainnet.
+- Retired the long-live price, archive, index map, relay, dispenser, oracle and consolidation gates.
+- Added optional archive status journaling, a dispenser status index and ledger address tick amount indexes.
+- Guarded automatic migrations on declared unique keys and utf8mb4 widening on legacy row formats.
+- Armed HOST_FAULT_HALT_ACTIVATION on BTC:testnet at 157073.
+- Armed HOST_FAULT_HALT_ACTIVATION on LTC:testnet at 4928460.
+- Armed HOST_FAULT_HALT_ACTIVATION on DOGE:testnet at 68009330.
+- Armed REASSEMBLE_CHUNK_PARENT_STATUS_ACTIVATION on BTC:testnet at 157073.
+- Armed REASSEMBLE_CHUNK_PARENT_STATUS_ACTIVATION on LTC:testnet at 4928460.
+- Armed REASSEMBLE_CHUNK_PARENT_STATUS_ACTIVATION on DOGE:testnet at 68009330.
+- Armed UNSTAKE_DELEGATED_ROW_JOURNAL_ACTIVATION on BTC:testnet at 157073.
+- Armed UNSTAKE_DELEGATED_ROW_JOURNAL_ACTIVATION on LTC:testnet at 4928460.
+- Armed UNSTAKE_DELEGATED_ROW_JOURNAL_ACTIVATION on DOGE:testnet at 68009330.
+- Armed ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVATION on BTC:testnet at 157073.
+- Armed ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVATION on LTC:testnet at 4928460.
+- Armed ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVATION on DOGE:testnet at 68009330.
+- Armed ACTIVE_STAKE_COLLATION_ACTIVATION on BTC:testnet at 157073.
+- Armed ACTIVE_STAKE_COLLATION_ACTIVATION on LTC:testnet at 4928460.
+- Armed ACTIVE_STAKE_COLLATION_ACTIVATION on DOGE:testnet at 68009330.
+- Armed ATTEST_CALLBACK_BATCH_POSITION_ACTIVATION on BTC:testnet at 157073.
+- Armed ATTEST_CALLBACK_BATCH_POSITION_ACTIVATION on LTC:testnet at 4928460.
+- Armed ATTEST_CALLBACK_BATCH_POSITION_ACTIVATION on DOGE:testnet at 68009330.
+- Armed AIRDROP_NATIVE_FEE_TALLY_ACTIVATION on BTC:testnet at 157073.
+- Armed AIRDROP_NATIVE_FEE_TALLY_ACTIVATION on LTC:testnet at 4928460.
+- Armed AIRDROP_NATIVE_FEE_TALLY_ACTIVATION on DOGE:testnet at 68009330.
+- Armed STRING_RECEIVER_METER on BTC:testnet at 1792454400.
+- Armed STRING_RECEIVER_METER on LTC:testnet at 1792454400.
+- Armed STRING_RECEIVER_METER on DOGE:testnet at 1792454400.
+- Armed STRING_RESULT_METER on BTC:testnet at 1792454400.
+- Armed STRING_RESULT_METER on LTC:testnet at 1792454400.
+- Armed STRING_RESULT_METER on DOGE:testnet at 1792454400.
+- Armed TOSTRING_SIZE_METER on BTC:testnet at 1792454400.
+- Armed TOSTRING_SIZE_METER on LTC:testnet at 1792454400.
+- Armed TOSTRING_SIZE_METER on DOGE:testnet at 1792454400.
+
+### Fixed
+- Restored the journaled archive status on reorg, skipped unused supply queries, and handled epoch rate-limit resets and bounded queue holds.
+
 ## [0.24.0] - 2026-10-17
 
 ### Added

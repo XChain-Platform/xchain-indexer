@@ -37,6 +37,10 @@ const { getLogger } = require('../../observability/index.js');
 // and every mixin read the same instance of each.
 const { requireStakeWeight, normalizeStakeAmount, usesCapabilitySnapshot } = require('../shared.js');
 
+const { createHeldLog } = require('../../consensus/capability_snapshot_proof/held_log.js');
+// Logs, once a minute per row, why a mirror-resolved row is still held.
+const logHeldProof = createHeldLog({ warn: message => getLogger().warn(message) });
+
 const CAPABILITY_SNAPSHOT_PROOF_ACTIVATION =
     'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION';
 
@@ -49,6 +53,7 @@ async function judgeMirrorResolvedRow(db, row, capability, opts){
         row, proofOpts, capabilityProof.verifyCapabilitySnapshotProof);
     if(result.firstUse)
         getLogger().warn('Capability snapshot proof is using an unpinned regtest checkpoint validator set for first use.');
+    if(result.verdict === 'held') logHeldProof(row, result.reason);
     return result;
 }
 

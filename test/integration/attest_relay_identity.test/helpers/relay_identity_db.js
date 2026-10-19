@@ -21,11 +21,8 @@
  * suites need a real engine rather than a stub is written down once, in the
  * first of them.
  *
- * Each suite is several consecutive describe blocks with one shared title, so
- * every block registers the same hooks through useRelayIdentityDb(). The schema
- * is built once per database name per run, which is what the single before()
- * of the one-file suite did; each block then opens its own pool and closes it.
- * Each suite passes its own database name, so no two files share a schema.
+ * Each useRelayIdentityDb registration owns a schema. Fault and migration cases
+ * mutate table and index state, so describe blocks must not share that state.
  *
  * The requiring suite sets INDEXER_COIN and INDEXER_NETWORK before it requires
  * this file, because src/db reads them at load.
@@ -95,11 +92,11 @@ async function buildSchema(name) {
     await admin.end();
 }
 
-// One schema build per database name per run, shared by the sibling blocks.
-const schemas = new Map();
-function ensureSchema(name) {
-    if (!schemas.has(name)) schemas.set(name, buildSchema(name));
-    return schemas.get(name);
+const schemaCounts = new Map();
+function nextSchemaName(name) {
+    const count = (schemaCounts.get(name) || 0) + 1;
+    schemaCounts.set(name, count);
+    return count === 1 ? name : name + '_' + count;
 }
 
 /**
@@ -108,12 +105,13 @@ function ensureSchema(name) {
  * lends a pooled connection, and `row` writes one attests row.
  */
 function useRelayIdentityDb(name) {
+    const schemaName = nextSchemaName(name);
     const fx = { db: null, conn, row };
 
     before(async function () {
         if (!DB_PASS) this.skip();
-        await ensureSchema(name);
-        fx.db = makeDb(name);
+        await buildSchema(schemaName);
+        fx.db = makeDb(schemaName);
     });
 
     after(async function () {

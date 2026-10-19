@@ -11,7 +11,7 @@
  **********************************************************************
  * test/unit/attestation/repair_validator_stats_drift.test.js
  *
- * Drift guard: scripts/repair-validator-stats.js must stay structurally
+ * Drift guard: bin/repair-validator-stats.js must stay structurally
  * in sync with the rollback recompute in src/rollback.js
  * (recomputeAttestationValidatorStats). Both walk the same source tables
  * with the same eligibility predicate; only the cutoff value differs
@@ -34,7 +34,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const REPAIR_FILE   = path.join(__dirname, '..', '..', '..', 'scripts', 'repair-validator-stats.js');
+const REPAIR_FILE   = path.join(__dirname, '..', '..', '..', 'bin', 'repair-validator-stats.js');
 // The recompute's statements, read as their own file: the extractor below takes the FIRST
 // 'expiredReqs' in the text, and in the module as a whole that name first appears in a part.
 const ROLLBACK_FILE = path.join(__dirname, '..', '..', '..', 'src', 'db', 'rollback', 'attestation_stats.js');
