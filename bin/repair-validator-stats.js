@@ -60,9 +60,16 @@ function missChargeContext(parent){
 }
 
 async function main(){
-    let required = ['INDEXER_DB_HOST','INDEXER_DB_PORT','INDEXER_DB_NAME','INDEXER_DB_USER','INDEXER_DB_PASS'];
-    for(let key of required){
-        if(!process.env[key]){
+    // Read by name so each variable stays visible to the env-var documentation gate.
+    let required = {
+        INDEXER_DB_HOST: process.env.INDEXER_DB_HOST,
+        INDEXER_DB_PORT: process.env.INDEXER_DB_PORT,
+        INDEXER_DB_NAME: process.env.INDEXER_DB_NAME,
+        INDEXER_DB_USER: process.env.INDEXER_DB_USER,
+        INDEXER_DB_PASS: process.env.INDEXER_DB_PASS
+    };
+    for(let key of Object.keys(required)){
+        if(!required[key]){
             console.error('Missing required environment variable: ' + key);
             process.exit(1);
         }
