@@ -37,7 +37,7 @@ function signature(checkpoint, signer){
     };
 }
 
-function fixture(){
+function fixture(network = 'testnet'){
     const signers = [keypair('source-a'), keypair('source-b'), keypair('source-c')];
     const row = {
         snapshot_block: SNAPSHOT_BLOCK,
@@ -55,11 +55,11 @@ function fixture(){
     };
     const checkpoint = {
         chain: 'BTC',
-        network: 'testnet',
+        network,
         block_index: CHECKPOINT_BLOCK,
         block_hash: 'e'.repeat(64),
         state_root: M.toHex(M.stateRoot(subRoots)),
-        state_root_version: stateSubtree.stateRootVersion(CHECKPOINT_BLOCK, 'testnet', 'BTC'),
+        state_root_version: stateSubtree.stateRootVersion(CHECKPOINT_BLOCK, network, 'BTC'),
     };
 
     function member(pubkey = row.signing_pubkey, committed = { source: row.source, weight: row.amount }){
@@ -233,5 +233,88 @@ describe('capability snapshot proof verifier @regression @tier1', function () {
             assert.strictEqual(typeof parsed.error, 'string');
             assert.ok(parsed.error.length > 0);
         }
+    });
+});
+
+// The e2e regtest stack runs one hub with XDEX_SEED_LOCAL_VALIDATOR=1 and no BTC stake.
+// Its capability_snapshots row is { signing_pubkey: <hub key>, source: 'seed:<hub key>',
+// amount: '1' }, the BTC stake proof for that key is a valid non-membership proof, and
+// before the regtest concession every LTC and DOGE indexer refused the row, so the
+// bridged XCHAIN credit never landed (release matrix run 39171449867).
+describe('capability snapshot proof verifier: regtest seeded validator @regression @tier1', function () {
+    function seeded(network, options = {}){
+        const f = fixture(network);
+        const hub = options.hub || keypair('unused');
+        const row = Object.assign({
+            snapshot_block: SNAPSHOT_BLOCK,
+            capability: CAPABILITY,
+            signing_pubkey: hub.pubkey,
+            source: 'seed:' + hub.pubkey,
+            amount: '1',
+        }, options.row);
+        const signers = options.signers || [hub];
+        const response = f.response({
+            signers,
+            proof: { members: [f.member(row.signing_pubkey, null)] },
+        });
+        return { f, hub, row, response };
+    }
+
+    it('accepts the seeded row on an unpinned regtest venue when the seeded key signed the checkpoint', function () {
+        const s = seeded('regtest');
+        expectVerdict(verifyCapabilitySnapshotProof(s.row, s.response, null,
+            { network: 'regtest', firstUse: true }), 'verified', /regtest seeded validator/);
+        const upper = Object.assign({}, s.row, { source: 'seed:' + s.hub.pubkey.toUpperCase(), amount: '1.00000000' });
+        expectVerdict(verifyCapabilitySnapshotProof(upper, s.response, null,
+            { network: 'regtest', firstUse: true }), 'verified', /regtest seeded validator/);
+    });
+
+    it('still refuses the same seeded shape on testnet and mainnet', function () {
+        for(const network of ['testnet', 'mainnet']){
+            const s = seeded(network);
+            expectVerdict(verifyCapabilitySnapshotProof(s.row, s.response, null,
+                { network, firstUse: true }), 'refused', /not a capability stake member/);
+            const trustSet = [{ pubkey: s.hub.pubkey, source: 'seed:' + s.hub.pubkey, weight: '1' }];
+            expectVerdict(verifyCapabilitySnapshotProof(s.row, s.response, trustSet,
+                { network }), 'refused', /not a capability stake member/);
+        }
+    });
+
+    it('still refuses on a pinned regtest venue', function () {
+        const s = seeded('regtest');
+        const trustSet = [{ pubkey: s.hub.pubkey, source: 'seed:' + s.hub.pubkey, weight: '1' }];
+        expectVerdict(verifyCapabilitySnapshotProof(s.row, s.response, trustSet,
+            { network: 'regtest' }), 'refused', /not a capability stake member/);
+    });
+
+    it('still refuses a seeded row whose key did not sign the checkpoint', function () {
+        const other = keypair('other');
+        const s = seeded('regtest', { signers: [other] });
+        expectVerdict(verifyCapabilitySnapshotProof(s.row, s.response, null,
+            { network: 'regtest', firstUse: true }), 'refused', /not a capability stake member/);
+    });
+
+    it('still refuses a non-member whose source or amount is not the seed shape', function () {
+        const hub = keypair('unused');
+        for(const row of [
+            { source: 'src-real' },
+            { source: 'seed:' + 'a'.repeat(64) },
+            { source: 'seed:' },
+            { amount: '2' },
+            { amount: '5000' },
+        ]){
+            const s = seeded('regtest', { hub, row });
+            expectVerdict(verifyCapabilitySnapshotProof(s.row, s.response, null,
+                { network: 'regtest', firstUse: true }), 'refused', /not a capability stake member/);
+        }
+    });
+
+    it('leaves real stake members on regtest judged by the binding as before', function () {
+        const f = fixture('regtest');
+        expectVerdict(verifyCapabilitySnapshotProof(f.row, f.response({ signers: [f.signers[0]] }), null,
+            { network: 'regtest', firstUse: true }), 'verified', /matches snapshot row/);
+        expectVerdict(verifyCapabilitySnapshotProof(
+            Object.assign({}, f.row, { amount: '2' }), f.response({ signers: [f.signers[0]] }), null,
+            { network: 'regtest', firstUse: true }), 'refused', /amount does not match/);
     });
 });

@@ -173,3 +173,64 @@ describe('capability snapshot proof database wiring @regression @tier1', functio
         assert.strictEqual(fetchProof.callCount, 0);
     });
 });
+
+// The e2e regtest stack (one hub, XDEX_SEED_LOCAL_VALIDATOR=1, no BTC stake) end to end
+// through the real regtest gate and the real verifier: an LTC indexer mirroring the hub's
+// seeded cross_chain row must apply it, or no bridged credit ever lands on LTC.
+describe('capability snapshot proof database wiring: regtest seeded hub row @regression @tier1', function () {
+    const crypto = require('crypto');
+    const M = require('../../../../src/consensus/merkle.js');
+    const stateSubtree = require('../../../../src/consensus/gates/state_subtree_gate.js');
+    const checkpointCanonical = require('../../../../src/consensus/snapshot_checkpoint/canonical.js');
+
+    function seededHubResponse(network, signerKey){
+        const pair = crypto.generateKeyPairSync('ed25519');
+        const pubkey = pair.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('hex');
+        const seedRow = { snapshot_block: 102, capability: 'cross_chain', signing_pubkey: pubkey,
+            source: 'seed:' + pubkey, amount: '1' };
+        const block = checkpointCanonical.snapshotCheckpointBlock(102, network);
+        // A BTC stakes tree holding one real staker and not the hub's key.
+        const tree = new M.SparseMerkleTree();
+        tree.set(M.stakeKey('d'.repeat(64), 'cross_chain'), M.stakeMemberLeaf('src-real', '5000'));
+        const subRoots = { balances_root: 'd'.repeat(64), stakes_root: tree.rootHex() };
+        const checkpoint = {
+            chain: 'BTC', network, block_index: block, block_hash: 'e'.repeat(64),
+            state_root: M.toHex(M.stateRoot(subRoots)),
+            state_root_version: stateSubtree.stateRootVersion(block, network, 'BTC'),
+        };
+        const signer = signerKey || pair;
+        const signerPub = signer.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('hex');
+        const canonical = checkpointCanonical.snapshotCheckpointCanonical(checkpoint);
+        checkpoint.validator_signatures = JSON.stringify([{ pubkey: signerPub,
+            sig: crypto.sign(null, Buffer.from(canonical, 'utf8'), signer.privateKey).toString('hex') }]);
+        const smt = tree.prove(M.stakeKey(pubkey, 'cross_chain'));
+        const response = { snapshot_block: 102, capability: 'cross_chain', checkpoint,
+            proof: { block_index: block, sub_roots: subRoots,
+                members: [{ pubkey, leaf_value: smt.leaf_value, siblings: smt.siblings, committed: null }] } };
+        return { seedRow, response };
+    }
+
+    it('applies the seeded row on an unpinned LTC regtest indexer', async function () {
+        sinon.stub(getLogger(), 'warn');
+        const s = seededHubResponse('regtest');
+        const actual = await verifyCapabilitySnapshotRow.call(
+            { config: { COIN: 'LTC', NETWORK: 'regtest' } }, s.seedRow, {
+                fetchProof: sinon.stub().resolves(s.response),
+                readEnv: () => undefined,
+            });
+        assert.strictEqual(actual.verdict, 'verified');
+        assert.strictEqual(actual.firstUse, true);
+    });
+
+    it('still refuses the seeded row when another key signed the checkpoint', async function () {
+        sinon.stub(getLogger(), 'warn');
+        const s = seededHubResponse('regtest', crypto.generateKeyPairSync('ed25519'));
+        const actual = await verifyCapabilitySnapshotRow.call(
+            { config: { COIN: 'LTC', NETWORK: 'regtest' } }, s.seedRow, {
+                fetchProof: sinon.stub().resolves(s.response),
+                readEnv: () => undefined,
+            });
+        assert.strictEqual(actual.verdict, 'refused');
+        assert.match(actual.reason, /not a capability stake member/);
+    });
+});
