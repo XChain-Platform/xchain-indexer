@@ -67,11 +67,11 @@ describe('ANCHOR chunk-side reassembly parent-status gate @regression @tier1', f
 
     it('is unarmed on mainnet, armed on testnet at its v0.25.0 heights, and opt-in on regtest', function () {
         assert.strictEqual(gateRegistry.activeAt(PARENT_STATUS_GATE, 'mainnet', 'BTC', 1e9, null), false);
-        // The v0.25.0 cut arms BTC:testnet at 157053 and DOGE:testnet (and the bare testnet key) at 68008790.
-        assert.strictEqual(gateRegistry.activeAt(PARENT_STATUS_GATE, 'testnet', 'BTC', 157052, null), false);
-        assert.strictEqual(gateRegistry.activeAt(PARENT_STATUS_GATE, 'testnet', 'BTC', 157053, null), true);
-        assert.strictEqual(gateRegistry.activeAt(PARENT_STATUS_GATE, 'testnet', 'DOGE', 68008789, null), false);
-        assert.strictEqual(gateRegistry.activeAt(PARENT_STATUS_GATE, 'testnet', 'DOGE', 68008790, null), true);
+        // The v0.25.0 cut arms BTC:testnet at 157073 and DOGE:testnet (and the bare testnet key) at 68009330.
+        assert.strictEqual(gateRegistry.activeAt(PARENT_STATUS_GATE, 'testnet', 'BTC', 157072, null), false);
+        assert.strictEqual(gateRegistry.activeAt(PARENT_STATUS_GATE, 'testnet', 'BTC', 157073, null), true);
+        assert.strictEqual(gateRegistry.activeAt(PARENT_STATUS_GATE, 'testnet', 'DOGE', 68009329, null), false);
+        assert.strictEqual(gateRegistry.activeAt(PARENT_STATUS_GATE, 'testnet', 'DOGE', 68009330, null), true);
         assert.strictEqual(gateRegistry.get(PARENT_STATUS_GATE).regtest, null);
     });
 

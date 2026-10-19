@@ -60,11 +60,11 @@ describe('UNSTAKE delegated-row journal gate @regression @tier1', function () {
             delete process.env[ENV];
             assert.strictEqual(gateRegistry.get(GATE).mainnet, UNARMED);
             assert.strictEqual(gateRegistry.get(GATE).testnet, UNARMED);
-            // The v0.25.0 cut arms BTC:testnet at 157053.
-            assert.strictEqual(gateRegistry.get(GATE)['BTC:testnet'], 157053);
+            // The v0.25.0 cut arms BTC:testnet at 157073.
+            assert.strictEqual(gateRegistry.get(GATE)['BTC:testnet'], 157073);
             assert.strictEqual(gateRegistry.activeAt(GATE, 'mainnet', 'BTC', 1e9, null), false);
-            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'BTC', 157052, null), false);
-            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'BTC', 157053, null), true);
+            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'BTC', 157072, null), false);
+            assert.strictEqual(gateRegistry.activeAt(GATE, 'testnet', 'BTC', 157073, null), true);
             process.env[ENV] = '0';
             assert.strictEqual(gateRegistry.activeAt(GATE, 'regtest', 'BTC', 1, null), true);
         } finally {
