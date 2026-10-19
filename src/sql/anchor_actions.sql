@@ -81,3 +81,7 @@ CREATE INDEX idx_anchor_checkpoint ON anchor_actions (chain, network, checkpoint
 -- completing v2 chunk by block_index_doge = B. Without this index the planner walks every
 -- archive head and probes its chunks, so each block reads the whole table.
 CREATE INDEX idx_anchor_block_doge ON anchor_actions (block_index_doge);
+-- getEarliestValidAnchorCheckpointAfterAnchor (db/anchors/checkpoint_anchor_axis.js) ranges on
+-- (chain, network, snapshot_block > ?) once per block for a DOGE- or LTC-origin bridge escrow
+-- checkpoint, so it gets a seekable index rather than a scan of every anchor section.
+CREATE INDEX idx_anchor_chain_snapshot ON anchor_actions (chain, network, snapshot_block);

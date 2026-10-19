@@ -35,6 +35,7 @@ const { ESCROW_PROOF_REASON, fail, pass } = require('./reasons.js');
 const { str, height, version, scaled } = require('./fields.js');
 const { resolveEscrowAddress } = require('./escrow_address.js');
 const { resolveTransferOrigin } = require('./origin.js');
+const { anchorMatched } = require('./anchor_match.js');
 
 /**
  * Link 1: is this leg one this check judges at all, and does the row carry what the check
@@ -91,7 +92,8 @@ function screenLeg(row, ctx){
         return { verdict: fail(ESCROW_PROOF_REASON.ROW_AMOUNT) };
 
     return { fields: { srcChain, destChain, rowNet, originChain: origin.originChain,
-                       tick: origin.nativeTick, snapshot, amount } };
+                       tick: origin.nativeTick, snapshot, amount,
+                       anchorMatched: anchorMatched(origin.originChain, ctx) } };
 }
 
 /**
@@ -122,7 +124,17 @@ function bindCheckpoint(proof, f){
     // predate the lock entirely and would let a forged transfer be "proven" by an escrow
     // balance that was put there for some earlier transfer. At or after it, the credit is
     // inside the committed state.
-    if(cpHeight < f.snapshot)
+    //
+    // For a DOGE or LTC origin past BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION the row's snapshot_block
+    // is a BTC height and the checkpoint's block_index is not, so the comparison above would be
+    // vacuous. The bound is then taken on the BTC anchor axis, with the same strict operator the
+    // selector uses (anchor_match.js says why strictly above is what commits the lock): a
+    // selected checkpoint always binds, and anything at or below the stamp is stale.
+    if(f.anchorMatched){
+        const cpAnchor = height(cp.snapshot_block);
+        if(cpAnchor === null || cpAnchor <= f.snapshot)
+            return { verdict: fail(ESCROW_PROOF_REASON.CHECKPOINT_STALE) };
+    } else if(cpHeight < f.snapshot)
         return { verdict: fail(ESCROW_PROOF_REASON.CHECKPOINT_STALE) };
 
     return { cp: cp, cpHeight: cpHeight };

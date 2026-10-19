@@ -40,6 +40,8 @@
  *   2. the proof names THIS transfer's chain, network, tick and the escrow address this
  *      module resolves itself from the origin chain's coin config (never the envelope's)
  *   3. the checkpoint is for the origin chain and network, and is at or after snapshot_block
+ *      (for a DOGE or LTC origin past BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION, its own
+ *      snapshot_block is strictly above the row's: bridge_checkpoint_check/anchor_match.js)
  *   4. the checkpoint's state_root_version is the version this node DERIVES at that
  *      checkpoint's own height for that chain and network, the way the fleet mints it
  *   5. the sub-roots in the envelope reassemble EXACTLY to the checkpoint's state_root
@@ -61,7 +63,7 @@
  *     can then forge the root it is proven against.
  *   - the caller must select the checkpoint DETERMINISTICALLY: the first checkpoint at or
  *     after row.snapshot_block for (row.src_chain, row.network), highest checkpoint_seq at
- *     that height. Two nodes that pick different checkpoints, or that differ on whether one
+ *     that height (on the BTC anchor axis for the origins point 3 names). Two nodes that pick different checkpoints, or that differ on whether one
  *     is present yet, produce different verdicts for the same row at the same height, and a
  *     verdict that decides whether an action index is assigned is consensus-visible. A
  *     checkpoint not yet held locally must therefore stall the pass, the way

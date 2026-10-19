@@ -53,3 +53,8 @@ CREATE TABLE state_checkpoints (
 -- Standalone so reconcileTableIndexes heals it onto an existing table at boot. A
 -- separate _HubMirror schema is built from the explorer's hub-mirror twin instead.
 CREATE INDEX idx_chain_block ON state_checkpoints (chain, network, block_index);
+
+-- getMirroredStateCheckpointCandidatesAfterAnchor (src/db/anchors/checkpoint_anchor_axis.js)
+-- ranges on (chain, network, snapshot_block > ?) inside the block loop for a DOGE- or
+-- LTC-origin bridge escrow checkpoint. Same reasoning and shape as idx_chain_block above.
+CREATE INDEX idx_chain_snapshot ON state_checkpoints (chain, network, snapshot_block);

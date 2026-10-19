@@ -393,4 +393,7 @@ module.exports = {
             [chain, network, atOrAfterBlock]);
     },
 
+    // The same two reads on the BTC anchor axis, for a DOGE- or LTC-origin escrow checkpoint.
+    ...require('./checkpoint_anchor_axis.js'),
+
 };

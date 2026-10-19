@@ -21,7 +21,8 @@
  *
  *   1. SELECT THE CHECKPOINT DETERMINISTICALLY. The first checkpoint at or after
  *      row.snapshot_block for (row.src_chain, row.network), highest checkpoint_seq at that
- *      height. Two nodes that pick different checkpoints, or that differ on whether one is
+ *      height; for a DOGE or LTC origin past BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION, the first
+ *      whose own snapshot_block is strictly above it (checkpoint_source.js). Two nodes that pick different checkpoints, or that differ on whether one is
  *      present yet, produce different verdicts for the same row at the same height, and a
  *      verdict that decides whether an action index is assigned is consensus-visible.
  *   2. HAND OVER ONLY A QUORUM-ESTABLISHED CHECKPOINT. Two sources qualify, and each is
