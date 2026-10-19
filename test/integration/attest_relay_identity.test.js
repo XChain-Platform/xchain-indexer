@@ -130,7 +130,7 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
 describe('relay-identity lookup against a real MariaDB @tier3', function () {
     this.timeout(60000);
     const fx = useRelayIdentityDb(DB_NAME);
-    const { conn, row } = fx;
+    const { row } = fx;
 
     // ── 3. request_status <> 'rejected' (the novel clause) ───────────────────
 
@@ -143,21 +143,6 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
 
         assert.strictEqual(await fx.db.getRelayRequestByOrigin(ORIGIN, IDX), null,
             'a rejected row consumed no slot');
-    });
-
-    it('counts every NON-rejected lifecycle state, terminal ones included', async function () {
-        // The other half of the same clause, and the more dangerous half: a fulfilled or
-        // expired request DID spend the fee, so it must keep consuming the slot. Written
-        // as `<> 'rejected'` rather than `= 'pending'` for exactly this reason, and this
-        // case is what stops a later "tighten it to pending" edit from re-opening that hole.
-        for (const status of ['fulfilled', 'expired', 'errored']) {
-            await conn(c => c.query('DELETE FROM attests'));
-            await row({ actionIndex: 13, status });
-
-            const hit = await fx.db.getRelayRequestByOrigin(ORIGIN, IDX);
-            assert.ok(hit, 'a ' + status + ' request already spent its materialization');
-            assert.strictEqual(hit.request_status, status);
-        }
     });
 
     it('sees past a rejected row to the real materialization behind it', async function () {

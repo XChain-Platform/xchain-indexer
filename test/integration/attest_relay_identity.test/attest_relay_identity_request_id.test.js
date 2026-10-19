@@ -32,7 +32,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert = require('assert');
 
-const { IDX, relayDbName, useRelayIdentityDb } = require('./helpers/relay_identity_db');
+const { ORIGIN, IDX, relayDbName, useRelayIdentityDb } = require('./helpers/relay_identity_db');
 
 const DB_NAME = relayDbName('rid');
 
@@ -117,6 +117,14 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
                 const hit = await fx.db.getRelayRequestById(RID);
                 assert.ok(hit, 'a ' + status + ' request already spent the id');
                 assert.strictEqual(hit.request_status, status);
+
+                // The origin-identity lookup shares the clause and the same hole.
+                await conn(c => c.query('DELETE FROM attests'));
+                await row({ actionIndex: 13, status });
+
+                const byOrigin = await fx.db.getRelayRequestByOrigin(ORIGIN, IDX);
+                assert.ok(byOrigin, 'a ' + status + ' request already spent its materialization');
+                assert.strictEqual(byOrigin.request_status, status);
             }
         });
 
