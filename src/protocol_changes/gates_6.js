@@ -96,3 +96,15 @@ addGate('capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATI
     testnet: UNARMED,
     regtest: 0,
 });
+
+// bridge_escrow_anchor_match_activation
+// Height on the settling (destination) chain's own block_index. From it the escrow cross-check
+// selects and binds a DOGE- or LTC-origin checkpoint by its BTC snapshot_block, the axis the
+// transfer row's snapshot_block lives on, instead of comparing that BTC height to the origin
+// chain's block_index. BTC-origin selection is unchanged at every height. Must be armed on a
+// network at or before TOKEN_BRIDGE_ACTIVATION there, or no DOGE- or LTC-origin lock settles.
+addGate('bridge_escrow_anchor_match_activation.BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});

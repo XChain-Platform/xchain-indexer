@@ -33,6 +33,18 @@ const parser      = Object.assign({}, sqlText, schemaDrift);
 const { collectAnchorInvalid } = require(path.join(SRC, 'consensus', 'state_hash', 'archive_invalid_section.js'));
 const anchorsDb = require(path.join(SRC, 'db', 'anchors', 'index.js'));
 
+// The (chain, network) equality prefix and the strict snapshot_block range of an anchor-axis
+// checkpoint read, pulled out of the SQL it issues.
+function anchorAxisPredicate(sql){
+    const where = /\bWHERE\b([\s\S]*?)\bORDER\s+BY\b/i.exec(sql);
+    assert.ok(where, 'no WHERE ... ORDER BY in: ' + sql);
+    const equality = [...where[1].matchAll(/\b(\w+)\s*=\s*\?/g)].map(m => m[1]);
+    const range    = /\b(\w+)\s*>\s*\?/.exec(where[1]);
+    assert.ok(equality.includes('chain') && equality.includes('network'), 'no chain and network equality in: ' + where[1]);
+    assert.ok(range, 'no > ? range in: ' + where[1]);
+    return range[1];
+}
+
 // Every index the table's SQL source declares, standalone and inline, as column lists.
 function declaredIndexes(table){
     const data = fs.readFileSync(path.join(SQL_DIR, table + '.sql'), 'utf8');
@@ -51,6 +63,31 @@ function servingIndex(table, equality, range){
         i.columns.length >= want &&
         i.columns.slice(0, eq.length).slice().sort().join(',') === eq.join(',') &&
         i.columns[eq.length] === range.toLowerCase());
+}
+
+// The BTC-anchor-axis twins of the mirrored read, for a DOGE- or LTC-origin escrow checkpoint.
+function registerAnchorAxisIndexTests(){
+it('getMirroredStateCheckpointCandidatesAfterAnchor: state_checkpoints is indexed on (chain, network, snapshot_block)', async function(){
+    let captured = null;
+    const self = { mirrorDb: () => ({ doQueryStrict: async (sql) => { captured = sql; return []; } }) };
+    await anchorsDb.getMirroredStateCheckpointCandidatesAfterAnchor.call(self, 'DOGE', 'regtest', 50200);
+    assert.ok(captured, 'getMirroredStateCheckpointCandidatesAfterAnchor issued no query');
+    const range = anchorAxisPredicate(captured);
+    assert.strictEqual(range, 'snapshot_block');
+    assert.ok(servingIndex('state_checkpoints', ['chain', 'network'], range),
+        'state_checkpoints.sql declares no index on (chain, network, ' + range + ')');
+});
+
+it('getEarliestValidAnchorCheckpointAfterAnchor: anchor_actions is indexed on (chain, network, snapshot_block)', async function(){
+    let captured = null;
+    const self = { doQueryStrict: async (sql) => { captured = sql; return []; } };
+    await anchorsDb.getEarliestValidAnchorCheckpointAfterAnchor.call(self, 0, 'DOGE', 'regtest', 50200);
+    assert.ok(captured, 'getEarliestValidAnchorCheckpointAfterAnchor issued no query');
+    const range = anchorAxisPredicate(captured);
+    assert.strictEqual(range, 'snapshot_block');
+    assert.ok(servingIndex('anchor_actions', ['chain', 'network'], range),
+        'anchor_actions.sql declares no index on (chain, network, ' + range + ')');
+});
 }
 
 describe('per-block reads have an index on their driving predicate @regression @tier1', function(){
@@ -94,11 +131,15 @@ describe('per-block reads have an index on their driving predicate @regression @
             declaredIndexes('state_checkpoints').map(i => i.name + '(' + i.columns.join(',') + ')').join('; ') + ')');
     });
 
+    registerAnchorAxisIndexTests();
+
     it('a dated mode=auto migration adds both indexes with the declared names and columns', function(){
         const dir = path.join(SQL_DIR, 'migrations');
         const want = [
             /CREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+idx_anchor_block_doge\s+ON\s+anchor_actions\s*\(\s*block_index_doge\s*\)/i,
             /CREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+idx_chain_block\s+ON\s+state_checkpoints\s*\(\s*chain\s*,\s*network\s*,\s*block_index\s*\)/i,
+            /CREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+idx_anchor_chain_snapshot\s+ON\s+anchor_actions\s*\(\s*chain\s*,\s*network\s*,\s*snapshot_block\s*\)/i,
+            /CREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+idx_chain_snapshot\s+ON\s+state_checkpoints\s*\(\s*chain\s*,\s*network\s*,\s*snapshot_block\s*\)/i,
         ];
         for(const re of want){
             const hit = fs.readdirSync(dir).filter(f => f.endsWith('.sql'))
