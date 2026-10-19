@@ -13,9 +13,12 @@
 'use strict';
 
 const assert = require('assert');
+const fs     = require('fs');
+const path   = require('path');
 const sinon  = require('sinon');
 const { DatabaseSync } = require('node:sqlite');
 
+const { mysqlDdlToSqlite } = require('../../../helpers/sqlAnchorDb.js');
 const observability = require('../../../../src/observability/index.js');
 const batchHeads = require('../../../../src/db/attests/batch_heads.js');
 // Take the head and continuation versions from the codec, as the reader does, so a codec
@@ -39,32 +42,43 @@ function captureQuery(rows = []) {
         .then(result => ({ seen, result }));
 }
 
+// Build the named production tables from their src/sql DDL, so a column rename or a
+// nullability change in the real schema reaches this test. The DDL is MySQL: indexes are
+// skipped (sqlite scopes index names database-wide, and nothing here reads one), charset
+// decorations and ENUMs have no sqlite grammar, and the rest goes through the shared
+// translator.
+function loadSrcSql(db, files) {
+    const dir = path.join(__dirname, '../../../..', 'src', 'sql');
+    for (const file of files) {
+        const ddl = fs.readFileSync(path.join(dir, file + '.sql'), 'utf8')
+            .replace(/--[^\n]*/g, '')
+            .replace(/\s+CHARACTER SET [A-Za-z0-9_]+/gi, '')
+            .replace(/\s+COLLATE[= ][A-Za-z0-9_]+/gi, '')
+            .replace(/\bENUM\s*\([^)]*\)/gi, 'TEXT')
+            .replace(/CREATE\s+(UNIQUE\s+)?INDEX[^;]*;/gi, '');
+        db.exec(mysqlDdlToSqlite(ddl));
+    }
+}
+
 function executableBatchReader() {
     const db = new DatabaseSync(':memory:');
+    loadSrcSql(db, ['index_statuses', 'attests', 'actions', 'transactions', 'index_transactions']);
     db.exec(`
-        CREATE TABLE index_statuses (id INTEGER PRIMARY KEY, status TEXT NOT NULL);
-        CREATE TABLE attests (
-            action_index INTEGER PRIMARY KEY, version INTEGER NOT NULL, request_id TEXT NOT NULL,
-            batch_window_start INTEGER, batch_window_end INTEGER, batch_row_count INTEGER,
-            batch_total_chunks INTEGER, batch_crc32 TEXT, batch_chunk_index INTEGER,
-            status_id INTEGER NOT NULL, block_index INTEGER NOT NULL
-        );
-        CREATE TABLE actions (action_index INTEGER PRIMARY KEY, source_id INTEGER, tx_index INTEGER);
-        CREATE TABLE transactions (tx_index INTEGER PRIMARY KEY, tx_hash_id INTEGER);
-        CREATE TABLE index_transactions (id INTEGER PRIMARY KEY, hash TEXT);
-        INSERT INTO index_statuses VALUES
+        INSERT INTO index_statuses (id, status) VALUES
             (1, 'valid'),
             (2, 'invalid: ATTEST_BATCH (reassembly CRC mismatch) (stamped on batch completion)');
-        INSERT INTO attests VALUES
-            (10, ${HEAD}, 'single',     100, 200, 0, 1, '11111111', 0, 1, 7),
-            (20, ${HEAD}, 'failed',     110, 210, 2, 1, '22222222', 0, 2, 8),
-            (30, ${HEAD}, 'incomplete', 120, 220, 2, 2, '33333333', 0, 1, 9),
-            (40, ${HEAD}, 'complete',   130, 230, 2, 2, '44444444', 0, 1, 10),
-            (41, ${CONT}, 'complete',  NULL, NULL, NULL, 2, '44444444', 1, 1, 11);
-        INSERT INTO actions VALUES
-            (10, 1, 10), (20, 2, 20), (30, 3, 30), (40, 4, 40), (41, 4, 41);
-        INSERT INTO transactions VALUES (10, 10), (20, 20), (30, 30), (40, 40), (41, 41);
-        INSERT INTO index_transactions VALUES
+        INSERT INTO attests (action_index, version, request_id, provider_id, batch_window_start, batch_window_end,
+            batch_row_count, batch_total_chunks, batch_crc32, batch_chunk_index, status_id, block_index) VALUES
+            (10, ${HEAD}, 'single', 'batch',     100, 200, 0, 1, '11111111', 0, 1, 7),
+            (20, ${HEAD}, 'failed', 'batch',     110, 210, 2, 1, '22222222', 0, 2, 8),
+            (30, ${HEAD}, 'incomplete', 'batch', 120, 220, 2, 2, '33333333', 0, 1, 9),
+            (40, ${HEAD}, 'complete', 'batch',   130, 230, 2, 2, '44444444', 0, 1, 10),
+            (41, ${CONT}, 'complete', 'batch',  NULL, NULL, NULL, 2, '44444444', 1, 1, 11);
+        INSERT INTO actions (action_index, block_index, action_id, source_id, tx_index) VALUES
+            (10, 0, 0, 1, 10), (20, 0, 0, 2, 20), (30, 0, 0, 3, 30), (40, 0, 0, 4, 40), (41, 0, 0, 4, 41);
+        INSERT INTO transactions (tx_index, block_index, tx_hash_id) VALUES
+            (10, 0, 10), (20, 0, 20), (30, 0, 30), (40, 0, 40), (41, 0, 41);
+        INSERT INTO index_transactions (id, hash) VALUES
             (10, 'single-tx'), (20, 'failed-tx'), (30, 'incomplete-tx'),
             (40, 'complete-tx'), (41, 'continuation-tx');
     `);
