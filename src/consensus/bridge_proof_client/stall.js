@@ -41,7 +41,8 @@ const PROOF_STALL_REASON = {
 // (a reorg below that height, or a minority fork). It is an {error} answer like every other
 // "cannot prove it here", so a consumer reads it as an unavailable proof and STALLS; the text
 // is distinct only so a log can tell it from an outage. The origin bounds how long it gives
-// this answer (db/credits/bridge_reads.js divergenceSettled); the consumer adds no rule of its own.
+// this answer (db/credits/escrow_divergence.js divergenceSettled and checkpointStreamStopped);
+// the consumer adds no rule of its own.
 const ESCROW_STATE_DIVERGED = 'escrow state at that block_index does not reassemble to the signed checkpoint state_root';
 
 // The ANCHOR wire version that carries a checkpoint SECTION in its own right. Version 1 is the

@@ -143,8 +143,8 @@ async function verifyCheckpointQuorum(cp, indexerDb){
  * on BTC the cadence latch puts them above. Either way the old row's root stays on no honest
  * node, and when the new rows are not below the transfer's snapshot_block this rule still takes
  * the old row, because it takes the FIRST at or after snapshot_block. The origin's
- * getbridgeescrowproof read is what bounds that case (db/credits/bridge_reads.js
- * divergenceSettled).
+ * getbridgeescrowproof read is what bounds that case (db/credits/escrow_divergence.js
+ * divergenceSettled, or checkpointStreamStopped once the hub stops signing).
  *
  * THE AXIS. For a DOGE or LTC origin from BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION, read at the
  * settling chain's own block, the same rule runs on the BTC anchor axis: the first checkpoint

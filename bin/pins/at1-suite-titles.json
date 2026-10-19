@@ -931,6 +931,15 @@
       "_assertRewardUniqueKeyCarriesQualifier @regression @tier1 reads the live INDEX shape, unique-only, bound once on the database name",
       "_assertRewardUniqueKeyCarriesQualifier @regression @tier1 releases the connection it took, on the halt path too"
     ],
+    "104f4cec83f40a5f": [
+      "getbridgeescrowproof: a divergence is released once the checkpoint stream stops @regression @tier1 keeps answering the error while the stopped stream is one block short of the bound",
+      "getbridgeescrowproof: a divergence is released once the checkpoint stream stops @regression @tier1 measures the bound from the newest signed row, so rows signed after the diverged one push it out",
+      "getbridgeescrowproof: a divergence is released once the checkpoint stream stops @regression @tier1 names about one day of blocks per chain",
+      "getbridgeescrowproof: a divergence is released once the checkpoint stream stops @regression @tier1 with no checkpoint after the diverged one, serves the envelope at the bound and the consumer skips the leg",
+      "getbridgeescrowproof: what the stopped-stream release does not release @regression @tier1 is not sticky: a fresh signed row in the mirror puts the error back",
+      "getbridgeescrowproof: what the stopped-stream release does not release @regression @tier1 keeps answering the error on a minority fork while the stream is live, however far its tip runs",
+      "getbridgeescrowproof: what the stopped-stream release does not release @regression @tier1 never reads an empty table as a stopped stream"
+    ],
     "10a57ea01148c597": [
       "E2E: Error Handling @regression @tier3 SEND for non-existent token does not crash indexer",
       "E2E: Error Handling @regression @tier3 SEND with insufficient balance does not affect balances",
@@ -18219,8 +18228,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1444,
-      "titleCount": 14102,
+      "fileCount": 1445,
+      "titleCount": 14109,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18733,6 +18742,7 @@
         "test/unit/api/reads/api_bridge_reads.test.js": "d5091677642a6150",
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
         "test/unit/api/reads/bridge_escrow_proof_divergence.test.js": "677146c005a44b90",
+        "test/unit/api/reads/bridge_escrow_proof_stream_stop.test.js": "104f4cec83f40a5f",
         "test/unit/api/reads/price_batch_query.test.js": "8c6b69def3f9000c",
         "test/unit/api/reads/reorg_history_query.test.js": "7ee0eb2668992ec0",
         "test/unit/api/rollcall_signers.test.js": "46fc3a8b9e5949d9",
@@ -20040,8 +20050,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1096,
-      "titleCount": 11136,
+      "fileCount": 1097,
+      "titleCount": 11143,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20503,6 +20513,7 @@
         "test/unit/api/reads/api_bridge_reads.test.js": "d5091677642a6150",
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
         "test/unit/api/reads/bridge_escrow_proof_divergence.test.js": "677146c005a44b90",
+        "test/unit/api/reads/bridge_escrow_proof_stream_stop.test.js": "104f4cec83f40a5f",
         "test/unit/api/rpc/api_time_memo_isolation.test.js": "0ff526efc3f322da",
         "test/unit/api/rpc/api_time_memo_rollback.test.js": "75f822b2b3557722",
         "test/unit/api/rpc/attest_batches.test.js": "eb22a475c243774f",
@@ -21142,8 +21153,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 533,
-      "titleCount": 5750,
+      "fileCount": 534,
+      "titleCount": 5757,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21277,6 +21288,7 @@
         "test/unit/api/reads/api_bridge_reads.test.js": "d5091677642a6150",
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
         "test/unit/api/reads/bridge_escrow_proof_divergence.test.js": "677146c005a44b90",
+        "test/unit/api/reads/bridge_escrow_proof_stream_stop.test.js": "104f4cec83f40a5f",
         "test/unit/api/rpc/api_time_memo_isolation.test.js": "0ff526efc3f322da",
         "test/unit/api/rpc/api_time_memo_rollback.test.js": "75f822b2b3557722",
         "test/unit/api/rpc/attest_batches.test.js": "eb22a475c243774f",
@@ -21681,8 +21693,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1096,
-      "titleCount": 11136,
+      "fileCount": 1097,
+      "titleCount": 11143,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22144,6 +22156,7 @@
         "test/unit/api/reads/api_bridge_reads.test.js": "d5091677642a6150",
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
         "test/unit/api/reads/bridge_escrow_proof_divergence.test.js": "677146c005a44b90",
+        "test/unit/api/reads/bridge_escrow_proof_stream_stop.test.js": "104f4cec83f40a5f",
         "test/unit/api/rpc/api_time_memo_isolation.test.js": "0ff526efc3f322da",
         "test/unit/api/rpc/api_time_memo_rollback.test.js": "75f822b2b3557722",
         "test/unit/api/rpc/attest_batches.test.js": "eb22a475c243774f",
