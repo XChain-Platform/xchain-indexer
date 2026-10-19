@@ -14,12 +14,32 @@ process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const sinon = require('sinon');
 const { createMockIndexer } = require('../../../fixtures/mocks');
 
 const maturitySql = require('../../../../src/db/rollback/cooldown_maturities.js');
 const gateRegistry = require('../../../../src/consensus/gate_registry');
 const Rollback = require('../../../../src/rollback/index.js');
+const { mysqlDdlToSqlite } = require('../../../helpers/sqlAnchorDb.js');
+
+const SQL_DIR = path.join(__dirname, '..', '..', '..', '..', 'src', 'sql');
+
+// Build the fixture tables from the project's own src/sql DDL rather than a hand-written copy,
+// so a column rename or nullability change in the real schema reaches this test. Only MySQL
+// storage and decoration syntax is rewritten; sqlite index names are schema-global, so each
+// is prefixed with its table.
+function loadDdl(...tables) {
+    return tables.map(table => mysqlDdlToSqlite(
+        fs.readFileSync(path.join(SQL_DIR, table + '.sql'), 'utf8')
+            .replace(/--.*$/gm, '')
+            .replace(/\bENUM\s*\([^)]*\)/gi, 'TEXT')
+            .replace(/\s+CHARACTER SET \w+ COLLATE \w+/gi, '')
+            .replace(/(\bINDEX\s+)(\w+)(\s+ON\s+(\w+)\s*\([^)]*?)\(\d+\)\)/gi, '$1$2$3)')
+            .replace(/(\bINDEX\s+)(\w+)(\s+ON\s+)(\w+)/gi, '$1$4_$2$3$4')
+    )).join('\n');
+}
 
 const GATE_KEY = 'cooldown_maturity_escrow_reversal_activation.COOLDOWN_MATURITY_ESCROW_REVERSAL_ACTIVATION';
 
@@ -179,33 +199,30 @@ describe('cooldown maturity escrow release reversal: slash to zero @regression @
     beforeEach(function () {
         const { DatabaseSync } = require('node:sqlite');
         sql = new DatabaseSync(':memory:');
+        sql.exec(loadDdl('index_addresses', 'index_tickers', 'unstakes', 'contract_unstakes', 'credits', 'escrows'));
         sql.exec(`
-            CREATE TABLE index_addresses (id INTEGER PRIMARY KEY, address TEXT NOT NULL);
-            CREATE TABLE index_tickers   (id INTEGER PRIMARY KEY, tick TEXT NOT NULL);
-            CREATE TABLE unstakes (action_index INTEGER NOT NULL, source_id INTEGER NOT NULL,
-                cooldown_end_block INTEGER NOT NULL, amount TEXT NOT NULL, status_id INTEGER, block_index INTEGER NOT NULL);
-            CREATE TABLE contract_unstakes (action_index INTEGER NOT NULL, source_id INTEGER NOT NULL, tick_id INTEGER,
-                cooldown_end_block INTEGER NOT NULL, amount TEXT NOT NULL, status_id INTEGER, block_index INTEGER NOT NULL);
-            CREATE TABLE credits (action_index INTEGER NOT NULL, address_id INTEGER, tick_id INTEGER, amount TEXT);
-            CREATE TABLE escrows (action_index INTEGER NOT NULL, address_id INTEGER, tick_id INTEGER, amount TEXT);
-            INSERT INTO index_addresses VALUES (1, 'alice'), (2, 'bob');
-            INSERT INTO index_tickers   VALUES (1, 'XCHAIN'), (2, 'TOK');
+            INSERT INTO index_addresses (id, address) VALUES (1, 'alice'), (2, 'bob');
+            INSERT INTO index_tickers (id, tick) VALUES (1, 'XCHAIN'), (2, 'TOK');
 
             -- Stake-time locks for every bond.
-            INSERT INTO escrows VALUES (4, 1, 1, '5'), (5, 2, 1, '7'), (14, 1, 2, '3'), (15, 2, 2, '9');
+            INSERT INTO escrows (action_index, address_id, tick_id, amount) VALUES (4, 1, 1, '5'), (5, 2, 1, '7'), (14, 1, 2, '3'), (15, 2, 2, '9');
 
             -- alice: both cooldowns matured at 120, inside the orphaned range, with the legacy
             -- refund and release written under each unstake's own action_index.
-            INSERT INTO unstakes          VALUES (10, 1,    120, '5', 7, 50);
-            INSERT INTO contract_unstakes VALUES (20, 1, 2, 120, '3', 7, 50);
-            INSERT INTO credits VALUES (10, 1, 1, '5'), (20, 1, 2, '3');
-            INSERT INTO escrows VALUES (10, 1, 1, '-5'), (20, 1, 2, '-3');
+            INSERT INTO unstakes (action_index, source_id, signing_pubkey_id, cooldown_end_block, amount, status_id, block_index)
+                VALUES (10, 1, 1,    120, '5', 7, 50);
+            INSERT INTO contract_unstakes (action_index, source_id, signing_pubkey_id, tick_id, cooldown_end_block, amount, status_id, block_index)
+                VALUES (20, 1, 1, 2, 120, '3', 7, 50);
+            INSERT INTO credits (action_index, address_id, tick_id, amount) VALUES (10, 1, 1, '5'), (20, 1, 2, '3');
+            INSERT INTO escrows (action_index, address_id, tick_id, amount) VALUES (10, 1, 1, '-5'), (20, 1, 2, '-3');
 
             -- bob: both cooldowns slashed to zero at surviving block 60 (slash actions 30 and 31),
             -- so neither ever matured. The slash released each bond under its own action_index.
-            INSERT INTO unstakes          VALUES (11, 2,    120, '0', 3, 50);
-            INSERT INTO contract_unstakes VALUES (21, 2, 2, 120, '0', 3, 50);
-            INSERT INTO escrows VALUES (30, 2, 1, '-7'), (31, 2, 2, '-9');
+            INSERT INTO unstakes (action_index, source_id, signing_pubkey_id, cooldown_end_block, amount, status_id, block_index)
+                VALUES (11, 2, 2,    120, '0', 3, 50);
+            INSERT INTO contract_unstakes (action_index, source_id, signing_pubkey_id, tick_id, cooldown_end_block, amount, status_id, block_index)
+                VALUES (21, 2, 2, 2, 120, '0', 3, 50);
+            INSERT INTO escrows (action_index, address_id, tick_id, amount) VALUES (30, 2, 1, '-7'), (31, 2, 2, '-9');
         `);
         db = {
             config: { GAS },

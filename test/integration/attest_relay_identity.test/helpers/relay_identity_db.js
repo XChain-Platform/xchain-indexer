@@ -51,6 +51,7 @@ const SQL_DIR = path.join(__dirname, '../../../../src/sql');
 // errno 1064 on the first line.
 const stripSqlLineComments = Database.prototype.stripSqlLineComments;
 const ATTESTS_SQL = stripSqlLineComments(fs.readFileSync(path.join(SQL_DIR, 'attests.sql'), 'utf8'));
+const INDEX_ADDRESSES_SQL = stripSqlLineComments(fs.readFileSync(path.join(SQL_DIR, 'index_addresses.sql'), 'utf8'));
 
 const ORIGIN = 'LTC';
 const OTHER  = 'DOGE';
@@ -81,14 +82,11 @@ async function buildSchema(name) {
         host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
     await admin.query('DROP DATABASE IF EXISTS ' + name + '; CREATE DATABASE ' + name + ';');
     await admin.query('USE ' + name + '; ' + ATTESTS_SQL);
-    // A stand-in for the one table getAttestationRequestById LEFT JOINs. The
-    // request_id comparison case needs the SHARED lookup to actually run against
-    // this schema, and without the join target its query is a 1146 that doQuery
-    // swallows into [] - which would make the shared lookup look like it excludes
-    // rejected rows when it does not. Columns are only what the join reads.
-    await admin.query('USE ' + name +
-        '; CREATE TABLE IF NOT EXISTS index_addresses (' +
-        ' id BIGINT UNSIGNED NOT NULL PRIMARY KEY, address VARCHAR(128) NULL)');
+    // The one table getAttestationRequestById LEFT JOINs, built from the project's own DDL.
+    // The request_id comparison case needs the SHARED lookup to actually run against this
+    // schema, and without the join target its query is a 1146 that doQuery swallows into []
+    // - which would make the shared lookup look like it excludes rejected rows when it does not.
+    await admin.query('USE ' + name + '; ' + INDEX_ADDRESSES_SQL);
     await admin.end();
 }
 
