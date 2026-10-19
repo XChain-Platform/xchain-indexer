@@ -837,18 +837,6 @@
       "Dispenser refill controller guard @regression @tier2 active: an edit that adds no escrow is not guarded",
       "Dispenser refill controller guard @regression @tier2 inactive: the same denied refill is unguarded and settles"
     ],
-    "0ec0f41236d14b46": [
-      "legacy migrations/ DDL is ported to the tracked ledger every legacy DROP COLUMN has a tracked counterpart naming the same table + column",
-      "legacy migrations/ DDL is ported to the tracked ledger every legacy DROP INDEX has a tracked counterpart naming the same index",
-      "legacy migrations/ DDL is ported to the tracked ledger every legacy dedup+UNIQUE has a tracked counterpart naming the same index",
-      "legacy migrations/ DDL is ported to the tracked ledger every legacy-added index retired from its definition has a tracked DROP INDEX",
-      "legacy migrations/ DDL is ported to the tracked ledger no tracked DROP COLUMN leaves the column still declared in its definition",
-      "legacy migrations/ DDL is ported to the tracked ledger no tracked DROP INDEX leaves the index still declared in its definition",
-      "legacy migrations/ DDL is ported to the tracked ledger sanity: the definition column parser sees real columns",
-      "legacy migrations/ DDL is ported to the tracked ledger sanity: the definition parser sees both declaration forms",
-      "legacy migrations/ DDL is ported to the tracked ledger sanity: the drop-direction timeline orders a drop-then-recreate onto the ADD",
-      "legacy migrations/ DDL is ported to the tracked ledger sanity: the extractor sees the known legacy drifts"
-    ],
     "0ef5583765eab080": [
       "repair-validator-stats missed_count @regression a legacy row re-derives through the same routine the reorg recompute uses",
       "repair-validator-stats missed_count @regression an empty pin charges nobody",
@@ -19365,7 +19353,6 @@
         "test/unit/migration/db_reconcile_fulltext_index.test.js": "918fa176a8537ff6",
         "test/unit/migration/key_witness/assert_unique_key_witness.test.js": "bc0fdae14389c0fc",
         "test/unit/migration/key_witness/committed_auto_files.test.js": "47b5ee89067e58ec",
-        "test/unit/migration/legacy_migrations_ported.test.js": "0ec0f41236d14b46",
         "test/unit/migration/migrate.test.js": "c26b3a8dec758d2c",
         "test/unit/migration/migrate_status.test.js": "149a444f9f541e90",
         "test/unit/migration/migration_auto_index_key_length.test.js": "62321e67976f95c9",

@@ -102,13 +102,9 @@ npm run api
 
 ## Database migrations
 
-The repo has two migration directories, and they are not interchangeable.
-`src/sql/migrations/` is the runner-tracked home: it is the only directory
-`Database.runMigrations()` scans, checksums, and records in the
-`schema_migrations` ledger, and it is where every new migration belongs. The
-top-level `migrations/` directory holds legacy, manual, one-off runbook SQL
-that is never auto-applied; see [`migrations/README.md`](migrations/README.md)
-for how (and whether) to run something from it by hand.
+`src/sql/migrations/` is the only migration home: `Database.runMigrations()` scans it, checksums each file, and records it in the
+`schema_migrations` ledger, and every new migration belongs there. See
+[`src/sql/migrations/README.md`](src/sql/migrations/README.md) for the file tags and how to apply a manual one.
 
 ## Metrics and log shipping (optional, off by default)
 

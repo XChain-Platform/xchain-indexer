@@ -20,9 +20,8 @@ If you're reporting a security issue, **stop here** and read [`SECURITY.md`](./S
 ```
 xchain-indexer/
 ├── src/                  indexer pipeline: action handlers, ledger, hash engine, DB writes, API
-│   └── sql/migrations/   runner-tracked migrations (auto-applied at boot; see migrations/README below)
+│   └── sql/migrations/   runner-tracked migrations (auto-applied at boot; see src/sql/migrations/README.md)
 ├── test/                 layered suites (unit, integration, e2e, fuzz, chaos, mutation, security, ...)
-├── migrations/           LEGACY manual runbook SQL - NOT auto-applied (see migrations/README.md)
 ├── CHANGELOG.md          authoritative version history
 ├── SECURITY.md           private vulnerability disclosure
 └── package.json          scripts + dependencies
