@@ -31,9 +31,9 @@ describe('protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression 
         else process.env[ENV] = saved;
     });
 
-    it('ships unarmed on regtest when the variable is unset', function () {
+    it('ships genesis-active on regtest when the variable is unset', function () {
         const row = build();
-        assert.strictEqual(row.regtest_time, ProtocolChanges.UNARMED);
+        assert.strictEqual(row.regtest_time, 0);
         assert.strictEqual(row.mainnet_time, ProtocolChanges.UNARMED);
         assert.strictEqual(row.testnet_time, 1791804379);
     });
@@ -56,8 +56,13 @@ describe('protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression 
         assert.strictEqual(build().regtest_time, 0);
     });
 
-    it('stays unarmed on an empty value', function () {
+    it('stays genesis-active on an empty value', function () {
         process.env[ENV] = '';
+        assert.strictEqual(build().regtest_time, 0);
+    });
+
+    it('runs inert on regtest when the venue sets off', function () {
+        process.env[ENV] = 'off';
         assert.strictEqual(build().regtest_time, ProtocolChanges.UNARMED);
     });
 });
