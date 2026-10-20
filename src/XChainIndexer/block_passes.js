@@ -180,7 +180,8 @@ module.exports = {
         // the common case. Throws AnchorProofUnavailableError when a matured reward
         // cannot be proven either way here, which defers the block rather than
         // deriving a set this node's peers would not.
-        await anchorRewardDerive.deriveAnchorRewards(this.indexerDb, this.config, blockToParse, this.anchorProof);
+        await anchorRewardDerive.deriveAnchorRewards(
+            this.indexerDb, this.config, blockToParse, this.anchorProof, this.protocolChanges);
 
         // ROLLCALL epoch close (validator liveness eviction). BTC-only and
         // gated on ROLLCALL_ACTIVATION, so below the gate (or off-BTC) this is a

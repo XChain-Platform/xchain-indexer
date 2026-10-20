@@ -93,7 +93,8 @@ function context(minted) {
     return {
         indexerDb: { createValidatorReward: async (...a) => { minted.push(a); return true; } },
         gatesActive: () => true, verifyAttestation: quorum,
-        mint: { blockIndex: 164, proof, minConfirmations: 60, amount: '10', legacyAnchorRewardPin: false },
+        mint: { blockIndex: 164, proof, minConfirmations: 60, amount: '10',
+                protocolChanges: { isEnabled: async () => false } },
     };
 }
 

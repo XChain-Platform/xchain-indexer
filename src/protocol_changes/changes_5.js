@@ -161,8 +161,10 @@ const CHANGES = [
 
     // LEGACY_ANCHOR_REWARD_PIN: below the flag the anchor reward mint ignores the legacy
     // pin list. At or above it, a reward tuple pinned in legacy_reward_pins.json is not
-    // minted again. Judged by the BTC block that derives the reward. Unarmed on every network.
-    ['LEGACY_ANCHOR_REWARD_PIN', '0.2.0', UNARMED, 1792303200, UNARMED, 0, 0, 0],
+    // minted again. Judged by the BTC block that derives the reward. The first testnet instant
+    // passed before the derive loop carried this gate, so the wired rule starts at the later
+    // v0.25.0 instant rather than changing the verdict of already-indexed testnet blocks.
+    ['LEGACY_ANCHOR_REWARD_PIN', '0.2.0', UNARMED, 1792454400, UNARMED, 0, 0, 0],
 
     // GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS: the controller-guard stake snapshot
     // (actions/execute/controller_guard.js) hands the VM decimal strings, as the primary
