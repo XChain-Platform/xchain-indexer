@@ -41,9 +41,10 @@ module.exports = {
     // rows effective at a future instant do not exist yet. Returns null when sync is off or
     // the inputs are not finite, which leaves the caller's verdict exactly as it was before.
     //
-    // The clock escape holds only BELOW the mirror-admission activation. Above it the barriers
-    // are keyed on the hub's per-table height watermark and no clock instant opens them, so
-    // defer sites call barrierClearsAtHeightAware or anchorBarrierClearsAt (./mirror_barriers.js),
+    // Above the mirror-admission activation the barriers are keyed on the hub's per-table
+    // height watermark, which can open them at any instant, so no first instant exists (the
+    // stream escape some keep there is a later backstop, not a floor). Defer sites therefore
+    // call barrierClearsAtHeightAware or anchorBarrierClearsAt (./mirror_barriers.js),
     // which return null there and let the hold ceiling fire, and never call this directly.
     //
     // Used ONLY for the /status health verdict. It gates no wait, no read and no write.

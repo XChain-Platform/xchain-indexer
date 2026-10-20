@@ -71,7 +71,7 @@ function assertBoundCall(call, sql, params, floorIndex, floor) {
 describe('archive-head canonical pick fold gate', function () {
     afterEach(function () { sinon.restore(); });
 
-    it('keeps public networks unarmed and fails unknown networks closed', function () {
+    it('keeps mainnet and the bare testnet entry unarmed and fails unknown networks closed', function () {
         assert.ok(foldArchiveHeadFloor('testnet') >= UNARMED);
         assert.ok(foldArchiveHeadFloor('mainnet') >= UNARMED);
         assert.strictEqual(foldArchiveHeadFloor('unknown'), UNARMED);

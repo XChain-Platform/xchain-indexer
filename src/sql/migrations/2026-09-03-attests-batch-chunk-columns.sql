@@ -26,9 +26,10 @@
 -- the columns and reassembles nothing. Nothing is backfilled: every pre-existing row
 -- is a v0 request or a v1 response, neither of which is a chunk.
 --
--- They hash nothing. The state hash covers a request's status flip through
--- resolved_block; it reads no batch column, and the batch's own verdict rides on the
--- action status that already existed.
+-- They are NOT hash-neutral: batch_chunk_index selects the heads the gated
+-- attest_batch_head state-hash section (stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION)
+-- reads, and that section hashes batch_total_chunks/batch_crc32 and joins on them. Renaming
+-- them, or changing what a head or continuation writes to them, needs a flag day.
 --
 -- No index accompanies them: the (request_id, version) lookup index this table already
 -- declares is exactly the seek the chunk read performs.

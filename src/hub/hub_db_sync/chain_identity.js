@@ -272,26 +272,27 @@ module.exports = {
         return (parent && parent.indexerDb) ? parent.indexerDb : null;
     },
 
-    // BTC-only re-derivation fence for one mirrored capability_snapshots row.
-    // True = refuse the row.
+    // Re-derivation and proof fence for one mirrored capability_snapshots row.
+    // True = refuse the row, or hold it out of the mirror for a retry.
     //
     // capability_snapshots is pulled from the hub over an unauthenticated SELECT and
     // applied with INSERT IGNORE, and it is the verification authority the off-BTC
-    // resolvers read for cross_chain, oracle_publish, price and attestation. The full
-    // remedy is an SMT membership proof against the BTC state_checkpoints stakes_root;
-    // it needs a hub proof endpoint, a pinned trust anchor, a new activation height and
-    // a grandfathering watermark, so it is a later spec round. THIS is the first step,
-    // and its whole value is falsifiability: a BTC node holds the same stakes the hub
-    // built these rows from, so it can catch a forged set instead of mirroring it.
+    // resolvers read for cross_chain, oracle_publish, price and attestation. The judge
+    // is db.verifyCapabilitySnapshotRow, which takes one of two paths:
+    //   - BTC holds the stakes the hub built these rows from, so it re-derives the row
+    //     and can catch a forged set instead of mirroring it (falsifiability, not coverage).
+    //   - A chain that resolves the capability from the mirror checks a hub checkpoint
+    //     proof against a pinned trust set once CAPABILITY_SNAPSHOT_PROOF_ACTIVATION is
+    //     active at the row's BTC snapshot_block. Below that height the verdict is
+    //     'unknown' and the row applies as before; at or above it every fault is 'held'.
     //
     // Deliberate limits, so nothing downstream reads more into this than it says:
-    //   - It only ever runs where the node can prove the claim (BTC). Off BTC the verdict
-    //     is 'unknown' and the row applies exactly as before, which is why this buys no
-    //     coverage on the chains that actually resolve from the mirror.
     //   - Only CONTRADICTIONS are refused. A row the hub withheld is invisible here.
-    //   - Every non-refusal (unreached block, unconfigured capability, truncated set,
-    //     a read that threw, no authoritative db wired) applies the row. An unjudgeable
-    //     row must never become a permanent mirror hole.
+    //   - A 'held' row stays out of the mirror and is retried, and the block loop waits
+    //     on the hold (barriers/capability_proof.js) rather than read a partial snapshot.
+    //   - Every other non-refusal (unreached block, unconfigured capability, truncated
+    //     set, a judge that threw, no authoritative db wired) applies the row. An
+    //     unjudgeable row must never become a permanent mirror hole.
     async refuseUnprovenCapabilitySnapshot(row, options) {
         let rowKey = capabilitySnapshotKey(row);
         if (this._capabilityProofRetryApproved.delete(rowKey)) return false;

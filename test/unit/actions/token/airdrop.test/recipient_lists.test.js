@@ -64,6 +64,12 @@ function creditedAddresses(spy) {
     return credits.filter(c => c[0] === 'TEST').map(c => c[2]);
 }
 
+// Read the airdropped TICK's debit amounts, which the leg sizes on the approved recipients only.
+function debitedAmounts(spy) {
+    const debits = spy.lastCall.args[3] || [];
+    return debits.filter(d => d[0] === 'TEST').map(d => String(d[1]));
+}
+
 async function runAirdrop() {
     const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
     await handler.parse(['0', 'TEST', '10', String(RECIPIENT_LIST_INDEX), null], data, null);
@@ -91,6 +97,7 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.strictEqual(data['STATUS'], 'valid');
             assert.deepStrictEqual(creditedAddresses(spy), [ADDR_B, ADDR_C]);
+            assert.deepStrictEqual(debitedAmounts(spy), ['20']);
         });
 
         it('BLOCK_LIST drops listed recipients and keeps the rest', async function () {
@@ -100,6 +107,7 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.strictEqual(data['STATUS'], 'valid');
             assert.deepStrictEqual(creditedAddresses(spy), [ADDR_A, ADDR_C]);
+            assert.deepStrictEqual(debitedAmounts(spy), ['20']);
         });
 
         it('ALLOW_LIST and BLOCK_LIST together: the block list still wins', async function () {

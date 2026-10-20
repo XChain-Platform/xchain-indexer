@@ -173,7 +173,7 @@ module.exports = {
     /*
      * Programmable policy layer - controller bindings (token_controllers / address_controllers).
      *
-     * A token (ISSUE format 7) or an account (ADDRESS format 1) defers a chosen action-class to a
+     * A token (ISSUE format 6) or an account (ADDRESS format 1) defers a chosen action-class to a
      * guard contract. These two tables are APPEND-ONLY event logs: every bind/unbind is one
      * immutable row keyed by its own action_index. The EFFECTIVE controller for a (subject, class)
      * at block X is the latest event with block_index <= X - a `bind` gates; an `unbind` gates ONLY
@@ -184,7 +184,7 @@ module.exports = {
      * "At most one live controller per (subject, class)" is enforced by the handlers: a BIND is
      * rejected when an effective controller already gates that class (replace = unbind-then-bind,
      * which preserves the cooldown's teeth). action_class ∈ {transfer, trade, burn, mint, stake,
-     * ownership}, validated by the handler. See
+     * ownership, all}, validated by the handler. See
      * xchain-documentation/protocol/controller-bound-tokens.md.
      */
 

@@ -30,6 +30,13 @@
 // that needs more keys than this is not doing what the method is for.
 const ROLLCALL_READ_MAX_KEYS = 2048;
 
+// A JSON number or a decimal-digit string as a number, anything else NaN. Typed
+// before it is numbered, because parseInt reads '960junk' as 960 and '1.7e9' as 1.
+function integerParam(v){
+    if(typeof v === 'number') return v;
+    return (typeof v === 'string' && /^\d+$/.test(v)) ? Number(v) : NaN;
+}
+
 // The caller's request checked in the order the handler has always checked it
 // (DOGE only, this network, numeric epoch and window, bounded hex key lists).
 // Returns { error } on the first refusal, else the parsed request.
@@ -39,10 +46,10 @@ function rollcallSignersRequest(config, {network, epoch_height, max_block_time, 
     if(network !== undefined && String(network) !== String(config['NETWORK']))
         return { error: 'network mismatch' };
 
-    let epoch = parseInt(epoch_height);
-    let maxT  = parseInt(max_block_time);
-    if(!Number.isFinite(epoch) || epoch < 0) return { error: 'invalid epoch_height' };
-    if(!Number.isFinite(maxT))               return { error: 'invalid max_block_time' };
+    let epoch = integerParam(epoch_height);
+    let maxT  = integerParam(max_block_time);
+    if(!Number.isSafeInteger(epoch) || epoch < 0) return { error: 'invalid epoch_height' };
+    if(!Number.isSafeInteger(maxT) || maxT < 0)   return { error: 'invalid max_block_time' };
 
     let keys = Array.isArray(pubkeys)    ? pubkeys    : [];
     let pubs = Array.isArray(publishers) ? publishers : [];

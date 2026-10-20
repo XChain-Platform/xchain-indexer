@@ -29,7 +29,7 @@ const { addGate, UNARMED } = require('./shared_rows.js');
 // the SOURCE of an action, was credited, or is the GET_ADDRESS of a valid dispenser),
 // so a mention in someone else's LIST no longer spends the exception. Below it any
 // index_addresses row counts, byte-identically. Keyed on block time like the other
-// dispenser-family rows. Unarmed on mainnet and testnet until a release names the instant.
+// dispenser-family rows. Unarmed on mainnet, armed on testnet per chain at the row's instants.
 addGate('dispenser_freshness_proven_use_activation.DISPENSER_FRESHNESS_PROVEN_USE_ACTIVATION', 'time', {
     mainnet: UNARMED,
     'BTC:testnet': 1791061097,
@@ -67,8 +67,8 @@ addGate('empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES', 'height', 
 // LIST_EDIT_REMOVE_ACTIVATION: at/after this block time a Version 2 DISPENSER, ORDER or
 // SWAP edit may carry `0` in ALLOW_LIST or BLOCK_LIST to remove that list. No LIST has
 // ACTION_INDEX 0, so below it `0` stays 'invalid: <field> (unknown)' and no valid edit
-// row can hold it. Keyed on block time; unarmed on mainnet and testnet until a release
-// names the instant.
+// row can hold it. Keyed on block time; unarmed on mainnet, armed on testnet per chain at
+// the row's instants.
 addGate('list_edit_remove_activation.LIST_EDIT_REMOVE_ACTIVATION', 'time', {
     mainnet: UNARMED,
     'BTC:testnet': 1791061097,
@@ -192,8 +192,8 @@ addGate('bridge_policy_detach_activation.BRIDGE_POLICY_DETACH', 'height', {
 // vm_lint_optional_chain_heights
 // Per-chain height on the processing chain's own block_index. At or after it,
 // the deploy-lint global-object and Math-object matchers also look through a
-// parenthesized optional chain. Mainnet is unarmed by ruling, and testnet stays
-// unarmed until a measured height is armed. MUST equal xchain-vm
+// parenthesized optional chain. Mainnet is unarmed by ruling, and testnet is armed
+// per chain at the row's heights. MUST equal xchain-vm
 // LINT_OPTIONAL_CHAIN_ACTIVATION, whose null is this row's UNARMED.
 addGate('vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
@@ -206,7 +206,7 @@ addGate('vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION', 'hei
     regtest: 0,
 });
 
-// Per-chain deploy-lint `with` ban, unarmed on public networks.
+// Per-chain deploy-lint `with` ban, unarmed on mainnet and armed on testnet per chain.
 // MUST equal xchain-vm LINT_BANNED_WITH_ACTIVATION; VM null is UNARMED here.
 addGate('vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
@@ -220,8 +220,8 @@ addGate('vm_lint_banned_with_heights.VM_LINT_BANNED_WITH_ACTIVATION', 'height', 
 });
 
 // vm_lint_nesting_depth_activation
-// Height on the processing chain's own block_index. Public networks remain
-// unarmed until release heights are chosen.
+// Height on the processing chain's own block_index. Mainnet stays unarmed, and
+// testnet is armed per chain at the row's heights.
 addGate('vm_lint_nesting_depth_activation.VM_LINT_NESTING_DEPTH_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
@@ -379,8 +379,8 @@ addGate('oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTI
 
 // bet_feed_list_edit_activation
 // At or above this height BET format 4 may edit an open feed's allow and
-// block list references. Production networks remain inert until a release
-// names per-chain activation heights.
+// block list references. Mainnet stays inert, and testnet is armed per chain at
+// the row's heights.
 addGate('bet_feed_list_edit_activation.BET_FEED_LIST_EDIT_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156230,

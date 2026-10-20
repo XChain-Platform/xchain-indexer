@@ -18,6 +18,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert  = require('assert');
 const Execute = require('../../../src/actions/execute/index.js');
 const CHANGES = require('../../../src/protocol_changes/changes_5.js');
+const { UNARMED } = require('../../../src/protocol_changes/core.js');
 
 const GATE = 'EMISSION_DEPTH_EXECUTE_ONLY';
 const STOP = 'STOP_AT_DISPATCH';
@@ -42,11 +43,12 @@ async function stampedData(gateOn, emission, depth) {
 }
 
 describe('EMISSION_DEPTH_EXECUTE_ONLY: emission CALL_DEPTH ruling @regression @tier1', function () {
-    it('is declared unarmed on every network', function () {
+    it('is unarmed on mainnet and regtest and armed at a real testnet instant', function () {
         const row = CHANGES.find(r => r[0] === GATE);
         assert.ok(row, 'gate row missing');
-        assert.strictEqual(typeof row[2], 'number');
-        assert.ok(row[2] > 1e9 && row[3] > 1e9 && row[4] > 1e9, 'must be unarmed on mainnet, testnet and regtest');
+        assert.strictEqual(row[2], UNARMED, 'mainnet must stay unarmed');
+        assert.strictEqual(row[4], UNARMED, 'regtest must stay unarmed');
+        assert.ok(Number.isInteger(row[3]) && row[3] > 0 && row[3] < UNARMED, 'testnet must carry a real instant');
     });
 
     it('stamps depth + 1 on EXECUTE with the gate on or off', async function () {

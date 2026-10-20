@@ -135,8 +135,8 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
     // ── 3. request_status <> 'rejected' (the novel clause) ───────────────────
 
     it("excludes a rejected v0 row, so one malformed v3 cannot grief the identity", async function () {
-        // The clause the guard's safety argument rests on. A rejected v3 still persists
-        // its origin_chain/origin_action_index for the audit row; if that row counted,
+        // Defence in depth: persistRelayRequest withholds a refused v3 and a refused v0
+        // leaves both origin columns NULL. If a rejected row that exists anyway counted,
         // anyone could permanently block a legitimate materialization by broadcasting a
         // single malformed v3 naming the same origin action.
         await row({ actionIndex: 12, status: 'rejected' });

@@ -36,7 +36,7 @@ async function assertArmedOnTestnetOnly(name, row) {
 }
 
 describe('protocol_changes/STAKE_DELEGATED_SIGNING_KEY row @regression @tier1', function () {
-    it('is unarmed on production networks and active from regtest genesis', async function () {
+    it('is unarmed on mainnet, armed on testnet at its instant and active from regtest genesis', async function () {
         const row = ProtocolChanges.get(KEY);
         await assertArmedOnTestnetOnly('STAKE_DELEGATED_SIGNING_KEY', row);
         assert.strictEqual(ProtocolChanges.STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME, ProtocolChanges.UNARMED);

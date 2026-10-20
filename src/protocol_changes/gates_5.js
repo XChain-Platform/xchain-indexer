@@ -46,8 +46,8 @@ addGate('prelaunch_seed_sources.PRELAUNCH_SEED_SOURCES', 'constant', {});
 // VM settles a run whose gas tracker crossed the ceiling as out_of_gas at the
 // ceiling on every path, and the DEPLOY constructor settle clamps the
 // constructor's gasUsed to GAS_CEILING on every path, as the EXECUTE settle
-// already does. Below it both replay exactly as before. Unarmed on mainnet and
-// testnet until a release names heights. MUST equal xchain-vm
+// already does. Below it both replay exactly as before. Unarmed on mainnet,
+// armed on testnet per chain at the row's heights. MUST equal xchain-vm
 // GAS_CEILING_EXHAUSTED_ACTIVATION, whose null is this row's UNARMED.
 addGate('gas_ceiling_exhausted_heights.GAS_CEILING_EXHAUSTED_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
@@ -66,7 +66,7 @@ addGate('gas_ceiling_exhausted_heights.GAS_CEILING_EXHAUSTED_ACTIVATION', 'heigh
 // to the host, so a contract that throws the guard's text or a RangeError of its own
 // no longer settles at the gas ceiling, and a memory-limit disposal of the isolate
 // settles as out_of_memory instead of timeout. Below it both replay exactly as before.
-// Unarmed on mainnet and testnet until a release names heights. MUST equal xchain-vm
+// Unarmed on mainnet, armed on testnet per chain at the row's heights. MUST equal xchain-vm
 // RESOURCE_FAULT_SIGNAL_ACTIVATION, whose null is this row's UNARMED.
 addGate('resource_fault_signal_heights.RESOURCE_FAULT_SIGNAL_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
@@ -82,8 +82,8 @@ addGate('resource_fault_signal_heights.RESOURCE_FAULT_SIGNAL_ACTIVATION', 'heigh
 // host_fault_halt_heights
 // Per-chain height on the processing chain's own block_index. At or after it the VM
 // halts deterministically when a host fault escapes the execution boundary. Below it
-// the prior host-fault behavior replays exactly as before. Unarmed on mainnet and
-// testnet until a release names heights. MUST equal xchain-vm
+// the prior host-fault behavior replays exactly as before. Unarmed on mainnet,
+// armed on testnet per chain at the row's heights. MUST equal xchain-vm
 // HOST_FAULT_HALT_ACTIVATION, whose null is this row's UNARMED.
 addGate('host_fault_halt_heights.HOST_FAULT_HALT_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
@@ -101,8 +101,8 @@ addGate('host_fault_halt_heights.HOST_FAULT_HALT_ACTIVATION', 'height', {
 // rethrows an error a host gateway function threw as a fresh in-isolate error of the
 // same constructor and message, whose stack is "", so a contract can no longer store
 // the harness position and isolated-vm frame text in hashed state. Below it the error
-// reaches the contract as before. Unarmed on mainnet and testnet until a release names
-// heights. MUST equal xchain-vm HOST_ERROR_STACK_STRIP_ACTIVATION, whose null is this
+// reaches the contract as before. Unarmed on mainnet, armed on testnet per chain at the
+// row's heights. MUST equal xchain-vm HOST_ERROR_STACK_STRIP_ACTIVATION, whose null is this
 // row's UNARMED.
 addGate('host_error_stack_strip_heights.HOST_ERROR_STACK_STRIP_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
@@ -120,8 +120,8 @@ addGate('host_error_stack_strip_heights.HOST_ERROR_STACK_STRIP_ACTIVATION', 'hei
 // gives each nested JSON.stringify call (from a toJSON, replacer or getter) its own frame
 // pool and key list and restores the outer ones when it returns, so the outer call no
 // longer returns the inner result, and charges a frame first allocated in a nested pool.
-// Below it both replay exactly as before. Unarmed on mainnet and testnet until a release
-// names heights. MUST equal xchain-vm JSON_STRINGIFY_REENTRY_ACTIVATION, whose null is
+// Below it both replay exactly as before. Unarmed on mainnet, armed on testnet per chain
+// at the row's heights. MUST equal xchain-vm JSON_STRINGIFY_REENTRY_ACTIVATION, whose null is
 // this row's UNARMED.
 addGate('json_stringify_reentry_heights.JSON_STRINGIFY_REENTRY_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
@@ -139,8 +139,8 @@ addGate('json_stringify_reentry_heights.JSON_STRINGIFY_REENTRY_ACTIVATION', 'hei
 // settles a native stack overflow a contract catch or finally would handle as the
 // deterministic depth fault, charges each frame its weight against the structural depth
 // bound, and holds the arguments a native apply, spread or bind pushes against the same
-// bound. Below it every execution replays exactly as before. Unarmed on mainnet and
-// testnet until a release names heights. MUST equal xchain-vm
+// bound. Below it every execution replays exactly as before. Unarmed on mainnet,
+// armed on testnet per chain at the row's heights. MUST equal xchain-vm
 // NATIVE_STACK_TERMINAL_ACTIVATION, whose null is this row's UNARMED.
 addGate('native_stack_terminal_heights.NATIVE_STACK_TERMINAL_ACTIVATION', 'height', {
     'BTC:mainnet': UNARMED,
@@ -158,7 +158,8 @@ addGate('native_stack_terminal_heights.NATIVE_STACK_TERMINAL_ACTIVATION', 'heigh
 // past the 8 dp its escrow locks and releases at, a ballot needs its poll still open, and split
 // portions are floored to 18 dp with the remainder on the largest share (lowest index on a tie),
 // so they sum to the voter's weight. Create and ballot read their own block, the tally its measure
-// block. Below it all three replay as before. Unarmed on mainnet and testnet; regtest from genesis.
+// block. Below it all three replay as before. Unarmed on mainnet, armed on testnet per chain at
+// the row's heights, and active from genesis on regtest.
 addGate('vote_settlement_exact_activation.VOTE_SETTLEMENT_EXACT_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -174,8 +175,8 @@ addGate('vote_settlement_exact_activation.VOTE_SETTLEMENT_EXACT_ACTIVATION', 'he
 // the swap's own escrow, the bound the order leg already applies to its remaining give; a match
 // that disagrees records a no-op settlement and moves nothing. From the same height a COINPAY
 // obligation expires in the block whose time reaches its expiration, the instant from which a
-// COINPAY paying it is refused. Below it both replay as before. Unarmed on mainnet and testnet;
-// regtest from genesis.
+// COINPAY paying it is refused. Below it both replay as before. Unarmed on mainnet, armed on
+// testnet per chain at the row's heights, and active from genesis on regtest.
 addGate('settlement_bounds_activation.SETTLEMENT_BOUNDS_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -192,7 +193,7 @@ addGate('settlement_bounds_activation.SETTLEMENT_BOUNDS_ACTIVATION', 'height', {
 // ceiling), recording an idempotency row that moves no value, so it stops holding a slot. From the
 // same height the XCALL result pass ages an orphan result that carries an admission height by that
 // height instead of by its effective_time. Below it all three passes replay as before. Unarmed on
-// mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with
+// mainnet, armed on testnet per chain at the row's heights. The regtest entry is UNPINNED: a venue arms it with
 // XC_PASS_PROGRESS_RETIREMENT_REGTEST_ACTIVATION (shared_rows.js), so the shared regtest rail
 // and wallet CI keep today's passes unless they opt in. The grace and the age rule live in
 // src/consensus/pass_retirement/index.js.
@@ -211,8 +212,8 @@ addGate('pass_progress_retirement_activation.PASS_PROGRESS_RETIREMENT_ACTIVATION
 // read at height h add back every capability_slash_debits row on a stakes row whose slash
 // block is above h, so the set at h depends only on the chain up to h for an active bond as it
 // already did for a cooling one. A read at the tip sees no such debit and is unchanged. Below
-// it the reads sum the current stakes.amount. Unarmed on mainnet and testnet. The regtest entry
-// is UNPINNED: a venue arms it with XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION (shared_rows.js).
+// it the reads sum the current stakes.amount. Unarmed on mainnet, armed on testnet per chain at
+// the row's heights. The regtest entry is UNPINNED: a venue arms it with XC_SLASH_HISTORICAL_SET_REGTEST_ACTIVATION (shared_rows.js).
 addGate('slash_historical_set_activation.SLASH_HISTORICAL_SET_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -229,8 +230,8 @@ addGate('slash_historical_set_activation.SLASH_HISTORICAL_SET_ACTIVATION', 'heig
 // proven copy with the lowest doge_anchor_txid; it defers when none proves and a copy is still
 // undecided, and pays nothing otherwise. The copies differ only in fields the XANCPUB signatures do
 // not cover, and the reward row carries neither, so the tuple's outcome no longer depends on which
-// copy arrived first. Below it the first copy received decides, as before. Unarmed on mainnet and
-// testnet. The regtest entry is UNPINNED: a venue arms it with
+// copy arrived first. Below it the first copy received decides, as before. Unarmed on mainnet,
+// armed on testnet per chain at the row's heights. The regtest entry is UNPINNED: a venue arms it with
 // XC_ANCHOR_REWARD_COPY_SELECTION_REGTEST_ACTIVATION (shared_rows.js).
 addGate('anchor_reward_copy_selection_activation.ANCHOR_REWARD_COPY_SELECTION_ACTIVATION', 'height', {
     mainnet: UNARMED,
@@ -243,7 +244,7 @@ addGate('anchor_reward_copy_selection_activation.ANCHOR_REWARD_COPY_SELECTION_AC
 
 // token_supply_representation_activation
 // Height on the chain's own block_index. From it an ISSUE whose MINT_SUPPLY (first issue or reissue) or a MINT whose AMOUNT would carry the token's total supply past MAX_TOKEN_SUPPLY is refused whether or not the token declares MAX_SUPPLY, so no supply or balance outgrows the 42 integer digits of the DECIMAL(60,18) ledger sums the per-block sanity check compares.
-// From the same height the per-block supply refresh writes tokens.supply in fixed notation, the form the rollback rebuild writes, instead of the exponent form a bignumber stringifies to from 1e21 up and below 1e-7. Below it both replay as before. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION (shared_rows.js).
+// From the same height the per-block supply refresh writes tokens.supply in fixed notation, the form the rollback rebuild writes, instead of the exponent form a bignumber stringifies to from 1e21 up and below 1e-7. Below it both replay as before. Unarmed on mainnet, armed on testnet per chain at the row's heights. The regtest entry is UNPINNED: a venue arms it with XC_TOKEN_SUPPLY_REPRESENTATION_REGTEST_ACTIVATION (shared_rows.js).
 addGate('token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -262,8 +263,9 @@ addGate('token_supply_representation_activation.TOKEN_SUPPLY_REPRESENTATION_ACTI
 // floor(COIN_AMOUNT x price / FIAT_AMOUNT) exactly; a non-batch coin-payment tally runs at the
 // exact tally scale and charges a Mode A fill its exact cost, so sub-satoshi fills drain the
 // shared payment; and an oracle_prices tie on (effective_at, action_index) resolves on
-// source_chain. Below it all four replay as before. Unarmed on mainnet and testnet. The regtest
-// entry is UNPINNED: a venue arms it with XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION
+// source_chain. Below it all four replay as before. Unarmed on mainnet, armed on testnet per chain
+// at the row's heights. The regtest entry is UNPINNED: a venue arms it with
+// XC_DISPENSER_FIAT_PRICING_REGTEST_ACTIVATION
 // (shared_rows.js).
 addGate('dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICING_ACTIVATION', 'height', {
     mainnet: UNARMED,
@@ -276,7 +278,7 @@ addGate('dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICING_ACTIVATION', '
 
 // bridge_policy_apply_order_activation
 // Height on the chain's own block_index. From it the bridge settle pass selects token policy snapshots only for ticks with a bridged copy on this chain (a local token row, or a due lock in-leg that creates one), before the XPOLICY_MAX_PER_BLOCK cap, so snapshots for ticks bridged elsewhere stop taking every slot. From the same height a tick's snapshots apply in contiguous policy_seq order: a seq waits while an earlier one is neither applied nor recorded refused, a seq at or below the applied one never applies, and a seq still waiting XPOLICY_SEQ_GAP_BOUND_S of block time past its own effective_time applies over the gap.
-// Below it the pass replays as before. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION (shared_rows.js). The selection and the bound live in src/consensus/bridge_settle/policy_order.js.
+// Below it the pass replays as before. Unarmed on mainnet, armed on testnet per chain at the row's heights. The regtest entry is UNPINNED: a venue arms it with XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION (shared_rows.js). The selection and the bound live in src/consensus/bridge_settle/policy_order.js.
 addGate('bridge_policy_apply_order_activation.BRIDGE_POLICY_APPLY_ORDER_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -292,7 +294,7 @@ addGate('bridge_policy_apply_order_activation.BRIDGE_POLICY_APPLY_ORDER_ACTIVATI
 // rounded to its tick's decimals, the shape the user path's amount rule accepts; anything else refuses the emission, which fails the EXECUTE and rolls it back
 // whole. Below it the rounding coerces the text as before: NaN and Infinity become 0, and hex,
 // exponent and bare-point forms ('0x10', '1e-9', '1.', '.5') are read as numbers. Unarmed on
-// mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with
+// mainnet, armed on testnet per chain at the row's heights. The regtest entry is UNPINNED: a venue arms it with
 // XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION (shared_rows.js).
 addGate('vm_emission_amount_format_activation.VM_EMISSION_AMOUNT_FORMAT_ACTIVATION', 'height', {
     mainnet: UNARMED,
@@ -305,7 +307,7 @@ addGate('vm_emission_amount_format_activation.VM_EMISSION_AMOUNT_FORMAT_ACTIVATI
 
 // execute_fee_cap_activation
 // Height on the chain's own block_index. From it an EXECUTE's XCHAIN-balance fee debit is capped at the GAS the caller holds when the run settles, floored at zero, so the debit never leaves the caller's balance negative; the run's outcome and its metered gas stand. Below it the full metered fee is debited, as before: the state commitment reads end-of-block nets, so a block whose later action re-credits the caller commits with the uncapped debit, and below STATE_COMMITMENT_ACTIVATION a negative balance commits, so capping without a height would change committed balances.
-// Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION (shared_rows.js).
+// Unarmed on mainnet, armed on testnet per chain at the row's heights. The regtest entry is UNPINNED: a venue arms it with XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION (shared_rows.js).
 addGate('execute_fee_cap_activation.EXECUTE_FEE_CAP_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -317,7 +319,7 @@ addGate('execute_fee_cap_activation.EXECUTE_FEE_CAP_ACTIVATION', 'height', {
 
 // vote_v3_tick_existence_activation
 // Height on the chain's own block_index. From it a VOTE v3 delegation names an issued TICK:
-// the false result getTokenInfo returns for an unknown ticker is refused instead of passing the null-only legacy check and storing a delegation row. Below it the old verdict replays exactly. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION (shared_rows.js).
+// the false result getTokenInfo returns for an unknown ticker is refused instead of passing the null-only legacy check and storing a delegation row. Below it the old verdict replays exactly. Unarmed on mainnet, armed on testnet per chain at the row's heights. The regtest entry is UNPINNED: a venue arms it with XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION (shared_rows.js).
 addGate('vote_v3_tick_existence_activation.VOTE_V3_TICK_EXISTENCE_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -329,7 +331,7 @@ addGate('vote_v3_tick_existence_activation.VOTE_V3_TICK_EXISTENCE_ACTIVATION', '
 
 // match_origin_open_activation
 // Height on the chain's own block_index. From it ORDER_MATCH and SWAP_MATCH re-read the originating offer and return before candidate
-// lookup unless its latest status is open. This covers a LIST rematch plan whose earlier step made a later planned origin terminal and the match an ORDER or SWAP cancel dispatches from the offer it just cancelled, so escrow already settled or refunded is not settled again. Below it both handlers replay as before. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION (shared_rows.js).
+// lookup unless its latest status is open. This covers a LIST rematch plan whose earlier step made a later planned origin terminal and the match an ORDER or SWAP cancel dispatches from the offer it just cancelled, so escrow already settled or refunded is not settled again. Below it both handlers replay as before. Unarmed on mainnet, armed on testnet per chain at the row's heights. The regtest entry is UNPINNED: a venue arms it with XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION (shared_rows.js).
 addGate('match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,

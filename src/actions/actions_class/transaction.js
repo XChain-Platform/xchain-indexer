@@ -77,9 +77,9 @@ function buildActionData(tx, action, format, coin, isGenesis){
     // holding the block-loop mutex. Sourced from tx.guard_inert, which only the synthetic tx of
     // computeFeeQuote and computePreflight carries; ALWAYS false for real decoded transactions.
     data['GUARD_INERT']      = tx.guard_inert === true;
-    // Read-only dry-run marker for output-matching fee checks (see dryRunAction's
-    // fee_probe). Sourced from tx.fee_probe, which only the public feequote/preflight
-    // synthetic tx carries; ALWAYS false for real decoded transactions.
+    // Read-only dry-run marker for output-matching fee checks (see fee_probe in
+    // dry_run_support.js syntheticDryRunTx). Sourced from tx.fee_probe, which only the public
+    // feequote/preflight synthetic tx carries; ALWAYS false for real decoded transactions.
     data['FEE_PROBE']        = tx.fee_probe === true;
 
     // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS).
@@ -87,8 +87,8 @@ function buildActionData(tx, action, format, coin, isGenesis){
     // a VM emission's own data object is built fresh per emission (execute.js
     // processEmission) and a BATCH sub-command's is cleared down to `baseKeys` between
     // commands, so a counter living in either would reset exactly where the abuse
-    // accumulates. Being present before batch.js takes its baseKeys snapshot is what
-    // makes the batch loop preserve it, the same way it preserves BATCH_VALUE_LEDGER.
+    // accumulates. Being present before batch/index.js dispatchSubCommands takes its baseKeys
+    // snapshot is what makes the batch loop preserve it, the same way it preserves BATCH_VALUE_LEDGER.
     //
     // Consumed by issue.js (the single choke point every ISSUE reaches, wire or emitted).
     // Held as an OBJECT rather than a number so the reference threads unchanged through

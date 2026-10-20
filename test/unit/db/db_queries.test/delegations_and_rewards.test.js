@@ -194,6 +194,30 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
 });
 
 describe('Database.createValidatorReward() @regression @tier1', function () {
+    // The ATTEST fee split hands this writer a bignumber, and doQuery's toString()
+    // renders one below 1e-7 in exponent form.
+    it('writes a sub-1e-7 bignumber amount in fixed notation and leaves other amounts untouched', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(3);
+        sinon.stub(db, 'resolveActiveStakeSourceId').resolves(2);
+        const dq = sinon.stub(db, 'doQuery').resolves([]);
+        const share = db.util.bcmulfloor(db.util.bcdiv('0.00000005', '1', 18), '1', 8);
+        assert.strictEqual(String(share), '5e-8', 'the fixture must reproduce the exponent form');
+
+        const cases = [[share, '0.00000005'], ['1.50', '1.50'], ['10', '10'], ['not-a-number', 'not-a-number']];
+        for(const [amount, stored] of cases){
+            dq.resetHistory();
+            await db.createValidatorReward('deadbeef', 1, 'attest_fee', amount, 100, true);
+            assert.strictEqual(String(dq.args[0][1][5]), stored, `amount ${String(amount)}`);
+        }
+        const normal = db.util.bcnum('1.5');
+        dq.resetHistory();
+        await db.createValidatorReward('deadbeef', 1, 'attest_fee', normal, 100, true);
+        assert.strictEqual(dq.args[0][1][5], normal, 'a normal-range bignumber is passed through as is');
+    });
+});
+
+describe('Database.createValidatorReward() @regression @tier1', function () {
     // a reward whose EARN block is not its MATERIALIZATION block (the
     // BTC-side anchor derivation) must persist both, or the reorg delete has no key
     // that names the block which actually minted the row.

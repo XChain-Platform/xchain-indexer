@@ -18,9 +18,11 @@
 -- capability_snapshots at snapshot_block, and injects the v2/v5 settle leg.
 --
 -- Fresh installs get this table from the directory scan in db.verifyTables(); an aged
--- database gets it from src/sql/migrations/2026-09-12-bridge-tables.sql, whose CREATE
--- TABLE block is byte-consistent with this one (sql_schema_column_parity.test.js compares
--- the two paths).
+-- database builds it from src/sql/migrations/2026-09-12-bridge-tables.sql, then takes the
+-- admit_block_* columns from 2026-09-16-admission-height.sql and the DATETIME created_at
+-- from 2026-09-27-datetime-bridge-policy.sql. sql_schema_column_parity.test.js checks this
+-- definition against the end of that chain. Change it with a new dated migration, never by
+-- editing an applied one (their checksums are ledgered).
 CREATE TABLE bridge_transfers (
     id                   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, -- mirror cursor (matches hub id)
     transfer_id          CHAR(64)     NOT NULL,                    -- sha256(network|src_chain:src_action_index|dest_chain:dest_address|snapshot_block), lowercase hex

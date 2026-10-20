@@ -69,6 +69,14 @@ const planLedgerRenames = function(appliedNames){
     return ops;
 };
 
+// Ledger names with no migration file on disk, sorted. Call it after the rename heal, so a
+// registered rename is not reported. What remains is a deleted file, the old name of a rename
+// whose new name is also recorded, or a rename that is missing its MIGRATION_LEDGER_RENAMES entry.
+const orphanedLedgerNames = function(appliedNames, files){
+    const onDisk = new Set(files || []);
+    return [...(appliedNames || [])].map(String).filter(name => !onDisk.has(name)).sort();
+};
+
 // Backdating guard for the auto-apply path. Apply order is lexical, so a migration
 // added with a date EARLIER than one already applied runs in a different position on
 // a fresh database (in its date slot) than on an aged one (after the frontier), and
@@ -196,6 +204,7 @@ const migrationDeclaresDeployPrecondition = function(raw){
 module.exports = {
     MIGRATION_LEDGER_RENAMES,
     planLedgerRenames,
+    orphanedLedgerNames,
     backdatedFrontierViolation,
     DEPLOY_PRECONDITION_TAG,
     STARTUP_ASSERTED_MIGRATIONS,

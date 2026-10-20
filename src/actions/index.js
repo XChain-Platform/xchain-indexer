@@ -67,8 +67,10 @@ const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 //            injectCallbackExecute), but that reach stays closed: vote.js refuses a v2 whose
 //            data is not IS_SYNTHETIC, which no probe sets. VOTE is 'quotable', so its public
 //            fee-quote dry-run answers a guard-inert VOTE v0 binding create (withVoteBindingDryRunRefusal)
-//            as guard-inert (unjudged) before any transaction or mutex is taken, so the public
-//            path runs neither the real handler nor the probe VM. It is deliberately kept in this set
+//            as guard-inert (unjudged) before any transaction or mutex is taken wherever the probe
+//            could run. It hands the real handler only a create that cannot reach the probe (a
+//            non-numeric contract, or below that gate), and the handler's GUARD_INERT refusal still
+//            stands before the probe, so the public path never runs the probe VM. It is deliberately kept in this set
 //            because the v0 create probe still reaches the VM in block processing and on the
 //            API-key dry-run, and because relaxing the v2 refusal would silently open another
 //            VM door. The cost is named honestly: a batch of legitimate VOTE v0/v1
@@ -162,15 +164,18 @@ function isBatchProbeForbiddenSubAction(action){
 
 // Position of CALLBACK_CONTRACT in a VOTE v0 create's params (VERSION is index 0).
 const VOTE_CALLBACK_CONTRACT_PARAM = 13;
+// The handler's own usable-method gate: below it a binding create never runs the callback probe.
+const gateRegistry = require('../consensus/gate_registry.js');
+const { USABLE_CALLBACK_GATE } = require('./vote/binding_callback.js');
 
 // The callback contract a guard-inert VOTE v0 create names, or null for any other request. Such a
 // create is answered without a transaction: its only unjudged check is the callback probe, so
 // running the real handler would hold the block-loop mutex for a verdict it cannot give.
-function guardInertVoteBindingContract(request){
+// `formatOf` derives the version as dispatch does (util.getFormatVersion), so "0" and 0.0 are v0.
+function guardInertVoteBindingContract(request, formatOf){
     if(!request || request.guardInert !== true || !Array.isArray(request.params)) return null;
     if(String(request.action == null ? '' : request.action).trim().toUpperCase() !== 'VOTE') return null;
-    let version = String(request.params[0] == null ? '' : request.params[0]).trim();
-    if(version !== '' && !/^0+$/.test(version)) return null;
+    if(formatOf(String(request.params[0] == null ? '' : request.params[0]).trim()) !== 0) return null;
     let contract = String(request.params[VOTE_CALLBACK_CONTRACT_PARAM] == null ? '' : request.params[VOTE_CALLBACK_CONTRACT_PARAM]).trim();
     return contract === '' ? null : contract;
 }
@@ -180,9 +185,13 @@ function guardInertVoteBindingContract(request){
 function withVoteBindingDryRunRefusal(methods){
     let dryRunAction = methods.dryRunAction;
     methods.dryRunAction = async function(request){
-        let contract = guardInertVoteBindingContract(request);
-        if(contract === null) return dryRunAction.call(this, request);
+        let contract = guardInertVoteBindingContract(request, (v) => this.util.getFormatVersion(v));
+        // Let the handler answer a non-numeric contract: it refuses on format before any probe
+        if(contract === null || !this.util.isNumeric(contract)) return dryRunAction.call(this, request);
         let blockIndex = await this.indexerDb.getLatestBlockIndex();
+        // Let the handler answer below the usable-method gate too: it never runs the probe there
+        if(!gateRegistry.activeAt(USABLE_CALLBACK_GATE, this.config['NETWORK'], this.config['COIN'], blockIndex, null))
+            return dryRunAction.call(this, request);
         let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
         let status = 'invalid: ' + this.util.guardInertContractProbeError(contract, 'as a VOTE binding-poll callback');
         return dryRunOutcome(blockIndex, blockTime,

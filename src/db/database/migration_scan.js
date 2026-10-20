@@ -128,6 +128,13 @@ function keywordDestroys(self, stmt){
     return false;
 }
 
+// destructiveAutoStatement, the closing allow-list: true unless the statement opens with a form
+// an auto file may use. Any other form (BINLOG, DO, SELECT, PURGE, RESET, INSTALL, ...) can make
+// the server do something this prefix classifier cannot see, the same blind spot as CALL above.
+function statementOutsideAllowList(stmt){
+    return !/^(?:ALTER\s+(?:ONLINE\s+)?TABLE|CREATE\s+(?:TEMPORARY\s+)?TABLE|CREATE\s+(?:(?:UNIQUE|FULLTEXT|SPATIAL)\s+)?INDEX|DROP\s+(?:INDEX|TEMPORARY\s+TABLE)|INSERT|UPDATE|SET)\b/i.test(stmt);
+}
+
 // destructiveAutoStatement, the CREATE TABLE engine check: true when any ENGINE option names
 // an engine other than InnoDB. MEMORY loses every row on restart, and MyISAM or Aria sit
 // outside the transaction a reorg rollback undoes.
@@ -267,6 +274,11 @@ module.exports = {
     // [UNIQUE|FULLTEXT|SPATIAL] INDEX (triggers, events, routines and views run SQL
     // the scanner cannot read), and any SET other than SET NAMES or a single UTC
     // time_zone (session variables relax strict mode; SET STATEMENT ... FOR hides a statement).
+    // Finally, any statement that does not open with ALTER [ONLINE] TABLE, CREATE [TEMPORARY]
+    // TABLE, CREATE [UNIQUE|FULLTEXT|SPATIAL] INDEX, DROP INDEX, DROP TEMPORARY TABLE, INSERT,
+    // UPDATE or SET is flagged (BINLOG, DO, SELECT, PURGE, RESET, INSTALL and every other form).
+    // The decoder twin is xchain-decoder/src/db/migration_statements.js:destructiveAutoStatement
+    // with its rules in xchain-decoder/src/db/migration_guards/destructive_statement_rules.js.
     //
     // Deliberately NOT flagged (legitimate existing auto patterns): DROP INDEX/KEY,
     // DROP FOREIGN KEY/CONSTRAINT/CHECK/DEFAULT/PRIMARY KEY with the keyword bare and
@@ -308,6 +320,8 @@ module.exports = {
             if(alterHead && alterTableDestroys(stmt))            return raw;
             // Any other ALTER (EVENT, VIEW, DATABASE, ...) is outside the allow-list, like CREATE.
             if(!alterHead && /^ALTER\b/i.test(stmt))             return raw;
+            // Every statement must open with an allowed form; the checks above narrow each one.
+            if(statementOutsideAllowList(stmt))                  return raw;
         }
         return null;
     },

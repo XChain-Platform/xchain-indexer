@@ -85,7 +85,7 @@ describe('token_supply_representation_activation: tokens.supply bytes @regressio
         assert.strictEqual((await refreshed('regtest', '0.00000001', 8)).supply, '1e-8');
     });
 
-    it('unarmed: keeps the exponent form on mainnet and testnet even with the variable set', async function () {
+    it('inactive: keeps the exponent form on mainnet, and on testnet below its armed height, even with the variable set', async function () {
         process.env[ENV] = 'armed';
         for (const network of ['mainnet', 'testnet'])
             assert.strictEqual((await refreshed(network, E21, 0)).supply, '1e+21', network);

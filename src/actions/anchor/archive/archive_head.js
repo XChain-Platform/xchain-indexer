@@ -43,7 +43,7 @@ async function checkReplayGuards(handler, data, error, validOnly){
     }
     // The archive half of the guard needs a second condition: MATCH_BATCH_SEQ is a dense
     // counter the hub allocates from its own tables (StateAnchorPublisher.getNextBatchSeq:
-    // MAX(batch_seq)+1 over cross_chain_matches / cross_chain_calls / validator_rewards),
+    // MAX(batch_seq)+1 over every batch_seq table the hub's getNextAnchorBatchSeq lists),
     // and those tables are reset by a wipe-and-replay rebase while this watermark (read
     // from replayed anchor_actions) returns to the pre-rebase maximum. Seq alone cannot
     // tell "the hub's counter restarted" from "someone is replaying an old archive", and
@@ -62,6 +62,10 @@ async function checkReplayGuards(handler, data, error, validOnly){
     // equal case is already tolerated elsewhere in this guard since an exact re-broadcast
     // is signature-bound to identical content and can only produce a duplicate row, which
     // the archive-head pick is already required to handle deterministically.
+    //
+    // So a v1 head has no same-author re-issue refusal: one that reuses a seq its author
+    // already spent, on different content, indexes valid, and only the hub's own seq floor
+    // keeps it from doing so. The refusal (checkFoldArchiveReissue) covers v3 folds only.
     if(!error){
         let wrapperRows = await handler.actions.protocolChanges.isEnabled(
             'ARCHIVE_REPLAY_WRAPPER_WATERMARK', Number(data['BLOCK_INDEX']));

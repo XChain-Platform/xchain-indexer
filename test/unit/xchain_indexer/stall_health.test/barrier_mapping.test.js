@@ -156,8 +156,9 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
     });
 
     it('every re-keyed barrier reports NO clear instant above the admission activation', function () {
-        // The height rule removes t(B) from the predicate, so there is no instant wall clock
-        // can reach that opens it. Reporting one anyway keeps waitingOnFutureBlock() answering
+        // The height half reads no t(B) and can open the barrier at any instant, so there is no
+        // first instant to report; the stream escape five of them keep is a later backstop,
+        // not a floor. Reporting one anyway keeps waitingOnFutureBlock() answering
         // 'future_block_wait', keeps nextBarrierHold() at null and makes the 900 s ceiling
         // unreachable on exactly the barrier whose stall is now remediable.
         const reKeyed = EXPECTED.filter(e => e[2] === 'height-aware' || e[2] === 'bound-aware');
@@ -201,24 +202,42 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
     });
 });
 
-// Curated, not derived from every `_release*Waiters` definition:
-// releaseSnapshotWaiters is deliberately driven off the CROSS_CHAIN_TABLES
-// content refresh instead of the watermark, so a blanket "every waiter
-// method fires here" rule would be wrong on its face. A barrier missing
-// from advanceWatermark blocks its waiters for the full poll timeout on
-// every advance.
+// Curated, with every other `release*Waiters` definition named in RELEASED_ELSEWHERE:
+// those waiters are released off their own event instead of the watermark, so a blanket
+// "every waiter method fires here" rule would be wrong on its face. A barrier missing
+// from advanceWatermark blocks its waiters for the full poll timeout on every advance.
 const REQUIRED_WATERMARK_RELEASES = [
     'releasePriceWaiters',
     'releasePriceTimeWaiters',
     'releaseOracleWaiters',
     'releaseMatchWaiters',
     'releaseCallWaiters',
+    'releaseBridgeWaiters',
+    'releasePolicyWaiters',
+    'releaseListShareWaiters',
+    'releaseRemoteTokenWaiters',
     'releaseAnchorAttestWaiters',
     'releaseAttestResponseWaiters',
 ];
+const RELEASED_ELSEWHERE = Object.freeze({
+    releaseSnapshotWaiters:        'the CROSS_CHAIN_TABLES content refresh',
+    releaseLandingWaiters:         'the price-landing advance',
+    releaseCapabilityProofWaiters: 'the capability-proof verdict',
+});
+// Every release*Waiters method the entry and its parts define, bar the height release path.
+function definedWaiterReleases(src) {
+    const names = new Set();
+    for (const m of src.matchAll(/^\s*(?:async\s+)?(release[A-Za-z]+Waiters)\s*\(\s*\)\s*\{/gm)) names.add(m[1]);
+    names.delete('releaseHeightWaiters');
+    return [...names].sort();
+}
 describe('barrier stallClearsAt grace-field mapping @regression', function () {
 
     it('every curated barrier registers its release call inside _advanceWatermark', function () {
+        // Fails a new waiter family until it is curated or excepted, and a stale listed name.
+        assert.deepStrictEqual(definedWaiterReleases(SYNC_SRC),
+            REQUIRED_WATERMARK_RELEASES.concat(Object.keys(RELEASED_ELSEWHERE)).sort(),
+            'each release*Waiters definition belongs in REQUIRED_WATERMARK_RELEASES or RELEASED_ELSEWHERE');
         const m = /advanceWatermark\([^)]*\)\s*\{([\s\S]*?)\n    \}/.exec(SYNC_SRC);
         assert.ok(m, 'advanceWatermark method not found in the hub_db_sync entry or its parts');
         const body = m[1];

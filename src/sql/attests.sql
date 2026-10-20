@@ -102,10 +102,11 @@ CREATE        INDEX origin_chain_status ON attests (origin_chain, request_status
 -- Cross-chain relay identity (origin_chain, origin_action_index). Deliberately NON-UNIQUE: it
 -- serves the v3 admission's exactly-once lookup (getRelayRequestByOrigin) as a seek instead
 -- of a scan over every row this chain ever materialized from that origin. Uniqueness is
--- enforced in CODE, as a stored 'invalid' verdict, and must NOT be moved here: a rejected v3
--- persists its origin_chain/origin_action_index for the audit row, so two rejected v3s naming
--- one origin action would collide, and a UNIQUE violation THROWS mid-block inside a consensus
--- indexer rather than producing the identical stored verdict on every node.
+-- enforced in CODE, as an 'invalid' verdict on the action row, and must NOT be moved here: a
+-- UNIQUE violation THROWS mid-block inside a consensus indexer rather than producing the
+-- identical stored verdict on every node. Only an admitted row carries the identity (a refused
+-- v3 is withheld and a refused v0 leaves both origin columns NULL), so the lookups' 'rejected'
+-- filter is defence in depth. This comment, not the dated migration's header, is the reason.
 CREATE        INDEX origin_relay_identity ON attests (origin_chain, origin_action_index);
 CREATE        INDEX version_status  ON attests (version, request_status, deadline_block);
 CREATE        INDEX contract_index  ON attests (contract_index);

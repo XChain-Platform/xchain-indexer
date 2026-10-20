@@ -313,7 +313,8 @@ addGate('oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION', 'height', {
 // it with its own coin at the ORDER_MATCH block; the hub's cross-chain book reads the
 // bare network entry at the match's BTC snapshot_block, so a release that adds
 // <COIN>:<network> heights for the indexers also sizes the bare entry for the hub.
-// Unarmed on mainnet and testnet; regtest is armed from genesis.
+// Unarmed on mainnet; armed on testnet per chain, with the bare entry at the BTC height for
+// the hub; armed from genesis on regtest.
 addGate('order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156908,
@@ -331,8 +332,8 @@ addGate('order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION',
 // remote_token_snapshots watermark, so the verdict no longer depends on when the pin
 // reached this node's mirror. A pin with no height for the reading chain is never read
 // at or above it. A release that adds <COIN>:<network> heights for the indexers sizes the
-// bare entry for the hub below every one of them. Unarmed on mainnet and testnet. The
-// regtest entry is UNPINNED: a venue arms it, hub and indexers together, with
+// bare entry for the hub below every one of them. Unarmed on mainnet; armed on testnet per
+// chain, with the bare entry at the BTC height for the hub. The regtest entry is UNPINNED: a venue arms it, hub and indexers together, with
 // XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION (shared_rows.js), because a pin-reading block
 // waits about one xdex round window for the height watermark.
 addGate('remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION', 'height', {
@@ -344,7 +345,7 @@ addGate('remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION', '
     regtest: UNPINNED,   // ARMS by XC_REMOTE_TOKEN_ADMISSION_REGTEST_ACTIVATION at read
 });
 // stateHash: the state_hash class for the batch-completion stamp on a surviving v5 attest head.
-// Inert on mainnet and testnet until a flag day is sized; regtest is armed from genesis.
+// Inert on mainnet, armed on testnet per chain at the row's heights, and armed from genesis on regtest.
 addGate('stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 156230,

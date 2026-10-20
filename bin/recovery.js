@@ -270,7 +270,7 @@ class AnchorRecovery {
             // batch'); 'orphan' rows are KEPT (a chunk that landed before its
             // parent head carries legitimate archive bytes) and are exactly why the
             // authorship filter must be in the read path; and only chunks authored by
-            // the canonical archive head count at all. Lowest action_index wins per
+            // this head's own publisher count at all. Lowest action_index wins per
             // index, deterministically. Mirrors the v1 status join above and
             // rollback.js's valid-chunk self-join; do NOT loosen to unfiltered.
             // The batch key is (match_batch_seq, head author), so THIS head reassembles

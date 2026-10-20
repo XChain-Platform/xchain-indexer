@@ -63,10 +63,10 @@ module.exports = {
             // anchor_invalid state-hash class covers the stamp itself). client/rollback.js
             // mirrors this; the drift guard pins the predicate on both sides.
             //
-            // Author scope, flag-day gated and INERT on every network today: the seq is
-            // not a batch key once archive batches are publisher-scoped, so a second
+            // Author scope, flag-day gated per network (see the gate row): the seq is
+            // not a batch key because archive batches are publisher-scoped, so a second
             // publisher's orphaned chunk resets a head whose own batch survives intact.
-            // Rationale + arming precondition: archive_rollback_author_scope_activation.js.
+            // Rationale + arming precondition: src/consensus/gates/archive_rollback_author_scope_gate.js.
             await db.createStatus('unverified');
             let authorScope = archiveAuthorScopeJoin(block_index, String(config['NETWORK'] || ''));
             // AND the fold row predicate so heads are picked as the state hash picks them; a

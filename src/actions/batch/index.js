@@ -111,11 +111,10 @@ async function parse(params, data, error){
         await dispatchSubCommands.call(this, commands, data, error, gates.normalize, isProbe);
     }
 
-    // Probe only: the dispatch loop leaves data['STATUS'] holding the LAST sub-command's
-    // verdict, so restore the BATCH's own. Without this the pre-flight would answer for
-    // whichever command happened to come last - which reads as a verdict on the batch and
-    // is not one. Per-sub-command verdicts are reported separately in PROBE_SUB_VERDICTS.
-    if(data['FEE_PROBE'] === true) data['STATUS'] = status;
+    // Restore the BATCH's own verdict, which the dispatch loop overwrote with the LAST
+    // sub-command's. Every dry-run reads it back, probe or not; on a block it reaches only the
+    // action counter (rows are already written). Probe sub-verdicts sit in PROBE_SUB_VERDICTS.
+    data['STATUS'] = status;
 }
 
 // Pre-parse all sibling commands so child handlers can inspect them

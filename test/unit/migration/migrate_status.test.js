@@ -142,7 +142,8 @@ function registerStatusOutputTests() {
         const output = printed(cli.logStub);
         const report = JSON.parse(output.slice(output.indexOf('{')));
         assert.deepStrictEqual(Object.keys(report),
-            ['database', 'total', 'applied', 'pending', 'changed', 'migrations']);
+            ['database', 'total', 'applied', 'pending', 'changed', 'migrations', 'orphaned']);
+        assert.deepStrictEqual(report.orphaned, []);
         assert.strictEqual(report.database, 'indexer_test');
         assert.strictEqual(report.total, fake.files.length);
         assert.strictEqual(report.applied, fake.files.length - 2);
@@ -258,6 +259,52 @@ function registerRenameStatusTests() {
     });
 }
 
+// A ledger holding every committed file except `target`, which sits under an unregistered old
+// name with its bytes' checksum, beside a deleted file's row and a registered rename's old row.
+const UNREGISTERED_OLD = '2026-01-01-renamed-without-registry.sql';
+function orphanLedger(target) {
+    return migrationFiles().filter((name) => name !== target)
+        .map((name) => ({ name, checksum: sumOf(name), mode: 'auto', applied_at: 'x' }))
+        .concat([
+            { name: UNREGISTERED_OLD, checksum: sumOf(target), mode: 'auto', applied_at: 'y' },
+            { name: 'add_controller_bound_token_columns.sql', checksum: '0'.repeat(64), mode: 'manual', applied_at: 'z' },
+            { name: RENAMED_FROM, checksum: sumOf(RENAMED_TO), mode: 'auto', applied_at: 'w' },
+        ]);
+}
+
+function registerOrphanStatusTests() {
+    it('--status --json lists ledger rows with no file and names a rename missing its registry entry', async function () {
+        const target = migrationFiles().slice(-1)[0];
+        const fake = makeFakeDb({ ledgerRows: orphanLedger(target), planner: realPlanLedgerRenames });
+        loadMigrate(fake.FakeDatabase, ['--status', '--json']);
+        await fake.done;
+
+        const output = printed(cli.logStub);
+        const report = JSON.parse(output.slice(output.indexOf('{')));
+        assert.deepStrictEqual(report.orphaned, [
+            { name: UNREGISTERED_OLD, mode: 'auto', appliedAt: 'y', renamedTo: null, sameContentAs: target },
+            { name: RENAMED_FROM, mode: 'auto', appliedAt: 'w', renamedTo: RENAMED_TO, sameContentAs: null },
+            { name: 'add_controller_bound_token_columns.sql', mode: 'manual', appliedAt: 'z', renamedTo: null, sameContentAs: null },
+        ]);
+        assert.strictEqual(report.total, report.migrations.length, 'orphans never enter the migrations rows');
+        assert.strictEqual(report.pending, 1);
+        assert.strictEqual(process.exitCode, undefined);
+    });
+
+    it('--status prints an ORPHANED line per ledger row with no file and the refusal note', async function () {
+        const target = migrationFiles().slice(-1)[0];
+        const fake = makeFakeDb({ ledgerRows: orphanLedger(target), planner: realPlanLedgerRenames });
+        loadMigrate(fake.FakeDatabase, ['--status']);
+        await fake.done;
+
+        const output = printed(cli.logStub);
+        assert.match(output, new RegExp('\\[ORPHANED, mode=auto\\] ' + UNREGISTERED_OLD +
+            ' \\(same content as pending ' + target + ': a rename missing its MIGRATION_LEDGER_RENAMES entry\\)'));
+        assert.match(output, /\[ORPHANED, mode=manual\] add_controller_bound_token_columns\.sql \(ledger row with no migration file\)/);
+        assert.match(output, /will refuse until each renamed file has a MIGRATION_LEDGER_RENAMES entry/);
+    });
+}
+
 function registerStatusArgumentTests() {
     it('refuses unsafe status argument combinations before constructing a Database', function () {
         const cases = [
@@ -339,6 +386,7 @@ describe('migrate CLI status report @regression', function () {
     registerStatusOutputTests();
     registerStatusFailureAndTextTests();
     registerRenameStatusTests();
+    registerOrphanStatusTests();
     registerStatusArgumentTests();
     registerChangedStatusTests();
 });

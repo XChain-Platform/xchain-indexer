@@ -13,8 +13,10 @@
  * PROTOCOL TIME
  *
  * Everything time-keyed in the protocol (the price/oracle/fiat reads, and the
- * ELEVEN mirror barrier hold points in XChainIndexer.js's block loop) currently
- * keys on a block's RAW timestamp. Eleven is the measured count, not a guess:
+ * ELEVEN mirror barrier hold points in the block loop's barrier chain,
+ * deferOnSyncBarriers in ../XChainIndexer/price_barriers.js with the members after
+ * the price reads in ../XChainIndexer/mirror_barriers.js) currently keys on a
+ * block's RAW timestamp. Eleven is the measured count, not a guess:
  * the price barrier is TWO members on one stallReason (a height-keyed one that
  * is BTC-gated and a time-keyed one that runs on every chain), the direct
  * hub-DB call-presence barrier is a full member on the hub's own clock, and the

@@ -26,6 +26,15 @@ const ledgerPrecision = require('../../consensus/ledger_amount_precision_gate');
 // back into the one method set db/index.js installs, at the position those methods held here.
 const tableDump = require('./table_dump.js');
 
+// Build the optional one-token ledger filter. Only a whole-number tick_id narrows the read;
+// a ticker name never reaches the SQL, since comparing it to the id column would match no rows.
+function tickIdFilter(tick_id, args){
+    if(tick_id === null || tick_id === undefined || !/^[0-9]+$/.test(String(tick_id)))
+        return '';
+    args.push(Number(tick_id));
+    return ' AND m.tick_id=?';
+}
+
 module.exports = {
 
     // Create / Update ledger change records (credits / debits / escrows)
@@ -68,7 +77,7 @@ module.exports = {
     },
 
     // Handle getting credits or debits records for a given address
-    async getAddressCreditDebit(table, address, action, block_index, action_index){
+    async getAddressCreditDebit(table, address, action, block_index, action_index, tick_id){
         let data       = [];
         let type       = typeof address;
         let address_id = null;
@@ -92,6 +101,8 @@ module.exports = {
             sql += " AND a1.action_id=?";
             args.push(action_id);
         }
+        // Narrow to one token when given its tick_id
+        sql += tickIdFilter(tick_id, args);
         if(['credits','debits'].indexOf(table) != -1){
             let query = `SELECT 
                     m.tick_id,

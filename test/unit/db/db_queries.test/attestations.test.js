@@ -67,9 +67,9 @@ describe('Database.getRelayRequestById() @regression @tier1', function () {
     });
 
     it('excludes rejected rows, which is the whole point of the separate query', async function () {
-        // A rejected v3 is still stored. Counting it let one malformed front-run at a
-        // public request_id block the federation's real relay for that id forever, so
-        // this clause is the fix, not a filter for tidiness.
+        // persistRelayRequest withholds a refused v3, so this clause is defence in depth: a
+        // rejected row that exists anyway must not let one malformed front-run at a public
+        // request_id block the federation's real relay for that id forever.
         const db = dbWithDoQuery([]);
         await db.getRelayRequestById('a'.repeat(64));
         const sql = db.doQueryStrict.firstCall.args[0];

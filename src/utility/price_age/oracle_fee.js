@@ -44,10 +44,11 @@ const { findFeeOutput } = require('../fee_output.js');
 // ledger every line below collapses to the pre-existing behavior, which is what a
 // non-BATCH transaction and a pre-flag-day BATCH must still see, byte for byte.
 //
-// data['FEE_PROBE'] marks the read-only public quote path. actions/dispenser.js
-// routes a probe to quoteOracleFee (which reads no output at all), so a probe does
-// not reach here today; this guard keeps that true for any later caller, because
-// letting the public quote API mutate consensus state is the sharpest edge here.
+// data['FEE_PROBE'] marks the read-only public quote path. chargeOracleUsageFee in
+// actions/dispenser/validate_format.js routes a probe to quoteOracleFee (which reads no
+// output at all), so a probe does not reach here today; this guard keeps that true for any
+// later caller, because letting the public quote API mutate consensus state is the sharpest
+// edge here.
 //
 // Returns this transaction's per-oracle tally, or null when no tally is in play.
 function oracleFeeTally(data){

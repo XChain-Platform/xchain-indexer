@@ -36,7 +36,7 @@ async function runControllerGuard(ctx){
     if(!error && tokenInfo){
         let gasTick     = this.config['GAS'];
         let gasInfo     = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let gasBalances = await this.indexerDb.getAddressBalances(data['SOURCE'], gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let gasBalances = await this.indexerDb.getAddressBalances(data['SOURCE'], gasInfo ? gasInfo['TICK_ID'] : null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
             actionType:  'MINT',
             tick:        data['TICK'],

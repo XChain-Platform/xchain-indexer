@@ -112,7 +112,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
         assert.throws(() => ProtocolChanges.activeAt('train_activation.TRAIN_ACTIVATION', 'mainnet', null, 0, 0), /unsupported unit ruleset/);
     });
 
-    it('keeps anchor archive folding inactive on live networks and active at regtest genesis', function () {
+    it('keeps anchor archive folding inactive on mainnet, armed on each testnet chain at its height and active at regtest genesis', function () {
         // The v0.23.0 cut armed the fold term on each testnet chain: dark at 1 and one block
         // short of the chain's own height (read from the registry), live from it.
         const row = ProtocolChanges.get(ANCHOR_ARCHIVE_FOLD_TERM);

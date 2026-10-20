@@ -117,9 +117,9 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
         // The griefing shape the narrow lookup exists to close. request_id rides the
         // wire and is derivable in public from the origin chain's v0, so a watcher can
         // front-run the federation with a malformed v3 naming the pending id. That
-        // attempt is refused, but it is still STORED as a rejected audit row - and a
-        // dedupe that counted stored rows then answered "taken" for the federation's
-        // real relay, forever, for one transaction fee.
+        // attempt is refused and persistRelayRequest withholds its row; a dedupe that
+        // counted a refusal would answer "taken" for the federation's real relay,
+        // forever, for one transaction fee.
         it('admits the federation relay after a malformed v3 front-ran its request_id', async function () {
             indexer.config['COIN'] = 'BTC';
 
@@ -128,7 +128,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
             await handler.parse(v3Params({ providerId: 'not_a_provider' }), griefData, null);
 
             assert.strictEqual(griefData['REQUEST_STATUS'], 'rejected',
-                'the front-run is refused, and the audit row is still written');
+                'the front-run is refused');
             assert.strictEqual(griefData['REQUEST_ID'], REQ_ID,
                 'carrying the very request_id the federation is about to relay');
 
@@ -139,7 +139,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
 
             assert.strictEqual(realData['STATUS'], 'valid');
             assert.strictEqual(realData['REQUEST_STATUS'], 'pending',
-                'a stored rejected verdict must not consume the request_id');
+                'a refused v3 must not consume the request_id');
             assert.strictEqual(indexer.indexerDb.getRelayRequestById.calledWith(REQ_ID), true,
                 'the guard asks the admitted-only lookup, not the shared row lookup');
         });

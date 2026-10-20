@@ -115,8 +115,8 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
                 'consensus dispatch must be unchanged');
             assert.strictEqual(data['PROBE_SUB_VERDICTS'], undefined, 'no probe collector off the probe path');
             assert.strictEqual(data['PROBE_ORACLE_FEES'], undefined);
-            assert.strictEqual(data['STATUS'], 'valid:SEND',
-                'off the probe path STATUS keeps the last handler\'s value, exactly as before');
+            assert.strictEqual(data['STATUS'], 'valid',
+                'off the probe path STATUS is the BATCH verdict too, never the last handler\'s');
         });
 
         it('BELOW-PROBE CONTROL: the consensus value ledger is still seeded and never replaced', async function () {

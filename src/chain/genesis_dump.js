@@ -36,7 +36,7 @@
  *   line 1  : {"meta": {version, coin, genesisBlock, expectedHashes, tableOrder, rowCounts}}
  *   per table: {"t": "<table>", "cols": ["c1","c2",...]}   then one {"r":[v1,v2,...]} per row
  * Values are JSON scalars (Number|string|null); BIGINT columns arrive as Numbers
- * (pool bigIntAsNumber=true) and stay within Number.MAX_SAFE_INTEGER.
+ * (pool bigIntAsNumber=true), and the writer refuses any beyond MAX_SAFE_INTEGER.
  *
  ********************************************************************/
 
@@ -280,9 +280,9 @@ class GenesisDump {
     }
 
     // Normalize a DB value for JSON. bigIntAsNumber=true (db.js) means BIGINTs
-    // already arrive as Numbers; a stray BigInt from a future driver change is
-    // range-checked and converted, and one too large to survive IEEE 754 throws
-    // rather than rounding.
+    // arrive as Numbers the driver has already rounded past 2^53-1, so a Number
+    // beyond MAX_SAFE_INTEGER throws (rounding never lands below 2^53), and a
+    // stray BigInt is range-checked the same way and converted.
     //
     // Number() on a BigInt above 2^53-1 silently returns a nearby double, and
     // this artifact is pinned by the sha256 of its bytes, so a rounded row would
@@ -298,6 +298,8 @@ class GenesisDump {
                 throw new RangeError(`genesis dump value (${v.toString()}) exceeds the maximum safe integer (${Number.MAX_SAFE_INTEGER}) and cannot be written without precision loss`);
             return Number(v);
         }
+        if(typeof v === 'number' && Math.abs(v) > Number.MAX_SAFE_INTEGER)
+            throw new RangeError(`genesis dump value (${v}) exceeds the maximum safe integer (${Number.MAX_SAFE_INTEGER}); the pool has already rounded it, so it cannot be written exactly`);
         return v;
     }
 }
