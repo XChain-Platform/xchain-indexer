@@ -12,8 +12,8 @@
  *
  * Action-scoped price-sync barrier.
  *
- * The price/oracle mirror barriers in XChainIndexer wait on EVERY block, so on
- * mainnet every tip block burns the full HUB_PRICE_SYNC_TIMEOUT_MS (60s) waiting
+ * Without this predicate the price/oracle mirror barriers waited on EVERY block, so on
+ * mainnet every tip block burned the full HUB_PRICE_SYNC_TIMEOUT_MS (60s) waiting
  * for a mirror it never reads: the hub finalizes one price round per 600s, the
  * same cadence as a BTC block, so a tip block can essentially never be covered
  * by a round anchored at or after it. Measured 2026-07-27: BTC 11 timeouts,
@@ -23,14 +23,16 @@
  * A block that reads no price is byte-identical whether the mirror is current or
  * a week stale, so waiting on it is pure cost. This predicate decides whether a
  * block can reach a price read at all; the caller skips the barriers when it
- * cannot.
+ * cannot. The caller is evaluatePriceBarrier (XChainIndexer/barrier_clock.js),
+ * called from deferOnSyncBarriers (XChainIndexer/price_barriers.js), which passes
+ * the verdict to the price and oracle barriers there.
  *
  * *** NO FLAG-DAY GATE, and this is deliberate. *** Every sibling module in this
  * directory gates a consensus value and therefore needs an activation height.
  * This one does not: the barrier is a node-local WAIT decision, never persisted
- * and never hashed (the invariant is written out at XChainIndexer.js, above the
- * price barrier). A node that waits and a node that skips produce identical
- * output for a block that reads no price, so the predicate does not have to be
+ * and never hashed (the invariant is written out above deferOnPriceSync in
+ * XChainIndexer/price_barriers.js). A node that waits and a node that skips
+ * produce identical output for a block that reads no price, so the predicate does not have to be
  * deterministic across nodes. It only has to be SOUND.
  *
  * SOUNDNESS is the whole design. Waiting when we did not need to costs latency.
@@ -52,8 +54,8 @@
  *      traffic justifies the risk.
  *
  *   2. The end-of-block passes are NOT covered here, because they cannot be.
- *      processCrossChainCalls (utility.js) injects XEXEC actions and runs XCALL
- *      callback isolates from hub-mirror state on blocks that contain no
+ *      processCrossChainCalls (utility/cross_chain_calls.js) injects XEXEC actions
+ *      and runs XCALL callback isolates from hub-mirror state on blocks that contain no
  *      transaction at all, and those run the VM, which can read the price
  *      mirror. Predicting them would mean re-running their due-set queries
  *      before the block transaction opens, and the answer could still change

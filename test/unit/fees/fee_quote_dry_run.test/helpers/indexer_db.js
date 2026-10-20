@@ -16,8 +16,15 @@ function makeIndexerDb({ feeAmount, prices, addressId, tickId, addressBalances, 
     return {
         getLatestBlockIndex: async () => 100,
         getBlockTime:        async () => 1000,
+        // The block-loop height field: null at boot, as the real Database starts it.
+        blockIndex:          null,
         beginTransaction:    async () => { calls.begin++; calls.order.push('begin'); },
-        rollbackTransaction: async () => { calls.rollback++; calls.order.push('rollback'); },
+        // Record the height field as the rollback sees it (the real rollback releases the lock).
+        async rollbackTransaction(){
+            calls.rollback++;
+            calls.order.push('rollback');
+            calls.blockIndexAtRollback = this.blockIndex;
+        },
         // Watchdog-fence surface: the dry-run reads the epoch after
         // beginTransaction and runs processTransaction under it. The stub
         // mirrors the real Database contract (fixed epoch, pass-through run).

@@ -88,6 +88,19 @@ describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
         assert.strictEqual(ix.barrierCeilingHits, 0);
         assert.deepStrictEqual(ix.resyncCalls, []);
     });
+
+    // A rule-set halt is a build-update problem, so it must not be logged or counted as a
+    // barrier or host fault however long the node stays halted.
+    it('a train activation halt never reaches the ceiling', function () {
+        const ix = wire(makeIndexer(900000));
+        ix.stallReason = 'train_activation_halt: rule set 3 required at 900';
+        note.call(ix, 900, NOW);
+        note.call(ix, 900, NOW + 3600000);
+        assert.strictEqual(ix.barrierHold, null);
+        assert.strictEqual(ix.barrierCeilingHits, 0);
+        assert.deepStrictEqual(ix.resyncCalls, []);
+        assert.strictEqual(err.called, false);
+    });
 });
 
 describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {

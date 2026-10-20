@@ -22,7 +22,9 @@
 
 'use strict';
 
-const { ARCHIVE_HEAD_VERSIONS_SQL, archiveHeadPredicate } = require('../../consensus/state_hash.js');
+const { archiveHeadPredicate } = require('../../consensus/state_hash.js');
+// The forward parent pick's own predicate and fold floor, so the reset matches every head a chunk can stamp.
+const { archiveHeadPickPredicate, foldArchiveHeadFloor } = require('../anchors/archive_head_pick.js');
 const { archiveAuthorScopeJoin } = require('../../consensus/gates/archive_rollback_author_scope_gate.js');
 // Wire versions only, for the ATTEST batch-link retraction below: the head and the
 // continuation are what make an `attests` row part of a batch, and naming them from the
@@ -52,14 +54,14 @@ module.exports = {
             // snapshot catch-up (it cannot intern locally without diverging the replicated
             // id, and anchor status_id is in no block-hash projection).
             //
-            // Version predicate: the parent is any ARCHIVE_HEAD version (today v1, the
-            // publisher-bearing archive head), spliced from the stateHash.js constant
-            // rather than hand-copied, so a head version added later reaches this reset
-            // too. No flag day gates it: every head version's stamp is equally
-            // un-re-derivable after the chunk delete, and this reset is not a hash
-            // preimage (the GATED anchor_invalid state-hash class covers the stamp
-            // itself). client/rollback.js mirrors this; the drift guard pins the
-            // predicate on both sides.
+            // Version predicate: the parent is any head the forward chunk path can pick
+            // and stamp, spliced from the same archiveHeadPickPredicate getAnchorV1ByBatchSeq
+            // uses: v1, plus a v3 fold archive row (chain NULL) at or above the DOGE fold
+            // floor, a bound placeholder that is UNARMED (no v3 row) where the gate is off.
+            // No flag day gates it: every picked head's stamp is equally un-re-derivable
+            // after the chunk delete, and this reset is not a hash preimage (the GATED
+            // anchor_invalid state-hash class covers the stamp itself). client/rollback.js
+            // mirrors this; the drift guard pins the predicate on both sides.
             //
             // Author scope, flag-day gated and INERT on every network today: the seq is
             // not a batch key once archive batches are publisher-scoped, so a second
@@ -80,10 +82,11 @@ module.exports = {
                         JOIN index_statuses us ON us.status = 'unverified'
                         SET p.status_id = COALESCE(p.pre_archive_status_id, us.id),
                             p.pre_archive_status_id = NULL
-                        WHERE p.version ${ARCHIVE_HEAD_VERSIONS_SQL}
+                        WHERE ${archiveHeadPickPredicate('p')}
                           AND p.action_index < ?
                           AND ${archiveHeadPredicate('p')}`;
-            args = [firstActionIndex, firstActionIndex];
+            // Bind in SQL order: the chunk join, the pick predicate's fold floor, then the parent bound.
+            args = [firstActionIndex, foldArchiveHeadFloor(config['NETWORK'], 'DOGE'), firstActionIndex];
             await db.doQuery(query, args);
         }
     },

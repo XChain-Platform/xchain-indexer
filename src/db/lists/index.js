@@ -103,7 +103,8 @@ async function queryListMembers(db, type, resolved){
     let query = '';
     // CONSENSUS: list_items has no ORDER BY on the AUTO_INCREMENT insert
     // order, so the row order MariaDB returns is engine/plan-arbitrary. The
-    // consuming AIRDROP recipient loop (airdrop.js) builds credits in this
+    // consuming AIRDROP recipient loop (expandAirdropRecipients, then
+    // settleAirdropLeg, under actions/airdrop/) builds credits in this
     // order, so an unordered list makes the credit-insert order (and any
     // order-sensitive step) diverge across independently-built nodes. Pin a
     // deterministic total order on the resolved item string with a BINARY

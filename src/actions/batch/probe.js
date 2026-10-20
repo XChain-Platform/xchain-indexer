@@ -15,8 +15,9 @@
  * XChain Platform Action - BATCH: the public pre-flight collectors
  *
  * What the BATCH handler records only when it runs as the read-only fee probe
- * (data['FEE_PROBE'] === true, set by the quote surfaces in actions/index.js): the
- * per-sub-command verdict list and the per-oracle fee table. Nothing here runs for a
+ * (data['FEE_PROBE'] === true, requested by the quote surfaces in
+ * actions_class/quote_surfaces.js and copied off tx.fee_probe by actions_class/transaction.js):
+ * the per-sub-command verdict list and the per-oracle fee table. Nothing here runs for a
  * decoded transaction, so nothing here can move a consensus value.
  *
  ********************************************************************/
@@ -24,9 +25,10 @@
 // Seed the probe-local collectors on `data`; returns whether this run is the probe.
 function seedProbeCollectors(data){
     // Public BATCH pre-flight collectors (spec row 46). data['FEE_PROBE'] is set ONLY
-    // on the synthetic transaction the read-only quote surfaces build (actions/index.js
-    // sources it from tx.fee_probe), so it is false for every decoded transaction and
-    // nothing in this block can move a consensus value. Seeded before the dispatch loop's
+    // on the synthetic transaction the read-only quote surfaces build
+    // (actions_class/transaction.js sources it from tx.fee_probe), so it is false for
+    // every decoded transaction and nothing in this block can move a consensus value.
+    // Seeded before the dispatch loop's
     // baseKeys snapshot, for the same reason the value ledger is: the per-sub-command
     // field clear there would otherwise delete them before the second command ran.
     //
@@ -49,9 +51,11 @@ function seedProbeCollectors(data){
     return isProbe;
 }
 
-// Record the verdict the sub-command just dispatched left in data['STATUS'].
-function recordSubVerdict(data, action, batchPosition){
-    let subStatus = (data['STATUS'] === undefined) ? null : data['STATUS'];
+// Record the verdict the sub-command just dispatched left in data['STATUS'], or, when it set
+// off a match, the verdict processAction snapshotted before the match overwrote that field.
+function recordSubVerdict(data, action, batchPosition, matchSnapshot){
+    let raw       = matchSnapshot ? matchSnapshot.status : data['STATUS'];
+    let subStatus = (raw === undefined) ? null : raw;
     // A sub-command whose bound controller's guard the probe declines to enter is
     // UNJUDGED, not rejected. The refusal arrives here as an ordinary
     // `invalid: FEE_QUOTE_CONTROLLER_UNSUPPORTED ...` status, and every consumer
@@ -61,7 +65,7 @@ function recordSubVerdict(data, action, batchPosition){
     // on testnet: with a transfer controller bound to an address, the standalone
     // SEND pre-flighted guard-inert and landed valid, while the identical send as
     // a batch sub-command reported "will fail". This is the same shape as the VM
-    // refusal in index.js's dispatch loop (status null + a `refused` note), so it takes the same road,
+    // refusal in batch/index.js's dispatch loop (status null + a `refused` note), so it takes the same road,
     // and the note names the controller so the composer knows what to do next.
     let inert = this.util.isGuardInertError(subStatus);
     data['PROBE_SUB_VERDICTS'].push({

@@ -26,9 +26,9 @@
 const dryRunSupport = require('./dry_run_support.js');
 const quoteAnswers  = require('./quote_answers.js');
 const { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome } = dryRunSupport;
-const { normalizeQuoteRequest, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, dryRunVerdictQuote } = quoteAnswers;
+const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, dryRunVerdictQuote } = quoteAnswers;
 const { malformedActionAnswer } = quoteAnswers;
-const { resolvePreflightFeeMode, preflightGateAnswer, preflightLockBusy, preflightResult } = quoteAnswers;
+const { resolvePreflightFeeMode, preflightGateAnswer, preflightLockBusy, preflightNoVerdict, preflightResult } = quoteAnswers;
 
 // How long a public read-only dry-run waits for the block-processing transaction mutex before
 // giving up. The default is deliberately well under the explorer's own 5s hop cap,
@@ -49,9 +49,9 @@ function isTxLockBusy(e){
 // Run the REAL action handler for a proposed action against current committed state inside
 // a forced-rollback transaction, and extract the handler's verdict plus the
 // XCHAIN-denominated fee it staged (the `fees` row, read back before rollback discards it).
-// The single dry-run engine behind BOTH the public feequote pre-flight (computeFeeQuote)
-// and the raw regtest-only feequotedryrun RPC. Never persists; and because in-transaction
-// index_* ids are assigned dense-explicitly (db.createAddress/createTicker MAX(id)+1) they
+// The single dry-run engine behind the two public read-only surfaces (computeFeeQuote and
+// computePreflight) and the raw regtest-only feequotedryrun RPC. Never persists; and
+// because in-transaction index_* ids are assigned dense-explicitly (db.createAddress/createTicker MAX(id)+1) they
 // roll back with the row, so a dry-run leaves no id skew. That retires the 06-18
 // unindexed-source refusal: quoting from a fresh (never-seen) address is a supported case.
 //
@@ -72,16 +72,13 @@ function isTxLockBusy(e){
 // busy-and-retryable rather than queueing behind a whole block; throws TX_LOCK_BUSY, with
 // no transaction opened and nothing to unwind.
 //
+// `rawData` (optional) is the caller's literal wire, dry-run in place of the string rebuilt
+// from `action` and `params`; set for a BATCH only (see batchRequestWire).
+//
 // Returns { blockIndex, blockTime, status, error, xchainFee, sourceFeeBalance } where
 // xchainFee is the handler-recorded fee ('0' for a valid zero-fee action, null when the
 // run never got far enough to stage one).
-async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, acquireTimeoutMs, label, guardInert, feeProbe, feeBalanceTick }){
-    let blockIndex = await this.indexerDb.getLatestBlockIndex();
-    let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
-
-    let syntheticTx = syntheticDryRunTx(this, { action, params, source, feeOutputs, probeFeeDestination,
-                                                blockIndex, blockTime, guardInert, feeProbe });
-
+async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, acquireTimeoutMs, label, guardInert, feeProbe, feeBalanceTick, rawData }){
     let dryRunError = null, sourceFeeBalance = null;
     // Probe-only disclosures the BATCH pre-flight collects on `data` (batch.js seeds them
     // before its baseKeys snapshot, so the per-sub-command field clear preserves them).
@@ -92,6 +89,25 @@ async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestin
     // Outside the try on purpose: a TX_LOCK_BUSY give-up opened no transaction, so it must
     // not reach the rollback below.
     await this.indexerDb.beginTransaction({ acquireTimeoutMs: acquireTimeoutMs });
+    // Read the tip only now, under the mutex: before it, a bare read lands on the block loop's
+    // open transaction, and a block committing during the wait would leave the run at the old
+    // height over the new state. A failed read is an outage, never a verdict, so it propagates.
+    let blockIndex, blockTime;
+    try {
+        blockIndex = await this.indexerDb.getLatestBlockIndex();
+        blockTime  = await this.indexerDb.getBlockTime(blockIndex);
+    } catch(e){
+        await this.indexerDb.rollbackTransaction();
+        throw e;
+    }
+
+    let syntheticTx = syntheticDryRunTx(this, { action, params, source, feeOutputs, probeFeeDestination,
+                                                blockIndex, blockTime, guardInert, feeProbe, rawData });
+    // Stamp the synthetic height as the block being processed, as openBlockTransaction does,
+    // so height-gated db reads and id stamping match the block loop (the field is null at
+    // boot and stale after an abandoned block). Restored in the finally, under the lock.
+    let previousBlockIndex = this.indexerDb.blockIndex;
+    this.indexerDb.blockIndex = syntheticTx.block_index;
     // Fence the dry-run's writes to THIS transaction's epoch, same as the block
     // loop: on watchdog timeout the finally below rolls back and bumps the epoch, but the
     // abandoned processTransaction can still resume and try to write on the shared
@@ -123,7 +139,13 @@ async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestin
     } catch(e){
         dryRunError = 'handler threw: ' + ((e && e.message) ? e.message : e);
     } finally {
-        await this.indexerDb.rollbackTransaction();
+        // Restore the height BEFORE the rollback: rollbackTransaction releases the lock, and
+        // a block waiting on it stamps its own height the moment it gets it.
+        try {
+            this.indexerDb.blockIndex = previousBlockIndex;
+        } finally {
+            await this.indexerDb.rollbackTransaction();
+        }
     }
 
     return dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBalance);
@@ -250,7 +272,11 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     base.status     = run.status;
     base.validated  = true;
 
-    return dryRunVerdictQuote(this, base, run, action) || await this.priceFeeQuote(base, run.xchainFee, feeOutputSats);
+    let quote = dryRunVerdictQuote(this, base, run, action) || await this.priceFeeQuote(base, run.xchainFee, feeOutputSats);
+    // Disclose the oracle usage fee a Mode B DISPENSER owes, as the pre-flight does: the probe
+    // skips that output check, so valid:true alone hides a second native output the chain requires.
+    if(run.status === 'valid' && run.oracleFeesOwed) quote.oracleFeesOwed = run.oracleFeesOwed;
+    return quote;
 }
 
 // Wire-string pre-scan for the BATCH pre-flight: the FIRST sub-command the probe path must
@@ -302,8 +328,12 @@ async function computePreflight(policy, { action, params, source, feeMode }){
     let probeDest      = (feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') ? feeDestination : null;
     let feeTick        = this.config['GAS'];
     let resolvedMode   = resolvePreflightFeeMode(this, feeMode, probeDest);
+    let rawAction      = action, rawParams = params;
     // Normalize identically to computeFeeQuote / dispatch (trim, uppercase, de-alias).
     ({ action, params } = normalizeQuoteRequest(this.actionAliases, action, params));
+    // A BATCH is dry-run on the caller's literal wire (see batchRequestWire). The gate below
+    // judges the normalized form; batch.js re-checks each name the wire really dispatches.
+    let rawData = batchRequestWire(action, rawAction, rawParams);
     let base = { supported: true, action: action, coin: coin };
 
     // Same classification path as the fee-quote gate (deny-before-exempt).
@@ -314,7 +344,8 @@ async function computePreflight(policy, { action, params, source, feeMode }){
     // Verdict memo keyed on (action, params, source, blockIndex, feeMode). A new tip
     // changes the key; so does the settlement mode, whose verdicts genuinely differ.
     let blockIndex = await this.indexerDb.getLatestBlockIndex();
-    let memoKey    = this._preflightMemo.key(action, params, source, blockIndex, resolvedMode);
+    // Keyed on the literal wire for a BATCH, whose verdict depends on bytes normalization drops
+    let memoKey    = this._preflightMemo.key(action, (rawData === null) ? params : rawData, source, blockIndex, resolvedMode);
     let cached     = this._preflightMemo.get(memoKey);
     if(cached) return Object.assign({}, cached, { cached: true });
 
@@ -329,7 +360,7 @@ async function computePreflight(policy, { action, params, source, feeMode }){
     let run;
     try {
         run = await this.dryRunAction({
-            action, params, source,
+            action, params, source, rawData,
             probeFeeDestination: (resolvedMode === 'native') ? probeDest : null,
             timeoutMs: timeoutMs,
             acquireTimeoutMs: acquireMs,
@@ -352,8 +383,15 @@ async function computePreflight(policy, { action, params, source, feeMode }){
         this._feeQuotePending--;
     }
 
+    // A run that threw before the handler left a status has no verdict; never memoized
+    if(run.error && run.status == null)
+        return preflightNoVerdict(base, run);
+
     let result = preflightResult(this, base, run, resolvedMode, feeTick);
-    this._preflightMemo.set(memoKey, result);
+    // File it under the height the run read under the mutex, which a block committing
+    // during the wait moves past the tip read above (that one only looks up the memo).
+    this._preflightMemo.set(this._preflightMemo.key(action, (rawData === null) ? params : rawData,
+        source, run.blockIndex, resolvedMode), result);
     return result;
 }
 

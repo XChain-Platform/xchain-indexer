@@ -28,10 +28,12 @@ const { getLogger } = require('../../observability/index.js');
 const { readEnvNow } = require('./env.js');
 
 // ── Watermark grace margins: frozen protocol constants every node must share ──
-// The four barrier grace margins (seconds) are NOT operational timeouts: they
-// decide WHEN the block-loop consensus barriers open via the stream-watermark
-// escape (priceSyncSatisfied / oracleSyncSatisfied / matchSyncSatisfied /
-// callSyncSatisfied).
+// The barrier grace margins (seconds) are NOT operational timeouts: each entry below
+// decides WHEN one block-loop consensus barrier opens via the stream-watermark escape
+// (priceSyncSatisfied / oracleSyncSatisfied / matchSyncSatisfied / callSyncSatisfied
+// and the later entries' own predicates). Barriers keyed on presence, landing or a
+// height watermark (price landing, list share, remote token, capability snapshot)
+// carry no entry, and the direct call-presence wait borrows the call entry.
 // A per-node divergence forks settlement: operator A with grace 60 settles a
 // block without a retroactive-effective-time row that lands inside the window
 // while operator B with grace 600 waits and settles it differently. An

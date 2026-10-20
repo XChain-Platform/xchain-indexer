@@ -25,7 +25,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
-const { CROSS_CHAIN_TABLES } = require('./mirror_tables.js');
+const { CHAIN_ID_FENCED_TABLES } = require('./mirror_tables.js');
 const { LOCAL_COLUMN_CACHE_TTL_MS } = require('./mirror_bounds.js');
 const { coerceMirrorValue, priceUpsertSql, applyMirrorWrite } = require('./mirror_write.js');
 const { mirrorUpsertSql } = require('./row_upserts.js');
@@ -54,11 +54,11 @@ module.exports = {
     // both states for one round converges to the same row either order.
     async applyRowsBatched(table, rows) {
         // The chain-identity fence lives in applyRow, the single funnel every applied row
-        // passes through. A batch has no per-row verdict, so a CROSS_CHAIN_TABLES row must
-        // never travel this path: declining here keeps the three tables on the per-row path
+        // passes through. A batch has no per-row verdict, so a CHAIN_ID_FENCED_TABLES row must
+        // never travel this path: declining here keeps the fenced tables on the per-row path
         // where the fence runs, and keeps that true if the batch is ever widened beyond
         // price_snapshots.
-        if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) return false;
+        if (CHAIN_ID_FENCED_TABLES.indexOf(table) !== -1) return false;
         if (table !== 'price_snapshots') return false;
         if (this._batchApplyDisabled) return false;
         if (!Array.isArray(rows) || rows.length < 2) return false;

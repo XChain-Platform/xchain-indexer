@@ -46,6 +46,7 @@ function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
         // Stubbed handler run: records the synthetic tx and stamps STATUS like a real handler.
         processTransaction: async (tx) => {
             calls.processed = tx;
+            calls.blockIndexSeen = ctx.indexerDb.blockIndex;
             calls.order.push('process');
             if(processThrows) throw new Error('boom');
             if(processHangs) return new Promise(() => {});   // never resolves: the watchdog must fire
@@ -76,6 +77,14 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         assert.strictEqual(calls.processed.data, 'ISSUE|0|NEWTOK|1000', 'action string reassembled');
         assert.ok(String(calls.processed.tx_hash).startsWith('DRYRUN-'), 'tx_hash marked DRYRUN');
         assert.strictEqual(calls.processed.block_index, 100, 'synthetic tx anchored at tip');
+        // Height-gated db reads see the synthetic height, and the boot-time null comes back
+        assert.strictEqual(calls.blockIndexSeen, 100, 'the handler runs with indexerDb.blockIndex at the synthetic height');
+        assert.strictEqual(calls.blockIndexAtRollback, null, 'the previous height is restored before the rollback releases the lock');
+        assert.strictEqual(ctx.indexerDb.blockIndex, null, 'the previous height survives the run');
+        // A caller-supplied literal wire replaces the reassembled string (BATCH reads TX_DATA)
+        await ctx.dryRunAction.call(ctx, { action: 'BATCH', params: ['0', 'SEND'], rawData: 'BATCH| 0|SEND',
+                                           source: 'src1', timeoutMs: 300000 });
+        assert.strictEqual(calls.processed.data, 'BATCH| 0|SEND', 'literal wire dry-run as given');
     });
 
     it('injects an oversized probe fee output when none supplied and a destination is given', async () => {
@@ -175,10 +184,14 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
     it('handler throws: rollback still runs in finally (no lock leak)', async () => {
         let { ctx, calls } = makeCtx({ processThrows: true });
+        ctx.indexerDb.blockIndex = 105;   // left stale by an abandoned block
         let r = await ctx.dryRunAction.call(ctx, { action: 'EXECUTE', params: ['0', 'c'], source: 'src1', timeoutMs: 300000 });
         assert.ok(/handler threw/.test(r.error), 'error reports the throw');
         assert.strictEqual(calls.begin, 1, 'transaction was opened');
         assert.strictEqual(calls.rollback, 1, 'rollback runs in finally even on throw');
+        assert.strictEqual(calls.blockIndexSeen, 100, 'a stale height is replaced by the synthetic one for the run');
+        assert.strictEqual(calls.blockIndexAtRollback, 105, 'the stale height is restored before the rollback, even on throw');
+        assert.strictEqual(ctx.indexerDb.blockIndex, 105);
     });
 });
 
@@ -257,6 +270,14 @@ describe('computeFeeQuoteDryRun (raw regtest surface)', () => {
         assert.strictEqual(r.requiredFeeNative, '0.00002000');
         assert.strictEqual(r.requiredFeeSats, 2000);
         assert.deepStrictEqual(calls.processed.tx_outputs, [], 'raw surface never injects a probe output');
+        // Shares the public surfaces' normalization: an alias is echoed as the action it dispatches
+        ctx.actionAliases = { TRANSFER: 'SEND' };
+        let aliased = await ctx.computeFeeQuoteDryRun.call(ctx, { action: ' transfer ', params: ['0', 'T', '1', 'd'], source: 'src1' });
+        assert.strictEqual(aliased.action, 'SEND');
+        assert.strictEqual(calls.processed.data, 'SEND|0|T|1|d');
+        // A BATCH keeps the caller's literal wire, as a real broadcast would carry it
+        await ctx.computeFeeQuoteDryRun.call(ctx, { action: 'BATCH', params: ' 0|SEND|0|T|1|d', source: 'src1' });
+        assert.strictEqual(calls.processed.data, 'BATCH| 0|SEND|0|T|1|d');
     });
 
     it('valid run without prices: verdict stands, sizing degrades to feeSupported:false + feeError', async () => {

@@ -238,7 +238,8 @@ module.exports = {
     // this chain. Rejects after timeoutMs so the caller can DEFER the block and retry;
     // never settle or validate against a stale local mirror. Runs on BTC too, ADDITIVELY
     // with the height-keyed waitForPriceSyncHeight barrier above, which is retained for
-    // the height-selected fee query below the flag-day (XChainIndexer.js:877-932).
+    // the height-selected fee query below the flag-day (see deferOnPriceSync in the
+    // indexer's XChainIndexer/price_barriers.js).
     //
     // `blockHeight` is B, the block being processed on THIS chain, and it is what the
     // admission-era predicate compares. Optional so the six single-argument unit callers and

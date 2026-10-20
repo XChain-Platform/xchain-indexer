@@ -50,7 +50,8 @@ function advanceFields(indexer, now){
                             && !stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                             indexer.healthStallGraceMs, now, indexer.stallClearsAt,
                                             indexer.priceLandingGraceMs,
-                                            indexer.barrierHold && indexer.barrierHold.since),
+                                            indexer.barrierHold && indexer.barrierHold.since,
+                                            indexer.proofWaitGraceMs),
         // true when the stall is nothing but a wait for wall clock to reach a future-stamped
         // block. Healthy and self-clearing: consensus forbids committing that block yet, so the
         // indexer is already holding everything it is permitted to hold. A testnet4 miner
@@ -59,16 +60,18 @@ function advanceFields(indexer, now){
         waitingOnFutureBlock: waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now),
         // Single machine-readable verdict on the block counter, so a monitor reads one field
         // instead of joining three. stallClassOf returns 'none' | 'future_block_wait' |
-        // 'bridge_proof_wait' | 'price_landing_wait' | 'barrier_defer' | 'wedged', then
-        // publishedStallClass can refine it to 'upstream_halted' | 'rollcall_proof_wait' |
-        // 'rollcall_proof_stuck', exactly as GET /status publishes it. The source of truth is
+        // 'bridge_proof_wait' | 'train_activation_halt' | 'price_landing_wait' | 'barrier_defer' |
+        // 'wedged', then publishedStallClass can refine it to 'upstream_halted' |
+        // 'rollcall_proof_wait' | 'rollcall_proof_stuck' | 'capability_proof_wait' |
+        // 'capability_proof_stuck', exactly as GET /status publishes it. The source of truth is
         // stallClassOf and publishedStallClass in src/XChainIndexer/stall_health.js; check those
         // functions rather than relying on this summary.
         stallClass:       publishedStallClass(
                               stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
                                            indexer.healthStallGraceMs, now, indexer.stallClearsAt,
                                            indexer.priceLandingGraceMs,
-                                           indexer.barrierHold && indexer.barrierHold.since),
+                                           indexer.barrierHold && indexer.barrierHold.since,
+                                           indexer.proofWaitGraceMs),
                               indexer.stallReason,
                               { decoderReorgHalted: !!indexer.decoderReorgHalted,
                                 ceilingExceeded: barrierCeilingExceeded(indexer.barrierHold,

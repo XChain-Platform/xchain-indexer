@@ -18,6 +18,10 @@
  * pre-ledger table shapes followed by every dated migration, applied by
  * running src/db/migration/migrate.js as an operator would. The resulting
  * table, column, and index metadata must be identical.
+ *
+ * A third database takes the path an aged node takes at boot: the frozen shapes,
+ * then the verifyTables reconcile and the auto migrations, then the operator CLI
+ * and the next boot. It must land on the fresh install's metadata too.
  */
 
 'use strict';
@@ -63,6 +67,9 @@ function scopedDbName(label) {
 
 const FRESH_DB = scopedDbName('fresh');
 const MIGRATED_DB = scopedDbName('migrated');
+// The aged database upgraded the way a node boots (reconcile first), not by the CLI alone
+const RECONCILED_DB = scopedDbName('reconciled');
+const NO_DRIFT_SUMMARY = 'Schema shape: no undeclared tables, columns or indexes.';
 
 function testIndexer() {
     return {
@@ -172,7 +179,7 @@ async function schemaSnapshot(conn, database) {
     };
 }
 
-function runMigrateCli(args) {
+function runMigrateCli(args, dbName = MIGRATED_DB) {
     const result = spawnSync(process.execPath, [MIGRATE_CLI, ...args], {
         encoding: 'utf8',
         timeout: 100000,
@@ -180,7 +187,7 @@ function runMigrateCli(args) {
             ...process.env,
             INDEXER_DB_HOST: DB_HOST,
             INDEXER_DB_PORT: String(DB_PORT),
-            INDEXER_DB_NAME: MIGRATED_DB,
+            INDEXER_DB_NAME: dbName,
             INDEXER_DB_USER: DB_USER,
             INDEXER_DB_PASS: DB_PASS,
         },
@@ -209,11 +216,17 @@ describe('fresh and migrated schema convergence against a real MariaDB @tier3', 
         });
         await ctx.admin.query('DROP DATABASE IF EXISTS `' + FRESH_DB + '`');
         await ctx.admin.query('DROP DATABASE IF EXISTS `' + MIGRATED_DB + '`');
+        await ctx.admin.query('DROP DATABASE IF EXISTS `' + RECONCILED_DB + '`');
         await ctx.admin.query('CREATE DATABASE `' + FRESH_DB + '`');
         await ctx.admin.query('CREATE DATABASE `' + MIGRATED_DB + '`');
+        await ctx.admin.query('CREATE DATABASE `' + RECONCILED_DB + '`');
 
         ctx.freshDb = new Database(DB_HOST, DB_PORT, FRESH_DB, DB_USER, DB_PASS, testIndexer());
         ctx.migratedDb = new Database(DB_HOST, DB_PORT, MIGRATED_DB, DB_USER, DB_PASS, testIndexer());
+        ctx.reconciledDb = new Database(DB_HOST, DB_PORT, RECONCILED_DB, DB_USER, DB_PASS, testIndexer());
+        ctx.reconciledConn = await mariadb.createConnection({
+            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, database: RECONCILED_DB,
+        });
         ctx.freshConn = await mariadb.createConnection({
             host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, database: FRESH_DB,
         });
@@ -230,11 +243,14 @@ describe('fresh and migrated schema convergence against a real MariaDB @tier3', 
     after(async function () {
         if (ctx.freshDb && ctx.freshDb.pool) await ctx.freshDb.pool.end();
         if (ctx.migratedDb && ctx.migratedDb.pool) await ctx.migratedDb.pool.end();
+        if (ctx.reconciledDb && ctx.reconciledDb.pool) await ctx.reconciledDb.pool.end();
         if (ctx.freshConn) await ctx.freshConn.end();
         if (ctx.migratedConn) await ctx.migratedConn.end();
+        if (ctx.reconciledConn) await ctx.reconciledConn.end();
         if (ctx.admin) {
             await ctx.admin.query('DROP DATABASE IF EXISTS `' + FRESH_DB + '`');
             await ctx.admin.query('DROP DATABASE IF EXISTS `' + MIGRATED_DB + '`');
+            await ctx.admin.query('DROP DATABASE IF EXISTS `' + RECONCILED_DB + '`');
             await ctx.admin.end();
         }
     });
@@ -263,5 +279,46 @@ describe('fresh and migrated schema convergence against a real MariaDB @tier3', 
         const migratedSnapshot = await schemaSnapshot(ctx.migratedConn, MIGRATED_DB);
         assert.deepStrictEqual(migratedSnapshot, ctx.freshSnapshot,
             'the fully migrated schema must match a fresh install in every table, column, and index attribute');
+    });
+
+    it('converges along the boot path: reconcile, boot migrations, operator CLI, next boot', async function () {
+        // Two reconcile passes and the whole migration ledger on one database
+        this.timeout(300000);
+        await createAgedSchema(ctx.reconciledConn);
+        assert.deepStrictEqual(await schemaSnapshot(ctx.reconciledConn, RECONCILED_DB), ctx.agedSnapshot,
+            'the boot-path database must start from the same frozen shapes as the CLI-path one');
+
+        // First boot (startup.js verifyIndexerDatabase): reconcile, then auto migrations only.
+        // A fail-closed startup assertion may halt it while a manual migration is pending, never
+        // a reconcile or migration statement (the halt's stack must start in startup_assertions.js).
+        assert.strictEqual(await ctx.reconciledDb.verifyTables(), true);
+        try {
+            const boot = await ctx.reconciledDb.runMigrations();
+            assert.ok(!boot.lockSkipped, 'the first boot must not skip its migration pass on the lock');
+        } catch (err) {
+            const frames = String(err && err.stack).split('\n').filter(line => /^\s+at /.test(line));
+            assert.ok(frames.length && /startup_assertions\.js/.test(frames[0]),
+                'a first boot may halt only in a fail-closed startup assertion: ' + (err && err.stack));
+        }
+
+        const output = runMigrateCli([], RECONCILED_DB);
+        assert.ok(/still-pending=\[\]/.test(output), 'the CLI run must leave no migration pending: ' + output);
+        const status = JSON.parse(runMigrateCli(['--status', '--json'], RECONCILED_DB));
+        assert.strictEqual(status.pending, 0, 'the CLI must report nothing pending after the run');
+        const migrationFiles = fs.readdirSync(MIGRATIONS_DIR)
+            .filter(file => file.endsWith('.sql')).sort();
+        assert.deepStrictEqual(await ledgerNames(ctx.reconciledConn), migrationFiles,
+            'the boot-path database must record every migration before comparison');
+
+        // Next boot: the same reconcile and migration pass must now run clean and report no drift.
+        assert.strictEqual(await ctx.reconciledDb.verifyTables(), true);
+        const nextBoot = await ctx.reconciledDb.runMigrations();
+        assert.ok(!nextBoot.lockSkipped, 'the next boot must not skip its migration pass on the lock');
+        const summary = ctx.reconciledDb.schemaShapeSummary();
+        assert.strictEqual(summary, NO_DRIFT_SUMMARY, 'the next boot must report no schema drift: ' + summary);
+
+        assert.deepStrictEqual(await schemaSnapshot(ctx.reconciledConn, RECONCILED_DB), ctx.freshSnapshot,
+            'an aged install upgraded along the boot path (reconcile, migrate, reconcile) must match a fresh ' +
+            'install in every table, column, and index attribute');
     });
 });

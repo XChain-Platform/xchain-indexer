@@ -135,14 +135,16 @@ function statusVerdict(XChainIndexer, indexer){
     let wedged    = XChainIndexer.stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                               indexer.healthStallGraceMs, now,
                                               indexer.stallClearsAt, indexer.priceLandingGraceMs,
-                                              indexer.barrierHold && indexer.barrierHold.since);
+                                              indexer.barrierHold && indexer.barrierHold.since,
+                                              indexer.proofWaitGraceMs);
     // Discriminate the healthy future-stamped-block wait from real degradation. One
     // clock read for all three so the fields can never disagree with each other.
     let futureWait  = XChainIndexer.waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now);
     let stallClass  = XChainIndexer.stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
                                                  indexer.healthStallGraceMs, now, indexer.stallClearsAt,
                                                  indexer.priceLandingGraceMs,
-                                                 indexer.barrierHold && indexer.barrierHold.since);
+                                                 indexer.barrierHold && indexer.barrierHold.since,
+                                                 indexer.proofWaitGraceMs);
     return { now, stalled, wedged, futureWait, stallClass,
              lastHubConfigFetchAt, hubConfigAgeSeconds, hubConfigStale };
 }
@@ -210,9 +212,9 @@ function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock,
         // Single machine-readable verdict on the counter, so a probe does not have to
         // join stallReason/degraded/stallClearsAt: 'none' | 'future_block_wait' |
         // 'bridge_proof_wait' | 'train_activation_halt' | 'price_landing_wait' |
-        // 'barrier_defer' | 'wedged', plus the two a restart cannot clear
-        // (publishedStallClass): 'upstream_halted' and 'rollcall_proof_wait', escalating
-        // to 'rollcall_proof_stuck' past the hold ceiling.
+        // 'barrier_defer' | 'wedged', plus the refinements publishedStallClass makes:
+        // 'upstream_halted', 'rollcall_proof_wait' and 'capability_proof_wait', each proof wait
+        // escalating to its '_stuck' class past the hold ceiling. stall_health.js is the source of truth.
         stallClass:   publishedStallClass(stallClass, indexer.stallReason, { decoderReorgHalted: halted,
             ceilingExceeded: barrierCeilingExceeded(indexer.barrierHold, indexer.barrierHoldCeilingMs, now) }),
         ...readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexerDbUnreachable, chainTip })

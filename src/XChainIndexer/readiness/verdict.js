@@ -26,7 +26,10 @@
  * lastBlockCommittedAt to null, which stallWedged() reads as "slow initial catch-up"
  * forever after. Gating liveness on any of them would restart-loop the container
  * without fixing anything, so they lived only in log lines and the JSON-RPC health
- * payload while /status and docker health both read healthy.
+ * payload while /status and docker health both read healthy. The roll-call and
+ * capability proof waits are the one bounded exception: past proofWaitGraceMs they
+ * wedge once, for a restart that can clear in-memory proof state, and after it the
+ * null lastBlockCommittedAt leaves them to this verdict alone.
  *
  * Pure: hashes nothing, gates no wait, changes no consensus value.
  *

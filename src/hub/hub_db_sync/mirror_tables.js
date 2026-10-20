@@ -72,9 +72,10 @@ const RETRACTION_CHAIN_COLUMNS = {
 // immutable history and never retracted.
 //
 // bridge_transfers, policy_snapshots and list_snapshots join the list because membership
-// buys refuseForeignChainRow's btc_chain_id fence (all three DDLs carry the column, and a
-// regtest venue that re-genesises its Bitcoin chain otherwise keeps serving dead-chain
-// transfers to every fresh indexer) and a place in the bootstrap concat loop below, ahead of
+// buys the btc_chain_id fence through CHAIN_ID_FENCED_TABLES below (all three DDLs carry the
+// column, and a regtest venue that re-genesises its Bitcoin chain otherwise keeps serving
+// dead-chain transfers to every fresh indexer), the envelope chain-id handshake, snapshot
+// waiter release and a place in the bootstrap concat loop, ahead of
 // the one heavy table. Membership does NOT make a table quorum-class: that is the
 // QUORUM_CLASS_TABLES registry below, which demands the push_generation
 // fence and the 2f+1 co-signature set and, of these three, names only bridge_transfers.
@@ -84,6 +85,11 @@ const RETRACTION_CHAIN_COLUMNS = {
 // quorumClass, or its deletions are accepted with no fence or signatures required.
 const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
                             'bridge_transfers', 'policy_snapshots', 'list_snapshots'];
+
+// Every mirrored table whose DDL carries btc_chain_id: membership buys the apply-time refusal,
+// the hub-adoption probe and the foreign-chain purge, nothing else (remote_token_snapshots'
+// signed content omits the column, so only this fence keeps a dead chain's row off the pin).
+const CHAIN_ID_FENCED_TABLES = CROSS_CHAIN_TABLES.concat(['remote_token_snapshots']);
 
 // Mirrored validity inputs whose deletion changes a consensus decision and therefore
 // requires the generation fence and, after activation, validator co-signatures.
@@ -180,7 +186,7 @@ const REFUSED_ROW_NAMED_CAP = 10000;
 
 module.exports = {
     RETRACTION_COLUMNS, RETRACTION_CHAIN_COLUMNS,
-    CROSS_CHAIN_TABLES, HUB_STATE_TABLES, HEIGHT_MIRROR_TABLES,
+    CROSS_CHAIN_TABLES, CHAIN_ID_FENCED_TABLES, HUB_STATE_TABLES, HEIGHT_MIRROR_TABLES,
     VALIDITY_READ_TABLES, QUORUM_CLASS_TABLES,
     MIRRORED_TABLES, AUTO_INCREMENT_ID_TABLES,
     REPAGE_PER_CONNECTION_TABLES,

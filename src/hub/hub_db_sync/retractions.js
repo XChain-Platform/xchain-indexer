@@ -126,8 +126,12 @@ module.exports = {
         await this.retractByColumn(event, range);
     },
 
-    // Guards 1 to 3: the unfenced-delete refusal, the own-chain generation check and the
-    // per-(table, source_chain) monotonicity fence. False refuses the event.
+    // Guards 1 and 2: the unfenced-delete refusal and the own-chain generation check.
+    // False refuses the event. There is no lower-than-seen skip: generations are
+    // per-indexer counters, so fences from several initiators (and nested rollbacks
+    // drained out of order) reach one mirror in any order. The fenced DELETE is the
+    // replay defense, since a late or lower fence cannot touch a row re-published at a
+    // higher generation.
     async acceptRetractionFences(event, range, quorumClass, ownChain) {
         if ((quorumClass || ownChain) && !range.fenced) {
             getLogger().error('HubDbSync: refusing UNFENCED retraction of ' + event.table +
@@ -151,18 +155,6 @@ module.exports = {
                     return false;
                 }
             }
-            // 3. Monotonicity: a fence below the last one observed for this
-            //    (table, source_chain) is a stale replay; skip it. Equal = redelivery,
-            //    idempotent under the fence, still applied.
-            let trackKey = event.table + '|' + event.source_chain;
-            let tracked = this.trackedRollbackGeneration[trackKey];
-            if (tracked !== undefined && range.gen < tracked) {
-                getLogger().warn('HubDbSync: skipping stale retraction of ' + event.table +
-                    ' (source_chain ' + event.source_chain + ') at generation ' + range.gen +
-                    ' < last-observed rollback generation ' + tracked);
-                return false;
-            }
-            this.trackedRollbackGeneration[trackKey] = range.gen;
         }
         return true;
     },

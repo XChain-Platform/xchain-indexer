@@ -102,9 +102,10 @@ module.exports = {
                 this.stallReason = 'call_sync_barrier';
                 // callWatermarkGraceS, NOT the match grace: callSyncSatisfied waits on
                 // the call grace, and the two producers stamp effective_time differently
-                // (hub_db_sync.js HUB_SYNC_WATERMARK_GRACE_S.call). Keying the health
-                // verdict on the match value would mis-time the wedge discriminator the
-                // moment the two constants diverge or a regtest override moves one.
+                // (HUB_SYNC_WATERMARK_GRACE_S.call in hub/hub_db_sync/watermark_config.js).
+                // Keying the health verdict on the match value would mis-time the wedge
+                // discriminator the moment the two constants diverge or a regtest override
+                // moves one.
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'callWatermarkGraceS', blockToParse);
                 return true;
             }
@@ -156,6 +157,12 @@ module.exports = {
         return false;
     },
 
+    // List-share sync barrier: wait until the hub's list_snapshots height watermark for this
+    // chain covers the block, so every operator applies the same shared-list versions at it.
+    // Its activation gate is the readers' own (consumerActive in consensus/list_share_settle.js;
+    // the ladder holds the consumer height at or above mirror admission): below it no block
+    // reads the table, so a wait there would only stall replay. Gating is safe because the
+    // barrier is a node-local wait, never hashed, so the gate moves no consensus value.
     async deferOnListShareSync(blockToParse, blockTime){
         if(!this.hubDbSync ||
            !gateRegistry.activeAt('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION',
@@ -271,7 +278,8 @@ module.exports = {
     // synthetic v1 action and settles the request fee. A node that has not
     // received the row by then does not lag, it forks: it commits that block with
     // the callback un-fired while its peers commit it fired, and nothing later
-    // re-binds. So it defers, with no chain-only escape (see hub_db_sync.js).
+    // re-binds. So it defers, with no chain-only escape (see attestResponseSyncSatisfied
+    // in ../hub/hub_db_sync/barriers/attest.js).
     // Armed on EVERY BTC block with no transaction predicate: the binding
     // condition is a time, so a row can bind at a block carrying no ATTEST
     // transaction at all, and there is nothing to scope the wait to. BTC-only,

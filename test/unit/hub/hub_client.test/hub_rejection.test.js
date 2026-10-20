@@ -36,7 +36,12 @@ describe('HubClient', function(){
             ['{accepted:false} db error',                       { accepted: false, reason: 'db error' }],
             ['{error} aggregator still booting',                { error: 'price aggregator not ready' }],
             ['{error} handler exception',                       { error: 'error processing oracle price' }],
-            ['an unrecognised reason (retry is the safe side)', { accepted: false, reason: 'some future reason' }]
+            ['an unrecognised reason (retry is the safe side)', { accepted: false, reason: 'some future reason' }],
+            // Both quorum modes are judged against the hub's own validator snapshot, not the payload.
+            ['{accepted:false} insufficient quorum (hub snapshot decides)',
+                { accepted: false, reason: 'insufficient quorum (1/3)' }],
+            ['{accepted:false} insufficient signer stake (hub snapshot decides)',
+                { accepted: false, reason: 'insufficient signer stake (2 verified signers)' }]
         ];
 
         for(const [label, result] of TRANSIENT){
@@ -52,7 +57,6 @@ describe('HubClient', function(){
             ['duplicate',                     { accepted: false, reason: 'duplicate' }],
             ['stale (retracted generation)',  { accepted: false, reason: 'stale (retracted generation)' }],
             ['invalid sigs',                  { accepted: false, reason: 'invalid sigs' }],
-            ['insufficient quorum (1/3)',     { accepted: false, reason: 'insufficient quorum (1/3)' }],
             ['a missing-field guard',         { error: 'source_chain is required' }],
             ['a multi-field guard',           { error: 'coin, tick, fiat, value are required' }],
             ['an unknown chain',              { error: 'chain must be one of: BTC, LTC, DOGE' }]

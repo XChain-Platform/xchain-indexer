@@ -179,9 +179,11 @@ module.exports = {
         return row.max_batch_seq != null ? Number(row.max_batch_seq) : null;
     },
 
-    // Archive heads at one match_batch_seq authored by one address, unwired: not
-    // called from any action path yet. Modeled on getMaxArchiveBatchSeqByAuthor's
-    // joins, keyed by seq instead of aggregated to a max.
+    // Archive heads at one match_batch_seq authored by one address, modeled on
+    // getMaxArchiveBatchSeqByAuthor's joins, keyed by seq instead of aggregated to a max.
+    // Consensus input: Anchor.parseFold's v3 fold re-issue guard (checkFoldArchiveReissue ->
+    // archiveReissueRefusal) rejects a fold on a 'conflict' over these rows, so changing the
+    // row set (version, status or author filter) moves fold verdicts and needs a flag day.
     async getArchiveHeadsByAuthorAndSeq(author, batchSeq){
         let rows = await this.doQuery(
             `SELECT a.batch_crc32, a.match_count, s.status

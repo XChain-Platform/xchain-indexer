@@ -29,6 +29,17 @@ const reorgHistoryQuery = require('../../api/reorg_history_query');
 const cursorGuards = require('./reorg_cursor_guards.js');
 
 const { getLogger } = require('../../observability/index.js');
+
+// Reason reported for a clear row that lifts nothing (same text as the decoder's reader).
+const UNAUDITED_CLEAR_REASON = 'unreadable or unaudited REORG_HALT_CLEARED row, treated as a live halt';
+
+// Check a clear row's payload carries the reason bar `xchain-node clear-reorg-halt` writes.
+// Same rule as isAuditedClear in xchain-decoder/src/db/reorg_halt.js, which is the source of truth.
+function isAuditedClear(payload){
+    if(payload == null || typeof payload !== 'object' || Array.isArray(payload)) return false;
+    return typeof payload.reason === 'string' && payload.reason.trim().length >= 8;
+}
+
 module.exports = {
 
     // The getreorghistory page: recent decoder REORG events above `sinceId`. Newest-first,
@@ -121,11 +132,24 @@ module.exports = {
     // live forever. A later halt writes a newer REORG_HALT row that is live again.
     // Fail-closed: a row whose code is missing or unreadable still counts as halted, because
     // "we could not tell" must never reach a caller as "not halted".
+    // A clear row lifts the halt only when its payload is audited, exactly as the decoder
+    // reads it: an unparseable or reason-less clear stays a live halt on both sides, and its
+    // payload is then the unaudited-clear reason plus a snippet of the row's data.
     async isReorgHalted(){
         let rows = await this.doQueryStrict(
             `SELECT code, data FROM events WHERE code IN ('REORG_HALT','REORG_HALT_CLEARED') ORDER BY id DESC LIMIT 1`);
         if(rows.length === 0) return { halted: false, payload: null };
-        if(rows[0].code === 'REORG_HALT_CLEARED') return { halted: false, payload: null };
+        if(rows[0].code === 'REORG_HALT_CLEARED'){
+            let data = rows[0].data;
+            let payload = null;
+            try {
+                payload = (typeof data === 'string') ? JSON.parse(data) : data;
+            } catch(_){
+                payload = null;
+            }
+            if(isAuditedClear(payload)) return { halted: false, payload: null };
+            return { halted: true, payload: UNAUDITED_CLEAR_REASON + ((data != null) ? ': ' + String(data).slice(0, 200) : '') };
+        }
         return { halted: true, payload: (rows[0].data != null) ? String(rows[0].data) : null };
     },
 
