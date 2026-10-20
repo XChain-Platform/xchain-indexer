@@ -67,19 +67,12 @@ const {
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
 
-// A set non-negative integer arms the row, including 0 (active from genesis); unset, empty or
-// non-numeric stays UNARMED.
-function exactIntegerWireRegtestTime() {
-    const raw = String(process.env.EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME === undefined ? '' :
-        process.env.EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME).trim();
-    return /^\d+$/.test(raw) ? parseInt(raw, 10) : UNARMED;
-}
-
 const CHANGES = [
-    // EXACT_INTEGER_WIRE_FIELDS: regtest stays unarmed unless a venue sets
-    // EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME.
+    // EXACT_INTEGER_WIRE_FIELDS: regtest is genesis-active unless a venue sets
+    // EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME to a positive height; the decoder, indexer and
+    // e2e all read it through regtestTimeOverride.
     ['EXACT_INTEGER_WIRE_FIELDS', '0.2.0', EXACT_INTEGER_WIRE_FIELDS_MAINNET_TIME, EXACT_INTEGER_WIRE_FIELDS_TESTNET_TIME,
-        exactIntegerWireRegtestTime, 0, 0, 0],
+        regtestTimeOverride('EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME'), 0, 0, 0],
     ['ITER_SET_METER','0.2.0', ITER_SET_METER_MAINNET_TIME,
         ITER_SET_METER_TESTNET_TIME, 0, 0, 0, 0],
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
