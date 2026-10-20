@@ -836,6 +836,22 @@
     "0ff526efc3f322da": [
       "API time memo isolation @regression @tier1 a deferred fee tip read cannot refill block-loop memos after a reorg clear"
     ],
+    "0ff776a2afbdb261": [
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan computeFeeQuote still refuses BATCH: this door answers validity, never pricing",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan fails CLOSED on an unrecognized VERSION, because the prefix cannot be stripped",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan leaves the OTHER denylisted actions flatly refused at top level",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan omits both fields entirely for a non-batch action",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan pre-flights a batch of ordinary sub-commands and runs the engine as a probe",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan refuses a VM sub-command however it is spelled",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan refuses a batch carrying a VM sub-command WITHOUT taking the mutex",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan refuses when the first sub-command is the VM one (prefix strip still applies)",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan surfaces batch-total native fee and destination-keyed coin payments",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan surfaces per-sub-command verdicts and oracle fees owed when the engine reports them",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-forbidden sub-action policy allows the ordinary composable sub-actions a batch exists for",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-forbidden sub-action policy normalizes case, whitespace and aliases before deciding",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-forbidden sub-action policy refuses every FEE_QUOTE_DENYLIST action, nested BATCH included",
+      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-forbidden sub-action policy refuses the VM-reaching actions the top-level gate does NOT deny"
+    ],
     "10065ba86499ea1c": [
       "Rollback @regression @tier3 deletes validator_rewards by derive_block_index too, so a reward materialized in the orphaned range goes",
       "Rollback @regression @tier3 does NOT delete price_snapshots on a non-BTC (DOGE) indexer",
@@ -3111,21 +3127,6 @@
       "/status train_activation copies a pending verdict",
       "/status train_activation reports an unevaluated verdict before the first block is graded",
       "/status train_activation reports unevaluated when there is no trainActivation property"
-    ],
-    "2fac856423a9a7a8": [
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan computeFeeQuote still refuses BATCH: this door answers validity, never pricing",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan fails CLOSED on an unrecognized VERSION, because the prefix cannot be stripped",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan leaves the OTHER denylisted actions flatly refused at top level",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan omits both fields entirely for a non-batch action",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan pre-flights a batch of ordinary sub-commands and runs the engine as a probe",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan refuses a VM sub-command however it is spelled",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan refuses a batch carrying a VM sub-command WITHOUT taking the mutex",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan refuses when the first sub-command is the VM one (prefix strip still applies)",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 computePreflight wire pre-scan surfaces per-sub-command verdicts and oracle fees owed when the engine reports them",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-forbidden sub-action policy allows the ordinary composable sub-actions a batch exists for",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-forbidden sub-action policy normalizes case, whitespace and aliases before deciding",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-forbidden sub-action policy refuses every FEE_QUOTE_DENYLIST action, nested BATCH included",
-      "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-forbidden sub-action policy refuses the VM-reaching actions the top-level gate does NOT deny"
     ],
     "300630d3e2aa9532": [
       "Tier 3 - State transition edge cases @tier3 Send handler crash safety handles all 4 send format versions",
@@ -9901,6 +9902,10 @@
       "src/consensus/merkle.js is byte-identical across its four carriers every merkle/primitives.js carrier present on disk has the same bytes",
       "src/consensus/merkle.js is byte-identical across its four carriers this repo carries the module at all"
     ],
+    "8fba7e8bd4c65ff0": [
+      "BATCH coin payment disclosure @regression @tier1 does not disclose an obligation whose later validity check rejects it",
+      "BATCH coin payment disclosure @regression @tier1 sums valid COINPAY obligations by payee without requiring payment outputs"
+    ],
     "8fcbc76f528097f2": [
       "Deploy (DEPLOY) @regression @tier2 nesting-depth deploy-lint gate threading passes enforceLintNestingDepth false on mainnet below the unarmed gate",
       "Deploy (DEPLOY) @regression @tier2 nesting-depth deploy-lint gate threading passes enforceLintNestingDepth true on regtest from genesis",
@@ -14048,6 +14053,10 @@
       "STAKE_SNAPSHOT_SLASH_WINDOW reaches the VM stake snapshot through isEnabled @regression @tier1 EXECUTE passes the isEnabled verdict (true) at the block being processed",
       "STAKE_SNAPSHOT_SLASH_WINDOW reaches the VM stake snapshot through isEnabled @regression @tier1 the controller guard passes the isEnabled verdict (false) at the host block",
       "STAKE_SNAPSHOT_SLASH_WINDOW reaches the VM stake snapshot through isEnabled @regression @tier1 the controller guard passes the isEnabled verdict (true) at the host block"
+    ],
+    "c7322a84171ad37e": [
+      "BATCH native fee disclosure @regression @tier1 lazily sums two ORDER native fees without changing BATCH_VALUE_LEDGER",
+      "BATCH native fee disclosure @regression @tier1 reports zero for a batch with no native fee and never invents it for a non-batch"
     ],
     "c8071ebba1ac2646": [
       "Anchor (ANCHOR) @regression @tier3 a v0 mined BELOW ANCHOR_ACTIVATION is invalid whatever it decodes to",
@@ -18299,8 +18308,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1451,
-      "titleCount": 14166,
+      "fileCount": 1453,
+      "titleCount": 14171,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18321,8 +18330,10 @@
         "test/unit/action_dispatch/actions.test/process_transaction_parsing.test.js": "25fa87aa685ad332",
         "test/unit/action_dispatch/batch_guard_inert_sub_command.test.js": "e6ecddd2370fac2d",
         "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "8884491a41fcbf65",
-        "test/unit/action_dispatch/batch_probe_preflight.test.js": "2fac856423a9a7a8",
+        "test/unit/action_dispatch/batch_probe_preflight.test.js": "0ff776a2afbdb261",
+        "test/unit/action_dispatch/batch_probe_preflight.test/coin_payments_disclosure.test.js": "8fba7e8bd4c65ff0",
         "test/unit/action_dispatch/batch_probe_preflight.test/dispatch_guard.test.js": "4ef2456b29e13fff",
+        "test/unit/action_dispatch/batch_probe_preflight.test/native_fee_disclosure.test.js": "c7322a84171ad37e",
         "test/unit/action_dispatch/batch_probe_preflight.test/oracle_fee_disclosure.test.js": "cec03c99db37953b",
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/preflight_memo.test.js": "fcceb01127354bd9",
@@ -20127,8 +20138,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1103,
-      "titleCount": 11191,
+      "fileCount": 1105,
+      "titleCount": 11196,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20190,8 +20201,10 @@
         "test/unit/action_dispatch/actions.test/process_transaction_parsing.test.js": "25fa87aa685ad332",
         "test/unit/action_dispatch/batch_guard_inert_sub_command.test.js": "e6ecddd2370fac2d",
         "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "8884491a41fcbf65",
-        "test/unit/action_dispatch/batch_probe_preflight.test.js": "2fac856423a9a7a8",
+        "test/unit/action_dispatch/batch_probe_preflight.test.js": "0ff776a2afbdb261",
+        "test/unit/action_dispatch/batch_probe_preflight.test/coin_payments_disclosure.test.js": "8fba7e8bd4c65ff0",
         "test/unit/action_dispatch/batch_probe_preflight.test/dispatch_guard.test.js": "4ef2456b29e13fff",
+        "test/unit/action_dispatch/batch_probe_preflight.test/native_fee_disclosure.test.js": "c7322a84171ad37e",
         "test/unit/action_dispatch/batch_probe_preflight.test/oracle_fee_disclosure.test.js": "cec03c99db37953b",
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/preflight_memo.test.js": "fcceb01127354bd9",
@@ -21236,16 +21249,18 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 538,
-      "titleCount": 5792,
+      "fileCount": 540,
+      "titleCount": 5797,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
         "test/unit/action_dispatch/batch_guard_inert_sub_command.test.js": "e6ecddd2370fac2d",
         "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "8884491a41fcbf65",
-        "test/unit/action_dispatch/batch_probe_preflight.test.js": "2fac856423a9a7a8",
+        "test/unit/action_dispatch/batch_probe_preflight.test.js": "0ff776a2afbdb261",
+        "test/unit/action_dispatch/batch_probe_preflight.test/coin_payments_disclosure.test.js": "8fba7e8bd4c65ff0",
         "test/unit/action_dispatch/batch_probe_preflight.test/dispatch_guard.test.js": "4ef2456b29e13fff",
+        "test/unit/action_dispatch/batch_probe_preflight.test/native_fee_disclosure.test.js": "c7322a84171ad37e",
         "test/unit/action_dispatch/batch_probe_preflight.test/oracle_fee_disclosure.test.js": "cec03c99db37953b",
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
@@ -21780,8 +21795,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1103,
-      "titleCount": 11191,
+      "fileCount": 1105,
+      "titleCount": 11196,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21843,8 +21858,10 @@
         "test/unit/action_dispatch/actions.test/process_transaction_parsing.test.js": "25fa87aa685ad332",
         "test/unit/action_dispatch/batch_guard_inert_sub_command.test.js": "e6ecddd2370fac2d",
         "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "8884491a41fcbf65",
-        "test/unit/action_dispatch/batch_probe_preflight.test.js": "2fac856423a9a7a8",
+        "test/unit/action_dispatch/batch_probe_preflight.test.js": "0ff776a2afbdb261",
+        "test/unit/action_dispatch/batch_probe_preflight.test/coin_payments_disclosure.test.js": "8fba7e8bd4c65ff0",
         "test/unit/action_dispatch/batch_probe_preflight.test/dispatch_guard.test.js": "4ef2456b29e13fff",
+        "test/unit/action_dispatch/batch_probe_preflight.test/native_fee_disclosure.test.js": "c7322a84171ad37e",
         "test/unit/action_dispatch/batch_probe_preflight.test/oracle_fee_disclosure.test.js": "cec03c99db37953b",
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/preflight_memo.test.js": "fcceb01127354bd9",

@@ -276,6 +276,9 @@ function preflightResult(actions, base, run, resolvedMode, feeTick){
     // where the chain wants the output to cover all N. Rather than fake a verdict the probe
     // cannot compute, report the TOTAL owed per oracle so a composer can size the outputs.
     if(run.oracleFeesOwed) result.oracleFeesOwed = run.oracleFeesOwed;
+    if(run.nativeFeeOwed !== null && run.nativeFeeOwed !== undefined)
+        result.nativeFeeOwed = run.nativeFeeOwed;
+    if(run.coinPaymentsOwed) result.coinPaymentsOwed = run.coinPaymentsOwed;
     return result;
 }
 
