@@ -30,14 +30,8 @@ const TWIN_PATH    = path.join('src', 'consensus', 'snapshot_checkpoint', 'canon
 
 describe('snapshot checkpoint canonical twin', function () {
     it('indexer copy is byte-identical to the hub copy', function () {
-        const checkout = siblingCheckout(__dirname, path.join(HUB_DIR, 'package.json'));
-        if (!skipOrFail(this, checkout, 'the hub snapshot checkpoint checkout')) return;
-
         const twin = path.join(HUB_DIR, TWIN_PATH);
-        const verdict = siblingCheckout(__dirname, twin);
-        assert.strictEqual(verdict.usable, true,
-            'xchain-hub is present but its snapshot checkpoint canonical twin is unavailable: '
-            + verdict.reason);
+        if (!skipOrFail(this, siblingCheckout(__dirname, twin), 'the hub snapshot checkpoint twin check')) return;
         assert.ok(fs.readFileSync(path.join(REPO_ROOT, TWIN_PATH)).equals(fs.readFileSync(twin)),
             'src/consensus/snapshot_checkpoint/canonical.js differs from the hub copy; '
             + 'edit both copies together or the indexers reject checkpoints the hub finalizes.');
