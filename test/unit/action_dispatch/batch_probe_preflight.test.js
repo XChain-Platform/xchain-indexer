@@ -52,7 +52,8 @@ function makeCtx({ dryRun } = {}){
             calls.lastArgs = args;
             return Object.assign({ blockIndex: 100, blockTime: 1000, status: 'valid', error: null,
                                    xchainFee: '0', sourceFeeBalance: null,
-                                   subCommands: null, oracleFeesOwed: null }, dryRun || {});
+                                   subCommands: null, oracleFeesOwed: null,
+                                   nativeFeeOwed: null, coinPaymentsOwed: null }, dryRun || {});
         },
         nativeFeeMandatory: Actions.prototype.nativeFeeMandatory,
         batchProbeForbiddenSubAction: Actions.prototype.batchProbeForbiddenSubAction,
@@ -209,6 +210,16 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
             let r = await ctx.computePreflight({ action: 'BATCH', params: '0|SEND|0|J|1|a' });
             assert.deepStrictEqual(r.subCommands, [{ position: 0, action: 'SEND', status: 'valid', refused: null }]);
             assert.deepStrictEqual(r.oracleFeesOwed, { oracleAddr: '0.00002000' });
+        });
+
+        it('surfaces batch-total native fee and destination-keyed coin payments', async function () {
+            let { ctx } = makeCtx({ dryRun: {
+                nativeFeeOwed: '12.50000000',
+                coinPaymentsOwed: { dispenserAddr: '3.00000000' }
+            }});
+            let r = await ctx.computePreflight({ action: 'BATCH', params: '0|SEND|0|J|1|a' });
+            assert.strictEqual(r.nativeFeeOwed, '12.50000000');
+            assert.deepStrictEqual(r.coinPaymentsOwed, { dispenserAddr: '3.00000000' });
         });
 
         it('omits both fields entirely for a non-batch action', async function () {

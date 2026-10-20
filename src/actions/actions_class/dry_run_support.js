@@ -151,6 +151,14 @@ async function readDryRunVerdict(actions, resultData, verdict){
        typeof resultData['PROBE_ORACLE_FEES'] === 'object' &&
        Object.keys(resultData['PROBE_ORACLE_FEES']).length > 0)
         verdict.oracleFeesOwed = resultData['PROBE_ORACLE_FEES'];
+    if(resultData && Object.prototype.hasOwnProperty.call(resultData, 'BATCH_POSITION')){
+        let payments = actions.util.probePaymentDisclosure(resultData);
+        if(payments){
+            verdict.nativeFeeOwed = payments.nativeFeeOwed;
+            if(Object.keys(payments.coinPaymentsOwed).length > 0)
+                verdict.coinPaymentsOwed = payments.coinPaymentsOwed;
+        }
+    }
 }
 
 // The dryRunAction result shape.
@@ -166,7 +174,9 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
                    : ((verdict.status === 'valid') ? '0' : null),
         sourceFeeBalance: sourceFeeBalance,
         subCommands:      verdict.subCommands,
-        oracleFeesOwed:   verdict.oracleFeesOwed
+        oracleFeesOwed:   verdict.oracleFeesOwed,
+        nativeFeeOwed:    verdict.nativeFeeOwed,
+        coinPaymentsOwed: verdict.coinPaymentsOwed
     };
 }
 

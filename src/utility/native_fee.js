@@ -27,6 +27,8 @@ const { CONFIG_ENV } = require('../config.js');
 const { findFeeOutput } = require('./fee_output.js');
 const { maxPriceAgeSecondsAt } = require('./price_age/oracle_price_age.js');
 
+const probePaymentDisclosures = new WeakMap();
+
 // Cumulative native-fee accounting.
 //
 // TX_OUTPUTS is TRANSACTION-level state that the batch loop preserves across every
@@ -85,6 +87,34 @@ function drawNativeFeeOutput(util, ledger, available, paidAmount, band, prices, 
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
 module.exports = {
+
+    probePaymentDisclosure(data){
+        if(!data || data['FEE_PROBE'] !== true ||
+           !Object.prototype.hasOwnProperty.call(data, 'BATCH_POSITION'))
+            return null;
+        let disclosure = probePaymentDisclosures.get(data);
+        if(!disclosure){
+            disclosure = { nativeFeeOwed: '0', coinPaymentsOwed: {} };
+            probePaymentDisclosures.set(data, disclosure);
+        }
+        return disclosure;
+    },
+
+    addProbeNativeFee(data, amount){
+        let disclosure = this.probePaymentDisclosure(data);
+        if(disclosure)
+            disclosure.nativeFeeOwed = this.bcformat(
+                this.bcadd(disclosure.nativeFeeOwed, amount, 8), 8);
+    },
+
+    addProbeCoinPayment(data, payee, amount){
+        let disclosure = this.probePaymentDisclosure(data);
+        if(disclosure){
+            let owed = disclosure.coinPaymentsOwed[payee] || '0';
+            disclosure.coinPaymentsOwed[payee] = this.bcformat(
+                this.bcadd(owed, amount, 8), 8);
+        }
+    },
 
     // Pure native-coin fee math, shared by validateNativeCoinFee (the on-chain consensus
     // check) and the read-only feequote pre-flight (Actions.computeFeeQuote). Keeping the
@@ -229,6 +259,7 @@ module.exports = {
         }
 
         let band = this.computeNativeFeeBand(xchainAmount, prices.xchainUsdPrice, prices.coinUsdPrice, toleranceMin, toleranceMax);
+        this.addProbeNativeFee(data, band.expectedNative);
         return drawNativeFeeOutput(this, ledger, available, paidAmount, band, prices, coin);
     }
 };
