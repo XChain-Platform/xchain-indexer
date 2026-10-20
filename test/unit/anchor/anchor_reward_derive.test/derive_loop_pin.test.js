@@ -25,7 +25,10 @@ const crypto = require('crypto');
 
 const swq = require('../../../../src/consensus/stake_weighted_quorum.js');
 const ar  = require('../../../../src/consensus/gates/anchor_reward_gate.js');
+const ed25519 = require('../../../../src/consensus/ed25519.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
 const realMintRow = require('../../../../src/consensus/anchor_reward_derive/mint_row.js');
+const legacyPins = require('../../../../src/consensus/anchor_reward_derive/legacy_reward_pins.json');
 
 const DERIVE_PATH   = require.resolve('../../../../src/consensus/anchor_reward_derive.js');
 const MINT_ROW_PATH = require.resolve('../../../../src/consensus/anchor_reward_derive/mint_row.js');
@@ -150,6 +153,57 @@ describe('deriveAnchorRewards per-row mint loop, pinned against the mint_row wir
         await deriveMod.deriveAnchorRewards(db, cfg, blockIndex, stubProof());
         assert.strictEqual(mintStub.callCount, 2);
         for (const call of mintStub.getCalls()) assert.strictEqual(call.args[2].blockIndex, blockIndex);
+    });
+});
+
+describe('deriveAnchorRewards real mint loop applies the legacy pin flag-day @regression @tier1', function () {
+    const cfg = { COIN: 'BTC', NETWORK: 'testnet' };
+    const FLAG_TIME = 1792454400;
+    const pin = legacyPins[0];
+    let deriveMod;
+
+    before(function () { deriveMod = require(DERIVE_PATH); });
+    beforeEach(function () {
+        sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        sinon.stub(ed25519, 'verify').returns(true);
+    });
+    afterEach(function () { sinon.restore(); });
+
+    function pinnedRow() {
+        return {
+            chain: pin.chain, network: pin.network, reward_type: pin.reward_type,
+            round_reference: pin.round_reference, snapshot_block: pin.snapshot_block,
+            publisher: pin.publisher, doge_anchor_txid: pin.txid,
+            publisher_attestations: JSON.stringify([{ pubkey: pin.publisher, sig: 'fixture' }]),
+        };
+    }
+
+    function protocolChangesAt(blockTime) {
+        return new ProtocolChanges({
+            config: { NETWORK: 'testnet' }, util: { throwError(error) { throw new Error(error); } },
+            decoderDb: { getBlockTime: sinon.stub().resolves(blockTime) }, indexerDb: {},
+        }, '0.25.0');
+    }
+
+    async function deriveAt(blockTime) {
+        const db = stubDb([{ pubkey: pin.publisher }], [pinnedRow()]);
+        const proof = { proveMined: sinon.stub().resolves('verified') };
+        const derived = await deriveMod.deriveAnchorRewards(
+            db, cfg, maturedAt(pin.snapshot_block), proof, protocolChangesAt(blockTime));
+        return { db, proof, derived };
+    }
+
+    it('mints the pinned tuple below the new instant and skips it at the instant', async function () {
+        const below = await deriveAt(FLAG_TIME - 1);
+        assert.strictEqual(below.derived, 1);
+        assert.strictEqual(below.db.createValidatorReward.callCount, 1);
+        assert.strictEqual(below.proof.proveMined.callCount, 1);
+
+        const at = await deriveAt(FLAG_TIME);
+        assert.strictEqual(at.derived, 0);
+        assert.strictEqual(at.db.createValidatorReward.callCount, 0);
+        assert.strictEqual(at.db.reconcileAnchorRewardWinner.callCount, 0);
+        assert.strictEqual(at.proof.proveMined.callCount, 0);
     });
 });
 
