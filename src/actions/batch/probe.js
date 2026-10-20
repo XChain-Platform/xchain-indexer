@@ -47,8 +47,6 @@ function seedProbeCollectors(data){
     if(isProbe){
         data['PROBE_SUB_VERDICTS'] = [];
         data['PROBE_ORACLE_FEES']  = {};
-        data['PROBE_NATIVE_FEE_OWED'] = '0';
-        data['PROBE_COIN_PAYMENTS_OWED'] = {};
     }
     return isProbe;
 }

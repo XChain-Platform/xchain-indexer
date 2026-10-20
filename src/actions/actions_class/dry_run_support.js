@@ -131,11 +131,14 @@ async function readDryRunVerdict(actions, resultData, verdict){
        typeof resultData['PROBE_ORACLE_FEES'] === 'object' &&
        Object.keys(resultData['PROBE_ORACLE_FEES']).length > 0)
         verdict.oracleFeesOwed = resultData['PROBE_ORACLE_FEES'];
-    if(resultData && Object.prototype.hasOwnProperty.call(resultData, 'PROBE_NATIVE_FEE_OWED'))
-        verdict.nativeFeeOwed = resultData['PROBE_NATIVE_FEE_OWED'];
-    if(resultData && resultData['PROBE_COIN_PAYMENTS_OWED'] &&
-       Object.keys(resultData['PROBE_COIN_PAYMENTS_OWED']).length > 0)
-        verdict.coinPaymentsOwed = resultData['PROBE_COIN_PAYMENTS_OWED'];
+    if(resultData && Object.prototype.hasOwnProperty.call(resultData, 'BATCH_POSITION')){
+        let payments = actions.util.probePaymentDisclosure(resultData);
+        if(payments){
+            verdict.nativeFeeOwed = payments.nativeFeeOwed;
+            if(Object.keys(payments.coinPaymentsOwed).length > 0)
+                verdict.coinPaymentsOwed = payments.coinPaymentsOwed;
+        }
+    }
 }
 
 // The dryRunAction result shape.
