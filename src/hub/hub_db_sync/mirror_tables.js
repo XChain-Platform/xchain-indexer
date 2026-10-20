@@ -82,8 +82,7 @@ const RETRACTION_CHAIN_COLUMNS = {
 // bridge_transfers also gets the RETRACTION_COLUMNS pair above; policy_snapshots and
 // list_snapshots are never retracted, so deletion events naming them are skipped rather
 // than applied. Giving either one a RETRACTION_COLUMNS entry also requires adding it to
-// QUORUM_CLASS_TABLES below and to the hub's twin set in xchain-hub
-// src/consensus/retraction/wire.js, or its deletions are accepted unfenced and unsigned.
+// quorumClass, or its deletions are accepted with no fence or signatures required.
 const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
                             'bridge_transfers', 'policy_snapshots', 'list_snapshots'];
 

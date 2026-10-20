@@ -136,9 +136,8 @@ HubDbSync.ensureTables = ensureTables;
 // Exported so tests assert against the frozen source of truth rather than
 // restating its numbers, which would let a future change here pass a stale test.
 HubDbSync.HUB_SYNC_WATERMARK_GRACE_S = HUB_SYNC_WATERMARK_GRACE_S;
-// Exported for the direct-hub-DB (no-mirror) call barrier, deferOnDirectCallPresence in the
-// indexer's XChainIndexer/mirror_barriers.js (grace resolved in XChainIndexer/runtime_config.js),
-// which opens on the SAME frozen call grace as callSyncSatisfied's watermark escape. It has
+// Exported for the direct-hub-DB (no-mirror) call barrier in XChainIndexer.js, which
+// opens on the SAME frozen call grace as callSyncSatisfied's watermark escape. It has
 // to resolve that grace through this exact function, not a private copy: the regtest
 // override, the off-regtest ignore-with-warning and the invalid-value throw are part of
 // the constant's contract, and two nodes resolving it differently fork settlement.

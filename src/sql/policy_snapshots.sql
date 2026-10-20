@@ -18,11 +18,8 @@
 -- readers take the highest APPLIED policy_seq per (network, origin_chain, tick).
 --
 -- Fresh installs get this table from the directory scan in db.verifyTables(); an aged
--- database builds it from src/sql/migrations/2026-09-12-bridge-tables.sql, then takes the
--- admit_block_* columns from 2026-09-16-admission-height.sql and the DATETIME created_at
--- from 2026-09-27-datetime-bridge-policy.sql. sql_schema_column_parity.test.js checks this
--- definition against the end of that chain. Change it with a new dated migration, never by
--- editing an applied one (their checksums are ledgered).
+-- database gets it from src/sql/migrations/2026-09-12-bridge-tables.sql, whose CREATE
+-- TABLE block is byte-consistent with this one.
 CREATE TABLE policy_snapshots (
     id                   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, -- mirror cursor (matches hub id)
     snapshot_id          CHAR(64)     NOT NULL,                    -- sha256(network|origin_chain:tick|policy_seq|snapshot_block), lowercase hex
