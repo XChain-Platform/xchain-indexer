@@ -3618,13 +3618,6 @@
       "config.readEnvNow @regression returns the NEW value on a second call, so nothing is cached at load",
       "config.readEnvNow @regression returns undefined for a variable that is unset or has been deleted"
     ],
-    "37d8b66508317d63": [
-      "exact integer wire fields @regression @tier1 accepts only lossless integer representations",
-      "exact integer wire fields @regression @tier1 gates BET create and existing-feed integer wire spellings",
-      "exact integer wire fields @regression @tier1 gates DISPENSER integer wire spellings",
-      "exact integer wire fields @regression @tier1 gates ORDER and SWAP integer wire spellings",
-      "exact integer wire fields @regression @tier1 registers the protocol change armed on testnet at a cut instant and unarmed on mainnet and regtest"
-    ],
     "383eb974c61ae810": [
       "archive-anchor content query: ARCHIVE_ANCHOR_BY_CONTENT_SQL @regression @tier1 LEFT JOINs the author and txid linkage",
       "archive-anchor content query: ARCHIVE_ANCHOR_BY_CONTENT_SQL @regression @tier1 does NOT filter on match_batch_seq",
@@ -9597,6 +9590,14 @@
     "8a8d0afa6dccfafa": [
       "state_hash class 6 projection for archive MATCH_COUNT carries the flagged head only on the armed side"
     ],
+    "8ab62ec19ab03a3c": [
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 arms from genesis on a value of 0 instead of treating it as unarmed",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 arms regtest from the variable and leaves the other networks alone",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 fails closed to unarmed on a non-numeric value",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 runs inert on regtest when the venue sets off",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 ships genesis-active on regtest when the variable is unset",
+      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 stays genesis-active on an empty value"
+    ],
     "8ac980aa3b54b80e": [
       "XANCPUB reward canonical: derive copy vs the frozen wire format @regression @tier1 ends on the frozen consensus amount, never a wire value",
       "XANCPUB reward canonical: derive copy vs the frozen wire format @regression @tier1 exercises both flag-day sides (the fixtures straddle the EQUIV header activation)",
@@ -11623,6 +11624,13 @@
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 home-chain callback suppression a v1 fulfilling a native request still fires the callback",
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 home-chain callback suppression a v1 fulfilling a relayed request fires no local callback"
     ],
+    "a3ea7822ac7d1ab0": [
+      "exact integer wire fields @regression @tier1 accepts only lossless integer representations",
+      "exact integer wire fields @regression @tier1 gates BET create and existing-feed integer wire spellings",
+      "exact integer wire fields @regression @tier1 gates DISPENSER integer wire spellings",
+      "exact integer wire fields @regression @tier1 gates ORDER and SWAP integer wire spellings",
+      "exact integer wire fields @regression @tier1 registers the protocol change armed on testnet at a cut instant, unarmed on mainnet and genesis-active on regtest"
+    ],
     "a3ecaa042dc5bed4": [
       "list snapshot archive verification @regression @tier1 accepts an absent or null list_snapshots value without calls",
       "list snapshot archive verification @regression @tier1 rejects a present non-array list_snapshots value",
@@ -12109,13 +12117,6 @@
       "Indexer cross-node determinism baseline @regression @tier1 every block produced a ledger + actions consensus hash",
       "Indexer cross-node determinism baseline @regression @tier1 hash chain matches the committed baseline (no consensus drift)",
       "Indexer cross-node determinism baseline @regression @tier1 re-deriving the corpus from a clean DB yields the identical hash chain (determinism)"
-    ],
-    "ac93d3fca252ee43": [
-      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 arms from genesis on a value of 0 instead of treating it as unarmed",
-      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 arms regtest from the variable and leaves the other networks alone",
-      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 fails closed to unarmed on a non-numeric value",
-      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 ships unarmed on regtest when the variable is unset",
-      "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 stays unarmed on an empty value"
     ],
     "ac9b353b9d7d511b": [
       "XBRIDGE action handler @regression @tier3 v4 burn (a bridged copy on the chain holding it) debits the copy and names the origin chain, with no bridged bit to set",
@@ -18298,7 +18299,7 @@
   "scripts": {
     "test": {
       "fileCount": 1451,
-      "titleCount": 14164,
+      "titleCount": 14165,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19546,7 +19547,7 @@
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
-        "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "ac93d3fca252ee43",
+        "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
@@ -19710,7 +19711,7 @@
         "test/unit/utility/amount_precision.test.js": "f8147b1f69e9d769",
         "test/unit/utility/controller_guard_custody.test.js": "49c6f8fe13359243",
         "test/unit/utility/controller_guard_inert_naming.test.js": "1bdf11fda7eec5f4",
-        "test/unit/utility/exact_integer_wire_fields.test.js": "37d8b66508317d63",
+        "test/unit/utility/exact_integer_wire_fields.test.js": "a3ea7822ac7d1ab0",
         "test/unit/utility/fee_output.test.js": "b5fb412331972a99",
         "test/unit/utility/list_tick_airdrop_holders.test.js": "2987ec28ce152583",
         "test/unit/utility/price_age_at.test.js": "4b148378640ac7fa",
@@ -20126,7 +20127,7 @@
     },
     "test:regression": {
       "fileCount": 1103,
-      "titleCount": 11189,
+      "titleCount": 11190,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21079,7 +21080,7 @@
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
-        "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "ac93d3fca252ee43",
+        "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
@@ -21210,7 +21211,7 @@
         "test/unit/utility/amount_precision.test.js": "f8147b1f69e9d769",
         "test/unit/utility/controller_guard_custody.test.js": "49c6f8fe13359243",
         "test/unit/utility/controller_guard_inert_naming.test.js": "1bdf11fda7eec5f4",
-        "test/unit/utility/exact_integer_wire_fields.test.js": "37d8b66508317d63",
+        "test/unit/utility/exact_integer_wire_fields.test.js": "a3ea7822ac7d1ab0",
         "test/unit/utility/utility.test.js": "4f9a9190b0431827",
         "test/unit/utility/utility.test/bignumber.test.js": "9c413eb2335154fc",
         "test/unit/utility/utility.test/block_loop.test.js": "b0736fe3615f59a3",
@@ -21235,7 +21236,7 @@
     },
     "test:regression:fast": {
       "fileCount": 538,
-      "titleCount": 5790,
+      "titleCount": 5791,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21692,7 +21693,7 @@
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
-        "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "ac93d3fca252ee43",
+        "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
@@ -21759,7 +21760,7 @@
         "test/unit/utility/address_validation.test.js": "5919ed99ee8ed193",
         "test/unit/utility/controller_guard_custody.test.js": "49c6f8fe13359243",
         "test/unit/utility/controller_guard_inert_naming.test.js": "1bdf11fda7eec5f4",
-        "test/unit/utility/exact_integer_wire_fields.test.js": "37d8b66508317d63",
+        "test/unit/utility/exact_integer_wire_fields.test.js": "a3ea7822ac7d1ab0",
         "test/unit/utility/utility.test.js": "4f9a9190b0431827",
         "test/unit/utility/utility.test/bignumber.test.js": "9c413eb2335154fc",
         "test/unit/utility/utility.test/block_loop.test.js": "b0736fe3615f59a3",
@@ -21779,7 +21780,7 @@
     },
     "test:regression:full": {
       "fileCount": 1103,
-      "titleCount": 11189,
+      "titleCount": 11190,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22732,7 +22733,7 @@
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
-        "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "ac93d3fca252ee43",
+        "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "b45d06aa483d7379",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
@@ -22863,7 +22864,7 @@
         "test/unit/utility/amount_precision.test.js": "f8147b1f69e9d769",
         "test/unit/utility/controller_guard_custody.test.js": "49c6f8fe13359243",
         "test/unit/utility/controller_guard_inert_naming.test.js": "1bdf11fda7eec5f4",
-        "test/unit/utility/exact_integer_wire_fields.test.js": "37d8b66508317d63",
+        "test/unit/utility/exact_integer_wire_fields.test.js": "a3ea7822ac7d1ab0",
         "test/unit/utility/utility.test.js": "4f9a9190b0431827",
         "test/unit/utility/utility.test/bignumber.test.js": "9c413eb2335154fc",
         "test/unit/utility/utility.test/block_loop.test.js": "b0736fe3615f59a3",
