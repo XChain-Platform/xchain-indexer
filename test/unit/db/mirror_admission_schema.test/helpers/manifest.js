@@ -19,7 +19,7 @@
  * twin must place each column so SHOW CREATE TABLE converges on a migrated and a
  * fresh install alike (the column-parity guard checks POSITION, not just shape).
  * The manifest states both, and mirror_admission_schema.test.js pins the manifest
- * against the hub DDL and the hub's migrateAdmissionColumns table map so the two
+ * against the hub DDL and the hub's dated migrations so the two
  * cannot drift apart silently.
  *
  * Derived 2026-09-16 from xchain-hub origin/develop 6d5b7301 (src/sql/*.sql and
@@ -73,7 +73,7 @@ const MIRROR_ADMISSION_COLUMNS = Object.freeze({
 // comparison in the test is exact: a hub column that gains a writer or a reader later
 // has to move OUT of this list into the manifest above, never drift in silence.
 const HUB_ONLY_ADMISSION_COLUMNS = Object.freeze({
-    // Added by row 2 for uniformity, migrated by migrateAdmissionColumns, but db/anchor.js
+    // Added by row 2 for uniformity, migrated by the hub's dated migration, but db/anchor.js
     // inserts the row WITHOUT it and the indexer's anchor-attest member keys on the row's
     // own snapshot_block plus ANCHOR_REWARD_MIRROR_MATURITY (144), never on this column
     // (family section 5.7: "its admission height already exists").
