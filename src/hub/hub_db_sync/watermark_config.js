@@ -349,12 +349,6 @@ function heightsAdvanced(prev, next){
     return false;
 }
 
-// ── signed-retraction verification helpers ───────────────────────────
-
-// Rebuild the retraction canonical from the wire event. MUST byte-match the
-// producer in xchain-hub/src/consensus/retraction.js canonicalRetraction():
-//   XRETRACTV1|<table>|<source_chain>|<from>|<to or ''>|<generation or ''>|<snapshot_block>
-
 module.exports = {
     HUB_SYNC_WATERMARK_GRACE_S, resolveWatermarkGrace,
     HUB_SYNC_BARRIER_HOLD_CEILING_S, resolveBarrierHoldCeilingMs,
