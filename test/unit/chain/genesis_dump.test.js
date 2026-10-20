@@ -180,6 +180,19 @@ describe('GenesisDump.write @regression', function () {
         assert.deepStrictEqual(meta.rowCounts, { tokens: 1 });
         assert.doesNotMatch(content, /schema_migrations/);
     });
+
+    it('refuses a BIGINT the pool has already rounded past 2^53-1 instead of writing it', async function () {
+        const file = path.join(os.tmpdir(), `xchain-gd-unit-${process.pid}-${counter++}.ndjson.gz`);
+        const db = mockDb(HASHES);
+        db.listTableNames = async () => ['dispensers'];
+        db.countRowsInTable = async () => 1;
+        db.listTableColumnNames = async () => ['id', 'expiration'];
+        // A stored U64_MAX expiration as bigIntAsNumber reads it back: 2^64.
+        db.readAllRowsByFirstColumn = async () => [{ id: 1, expiration: Number('18446744073709551615') }];
+        const gd = new GenesisDump(db, util, { COIN: 'BTC', GENESIS_BLOCK: 100 });
+
+        await assert.rejects(gd.write(file), RangeError);
+    });
 });
 
 describe('GenesisDump.read @regression', function () {
@@ -247,5 +260,14 @@ describe('GenesisDump._scalar @regression', function () {
         assert.notStrictEqual(Number(tooBig).toString(), tooBig.toString());
         assert.throws(() => g.scalar(tooBig), RangeError);
         assert.throws(() => g.scalar(-tooBig), RangeError);
+    });
+
+    it('throws on a Number past 2^53-1, which the pool has already rounded', function () {
+        const g = gd();
+        assert.strictEqual(g.scalar(Number.MAX_SAFE_INTEGER), Number.MAX_SAFE_INTEGER);
+        assert.strictEqual(g.scalar(-Number.MAX_SAFE_INTEGER), -Number.MAX_SAFE_INTEGER);
+        assert.strictEqual(g.scalar(1.5), 1.5);
+        for (const v of [2 ** 53, Number.MAX_SAFE_INTEGER + 2, -(2 ** 53), 2 ** 64])
+            assert.throws(() => g.scalar(v), RangeError, `scalar(${v})`);
     });
 });

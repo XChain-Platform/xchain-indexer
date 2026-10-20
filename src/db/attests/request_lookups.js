@@ -113,14 +113,13 @@ module.exports = {
     // v3 admission guard gets this query.
     //
     // 'rejected' rows are excluded for the same reason getRelayRequestByOrigin
-    // excludes them, and the omission was exploitable in exactly the shape that
-    // sibling was written to prevent. request_id arrives on the wire and is derivable
-    // in public from the origin chain's v0, so anyone can watch an origin chain, take
-    // the id of a request the federation is about to relay, and broadcast a
-    // deliberately malformed v3 naming it. The malformed one is rejected but still
-    // stored, and a guard that counts stored rows then reads that audit row as "this
-    // id is taken" and refuses the federation's real relay forever. One transaction
-    // fee, one permanently unservable request. A rejected row escrowed nothing, was
+    // excludes them. request_id arrives on the wire and is derivable in public from
+    // the origin chain's v0, so anyone can watch an origin chain, take the id of a
+    // request the federation is about to relay, and broadcast a deliberately
+    // malformed v3 naming it. A guard that read that refusal as "this id is taken"
+    // would refuse the federation's real relay forever: one transaction fee, one
+    // permanently unservable request. persistRelayRequest withholds a refused v3's
+    // row, so this filter is defence in depth; a rejected row escrowed nothing, was
     // never pending and was never served, so it consumed no materialization.
     //
     // ORDER BY action_index keeps the FIRST admission canonical on every node, and

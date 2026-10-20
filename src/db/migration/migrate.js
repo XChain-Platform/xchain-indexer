@@ -50,6 +50,7 @@ const Utility  = require('../../utility.js');
 const { CONFIG_ENV } = require('../../config.js');
 const { migrationChecksum, classifyAppliedChecksum } = require('./checksum_verdict.js');
 const { MIGRATION_CHECKSUM_REBASELINES } = require('./checksum_rebaselines.js');
+const { orphanedLedgerNames, MIGRATION_LEDGER_RENAMES } = require('../database/migration_registry.js');
 // Spelled out for an operator reading it mid-incident: the difference between a
 // blanket run and a scoped one is the whole risk of this command, so each mode
 // says what it applies rather than naming a flag.
@@ -181,6 +182,7 @@ async function reportStatus(db, dbName, json){
     });
     const pendingCount = rows.filter(r => !r.applied).length;
     const changedCount = rows.filter(r => r.changed).length;
+    const orphaned     = orphanedStatusRows(applied, files, rows);
 
     // Exit 0 whenever the report was produced: drift is data each consumer judges, and a
     // scoped `--file` run deliberately ignores unrelated files, so it must not read as unreadable.
@@ -192,18 +194,54 @@ async function reportStatus(db, dbName, json){
             pending: pendingCount,
             changed: changedCount,
             migrations: rows,
+            orphaned,
         }, null, 2));
         return;
     }
 
     console.log('migrate: status for ' + dbName + ' (read-only; nothing applied)');
     for(const r of rows) console.log(statusLine(r, verdicts.get(r.file)));
+    for(const o of orphaned) console.log(orphanLine(o));
     console.log('migrate: ' + rows.length + ' migration(s), ' + (rows.length - pendingCount) + ' applied, ' + pendingCount + ' pending, ' +
         changedCount + ' changed.');
     if(changedCount){
         console.log('migrate: a blanket `npm run migrate` will refuse until each CHANGED file is reverted or given a ' +
             'reviewed MIGRATION_CHECKSUM_REBASELINES entry.');
     }
+    if(orphaned.some(o => o.sameContentAs)){
+        console.log('migrate: a blanket `npm run migrate` will refuse until each renamed file has a ' +
+            'MIGRATION_LEDGER_RENAMES entry from its ledger name.');
+    }
+}
+
+// Ledger rows with no file on disk, after the in-memory rename heal. sameContentAs names the
+// pending file with byte-identical content: a rename missing its registry entry, which the
+// runner refuses to apply a second time.
+function orphanedStatusRows(applied, files, rows){
+    const pendingByChecksum = new Map();
+    for(const r of rows){
+        if(r.applied) continue;
+        pendingByChecksum.set(migrationChecksum(fs.readFileSync(path.join(MIGRATIONS_DIR, r.file), 'utf8')), r.file);
+    }
+    return orphanedLedgerNames(applied.keys(), files).map(name => {
+        const record = applied.get(name);
+        return {
+            name,
+            mode: record.mode,
+            appliedAt: record.appliedAt,
+            renamedTo: Object.prototype.hasOwnProperty.call(MIGRATION_LEDGER_RENAMES, name) ? MIGRATION_LEDGER_RENAMES[name] : null,
+            sameContentAs: (record.checksum && pendingByChecksum.get(String(record.checksum))) || null,
+        };
+    });
+}
+
+// One text line for a ledger row with no file, saying which of the three causes it is.
+function orphanLine(o){
+    const why = o.sameContentAs
+        ? 'same content as pending ' + o.sameContentAs + ': a rename missing its MIGRATION_LEDGER_RENAMES entry'
+        : o.renamedTo ? 'old name of ' + o.renamedTo + ', which the ledger also records'
+            : 'ledger row with no migration file';
+    return '  [ORPHANED, mode=' + o.mode + '] ' + o.name + ' (' + why + ')';
 }
 
 // One text status line: PENDING, CHANGED with both hash prefixes, or applied (noting a pending heal).

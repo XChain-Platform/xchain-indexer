@@ -69,15 +69,17 @@ async function unassignedAddresses(actions, candidates){
 module.exports = {
 
     // Map an ACTION name to the handler whose `formats` strings (and setActionParams
-    // positional layout) define the wire fields. Only handlers that parse with
-    // util.setActionParams are listed: their fixed positional layout lets the pre-pass
-    // extract field values IDENTICALLY to the handler. SEND / ISSUE / SWEEP / DEPLOY use
-    // bespoke parsing (repeating recipients, variable-length constructor params, etc.),
-    // so they are deliberately absent here and their new addresses keep deterministic
-    // handler-order assignment (still reorg-safe via the explicit index-id counter).
+    // positional layout) define the wire fields. Only the actions the value-sorted pre-pass
+    // covers are listed: their fixed positional layout lets it extract field values
+    // IDENTICALLY to the handler. SEND and DEPLOY parse bespoke (repeating recipients,
+    // variable-length constructor params). ISSUE and SWEEP do parse with util.setActionParams,
+    // but their addresses get ids in the handler's fixed interning order by consensus
+    // (consensus/address_ref_fields.js), so listing them here would move id assignment.
+    // All four keep deterministic handler-order assignment (reorg-safe via the explicit
+    // index-id counter).
     // Also the public name of this map, so a caller OUTSIDE this class can ask the same
     // question the address pre-pass asks: "does this ACTION have a fixed positional wire
-    // layout I may read a field out of?" batch.js's duration-fee pre-check (nominalDurationFee)
+    // layout I may read a field out of?" batch/fees.js's duration-fee pre-check (nominalDurationFee)
     // is the caller: it reads EXPIRATION's index out of the handler's own format string
     // instead of hardcoding a position, so a format change moves the pre-check with it.
     // This was a private map behind a same-named public delegator until the underscore

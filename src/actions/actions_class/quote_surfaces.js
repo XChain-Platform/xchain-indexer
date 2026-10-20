@@ -26,6 +26,7 @@
 const dryRunSupport = require('./dry_run_support.js');
 const quoteAnswers  = require('./quote_answers.js');
 const { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome } = dryRunSupport;
+const { launchGateAdmits, NOT_ADMITTED_BEFORE_LAUNCH } = dryRunSupport;
 const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, dryRunVerdictQuote } = quoteAnswers;
 const { malformedActionAnswer } = quoteAnswers;
 const { resolvePreflightFeeMode, preflightGateAnswer, preflightLockBusy, preflightNoVerdict, preflightResult } = quoteAnswers;
@@ -75,13 +76,14 @@ function isTxLockBusy(e){
 // `rawData` (optional) is the caller's literal wire, dry-run in place of the string rebuilt
 // from `action` and `params`; set for a BATCH only (see batchRequestWire).
 //
-// Returns { blockIndex, blockTime, status, error, xchainFee, sourceFeeBalance } where
-// xchainFee is the handler-recorded fee ('0' for a valid zero-fee action, null when the
-// run never got far enough to stage one).
+// Returns dryRunOutcome's { blockIndex, blockTime, status, error, xchainFee, sourceFeeBalance,
+// subCommands, oracleFeesOwed, nativeFeeOwed, coinPaymentsOwed }: xchainFee is the staged fee ('0'
+// for a valid zero-fee action, null for a withheld BATCH sum or none staged); the last four are
+// probe disclosures, else null.
 async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, acquireTimeoutMs, label, guardInert, feeProbe, feeBalanceTick, rawData }){
     let dryRunError = null, sourceFeeBalance = null;
-    // Probe-only disclosures collected while BATCH sub-commands run.
-    // Both stay null for every other action and for every decoded transaction.
+    // Probe-only disclosures collected while BATCH sub-commands run (subCommands and the three
+    // owed totals); all stay null for every other action and for every decoded transaction.
     let verdict = { status: null, feeRecord: null, subCommands: null, oracleFeesOwed: null,
                     nativeFeeOwed: null, coinPaymentsOwed: null };
     // beginTransaction acquires the db transaction mutex (serializes against block processing
@@ -92,17 +94,25 @@ async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestin
     // Read the tip only now, under the mutex: before it, a bare read lands on the block loop's
     // open transaction, and a block committing during the wait would leave the run at the old
     // height over the new state. A failed read is an outage, never a verdict, so it propagates.
-    let blockIndex, blockTime;
+    let blockIndex, blockTime, syntheticTx, admitted;
     try {
         blockIndex = await this.indexerDb.getLatestBlockIndex();
         blockTime  = await this.indexerDb.getBlockTime(blockIndex);
+        syntheticTx = syntheticDryRunTx(this, { action, params, source, feeOutputs, probeFeeDestination,
+                                                blockIndex, blockTime, guardInert, feeProbe, rawData });
+        admitted = launchGateAdmits(this, syntheticTx);
     } catch(e){
         await this.indexerDb.rollbackTransaction();
         throw e;
     }
 
-    let syntheticTx = syntheticDryRunTx(this, { action, params, source, feeOutputs, probeFeeDestination,
-                                                blockIndex, blockTime, guardInert, feeProbe, rawData });
+    // Answer the launch gate's refusal without running the handler: the block loop skips such a
+    // transaction before processTransaction, so the chain never gives it a verdict or a fee.
+    if(!admitted){
+        await this.indexerDb.rollbackTransaction();
+        verdict.status = NOT_ADMITTED_BEFORE_LAUNCH;
+        return dryRunOutcome(blockIndex, blockTime, verdict, null, null);
+    }
     // Stamp the synthetic height as the block being processed, as openBlockTransaction does,
     // so height-gated db reads and id stamping match the block loop (the field is null at
     // boot and stale after an abandoned block). Restored in the finally, under the lock.
@@ -230,8 +240,16 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     let feeClass = policy.classifyFeeQuoteAction(action);
     if(feeClass === 'denied')
         return await this.staticFeeQuote(base, action, params, feeOutputSats);
-    if(feeClass === 'exempt')
+    if(feeClass === 'exempt'){
+        // Refuse a fee-exempt action the mainnet launch gate drops: no fee is not an admission.
+        if(this.config['NETWORK'] === 'mainnet'){
+            let tipTime = await this.indexerDb.getBlockTime(await this.indexerDb.getLatestBlockIndex());
+            let tx = { data: [action].concat(params).join('|'), source: source, block_time: tipTime };
+            if(!launchGateAdmits(this, tx))
+                return Object.assign(base, { valid: false, error: NOT_ADMITTED_BEFORE_LAUNCH });
+        }
         return exemptFeeQuote(base, action);
+    }
 
     let maxPending = parseInt(policy.CONFIG_ENV.INDEXER_FEEQUOTE_MAX_PENDING, 10) || 8;
     if((this._feeQuotePending || 0) >= maxPending)
@@ -282,17 +300,18 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
 // Wire-string pre-scan for the BATCH pre-flight: the FIRST sub-command the probe path must
 // refuse to dispatch, or null when every sub-command is safe to run.
 //
-// Reproduces batch.js's own command split exactly - `TX_DATA.split(';')`, then strip the
-// `BATCH|<format>|` prefix off element 0, then take `split('|')[0]` - so the names scanned
-// here are the names that loop will dispatch. Two deliberate asymmetries, both in the
-// REFUSING direction: this trims and de-aliases unconditionally (batch.js only de-aliases
-// at/after BATCH_SUBACTION_NORMALIZATION), and an unrecognized FORMAT leaves the prefix
+// Reproduces the batch handler's own command split exactly (batch/validate.js readCommands):
+// `TX_DATA.split(';')`, then strip the `BATCH|<format>|` prefix off element 0, then take
+// `split('|')[0]` - so the names scanned here are the names that loop will dispatch. Two
+// deliberate asymmetries, both in the REFUSING direction: this trims and de-aliases
+// unconditionally (batch/sub_command.js normalizeSubAction only de-aliases at/after
+// BATCH_SUBACTION_NORMALIZATION), and an unrecognized FORMAT leaves the prefix
 // unstripped so element 0 reads as `BATCH`, which is itself forbidden. It can therefore
 // refuse a batch the loop would have found harmless, and never the reverse.
 //
 // This runs BEFORE the dry-run takes the block-loop mutex, so a batch carrying a VM
 // sub-action costs the node one string scan rather than a transaction. It is NOT the
-// load-bearing guard: batch.js re-checks each dispatched name (see
+// load-bearing guard: batch/index.js dispatchSubCommands re-checks each dispatched name (see
 // isBatchProbeForbiddenSubAction).
 function batchProbeForbiddenSubAction(policy, params){
     let format   = this.util.getFormatVersion(params[0]);
@@ -332,7 +351,8 @@ async function computePreflight(policy, { action, params, source, feeMode }){
     // Normalize identically to computeFeeQuote / dispatch (trim, uppercase, de-alias).
     ({ action, params } = normalizeQuoteRequest(this.actionAliases, action, params));
     // A BATCH is dry-run on the caller's literal wire (see batchRequestWire). The gate below
-    // judges the normalized form; batch.js re-checks each name the wire really dispatches.
+    // judges the normalized form; batch/index.js dispatchSubCommands re-checks each name the wire
+    // really dispatches.
     let rawData = batchRequestWire(action, rawAction, rawParams);
     let base = { supported: true, action: action, coin: coin };
 

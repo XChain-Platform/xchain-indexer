@@ -307,18 +307,18 @@ module.exports = {
     // action_index wins' tie-break the v2-continuation dedup below already uses. Order on
     // action_index (consensus-visible, unique on this single-network table), never the local
     // AUTO_INCREMENT id, which differs per node.
-    // The row also carries `source`: the head's AUTHOR address, resolved through
-    // actions.source_id (#3075). anchor.js binds every v2 continuation chunk to it, so a
-    // junk chunk can no longer squat a slot and deny the batch. LEFT JOINed so the head
-    // PICK is unchanged from the pre-#3075 query (an inner join would skip an unlinked
-    // head and select a different one, moving a consensus-visible geometry verdict); an
-    // unresolvable author arrives as null and anchor.js fails the chunk closed.
+    // The row also carries `source`, the head's AUTHOR via actions.source_id, LEFT JOINed
+    // so the PICK matches an author-free query (an inner join would skip an unlinked head
+    // and move a consensus-visible geometry verdict). The archive chunk path takes this row
+    // as a chunk's parent only when `source` equals the chunk's publisher, else re-picks with
+    // that publisher as `author`, so a head with a null `source` is never a chunk's parent.
     // `author`, when supplied, narrows the candidates to heads authored by
     // that address, i.e. the batch key becomes (match_batch_seq, head author). The
-    // caller (anchor.js, gated on the flag day) passes it so a junk head broadcast at
+    // archive chunk path passes the chunk's own publisher so a junk head broadcast at
     // another publisher's batch seq can no longer be the parent that governs that
-    // publisher's chunks. Omitted / null keeps the legacy canonical-head candidate set
-    // below the fold activation. The narrowing
+    // publisher's chunks. Omitted / null picks the canonical head (earliest row for the
+    // seq, any author), the starting row every caller resolves first. Either way a folded
+    // v3 head is a candidate only at or above the fold activation floor. The narrowing
     // rides on the SAME LEFT-joined address the row already exposes as `source`: a head
     // whose author cannot be resolved compares unequal and is skipped, which is
     // fail-closed (the chunk lands 'orphan' rather than authenticated against nothing).

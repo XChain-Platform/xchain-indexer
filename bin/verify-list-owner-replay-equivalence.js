@@ -13,8 +13,8 @@
  *
  * BELOW-THE-FLAG REPLAY WITNESS for LIST_OWNER_ACTIVATION.
  *
- * The gate is deliberately inert on mainnet and testnet. This tool replays one
- * of those corpora through two isolated trees: LEGACY removes only the general
+ * Mainnet is armed from genesis and is refused, so this tool replays one
+ * testnet corpus through two isolated trees: LEGACY removes only the general
  * list-owner check, while OFF is the current tree with its natural inert gate.
  * The four resolved block hashes must agree at every block.
  *
@@ -38,7 +38,7 @@
  *   node bin/verify-list-owner-replay-equivalence.js \
  *        --network testnet --corpus-file /path/to/two-sided.json
  *   node bin/verify-list-owner-replay-equivalence.js \
- *        --coin BTC --network mainnet --decoder-db decoder_schema
+ *        --coin BTC --network testnet --decoder-db decoder_schema
  *
  * Options: --schema-prefix <plain_name>, --workdir <dir>, --keep, --dry-run.
  * Database credentials are loaded by dotenv from the project .env and then read

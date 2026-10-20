@@ -116,7 +116,9 @@ module.exports = {
         // than applied. policy_snapshots, list_snapshots and remote_token_snapshots are absent
         // because they are never retracted (no RETRACTION_COLUMNS entry, so the generic path
         // below skips them). Giving any of them a RETRACTION_COLUMNS entry also requires adding
-        // it to this list AND a push_generation column in both the hub and indexer DDL.
+        // it to QUORUM_CLASS_TABLES (mirror_tables.js) and to the hub's twin set in xchain-hub
+        // src/consensus/retraction/wire.js, AND a push_generation column in both the hub and
+        // indexer DDL.
         let quorumClass = QUORUM_CLASS_TABLES.includes(event.table);
         let ownChain = !!(this.coin && event.source_chain === this.coin && this.getOwnRollbackGeneration);
         if (!(await this.acceptRetractionFences(event, range, quorumClass, ownChain))) return;

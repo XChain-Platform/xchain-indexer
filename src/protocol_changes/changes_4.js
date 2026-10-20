@@ -379,7 +379,8 @@ module.exports = [
     ['CONTRACT_META_REQUIRED', '0.2.0',CONTRACT_META_REQUIRED_MAINNET_TIME,CONTRACT_META_REQUIRED_TESTNET_TIME,0,0,0,0],
 
     // BROADCAST_FEE_LENGTH rejects a FEE wider than the 11-character storage column.
-    // Mainnet and testnet stay inert until armed; regtest activates at genesis.
+    // Mainnet stays inert until armed, testnet is armed by the v0.21.3 cut at
+    // 2026-10-03T20:58:17Z, and regtest activates at genesis.
     ['BROADCAST_FEE_LENGTH', '0.2.0',BROADCAST_FEE_LENGTH_MAINNET_TIME,BROADCAST_FEE_LENGTH_TESTNET_TIME,0,0,0,0],
 
     // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.

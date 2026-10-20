@@ -132,17 +132,15 @@ const ANCHOR_ACTIONS_SQL =
 // mirrored oracle_publish snapshot stores an unverifiable head 'unverified' where
 // a mirrored node stores 'valid' or 'invalid: ...', so a status-filtered head pick
 // would make authorship, and every chunk verdict downstream of it, differ between
-// mirrored and unmirrored nodes. That fleet divergence is worse than the accepted
-// cost below.
+// mirrored and unmirrored nodes. That fleet divergence is what the status-agnostic
+// pick avoids.
 //
-// Accepted cost: because the earliest head wins, a batch whose first head
-// publisher stops before broadcasting all its chunks can no longer be rescued by
-// a second publisher's chunks under the same batch seq. Denial now requires being
-// the legitimate first head publisher and then failing, instead of being anyone
-// at all. Residual, out of scope here: nothing stops a junk head row (bad
-// signatures, status 'invalid: ...') from being the earliest row for a batch and
-// thereby capturing both the geometry gate and this authorship rule; that cannot
-// be closed by filtering on status, for the divergence reason above.
+// Scope: the live ANCHOR handler and recovery bind every batch that has a canonical
+// head to one publisher's own chunks (ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL), so a junk head
+// that is the earliest row for a seq governs only its own batch, and a second
+// publisher completes a batch at the same seq under its own head. This canonical-head
+// author binds only a caller that supplies no author, which those two do only when
+// the batch has no canonical head, and then the subquery is empty and so is the set.
 //
 // LEFT JOINs throughout: the head pick must stay byte-identical to
 // getAnchorV1ByBatchSeq (inner joins would silently skip an unlinked head and
@@ -169,12 +167,12 @@ const ARCHIVE_HEAD_AUTHOR_SQL =
 // Callers dedupe to one row per chunk_index (lowest action_index wins) after this
 // query; the ORDER BY makes that deterministic. Params: [batchSeq, foldFloor, batchSeq].
 // Shared verbatim by db.getAnchorChunks and recovery.js's reassembly (which holds only
-// a doQuery handle) so the two can no longer drift. Two other places join v2 chunks and
-// deliberately need NO authorship term, because both already require status 'valid',
-// which a wrong-author chunk can never hold (parse rejects it, and an orphan is not
-// 'valid'): rollback.js's invalid_archive reset self-join, and stateHash.js's class-6
-// anchor_invalid query. Adding the term there would be inert at best and would move a
-// hash preimage at worst.
+// a doQuery handle) so the two cannot drift. Two other places join v2 chunks to a head
+// by seq. The invalid_archive rollback reset self-join (db/rollback/batch_heads.js)
+// adds an author term behind its own per-network gate (archiveAuthorScopeJoin), because
+// a second publisher's chunk at the same seq is stored 'valid' against its own head.
+// The class-6 anchor_invalid state-hash query carries no author term: adding one would
+// move that hash preimage, so it changes only behind its own flag day.
 const ARCHIVE_CHUNK_SET_SQL =
     `SELECT c.*, cadr.address AS source
      FROM anchor_actions c
@@ -185,12 +183,11 @@ const ARCHIVE_CHUNK_SET_SQL =
        AND cadr.address = (${ARCHIVE_HEAD_AUTHOR_SQL})
      ORDER BY c.chunk_index ASC, c.action_index ASC`;
 
-// Publisher-scoped archive batches, flag-day gated: the same chunk set, but
-// bound to a SUPPLIED author instead of the canonical head's. At/after the
-// ARCHIVE_BATCH_AUTHOR flag day the archive batch key is (match_batch_seq, head
-// author), so each head governs only its own publisher's chunks and a junk head
-// squatting the batch seq governs nothing, closing the earlier gap where "the
-// batch" meant "the earliest row carrying that seq". Everything else is
+// Publisher-scoped archive batches: the same chunk set, but bound to a SUPPLIED
+// author instead of the canonical head's. The archive batch key is
+// (match_batch_seq, head author) at every height, so each head governs only its
+// own publisher's chunks and a junk head squatting the batch seq governs nothing,
+// rather than "the batch" meaning "the earliest row carrying that seq". Everything else is
 // byte-identical to ARCHIVE_CHUNK_SET_SQL (rejected rows out, 'orphan' kept,
 // deterministic order), and with exactly one publisher per batch seq (honest
 // operation) the two queries return the same rows.
@@ -206,13 +203,12 @@ const ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL =
      ORDER BY c.chunk_index ASC, c.action_index ASC`;
 
 // The batch's canonical head row identity (earliest archive-head row for the seq,
-// status-agnostic) reduced to what the flag-day predicate needs: the DOGE height it
-// landed at. This is the one row every node agrees on for a batch seq without
-// consulting status, which is why the publisher-authorship gate is anchored to it
-// rather than to the chunk's own block, so a head and its chunks can never
-// straddle two rules. block_index_doge, not block_index: the latter is the
-// checkpointed height on the checkpointed chain (and is NULL on a v2 chunk), while
-// the flag day is a height on the chain the ANCHOR itself lands on.
+// status-agnostic): its action_index and the DOGE height it landed at. This is the
+// one row every node agrees on for a batch seq without consulting status. Recovery
+// reads it only to learn whether the batch has a canonical head, the same existence
+// test the live ANCHOR handler makes before scoping a batch to its publisher, so the
+// two scope every batch from the same row. A folded v3 head counts only at or above
+// the fold activation floor.
 // Params: [foldFloor, batchSeq].
 const ARCHIVE_HEAD_GATE_SQL =
     `SELECT h.action_index, h.block_index_doge

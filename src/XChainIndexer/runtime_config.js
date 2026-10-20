@@ -29,6 +29,7 @@ const util   = require('../utility.js');
 const { HUB_SYNC_WATERMARK_GRACE_S, resolveWatermarkGrace } = require('../hub/hub_db_sync.js');
 const { ANCHOR_ATTEST_ARRIVAL_MARGIN_S } = require('../consensus/gates/anchor_reward_gate.js');
 const { getLogger } = require('../observability/index.js');
+const ProviderRegistry = require('../attestation/provider_registry.js');
 
 module.exports = {
 
@@ -38,6 +39,15 @@ module.exports = {
     resolveRuntimeConfig(){
         // Get indexer configuration
         this.config = config.getConfig();
+
+        // Refuse an ATTESTATION.PROVIDERS overlay before any block. The effective provider
+        // map feeds consensus (VM deadline caps, attest deadlines, the stake floor) and sits
+        // outside CONSENSUS_CONFIG_PIN, so nothing would prove every node applies the same one.
+        let overlayIds = ProviderRegistry.overlayIds(this.config);
+        if(overlayIds.length > 0)
+            throw new Error('Refusing to start: config.ATTESTATION.PROVIDERS overlays ' + overlayIds.join(', ') +
+                ', and CONSENSUS_CONFIG_PIN does not cover that block. Ship provider changes in the' +
+                ' provider_registry.js DEFAULTS instead.');
 
         // Resolve the direct-hub-DB call barrier's grace now that NETWORK is known. Same
         // constant, same env override, same regtest-only rules as the mirrored path.

@@ -15,7 +15,7 @@ describe('ANCHOR bundle order activation', function () {
         assert.strictEqual(gateRegistry.activeAt(BUNDLE_ORDER_KEY, 'regtest', null, undefined, null), false);
     });
 
-    it('remains unarmed on public networks and rejects an unknown network', function () {
+    it('remains unarmed on mainnet and on the bare testnet entry and rejects an unknown network', function () {
         assert.strictEqual(gateRegistry.activeAt(BUNDLE_ORDER_KEY, 'mainnet', null, 70000000, null), false);
         assert.strictEqual(gateRegistry.activeAt(BUNDLE_ORDER_KEY, 'testnet', null, 70000000, null), false);
         assert.strictEqual(gateRegistry.activeAt(BUNDLE_ORDER_KEY, 'bogus', null, 70000000, null), false);

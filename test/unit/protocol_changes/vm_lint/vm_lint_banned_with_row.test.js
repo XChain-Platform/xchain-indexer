@@ -53,7 +53,7 @@ describe('protocol_changes VM lint banned-with row', function () {
         });
     });
 
-    it('is active on regtest at genesis and unarmed on every mainnet and testnet chain', function () {
+    it('is active on regtest at genesis, unarmed on every mainnet chain and armed on each testnet chain', function () {
         assert.strictEqual(registry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.strictEqual(registry.activeAt(KEY, 'mainnet', coin, UNARMED - 1, null), false, coin + ':mainnet');

@@ -9,10 +9,11 @@ const Actions = require('../../../src/actions/index.js');
 const Utility = require('../../../src/utility.js');
 const probeVm = require('../../../src/actions/vote/callback_probe_vm.js');
 
-function makeCtx(){
+function makeCtx(network){
     let calls = { latest: 0, begin: 0 };
     return {
         util: new Utility(),
+        config: { NETWORK: network || 'regtest', COIN: 'BTC' },
         indexerDb: {
             getLatestBlockIndex: async () => { calls.latest++; return 900; },
             getBlockTime:        async () => 1700000000,
@@ -54,7 +55,8 @@ describe('public VOTE binding dry-run refusal', () => {
         ['a signaling poll with no callback contract', { action: 'VOTE', params: voteParams('0', ''), guardInert: true }],
         ['a non-v0 VOTE', { action: 'VOTE', params: voteParams('2', '77'), guardInert: true }],
         ['another action', { action: 'SEND', params: voteParams('0', '77'), guardInert: true }],
-        ['a request that is not guard-inert', { action: 'VOTE', params: voteParams('0', '77') }]
+        ['a request that is not guard-inert', { action: 'VOTE', params: voteParams('0', '77') }],
+        ['a non-numeric callback contract', { action: 'VOTE', params: voteParams('0', 'abc'), guardInert: true }]
     ]){
         it('falls through to the real engine for ' + label, async () => {
             let ctx = makeCtx();
@@ -62,6 +64,23 @@ describe('public VOTE binding dry-run refusal', () => {
             assert.ok(ctx.calls.begin > 0, 'engine was not entered');
         });
     }
+
+    it('reads a quoted or decimal zero version as the same v0 create', async () => {
+        for(let version of ['"0"', '0.0']){
+            let ctx = makeCtx();
+            let out = await Actions.prototype.dryRunAction.call(ctx,
+                { action: 'VOTE', params: voteParams(version, '77'), source: 'src', guardInert: true });
+            assert.ok(out.status.includes('contract 77'), version + ' must take the early refusal');
+            assert.strictEqual(ctx.calls.begin, 0);
+        }
+    });
+
+    it('falls through to the real engine below the usable-method gate', async () => {
+        let ctx = makeCtx('mainnet');
+        await Actions.prototype.dryRunAction.call(ctx,
+            { action: 'VOTE', params: voteParams('0', '77'), source: 'src', guardInert: true }).catch(() => {});
+        assert.ok(ctx.calls.begin > 0, 'below the gate the handler gives a verdict, so it must run');
+    });
 
     it('builds the listing probe from the code alone so every callback method shares one probe text', () => {
         let a = probeVm.buildListingProbeCode('module.exports={a(){},b(){}};');

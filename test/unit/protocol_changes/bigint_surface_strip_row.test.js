@@ -49,7 +49,7 @@ function assertArmedOnEachTestnetChain(key) {
 }
 
 describe('protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1', function () {
-    it('registers a frozen per-chain height map that is unarmed on launched networks', function () {
+    it('registers a frozen per-chain height map that is unarmed on mainnet and armed on each testnet chain', function () {
         assert.strictEqual(ProtocolChanges.registry.unitOf(KEY), 'height');
         const row = ProtocolChanges.get(KEY);
         assert.deepStrictEqual(row, {

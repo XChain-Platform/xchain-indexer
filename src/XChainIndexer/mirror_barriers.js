@@ -14,12 +14,12 @@
  *
  * XChain Indexer - Mirror barriers
  *
- * The mirror sync barriers after the price pair, in block-loop order (cross-chain match,
- * call, bridge transfer, policy snapshot, list share, remote-token pin, direct-hub-DB call
- * presence, anchor-reward attestation, attestation response, capability snapshot), and the
- * two height-aware clear-instant helpers they report through. Each defers the block
- * (stallReason set, no transaction open) rather than process it against a mirror that has
- * not caught up.
+ * The mirror sync barriers after the three price-read members (see ./price_barriers.js), in
+ * block-loop order (cross-chain match, call, bridge transfer, policy snapshot, list share,
+ * remote-token pin, direct-hub-DB call presence, anchor-reward attestation, attestation
+ * response, capability snapshot), and the two height-aware clear-instant helpers they
+ * report through. Each defers the block (stallReason set, no transaction open) rather than
+ * process it against a mirror that has not caught up.
  * Installed onto XChainIndexer.prototype by ../XChainIndexer.js.
  *
  ********************************************************************/
@@ -38,14 +38,17 @@ module.exports = {
     // been RE-KEYED onto a height.
     //
     // Above the mirror-admission activation the answer is null, and that null is load-bearing
-    // rather than cosmetic. stallClearsAt exists to name the first instant a CLOCK-keyed
-    // barrier can open; a height-keyed one has no such instant, because nothing in its
-    // predicate moves with wall clock. Reporting `blockTime + grace` anyway would be a lie
+    // rather than cosmetic. stallClearsAt names the FIRST instant a barrier can open, and
+    // above the activation none exists: the height half reads no time and can open the
+    // barrier at any instant. The price-time, oracle, match and call callers still keep a
+    // stream escape at blockTime + grace once the hub has published a height for the table,
+    // but that escape is a later backstop, not a floor. Reporting it anyway would be a lie
     // with consequences: waitingOnFutureBlock() would answer 'future_block_wait' until that
     // instant, nextBarrierHold() would refuse to accumulate a hold, and the 900 s ceiling
-    // could never fire on the one barrier whose stall is now genuine mirror lag and IS
-    // remediable by a resync. Null is what turns this stall from "healthy, self-clearing" into
-    // "measurable, attributable and self-remedying", which is the whole point of the re-keying.
+    // could never fire on a stall whose failing height half makes it genuine mirror lag,
+    // which IS remediable by a resync. Null is what turns this stall from "healthy,
+    // self-clearing" into "measurable, attributable and self-remedying", which is the whole
+    // point of the re-keying.
     //
     // Keyed on B, the block being processed, exactly as the predicate is.
     barrierClearsAtHeightAware(blockTime, graceField, blockHeight){
@@ -63,7 +66,7 @@ module.exports = {
     // added to un-stall. The grace field is passed by NAME so barrierClearsAt stays the only
     // reader of a grace and the barrier-to-grace wiring scan still sees which one this is.
     anchorBarrierClearsAt(blockTime, horizonBound, blockHeight, graceField){
-        // Height-keyed above the activation: no clock instant exists, so null.
+        // Null above the activation: the height half opens it at any instant, so no first one.
         if(this.mirrorAdmissionActiveAt(blockHeight)) return null;
         blockTime = Number(blockTime);
         if(!Number.isFinite(blockTime)) return null;
@@ -159,9 +162,10 @@ module.exports = {
 
     // List-share sync barrier: wait until the hub's list_snapshots height watermark for this
     // chain covers the block, so every operator applies the same shared-list versions at it.
-    // Its activation gate is the readers' own (consumerActive in consensus/list_share_settle.js;
-    // the ladder holds the consumer height at or above mirror admission): below it no block
-    // reads the table, so a wait there would only stall replay. Gating is safe because the
+    // Its activation gate copies the reader's own, both clauses (consumerActive in
+    // consensus/list_share_settle.js), so the barrier waits exactly where a block reads the
+    // table. The admission clause is not redundant: regtest arms the consumer at 0 while mirror
+    // admission is env-armed. Change one gate, change the other. Gating is safe because the
     // barrier is a node-local wait, never hashed, so the gate moves no consensus value.
     async deferOnListShareSync(blockToParse, blockTime){
         if(!this.hubDbSync ||

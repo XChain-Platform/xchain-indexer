@@ -29,7 +29,7 @@ describe('list-share producer rules digest gate', function () {
         assert.notStrictEqual(gates[KEY], consensusRules.ABSENT);
     });
 
-    it('stays unarmed on mainnet and testnet and is active at regtest genesis', function () {
+    it('stays unarmed on mainnet, arms testnet at its height and is active at regtest genesis', function () {
         assert.strictEqual(gateRegistry.activeAt(KEY, 'mainnet', null, 9999999998, null), false);
         assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', null, 154776, null), false);
         assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', null, 154777, null), true);

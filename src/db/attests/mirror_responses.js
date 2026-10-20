@@ -154,11 +154,16 @@ module.exports = {
     // best effort (row_apply.js linkAppliedResponseToBatch skips a failed write), so never
     // alert on its NULLs: complete valid v5/v6 batches per window
     // (getCompleteAttestBatchesByWindowStart) prove a window reached the chain.
+    //
+    // Scoped to the VALID v1 row, the one the mirror applier writes: a request also keeps
+    // every rejected on-chain v1 under its id, and the batch never carried their bodies.
     async setAttestationResponseBatchIndex(requestId, batchActionIndex){
+        let validId = await this.getStatusId('valid');
+        if(validId === null) return;
         let query = `UPDATE attests
                      SET batch_action_index = ?
-                     WHERE request_id = ? AND version = 1`;
-        await this.doQuery(query, [batchActionIndex, String(requestId || '').toLowerCase()]);
+                     WHERE request_id = ? AND version = 1 AND status_id = ?`;
+        await this.doQuery(query, [batchActionIndex, String(requestId || '').toLowerCase(), validId]);
     },
 
 };

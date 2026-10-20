@@ -114,7 +114,9 @@ module.exports = {
     // True when this chain has no XCHAIN fee lane, so a protocol fee can ONLY be paid with a
     // native-coin output. Mirrors the runtime rule in utility.detectFeePaymentMode (BTC falls
     // back to an XCHAIN balance debit when no fee output is present; every other coin rejects).
-    // Message-shaping only: nothing consensus-bearing reads this.
+    // test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js fails when the two rules part.
+    // Quote side only (the pre-flight's default fee mode and refusal wording): nothing
+    // consensus-bearing reads this.
     nativeFeeMandatory(){
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
         if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') return false;

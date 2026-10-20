@@ -272,7 +272,7 @@ async function createDecoderSchema() {
         const files = fs.readdirSync(DECODER_SQL_DIR).filter(f => f.endsWith('.sql')).sort();
         for (const file of files) {
             // Strip `--` line comments (a ';' in comment prose must not split a statement),
-            // then run each statement. Mirrors xchain-decoder/src/db.js createTable().
+            // then run each statement. Mirrors xchain-decoder/src/db/table_drift.js:createTable.
             const sql = fs.readFileSync(path.join(DECODER_SQL_DIR, file), 'utf8')
                 .replace(/--[^\n]*/g, '');
             for (let stmt of sql.split(';')) {

@@ -12,12 +12,13 @@
  *
  **********************************************************************
  *
- * Flag-day gated collectors for the state-hash preimage: index-map delta,
- * VOTE poll finalization, tokens.supply refreshes and BET status flips. Each
- * is included ONLY at/after its per-chain activation height, so below it the
- * keys are omitted and the preimage is byte-identical to the pre-feature
- * shape (no fleet halt). The queries run after every ungated query so the
- * doQuery call order is unchanged when inert.
+ * Collectors for the state-hash preimage's late classes. The index-map delta
+ * has no gate and is always included. VOTE poll finalization, tokens.supply
+ * refreshes, BET status flips and the ATTEST batch head are flag-day gated:
+ * each is included ONLY at/after its per-chain activation height, so below it
+ * the keys are omitted and the preimage is byte-identical to the pre-feature
+ * shape (no fleet halt). The gated queries run after every ungated query so
+ * the doQuery call order is unchanged when inert.
  *
  ********************************************************************/
 

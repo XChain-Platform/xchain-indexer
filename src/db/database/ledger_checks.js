@@ -90,8 +90,9 @@ module.exports = {
         await this.createLedgerChangeRecord('escrows', action_index, tick, amount, address);
     },
 
-    // Get address balances using credits/debits table data
-    async getAddressBalances(address, tick, block_index, action_index){
+    // Get address balances using credits/debits table data.
+    // A whole-number tick_id returns that one token's balance; null or a ticker name returns every token.
+    async getAddressBalances(address, tick_id, block_index, action_index){
         let type       = typeof address;
         let address_id = null;
         if(type==='number' && this.util.isNumeric(address))
@@ -99,8 +100,8 @@ module.exports = {
         if(type==='string')
             address_id = await this.createAddress(address);
         let [credits, debits] = await Promise.all([
-            this.getAddressCreditDebit('credits', address_id, null, block_index, action_index),
-            this.getAddressCreditDebit('debits',  address_id, null, block_index, action_index)
+            this.getAddressCreditDebit('credits', address_id, null, block_index, action_index, tick_id),
+            this.getAddressCreditDebit('debits',  address_id, null, block_index, action_index, tick_id)
         ]);
         let balances = {}; // Object to store tick_id/balance
         // Build out balances (credits - debits).

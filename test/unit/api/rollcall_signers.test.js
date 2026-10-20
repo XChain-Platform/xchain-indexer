@@ -47,6 +47,12 @@ describe('rollcall signer request validation', function () {
         assert.deepStrictEqual(rollcallSignersRequest(
             CONFIG, { epoch_height: 1, max_block_time: 'later' }
         ), { error: 'invalid max_block_time' });
+        // parseInt would read each of these as a number
+        const ask = (epoch, maxT) => rollcallSignersRequest(CONFIG, { epoch_height: epoch, max_block_time: maxT });
+        for (const bad of ['960junk', '1.7e9', '0x10', [5], ' 7', 1.5, '-3', -3]) {
+            assert.deepStrictEqual(ask(bad, 10), { error: 'invalid epoch_height' }, JSON.stringify(bad));
+            assert.deepStrictEqual(ask(1, bad), { error: 'invalid max_block_time' }, JSON.stringify(bad));
+        }
     });
 
     it('rejects a key list above the read ceiling', function () {

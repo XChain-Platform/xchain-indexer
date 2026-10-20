@@ -71,6 +71,8 @@ addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION',
 // LIST format 1 edits must come from the list root's creator. Mainnet and regtest
 // start at genesis; testnet uses per-chain heights and keeps the fallback unarmed.
 addGate('list_owner_activation.LIST_OWNER_ACTIVATION', 'height', {
+    // ARMED at genesis by the 2026-10-07 ruling: identity on the indexed mainnet history
+    // (0 LIST actions on every chain, so no edit to re-verdict, measured 2026-09-09).
     mainnet: 0,
     'BTC:testnet': 155001,
     'LTC:testnet': 4906040,

@@ -109,7 +109,7 @@ function assertNoRematchQuery(db){
 describe('LIST change rematch activation @regression @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
-    it('is armed from genesis on regtest and unarmed on mainnet and every testnet', function () {
+    it('is armed from genesis on regtest, unarmed on mainnet and on the bare testnet entry, and armed on each testnet chain at its height', function () {
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'regtest', 'BTC', 0, null), true);
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'mainnet', 'BTC', 1_000_000_000, null), false);
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', null, 1_000_000_000, null), false);

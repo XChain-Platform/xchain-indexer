@@ -270,8 +270,9 @@ function preflightResult(actions, base, run, resolvedMode, feeTick){
     // Oracle usage fees this batch owes, per oracle address, summed over its Mode B
     // DISPENSER sub-commands. DISCLOSED, not judged: a probe carries no transaction and
     // therefore no oracle fee outputs, so the handler's own check (util.validateOracleFee)
-    // is unreachable here and dispenser.js answers from util.quoteOracleFee, which reads no
-    // output at all. That answer is OPTIMISTIC by construction and stays optimistic per
+    // is unreachable here and dispenser/validate_format.js chargeOracleUsageFee answers from
+    // util.quoteOracleFee, which reads no output at all. That answer is OPTIMISTIC by
+    // construction and stays optimistic per
     // sub-command - N DISPENSERs naming one oracle each quote the same single fee valid,
     // where the chain wants the output to cover all N. Rather than fake a verdict the probe
     // cannot compute, report the TOTAL owed per oracle so a composer can size the outputs.

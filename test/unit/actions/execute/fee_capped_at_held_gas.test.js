@@ -117,7 +117,7 @@ describe('EXECUTE fee cap gate: armed edges @regression @tier1', function(){
         assert.strictEqual((await debitFor({ [TICK_ID]: '0.02' }, { data: { SOURCE: 'caller', ACTION_INDEX: 5, BLOCK_INDEX: 4 } })).debit, '0.02');
     });
 
-    it('mainnet and testnet are unarmed', async function(){
+    it('inactive (mainnet unarmed, testnet below its armed height): the full metered fee is debited', async function(){
         process.env[ENV] = 'armed';
         for(const net of ['mainnet', 'testnet'])
             assert.strictEqual((await debitFor({ [TICK_ID]: '0.02' }, null, net)).debit, '10', net);

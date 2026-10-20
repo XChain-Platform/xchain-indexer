@@ -34,7 +34,7 @@ async function assertArmedOnTestnetOnly(name, row) {
 }
 
 describe('protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1', function () {
-    it('is unarmed on production networks and active from regtest genesis', async function () {
+    it('is unarmed on mainnet, armed on testnet at its instant and active from regtest genesis', async function () {
         const row = ProtocolChanges.get(KEY);
         await assertArmedOnTestnetOnly('STAKE_SNAPSHOT_DECIMAL_STRINGS', row);
         assert.strictEqual(ProtocolChanges.STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME, ProtocolChanges.UNARMED);

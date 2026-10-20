@@ -7,7 +7,7 @@ const KEY = 'vm_lint_syntax_depth_heights.VM_LINT_SYNTAX_DEPTH_ACTIVATION';
 const UNARMED = 9999999999;
 
 describe('protocol_changes VM lint syntax-depth row', function () {
-    it('registers the per-chain height map, unarmed on every public chain', function () {
+    it('registers the per-chain height map, unarmed on every mainnet chain and armed on each testnet chain', function () {
         assert.strictEqual(registry.registry.unitOf(KEY), 'height');
         assert.deepStrictEqual(registry.get(KEY), {
             'BTC:mainnet': UNARMED,

@@ -105,7 +105,7 @@ module.exports = {
         // across controlled legs (maybeRunControllerGuard reserves the ceiling against it).
         let gasTick      = this.config['GAS'];
         let gasInfo      = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
-        let gasBalances  = await this.indexerDb.getAddressBalances(data['SOURCE'], gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let gasBalances  = await this.indexerDb.getAddressBalances(data['SOURCE'], gasInfo ? gasInfo['TICK_ID'] : null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // SOURCE sleeping-state check is byte-identical for every leg (same SOURCE, same
         // BLOCK_INDEX, tick arg null), so run it once here instead of once per leg. Read-only,

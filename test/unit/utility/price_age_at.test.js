@@ -26,7 +26,7 @@ describe('price age at block', function(){
             assert.strictEqual(maxPriceAgeSecondsAt(config, 'regtest', chainKey, 0), 4500);
     });
 
-    it('selects the standard value for every unarmed testnet chain', function(){
+    it('selects the standard value for every testnet chain below its armed height', function(){
         for(const chainKey of ['BTC', 'LTC', 'DOGE'])
             assert.strictEqual(maxPriceAgeSecondsAt(config, 'testnet', chainKey, 1), 1800);
     });

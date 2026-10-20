@@ -24,6 +24,7 @@ const sinon  = require('sinon');
 
 const Actions = require('../../../src/actions/index.js');
 const Batch   = require('../../../src/actions/batch/index.js');
+const { readDryRunVerdict } = require('../../../src/actions/actions_class/dry_run_support.js');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
@@ -119,6 +120,34 @@ describe('BATCH pre-flight : a filling ORDER sub-command answers for itself @reg
         assert.deepStrictEqual(ctx._primaryVerdict, { status: 'valid', actionIndex: ctx._primaryVerdict.actionIndex },
             'off the probe path the first match is still captured once per transaction');
         assert.notStrictEqual(ctx._primaryVerdict.actionIndex, MATCH_INDEX);
-        assert.strictEqual(data['STATUS'], 'pending_coinpay', 'consensus dispatch is untouched');
+        assert.strictEqual(data['STATUS'], 'valid', 'the batch\'s own status is restored off the probe path too');
+    });
+});
+
+describe('BATCH dry-run read-back off the probe path @regression @tier1', function () {
+    beforeEach(makeCtx);
+    afterEach(function () { sinon.restore(); });
+
+    function emptyVerdict(){
+        return { status: null, feeRecord: null, subCommands: null, oracleFeesOwed: null };
+    }
+
+    it('answers for the BATCH when its last sub-command is invalid', async function () {
+        const data = createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE,
+            TX_DATA: 'BATCH|0|SEND|0|TEST|5|' + DEST });
+        await handler.parse(['0'], data, null);
+        const verdict = emptyVerdict();
+        await readDryRunVerdict(ctx, data, verdict);
+        assert.strictEqual(verdict.status, 'valid', 'a valid BATCH must not read as its last sub-command\'s rejection');
+        assert.strictEqual(verdict.feeWithheld, true);
+    });
+
+    it('ignores a filling sub-command\'s match capture', async function () {
+        const data = txData(false);
+        await handler.parse(['0'], data, null);
+        ctx._primaryVerdict = { status: 'invalid: from the ORDER', actionIndex: MATCH_INDEX };
+        const verdict = emptyVerdict();
+        await readDryRunVerdict(ctx, data, verdict);
+        assert.strictEqual(verdict.status, 'valid', 'the batch verdict must not be a sub-command\'s capture');
     });
 });

@@ -155,7 +155,7 @@ describe('protocol_changes/assembler: GAS_CEILING_SUCCESS row @regression @tier1
         assert.deepStrictEqual(table.GAS_CEILING_SUCCESS, ProtocolChanges.get(key));
     });
 
-    it('is unarmed on production networks and active from regtest genesis', async function () {
+    it('is unarmed on mainnet, armed on testnet at its instant and active from regtest genesis', async function () {
         const armed = ProtocolChanges.get(key).testnet_time;
         await assertArmedOnTestnetOnly('GAS_CEILING_SUCCESS', ProtocolChanges.get(key));
         assert.strictEqual(ProtocolChanges.GAS_CEILING_SUCCESS_MAINNET_TIME, ProtocolChanges.UNARMED);

@@ -34,7 +34,7 @@ const { MIGRATION_CHECKSUM_REBASELINES } = require('../migration/checksum_rebase
 // executable SQL is byte-identical across pinned revisions. A runner-side predicate keeps
 // both properties intact and covers every invocation route (startup, blanket
 // `node src/db/migration/migrate.js`, and a targeted `--file` rollout), since all three funnel through
-// this loop. Mirrors xchain-decoder/src/db.js.
+// this loop. Mirrors xchain-decoder/src/db/migration_preconditions.js:MIGRATION_PRECONDITIONS.
 const MIGRATION_PRECONDITIONS = {
     '2026-06-10-mirror-id-autoincrement-repair.sql': {
         sql: "SELECT TABLE_NAME AS name, COLUMN_TYPE AS type, EXTRA AS extra FROM information_schema.columns " +

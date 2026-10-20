@@ -23,6 +23,24 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
+const gateRegistry = require('../../consensus/gate_registry.js');
+const { prelaunchAdmits } = require('../../consensus/gates/mainnet_launch_gate.js');
+const { prelaunchInput } = require('../../XChainIndexer/block_admission.js');
+
+// The verdict for a transaction the mainnet launch gate refuses: the chain never processes it.
+const NOT_ADMITTED_BEFORE_LAUNCH = 'invalid: not admitted before mainnet launch ' +
+    '(only validator and seed-source transactions are indexed until then)';
+
+// True when the mainnet launch gate admits `tx`, read with the block loop's own inputs and gate
+// values (block_passes.js runOpeningPasses). Judged at `tx.block_time`, the tip for a dry-run, so
+// in the last block before launch it can refuse a transaction the next block would admit.
+function launchGateAdmits(actions, tx){
+    const network = actions.config['NETWORK'];
+    return prelaunchAdmits(prelaunchInput(tx, { network, coin: actions.config['COIN'], blockTime: tx.block_time }), {
+        launchTime:  gateRegistry.get('mainnet_launch_activation.MAINNET_LAUNCH_ACTIVATION')[network],
+        seedSources: gateRegistry.get('prelaunch_seed_sources.PRELAUNCH_SEED_SOURCES')
+    }) === true;
+}
 
 // The synthetic transaction a dry-run feeds processTransaction.
 // `rawData` (optional) is the caller's literal wire, used as-is in place of the rebuilt string.
@@ -108,8 +126,10 @@ function quietAbandonedRun(dryRunProcessing){
 async function readDryRunVerdict(actions, resultData, verdict){
     // Prefer the QUOTED action's own verdict over whatever the record holds now: a
     // follow-on matcher runs inside the handler and overwrites both fields with the
-    // match's (see processAction). Quoting an ORDER must answer for the ORDER.
-    let primary = actions._primaryVerdict;
+    // match's (see processAction). Quoting an ORDER must answer for the ORDER. A BATCH answers
+    // for itself: a capture there belongs to a filling sub-command, never to the batch.
+    let batched = !!resultData && Object.prototype.hasOwnProperty.call(resultData, 'BATCH_POSITION');
+    let primary = batched ? null : actions._primaryVerdict;
     verdict.status = primary
         ? primary.status
         : ((resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null);
@@ -121,7 +141,7 @@ async function readDryRunVerdict(actions, resultData, verdict){
     // A BATCH hands its record to each sub-command in turn (batch/index.js prepareSubCommand), so
     // ACTION_INDEX now names the LAST sub-command's row. The batch owes the sum its sub-commands
     // each staged, so no single row answers for it, and the figure is withheld rather than wrong.
-    if(resultData && Object.prototype.hasOwnProperty.call(resultData, 'BATCH_POSITION'))
+    if(batched)
         verdict.feeWithheld = true;
     else if(actionIndex !== null)
         verdict.feeRecord = await actions.indexerDb.getFeeRecord(actionIndex);
@@ -160,4 +180,5 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
     };
 }
 
-module.exports = { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome };
+module.exports = { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome,
+                   launchGateAdmits, NOT_ADMITTED_BEFORE_LAUNCH };
