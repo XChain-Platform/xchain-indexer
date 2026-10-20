@@ -31,6 +31,7 @@ module.exports = {
     // been skipped as unable to settle it.
     async resolvePaymentPool(data, obligationInfo){
         let pool = this.openBatchLedger(data);
+        pool.data = data;
         pool.payee = obligationInfo['PAYEE_ADDRESS'];
         if(!(await this.resolvePayeeOutput(data, pool)))
             return null;
@@ -185,7 +186,12 @@ module.exports = {
     // scalar for the row's own COIN_DESTINATION (unchanged, and still visible to
     // actions/dispense.js), or this payee's own cell otherwise.
     drawFromPool(pool, obligationInfo, status){
-        let { ledger, payee, settledOutput, payeeTally, consumed } = pool;
+        let { data, ledger, payee, settledOutput, payeeTally, consumed } = pool;
+        if(data && data['FEE_PROBE'] && status == 'valid' && data['PROBE_COIN_PAYMENTS_OWED']){
+            let owed = data['PROBE_COIN_PAYMENTS_OWED'][payee] || '0';
+            data['PROBE_COIN_PAYMENTS_OWED'][payee] = this.util.bcformat(
+                this.util.bcadd(owed, obligationInfo['COIN_AMOUNT'], 8), 8);
+        }
         if(ledger && status == 'valid'){
             let drawn = this.util.bcformat(this.util.bcadd(consumed, obligationInfo['COIN_AMOUNT'], 8), 8);
             if(settledOutput){

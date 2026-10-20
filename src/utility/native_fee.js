@@ -229,6 +229,9 @@ module.exports = {
         }
 
         let band = this.computeNativeFeeBand(xchainAmount, prices.xchainUsdPrice, prices.coinUsdPrice, toleranceMin, toleranceMax);
+        if(data['FEE_PROBE'] && Object.prototype.hasOwnProperty.call(data, 'PROBE_NATIVE_FEE_OWED'))
+            data['PROBE_NATIVE_FEE_OWED'] = this.bcformat(
+                this.bcadd(data['PROBE_NATIVE_FEE_OWED'], band.expectedNative, 8), 8);
         return drawNativeFeeOutput(this, ledger, available, paidAmount, band, prices, coin);
     }
 };

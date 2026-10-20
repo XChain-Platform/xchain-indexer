@@ -353,6 +353,15 @@ module.exports = {
                 ledger['coinAmountConsumed'] = this.util.bcformat(
                     this.util.bcadd(ledger['coinAmountConsumed'], cost, tallyScale), tallyScale);
             }
+            if(data['FEE_PROBE'] && data['PROBE_COIN_PAYMENTS_OWED'] &&
+               !error && !this.util.isNull(unitCoinCost) && multiplier > 0){
+                let cost = row.fiatFillPrice ? this.util.fiatFillCost(multiplier, row.fiatFillPrice, tallyScale)
+                                             : this.util.bcmul(multiplier, unitCoinCost, tallyScale);
+                let destination = data['COIN_DESTINATION'];
+                let owed = data['PROBE_COIN_PAYMENTS_OWED'][destination] || '0';
+                data['PROBE_COIN_PAYMENTS_OWED'][destination] = this.util.bcformat(
+                    this.util.bcadd(owed, cost, tallyScale), tallyScale);
+            }
 
         row.attributedCost = attributedCost;
     },

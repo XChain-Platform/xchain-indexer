@@ -83,7 +83,8 @@ async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestin
     // Probe-only disclosures the BATCH pre-flight collects on `data` (batch.js seeds them
     // before its baseKeys snapshot, so the per-sub-command field clear preserves them).
     // Both stay null for every other action and for every decoded transaction.
-    let verdict = { status: null, feeRecord: null, subCommands: null, oracleFeesOwed: null };
+    let verdict = { status: null, feeRecord: null, subCommands: null, oracleFeesOwed: null,
+                    nativeFeeOwed: null, coinPaymentsOwed: null };
     // beginTransaction acquires the db transaction mutex (serializes against block processing
     // and reorgs); the finally guarantees rollback + lock release even on a handler throw.
     // Outside the try on purpose: a TX_LOCK_BUSY give-up opened no transaction, so it must
