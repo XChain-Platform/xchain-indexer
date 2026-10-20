@@ -67,16 +67,18 @@ const {
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
 
-// A set non-negative integer arms the row, including 0 (active from genesis); unset, empty or
-// non-numeric stays UNARMED.
+// Unset or empty arms the row from genesis, matching the decoder's regtest 0 for its exact
+// integer EXPIRATION gate; a set non-negative integer arms it at that time; any other value
+// (off, for a venue that runs it inert) stays UNARMED.
 function exactIntegerWireRegtestTime() {
     const raw = String(process.env.EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME === undefined ? '' :
         process.env.EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME).trim();
+    if (raw === '') return 0;
     return /^\d+$/.test(raw) ? parseInt(raw, 10) : UNARMED;
 }
 
 const CHANGES = [
-    // EXACT_INTEGER_WIRE_FIELDS: regtest stays unarmed unless a venue sets
+    // EXACT_INTEGER_WIRE_FIELDS: regtest is genesis-active unless a venue sets
     // EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME.
     ['EXACT_INTEGER_WIRE_FIELDS', '0.2.0', EXACT_INTEGER_WIRE_FIELDS_MAINNET_TIME, EXACT_INTEGER_WIRE_FIELDS_TESTNET_TIME,
         exactIntegerWireRegtestTime, 0, 0, 0],

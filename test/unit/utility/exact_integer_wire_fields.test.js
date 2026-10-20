@@ -52,10 +52,17 @@ describe('exact integer wire fields @regression @tier1', function(){
             assert.strictEqual(valueChecks.isExactInteger(value), false, String(value));
     });
 
-    it('registers the protocol change armed on testnet at a cut instant and unarmed on mainnet and regtest', async function(){
-        const row = ProtocolChanges.get('protocol_changes.changes.EXACT_INTEGER_WIRE_FIELDS');
+    it('registers the protocol change armed on testnet at a cut instant, unarmed on mainnet and genesis-active on regtest', async function(){
+        const saved = process.env.EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME;
+        delete process.env.EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME;
+        let row;
+        try {
+            row = ProtocolChanges.get('protocol_changes.changes.EXACT_INTEGER_WIRE_FIELDS');
+        } finally {
+            if (saved !== undefined) process.env.EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME = saved;
+        }
         assert.strictEqual(row.mainnet_time, ProtocolChanges.UNARMED);
-        assert.strictEqual(row.regtest_time, ProtocolChanges.UNARMED);
+        assert.strictEqual(row.regtest_time, 0);
         // The armed instant is read from the registry so the next cut moves it without a test edit.
         const armed = row.testnet_time;
         assert.ok(Number.isSafeInteger(armed) && armed > 1 && armed < ProtocolChanges.UNARMED, String(armed));
