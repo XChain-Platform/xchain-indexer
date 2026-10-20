@@ -13,10 +13,17 @@
 const assert = require('assert');
 const { mintProvenRow } = require('../../../src/consensus/anchor_reward_derive/mint_row.js');
 const CHANGES = require('../../../src/protocol_changes/changes_5.js');
+const LEGACY_PINS = require('../../../src/consensus/anchor_reward_derive/legacy_reward_pins.json');
 
 const ROW = { reward_type: 'anchor_bundle', round_reference: 10, snapshot_block: 10,
     publisher: 'AB', doge_anchor_txid: 'tx1', network: 'testnet' };
 const PINS = [{ reward_type: 'anchor_bundle', round_reference: 10, snapshot_block: 10, publisher: 'ab', txid: 'tx1' }];
+const TESTNET_HISTORY_READING_2026_10_20 = Object.freeze({
+    attestation_count: 64,
+    latest_attestation_time: 1792400035,
+    latest_snapshot_block: 157002,
+    legacy_reward_ids: [4, 5, 6],
+});
 
 function db(){
     let calls = [];
@@ -25,7 +32,7 @@ function db(){
 const proof = { proveMined: async () => 'verified' };
 
 describe('LEGACY_ANCHOR_REWARD_PIN', function(){
-    it('is declared unarmed on mainnet and regtest and armed on testnet at the v0.25.0 instant', function(){
+    it('is unarmed on mainnet and regtest and armed after the recorded testnet history', function(){
         let row = CHANGES.find((c) => c[0] === 'LEGACY_ANCHOR_REWARD_PIN');
         assert.ok(row);
         let { UNARMED } = require('../../../src/protocol_changes/core.js');
@@ -33,6 +40,12 @@ describe('LEGACY_ANCHOR_REWARD_PIN', function(){
         assert.strictEqual(row.length, 8);
         assert.strictEqual(row[2], UNARMED);
         assert.strictEqual(row[3], 1792454400);
+        assert.strictEqual(new Date(row[3] * 1000).toISOString(), '2026-10-20T00:00:00.000Z');
+        assert.ok(TESTNET_HISTORY_READING_2026_10_20.latest_attestation_time < row[3]);
+        assert.strictEqual(TESTNET_HISTORY_READING_2026_10_20.attestation_count, 64);
+        assert.strictEqual(TESTNET_HISTORY_READING_2026_10_20.latest_snapshot_block, 157002);
+        assert.deepStrictEqual(LEGACY_PINS.map((pin) => pin.minted_on_testnet_btc.validator_reward_id),
+            TESTNET_HISTORY_READING_2026_10_20.legacy_reward_ids);
         assert.strictEqual(row[4], UNARMED);
         assert.deepStrictEqual(row.slice(5), [0, 0, 0]);
     });
