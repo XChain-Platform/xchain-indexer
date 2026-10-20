@@ -95,7 +95,7 @@ describe('getContractStakeDataForVM() slash-window cap @regression @tier1', func
         assert.strictEqual(String(snap.stakeByPubkeyTick['aa|XCHAIN']), '100');
     });
 
-    it('unarmed (testnet and mainnet ship inert): legacy snapshot', async function () {
+    it('inactive (mainnet unarmed, testnet below its armed instant): legacy snapshot', async function () {
         for (const net of ['testnet', 'mainnet']) {
             const active = await slashWindowActive(net, 1000);
             assert.strictEqual(active, false, net);

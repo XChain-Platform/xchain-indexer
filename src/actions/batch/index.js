@@ -111,11 +111,10 @@ async function parse(params, data, error){
         await dispatchSubCommands.call(this, commands, data, error, gates.normalize, isProbe);
     }
 
-    // Probe only: the dispatch loop leaves data['STATUS'] holding the LAST sub-command's
-    // verdict, so restore the BATCH's own. Without this the pre-flight would answer for
-    // whichever command happened to come last - which reads as a verdict on the batch and
-    // is not one. Per-sub-command verdicts are reported separately in PROBE_SUB_VERDICTS.
-    if(data['FEE_PROBE'] === true) data['STATUS'] = status;
+    // Restore the BATCH's own verdict, which the dispatch loop overwrote with the LAST
+    // sub-command's. Every dry-run reads it back, probe or not; on a block it reaches only the
+    // action counter (rows are already written). Probe sub-verdicts sit in PROBE_SUB_VERDICTS.
+    data['STATUS'] = status;
 }
 
 // Pre-parse all sibling commands so child handlers can inspect them
@@ -193,8 +192,8 @@ async function dispatchSubCommands(commands, data, error, normalize, isProbe){
         //
         // Placed HERE, immediately above the dispatch, on the SAME `action` variable
         // processAction receives - after the uppercase and after normalizeSubAction's
-        // alias rewrite. A pre-scan of the wire string (actions/index.js
-        // _batchProbeForbiddenSubAction) refuses the batch earlier and more cheaply,
+        // alias rewrite. A pre-scan of the wire string (actions_class/quote_surfaces.js
+        // batchProbeForbiddenSubAction) refuses the batch earlier and more cheaply,
         // but only this one is impossible to spell around, because there is no further
         // transformation between the check and the call.
         if(isProbe && this.actions.isBatchProbeForbiddenSubAction(action)){
@@ -213,11 +212,20 @@ async function dispatchSubCommands(commands, data, error, normalize, isProbe){
         // status. STATUS is a base key, so the field clear above never touches it.
         if(isProbe) delete data['STATUS'];
 
+        // Probe only: give this sub-command its own match snapshot. processAction keeps only the
+        // first ORDER_MATCH/SWAP_MATCH capture per transaction, so a filling ORDER read as its
+        // match's pending_coinpay and the batch answered with that ORDER's verdict and fee.
+        let outerPrimary = isProbe ? this.actions._primaryVerdict : null;
+        if(isProbe) this.actions._primaryVerdict = null;
+
         // Process the specific ACTION commands
         await this.actions.processAction(action, params, data, error);
 
-        if(isProbe)
-            probe.recordSubVerdict.call(this, data, action, batchPosition);
+        if(isProbe){
+            probe.recordSubVerdict.call(this, data, action, batchPosition, this.actions._primaryVerdict);
+            // Restore, so no sub-command's snapshot is left to answer for the batch itself.
+            this.actions._primaryVerdict = outerPrimary;
+        }
     }
 }
 

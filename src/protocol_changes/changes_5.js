@@ -67,16 +67,18 @@ const {
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
 
-// A set non-negative integer arms the row, including 0 (active from genesis); unset, empty or
-// non-numeric stays UNARMED.
+// Unset or empty arms the row from genesis, matching the decoder's regtest 0 for its exact
+// integer EXPIRATION gate; a set non-negative integer arms it at that time; any other value
+// (off, for a venue that runs it inert) stays UNARMED.
 function exactIntegerWireRegtestTime() {
     const raw = String(process.env.EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME === undefined ? '' :
         process.env.EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME).trim();
+    if (raw === '') return 0;
     return /^\d+$/.test(raw) ? parseInt(raw, 10) : UNARMED;
 }
 
 const CHANGES = [
-    // EXACT_INTEGER_WIRE_FIELDS: regtest stays unarmed unless a venue sets
+    // EXACT_INTEGER_WIRE_FIELDS: regtest is genesis-active unless a venue sets
     // EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME.
     ['EXACT_INTEGER_WIRE_FIELDS', '0.2.0', EXACT_INTEGER_WIRE_FIELDS_MAINNET_TIME, EXACT_INTEGER_WIRE_FIELDS_TESTNET_TIME,
         exactIntegerWireRegtestTime, 0, 0, 0],
@@ -146,7 +148,8 @@ const CHANGES = [
     ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', UNARMED,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 0, 0, 0, 0],
     // EMISSION_DEPTH_EXECUTE_ONLY: only an EXECUTE emission stamps the incremented CALL_DEPTH;
-    // other emissions keep the emitter's depth. Unarmed on every network until a release cut pins an instant.
+    // other emissions keep the emitter's depth. Unarmed on mainnet and regtest; testnet is armed
+    // at the instant in its row (2026-10-18T06:00Z, the v0.24.0 cut).
     ['EMISSION_DEPTH_EXECUTE_ONLY', '0.2.0', UNARMED, 1792303200, UNARMED, 0, 0, 0],
     ['STAKE_SNAPSHOT_DECIMAL_STRINGS','0.2.0', STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME,
         STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME, 0, 0, 0, 0],
@@ -154,18 +157,22 @@ const CHANGES = [
     // ARCHIVE_REPLAY_WRAPPER_WATERMARK: the archive replay guard's checkpoint watermark also
     // reads the wrapper chain row of each v3 archive (db/anchors getArchiveReplayWatermarks).
     // A v3 archive head row carries no checkpoint_seq, so below the flag the watermark only
-    // ever sees v1 heads. Judged by the block that carries the ANCHOR. Unarmed on every network.
+    // ever sees v1 heads. Judged by the block that carries the ANCHOR. Unarmed on mainnet and
+    // regtest; testnet is armed at the instant in its row (2026-10-18T06:00Z, the v0.24.0 cut).
     ['ARCHIVE_REPLAY_WRAPPER_WATERMARK', '0.2.0', UNARMED, 1792303200, UNARMED, 0, 0, 0],
 
     // LEGACY_ANCHOR_REWARD_PIN: below the flag the anchor reward mint ignores the legacy
     // pin list. At or above it, a reward tuple pinned in legacy_reward_pins.json is not
-    // minted again. Judged by the BTC block that derives the reward. Unarmed on every network.
-    ['LEGACY_ANCHOR_REWARD_PIN', '0.2.0', UNARMED, 1792303200, UNARMED, 0, 0, 0],
+    // minted again. Judged by the BTC block that derives the reward. A 2026-10-20 testnet
+    // history reading found 64 attestations, latest at 1792400035, and the three pinned
+    // rewards unchanged at ids 4, 5 and 6. The wired rule starts after that history.
+    ['LEGACY_ANCHOR_REWARD_PIN', '0.2.0', UNARMED, 1792454400, UNARMED, 0, 0, 0],
 
     // GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS: the controller-guard stake snapshot
     // (actions/execute/controller_guard.js) hands the VM decimal strings, as the primary
-    // EXECUTE path does under STAKE_SNAPSHOT_DECIMAL_STRINGS. Unarmed on mainnet and
-    // testnet; regtest is inert unless a venue sets GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME.
+    // EXECUTE path does under STAKE_SNAPSHOT_DECIMAL_STRINGS. Mainnet is unarmed, testnet is
+    // armed at the instant in its row, and regtest is inert unless a venue sets
+    // GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME.
     ['GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS', '0.2.0', UNARMED, 1792303200,
         () => regtestTimeOverride('GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME')() || UNARMED, 0, 0, 0],
 
@@ -173,20 +180,23 @@ const CHANGES = [
     // instant on, an emission refused at the emission cap is not charged its reservation, prepay or
     // request fee, a value that contains itself throws a catchable TypeError instead of faulting
     // out_of_stack at the gas ceiling, and a host-call argument may nest as deep as a plain
-    // JSON.stringify of it. Unarmed on mainnet and testnet; regtest is active from genesis.
+    // JSON.stringify of it. Unarmed on mainnet; testnet is armed at HOST_CALL_BOUNDS_TESTNET_TIME
+    // (2026-10-18T06:00Z, the v0.24.0 cut); regtest is active from genesis.
     ['HOST_CALL_BOUNDS', '0.2.0', HOST_CALL_BOUNDS_MAINNET_TIME,
         HOST_CALL_BOUNDS_TESTNET_TIME, 0, 0, 0, 0],
 
     // PER_ELEMENT_METER: mirrors xchain-vm PER_ELEMENT_METER_ACTIVATION, judged by block time. From
     // the instant on, iterator-helper callbacks and yielded values, set algebra with a set-like
     // argument, String.raw segments and every key an object spread or rest copies are charged
-    // per element. Unarmed on mainnet and testnet; regtest is active from genesis.
+    // per element. Unarmed on mainnet; testnet is armed at PER_ELEMENT_METER_TESTNET_TIME
+    // (2026-10-18T06:00Z, the v0.24.0 cut); regtest is active from genesis.
     ['PER_ELEMENT_METER', '0.2.0', PER_ELEMENT_METER_MAINNET_TIME,
         PER_ELEMENT_METER_TESTNET_TIME, 0, 0, 0, 0],
 
     // STRING_RECEIVER_METER: mirrors xchain-vm STRING_RECEIVER_METER_ACTIVATION, judged by
-    // block time. The corrected String receiver and alias metering stays unarmed on mainnet
-    // and testnet; regtest is active from genesis.
+    // block time. The corrected String receiver and alias metering stays unarmed on mainnet,
+    // is armed on testnet at STRING_RECEIVER_METER_TESTNET_TIME (2026-10-20T00:00Z, the v0.25.0
+    // cut), and is active from genesis on regtest.
     ['STRING_RECEIVER_METER', '0.2.0', STRING_RECEIVER_METER_MAINNET_TIME,
         STRING_RECEIVER_METER_TESTNET_TIME, 0, 0, 0, 0],
 
@@ -194,8 +204,9 @@ const CHANGES = [
     // array its injector built, so a '|' inside a provider response, a callee return value or a
     // callback param stays inside its own argument. Below the flag the arguments are joined on
     // '|' and split again before the VM, which is how they ran before. Judged by the block that
-    // injects the callback. Unarmed on mainnet and testnet; genesis-active on regtest unless a
-    // venue sets CALLBACK_ARGS_EXACT_REGTEST_TIME.
+    // injects the callback. Unarmed on mainnet, armed on testnet at the instant in its row
+    // (2026-10-18T06:00Z, the v0.24.0 cut), and genesis-active on regtest unless a venue sets
+    // CALLBACK_ARGS_EXACT_REGTEST_TIME.
     ['CALLBACK_ARGS_EXACT', '0.2.0', UNARMED, 1792303200,
         regtestTimeOverride('CALLBACK_ARGS_EXACT_REGTEST_TIME'), 0, 0, 0],
 

@@ -113,12 +113,16 @@ function installCostWeights(){
 // than the spec's original '1 + recipients', and the reason is that the exact recipient
 // count is not knowable here at any acceptable price:
 //
-//   - it is not on the wire. AIRDROP carries a LIST_ACTION_INDEX, not a list, and
-//     DIVIDEND carries only a TICK whose holders are the recipients;
-//   - the number that matters is the FILTERED count, not the raw one. airdrop.js
-//     resolves the list and then filters it through the token's ALLOW_LIST and
-//     BLOCK_LIST; dividend.js fetches every holder, filters the same two ways, and then
-//     drops holders whose share rounds to zero at the dividend token's decimals;
+//   - it is not on the wire. AIRDROP carries LIST_ACTION_INDEXes (one shared by every
+//     leg in FORMATs 0 and 1, one per leg in FORMATs 2 and 3), never the lists
+//     themselves, and DIVIDEND carries only a TICK whose holders are the recipients;
+//   - the number that matters is the FILTERED count, not the raw one. AIRDROP
+//     resolves the list (expandAirdropRecipients, airdrop/recipients.js), filters it
+//     through the token's ALLOW_LIST and BLOCK_LIST (approveAirdropRecipients, same
+//     file), and only then prices each recipient (priceAirdropLeg, airdrop/fees.js);
+//     DIVIDEND fetches every holder (loadDividendContext, dividend/index.js), filters
+//     the same two ways, and then drops holders whose share rounds to zero at the
+//     dividend token's decimals (buildDividendRecipients, same file);
 //   - so an exact count means re-running each handler's own resolution inside this
 //     pre-check. That duplicates consensus logic into a second place it can drift from,
 //     and it performs precisely the O(commands x recipients) work the budget exists to
@@ -132,6 +136,17 @@ function installCostWeights(){
 // reversed from a limit, so LOWERING one later is a loosening and cheap, while RAISING
 // one later is a tightening that risks forking a replay. 25 admits 10 fan-out
 // sub-commands per batch. Retune it before the mainnet instant is armed, never after.
+// That instant sits at genesis (0) on every network only because mainnet has carried no
+// BATCH (flag_times_batch_fees.js records the evidence, and that a replay divergence moves
+// it back to a future instant); mainnet admits general traffic only from
+// MAINNET_LAUNCH_ACTIVATION (gates_5.js).
+//
+// The weight is charged per SUB-COMMAND, not per leg or recipient. AIRDROP FORMATs 1 to 3
+// carry many legs, and each leg expands and pays out its list on its own (FORMAT 1 reuses
+// one list for every leg, FORMATs 2 and 3 name a list per leg), so 10 sub-commands can mean
+// far more than 10 list expansions. The leg count IS on the wire (readAirdropLegs,
+// airdrop/legs.js) even though the recipient count is not, and an AIRDROP sent outside a
+// BATCH is not weighed by this budget at all.
 function installFanOutWeights(){
     this.commandWeights['AIRDROP']  = 25;
     this.commandWeights['DIVIDEND'] = 25;

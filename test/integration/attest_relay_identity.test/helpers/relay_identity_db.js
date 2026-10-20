@@ -21,11 +21,8 @@
  * suites need a real engine rather than a stub is written down once, in the
  * first of them.
  *
- * Each suite is several consecutive describe blocks with one shared title, so
- * every block registers the same hooks through useRelayIdentityDb(). The schema
- * is built once per database name per run, which is what the single before()
- * of the one-file suite did; each block then opens its own pool and closes it.
- * Each suite passes its own database name, so no two files share a schema.
+ * Each useRelayIdentityDb registration owns a schema. Fault and migration cases
+ * mutate table and index state, so describe blocks must not share that state.
  *
  * The requiring suite sets INDEXER_COIN and INDEXER_NETWORK before it requires
  * this file, because src/db reads them at load.
@@ -54,6 +51,8 @@ const SQL_DIR = path.join(__dirname, '../../../../src/sql');
 // errno 1064 on the first line.
 const stripSqlLineComments = Database.prototype.stripSqlLineComments;
 const ATTESTS_SQL = stripSqlLineComments(fs.readFileSync(path.join(SQL_DIR, 'attests.sql'), 'utf8'));
+// The one table getAttestationRequestById LEFT JOINs, from its production DDL.
+const INDEX_ADDRESSES_SQL = stripSqlLineComments(fs.readFileSync(path.join(SQL_DIR, 'index_addresses.sql'), 'utf8'));
 
 const ORIGIN = 'LTC';
 const OTHER  = 'DOGE';
@@ -84,22 +83,18 @@ async function buildSchema(name) {
         host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
     await admin.query('DROP DATABASE IF EXISTS ' + name + '; CREATE DATABASE ' + name + ';');
     await admin.query('USE ' + name + '; ' + ATTESTS_SQL);
-    // A stand-in for the one table getAttestationRequestById LEFT JOINs. The
-    // request_id comparison case needs the SHARED lookup to actually run against
-    // this schema, and without the join target its query is a 1146 that doQuery
-    // swallows into [] - which would make the shared lookup look like it excludes
-    // rejected rows when it does not. Columns are only what the join reads.
-    await admin.query('USE ' + name +
-        '; CREATE TABLE IF NOT EXISTS index_addresses (' +
-        ' id BIGINT UNSIGNED NOT NULL PRIMARY KEY, address VARCHAR(128) NULL)');
+    // getAttestationRequestById LEFT JOINs index_addresses. Without that table its query is a
+    // 1146 that doQuery swallows into [], which would make the shared lookup look like it
+    // excludes rejected rows when it does not.
+    await admin.query('USE ' + name + '; ' + INDEX_ADDRESSES_SQL);
     await admin.end();
 }
 
-// One schema build per database name per run, shared by the sibling blocks.
-const schemas = new Map();
-function ensureSchema(name) {
-    if (!schemas.has(name)) schemas.set(name, buildSchema(name));
-    return schemas.get(name);
+const schemaCounts = new Map();
+function nextSchemaName(name) {
+    const count = (schemaCounts.get(name) || 0) + 1;
+    schemaCounts.set(name, count);
+    return count === 1 ? name : name + '_' + count;
 }
 
 /**
@@ -108,12 +103,13 @@ function ensureSchema(name) {
  * lends a pooled connection, and `row` writes one attests row.
  */
 function useRelayIdentityDb(name) {
+    const schemaName = nextSchemaName(name);
     const fx = { db: null, conn, row };
 
     before(async function () {
         if (!DB_PASS) this.skip();
-        await ensureSchema(name);
-        fx.db = makeDb(name);
+        await buildSchema(schemaName);
+        fx.db = makeDb(schemaName);
     });
 
     after(async function () {

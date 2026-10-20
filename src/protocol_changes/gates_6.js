@@ -25,7 +25,7 @@
 const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 
 // reassemble_chunk_parent_status_activation
-// Height on the completing continuation chunk's DOGE block_index. From it chunk-side archive reassembly runs only when its parent head has the same valid or gated-unverified status the head-side path admits. Below it the continuation's own status remains the only status guard. Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION (shared_rows.js).
+// Height on the completing continuation chunk's DOGE block_index. From it chunk-side archive reassembly runs only when its parent head has the same valid or gated-unverified status the head-side path admits. Below it the continuation's own status remains the only status guard. Unarmed on mainnet, armed on testnet at the row's heights. The regtest entry is UNPINNED: a venue arms it with XC_REASSEMBLE_CHUNK_PARENT_STATUS_REGTEST_ACTIVATION (shared_rows.js).
 addGate('reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATUS_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 157073,
@@ -36,7 +36,7 @@ addGate('reassemble_chunk_parent_status_activation.REASSEMBLE_CHUNK_PARENT_STATU
 });
 
 // unstake_delegated_row_journal_activation
-// Height on the processing chain's own block_index. From it a contract UNSTAKE under a delegated key journals its rows so a delegation revert restores the original key. Unarmed live; regtest arms by XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION (shared_rows.js).
+// Height on the processing chain's own block_index. From it a contract UNSTAKE under a delegated key journals its rows so a delegation revert restores the original key. Unarmed on mainnet, armed on testnet per chain at the row's heights with the bare testnet entry UNARMED, and on regtest armed by XC_UNSTAKE_DELEGATED_ROW_JOURNAL_REGTEST_ACTIVATION (shared_rows.js).
 addGate('unstake_delegated_row_journal_activation.UNSTAKE_DELEGATED_ROW_JOURNAL_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 157073,
@@ -47,7 +47,7 @@ addGate('unstake_delegated_row_journal_activation.UNSTAKE_DELEGATED_ROW_JOURNAL_
 });
 
 // anchor_checkpoint_seq_bind_activation
-// From its ANCHOR DOGE height each sequence equals its canonical safe-integer snapshot block. Unarmed live.
+// From its ANCHOR DOGE height each sequence equals its canonical safe-integer snapshot block. Unarmed on mainnet, armed on testnet per chain at the row's heights with the bare testnet entry UNARMED, and on regtest armed by XC_ANCHOR_CHECKPOINT_SEQ_BIND_REGTEST_ACTIVATION (shared_rows.js).
 addGate('anchor_checkpoint_seq_bind_activation.ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 157073,
@@ -58,7 +58,7 @@ addGate('anchor_checkpoint_seq_bind_activation.ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVA
 });
 
 // active_stake_collation_activation
-// Height on the reading chain's own block_index. From it validator-set reads pin the binary collation. Below it they use the legacy collation. Unarmed on mainnet and testnet; regtest is active from genesis with no venue arming overlay.
+// Height on the reading chain's own block_index. From it validator-set reads pin the binary collation. Below it they use the legacy collation. Unarmed on mainnet, armed on testnet per chain at the row's heights, and active from genesis on regtest with no venue arming overlay.
 addGate('active_stake_collation_activation.ACTIVE_STAKE_COLLATION_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 157073,
@@ -79,7 +79,7 @@ addGate('attest_callback_batch_position_activation.ATTEST_CALLBACK_BATCH_POSITIO
 });
 
 // airdrop_native_fee_tally_activation
-// Height on the processing chain's own block_index. From it a non-BATCH multi-leg AIRDROP pays native fees from one action tally, and a fee probe quotes the summed fee without drawing it. Below it each leg reads the output independently. Unarmed on mainnet and testnet; regtest from genesis.
+// Height on the processing chain's own block_index. From it a non-BATCH multi-leg AIRDROP pays native fees from one action tally, and a fee probe quotes the summed fee without drawing it. Below it each leg reads the output independently. Unarmed on mainnet, armed on testnet per chain at the row's heights, and active from genesis on regtest.
 addGate('airdrop_native_fee_tally_activation.AIRDROP_NATIVE_FEE_TALLY_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 157073,
@@ -90,9 +90,24 @@ addGate('airdrop_native_fee_tally_activation.AIRDROP_NATIVE_FEE_TALLY_ACTIVATION
 });
 
 // capability_snapshot_proof_activation
-// Height on the mirrored row's BTC snapshot_block. From it mirror-resolved capability rows require a checkpoint proof. Below it they apply as before. Deferred for the v0.25.0 train on every network, regtest included, after three release matrices held the first mirror-resolved row on regtest.
+// Height on the mirrored row's BTC snapshot_block. From it mirror-resolved capability rows require a checkpoint proof. Below it they apply as before.
 addGate('capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION', 'height', {
     mainnet: UNARMED,
     testnet: UNARMED,
-    regtest: UNARMED,
+    regtest: 0,
+});
+
+// bridge_escrow_anchor_match_activation
+// Height on the settling (destination) chain's own block_index. From it the escrow cross-check
+// selects and binds a DOGE- or LTC-origin checkpoint by its BTC snapshot_block, the axis the
+// transfer row's snapshot_block lives on, instead of comparing that BTC height to the origin
+// chain's block_index. BTC-origin selection is unchanged at every height. Must be armed on a
+// network at or before TOKEN_BRIDGE_ACTIVATION there, or no DOGE- or LTC-origin lock settles.
+addGate('bridge_escrow_anchor_match_activation.BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 157235,
+    'LTC:testnet': 4930600,
+    'DOGE:testnet': 68012800,
+    testnet: UNARMED,
+    regtest: 0,
 });

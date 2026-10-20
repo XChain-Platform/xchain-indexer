@@ -71,15 +71,15 @@ function buildActionData(tx, action, format, coin, isGenesis){
     data['SOURCE_PUBKEY']    = tx.source_pubkey; // Public key for the source address
     data['TX_OUTPUTS']       = tx.tx_outputs || []; // Full native-coin output set (fee detection)
     data['IS_GENESIS']       = isGenesis === true;  // synthetic genesis bootstrap action (genesis.js)
-    // Guard-inert marker for the public feequote dry-run: when set, a controller guard
-    // refuses at the invokeController chokepoint instead of entering the VM (utility.js),
-    // so the unauthenticated feequote endpoint cannot run caller-influenced contract code
-    // while holding the block-loop mutex. Sourced from tx.guard_inert, which only
-    // computeFeeQuote's synthetic tx carries; ALWAYS false for real decoded transactions.
+    // Guard-inert marker for the public feequote and preflight dry-runs: when set, a controller
+    // guard refuses at the invokeController chokepoint instead of entering the VM (utility.js),
+    // so neither unauthenticated endpoint can run caller-influenced contract code while
+    // holding the block-loop mutex. Sourced from tx.guard_inert, which only the synthetic tx of
+    // computeFeeQuote and computePreflight carries; ALWAYS false for real decoded transactions.
     data['GUARD_INERT']      = tx.guard_inert === true;
-    // Read-only dry-run marker for output-matching fee checks (see dryRunAction's
-    // fee_probe). Sourced from tx.fee_probe, which only the public feequote/preflight
-    // synthetic tx carries; ALWAYS false for real decoded transactions.
+    // Read-only dry-run marker for output-matching fee checks (see fee_probe in
+    // dry_run_support.js syntheticDryRunTx). Sourced from tx.fee_probe, which only the public
+    // feequote/preflight synthetic tx carries; ALWAYS false for real decoded transactions.
     data['FEE_PROBE']        = tx.fee_probe === true;
 
     // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS).
@@ -87,8 +87,8 @@ function buildActionData(tx, action, format, coin, isGenesis){
     // a VM emission's own data object is built fresh per emission (execute.js
     // processEmission) and a BATCH sub-command's is cleared down to `baseKeys` between
     // commands, so a counter living in either would reset exactly where the abuse
-    // accumulates. Being present before batch.js takes its baseKeys snapshot is what
-    // makes the batch loop preserve it, the same way it preserves BATCH_VALUE_LEDGER.
+    // accumulates. Being present before batch/index.js dispatchSubCommands takes its baseKeys
+    // snapshot is what makes the batch loop preserve it, the same way it preserves BATCH_VALUE_LEDGER.
     //
     // Consumed by issue.js (the single choke point every ISSUE reaches, wire or emitted).
     // Held as an OBJECT rather than a number so the reference threads unchanged through
@@ -167,8 +167,9 @@ module.exports = {
         // Process the specific ACTION commands
         await this.processAction(action, params, data, error);
 
-        // Return the populated data object. The block loop ignores this; the read-only
-        // feequote dry-run (computeFeeQuoteDryRun) reads data['STATUS'] to report validity.
+        // Return the populated data object. The block loop ignores this; the read-only dry-run
+        // engine (quote_surfaces.js dryRunAction, behind feequote, preflight and feequotedryrun)
+        // reads its verdict, fee row and probe disclosures from it.
         return data;
     }
 };

@@ -35,31 +35,50 @@ module.exports = {
         return !this.enabled || (this._capabilityProofHolds.size === 0 && !this._capabilityProofOverflow);
     },
 
+    capabilityProofWaiterSatisfied(waiter) {
+        if (!this.enabled) return true;
+        if (!waiter || !(waiter.holds instanceof Set)) return this.capabilityProofSatisfied();
+        for (let key of waiter.holds) {
+            if (this._capabilityProofHolds.has(key)) return false;
+        }
+        return !waiter.overflow || !this._capabilityProofOverflow;
+    },
+
     waitForCapabilityProof(timeoutMs) {
         if (this.capabilityProofSatisfied()) return Promise.resolve(true);
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
-            let waiter = { resolve: resolve, timer: null };
+            let waiter = {
+                resolve: resolve,
+                timer: null,
+                holds: new Set(this._capabilityProofHolds.keys()),
+                overflow: this._capabilityProofOverflow
+            };
             waiter.timer = setTimeout(() => {
                 this.releaseCapabilityProofWaiters();
                 if (this._capabilityProofWaiters.indexOf(waiter) === -1) return;
                 this._capabilityProofWaiters = this._capabilityProofWaiters.filter(w => w !== waiter);
+                let held = Array.from(waiter.holds).filter(key => this._capabilityProofHolds.has(key)).length;
                 reject(new Error('capability proof barrier timed out after ' + ms + 'ms with ' +
-                    this._capabilityProofHolds.size + ' row(s) held' +
-                    (this._capabilityProofOverflow ? ' and a re-page pending' : '')));
+                    held + ' observed row(s) held' +
+                    (waiter.overflow && this._capabilityProofOverflow ? ' and a re-page pending' : '')));
             }, ms);
             this._capabilityProofWaiters.push(waiter);
         });
     },
 
     releaseCapabilityProofWaiters() {
-        if (!this.capabilityProofSatisfied()) return;
+        let waiting = [];
         for (let waiter of this._capabilityProofWaiters) {
+            if (!this.capabilityProofWaiterSatisfied(waiter)) {
+                waiting.push(waiter);
+                continue;
+            }
             clearTimeout(waiter.timer);
             waiter.resolve(true);
         }
-        this._capabilityProofWaiters = [];
+        this._capabilityProofWaiters = waiting;
     },
 
     holdCapabilitySnapshot(row) {

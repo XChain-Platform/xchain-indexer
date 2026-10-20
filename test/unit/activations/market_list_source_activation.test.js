@@ -141,7 +141,7 @@ async function driveSwap(activated) {
 describe('market list SOURCE activation @regression @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
-    it('is armed from genesis on regtest and unarmed on public networks', function () {
+    it('is armed from genesis on regtest, unarmed on mainnet and on the bare testnet entry, and armed on each testnet chain at its height', function () {
         assert.strictEqual(gateRegistry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
         assert.strictEqual(gateRegistry.activeAt(KEY, 'mainnet', 'BTC', 1_000_000_000, null), false);
         assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', null, 1_000_000_000, null), false);

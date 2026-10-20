@@ -61,7 +61,8 @@ function copiesByTuple(rows){
 }
 
 // Mint one tuple from its sorted copies. `c` carries the checks the derive pass applies to a
-// row (gatesActive, verifyAttestation), the db handle and the mint context mintProvenRow takes.
+// row (gatesActive, verifyAttestation), the db handle and the mint context mintProvenRow takes,
+// including the block's protocolChanges registry for the legacy reward pin verdict.
 // Returns the minted copy, or null when the tuple pays nothing; throws
 // AnchorProofUnavailableError when no copy proves and one is still undecided.
 async function mintTuple(copies, c){

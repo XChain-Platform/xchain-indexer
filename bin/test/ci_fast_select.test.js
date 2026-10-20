@@ -221,6 +221,9 @@ describe('ci fast selector', function () {
     assert(script.includes('need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub xchain-documentation'));
     assert(script.includes('git -C "$SIB/xchain-documentation" archive HEAD'));
     assert(script.includes('XCHAIN_DOCS_DIR="$docs_snapshot"'));
+    assert(script.includes('sdk_preflight_drift_check'));
+    assert(script.includes('merge-base --is-ancestor "$sdk_head" "$sdk_develop"'));
+    assert(script.includes('archive "$sdk_develop"'));
   });
 
   it('runs source-only VM staging in Linux fast mode', function () {

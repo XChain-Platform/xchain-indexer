@@ -270,7 +270,8 @@ module.exports = {
                 // there is a validator price to value its fee against, both of which a caller
                 // can act on) and skip the half that structurally cannot exist yet. The
                 // native-coin fee check gets a probe OUTPUT for the same reason
-                // (actions/index.js _dryRunAction); this one cannot, because ORACLE_ADDRESS may be
+                // (syntheticDryRunTx, built by dryRunAction in actions_class/quote_surfaces.js);
+                // this one cannot, because ORACLE_ADDRESS may be
                 // a ^id reference that is only resolved above.
                 let priceDb = (this.actions && this.actions.hubDb) || this.indexerDb;
                 let feeCheck = data['FEE_PROBE']

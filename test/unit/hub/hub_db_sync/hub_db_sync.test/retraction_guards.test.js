@@ -137,7 +137,7 @@ const deletes = (calls) => calls.filter(c => /^DELETE/.test(c.sql));
 // and the hub's push*reorg RPCs forward the caller's claim verbatim, so the
 // mirror must not treat them as ground truth: retractions claiming a reorg of
 // OUR OWN chain are checked against our own push_generations authority, and
-// per-chain generation monotonicity drops stale replays.
+// every other fenced retraction applies under its own push_generation fence.
 // ---------------------------------------------------------------------------
 describe('HubDbSync applyRetraction receive-side guards @regression @tier1', function () {
     it('accepts an own-chain retraction whose fence is below our rollback generation', async function () {
@@ -171,19 +171,44 @@ describe('HubDbSync applyRetraction receive-side guards @regression @tier1', fun
         assert.strictEqual(deletes(calls).length, 0, 'our own retractions are always fenced');
     });
 
-    it('other-chain retractions skip the own-generation check but track monotonicity', async function () {
+    it('other-chain retractions skip the own-generation check and apply every fence, lower ones included', async function () {
         const { sync, calls } = makeApply(async () => 0);
         await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 7 });
         assert.strictEqual(deletes(calls).length, 1, 'no local authority for LTC; fenced delete applies');
-        // Stale replay below the tracked generation is dropped...
+        // A lower fence is not skipped: the fenced DELETE itself keeps it from touching newer rows.
         await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 6 });
-        assert.strictEqual(deletes(calls).length, 1, 'stale replay must be skipped');
-        // ...equal-generation redelivery is idempotent and still applied.
+        assert.strictEqual(deletes(calls).length, 2, 'a lower fence still applies, bounded by its own fence');
+        assert.strictEqual(deletes(calls)[1].args[deletes(calls)[1].args.length - 1], 6, 'the DELETE carries its own fence');
+        // Equal-generation redelivery is idempotent and still applied.
         await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 7 });
-        assert.strictEqual(deletes(calls).length, 2, 'same-generation redelivery stays idempotent');
+        assert.strictEqual(deletes(calls).length, 3, 'same-generation redelivery stays idempotent');
     });
 
-    it('monotonicity is tracked per (table, source_chain), not globally', async function () {
+    // Generations are per-indexer counters: each hub initiates a round with its own
+    // indexer's value, and every finalized round reaches every mirror.
+    it('applies fences from two initiators with unrelated generation counters', async function () {
+        const { sync, calls } = makeApply(async () => 0);
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 50 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 20, retraction_generation: 4 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 4 });
+        const d = deletes(calls);
+        assert.strictEqual(d.length, 3, 'a lower counter from another initiator must not be dropped as stale');
+        assert.deepStrictEqual(d.map(c => c.args[c.args.length - 1]), [50, 4, 4], 'each DELETE carries its own fence');
+    });
+
+    // Nested rollbacks: the deeper, older rollback's closed-range row can drain after the
+    // shallower, newer rollback's live open-ended retraction.
+    it('applies an older closed-range fence that arrives after a newer open-ended one', async function () {
+        const { sync, calls } = makeApply(async () => 0);
+        await sync.applyRetraction({ table: 'cross_chain_matches', source_chain: 'LTC', from_action_index: 200, retraction_generation: 8 });
+        await sync.applyRetraction({ table: 'cross_chain_matches', source_chain: 'LTC', from_action_index: 100, to_action_index: 250, retraction_generation: 7 });
+        const d = deletes(calls);
+        assert.strictEqual(d.length, 2, 'the older rollback still owns orphans in [100, 200)');
+        assert.match(d[1].sql, /a_action_index <= \? AND a_push_generation <= \?/);
+        assert.deepStrictEqual(d[1].args, ['LTC', 100, 250, 7, 'LTC', 100, 250, 7]);
+    });
+
+    it('fences on different (table, source_chain) pairs never shadow each other', async function () {
         const { sync, calls } = makeApply(async () => 0);
         await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 9 });
         await sync.applyRetraction({ table: 'cross_chain_matches', source_chain: 'LTC', from_action_index: 10, retraction_generation: 2 });

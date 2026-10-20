@@ -217,6 +217,10 @@ module.exports = {
         let round_qualifier = Number(roundQualifier);
         if(!Number.isFinite(round_qualifier) || round_qualifier < 0) round_qualifier = 0;
         round_qualifier = Math.floor(round_qualifier);
+        // Rewrite only an exponent-form amount ("5e-8") to fixed notation, so every other
+        // amount keeps its stored bytes and a non-numeric one is not zeroed by bcstr.
+        if(amount !== null && amount !== undefined && /e/i.test(String(amount)) && this.util.isNumeric(amount))
+            amount = this.util.bcstr(amount);
         let query = upsert
             ? `INSERT INTO validator_rewards
                     (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier, amount, block_index, derive_block_index)

@@ -17,7 +17,7 @@
  * The reads, the delete and the write the stats recompute runs, called from
  * src/rollback/attestation_stats.js inside the rollback transaction. The
  * expired-request read is compared predicate for predicate with
- * scripts/repair-validator-stats.js by that script's drift guard.
+ * bin/repair-validator-stats.js by that script's drift guard.
  *
  ********************************************************************/
 

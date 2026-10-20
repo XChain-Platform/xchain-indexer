@@ -197,7 +197,7 @@ describe('FIAT admission below the settlement price gate @regression @tier2', fu
         assert.strictEqual(data['STATUS'], STALE);
     });
 
-    it('is armed from genesis on regtest and unarmed on mainnet and testnet', function () {
+    it('is armed from genesis on regtest and unarmed on mainnet and on the bare testnet entry', function () {
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'regtest', null, null, 0), true);
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'mainnet', null, null, BLOCK_TIME), false);
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', null, null, BLOCK_TIME), false);

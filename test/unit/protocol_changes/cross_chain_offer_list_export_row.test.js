@@ -45,7 +45,7 @@ function assertArmedOnEachTestnetChain(key) {
 }
 
 describe('protocol_changes CROSS_CHAIN_OFFER_LIST_EXPORT row @regression @tier1', function () {
-    it('registers a frozen height map that is unarmed on launched networks', function () {
+    it('registers a frozen height map that is unarmed on mainnet and armed on each testnet chain', function () {
         assert.strictEqual(ProtocolChanges.registry.unitOf(KEY), 'height');
         const row = ProtocolChanges.get(KEY);
         assert.deepStrictEqual(row, {

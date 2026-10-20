@@ -81,7 +81,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
         assert.strictEqual(REPLACED.size, 30, 'the W4 census of 20 predicate-only shims plus the 11 predicate-only twins of W5');
-        assert.strictEqual(REGISTRY_ONLY.size, 84, 'the registry-only gate census moved');
+        assert.strictEqual(REGISTRY_ONLY.size, 85, 'the registry-only gate census moved');
         assert.ok(REGISTRY_ONLY.has('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'),
             'the cross-chain remote-token gate is registry-only');
         assert.ok(REGISTRY_ONLY.has('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION'),
@@ -112,7 +112,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
         assert.throws(() => ProtocolChanges.activeAt('train_activation.TRAIN_ACTIVATION', 'mainnet', null, 0, 0), /unsupported unit ruleset/);
     });
 
-    it('keeps anchor archive folding inactive on live networks and active at regtest genesis', function () {
+    it('keeps anchor archive folding inactive on mainnet, armed on each testnet chain at its height and active at regtest genesis', function () {
         // The v0.23.0 cut armed the fold term on each testnet chain: dark at 1 and one block
         // short of the chain's own height (read from the registry), live from it.
         const row = ProtocolChanges.get(ANCHOR_ARCHIVE_FOLD_TERM);

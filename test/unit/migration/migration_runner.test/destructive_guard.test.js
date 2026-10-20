@@ -376,8 +376,21 @@ describe('Database._destructiveAutoStatement() prefix forms @regression @tier1',
         assert.strictEqual(destructiveOf(['CREATE UNIQUE INDEX u ON t (a)']), null);
     });
 
+    it('flags every top-level DROP other than a standalone index or temporary-table drop', function () {
+        for (const sql of ['DROP SEQUENCE IF EXISTS s', 'DROP TRIGGER trg', 'DROP TRIGGER IF EXISTS trg',
+            'DROP VIEW v', 'DROP EVENT e', 'DROP PROCEDURE p', 'DROP FUNCTION f', 'DROP PACKAGE BODY pk',
+            'DROP USER u', 'DROP ROLE r', 'DROP SERVER s', 'drop\n  trigger trg', '/* note */ DROP VIEW v'])
+            assert.ok(destructiveOf([sql]), sql);
+    });
+
+    it('still allows a standalone DROP INDEX and a DROP TEMPORARY TABLE', function () {
+        assert.strictEqual(destructiveOf(['DROP INDEX IF EXISTS uq_attest_response ON attestation_responses']), null);
+        assert.strictEqual(destructiveOf(['DROP INDEX i ON t']), null);
+        assert.strictEqual(destructiveOf(['DROP TEMPORARY TABLE IF EXISTS _tmp']), null);
+    });
+
     it('catches ALTER ONLINE and CREATE TRIGGER end to end from raw file text', function () {
-        for (const body of ['ALTER ONLINE TABLE balances DROP COLUMN quantity;',
+        for (const body of ['ALTER ONLINE TABLE balances DROP COLUMN quantity;', 'DROP TRIGGER trg;',
             'CREATE TRIGGER purge AFTER INSERT ON blocks FOR EACH ROW DELETE FROM balances;']) {
             const raw = '-- xchain:migration mode=auto\n' + body + '\n';
             assert.strictEqual(modeOf(raw), 'auto');

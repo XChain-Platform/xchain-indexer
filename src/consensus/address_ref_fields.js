@@ -58,8 +58,10 @@
  * live in SDK_COMPACTABLE_BY_ACTION.
  *
  * Excluded on purpose:
- *  - SOURCE: the tx sender, registered first in db.createActionIndex; it is
+ *  - SOURCE: the tx sender, registered first in processTransaction; it is
  *    never a wire field and so is never a ^id reference.
+ *  - tx destination: the decoder's destination for the tx, registered right
+ *    after SOURCE in processTransaction, before the action is parsed.
  *  - COINPAY recipient: comes from a native-coin tx OUTPUT, not the payload.
  *  - SIGNING_PUBKEY / *_PUBKEY: Ed25519 keys, not addresses.
  *  - *_ACTION_INDEX, CONTRACT_ACTION_INDEX, LIST_ACTION_INDEX: action refs.

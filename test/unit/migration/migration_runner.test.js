@@ -187,7 +187,7 @@ async function seedFreshSchemaMigrations(options = {}) {
             ensured = true;
         },
         migrationMode: Database.prototype.migrationMode,
-        recordFreshSchemaMigrations: Database.prototype.recordFreshSchemaMigrations,
+        recordFreshSchemaMigrations: options.record || Database.prototype.recordFreshSchemaMigrations,
     };
     const realInfo = console.log;
     console.log = () => {};
@@ -263,6 +263,41 @@ function registerFreshSchemaLedgerRecordingTest() {
     });
 }
 
+// Load schema_setup's seed against a stand-in migrationChecksum, restoring both modules afterwards
+function seedWithStandInChecksum(standIn) {
+    const verdictPath = require.resolve('../../../src/db/migration/checksum_verdict.js');
+    const setupPath = require.resolve('../../../src/db/database/schema_setup.js');
+    require(verdictPath);
+    const verdict = require.cache[verdictPath];
+    const realExports = verdict.exports;
+    const realSetup = require.cache[setupPath];
+    try {
+        verdict.exports = Object.assign({}, realExports, { migrationChecksum: standIn });
+        delete require.cache[setupPath];
+        return require(setupPath).recordFreshSchemaMigrations;
+    } finally {
+        verdict.exports = realExports;
+        if(realSetup) require.cache[setupPath] = realSetup;
+        else delete require.cache[setupPath];
+    }
+}
+
+function registerFreshSchemaChecksumSourceTest() {
+    it('takes every seeded checksum from the shared migrationChecksum, never a private hash', async function () {
+        // A seed hashing on its own records rows the runner's immutability guard later disowns
+        const record = seedWithStandInChecksum(raw => 'shared:' + raw.length);
+        const { calls, error } = await seedFreshSchemaMigrations({ record });
+        assert.strictEqual(error, null);
+        const inserts = calls.filter(c => /^INSERT INTO schema_migrations/i.test(c.sql));
+        assert.ok(inserts.length > 0, 'the seed recorded no rows, so nothing was checked');
+        for(const insert of inserts){
+            const raw = fs.readFileSync(path.join(MIG_DIR, insert.params[0]), 'utf8');
+            assert.strictEqual(insert.params[1], 'shared:' + raw.length,
+                insert.params[0] + ' was seeded with a checksum migrationChecksum did not produce');
+        }
+    });
+}
+
 function registerFreshSchemaLedgerTransactionTests() {
     it('seeds in one transaction under the migration lock, so a kill leaves all rows or none', async function () {
         const { calls, error } = await seedFreshSchemaMigrations();
@@ -324,6 +359,7 @@ function registerFreshSchemaVerificationTests() {
 
 function registerFreshSchemaMigrationLedgerTests() {
     registerFreshSchemaLedgerRecordingTest();
+    registerFreshSchemaChecksumSourceTest();
     registerFreshSchemaLedgerTransactionTests();
     registerFreshSchemaVerificationTests();
 }

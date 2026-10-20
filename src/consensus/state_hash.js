@@ -65,9 +65,10 @@
  *                                       cooldown, credits).
  *   state_hash/archive_invalid_section.js  the anchor_invalid class, which has two
  *                                       separate flag days of its own.
- *   state_hash/gated_sections.js        the four classes folded in only at or after
- *                                       a per-chain height (index map, poll
- *                                       finalize, token supply, bet status).
+ *   state_hash/gated_sections.js        the index-map class, which is always folded
+ *                                       in, and the four classes folded in only at or
+ *                                       after a per-chain height (poll finalize,
+ *                                       token supply, bet status, attest batch head).
  *   state_hash/tolerant_query.js        the shared query wrapper that degrades a
  *                                       class to empty on an older schema.
  *
@@ -126,10 +127,10 @@
  *   1. deactivations, slashes, request_status, cooldown, credits, anchor_invalid,
  *      always present, always in that order, each an array that is empty when the
  *      class found nothing or the schema predates it.
- *   2. index_addresses_new and index_tickers_new, only once the index-map gate is
- *      active for the block and network.
- *   3. poll_finalize, then token_supply, then bet_feed_status and bet_status, each
- *      only once its own gate is active.
+ *   2. index_addresses_new and index_tickers_new, always present (the index-map
+ *      class has no gate), each an array that is empty when B assigned no id.
+ *   3. poll_finalize, then token_supply, then bet_feed_status and bet_status, then
+ *      attest_batch_head, each only once its own gate is active.
  *   4. block_index and state_hash_version, always last.
  * A gated key is inserted before block_index only when its gate is active, never
  * as a null placeholder, because a present-but-null key would serialize
@@ -169,10 +170,10 @@ const G = require('./state_hash/gated_sections');
 const { STATE_HASH_VERSION } = A;
 
 // Build the canonical state-hash preimage object for block B. db must expose
-// doQuery(sql, args) and getStatusId(name) (both xchain-indexer and xchain-sync
+// doQueryStrict(sql, args) and getStatusId(name) (both xchain-indexer and xchain-sync
 // Database classes do). opts: { activationDelay, gasTick }. The caller hashes the
 // returned object with util.getDataHash. Each class degrades to empty on a missing
-// table/column (older schemas) rather than throwing.
+// table/column (older schemas) and throws on every other read error.
 async function buildStateHashData(db, blockIndex, opts){
     let B       = Number(blockIndex);
     let delay   = (opts && opts.activationDelay != null) ? Number(opts.activationDelay) : null;

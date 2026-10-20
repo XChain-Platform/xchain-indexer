@@ -52,7 +52,8 @@ function makeCtx({ dryRun } = {}){
             calls.lastArgs = args;
             return Object.assign({ blockIndex: 100, blockTime: 1000, status: 'valid', error: null,
                                    xchainFee: '0', sourceFeeBalance: null,
-                                   subCommands: null, oracleFeesOwed: null }, dryRun || {});
+                                   subCommands: null, oracleFeesOwed: null,
+                                   nativeFeeOwed: null, coinPaymentsOwed: null }, dryRun || {});
         },
         nativeFeeMandatory: Actions.prototype.nativeFeeMandatory,
         batchProbeForbiddenSubAction: Actions.prototype.batchProbeForbiddenSubAction,
@@ -114,6 +115,13 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
             assert.strictEqual(calls.dryRuns, 1, 'a safe batch must reach the engine');
             assert.strictEqual(calls.lastArgs.feeProbe, true);
             assert.strictEqual(calls.lastArgs.guardInert, true);
+            // The batch handler splits the raw TX_DATA, so the engine runs the caller's exact wire
+            assert.strictEqual(calls.lastArgs.rawData, 'BATCH|0|SEND|0|JDOG|1|addr1;SEND|0|JDOG|2|addr2');
+            let padded = await ctx.computePreflight({ action: 'BATCH', params: ' 0|SEND|0|JDOG|1|addr1 ' });
+            assert.strictEqual(calls.lastArgs.rawData, 'BATCH| 0|SEND|0|JDOG|1|addr1 ', 'padding the chain would see is kept');
+            assert.strictEqual(padded.action, 'BATCH');
+            await ctx.computePreflight({ action: 'BATCH', params: '0|SEND|0|JDOG|1|addr1' });
+            assert.strictEqual(calls.dryRuns, 3, 'wires that differ only in padding never share a memo entry');
         });
 
         it('refuses a batch carrying a VM sub-command WITHOUT taking the mutex', async function () {
@@ -204,11 +212,22 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
             assert.deepStrictEqual(r.oracleFeesOwed, { oracleAddr: '0.00002000' });
         });
 
+        it('surfaces batch-total native fee and destination-keyed coin payments', async function () {
+            let { ctx } = makeCtx({ dryRun: {
+                nativeFeeOwed: '12.50000000',
+                coinPaymentsOwed: { dispenserAddr: '3.00000000' }
+            }});
+            let r = await ctx.computePreflight({ action: 'BATCH', params: '0|SEND|0|J|1|a' });
+            assert.strictEqual(r.nativeFeeOwed, '12.50000000');
+            assert.deepStrictEqual(r.coinPaymentsOwed, { dispenserAddr: '3.00000000' });
+        });
+
         it('omits both fields entirely for a non-batch action', async function () {
-            let { ctx } = makeCtx();
+            let { ctx, calls } = makeCtx();
             let r = await ctx.computePreflight({ action: 'SEND', params: '0|J|1|a' });
             assert.strictEqual(r.subCommands, undefined);
             assert.strictEqual(r.oracleFeesOwed, undefined);
+            assert.strictEqual(calls.lastArgs.rawData, null, 'a non-batch action is dry-run on its normalized form');
         });
     });
 });

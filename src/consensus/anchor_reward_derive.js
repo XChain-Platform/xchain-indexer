@@ -249,12 +249,14 @@ async function mintGroupCopies(indexerDb, groupRows, m){
 //   blockIndex - the BTC block being processed
 //   proof      - AnchorProofClient (DOGE anchor visibility). Required at/above the derive
 //                gate: without it nothing can be proven mined, so every matured row defers.
+//   protocolChanges - the block-time-keyed gate registry. The mint step reads
+//                     LEGACY_ANCHOR_REWARD_PIN from it at blockIndex.
 //
 // Maturity is the fleet-agreed watermark, NOT snapshot_block: a row is derivable at
 // snapshot_block + ANCHOR_REWARD_MIRROR_MATURITY. Rows still inside that window are simply
 // not fetched, so a node whose mirror is a few minutes behind the fleet still derives the
 // identical set at the identical height.
-async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
+async function deriveAnchorRewards(indexerDb, config, blockIndex, proof, protocolChanges){
     // Reward derivation resolves only where the oracle_publish stake lives: BTC.
     if(String(config['COIN']) !== 'BTC') return 0;
     let network = String(config['NETWORK'] || '');
@@ -286,7 +288,7 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
     let groups = groupByLogicalReward(rows);
 
     let derived = 0;
-    let mint = { blockIndex, proof, minConfirmations };
+    let mint = { blockIndex, proof, minConfirmations, protocolChanges };
     for(let [, groupRows] of groups){
         let anyWritten = selectCopies
             ? await mintGroupCopies(indexerDb, groupRows, mint)

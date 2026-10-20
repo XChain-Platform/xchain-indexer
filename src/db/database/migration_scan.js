@@ -88,7 +88,9 @@ function keywordDestroys(self, stmt){
     // silently instead of failing; and SET STATEMENT v=x FOR <stmt> hides a statement
     // behind the SET keyword from every check below.
     if(/^SET\b/i.test(stmt) && !autoEligibleSet(stmt))   return true;
-    if(/^DROP\s+(TABLE|DATABASE|SCHEMA)\b/i.test(stmt))  return true;
+    // DROP is an allow-list like CREATE: only a standalone index drop and a session temporary-table
+    // drop stay auto-eligible, since a sequence, trigger, view, event or routine drop loses state or behaviour.
+    if(/^DROP\b/i.test(stmt) && !/^DROP\s+(?:INDEX|TEMPORARY\s+TABLE)\b/i.test(stmt)) return true;
     // CREATE OR REPLACE TABLE is an atomic DROP TABLE IF EXISTS + CREATE: it destroys
     // every existing row. Plain CREATE TABLE / CREATE TABLE IF NOT EXISTS are additive
     // and stay unflagged (see the CREATE note below); only the OR REPLACE form loses
@@ -124,6 +126,13 @@ function keywordDestroys(self, stmt){
     // flag every other UPDATE.
     if(/^UPDATE\b/i.test(stmt) && !self.isIdRepairUpdate(stmt)) return true;
     return false;
+}
+
+// destructiveAutoStatement, the closing allow-list: true unless the statement opens with a form
+// an auto file may use. Any other form (BINLOG, DO, SELECT, PURGE, RESET, INSTALL, ...) can make
+// the server do something this prefix classifier cannot see, the same blind spot as CALL above.
+function statementOutsideAllowList(stmt){
+    return !/^(?:ALTER\s+(?:ONLINE\s+)?TABLE|CREATE\s+(?:TEMPORARY\s+)?TABLE|CREATE\s+(?:(?:UNIQUE|FULLTEXT|SPATIAL)\s+)?INDEX|DROP\s+(?:INDEX|TEMPORARY\s+TABLE)|INSERT|UPDATE|SET)\b/i.test(stmt);
 }
 
 // destructiveAutoStatement, the CREATE TABLE engine check: true when any ENGINE option names
@@ -248,7 +257,8 @@ module.exports = {
     // first statement that can lose, truncate, or rename data - or null when the
     // file is safe to auto-run. Pure string logic (no DB), unit-tested directly.
     //
-    // Flagged as destructive: DROP TABLE/DATABASE/SCHEMA, TRUNCATE, RENAME TABLE,
+    // Flagged as destructive: any top-level DROP other than DROP INDEX and DROP TEMPORARY
+    // TABLE (sequences, triggers, views, events and routines too), TRUNCATE, RENAME TABLE,
     // DELETE (any form), REPLACE INTO (atomic DELETE+INSERT), INSERT ... ON DUPLICATE
     // KEY UPDATE (rewrites every colliding row), LOAD DATA (rows from a file the
     // scanner cannot read), UPDATE (except the
@@ -264,10 +274,16 @@ module.exports = {
     // [UNIQUE|FULLTEXT|SPATIAL] INDEX (triggers, events, routines and views run SQL
     // the scanner cannot read), and any SET other than SET NAMES or a single UTC
     // time_zone (session variables relax strict mode; SET STATEMENT ... FOR hides a statement).
+    // Finally, any statement that does not open with ALTER [ONLINE] TABLE, CREATE [TEMPORARY]
+    // TABLE, CREATE [UNIQUE|FULLTEXT|SPATIAL] INDEX, DROP INDEX, DROP TEMPORARY TABLE, INSERT,
+    // UPDATE or SET is flagged (BINLOG, DO, SELECT, PURGE, RESET, INSTALL and every other form).
+    // The decoder twin is xchain-decoder/src/db/migration_statements.js:destructiveAutoStatement
+    // with its rules in xchain-decoder/src/db/migration_guards/destructive_statement_rules.js.
     //
     // Deliberately NOT flagged (legitimate existing auto patterns): DROP INDEX/KEY,
     // DROP FOREIGN KEY/CONSTRAINT/CHECK/DEFAULT/PRIMARY KEY with the keyword bare and
-    // unquoted (structural, no row data lost), ADD ..., plain InnoDB or engine-less
+    // unquoted (structural, no row data lost), a standalone DROP INDEX ... ON and
+    // DROP TEMPORARY TABLE, ADD ..., plain InnoDB or engine-less
     // CREATE TABLE / CREATE TABLE IF NOT EXISTS (additive;
     // but CREATE OR REPLACE TABLE IS flagged - it is an atomic DROP+CREATE), CREATE
     // [UNIQUE] INDEX, MODIFY that widens/nullables a column, and ALTER ONLINE TABLE
@@ -304,6 +320,8 @@ module.exports = {
             if(alterHead && alterTableDestroys(stmt))            return raw;
             // Any other ALTER (EVENT, VIEW, DATABASE, ...) is outside the allow-list, like CREATE.
             if(!alterHead && /^ALTER\b/i.test(stmt))             return raw;
+            // Every statement must open with an allowed form; the checks above narrow each one.
+            if(statementOutsideAllowList(stmt))                  return raw;
         }
         return null;
     },

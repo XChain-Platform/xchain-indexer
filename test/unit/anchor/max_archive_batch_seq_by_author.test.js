@@ -51,7 +51,7 @@ describe('getMaxArchiveBatchSeqByAuthor()', function () {
         assert.strictEqual(result.value, 19);
         assert.match(result.query, /MAX\(a\.match_batch_seq\)/);
         assert.match(result.query, /a\.version = 1/);
-        assert.match(result.query, /s\.status IN \('valid', 'unverified'\)/);
+        assert.doesNotMatch(result.query, /s\.status|index_statuses/);
         assert.match(result.query, /adr\.address = \?/);
         assert.doesNotMatch(result.query, /batch_crc32|match_count/);
     });

@@ -15,8 +15,8 @@
  *
  * The COINPAY_EXPIRE boundary under settlement_bounds_activation. A COINPAY is refused once
  * block_time >= expiration. Armed (regtest, genesis) the end-of-block pass expires a pending
- * obligation in the block whose time equals its expiration, the same instant; unarmed (the
- * committed mainnet and testnet rows) it expires one block later, at block_time > expiration.
+ * obligation in the block whose time equals its expiration, the same instant; inactive (mainnet,
+ * and testnet below its armed height) it expires one block later, at block_time > expiration.
  * The due query runs for real on node:sqlite over the project's own DDL.
  */
 
@@ -101,7 +101,7 @@ describe('COINPAY_EXPIRE boundary: the end-of-block pass', function () {
         assert.deepStrictEqual(await expiredAt('regtest', EXPIRATION), [50]);
     });
 
-    it('unarmed (mainnet, testnet) expires it only once block_time passes its expiration', async function () {
+    it('inactive (mainnet unarmed, testnet below its armed height) expires it only once block_time passes its expiration', async function () {
         for (const network of ['mainnet', 'testnet']) {
             assert.deepStrictEqual(await expiredAt(network, EXPIRATION), [], network);
             assert.deepStrictEqual(await expiredAt(network, EXPIRATION + 1), [50], network);

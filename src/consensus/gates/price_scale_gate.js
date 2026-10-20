@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * PRICE v0 canonical price-value flag-day.
+ * PRICE v0 canonical price-value rule.
  *
  * A PRICE v0 round names each pair TICKER/FIAT and a price STRING. Every other
  * price entry point bounds that string's scale: the v1 push path caps the
@@ -40,7 +40,7 @@
  * its own finalized price_snapshots rows and compares pair prices as strings,
  * so a truncated row also poisons later batch co-signing.
  *
- * THE RULE. At and above the threshold a v0 price is CANONICAL: no leading
+ * THE RULE. A v0 price is CANONICAL: no leading
  * zeros on the integer side, at most PRICE_SCALE_MAX_DECIMALS digits on the
  * decimal side, and a point only when digits follow it.
  *
@@ -55,30 +55,23 @@
  * no schema change carries this fix.
  *
  * It refuses nothing a producer emits. bcformat(..., 8) yields exactly this
- * form, so the honest wire is already canonical and arming changes no round the
+ * form, so the honest wire is already canonical and the rule changes no round the
  * federation assembles.
  *
- * CONSENSUS-AFFECTING, so gated: below the threshold a node accepts the loose
- * form and at/above it refuses, and a one-sided deploy forks the fleet on the
- * first round carrying either shape. Below the gate the legacy pattern is
- * preserved verbatim and a from-genesis replay stays byte-identical.
+ * CONSENSUS-AFFECTING and UNCONDITIONAL: the rule binds from genesis on mainnet,
+ * testnet and regtest alike, with no activation threshold, so every node judges
+ * every v0 round under it and a from-genesis replay meets no other branch.
+ * Binding it from genesis rejects no round any node ever accepted: no PRICE
+ * action had been indexed on any mainnet chain when measured on 2026-09-09.
  *
- * TIME-keyed, not height-keyed, for the reason price_pair_activation records: a
- * PRICE v0 action is parsed by the indexer of whichever chain carried it, and
- * BTC/LTC/DOGE heights diverge, so no single height names one cutover.
+ * priceValuePattern and isValidPriceValue keep their (blockTime, network)
+ * parameters so callers stay unchanged, and ignore them. PRICE_VALUE_RE_LEGACY
+ * stays registered and exported, but no predicate here reads it. The PRICE v1
+ * canonical gate below (PRICE_V1_CANONICAL_ACTIVATION) is a separate, live gate.
  *
- * Resolved ONCE per action, alongside the pair-name bound, so every round in a
- * batch is judged under one rule and no window can straddle this gate.
- *
- * MAINNET IS ARMED AT GENESIS by the 2026-09-09 ruling: no PRICE action has ever
- * been indexed on any mainnet chain (measured 2026-09-09), so tightening the
- * decimal bound rejects no round that was ever accepted, and the from-genesis
- * OLD-vs-ON replay is the witness. testnet/regtest run from genesis too,
- * matching the price-pair family.
- *
- * VENDORED byte-identically into xchain-hub/src, where PriceAggregator gates
- * both v0 ingest paths on it. The hub resolves the same key the chain does, so
- * it can never sit stricter than consensus; a one-sided edit of either copy is
+ * VENDORED byte-identically into xchain-hub/src, where PriceAggregator applies
+ * this same pattern on both v0 ingest paths, so the hub never grades a price
+ * under a rule the chain does not apply; a one-sided edit of either copy is
  * what would have it withhold a round the chain finalized. A test in each repo
  * pins the byte-equality.
  *

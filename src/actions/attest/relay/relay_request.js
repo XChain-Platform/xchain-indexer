@@ -159,12 +159,12 @@ module.exports = {
         // verdict every node reaches identically.
         //
         // getRelayRequestById, not getAttestationRequestById: only an ADMITTED row
-        // consumes the id. The rejected verdict this branch writes is stored too, and
-        // counting stored rows made the guard self-blocking - request_id comes off the
-        // wire and is public before the federation broadcasts, so one malformed v3
-        // naming a pending id got stored as rejected and then answered this check for
-        // the real relay, permanently. Same reasoning as the relay-identity guard
-        // below, which already read only admitted rows.
+        // consumes the id. request_id comes off the wire and is public before the
+        // federation broadcasts, so a guard that counted a refusal would let one
+        // malformed v3 naming a pending id answer this check for the real relay,
+        // permanently. persistRelayRequest withholds a refused v3's row, so the lookup's
+        // 'rejected' filter is defence in depth. Same reasoning as the relay-identity
+        // guard below, which also reads only admitted rows.
         //
         // Ungated on purpose, and the reason is a measurement with an expiry date: at
         // the time of the change no ATTEST action of any version had ever been admitted

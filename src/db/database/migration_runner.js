@@ -36,6 +36,7 @@ const { CONFIG_ENV } = require('../../config.js');
 const { reorderVerdict, describeReorder } = require('./migration_reorder.js');
 const { assertNoLiveColumnLoss } = require('./migration_live_schema_guard.js');
 const { assertUniqueKeyWitness } = require('./migration_guards/key_witness.js');
+const { assertNoDeclaredKeyDrop } = require('./migration_guards/declared_key_drop.js');
 const { assertMigrationSqlMode } = require('./migration_sql_mode_guard.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
@@ -110,7 +111,16 @@ async function applyPendingMigrations(self, conn, files, ctx){
         getLogger().info('runMigrations: re-keyed ledger row ' + from + ' -> ' + to + ' (legacy migration renamed to dated form).');
     }
 
-    for(const file of files) await migrateFile(self, conn, file, appliedByName, ctx);
+    // Index the ledger rows that have no file by their recorded checksum, so a pending file
+    // with the same bytes is recognised as an applied migration renamed without a registry entry.
+    const orphanByChecksum = new Map();
+    for(const name of Database.orphanedLedgerNames(appliedByName.keys(), files)){
+        const recorded = appliedByName.get(name);
+        if(recorded && !orphanByChecksum.has(recorded)) orphanByChecksum.set(recorded, name);
+    }
+    const fileCtx = Object.assign({}, ctx, { orphanByChecksum });
+
+    for(const file of files) await migrateFile(self, conn, file, appliedByName, fileCtx);
 }
 
 // One migration file: the scope and naming checks, then the checksum guard for an applied
@@ -146,6 +156,8 @@ async function migrateFile(self, conn, file, appliedByName, ctx){
     const mode = self.migrationMode(raw);
 
     if(await gateUnappliedMigration(self, conn, file, checksum, mode, result, includeManual)) return;
+
+    if(guardUnregisteredRename(ctx, file, checksum)) return;
 
     // Backdating guard: the dated-prefix check above freezes the NAMING
     // convention, but nothing stopped a new file from being dated before a
@@ -206,6 +218,24 @@ async function checkAppliedChecksum(conn, file, checksum, appliedByName, include
         }
         getLogger().error(msg + ' Continuing on the diverged schema - review manually.');
     }
+}
+
+// The rename guard for a pending file: true when its bytes match a ledger row that has no file,
+// which means it already ran under that old name and only lacks a MIGRATION_LEDGER_RENAMES entry.
+// The operator path and strict mode fail closed; passive startup logs and leaves the file
+// unapplied, because applying it a second time is the harm this guard exists to stop.
+function guardUnregisteredRename(ctx, file, checksum){
+    const { includeManual, result, orphanByChecksum } = ctx;
+    const oldName = orphanByChecksum ? orphanByChecksum.get(checksum) : undefined;
+    if(!oldName) return false;
+    const msg = 'runMigrations: ' + file + ' has the same content as ledger row ' + oldName +
+        ', which has no file on disk, so it is an applied migration renamed without a' +
+        ' Database.MIGRATION_LEDGER_RENAMES entry. Add the entry ' + JSON.stringify(oldName) + ': ' +
+        JSON.stringify(file) + ' so the ledger re-keys instead of running it again.';
+    if(includeManual || CONFIG_ENV.MIGRATION_STRICT_CHECKSUM === '1') throw new Error(msg);
+    getLogger().error(msg + ' Leaving it unapplied.');
+    result.unregisteredRenames.push({ file, ledgerName: oldName });
+    return true;
 }
 
 // A pending file the precondition baselines or the mode gate defers: true when it was settled
@@ -316,6 +346,16 @@ async function applyMigrationFile(self, conn, file, raw, checksum, mode, ctx){
                 offender.slice(0, 160) + (offender.length > 160 ? '...' : '') + '". ' +
                 'Re-tag the file `-- xchain:migration mode=manual` and apply it deliberately via `node src/db/migration/migrate.js`.');
         }
+        // Refuse a drop of a key src/sql still declares UNIQUE or PRIMARY, which verifyTables
+        // already ran past this boot and so would leave missing until the next one.
+        assertNoDeclaredKeyDrop(file, statements, table => {
+            if(!/^[\w$]+$/.test(table)) return null;
+            try { return fs.readFileSync(path.join(__dirname, '..', '..', 'sql', table + '.sql'), 'utf8'); }
+            catch(err){
+                if(err && err.code === 'ENOENT') return null;
+                throw err;
+            }
+        });
         await assertNoLiveColumnLoss(conn, file, statements);
         await assertUniqueKeyWitness(conn, self.dbName, file, statements, table => {
             let data;
@@ -353,7 +393,7 @@ module.exports = {
         const only          = (opts.only == null) ? null
             : new Set([].concat(opts.only).map(s => String(s).trim()).filter(Boolean));
         const dir           = path.join(__dirname, '..', '..', 'sql', 'migrations');
-        const result        = { applied: [], pending: [], baselined: [], reordered: [], lockSkipped: false };
+        const result        = { applied: [], pending: [], baselined: [], reordered: [], unregisteredRenames: [], lockSkipped: false };
 
         let files = [];
         try { files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort(); }

@@ -10,9 +10,10 @@
  *   1. the MANIFEST (mirror_admission_schema.test/helpers/manifest.js) has the
  *      shape the family spec fixes: seven tables, three chains in a fixed order on
  *      the mapped rails, one column on the unsigned oracle rail, nullable everywhere;
- *   2. the manifest equals the HUB DDL and the hub's own migrateAdmissionColumns map
- *      column for column and position for position, so the producer's shape and the
- *      contract the indexer twin is checked against cannot drift apart;
+ *   2. the manifest equals the HUB DDL column for column and position for position,
+ *      and the hub's dated migrations add exactly that set to an already-deployed hub,
+ *      so the producer's shape and the contract the indexer twin is checked against
+ *      cannot drift apart;
  *   3. the INDEXER twins never carry an admission column the manifest does not name,
  *      and the dated migration, the DDL columns and the compat gate's OLD_STATEMENTS
  *      land together or not at all, never half-applied.
@@ -39,7 +40,7 @@ const M = require('./mirror_admission_schema.test/helpers/manifest.js');
 const LOCAL_SQL_DIR = path.join(__dirname, '..', '..', '..', 'src', 'sql');
 const HUB_DIR       = process.env.XCHAIN_HUB_DIR || path.join(__dirname, '..', '..', '..', '..', 'xchain-hub');
 const HUB_SQL_DIR   = path.join(HUB_DIR, 'src', 'sql');
-const HUB_COLUMNS   = path.join(HUB_DIR, 'src', 'db', 'schema', 'columns.js');
+const HUB_MIGRATIONS = path.join(HUB_SQL_DIR, 'migrations');
 const COMPAT_GATE   = path.join(__dirname, '..', '..', '..', 'bin', 'check-migration-old-code-compat.js');
 
 const stripSql = Database.prototype.stripSqlLineComments;
@@ -54,15 +55,20 @@ function anchorOf(columns){
     return first > 0 ? columns[first - 1].name : null;
 }
 
-// The `<table>: ['btc', ...]` entries of the hub's migrateAdmissionColumns TABLES map,
-// scraped from source because the helper is a method on the hub's Database mixin.
-function scrapeHubMigrationMap(source){
-    const body = /migrateAdmissionColumns\(\)\s*\{[\s\S]*?const TABLES = \{([\s\S]*?)\};/.exec(source);
-    assert.ok(body, 'could not find migrateAdmissionColumns TABLES in ' + HUB_COLUMNS);
-    const out = {};
-    for(const m of body[1].matchAll(/([a-z_]+):\s*\[([^\]]*)\]/g))
-        out[m[1]] = [...m[2].matchAll(/'([a-z]+)'/g)].map(x => 'admit_block_' + x[1]);
-    return out;
+// Every admission column the hub's dated migrations add, as { table: [column, ...] } in
+// file then statement order, with each column's definition text. The hub retired its
+// migrateAdmissionColumns helper for ledgered .sql migrations, so an already-deployed hub
+// gains these columns only through an ALTER in one of those files.
+function hubMigrationAdmissionColumns(){
+    const out = {}, defs = [];
+    for(const f of fs.readdirSync(HUB_MIGRATIONS).filter(f => f.endsWith('.sql')).sort()){
+        const sql = stripSql.call({}, fs.readFileSync(path.join(HUB_MIGRATIONS, f), 'utf8'));
+        for(const m of sql.matchAll(/ALTER\s+TABLE\s+`?([a-z_]+)`?\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+`?(admit_block[a-z_]*)`?\s+([^;,]+)/gi)){
+            (out[m[1]] = out[m[1]] || []).push(m[2]);
+            defs.push({ where: f + ': ' + m[1] + '.' + m[2], definition: m[3].replace(/\s+AFTER\s+\S+\s*$/i, '').trim() });
+        }
+    }
+    return { columns: out, defs };
 }
 
 // The compat gate's exported maps and drivers (row 7), and a connection stand-in that
@@ -147,15 +153,15 @@ describe('mirror admission schema: the manifest against the hub DDL (sibling)', 
             'the hub DDL admission columns are not the manifest plus the declared hub-only set');
     });
 
-    it('the hub migrateAdmissionColumns map is the manifest plus the hub-only set, column for column', function(){
-        const map = scrapeHubMigrationMap(fs.readFileSync(HUB_COLUMNS, 'utf8'));
+    it('the hub dated migrations add the manifest plus the hub-only set, column for column, each nullable', function(){
+        const { columns, defs } = hubMigrationAdmissionColumns();
         const expected = {};
-        for(const t of Object.keys(M.MIRROR_ADMISSION_COLUMNS)) if(t !== 'oracle_prices') expected[t] = [...M.MIRROR_ADMISSION_COLUMNS[t].columns];
+        for(const t of Object.keys(M.MIRROR_ADMISSION_COLUMNS)) expected[t] = [...M.MIRROR_ADMISSION_COLUMNS[t].columns];
         for(const t of Object.keys(M.HUB_ONLY_ADMISSION_COLUMNS)) expected[t] = [...M.HUB_ONLY_ADMISSION_COLUMNS[t]];
-        assert.deepStrictEqual(map, expected);
-        // The oracle rail is migrated by its own single-column call, outside the map.
-        assert.ok(/migrateAddNullableColumn\('oracle_prices',\s*'admit_block',\s*'BIGINT UNSIGNED DEFAULT NULL'(?:,\s*true)?\)/
-            .test(fs.readFileSync(HUB_COLUMNS, 'utf8')), 'oracle_prices.admit_block is not migrated by the hub helper');
+        const sorted = o => Object.fromEntries(Object.keys(o).sort().map(k => [k, o[k]]));
+        assert.deepStrictEqual(sorted(columns), sorted(expected),
+            'the hub migrations do not add exactly the manifest plus the declared hub-only admission columns');
+        for(const d of defs) assert.strictEqual(d.definition, M.ADMISSION_COLUMN_DDL, d.where);
     });
 });
 

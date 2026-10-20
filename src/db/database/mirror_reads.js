@@ -109,10 +109,12 @@ module.exports = {
     // slot and denying the batch permanently.
     // `author`, when supplied, replaces "authored by the canonical head" with
     // "authored by THIS address", the read-path half of publisher-scoped archive
-    // batches. anchor.js supplies it (gated) so the chunk set a head reassembles - and
-    // the occupancy set the duplicate guard reads - belong to that head's own
+    // batches. The ANCHOR handler always supplies it when the batch has a canonical
+    // head, so the chunk set a head reassembles - and the occupancy set the
+    // duplicate guard reads - belong to that head's own
     // publisher, not to whoever happened to broadcast the earliest row for the seq.
-    // Omitted / null keeps the legacy canonical-head candidate set below fold activation.
+    // Omitted / null binds the set to the canonical head's author; the ANCHOR handler
+    // omits it only when the batch has no canonical head, which leaves the set empty.
     async getAnchorChunks(batchSeq, author){
         let rows = (author !== undefined && author !== null)
             ? await this.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [batchSeq, String(author)])
@@ -159,9 +161,9 @@ module.exports = {
         return { head, chunks };
     },
 
-    // Return this publisher's highest usable v1 archive batch sequence. Invalid
-    // heads cannot seed an allocator, while unverified heads remain usable on a
-    // node that lacks the mirrored snapshot needed to verify their signatures.
+    // Return the highest archive batch sequence this publisher has spent, at any status.
+    // Chunk parent resolution (getAnchorV1ByBatchSeq) picks the author's earliest head
+    // for a seq whatever its status, so a seq held only by an invalid head is still taken.
     async getMaxArchiveBatchSeqByAuthor(author){
         let network = this.config && this.config['NETWORK'];
         let headPredicate = archiveHeadPickPredicate('a')
@@ -169,19 +171,20 @@ module.exports = {
         let rows = await this.doQuery(
             `SELECT MAX(a.match_batch_seq) AS max_batch_seq
              FROM anchor_actions a
-             JOIN index_statuses s  ON s.id = a.status_id
              JOIN actions act       ON act.action_index = a.action_index
              JOIN index_addresses adr ON adr.id = act.source_id
-             WHERE ${headPredicate} AND s.status IN ('valid', 'unverified')
+             WHERE ${headPredicate}
                AND adr.address = ?`,
             [String(author)]);
         let row = rows.length > 0 ? rows[0] : {};
         return row.max_batch_seq != null ? Number(row.max_batch_seq) : null;
     },
 
-    // Archive heads at one match_batch_seq authored by one address, unwired: not
-    // called from any action path yet. Modeled on getMaxArchiveBatchSeqByAuthor's
-    // joins, keyed by seq instead of aggregated to a max.
+    // Archive heads at one match_batch_seq authored by one address, modeled on
+    // getMaxArchiveBatchSeqByAuthor's author joins, keyed by seq instead of aggregated to a max.
+    // Consensus input: Anchor.parseFold's v3 fold re-issue guard (checkFoldArchiveReissue ->
+    // archiveReissueRefusal) rejects a fold on a 'conflict' over these rows, so changing the
+    // row set (version, status or author filter) moves fold verdicts and needs a flag day.
     async getArchiveHeadsByAuthorAndSeq(author, batchSeq){
         let rows = await this.doQuery(
             `SELECT a.batch_crc32, a.match_count, s.status

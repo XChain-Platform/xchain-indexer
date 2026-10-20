@@ -138,6 +138,16 @@ describe('nextBarrierHold / barrierHoldMs @regression @tier1', function () {
         assert.ok(first, 'a mirror barrier on the same block is a real hold');
         assert.strictEqual(nextBarrierHold(first, 900, BRIDGE_PROOF_BARRIER, null, NOW + 60000), null);
     });
+
+    // A train activation halt clears only when the node is updated, so neither a mirror
+    // resync nor a host fix can shorten it and the ceiling must never fire over it.
+    it('a train activation halt is NOT a hold and drops one already running', function () {
+        const TRAIN_HALT = 'train_activation_halt: rule set 3 required at 900';
+        assert.strictEqual(nextBarrierHold(null, 900, TRAIN_HALT, null, NOW), null);
+        const first = nextBarrierHold(null, 900, 'attest_response_sync_barrier', null, NOW);
+        assert.ok(first, 'a mirror barrier on the same block is a real hold');
+        assert.strictEqual(nextBarrierHold(first, 900, TRAIN_HALT, null, NOW + 60000), null);
+    });
 });
 
 describe('nextBarrierHold / barrierHoldMs @regression @tier1', function () {
@@ -166,23 +176,35 @@ describe('nextBarrierHold / barrierHoldMs @regression @tier1', function () {
 describe('isMirrorBarrierReason @regression @tier1', function () {
 
     const INDEXER_SRC = require('../../helpers/indexer_class_source.js').readIndexerClassSource();
-    const REASONS = [...new Set(
-        [...INDEXER_SRC.matchAll(/this\.stallReason = '([a-z_]+)'/g)].map(m => m[1]))];
+    // Literal, constant and prefixed sites alike; the reader throws on a form it cannot resolve.
+    const { stallReasonSites, countStallReasonAssignments } = require('../../helpers/stall_reason_sites.js');
+    const { REMOTE_TOKEN_RETRY_STALL_REASON } = require('../../../src/actions/cross_chain_remote_token.js');
+    const SITES = stallReasonSites(INDEXER_SRC, { REMOTE_TOKEN_RETRY_STALL_REASON });
+    const REASONS = [...new Set(SITES.map(s => s.reason))];
 
     const HOST_FAULTS = ['vm_executor_unavailable', 'anchor_reward_proof_unavailable',
                          'rollcall_proof_unavailable', 'list_share_halt'];
+    // Not mirror barriers either, so no resync: a proof check and two prose reasons by prefix.
+    const OTHER_NON_MIRROR = ['capability_proof_unavailable', 'parse_exception:', 'train_activation_halt:'];
 
     it('finds every stall reason the block loop actually sets', function () {
+        assert.strictEqual(SITES.length, countStallReasonAssignments(INDEXER_SRC),
+            'a non-null stallReason assignment is outside the scan; extend stall_reason_sites.js to read it');
         assert.ok(REASONS.length >= 10, 'expected the full set of defer sites, got ' + REASONS.join(','));
-        for (const f of HOST_FAULTS) assert.ok(REASONS.includes(f), 'missing host fault ' + f);
+        for (const f of HOST_FAULTS.concat(OTHER_NON_MIRROR))
+            assert.ok(REASONS.includes(f), 'missing non-mirror reason ' + f);
     });
 
     it('classifies every mirror barrier as resync-able and every host fault as not', function () {
         for (const reason of REASONS) {
-            const expected = !HOST_FAULTS.includes(reason);
+            const expected = !HOST_FAULTS.includes(reason) && !OTHER_NON_MIRROR.includes(reason);
             assert.strictEqual(isMirrorBarrierReason(reason), expected,
                 reason + ' is classified wrongly; a host fault must not force a hub-mirror resync');
         }
+        // REASONS reads a prose reason by its prefix only, so whole prose reasons are pinned here: their text never makes them a barrier.
+        for (const prose of ['parse_exception: lookup failed near price_sync_barrier',
+                             'train_activation_halt: waiting on oracle_sync_barrier'])
+            assert.strictEqual(isMirrorBarrierReason(prose), false, prose + ' must not force a hub-mirror resync');
     });
 
     it('is total on junk input', function () {

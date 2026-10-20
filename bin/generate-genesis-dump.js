@@ -21,7 +21,7 @@
  * Usage (Node 22, MariaDB reachable):
  *   INDEXER_COIN=BTC INDEXER_NETWORK=regtest \
  *     XCHAIN_GENESIS_BLOCK=100 GENESIS_LEDGER_PATH=data/genesis/BTC-ledger.csv \
- *     node scripts/generate-genesis-dump.js data/genesis/BTC-genesis-dump.ndjson.gz
+ *     node bin/generate-genesis-dump.js data/genesis/BTC-genesis-dump.ndjson.gz
  *
  * Uses the integration test harness for DB wiring (scratch xchain_test_* DBs), so it
  * never touches a live indexer DB. The dump itself is environment-independent.
@@ -34,11 +34,11 @@ const { decoderQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require(path.join(SETUP, 'db-connection'));
 const DecoderSeeder = require(path.join(SETUP, 'decoder-seeder'));
 const { initIndexer, destroyIndexer } = require(path.join(SETUP, 'indexer-launcher'));
-const GenesisDump = require(path.join(__dirname, '..', 'src', 'chain', 'genesis_dump'));
+const GenesisDump = require(path.join(__dirname, '..', 'src', 'chain', 'genesis_dump.js'));
 
 const outFile = process.argv[2];
 if(!outFile){
-    console.error('usage: node scripts/generate-genesis-dump.js <out-file.ndjson.gz>');
+    console.error('usage: node bin/generate-genesis-dump.js <out-file.ndjson.gz>');
     process.exit(2);
 }
 

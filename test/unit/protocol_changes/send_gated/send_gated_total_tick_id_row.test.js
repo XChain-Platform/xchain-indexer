@@ -55,7 +55,7 @@ describe('protocol_changes SEND_GATED_TOTAL_TICK_ID row', function () {
         for (const coin of ['BTC', 'LTC', 'DOGE']) assert.strictEqual(row[coin + ':testnet'], row.testnet, coin);
     });
 
-    it('is active on regtest at genesis and inactive on every production network', function () {
+    it('is active on regtest at genesis, inactive on every mainnet chain and armed on each testnet chain', function () {
         assert.strictEqual(registry.activeAt(KEY, 'regtest', 'BTC', 0, 0), true);
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.strictEqual(registry.activeAt(KEY, 'mainnet', coin, 1, UNARMED - 1), false, coin + ':mainnet');

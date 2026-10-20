@@ -142,3 +142,5 @@ CREATE UNIQUE INDEX uq_attest_response ON attestation_responses (network, reques
 CREATE        INDEX idx_effective_time ON attestation_responses (network, effective_time);
 -- Deterministic applier order within a block.
 CREATE        INDEX idx_request_order  ON attestation_responses (network, request_block_index, request_action_index);
+-- Serve the explorer's public per-batch response lookup, which has no window bound.
+CREATE        INDEX idx_batch_action   ON attestation_responses (network, batch_action_index);

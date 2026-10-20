@@ -59,8 +59,8 @@ async function reassembleAtHead(handler, data, error, format){
     if(!error &&
        (data['STATUS'] === 'valid' || data['STATUS'] === 'unverified') &&
        Number(data['TOTAL_CHUNKS']) > 1){
-        // At/after the publisher-scoped-archive flag day, the head reassembles its OWN
-        // publisher's chunks. Below it, the canonical-head rule (whatever it selects) is kept.
+        // The head reassembles its OWN publisher's chunks: archiveAuthorScope scopes the
+        // set to the head's source at every height whenever the batch has a canonical head.
         let scope = await handler.archiveAuthorScope(data['MATCH_BATCH_SEQ'], data['SOURCE']);
         let chunks = await handler.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
         let ordered = aaq.archiveChunkCoverage(chunks, Number(data['TOTAL_CHUNKS']));

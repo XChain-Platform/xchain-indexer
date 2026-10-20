@@ -36,7 +36,8 @@ class AnchorProofUnavailableError extends Error {
 
 // Whether the LEGACY_ANCHOR_REWARD_PIN gate is on for this block. It is evaluated at
 // blockIndex through `m.protocolChanges.isEnabled`; an explicit boolean
-// `m.legacyAnchorRewardPin` overrides it. With neither supplied the gate reads as off.
+// `m.legacyAnchorRewardPin` overrides it for focused tests. Production derivation supplies
+// protocolChanges from XChainIndexer's block pass; with neither supplied the gate reads as off.
 async function legacyPinGateOn(m){
     if(typeof m.legacyAnchorRewardPin === 'boolean'){ return m.legacyAnchorRewardPin; }
     if(m.protocolChanges && typeof m.protocolChanges.isEnabled === 'function'){

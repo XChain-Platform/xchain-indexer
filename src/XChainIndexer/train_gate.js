@@ -25,6 +25,8 @@ const fs              = require('fs');
 const path            = require('path');
 const trainActivation = require('../consensus/gates/train_gate.js');
 const { getLogger }   = require('../observability/index.js');
+// The halt reason's prefix comes from the stall verdicts that read it, so a rename cannot leave the halt graded as a wedge.
+const { TRAIN_ACTIVATION_HALT_PREFIX, isTrainActivationHalt } = require('./stall_health.js');
 
 module.exports = {
 
@@ -97,7 +99,7 @@ module.exports = {
         this.trainActivation = verdict;
 
         if(verdict.status === 'clear'){
-            if(this.stallReason && /^train_activation_halt:/.test(this.stallReason)){
+            if(isTrainActivationHalt(this.stallReason)){
                 this.stallReason   = null;
                 this.stallClearsAt = null;
             }
@@ -119,7 +121,7 @@ module.exports = {
             getLogger().error('XChainIndexer: TRAIN ACTIVATION HALT at block ' + blockToParse + ' - ' + verdict.reason +
                 ' REQUIRED OPERATOR ACTION: update this node to the platform version that carries the ' +
                 'required rule set. Clearing the marker by hand is not a supported path.');
-        this.stallReason   = 'train_activation_halt: ' + verdict.reason;
+        this.stallReason   = TRAIN_ACTIVATION_HALT_PREFIX + ' ' + verdict.reason;
         this.stallClearsAt = null;
         await this.recordTrainActivationHalt(blockToParse, verdict);
         return true;

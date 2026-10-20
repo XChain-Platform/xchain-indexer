@@ -15,7 +15,7 @@
 'use strict';
 
 const assert = require('assert');
-const BalanceBench = require('../../../scripts/bench_net_balance.js');
+const BalanceBench = require('../../../bin/bench_net_balance.js');
 const {
     getHottestLedgerKeys,
     ledgerKeysForBlock,

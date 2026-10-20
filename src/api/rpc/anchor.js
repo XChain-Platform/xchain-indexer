@@ -136,8 +136,9 @@ function anchorConfirmationsRpc({ indexer }){
 // resuming publisher re-send only the chunks that are actually missing, in the
 // slots of the batch its previous process allocated.
 //
-// An author-only request instead returns that publisher's highest usable archive
-// sequence. It shares the method so existing content-key callers need no wire change.
+// An author-only request instead returns the highest archive sequence that publisher
+// has spent, at any status. It shares the method so existing content-key callers need
+// no wire change.
 function archiveAnchorRpc({ indexer }){
     return {
         async getarchiveanchor({chain, network, block_index, checkpoint_seq, batch_crc32, match_count, author}){

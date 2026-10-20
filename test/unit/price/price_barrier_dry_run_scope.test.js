@@ -139,10 +139,12 @@ describe('the price barrier is scoped to consensus, not to "a context exists"', 
         // above it (a boot gate added at the top of actions.js did exactly that), which taught
         // the reflex of re-pinning the numbers instead of reading what moved. The enclosing
         // function is what the assertion cares about; it changes only for a real new caller.
+        // Skip control statements, which share a method header's indent and shape.
+        const CONTROL = new Set(['if', 'for', 'while', 'switch', 'catch', 'return', 'await']);
         const enclosingMethod = (lines, index) => {
             for (let i = index; i >= 0; i--) {
                 const m = /^(?:\s{4}(?:async\s+)?|(?:async\s+)?function\s+)([A-Za-z_$][\w$]*)\s*\(/.exec(lines[i]);
-                if (m) return m[1];
+                if (m && !CONTROL.has(m[1])) return m[1];
             }
             return '(top level)';
         };

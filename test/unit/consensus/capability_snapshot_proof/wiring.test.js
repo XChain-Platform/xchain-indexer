@@ -175,15 +175,9 @@ describe('capability snapshot proof database wiring @regression @tier1', functio
 });
 
 // The e2e regtest stack (one hub, XDEX_SEED_LOCAL_VALIDATOR=1, no BTC stake) end to end
-// through the real verifier: an LTC indexer mirroring the hub's seeded cross_chain row must
-// apply it, or no bridged credit ever lands on LTC. The gate is deferred on every network
-// for the v0.25.0 train, regtest included, so this suite arms it through the activeAt seam
-// and every other gate read still resolves through the real registry.
+// through the real regtest gate and the real verifier: an LTC indexer mirroring the hub's
+// seeded cross_chain row must apply it, or no bridged credit ever lands on LTC.
 describe('capability snapshot proof database wiring: regtest seeded hub row @regression @tier1', function () {
-    beforeEach(function () {
-        sinon.stub(gates, 'activeAt').callThrough().withArgs(KEY).returns(true);
-    });
-
     const crypto = require('crypto');
     const M = require('../../../../src/consensus/merkle.js');
     const stateSubtree = require('../../../../src/consensus/gates/state_subtree_gate.js');

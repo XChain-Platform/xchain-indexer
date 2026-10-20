@@ -37,10 +37,17 @@ function isRound(v) {
     return Number.isSafeInteger(v) && v >= 0;
 }
 
+// A JSON number or a decimal-digit string as a number, anything else NaN. Typed
+// before it is numbered, because Number() reads null, '', [] and false as 0 and '0x10' as 16.
+function integerParam(v) {
+    if (typeof v === 'number') return v;
+    return (typeof v === 'string' && /^\d+$/.test(v)) ? Number(v) : NaN;
+}
+
 function validateInclusiveBounds(body, firstName, lastName) {
     body = body || {};
-    let first = Number(body[firstName]);
-    let last  = Number(body[lastName]);
+    let first = integerParam(body[firstName]);
+    let last  = integerParam(body[lastName]);
     if (!isRound(first)) return { ok: false, error: firstName + ' must be a non-negative integer' };
     if (!isRound(last))  return { ok: false, error: lastName + ' must be a non-negative integer' };
     if (first > last)    return { ok: false, error: firstName + ' must not exceed ' + lastName };
@@ -48,7 +55,7 @@ function validateInclusiveBounds(body, firstName, lastName) {
 }
 
 function validatedLimit(body) {
-    let limit = body.limit === undefined || body.limit === null ? PRICE_BATCHES_DEFAULT_LIMIT : Number(body.limit);
+    let limit = body.limit === undefined || body.limit === null ? PRICE_BATCHES_DEFAULT_LIMIT : integerParam(body.limit);
     if (!Number.isInteger(limit) || limit < 1) return { ok: false, error: 'limit must be a positive integer' };
     return { ok: true, limit: Math.min(limit, PRICE_BATCHES_MAX_LIMIT) };
 }

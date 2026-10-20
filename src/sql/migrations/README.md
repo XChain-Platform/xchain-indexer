@@ -1,10 +1,6 @@
-# Legacy manual runbook SQL (NOT auto-applied)
+# Migrations
 
-The `.sql` files in this directory are **legacy, manual, one-off runbook scripts**.
-They are historical and are **not** read, tracked, checksummed, or applied by the
-migration runner.
-
-The runner-tracked migration home is **`src/sql/migrations/`**. That is the only
+This directory, **`src/sql/migrations/`**, is the only migration home. It is the only
 directory `Database.runMigrations()` scans, records in the `schema_migrations`
 ledger, and enforces immutability/checksum on. New migrations go there, tagged
 `-- xchain:migration mode=auto|manual` (auto applies at boot; manual applies via
@@ -29,7 +25,3 @@ source tree it is about to deploy so it can refuse before recreating the contain
 Each registered file also carries a `Database.MIGRATION_PRECONDITIONS` predicate, so
 a database whose boot already built the migration's end state records it as applied
 instead of leaving it pending with no ledger row for the deploy check to refuse on.
-
-Do not add new migrations here. If a script in this directory still needs to run
-against a database, apply it by hand and, if it should become part of the tracked
-schema baseline, port it into `src/sql/migrations/` with the appropriate tag.

@@ -374,7 +374,7 @@ module.exports = {
         }
 
         // Chain-identity handshake, before a single row of this page is applied. The
-        // three cross-chain snapshot envelopes carry the hub's own btc_chain_id (the
+        // CROSS_CHAIN_TABLES snapshot envelopes carry the hub's own btc_chain_id (the
         // block-1 hash of the Bitcoin chain its indexer pushes tips from), which is how
         // a consumer with no Bitcoin chain of its own - a DOGE or LTC indexer, the
         // explorer's display mirror - learns which chain to fence on. A Bitcoin indexer

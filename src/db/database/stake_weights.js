@@ -37,6 +37,10 @@ const { getLogger } = require('../../observability/index.js');
 // and every mixin read the same instance of each.
 const { requireStakeWeight, normalizeStakeAmount, usesCapabilitySnapshot } = require('../shared.js');
 
+const { createHeldLog } = require('../../consensus/capability_snapshot_proof/held_log.js');
+// Logs, once a minute per row, why a mirror-resolved row is still held.
+const logHeldProof = createHeldLog({ warn: message => getLogger().warn(message) });
+
 const CAPABILITY_SNAPSHOT_PROOF_ACTIVATION =
     'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION';
 
@@ -49,6 +53,7 @@ async function judgeMirrorResolvedRow(db, row, capability, opts){
         row, proofOpts, capabilityProof.verifyCapabilitySnapshotProof);
     if(result.firstUse)
         getLogger().warn('Capability snapshot proof is using an unpinned regtest checkpoint validator set for first use.');
+    if(result.verdict === 'held') logHeldProof(row, result.reason);
     return result;
 }
 
@@ -157,34 +162,35 @@ module.exports = {
         return { rows, truncated };
     },
 
-    // Re-derive ONE hub-mirrored capability_snapshots row against this node's OWN
-    // authoritative stakes at the row's BURIED snapshot_block, and say whether the hub's
-    // claim contradicts what this chain can prove.
+    // Judge ONE hub-mirrored capability_snapshots row and say whether the hub's claim
+    // contradicts what this chain can prove.
     //
     // capability_snapshots is the only mirrored table with no authentication on the
     // wire: rows arrive over a bare SELECT and land via INSERT IGNORE, and they are the
     // verification authority every off-BTC resolver reads (cross_chain, oracle_publish,
-    // price, attestation). The full remedy is an SMT membership proof against the BTC
-    // state_checkpoints stakes_root, which needs a new hub endpoint, a trust anchor, an
-    // activation height and a grandfathering watermark. This is the FIRST step of that
-    // ladder and nothing more: falsifiability, not coverage.
-    //
-    // Its honest limit, stated so no caller mistakes it for the proof: it protects BTC
-    // ONLY, because BTC is the one chain whose capability stakes are local and therefore
-    // the one chain that can re-derive a row without trusting anyone. It is also the one
-    // chain that does NOT read the mirror to resolve a capability (usesCapabilitySnapshot
-    // is false on BTC). What it buys is that a hub serving FORGED validator sets is
-    // caught on the BTC indexers rather than being silently mirrored everywhere.
+    // price, attestation). usesCapabilitySnapshot picks one of two judges:
+    //   - A chain that RESOLVES the capability from the mirror has no local stakes to
+    //     re-derive from. Once CAPABILITY_SNAPSHOT_PROOF_ACTIVATION is active at the row's
+    //     BTC snapshot_block, judgeMirrorResolvedRow checks a hub checkpoint proof against
+    //     a pinned trust set and fails closed to 'held' on every fault. Below that height
+    //     the verdict is 'unknown'.
+    //   - BTC, whose capability stakes are local, re-derives the row against its OWN
+    //     authoritative stakes at the row's BURIED snapshot_block. That buys
+    //     falsifiability, not coverage: a hub serving FORGED validator sets is caught on
+    //     the BTC indexers rather than being silently mirrored everywhere.
     //
     // Verdict shape is anchor_proof_client.js's, deliberately:
-    //   'verified' - the row's (signing_pubkey, source, amount) matches this node's own
+    //   'verified' - BTC: the row's (signing_pubkey, source, amount) matches this node's own
     //                effective-signer set and source aggregate at the buried snapshot_block.
-    //   'refused'  - this node CAN re-derive that block and the row contradicts it.
+    //                Mirror path: the hub proof checks out against the pinned trust set.
+    //   'refused'  - this node CAN judge the row and it contradicts the chain or the proof.
+    //   'held'     - mirror path only: the proof cannot be judged yet. The caller keeps the
+    //                row out of the mirror and retries it.
     //   'unknown'  - this node cannot judge (block not reached, capability not local,
-    //                set truncated, read failed). The caller applies the row as before:
-    //                an unjudgeable row must never become a mirror hole.
+    //                set truncated, read failed, proof gate inactive). The caller applies
+    //                the row as before: an unjudgeable row must never become a mirror hole.
     //
-    // The local set is re-derived with minStake '0' ON PURPOSE. The hub filters its rows
+    // On the BTC path the local set is re-derived with minStake '0' ON PURPOSE. The hub filters its rows
     // by its OWN authoritative MIN_STAKE, which can legitimately differ from this node's
     // local floor, so re-deriving at the local floor would refuse honest rows the moment
     // the two drifted. At '0' the local set is the widest superset (every source with any

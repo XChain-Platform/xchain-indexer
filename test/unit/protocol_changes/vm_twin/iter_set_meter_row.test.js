@@ -46,7 +46,7 @@ describe('protocol_changes/ITER_SET_METER row @regression @tier1', function () {
         ]);
     });
 
-    it('is unarmed on production networks and active from regtest genesis', async function () {
+    it('is unarmed on mainnet, armed on testnet at its instant and active from regtest genesis', async function () {
         const row = ProtocolChanges.get(KEY);
         await assertArmedOnTestnetOnly('ITER_SET_METER', row);
         assert.strictEqual(ProtocolChanges.ITER_SET_METER_MAINNET_TIME, ProtocolChanges.UNARMED);

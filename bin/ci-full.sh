@@ -251,8 +251,30 @@ run_tier "drift: coin consensus-pin conformance" node -e '
   }
   console.log("consensus pin conformance OK (testnet, regtest)");
 '
-run_tier "drift: pre-flight <-> handler gate" \
-  env XCHAIN_INDEXER_PATH="$SELF" node "$SIB/xchain-sdk/bin/check-preflight-drift.js"
+sdk_preflight_drift_check() {
+  local sdk_head sdk_develop sdk_snapshot status
+  sdk_head="$(git -C "$XCHAIN_SDK_PATH" rev-parse HEAD 2>/dev/null || true)"
+  sdk_develop="$(git -C "$XCHAIN_SDK_PATH" rev-parse origin/develop 2>/dev/null || true)"
+  if [ -z "$sdk_develop" ] || [ "$sdk_head" = "$sdk_develop" ] || \
+      ! git -C "$XCHAIN_SDK_PATH" merge-base --is-ancestor "$sdk_head" "$sdk_develop"; then
+    env XCHAIN_INDEXER_PATH="$SELF" node "$XCHAIN_SDK_PATH/bin/check-preflight-drift.js"
+    return
+  fi
+
+  mkdir -p "$SELF/tmp" || return 1
+  sdk_snapshot="$(mktemp -d "$SELF/tmp/sdk-drift.XXXXXX")" || return 1
+  if git -C "$XCHAIN_SDK_PATH" archive "$sdk_develop" | tar -x -C "$sdk_snapshot"; then
+    echo "ci:full: drift gate uses xchain-sdk origin/develop $sdk_develop (adjacent HEAD is $sdk_head)"
+    NODE_PATH="$XCHAIN_SDK_PATH/node_modules" XCHAIN_INDEXER_PATH="$SELF" \
+      node "$sdk_snapshot/bin/check-preflight-drift.js"
+    status=$?
+  else
+    status=1
+  fi
+  rm -rf -- "$sdk_snapshot"
+  return "$status"
+}
+run_tier "drift: pre-flight <-> handler gate" sdk_preflight_drift_check
 
 # --- job: coverage ---------------------------------------------------------
 run_tier "coverage ratchet (coverage:check)" env XCHAIN_REQUIRE_SIBLINGS=1 npm run coverage:check

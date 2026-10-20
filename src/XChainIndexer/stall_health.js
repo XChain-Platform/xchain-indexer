@@ -36,11 +36,24 @@ function isTrainActivationHalt(stallReason){
 // The no-progress window a stall is judged against. The price-landing barrier waits on
 // the OTHER landing chains' published landed times, which move on their own cadence, so
 // it carries its own window (priceLandingGraceMs) instead of the generic stall grace.
-// Any other reason, or an unusable priceLandingGraceMs, falls back to graceMs.
-function graceFor(stallReason, graceMs, priceLandingGraceMs){
+// The roll-call and capability proof waits carry proofWaitGraceMs, sized above the hold
+// ceiling so they publish *_proof_wait, then *_proof_stuck, before the one restart.
+// Any other reason, or an unusable window, falls back to graceMs.
+function graceFor(stallReason, graceMs, priceLandingGraceMs, proofWaitGraceMs){
     if(stallReason === PRICE_LANDING_BARRIER && Number.isFinite(priceLandingGraceMs) && priceLandingGraceMs > 0)
         return priceLandingGraceMs;
+    if((stallReason === ROLLCALL_PROOF_REASON || stallReason === CAPABILITY_PROOF_REASON)
+       && Number.isFinite(proofWaitGraceMs) && proofWaitGraceMs > 0)
+        return proofWaitGraceMs;
     return graceMs;
+}
+
+// The proof-wait window: twice the barrier hold ceiling, never below the stall grace, so
+// the ceiling's *_proof_stuck class always shows before the wedge. A disabled ceiling
+// (0 or unusable) leaves the stall grace. Operational only, NOT a consensus parameter.
+function resolveProofWaitGraceMs(graceMs, barrierHoldCeilingMs){
+    let ceilingMs = (Number.isFinite(barrierHoldCeilingMs) && barrierHoldCeilingMs > 0) ? barrierHoldCeilingMs : 0;
+    return Math.max(2 * ceilingMs, graceMs);
 }
 
 // Discriminate a genuinely WEDGED indexer from one that is merely deferring the
@@ -75,14 +88,18 @@ function graceFor(stallReason, graceMs, priceLandingGraceMs){
 // begins more than the grace after the previous commit, so a healthy indexer read wedged
 // (503, container unhealthy) the moment its wait began. A barrier held past the grace with
 // no progress still reads wedged, because the hold instant stops moving while it persists.
-function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null){
+//
+// `proofWaitGraceMs` is the roll-call and capability proof waits' own window (see graceFor).
+// Past it the 503 buys one autoheal restart per episode, which can clear in-memory proof
+// state (capability holds, the overflow flag, a cached failed manifest-hash read).
+function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null, proofWaitGraceMs = null){
     if(!stallReason) return false;
     if(stallReason === BRIDGE_PROOF_BARRIER) return false;
     if(isTrainActivationHalt(stallReason)) return false;
     if(lastBlockCommittedAt == null) return false;
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
     let windowStart = Number.isFinite(barrierHoldSinceMs) ? Math.max(lastBlockCommittedAt, barrierHoldSinceMs) : lastBlockCommittedAt;
-    return (now - windowStart) > graceFor(stallReason, graceMs, priceLandingGraceMs);
+    return (now - windowStart) > graceFor(stallReason, graceMs, priceLandingGraceMs, proofWaitGraceMs);
 }
 
 // True when the current stall is nothing but a wait for WALL CLOCK to reach a
@@ -117,22 +134,24 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 //   'price_landing_wait' - waiting on the other landing chains' landed times, judged
 //                         against its own priceLandingGraceMs; wedged once that passes.
 //   'barrier_defer'     - a real barrier defer (mirror behind, host fault), still
-//                         advancing inside the grace window.
+//                         advancing inside the grace window. The roll-call and capability
+//                         proof waits read this inside proofWaitGraceMs.
 //   'wedged'            - stalled with no commit for longer than the grace window.
 // 'future_block_wait' and 'wedged' cannot collide: stallWedged() already declines to
 // wedge a stall whose clear instant is still ahead.
-function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null){
+function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null, proofWaitGraceMs = null){
     if(!stallReason) return 'none';
     if(stallReason === BRIDGE_PROOF_BARRIER) return 'bridge_proof_wait';
     if(isTrainActivationHalt(stallReason)) return 'train_activation_halt';
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
-    if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs, priceLandingGraceMs, barrierHoldSinceMs)) return 'wedged';
+    if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs, priceLandingGraceMs, barrierHoldSinceMs,
+                   proofWaitGraceMs)) return 'wedged';
     if(stallReason === PRICE_LANDING_BARRIER) return 'price_landing_wait';
     return 'barrier_defer';
 }
 
 // The stall class the status surfaces publish: stallClassOf's verdict, refined for the
-// two stalls a restart cannot clear and that otherwise read as something milder.
+// stalls that otherwise read as something milder.
 //   'upstream_halted'     - the paired decoder carries a live REORG_HALT marker and the
 //                           indexer has no stall of its own. It has caught up to the
 //                           decoder's frozen tip, so without this it reads 'none'.
@@ -141,8 +160,14 @@ function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClea
 //                           returns, not on a clock, so like bridge_proof_wait it is a
 //                           wait rather than a mirror-barrier defer.
 //   'rollcall_proof_stuck' - the same wait once the block's hold has passed its ceiling.
+//   'capability_proof_wait' - a mirrored capability snapshot row is held because its
+//                           checkpoint proof cannot be verified yet. It clears when a
+//                           retry verifies the proof, not on a clock.
+//   'capability_proof_stuck' - the same wait once the block's hold has passed its ceiling.
 // A 'wedged' verdict is never refined away: the liveness contract (the /status 503 and
-// what autoheal reads) is stallWedged() alone, and this function changes none of it.
+// what autoheal reads) is stallWedged() alone, and this function changes none of it. The
+// proof waits wedge only past proofWaitGraceMs, above the ceiling, so in one process
+// lifetime they run *_proof_wait, then *_proof_stuck (/ready 503), then 'wedged'.
 // HEALTH REPORTING ONLY: hashes nothing and gates no wait.
 function publishedStallClass(baseClass, stallReason, { decoderReorgHalted = false, ceilingExceeded = false } = {}){
     if(baseClass === 'wedged') return baseClass;
@@ -181,7 +206,7 @@ function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
 // the whole rule is testable without a block loop. It returns the new record, or null
 // when there is no hold to carry.
 //
-// Four things reset it, and each is a case where the mirror wait is NOT open-ended:
+// Five things reset it, and each is a case where the mirror wait is NOT open-ended:
 //   - no stall reason at all (the loop is advancing),
 //   - a different block at the head of the queue (the previous one committed),
 //   - a future-stamped block (waitingOnFutureBlock). That wait already has its own named
@@ -190,22 +215,29 @@ function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
 //     ceiling on the healthiest case there is.
 //   - a bridge proof wait. It clears on a quorum checkpoint or origin endpoint, so a
 //     hub-mirror resync cannot shorten it either.
+//   - a train activation halt. Only updating the node to a build with the required rule
+//     set clears it, so the ceiling would name a barrier or host fault that is not there.
 function nextBarrierHold(prev, block, stallReason, stallClearsAtMs, now){
     if(!stallReason || block == null) return null;
     if(stallReason === BRIDGE_PROOF_BARRIER) return null;
+    if(isTrainActivationHalt(stallReason)) return null;
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return null;
     if(prev && prev.block === block)
         return { block: block, reason: stallReason, since: prev.since, notified: prev.notified };
     return { block: block, reason: stallReason, since: now, notified: false };
 }
 
-// True for the stall reasons named as hub-mirror barriers. Every mirror barrier's reason
-// ends in '_barrier' (price/oracle/match/call/call_presence/anchor_attest/snapshot); the
-// host faults deliberately do not (vm_executor_unavailable,
-// anchor_reward_proof_unavailable, rollcall_proof_unavailable). Proof waits opt out in
-// nextBarrierHold before the hold-ceiling remedy can request a mirror resync.
+// True for the stall reasons named as hub-mirror barriers. The '_barrier' suffix is the
+// contract: every mirror-barrier defer site sets a reason ending in it (the full set is
+// read off the source by the barrier_mapping and barrier_hold_ceiling tests), and the
+// host faults and the other proof waits deliberately do not (vm_executor_unavailable,
+// anchor_reward_proof_unavailable, rollcall_proof_unavailable,
+// capability_proof_unavailable, list_share_halt). The bridge proof wait
+// also ends in '_barrier', and it opts out in nextBarrierHold before the hold-ceiling
+// remedy can request a mirror resync. Tests the leading word only, so a reason that
+// carries prose (parse_exception, train_activation_halt) never forces a resync.
 function isMirrorBarrierReason(stallReason){
-    return typeof stallReason === 'string' && /_barrier$/.test(stallReason);
+    return typeof stallReason === 'string' && /_barrier$/.test(stallReason.trim().split(/[\s:]/)[0]);
 }
 
 // Milliseconds the current hold has lasted, or 0 when nothing is held.
@@ -226,6 +258,7 @@ module.exports = {
     TRAIN_ACTIVATION_HALT_PREFIX,
     isTrainActivationHalt,
     stallWedged,
+    resolveProofWaitGraceMs,
     waitingOnFutureBlock,
     stallClassOf,
     publishedStallClass,

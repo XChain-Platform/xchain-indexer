@@ -135,6 +135,13 @@ const ALLOWLIST = [
                 'checkpoint_seq is unique per row and the two terms are already a total order.'
     },
     {
+        clause: 'snapshot_block ASC, checkpoint_seq DESC',
+        reason: 'getMirroredStateCheckpointCandidatesAfterAnchor: the query pins chain and ' +
+                'network, and state_checkpoints carries UNIQUE KEY uq_chain_seq (chain, network, ' +
+                'checkpoint_seq) (src/sql/state_checkpoints.sql), so within the filtered set ' +
+                'checkpoint_seq is unique per row and the two terms are already a total order.'
+    },
+    {
         clause: 'checkpoint_seq DESC',
         reason: 'readVerifiedCheckpoint: the query pins chain and network, and state_checkpoints ' +
                 'carries UNIQUE KEY uq_chain_seq (chain, network, checkpoint_seq) ' +

@@ -124,8 +124,8 @@ module.exports = {
         this.util.resetLists();
 
         // ORDER_MATCH / SWAP_MATCH are dispatched by the ORDER / SWAP handler with the
-        // ORIGINATING action's OWN record (order.js / swap.js), and they overwrite its
-        // STATUS and ACTION_INDEX with the match's (order_match.js sets STATUS to
+        // ORIGINATING action's OWN record (order/index.js / swap/index.js), and they overwrite its
+        // STATUS and ACTION_INDEX with the match's (order_match/settle.js sets STATUS to
         // 'pending_coinpay' for a native-coin leg, and takes ACTION_INDEX for the match row).
         // On the real path that is invisible: the block loop discards processTransaction's
         // return value and every row was already written from the handler's own state. The
@@ -148,7 +148,7 @@ module.exports = {
         // order (other actions keep that fixed handler order). Either way the wire ^<id>
         // address form resolves identically on every node. Runs after createActionIndex
         // (which already registered SOURCE first) and covers the BATCH path too, since
-        // batch.js dispatches each sub-action back through processAction.
+        // batch/index.js dispatchSubCommands sends each sub-action back through processAction.
         await this.assignActionAddressIds(action, params, data, error);
 
         // Process the action with the correct handler (dispatchCoreAction, then

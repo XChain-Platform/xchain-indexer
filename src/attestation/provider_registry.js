@@ -20,20 +20,18 @@
  * validation only; the hub side does the actual fetch and consensus.
  *
  * Effective set = built-in DEFAULTS (`http_get`, `llm`) overlaid with an optional
- * governance/operator config block (`config.ATTESTATION.PROVIDERS`), the same
- * pattern used for STAKING.CAPABILITIES[*].MIN_STAKE: DEFAULTS are the shipped
- * floor, and any config-added/tuned provider takes effect only through a
- * coordinated rollout every node applies in lockstep. When no config block is
- * present (the shipping state today) the effective set is byte-identical to
- * DEFAULTS, so this stays a no-op consensus-wise until governance registers a
- * provider.
+ * config block (`config.ATTESTATION.PROVIDERS`). The effective map feeds consensus
+ * (VM deadline caps, attest deadlines, the provider stake floor) but the block sits
+ * outside CONSENSUS_CONFIG_PIN, so the indexer refuses to boot with one
+ * (XChainIndexer/runtime_config.js) and every running node resolves DEFAULTS. The
+ * constructor argument stays as the seam the unit tests drive.
  *
  * A fully dynamic on-chain governance load (reading ATTESTATION_PROVIDER:{id}
  * configs whose activation is block-anchored, like the llm approved_models
  * ladder, spec §16 Phase 6) is deferred: it needs a deterministic,
  * block-anchored config read so a mid-history provider change replays
- * identically. Until that lands, this DEFAULTS-plus-static-config overlay is
- * the consensus-safe seam.
+ * identically. Until that lands, a provider change ships as a DEFAULTS edit in a
+ * coordinated release.
  *
  ********************************************************************/
 
@@ -102,6 +100,14 @@ class ProviderRegistry {
     // tests) it resolves to DEFAULTS unchanged.
     constructor(config) {
         this.providers = buildEffectiveProviders(config);
+    }
+
+    // The provider ids an ATTESTATION.PROVIDERS block would add or replace: its
+    // object-valued entries, the same rule buildEffectiveProviders applies.
+    static overlayIds(config) {
+        let overlay = config && config.ATTESTATION && config.ATTESTATION.PROVIDERS;
+        if (!overlay || typeof overlay !== 'object') return [];
+        return Object.keys(overlay).filter(id => overlay[id] && typeof overlay[id] === 'object');
     }
 
     // Whether a provider id is known and currently enabled

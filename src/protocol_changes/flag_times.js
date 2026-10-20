@@ -242,7 +242,8 @@ const READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME = UNARMED;
 
 // Testnet is active from genesis in the VM table, so the mirror is 0.
 const READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME = 0;
-// Mirrors the VM table; production networks remain inert and regtest is set on the row.
+// Mirrors the VM table: mainnet stays inert, testnet is armed at the instant below
+// (2026-10-12T11:26:19Z, the v0.23.0 cut), and regtest is set on the row.
 const APPLY_LENGTH_METER_MAINNET_TIME = UNARMED;
 const APPLY_LENGTH_METER_TESTNET_TIME = 1791804379;
 const GAS_CEILING_SUCCESS_MAINNET_TIME = UNARMED;
@@ -270,19 +271,19 @@ const DELEGATION_ROTATE_IN_WINDOW_MAINNET_TIME = UNARMED;
 const DELEGATION_ROTATE_IN_WINDOW_TESTNET_TIME = 1791804379;
 const SLASH_ATTEST_MULTIROUND_EXEMPT_MAINNET_TIME = UNARMED;
 const SLASH_ATTEST_MULTIROUND_EXEMPT_TESTNET_TIME = 1791804379;
-// Mirrors xchain-vm HOST_CALL_BOUNDS_ACTIVATION, whose null is UNARMED here: both production
-// networks stay inert until a release names an instant, and regtest is set on the row.
+// Mirrors xchain-vm HOST_CALL_BOUNDS_ACTIVATION, whose null is UNARMED here: mainnet stays
+// inert, testnet is armed at 2026-10-18T06:00Z (the v0.24.0 cut), and regtest is set on the row.
 const HOST_CALL_BOUNDS_MAINNET_TIME = UNARMED;
 const HOST_CALL_BOUNDS_TESTNET_TIME = 1792303200;
-// Mirrors xchain-vm PER_ELEMENT_METER_ACTIVATION, whose null is UNARMED here: both production
-// networks stay inert until a release names an instant, and regtest is set on the row.
+// Mirrors xchain-vm PER_ELEMENT_METER_ACTIVATION, whose null is UNARMED here: mainnet stays
+// inert, testnet is armed at 2026-10-18T06:00Z (the v0.24.0 cut), and regtest is set on the row.
 const PER_ELEMENT_METER_MAINNET_TIME = UNARMED;
 const PER_ELEMENT_METER_TESTNET_TIME = 1792303200;
 // Mirrors xchain-vm STRING_RESULT_METER_ACTIVATION.
 const STRING_RESULT_METER_MAINNET_TIME = UNARMED;
 const STRING_RESULT_METER_TESTNET_TIME = 1792454400;
-// Mirrors xchain-vm STRING_RECEIVER_METER_ACTIVATION, whose null is UNARMED here:
-// production networks stay inert, and regtest is set on the row.
+// Mirrors xchain-vm STRING_RECEIVER_METER_ACTIVATION, whose null is UNARMED here: mainnet
+// stays inert, testnet is armed at 2026-10-20T00:00Z (the v0.25.0 cut), and regtest is set on the row.
 const STRING_RECEIVER_METER_MAINNET_TIME = UNARMED;
 const STRING_RECEIVER_METER_TESTNET_TIME = 1792454400;
 // Mirrors xchain-vm TOSTRING_SIZE_METER_ACTIVATION.

@@ -27,7 +27,7 @@ const headsSql = require('../db/rollback/batch_heads.js');
 
 module.exports = {
 
-    // Reset an anchor archive batch's parent (v1 archive-head) status that an
+    // Reset an anchor archive batch's parent (a v1 head, or a v3 fold archive row) status that an
     // orphaned final chunk flipped to 'invalid_archive' IN PLACE on a surviving row. A
     // chunked archive batch spans multiple blocks: a head in an early block, then v2
     // continuation chunks in later blocks. When the LAST v2 chunk lands, anchor.js

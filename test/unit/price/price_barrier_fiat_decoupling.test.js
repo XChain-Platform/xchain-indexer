@@ -77,7 +77,8 @@ describe('price barrier decoupled from the fee flag-day @regression @tier1', fun
         const block = barrierBlock();
         // Was pinned as `} else if(this.hubDbSync){` when the time barrier was the
         // non-BTC ALTERNATIVE to the height barrier. made the two additive
-        // (BTC needs both; see the barrier comment in XChainIndexer.js), so the
+        // (BTC needs both; see the comment above deferOnPriceSync in
+        // src/XChainIndexer/price_barriers.js), so the
         // condition is now a bare `if`. The property this test exists for is
         // unchanged and strictly stronger: the barrier runs whenever a mirror is in
         // play, and is a no-op only on single-host stacks.

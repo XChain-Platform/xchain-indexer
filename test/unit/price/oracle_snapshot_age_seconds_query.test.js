@@ -16,9 +16,15 @@
 
 const assert = require('assert');
 
-const { readSnapshotAgeSeconds } = require('../../../src/db/prices/oracle_snapshot_age_seconds');
+const ageSeconds = require('../../../src/db/prices/oracle_snapshot_age_seconds');
+const { readAgeSeconds } = ageSeconds;
 
-const QUERY = "SELECT MAX(block_timestamp) AS latest_time FROM price_snapshots WHERE status = 'finalized' AND block_timestamp <= ?";
+const BASE_QUERY = "SELECT MAX(block_timestamp) AS latest_time FROM price_snapshots"
+                 + " WHERE status = 'finalized' AND reference_block <= ?";
+
+// The preload window getOracleDataForVM builds: a block cap, plus a causality bound once armed.
+const CAPPED   = { blockCap: 55, timeBound: '', timeArgs: [] };
+const BOUNDED  = { blockCap: 55, timeBound: ' AND block_timestamp <= ?', timeArgs: [1700000012] };
 
 function stubDb(rows, calls = []){
     return {
@@ -30,38 +36,50 @@ function stubDb(rows, calls = []){
 }
 
 describe('oracle snapshot age seconds query @regression @tier1', function () {
-    it('uses the exact finalized timestamp query and returns elapsed seconds', async function () {
+    it('reads under the block cap and returns elapsed seconds', async function () {
         const calls = [];
         const db = stubDb([{ latest_time: 1700000000 }], calls);
-        assert.strictEqual(await readSnapshotAgeSeconds(db, 55, 1700000012), 12);
-        assert.deepStrictEqual(calls, [{ query: QUERY, args: [1700000012] }]);
+        assert.strictEqual(await readAgeSeconds(db, 55, 1700000012, CAPPED), 12);
+        assert.deepStrictEqual(calls, [{ query: BASE_QUERY, args: [55] }]);
+    });
+
+    it('appends the causality bound and its bindings after the block cap', async function () {
+        const calls = [];
+        const db = stubDb([{ latest_time: 1700000000 }], calls);
+        assert.strictEqual(await readAgeSeconds(db, 55, 1700000012, BOUNDED), 12);
+        assert.deepStrictEqual(calls, [{ query: BASE_QUERY + BOUNDED.timeBound, args: [55, 1700000012] }]);
     });
 
     it('clamps a future-dated snapshot age to zero', async function () {
         const db = stubDb([{ latest_time: 1700000020 }]);
-        assert.strictEqual(await readSnapshotAgeSeconds(db, 55, 1700000012), 0);
+        assert.strictEqual(await readAgeSeconds(db, 55, 1700000012, CAPPED), 0);
     });
 
     it('returns the sentinel when the query returns no row', async function () {
         const db = stubDb([]);
-        assert.strictEqual(await readSnapshotAgeSeconds(db, 55, 1700000012), Number.MAX_SAFE_INTEGER);
+        assert.strictEqual(await readAgeSeconds(db, 55, 1700000012, CAPPED), Number.MAX_SAFE_INTEGER);
     });
 
     it('returns the sentinel when the latest timestamp is null', async function () {
         const db = stubDb([{ latest_time: null }]);
-        assert.strictEqual(await readSnapshotAgeSeconds(db, 55, 1700000012), Number.MAX_SAFE_INTEGER);
+        assert.strictEqual(await readAgeSeconds(db, 55, 1700000012, CAPPED), Number.MAX_SAFE_INTEGER);
     });
 
-    it('returns the sentinel without querying for a non-finite reference time', async function () {
-        const calls = [];
-        const db = stubDb([{ latest_time: 1700000000 }], calls);
-        assert.strictEqual(await readSnapshotAgeSeconds(db, 55, Infinity), Number.MAX_SAFE_INTEGER);
-        assert.deepStrictEqual(calls, []);
+    it('returns the sentinel for a non-finite reference time', async function () {
+        const db = stubDb([{ latest_time: 1700000000 }]);
+        assert.strictEqual(await readAgeSeconds(db, 55, Infinity, CAPPED), Number.MAX_SAFE_INTEGER);
     });
 
     it('propagates a strict-query rejection', async function () {
         const failure = new Error('strict query failed');
         const db = { doQueryStrict: async () => { throw failure; } };
-        await assert.rejects(readSnapshotAgeSeconds(db, 55, 1700000012), error => error === failure);
+        await assert.rejects(readAgeSeconds(db, 55, 1700000012, CAPPED), error => error === failure);
+    });
+
+    // An uncapped reader here would let a future adopter skip both the block cap and the
+    // price-barrier assert that getOracleDataForVM carries, so the module exports none.
+    it('exports no snapshot-age reader other than the capped one', function () {
+        const readers = Object.keys(ageSeconds).filter(name => typeof ageSeconds[name] === 'function' && /^read/.test(name));
+        assert.deepStrictEqual(readers, ['readAgeSeconds']);
     });
 });

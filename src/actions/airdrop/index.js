@@ -112,14 +112,15 @@ class Airdrop {
     }
 
     // Judge and settle one airdrop leg. Every leg validates against the action's original error.
-    // `data` is returned because the NUMBER-format pass may replace it, and the next leg and the
-    // close of the action read the replaced object.
+    // `data` is returned for the caller's leg loop and is the same object it passed in: it carries
+    // this leg's TICK/AMOUNT/DEBIT/STATUS, which the next leg overwrites and finishAirdrop reads.
     async processAirdropLeg(idx, info, data, ctx){
         let error = ctx.origError; // each leg validates independently against the original error state
 
         // Reset error to the original value
 
-        // Copy base transaction data object
+        // Point `airdrop` at the transaction data object itself, not a copy: the helpers below
+        // read either name, so the leg's fields must land on the one shared object
         let airdrop = data;
 
         // Update transaction data object with airdrop values
@@ -131,7 +132,9 @@ class Airdrop {
         // Get information on token
         let tokenInfo = ctx.ticks[airdrop['TICK']];
 
-        // Convert NUMBER fields from string to number so comparisons below are mathematical, not lexical.
+        // Normalize NUMBER fields in place: non-string numerics become bignumbers, wire strings stay
+        // strings (the bc* math helpers parse them). It returns the same object, so `airdrop` and
+        // `data` stay one object.
         if(!error)
             data = this.util.setNumberFormats(data);
 

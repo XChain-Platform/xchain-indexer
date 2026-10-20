@@ -31,7 +31,18 @@ module.exports = {
     // been skipped as unable to settle it.
     async resolvePaymentPool(data, obligationInfo){
         let pool = this.openBatchLedger(data);
+        pool.data = data;
         pool.payee = obligationInfo['PAYEE_ADDRESS'];
+        if(data['FEE_PROBE'] && Object.prototype.hasOwnProperty.call(data, 'BATCH_POSITION')){
+            Object.assign(pool, {
+                payeeOutput: null,
+                settledOutput: null,
+                paidAmount: obligationInfo['COIN_AMOUNT'],
+                payeeTally: null,
+                consumed: '0'
+            });
+            return pool;
+        }
         if(!(await this.resolvePayeeOutput(data, pool)))
             return null;
         if(!(await this.measurePool(data, obligationInfo, pool)))
@@ -66,10 +77,10 @@ module.exports = {
     // Denying a probe BOTH capabilities leaves it resolving no per-payee output, so it
     // answers `destination mismatch` for every payee the collapsed row does not name: a
     // false negative on a transaction the chain accepts, the same class the _primaryVerdict
-    // snapshot in actions/index.js fixes for ORDER. Granting batchLedger while denying
+    // snapshot in actions_class/dispatch.js processAction fixes for ORDER. Granting batchLedger while denying
     // ledger lets a probe read the output set and tally ZERO, so each sub-command is quoted
     // against the payment it will really draw on. FEE_PROBE is false for every decoded
-    // transaction (actions/index.js sources it
+    // transaction (actions_class/transaction.js buildActionData sources it
     // from the synthetic tx only), so nothing below this line can move a consensus value.
     openBatchLedger(data){
         let batchLedger = (data['BATCH_VALUE_LEDGER'] && typeof data['BATCH_VALUE_LEDGER'] === 'object')
@@ -185,7 +196,9 @@ module.exports = {
     // scalar for the row's own COIN_DESTINATION (unchanged, and still visible to
     // actions/dispense.js), or this payee's own cell otherwise.
     drawFromPool(pool, obligationInfo, status){
-        let { ledger, payee, settledOutput, payeeTally, consumed } = pool;
+        let { data, ledger, payee, settledOutput, payeeTally, consumed } = pool;
+        if(status == 'valid')
+            this.util.addProbeCoinPayment(data, payee, obligationInfo['COIN_AMOUNT']);
         if(ledger && status == 'valid'){
             let drawn = this.util.bcformat(this.util.bcadd(consumed, obligationInfo['COIN_AMOUNT'], 8), 8);
             if(settledOutput){

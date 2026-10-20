@@ -32,11 +32,14 @@ const { readEnvNow } = require('./hub_db_sync/env.js');
 // which a queued row replays byte for byte, so retrying only grows the queue. Anything
 // else is retryable, including a reason this list has never seen: a needless retry costs
 // a queue slot, a wrong drop costs a never-re-derivable oracle price (actions/price.js).
+//
+// 'insufficient quorum' is deliberately absent, like its weighted twin 'insufficient
+// signer stake': the hub counts the sigs against its OWN validator snapshot (buried height,
+// its MIN_STAKE, its BTC indexer), and this indexer only queues a price it already found quorate.
 const TERMINAL_HUB_REJECTIONS = [
     /^duplicate$/i,                        // the hub already holds this action key
     /^stale \(retracted generation\)$/i,   // ingest fence; it only ever hardens
     /^invalid\b/i,                         // structural reject of the payload's own fields
-    /^insufficient quorum\b/i,             // the sigs ride in the payload and never change
     /\b(is|are) required$/i,               // api.js missing-field guards
     /^chain must be one of\b/i             // api.js validateChain
 ];

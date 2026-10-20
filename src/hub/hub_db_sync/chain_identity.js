@@ -26,13 +26,13 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
-const { CROSS_CHAIN_TABLES, REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT,
+const { CHAIN_ID_FENCED_TABLES, REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT,
         REFUSED_ROW_NAMED_CAP } = require('./mirror_tables.js');
 const { capabilitySnapshotKey } = require('./mirror_bounds.js');
 
 module.exports = {
 
-    // ── Chain identity fence for the three CROSS_CHAIN_TABLES ────────────────────
+    // ── Chain identity fence for the CHAIN_ID_FENCED_TABLES ──────────────────────
 
     // Record which Bitcoin chain this mirror's cross-chain rows must belong to.
     //
@@ -121,8 +121,9 @@ module.exports = {
     },
 
     async purgeChainScopedTables(expected, previous) {
-        let total = 0, refresh = { matches: false, calls: false, bridge: false, policy: false, listShare: false };
-        for (let table of CROSS_CHAIN_TABLES) {
+        let total = 0, refresh = { matches: false, calls: false, bridge: false, policy: false, listShare: false,
+                                   remoteToken: false };
+        for (let table of CHAIN_ID_FENCED_TABLES) {
             let result;
             try {
                 result = await this.hubDb.doQuery(
@@ -152,6 +153,7 @@ module.exports = {
             if (table === 'bridge_transfers')    refresh.bridge  = true;
             if (table === 'policy_snapshots')    refresh.policy  = true;
             if (table === 'list_snapshots')      refresh.listShare = true;
+            if (table === 'remote_token_snapshots') refresh.remoteToken = true;
         }
         return { total: total, refresh: refresh };
     },
@@ -192,6 +194,8 @@ module.exports = {
             if (refresh.bridge)  await this.refreshBridgeSyncTimestamp();
             if (refresh.policy)  await this.refreshPolicySyncTimestamp();
             if (refresh.listShare) await this.refreshListShareSyncState();
+            // No argument: the default never arms the remote token barrier before a full drain.
+            if (refresh.remoteToken) await this.refreshRemoteTokenSyncState();
             if (refresh.matches || refresh.calls) await this.releaseSnapshotWaiters();
         } catch (e) {
             getLogger().warn('HubDbSync: could not refresh the sync barriers after a foreign-chain purge:', e);
@@ -201,7 +205,7 @@ module.exports = {
     // True when this row belongs to a Bitcoin chain other than the one this mirror follows,
     // and must therefore not be applied.
     //
-    // Only the three CROSS_CHAIN_TABLES carry the column. A NULL (or absent) value applies
+    // Only the CHAIN_ID_FENCED_TABLES are fenced. A NULL (or absent) value applies
     // as before, and so does every row while no expectation is known: the fence refuses only
     // on positive evidence that the row names a different chain.
     //
@@ -210,7 +214,7 @@ module.exports = {
     // is supposed to be without - and failing the page closed here would wedge every
     // settlement barrier forever against a hub database nobody purged.
     refuseForeignChainRow(table, row) {
-        if (CROSS_CHAIN_TABLES.indexOf(table) === -1) return false;
+        if (CHAIN_ID_FENCED_TABLES.indexOf(table) === -1) return false;
         let expected = this._expectedBtcChainId;
         if (!expected) return false;
         let rowChainId = (row && typeof row.btc_chain_id === 'string') ? row.btc_chain_id.trim().toLowerCase() : null;
@@ -268,26 +272,27 @@ module.exports = {
         return (parent && parent.indexerDb) ? parent.indexerDb : null;
     },
 
-    // BTC-only re-derivation fence for one mirrored capability_snapshots row.
-    // True = refuse the row.
+    // Re-derivation and proof fence for one mirrored capability_snapshots row.
+    // True = refuse the row, or hold it out of the mirror for a retry.
     //
     // capability_snapshots is pulled from the hub over an unauthenticated SELECT and
     // applied with INSERT IGNORE, and it is the verification authority the off-BTC
-    // resolvers read for cross_chain, oracle_publish, price and attestation. The full
-    // remedy is an SMT membership proof against the BTC state_checkpoints stakes_root;
-    // it needs a hub proof endpoint, a pinned trust anchor, a new activation height and
-    // a grandfathering watermark, so it is a later spec round. THIS is the first step,
-    // and its whole value is falsifiability: a BTC node holds the same stakes the hub
-    // built these rows from, so it can catch a forged set instead of mirroring it.
+    // resolvers read for cross_chain, oracle_publish, price and attestation. The judge
+    // is db.verifyCapabilitySnapshotRow, which takes one of two paths:
+    //   - BTC holds the stakes the hub built these rows from, so it re-derives the row
+    //     and can catch a forged set instead of mirroring it (falsifiability, not coverage).
+    //   - A chain that resolves the capability from the mirror checks a hub checkpoint
+    //     proof against a pinned trust set once CAPABILITY_SNAPSHOT_PROOF_ACTIVATION is
+    //     active at the row's BTC snapshot_block. Below that height the verdict is
+    //     'unknown' and the row applies as before; at or above it every fault is 'held'.
     //
     // Deliberate limits, so nothing downstream reads more into this than it says:
-    //   - It only ever runs where the node can prove the claim (BTC). Off BTC the verdict
-    //     is 'unknown' and the row applies exactly as before, which is why this buys no
-    //     coverage on the chains that actually resolve from the mirror.
     //   - Only CONTRADICTIONS are refused. A row the hub withheld is invisible here.
-    //   - Every non-refusal (unreached block, unconfigured capability, truncated set,
-    //     a read that threw, no authoritative db wired) applies the row. An unjudgeable
-    //     row must never become a permanent mirror hole.
+    //   - A 'held' row stays out of the mirror and is retried, and the block loop waits
+    //     on the hold (barriers/capability_proof.js) rather than read a partial snapshot.
+    //   - Every other non-refusal (unreached block, unconfigured capability, truncated
+    //     set, a judge that threw, no authoritative db wired) applies the row. An
+    //     unjudgeable row must never become a permanent mirror hole.
     async refuseUnprovenCapabilitySnapshot(row, options) {
         let rowKey = capabilitySnapshotKey(row);
         if (this._capabilityProofRetryApproved.delete(rowKey)) return false;
@@ -353,7 +358,7 @@ module.exports = {
     // purges the previous chain's rows before this row applies). A 'local' expectation is
     // this node's own measurement of the chain it indexes and is never adopted away from.
     async maybeAdoptHubChainId(table, row) {
-        if (CROSS_CHAIN_TABLES.indexOf(table) === -1) return;
+        if (CHAIN_ID_FENCED_TABLES.indexOf(table) === -1) return;
         let expected = this._expectedBtcChainId;
         if (!expected) return;
         let rowChainId = (row && typeof row.btc_chain_id === 'string') ? row.btc_chain_id.trim().toLowerCase() : null;

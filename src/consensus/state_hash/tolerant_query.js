@@ -13,17 +13,21 @@
  **********************************************************************
  *
  * Runs one state-section query, degrading to an empty class when an older
- * schema lacks the table (1146) or column (1054). Any other numeric errno
- * rethrows; errors without a numeric errno are swallowed as before.
+ * schema lacks the table (1146) or column (1054). Every other error rethrows,
+ * errors without a numeric errno included, so a fault never hashes as no rows.
  *
  ********************************************************************/
 
 async function tolerantQuery(db, sql, args){
     try {
+        // Read through doQueryStrict: plain doQuery turns a read error outside a transaction into [].
+        // Both Database classes carry it; only a canned-row test double falls back to doQuery.
+        if(typeof db.doQueryStrict === 'function') return await db.doQueryStrict(sql, args);
         return await db.doQuery(sql, args);
     } catch(e){
-        if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e;
-        return [];
+        // Degrade only a schema gap; a fence, driver or plain Error must stop the hash.
+        if(e && (e.errno === 1146 || e.errno === 1054)) return [];
+        throw e;
     }
 }
 

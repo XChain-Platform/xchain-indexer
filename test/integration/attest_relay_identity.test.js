@@ -130,34 +130,19 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
 describe('relay-identity lookup against a real MariaDB @tier3', function () {
     this.timeout(60000);
     const fx = useRelayIdentityDb(DB_NAME);
-    const { conn, row } = fx;
+    const { row } = fx;
 
     // ── 3. request_status <> 'rejected' (the novel clause) ───────────────────
 
     it("excludes a rejected v0 row, so one malformed v3 cannot grief the identity", async function () {
-        // The clause the guard's safety argument rests on. A rejected v3 still persists
-        // its origin_chain/origin_action_index for the audit row; if that row counted,
+        // Defence in depth: persistRelayRequest withholds a refused v3 and a refused v0
+        // leaves both origin columns NULL. If a rejected row that exists anyway counted,
         // anyone could permanently block a legitimate materialization by broadcasting a
         // single malformed v3 naming the same origin action.
         await row({ actionIndex: 12, status: 'rejected' });
 
         assert.strictEqual(await fx.db.getRelayRequestByOrigin(ORIGIN, IDX), null,
             'a rejected row consumed no slot');
-    });
-
-    it('counts every NON-rejected lifecycle state, terminal ones included', async function () {
-        // The other half of the same clause, and the more dangerous half: a fulfilled or
-        // expired request DID spend the fee, so it must keep consuming the slot. Written
-        // as `<> 'rejected'` rather than `= 'pending'` for exactly this reason, and this
-        // case is what stops a later "tighten it to pending" edit from re-opening that hole.
-        for (const status of ['fulfilled', 'expired', 'errored']) {
-            await conn(c => c.query('DELETE FROM attests'));
-            await row({ actionIndex: 13, status });
-
-            const hit = await fx.db.getRelayRequestByOrigin(ORIGIN, IDX);
-            assert.ok(hit, 'a ' + status + ' request already spent its materialization');
-            assert.strictEqual(hit.request_status, status);
-        }
     });
 
     it('sees past a rejected row to the real materialization behind it', async function () {

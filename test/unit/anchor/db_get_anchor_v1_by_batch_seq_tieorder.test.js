@@ -105,10 +105,11 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
         assert.doesNotMatch(orderClause(captured), /\bid\b/i);
     });
 
-    // The head row must carry its AUTHOR, because anchor.js binds every v2
-    // continuation chunk to it. The address is resolved through actions.source_id
-    // (authoritative for auth) - anchor_actions has no source column of its own, and its
-    // `publisher` column is the v4/v5/v6 elected-PUBLISHER pubkey, a different thing.
+    // The head row must carry its AUTHOR, because the archive chunk path parents a v2
+    // continuation chunk only on a head of its own author. The address is resolved
+    // through actions.source_id (authoritative for auth) - anchor_actions has no source
+    // column of its own, and its `publisher` column is the v4/v5/v6 elected-PUBLISHER
+    // pubkey, a different thing.
     it('resolves the head AUTHOR through actions.source_id as `source` (#3075)', async function () {
         const db = makeDb();
         let captured = null;
@@ -174,13 +175,13 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
             for (const j of joins) assert.match(j, /LEFT\s+JOIN/i);
         });
 
-        it('adds NOTHING to the query when no author is supplied (inert below the flag day)', async function () {
+        it('adds NOTHING to the query when no author is supplied (the canonical-head pick)', async function () {
             const db = makeDb();
             let captured = null, args = null;
             sinon.stub(db, 'doQuery').callsFake(async (sql, params) => { captured = sql; args = params; return []; });
             await db.getAnchorV1ByBatchSeq(42);
             assert.doesNotMatch(captured, /adr\.address\s*=/i,
-                'the legacy canonical-head pick must not gain an authorship predicate');
+                'the unscoped canonical-head pick must not gain an authorship predicate');
             assert.deepStrictEqual(args, [foldArchiveHeadFloor(db.config['NETWORK']), 42]);
         });
 

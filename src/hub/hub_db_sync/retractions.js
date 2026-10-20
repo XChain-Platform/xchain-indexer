@@ -116,7 +116,9 @@ module.exports = {
         // than applied. policy_snapshots, list_snapshots and remote_token_snapshots are absent
         // because they are never retracted (no RETRACTION_COLUMNS entry, so the generic path
         // below skips them). Giving any of them a RETRACTION_COLUMNS entry also requires adding
-        // it to this list AND a push_generation column in both the hub and indexer DDL.
+        // it to QUORUM_CLASS_TABLES (mirror_tables.js) and to the hub's twin set in xchain-hub
+        // src/consensus/retraction/wire.js, AND a push_generation column in both the hub and
+        // indexer DDL.
         let quorumClass = QUORUM_CLASS_TABLES.includes(event.table);
         let ownChain = !!(this.coin && event.source_chain === this.coin && this.getOwnRollbackGeneration);
         if (!(await this.acceptRetractionFences(event, range, quorumClass, ownChain))) return;
@@ -126,8 +128,12 @@ module.exports = {
         await this.retractByColumn(event, range);
     },
 
-    // Guards 1 to 3: the unfenced-delete refusal, the own-chain generation check and the
-    // per-(table, source_chain) monotonicity fence. False refuses the event.
+    // Guards 1 and 2: the unfenced-delete refusal and the own-chain generation check.
+    // False refuses the event. There is no lower-than-seen skip: generations are
+    // per-indexer counters, so fences from several initiators (and nested rollbacks
+    // drained out of order) reach one mirror in any order. The fenced DELETE is the
+    // replay defense, since a late or lower fence cannot touch a row re-published at a
+    // higher generation.
     async acceptRetractionFences(event, range, quorumClass, ownChain) {
         if ((quorumClass || ownChain) && !range.fenced) {
             getLogger().error('HubDbSync: refusing UNFENCED retraction of ' + event.table +
@@ -151,18 +157,6 @@ module.exports = {
                     return false;
                 }
             }
-            // 3. Monotonicity: a fence below the last one observed for this
-            //    (table, source_chain) is a stale replay; skip it. Equal = redelivery,
-            //    idempotent under the fence, still applied.
-            let trackKey = event.table + '|' + event.source_chain;
-            let tracked = this.trackedRollbackGeneration[trackKey];
-            if (tracked !== undefined && range.gen < tracked) {
-                getLogger().warn('HubDbSync: skipping stale retraction of ' + event.table +
-                    ' (source_chain ' + event.source_chain + ') at generation ' + range.gen +
-                    ' < last-observed rollback generation ' + tracked);
-                return false;
-            }
-            this.trackedRollbackGeneration[trackKey] = range.gen;
         }
         return true;
     },

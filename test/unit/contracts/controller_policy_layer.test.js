@@ -17,7 +17,7 @@
  *
  * The table model (token_controllers / address_controllers) routes ONE action-class
  * per action to a guard contract. These tests pin the wire/field contract for that
- * binding: ISSUE format 7, ADDRESS format 1, the action-class taxonomy, and the field
+ * binding: ISSUE format 6, ADDRESS format 1, the action-class taxonomy, and the field
  * classifications the handlers rely on. They are PURE: handlers are built with a stub
  * context (no DB, no VM) so they run on any Node version. The db-layer bind/unbind/
  * cooldown-sweep behavior is consensus-critical and exercised on Node 22 / regtest

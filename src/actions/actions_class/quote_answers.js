@@ -16,7 +16,8 @@
  *
  * The request normalization, refusal answers and result shapes of the two public
  * read-only surfaces, Actions.computeFeeQuote and Actions.computePreflight. Those methods
- * stay in actions/index.js with their admission cap, their dry-run call and the
+ * live in actions_class/quote_surfaces.js (installed by actions/index.js through
+ * quoteSurfaceMethods) with their admission cap, their dry-run call and the
  * config-read budgets; everything here is a pure function of what they pass in, taking
  * the Actions instance explicitly so a test context that borrows the two methods works.
  *
@@ -35,6 +36,17 @@ function normalizeQuoteRequest(aliases, action, params){
     if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
     params = params.map(v => String(v).trim());
     return { action, params };
+}
+
+// The caller's literal wire for a BATCH request, or null for any other action. The batch
+// handler splits the RAW TX_DATA and strips its `BATCH|<version>|` prefix byte for byte, so a
+// normalized rebuild could parse where the chain does not; every other handler reads the
+// params dispatch has already trimmed, uppercased and de-aliased.
+function batchRequestWire(action, rawAction, rawParams){
+    if(action !== 'BATCH') return null;
+    let tail = Array.isArray(rawParams) ? rawParams.map(String).join('|')
+                                        : String(rawParams == null ? '' : rawParams);
+    return String(rawAction == null ? '' : rawAction) + '|' + tail;
 }
 
 // The shape a quotable action name must have, the same rule the explorer proxy applies.
@@ -182,6 +194,16 @@ function preflightLockBusy(base, acquireMs){
                'ms for the database transaction lock); retry shortly' });
 }
 
+// The retryable pre-flight for a dry-run that threw before the handler left a status (a
+// watchdog timeout, an epoch-fence rejection). The block loop retries such a block rather than
+// indexing it invalid, so there is no chain verdict to report and nothing to memoize.
+function preflightNoVerdict(base, run){
+    return Object.assign(base, { valid: null, retryable: true, noVerdict: true, status: null,
+        blockIndex: run.blockIndex,
+        blockTime:  run.blockTime,
+        error: 'pre-flight produced no verdict (the dry-run did not finish: ' + run.error + '); retry shortly' });
+}
+
 // The fee a pre-flight discloses beside its verdict, and the payer's balance against it.
 function preflightFeeDisclosure(util, run, resolvedMode){
     // The dry-run already staged the handler's fee record, so echoing it costs nothing and
@@ -248,17 +270,22 @@ function preflightResult(actions, base, run, resolvedMode, feeTick){
     // Oracle usage fees this batch owes, per oracle address, summed over its Mode B
     // DISPENSER sub-commands. DISCLOSED, not judged: a probe carries no transaction and
     // therefore no oracle fee outputs, so the handler's own check (util.validateOracleFee)
-    // is unreachable here and dispenser.js answers from util.quoteOracleFee, which reads no
-    // output at all. That answer is OPTIMISTIC by construction and stays optimistic per
+    // is unreachable here and dispenser/validate_format.js chargeOracleUsageFee answers from
+    // util.quoteOracleFee, which reads no output at all. That answer is OPTIMISTIC by
+    // construction and stays optimistic per
     // sub-command - N DISPENSERs naming one oracle each quote the same single fee valid,
     // where the chain wants the output to cover all N. Rather than fake a verdict the probe
     // cannot compute, report the TOTAL owed per oracle so a composer can size the outputs.
     if(run.oracleFeesOwed) result.oracleFeesOwed = run.oracleFeesOwed;
+    if(run.nativeFeeOwed !== null && run.nativeFeeOwed !== undefined)
+        result.nativeFeeOwed = run.nativeFeeOwed;
+    if(run.coinPaymentsOwed) result.coinPaymentsOwed = run.coinPaymentsOwed;
     return result;
 }
 
 module.exports = {
     normalizeQuoteRequest,
+    batchRequestWire,
     QUOTE_ACTION_NAME,
     malformedActionAnswer,
     feeQuoteBase,
@@ -268,5 +295,6 @@ module.exports = {
     resolvePreflightFeeMode,
     preflightGateAnswer,
     preflightLockBusy,
+    preflightNoVerdict,
     preflightResult
 };

@@ -27,6 +27,7 @@
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
+const { anchorMatched } = require('../bridge_checkpoint_check/anchor_match.js');
 
 // The ANCHOR wire version that carries a checkpoint SECTION in its own right. Version 1 is the
 // archive head, which carries its WRAPPER checkpoint's identity rather than being one, and
@@ -142,8 +143,16 @@ async function verifyCheckpointQuorum(cp, indexerDb){
  * on BTC the cadence latch puts them above. Either way the old row's root stays on no honest
  * node, and when the new rows are not below the transfer's snapshot_block this rule still takes
  * the old row, because it takes the FIRST at or after snapshot_block. The origin's
- * getbridgeescrowproof read is what bounds that case (db/credits/bridge_reads.js
- * divergenceSettled).
+ * getbridgeescrowproof read is what bounds that case (db/credits/escrow_divergence.js
+ * divergenceSettled, or checkpointStreamStopped once the hub stops signing).
+ *
+ * THE AXIS. For a DOGE or LTC origin from BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION, read at the
+ * settling chain's own block, the same rule runs on the BTC anchor axis: the first checkpoint
+ * whose snapshot_block is STRICTLY above row.snapshot_block, highest checkpoint_seq at that
+ * snapshot_block. row.snapshot_block is a BTC height, so comparing it to a DOGE or LTC
+ * block_index selected the oldest checkpoint held, from before the lock. Why strictly above
+ * commits the lock is in bridge_checkpoint_check/anchor_match.js. A BTC origin, and every
+ * origin below the activation, keeps the block_index rule exactly.
  *
  * Both sources are queried and the candidates are MERGED before the pick, rather than one
  * being preferred: a node that holds the anchor for height 105 and a mirrored row for 102 must
@@ -165,6 +174,7 @@ async function selectCheckpoint(row, ctx){
 
     const db = ctx.indexerDb;
     const candidates = [];
+    const onAnchor = anchorMatched(chain, ctx);
 
     // Source 1: locally parsed ANCHOR v0 sections whose quorum this node verified at parse
     // time. status 'valid' ONLY: 'unverified' means this node had no capability snapshot and
@@ -173,8 +183,9 @@ async function selectCheckpoint(row, ctx){
     // Only a SUCCESSFUL empty read is an absence, which stalls. A read fault propagates, the
     // block is not committed and is retried, so a fault on one source never shrinks the
     // candidate set into a pick a healthy peer holding the same rows would not make.
-    const anchors = await db.getEarliestValidAnchorCheckpoint(
-        ANCHOR_SECTION_VERSION, chain, network, atOrAfter);
+    const anchors = onAnchor
+        ? await db.getEarliestValidAnchorCheckpointAfterAnchor(ANCHOR_SECTION_VERSION, chain, network, atOrAfter)
+        : await db.getEarliestValidAnchorCheckpoint(ANCHOR_SECTION_VERSION, chain, network, atOrAfter);
     for(const a of anchors)
         candidates.push({ chain: a.chain, network: a.network, block_index: height(a.block_index),
                           checkpoint_seq: height(a.checkpoint_seq), snapshot_block: height(a.snapshot_block),
@@ -186,7 +197,9 @@ async function selectCheckpoint(row, ctx){
     // may fail re-verification, in which case the next candidate up is the honest pick rather
     // than a stall. Bounded, because this runs inside the block loop. A read fault here
     // propagates for the same reason as Source 1's.
-    const mirrored = await db.getMirroredStateCheckpointCandidates(chain, network, atOrAfter);
+    const mirrored = onAnchor
+        ? await db.getMirroredStateCheckpointCandidatesAfterAnchor(chain, network, atOrAfter)
+        : await db.getMirroredStateCheckpointCandidates(chain, network, atOrAfter);
     for(const m of mirrored){
         if(!await verifyCheckpointQuorum(m, db)) continue;
         candidates.push({ chain: m.chain, network: m.network, block_index: height(m.block_index),
@@ -198,9 +211,13 @@ async function selectCheckpoint(row, ctx){
         break;
     }
 
-    const usable = candidates.filter(c => c.block_index !== null && c.checkpoint_seq !== null);
+    const usable = candidates.filter(c => c.block_index !== null && c.checkpoint_seq !== null &&
+                                          (!onAnchor || c.snapshot_block !== null));
     if(usable.length === 0) return null;
-    usable.sort((a, b) => (a.block_index - b.block_index) || (b.checkpoint_seq - a.checkpoint_seq));
+    if(onAnchor)
+        usable.sort((a, b) => (a.snapshot_block - b.snapshot_block) || (b.checkpoint_seq - a.checkpoint_seq));
+    else
+        usable.sort((a, b) => (a.block_index - b.block_index) || (b.checkpoint_seq - a.checkpoint_seq));
     return usable[0];
 }
 

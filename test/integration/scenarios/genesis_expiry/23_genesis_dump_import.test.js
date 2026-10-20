@@ -15,7 +15,7 @@
  * re-deriving the genesis ledger. These tests assert the safety property that
  * makes that sound - importing a dump yields BYTE-IDENTICAL genesis block hashes
  * to the canonical CSV injection - plus that a content-hash mismatch halts the
- * import. See src/chain/genesis_dump.js and scripts/generate-genesis-dump.js.
+ * import. See src/chain/genesis_dump.js and bin/generate-genesis-dump.js.
  */
 
 'use strict';

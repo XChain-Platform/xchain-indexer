@@ -45,7 +45,7 @@ function assertArmedOnEachTestnetChain(key) {
 }
 
 describe('protocol_changes BET feed list edit row @regression @tier1', function () {
-    it('registers an unarmed production height map with regtest active from genesis', function () {
+    it('registers a height map unarmed on mainnet and armed on each testnet chain, with regtest active from genesis', function () {
         assert.deepStrictEqual(ProtocolChanges.get(KEY), {
             mainnet: ProtocolChanges.UNARMED,
             ...armedTestnetSlots(ProtocolChanges.get(KEY)),
@@ -54,7 +54,7 @@ describe('protocol_changes BET feed list edit row @regression @tier1', function 
         });
     });
 
-    it('stays inactive on production networks and activates at regtest genesis', function () {
+    it('stays inactive on mainnet and activates on each testnet chain at its height and at regtest genesis', function () {
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.strictEqual(ProtocolChanges.activeAt(KEY, 'mainnet', coin, ProtocolChanges.UNARMED - 1, null), false);
         }

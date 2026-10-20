@@ -51,10 +51,10 @@ function installFeeTables(){
     //  - EXECUTE is priced, but NOT positionally and NOT from a duration: its floor is a
     //    schedule constant, so it has its own table below (vmBaseFeeActions) rather than a
     //    seat here.
-    //  - SEND / ISSUE / SWEEP / DEPLOY use bespoke parsing (repeating recipients,
-    //    variable-length constructor params), which is exactly why actions/index.js's
-    //    setActionParamHandler omits them. ISSUE is priced here by its own dedicated
-    //    path (nominalIssueFee), not positionally.
+    //  - SEND / ISSUE / SWEEP / DEPLOY are absent from setActionParamHandler
+    //    (actions_class/address_pre_pass.js), whose layouts this pre-check reads: SEND and
+    //    DEPLOY parse bespoke, and ISSUE and SWEEP keep handler-order address ids by consensus.
+    //    ISSUE is priced here by its own dedicated path (nominalIssueFee), not positionally.
     this.durationFeeActions = ['ORDER', 'SWAP', 'DISPENSER'];
 
     // VM actions whose ACCEPTANCE fee is a schedule CONSTANT, so the batch spam collapse can

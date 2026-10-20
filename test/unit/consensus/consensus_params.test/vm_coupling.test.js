@@ -76,7 +76,32 @@ const EXPECTED_VM_NEUTERED_PROTO_CONSTRUCTORS = [
 const EXPECTED_VM_SAFE_MATH_MEMBERS = [
     'E', 'PI', 'abs', 'ceil', 'floor', 'max', 'min', 'round', 'sign', 'trunc'
 ];
+// Mirror the VM's per-epoch digest of its four runtime pins (engine, math, AST toolchain,
+// isolated-vm). The boot gates compare an install against the loaded VM's own pins, so only
+// this row stops a re-pin from shipping under an unchanged epoch. A new epoch adds a row.
+const EXPECTED_VM_PIN_DIGEST_BY_EPOCH = {
+    '7': 'e9520c7a8baeefc28ff2d8d1e1ec08917e0150581d1c4bdc676636bdb5280ae4'
+};
 const FROZEN_STATUS_TOKENS = ['reverted', 'out_of_resource', 'failed'];
+
+// Hash the four pin objects with sorted keys, exactly as the VM's own epoch-digest test does.
+function vmRuntimePinDigest(runtime){
+    const canonical = (v) => (!v || typeof v !== 'object') ? JSON.stringify(v)
+        : '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canonical(v[k])).join(',') + '}';
+    const pins = {
+        AST_TOOLCHAIN_PINNED: runtime.AST_TOOLCHAIN_PINNED,
+        MATH_PINNED:          runtime.MATH_PINNED,
+        PINNED:               runtime.PINNED,
+        RUNTIME_ADDON_PINNED: runtime.RUNTIME_ADDON_PINNED
+    };
+    return require('crypto').createHash('sha256').update(canonical(pins)).digest('hex');
+}
+
+// Load the bundled package's consensus runtime under either spelling the VM has shipped.
+function requireVmConsensusRuntime(){
+    try { return require('xchain-vm/src/consensus-runtime.js'); }
+    catch(e){ return require('xchain-vm/src/consensus_runtime.js'); }
+}
 
 // Resolve the bundled VM's consensus exports, defensively: the file: dep
 // (node_modules/xchain-vm -> ./xchain-vm) is populated in prod by xchain-node,
@@ -145,6 +170,16 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             'bundled VM CONSENSUS_VERSION != indexer expectation (bump both together)');
         assert.deepStrictEqual(vm.CONSENSUS_STATUS_TOKENS, FROZEN_STATUS_TOKENS,
             'VM status vocabulary drifted from the indexer mapping');
+
+        // Pin coupling: the package entry does not export the pin objects, so the full package
+        // reads them from its consensus runtime; the runtime-only fallback carries them itself.
+        const runtime = full ? requireVmConsensusRuntime() : vm;
+        const pinRow = EXPECTED_VM_PIN_DIGEST_BY_EPOCH[EXPECTED_VM_CONSENSUS_VERSION];
+        assert.ok(pinRow, 'no VM runtime pin digest recorded for epoch ' + EXPECTED_VM_CONSENSUS_VERSION +
+            ' (add its row in lockstep with the VM)');
+        assert.strictEqual(vmRuntimePinDigest(runtime), pinRow,
+            'bundled VM runtime pins changed under epoch ' + EXPECTED_VM_CONSENSUS_VERSION +
+            ' (re-pinning is a consensus event: bump CONSENSUS_VERSION in both repos and add a row)');
 
         // Surface coupling: the sandbox strip set and the deploy CONSENSUS_RULES are
         // consensus surface frozen with the same epoch. The integer-only check above

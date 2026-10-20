@@ -23,8 +23,12 @@
  *   - a block held behind a proof barrier past its ceiling, with no commit since a
  *     restart, so stallWedged() (and the 503 the container healthcheck reads)
  *     never fires.
- * /status must stay 200 for both: autoheal restarts on its 503, and a restart
- * fixes neither.
+ * /status must stay 200 for both: autoheal restarts on its 503, and a further
+ * restart clears neither.
+ *
+ * A roll-call or capability proof wait in its first process lifetime runs wait,
+ * then stuck past the hold ceiling (/ready 503), then wedged past its own proof
+ * grace (/status 503), which buys the one autoheal restart per episode.
  */
 
 'use strict';
@@ -35,6 +39,7 @@ const express = require('express');
 
 const XChainIndexer = require('../../../src/XChainIndexer.js');
 const { mountStatusRoute } = require('../../../src/api/status_endpoint.js');
+const { resolveProofWaitGraceMs } = require('../../../src/XChainIndexer/stall_health.js');
 
 const MIN = 60 * 1000;
 
@@ -153,4 +158,52 @@ describe('GET /status and GET /ready on faults a restart cannot clear', function
         assert.strictEqual(ready.status, 503);
         assert.deepStrictEqual(ready.body.notReadyReasons, ['barrier_ceiling_exceeded', 'behind_tip_no_commit']);
     });
+});
+
+describe('GET /status and GET /ready through a proof wait before any restart', function(){
+    afterEach(closeServer);
+
+    // A real indexer committed a minute before `heldMs` ago, then held on `reason` since.
+    function heldIndexer(reason, heldMs){
+        let ix  = stubIndexer({ indexerBlock: 1000, decoderBlock: 1004 });
+        let now = Date.now();
+        ix.startedAt            = now - heldMs - 2 * MIN;
+        ix.lastBlockCommittedAt = now - heldMs - MIN;
+        ix.stallReason          = reason;
+        ix.barrierHold          = { block: 1001, reason: reason, since: now - heldMs, notified: false };
+        // Pin the ceiling so the sequence holds whatever the venue's environment sets.
+        ix.barrierHoldCeilingMs = 15 * MIN;
+        ix.proofWaitGraceMs     = resolveProofWaitGraceMs(ix.healthStallGraceMs, ix.barrierHoldCeilingMs);
+        return ix;
+    }
+
+    for (const [reason, prefix] of [['rollcall_proof_unavailable', 'rollcall'], ['capability_proof_unavailable', 'capability']]) {
+        it('runs ' + prefix + '_proof_wait, then _stuck with /ready 503, then wedged with /status 503', async function(){
+            let ceiling = heldIndexer(reason, 0).barrierHoldCeilingMs;
+            let grace   = heldIndexer(reason, 0).proofWaitGraceMs;
+            assert.ok(ceiling > 0 && grace > ceiling, 'the proof grace must sit above the hold ceiling');
+
+            await serve(heldIndexer(reason, 5 * MIN));
+            let status = await get(port, '/status');
+            assert.strictEqual(status.status, 200);
+            assert.strictEqual(status.body.stallClass, prefix + '_proof_wait');
+            assert.strictEqual(status.body.degraded, true);
+            assert.strictEqual((await get(port, '/ready')).status, 200);
+            await new Promise((resolve) => closeServer(resolve));
+
+            await serve(heldIndexer(reason, ceiling + MIN));
+            status = await get(port, '/status');
+            assert.strictEqual(status.status, 200, 'past the ceiling but inside the proof grace is still alive');
+            assert.strictEqual(status.body.stallClass, prefix + '_proof_stuck');
+            let ready = await get(port, '/ready');
+            assert.strictEqual(ready.status, 503);
+            assert.deepStrictEqual(ready.body.notReadyReasons, ['barrier_ceiling_exceeded', 'behind_tip_no_commit']);
+            await new Promise((resolve) => closeServer(resolve));
+
+            await serve(heldIndexer(reason, grace + MIN));
+            status = await get(port, '/status');
+            assert.strictEqual(status.status, 503, 'past the proof grace autoheal gets its one restart');
+            assert.strictEqual(status.body.stallClass, 'wedged');
+        });
+    }
 });

@@ -6,7 +6,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { missChargeContext } = require('../../../scripts/repair-validator-stats.js');
+const { missChargeContext } = require('../../../bin/repair-validator-stats.js');
 const Rollback = require('../../../src/rollback/attestation_stats.js');
 
 const PK = ch => ch.repeat(64);

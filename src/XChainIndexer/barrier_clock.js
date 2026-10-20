@@ -17,8 +17,10 @@
  * The health-side arithmetic around the block loop's sync barriers: the instant a
  * time-keyed barrier can first clear, the price-barrier skip decision, and the
  * mirror-barrier hold fold with its ceiling remedy. The height-aware and
- * bound-aware clearsAt wrappers stay in ../XChainIndexer.js beside the activation
- * reads they key on. Installed onto XChainIndexer.prototype by ../XChainIndexer.js.
+ * bound-aware clearsAt wrappers (barrierClearsAtHeightAware, anchorBarrierClearsAt)
+ * live in ./mirror_barriers.js beside the barriers that report through them;
+ * landingClearsAt is in ./price_barriers.js, and the direct-hub-DB height-aware twin,
+ * directCallBarrierClearsAt, is below. Installed onto XChainIndexer.prototype by ../XChainIndexer.js.
  *
  ********************************************************************/
 
@@ -38,6 +40,12 @@ module.exports = {
     // (the mirror already holds a row at/past blockTime) cannot fire early either, because
     // rows effective at a future instant do not exist yet. Returns null when sync is off or
     // the inputs are not finite, which leaves the caller's verdict exactly as it was before.
+    //
+    // Above the mirror-admission activation the barriers are keyed on the hub's per-table
+    // height watermark, which can open them at any instant, so no first instant exists (the
+    // stream escape some keep there is a later backstop, not a floor). Defer sites therefore
+    // call barrierClearsAtHeightAware or anchorBarrierClearsAt (./mirror_barriers.js),
+    // which return null there and let the hold ceiling fire, and never call this directly.
     //
     // Used ONLY for the /status health verdict. It gates no wait, no read and no write.
     barrierClearsAt(blockTime, graceField){
@@ -77,7 +85,7 @@ module.exports = {
     //   - blockMayReadPrice says the block carries transactions, so a reader is possible.
     //   - this block already tripped the fail-closed assertion on a previous attempt, so
     //     priceBarrierForceBlock pins it; skipping again would loop forever.
-    //   - malformed input, which priceReadPredicate resolves to "wait" by contract.
+    //   - malformed input, which blockMayReadPrice resolves to "wait" by contract.
     //
     // priceBarrierSkipped is deliberately AND-ed with hubDbSync. On a single-host stack
     // there is no mirror and the barriers never ran in the first place, so flagging a skip
@@ -115,7 +123,8 @@ module.exports = {
     // Fold one poll-loop pass into the mirror-barrier hold, and act when it crosses the
     // named ceiling. Called once per pass, right after the catch-up loop exits,
     // where `this.stallReason` and `this.stallClearsAt` already carry whatever the defer
-    // sites set. Reading them here rather than instrumenting each of the nine defer sites
+    // sites set. Reading them here rather than instrumenting each stall site (the barrier
+    // chain is deferOnSyncBarriers in ./price_barriers.js; fault handlers and halts set it too)
     // keeps one rule in one place, and a barrier added later is covered for free.
     //
     // What crossing the ceiling does, and what it deliberately does NOT do. It logs under

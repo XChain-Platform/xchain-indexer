@@ -78,9 +78,9 @@ const TABLES = [
     // below. Ids are assigned by an explicit dense counter, so deleting the
     // orphaned-block ids and reapplying reproduces them identically.
     { table: 'index_addresses', owner: 'indexer', replication: 'stream:index', rollback: 'index', replicaRollback: 'mirror',
-      hashed: { classes: ['index_map'], note: 'The (id, address) delta class of state_hash, armed per-chain (id-determinism P4).' } },
+      hashed: { classes: ['index_map'], note: 'The (id, address) delta class of state_hash, always folded in with no gate (id-determinism P4).' } },
     { table: 'index_tickers', owner: 'indexer', replication: 'stream:index', rollback: 'index', replicaRollback: 'mirror',
-      hashed: { classes: ['index_map'], note: 'The (id, tick) delta class of state_hash, armed per-chain (id-determinism P4).' } },
+      hashed: { classes: ['index_map'], note: 'The (id, tick) delta class of state_hash, always folded in with no gate (id-determinism P4).' } },
 
     // ── Recomputed / bespoke-rollback tables ───────────────────────────
     { table: 'balances', owner: 'indexer', replication: 'snapshot', rollback: 'recomputed', replicaRollback: 'recomputed',

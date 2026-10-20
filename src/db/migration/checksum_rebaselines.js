@@ -284,6 +284,21 @@ const MIGRATION_CHECKSUM_REBASELINES = {
         from: '755dcb61fb94a534f44f7ece590fbdc009ad1a85d100d4e8bae9144f10b95e5a', // 3ddbf7689, as authored
         to:   '4f61f3b78e0fb0c3b06eec68ed2ff9d929f5b897be409684c5933e2ef40c0b16',
     },
+    // A FALSE note fixed: the header said the batch chunk columns hash nothing, but the gated
+    // attest_batch_head state-hash section selects on batch_chunk_index and hashes
+    // batch_total_chunks/batch_crc32, so believing it would let a rename skip its flag day.
+    // Comment lines only: the ALTER TABLE is byte-identical, verified by comparing the
+    // comment-stripped residue. An object-store scan found exactly three blobs with that
+    // residue, the as-authored file and two test-path citation spellings each reverted the
+    // same day, and every one is listed so a DB that applied any of them heals.
+    '2026-09-03-attests-batch-chunk-columns.sql': {
+        from: [
+            'f93c63938130a3e2953ac2e9b57bd70946072667198d8c97a0c9326f16bfe8a7', // 859acd892, as authored
+            '7112930aafb25488c07017ced31a4e9a9661c7147038af285c01461e39d4a897', // fb40fe9b2, test-path spelling
+            '8d0790a8cf253e489ffc4ecfa210f76d192ebe472f4ee5385c8826c54c4754a0', // e785db5ee, test-path spelling
+        ],
+        to:   '2afcca361a652ddd0107531ef433bc63359847d176a6862b531de7719dd25f71',
+    },
 };
 
 module.exports = { MIGRATION_CHECKSUM_REBASELINES };
