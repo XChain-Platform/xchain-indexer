@@ -108,7 +108,8 @@ function registerRegistryRow(){
     it('ships unarmed on mainnet and testnet and armed on regtest from genesis', function(){
         const gates = require('../../../../src/consensus/gate_registry');
         assert.strictEqual(gates.activeAt(ANCHOR_MATCH_KEY, 'mainnet', 'BTC', 99999999, null), false);
-        assert.strictEqual(gates.activeAt(ANCHOR_MATCH_KEY, 'testnet', 'BTC', 99999999, null), false);
+        assert.strictEqual(gates.activeAt(ANCHOR_MATCH_KEY, 'testnet', 'BTC', 157234, null), false);
+        assert.strictEqual(gates.activeAt(ANCHOR_MATCH_KEY, 'testnet', 'BTC', 157235, null), true);
         assert.strictEqual(gates.activeAt(ANCHOR_MATCH_KEY, 'regtest', 'BTC', 0, null), true);
     });
 
