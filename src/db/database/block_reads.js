@@ -71,9 +71,10 @@ module.exports = {
         return protocolTime.protocolTime(network, raw, previous);
     },
 
-    // Handle getting block time for a given block. Memoized (last-block-wins, see
-    // this._blockTimeCache in the constructor): block_time is constant per block_index, and
-    // protocol_changes.isEnabled() calls this repeatedly per block under the hot per-action path.
+    // Handle getting block time for a given block. Memoized (last-block-wins, in
+    // this._protocolTimeCache, separate from getRawBlockTime's _blockTimeCache): the value is
+    // constant per block_index, and protocol_changes.isEnabled() calls this repeatedly per
+    // block under the hot per-action path.
     // PROTOCOL time for a block: what every time-keyed consensus reader should use.
     //
     // On networks switched to median-time-past (see protocol_time.js) this is the
@@ -87,7 +88,7 @@ module.exports = {
     //
     // Applied HERE rather than at each call site on purpose: this is the single
     // seam every protocol reader already flows through (actions.js, protocol
-    // changes, the six mirror barriers), so they all move together. A reader left
+    // changes, the mirror barriers), so they all move together. A reader left
     // on the raw stamp while the barriers move is the combination that forks.
     // Storage and display must NOT use this - createBlock and the chain-tip push
     // take getRawBlockTime, so the timestamp we persist and show stays the real one.
@@ -110,9 +111,9 @@ module.exports = {
         return protocolTimeValue;
     },
 
-    // Invalidate the single-entry getBlockTime() memo. A reorg replaces the content of an
-    // already-processed height: the decoder re-inserts the new-chain block with a new
-    // block_time, and the indexer's blocks row for that height is deleted by rollback. The
+    // Invalidate the single-entry block-time memos (getRawBlockTime's and getBlockTime's).
+    // A reorg replaces the content of an already-processed height: the decoder re-inserts
+    // the new-chain block with a new block_time, and the indexer's blocks row for that height is deleted by rollback. The
     // memo is keyed by height ONLY, so on a depth-1 reorg the replay of the same height would
     // otherwise return the orphaned chain's stale block_time (a cache hit), feeding the wrong
     // timestamp into time-gated consensus logic (ProtocolChanges.isEnabled, fee-price gate,

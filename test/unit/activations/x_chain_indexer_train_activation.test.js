@@ -40,6 +40,7 @@ const path   = require('path');
 
 const ta            = require('../../../src/consensus/gates/train_gate.js');
 const XChainIndexer = require('../../../src/XChainIndexer.js');
+const { TRAIN_ACTIVATION_HALT_PREFIX, isTrainActivationHalt } = require('../../../src/XChainIndexer/stall_health.js');
 
 const FLOOR   = { '1.0.0': { mainnet: 0, testnet: 0, regtest: 0 } };
 const TWO_ARM = { '1.0.0': { mainnet: 0, testnet: 0, regtest: 0 },
@@ -247,6 +248,9 @@ describe('train activation: the indexer pre-apply gate @regression', function ()
             assert.strictEqual(self.trainActivation.status, 'halt');
             assert.match(self.stallReason, /^train_activation_halt: /);
             assert.match(self.stallReason, /9\.0\.0/);
+            // The writer and the stall verdicts must agree on the prefix, or the halt grades as a wedge.
+            assert.ok(self.stallReason.startsWith(TRAIN_ACTIVATION_HALT_PREFIX + ' '));
+            assert.ok(isTrainActivationHalt(self.stallReason));
             const insert = self.queries.find(([sql]) => /INSERT INTO events/.test(sql));
             assert.ok(insert, 'a durable TRAIN_ACTIVATION_HALT marker must be written');
             assert.match(insert[0], /TRAIN_ACTIVATION_HALT/);
@@ -303,8 +307,11 @@ describe('train activation: the indexer pre-apply gate @regression', function ()
     it('clears its own stall reason once the verdict goes clear, and leaves other stalls alone', function () {
         const mine = fakeIndexer({ required: null, stallReason: 'train_activation_halt: stale' });
         const other = fakeIndexer({ required: null, stallReason: 'price_sync_barrier' });
-        return check(mine, 1).then(() => check(other, 1)).then(() => {
+        // A halt written under the shared prefix must clear too, so a renamed prefix cannot strand a published halt.
+        const shared = fakeIndexer({ required: null, stallReason: TRAIN_ACTIVATION_HALT_PREFIX + ' stale' });
+        return check(mine, 1).then(() => check(other, 1)).then(() => check(shared, 1)).then(() => {
             assert.strictEqual(mine.stallReason, null);
+            assert.strictEqual(shared.stallReason, null, 'a clear verdict must drop a halt written under the shared prefix');
             assert.strictEqual(other.stallReason, 'price_sync_barrier',
                 'the train gate must never clear another barrier\'s stall');
         });

@@ -11,13 +11,12 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Unit: stallWedged() /status healthcheck discriminator
+ * Unit: barrier stallReason to grace-field wiring
  *
- * The height-keyed BTC price-sync barrier defers the newest block on almost
- * every poll, so a healthy BTC-mainnet indexer is nearly always mid-barrier
- * (stallReason set) even though it advances every few seconds. stallWedged()
- * is what lets the container /status healthcheck reserve 503 for a real wedge
- * rather than restart-looping a functioning service.
+ * Pins, by source text, which grace field each block-loop barrier keys its
+ * stallClearsAt on and how (clock, height-aware, bound-aware or null), that
+ * every named grace field is assigned in its owning module, and that each
+ * watermark-released barrier is registered in both release paths.
  */
 
 'use strict';
@@ -55,23 +54,26 @@ const SYNC_ENTRY = path.resolve(__dirname, '../../../../src/hub/hub_db_sync.js')
 const SYNC_SRC = fs.readFileSync(SYNC_ENTRY, 'utf8') + '\n' +
     readTreeSource(path.resolve(__dirname, '../../../../src/hub/hub_db_sync'));
 
-// Every `this.stallReason = '<name>';` in the block loop is immediately followed by
-// the matching `this.stallClearsAt = ...;`, so a non-greedy pair scan reads the
-// wiring exactly rather than guessing at a line window.
+// Every stall site in the block loop, literal, constant or prefixed, is read by the shared
+// reader, which throws on a form it cannot resolve. Each site's stallClearsAt is the first
+// one after it and before the next site, so a site that sets none reads as 'missing'.
 //
 // The scan reads the HEIGHT-AWARE helper as well as the plain one, because a re-keyed
 // barrier still has to name which grace it would use below its activation. It does NOT
 // accept a bare `barrierClearsAt` on a re-keyed reason silently: the two helper names
 // are distinguished below, so dropping the height-awareness from a call site is a red
 // rather than a rename that slides through.
+const { stallReasonSites, countStallReasonAssignments } = require('../../../helpers/stall_reason_sites.js');
+const IMPORTED_REASONS = { REMOTE_TOKEN_RETRY_STALL_REASON };
 function graceWiring() {
     const pairs = [];
-    const re = /this\.stallReason = (?:'(\w+)'|(REMOTE_TOKEN_RETRY_STALL_REASON));[\s\S]*?this\.stallClearsAt\s*=\s*([^;]+);/g;
-    let m;
-    while ((m = re.exec(INDEXER_SRC)) !== null) {
-        const reason = m[1] || (m[2] === 'REMOTE_TOKEN_RETRY_STALL_REASON'
-            ? REMOTE_TOKEN_RETRY_STALL_REASON : null);
-        const expr  = m[3];
+    const sites = stallReasonSites(INDEXER_SRC, IMPORTED_REASONS);
+    for (let i = 0; i < sites.length; i++) {
+        const reason = sites[i].reason;
+        const stop = i + 1 < sites.length ? sites[i + 1].index : INDEXER_SRC.length;
+        const clears = /this\.stallClearsAt\s*=\s*([^;]+);/.exec(INDEXER_SRC.slice(sites[i].end, stop));
+        if (!clears) { pairs.push([reason, null, 'missing']); continue; }
+        const expr  = clears[1];
         const plain  = /\bbarrierClearsAt\(blockTime,\s*'([A-Za-z]+)'\)/.exec(expr);
         const height = /\bbarrierClearsAtHeightAware\(blockTime,\s*'([A-Za-z]+)',\s*blockToParse\)/.exec(expr);
         // The anchor barrier reads its grace through a BOUND-aware sibling, because its
@@ -101,12 +103,15 @@ function graceWiring() {
 // left bridge_sync_barrier, policy_sync_barrier, attest_response_sync_barrier and
 // bridge_proof_barrier unpinned: a new barrier, or a re-keyed one, could drop its grace
 // wiring entirely and this suite stayed green. That is the exact drift the scan exists to
-// catch, so the list is now exhaustive and a new stallReason FAILS here until it is added.
+// catch, so the list is exhaustive: the site count is checked against every non-null
+// assignment, and a new stallReason, in any form, FAILS here until it is added.
 //
 // 'height-aware' means the barrier was re-keyed onto the admission height watermark and
 // reports NO clear instant above its activation, which is what lets a hold accumulate and
 // the 900 s ceiling fire on a stall that is now genuine mirror lag.
 const EXPECTED = [
+    // Train-activation safety halt, read by its prefix (the tail is the verdict prose).
+    ['train_activation_halt:',          null,                          'null'],
     ['price_sync_barrier',              null,                          'null'],          // height case can clear early
     ['price_sync_barrier',              'priceWatermarkGraceS',        'height-aware'],
     ['price_landing_barrier',           null,                          'null'],          // clears on other chains' landed time
@@ -124,9 +129,11 @@ const EXPECTED = [
     ['call_presence_barrier',           'directCallGraceS',            'height-aware'],
     ['anchor_attest_barrier',           'anchorAttestWatermarkGraceS', 'bound-aware'],
     ['attest_response_sync_barrier',    'attestResponseWatermarkGraceS', 'height-aware'],
+    ['capability_proof_unavailable',    null,                          'null'],          // proof verification, not wall clock
     ['snapshot_sync_barrier',           null,                          'null'],          // presence, not wall clock
     // Host faults, not mirror barriers: none of them has a clock instant to name, and a
     // grace field appearing on one would be a category error rather than a drift.
+    ['parse_exception:',                null,                          'null'],          // repeated parse failure, by prefix
     ['vm_executor_unavailable',         null,                          'null'],
     ['anchor_reward_proof_unavailable', null,                          'null'],
     ['bridge_proof_barrier',            null,                          'null'],
@@ -137,6 +144,9 @@ const EXPECTED = [
 describe('barrier stallClearsAt grace-field mapping @regression', function () {
 
     it('each barrier keys stallClearsAt on its own grace field', function () {
+        assert.strictEqual(stallReasonSites(INDEXER_SRC, IMPORTED_REASONS).length,
+            countStallReasonAssignments(INDEXER_SRC),
+            'a non-null stallReason assignment is outside the scan; extend stall_reason_sites.js to read it');
         assert.deepStrictEqual(graceWiring(), EXPECTED,
             'barrier-to-grace wiring drifted. Borrowing a sibling barrier\'s grace ' +
             'mis-times the /status wedge discriminator the moment the two constants ' +
@@ -151,7 +161,9 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         // 'future_block_wait', keeps nextBarrierHold() at null and makes the 900 s ceiling
         // unreachable on exactly the barrier whose stall is now remediable.
         const reKeyed = EXPECTED.filter(e => e[2] === 'height-aware' || e[2] === 'bound-aware');
-        assert.strictEqual(reKeyed.length, 9, 'nine of the eleven hold points are re-keyed onto a height');
+        assert.strictEqual(reKeyed.length, 9,
+            'nine EXPECTED entries are re-keyed onto a height (height-aware or bound-aware); ' +
+            'a change here means a barrier gained or lost its height keying');
         assert.ok(/\bbarrierClearsAtHeightAware\(blockTime, graceField, blockHeight\)\{[\s\S]{0,400}?\bmirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
             'the height-aware helper must return null while the admission consumer is armed');
         assert.ok(/\banchorBarrierClearsAt\(blockTime, horizonBound, blockHeight, graceField\)\{[\s\S]{0,400}?\bmirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),

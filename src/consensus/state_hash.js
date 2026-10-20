@@ -169,10 +169,10 @@ const G = require('./state_hash/gated_sections');
 const { STATE_HASH_VERSION } = A;
 
 // Build the canonical state-hash preimage object for block B. db must expose
-// doQuery(sql, args) and getStatusId(name) (both xchain-indexer and xchain-sync
+// doQueryStrict(sql, args) and getStatusId(name) (both xchain-indexer and xchain-sync
 // Database classes do). opts: { activationDelay, gasTick }. The caller hashes the
 // returned object with util.getDataHash. Each class degrades to empty on a missing
-// table/column (older schemas) rather than throwing.
+// table/column (older schemas) and throws on every other read error.
 async function buildStateHashData(db, blockIndex, opts){
     let B       = Number(blockIndex);
     let delay   = (opts && opts.activationDelay != null) ? Number(opts.activationDelay) : null;

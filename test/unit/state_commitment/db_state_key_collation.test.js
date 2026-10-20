@@ -50,6 +50,8 @@ function dbFor(network, coin) {
     const db = new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', { config, util });
     const calls = [];
     sinon.stub(db, 'doQuery').callsFake((query, args) => { calls.push({ query, args }); return Promise.resolve([]); });
+    // Capture the state-hash reads too, which go through doQueryStrict and would otherwise dial the fake host.
+    sinon.stub(db, 'doQueryStrict').callsFake((query, args) => { calls.push({ query, args }); return Promise.resolve([]); });
     db._calls = calls;
     return db;
 }

@@ -16,8 +16,8 @@
  *
  * The pieces of Actions.dryRunAction that do not touch the transaction or its epoch
  * fence: the synthetic transaction, the advisory fee-balance read, the verdict read-back
- * and the result shape. dryRunAction itself (in actions/index.js) keeps the transaction,
- * the two epoch-fenced runs and the rollback. Plain functions taking the Actions instance
+ * and the result shape. dryRunAction itself (in actions_class/quote_surfaces.js) keeps the
+ * transaction, the two epoch-fenced runs and the rollback. Plain functions taking the Actions instance
  * explicitly, so a test context that borrows Actions.prototype.dryRunAction alone works.
  *
  ********************************************************************/
@@ -25,8 +25,9 @@
 const { getLogger } = require('../../observability/index.js');
 
 // The synthetic transaction a dry-run feeds processTransaction.
+// `rawData` (optional) is the caller's literal wire, used as-is in place of the rebuilt string.
 function syntheticDryRunTx(actions, { action, params, source, feeOutputs, probeFeeDestination,
-                                      blockIndex, blockTime, guardInert, feeProbe }){
+                                      blockIndex, blockTime, guardInert, feeProbe, rawData }){
     let txOutputs = Array.isArray(feeOutputs) ? feeOutputs : [];
     if(txOutputs.length === 0 && probeFeeDestination)
         // Decimal coin units (decoder-shaped outputs); 21M coin exceeds any fee band.
@@ -35,7 +36,7 @@ function syntheticDryRunTx(actions, { action, params, source, feeOutputs, probeF
     // Synthetic transaction mirroring what the decoder feeds processTransaction. The tx_hash
     // is unique + clearly marked; it and any handler writes vanish on rollback.
     return {
-        data:          [action].concat(params).join('|'),
+        data:          (typeof rawData === 'string') ? rawData : [action].concat(params).join('|'),
         source:        source,
         destination:   null,
         amount:        null,
@@ -117,7 +118,12 @@ async function readDryRunVerdict(actions, resultData, verdict){
     let actionIndex = primary
         ? primary.actionIndex
         : ((resultData && resultData['ACTION_INDEX'] !== undefined) ? resultData['ACTION_INDEX'] : null);
-    if(actionIndex !== null)
+    // A BATCH hands its record to each sub-command in turn (batch/index.js prepareSubCommand), so
+    // ACTION_INDEX now names the LAST sub-command's row. The batch owes the sum its sub-commands
+    // each staged, so no single row answers for it, and the figure is withheld rather than wrong.
+    if(resultData && Object.prototype.hasOwnProperty.call(resultData, 'BATCH_POSITION'))
+        verdict.feeWithheld = true;
+    else if(actionIndex !== null)
         verdict.feeRecord = await actions.indexerDb.getFeeRecord(actionIndex);
     if(resultData && Array.isArray(resultData['PROBE_SUB_VERDICTS']))
         verdict.subCommands = resultData['PROBE_SUB_VERDICTS'];
@@ -134,7 +140,9 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
         blockTime:  blockTime,
         status:     verdict.status,
         error:      dryRunError,
-        xchainFee:  verdict.feeRecord ? String(verdict.feeRecord.amount)
+        // null, never '0', for a withheld batch fee: '0' would tell a confirm screen it is free.
+        xchainFee:  verdict.feeWithheld ? null
+                   : verdict.feeRecord ? String(verdict.feeRecord.amount)
                    : ((verdict.status === 'valid') ? '0' : null),
         sourceFeeBalance: sourceFeeBalance,
         subCommands:      verdict.subCommands,

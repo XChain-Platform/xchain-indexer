@@ -164,8 +164,9 @@ const CHANGES = [
 
     // GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS: the controller-guard stake snapshot
     // (actions/execute/controller_guard.js) hands the VM decimal strings, as the primary
-    // EXECUTE path does under STAKE_SNAPSHOT_DECIMAL_STRINGS. Unarmed on mainnet and
-    // testnet; regtest is inert unless a venue sets GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME.
+    // EXECUTE path does under STAKE_SNAPSHOT_DECIMAL_STRINGS. Mainnet is unarmed, testnet is
+    // armed at the instant in its row, and regtest is inert unless a venue sets
+    // GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME.
     ['GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS', '0.2.0', UNARMED, 1792303200,
         () => regtestTimeOverride('GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME')() || UNARMED, 0, 0, 0],
 

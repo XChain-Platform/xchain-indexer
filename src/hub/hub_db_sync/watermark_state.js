@@ -51,9 +51,9 @@ function initStreamWatermarks(sync) {
     // price rounds finalize via PBFT some time after their anchor block, and
     // matches are stamped with the hub's wall clock (skew only).
     sync.streamWatermark      = 0;
-    // Frozen protocol constants (600/600/120/120), env-overridable only on regtest;
-    // off-regtest the override is ignored with a warning and a bad value throws.
-    // See HUB_SYNC_WATERMARK_GRACE_S / resolveWatermarkGrace above.
+    // Frozen protocol constants (values in the HUB_SYNC_WATERMARK_GRACE_S table), env-overridable
+    // only on regtest; off-regtest the override is ignored with a warning and a bad value throws.
+    // See HUB_SYNC_WATERMARK_GRACE_S / resolveWatermarkGrace in ./watermark_config.js.
     sync.priceWatermarkGraceS  = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.price,  'HUB_SYNC_PRICE_GRACE_S',  sync.network);
     sync.oracleWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.oracle, 'HUB_SYNC_ORACLE_GRACE_S', sync.network);
     sync.matchWatermarkGraceS  = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.match,  'HUB_SYNC_MATCH_GRACE_S',  sync.network);

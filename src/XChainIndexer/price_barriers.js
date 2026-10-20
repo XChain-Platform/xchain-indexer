@@ -14,10 +14,12 @@
  *
  * XChain Indexer - Price barriers
  *
- * The mirror sync barrier chain and its two price-read members. The chain evaluates the
- * price-read predicate once per block; the price barriers (height and time) and the
- * oracle barrier are the ones a block that provably reads no price may skip. The other
- * members, in chain order, are in ./mirror_barriers.js. Installed onto XChainIndexer.prototype by ../XChainIndexer.js.
+ * The mirror sync barrier chain (deferOnSyncBarriers) and its three price-read members.
+ * The chain evaluates the price-read predicate once per block; the price barrier (height
+ * and time), the price-landing barrier and the oracle barrier are the ones a block that
+ * provably reads no price may skip. Their helpers markPriceSyncHold and landingClearsAt
+ * sit beside them. The other members, in chain order, are in ./mirror_barriers.js.
+ * Installed onto XChainIndexer.prototype by ../XChainIndexer.js.
  *
  ********************************************************************/
 
@@ -90,8 +92,8 @@ module.exports = {
     // Widening a barrier is safe in both directions that matter. It cannot fork:
     // it is a node-local WAIT decision, never persisted or hashed, so a reindex
     // (mirror far ahead of the tip) opens it immediately and replays byte-identically
-    // (see the HUB_SYNC_WATERMARK_GRACE_S note in hub_db_sync.js on why barriers
-    // need no activation gate). It cannot freeze a quiet chain either:
+    // (see the HUB_SYNC_WATERMARK_GRACE_S note in hub/hub_db_sync/watermark_config.js on
+    // why barriers need no activation gate). It cannot freeze a quiet chain either:
     // _priceTimeSyncSatisfied's second case opens on the hub's stream watermark, so
     // a chain with no rounds yet, or sitting in a round gap, proceeds once the hub
     // confirms it has sent everything through this instant. Only a genuinely-behind

@@ -193,8 +193,8 @@ async function dispatchSubCommands(commands, data, error, normalize, isProbe){
         //
         // Placed HERE, immediately above the dispatch, on the SAME `action` variable
         // processAction receives - after the uppercase and after normalizeSubAction's
-        // alias rewrite. A pre-scan of the wire string (actions/index.js
-        // _batchProbeForbiddenSubAction) refuses the batch earlier and more cheaply,
+        // alias rewrite. A pre-scan of the wire string (actions_class/quote_surfaces.js
+        // batchProbeForbiddenSubAction) refuses the batch earlier and more cheaply,
         // but only this one is impossible to spell around, because there is no further
         // transformation between the check and the call.
         if(isProbe && this.actions.isBatchProbeForbiddenSubAction(action)){
@@ -213,11 +213,20 @@ async function dispatchSubCommands(commands, data, error, normalize, isProbe){
         // status. STATUS is a base key, so the field clear above never touches it.
         if(isProbe) delete data['STATUS'];
 
+        // Probe only: give this sub-command its own match snapshot. processAction keeps only the
+        // first ORDER_MATCH/SWAP_MATCH capture per transaction, so a filling ORDER read as its
+        // match's pending_coinpay and the batch answered with that ORDER's verdict and fee.
+        let outerPrimary = isProbe ? this.actions._primaryVerdict : null;
+        if(isProbe) this.actions._primaryVerdict = null;
+
         // Process the specific ACTION commands
         await this.actions.processAction(action, params, data, error);
 
-        if(isProbe)
-            probe.recordSubVerdict.call(this, data, action, batchPosition);
+        if(isProbe){
+            probe.recordSubVerdict.call(this, data, action, batchPosition, this.actions._primaryVerdict);
+            // Restore, so no sub-command's snapshot is left to answer for the batch itself.
+            this.actions._primaryVerdict = outerPrimary;
+        }
     }
 }
 

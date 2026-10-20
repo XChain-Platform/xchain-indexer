@@ -21,8 +21,7 @@
  * must agree on the activation heights, the frozen reward amount, and the gate predicate,
  * or the two sides credit rewards on different anchors (fork). This suite enforces:
  *   1. export parity (map + amount + isAnchorRewardActive behavior), and
- *   2. full source byte-identity, allowing only the exact old/new DOGE-credit wording
- *      while the two repository changes land independently.
+ *   2. full source byte-identity, with no line exempt, matching the hub-side twin test.
  * The byte check is what catches accidental comment/logic drift between the twins.
  ********************************************************************/
 
@@ -38,15 +37,6 @@ const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.
 // Name the twin file once; the shared header names "the same path in the hub" in both
 // copies by design, so a hub copy pointing at the hub is correct, not a stale pointer.
 const GATE_REL = 'src/consensus/gates/anchor_reward_gate.js';
-const LEGACY_DOGE_WORDING = '// inert null / unknown network) -> off (no indexer mints it; the DOGE-side handlers only log the skip).';
-const CURRENT_DOGE_WORDING = '// inert null / unknown network) -> off (no indexer mints it; DOGE-side handlers credit nothing).';
-
-function isDogeWordingTransition(mine, theirs, differing){
-    if(differing.length !== 1) return false;
-    const i = differing[0] - 1;
-    return (mine[i] === CURRENT_DOGE_WORDING && theirs[i] === LEGACY_DOGE_WORDING) ||
-        (mine[i] === LEGACY_DOGE_WORDING && theirs[i] === CURRENT_DOGE_WORDING);
-}
 
 describe('anchor_reward_activation twin parity @regression @tier1', function () {
     it('indexer exports the frozen reward amount and armed BTC mainnet height', function () {
@@ -153,7 +143,7 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
                 GATE_REL + ' differs in line count between hub and indexer; something was added on one side only');
             const differing = [];
             for (let i = 0; i < mine.length; i++) if (mine[i] !== theirs[i]) differing.push(i + 1);
-            assert.deepStrictEqual(isDogeWordingTransition(mine, theirs, differing) ? [] : differing, [],
+            assert.deepStrictEqual(differing, [],
                 GATE_REL + ' drifted between hub and indexer; regenerate the hub copy from the indexer copy, never hand-edit it');
         });
     });

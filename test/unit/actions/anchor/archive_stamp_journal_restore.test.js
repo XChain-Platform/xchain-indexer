@@ -17,11 +17,12 @@ const assert = require('assert');
 
 const anchors = require('../../../../src/db/anchors/index.js');
 const batchHeads = require('../../../../src/db/rollback/batch_heads.js');
+const { foldArchiveHeadFloor } = require('../../../../src/db/anchors/archive_head_pick.js');
 const { mysqlDdlToSqlite } = require('../../../helpers/sqlAnchorDb.js');
 
 const SQL_DIR = path.join(__dirname, '..', '..', '..', '..', 'src', 'sql');
 
-function makeDb(){
+function makeDb(network){
     const { DatabaseSync } = require('node:sqlite');
     const sqlite = new DatabaseSync(':memory:');
     for(const file of ['index_statuses.sql', 'anchor_actions.sql']){
@@ -29,7 +30,7 @@ function makeDb(){
     }
 
     const api = {
-        config: { NETWORK: 'regtest' },
+        config: { NETWORK: network || 'regtest' },
         async createStatus(name){
             sqlite.prepare('INSERT OR IGNORE INTO index_statuses (status) VALUES (?)').run(name);
             return sqlite.prepare('SELECT id FROM index_statuses WHERE status = ?').get(name).id;
@@ -69,6 +70,21 @@ function makeDb(){
                 '(action_index, version, match_batch_seq, chunk_index, status_id, block_index_doge) ' +
                 'VALUES (300, 2, 7, 1, ?, 30)'
             ).run(valid);
+        },
+        // Seed a stamped v3 head at a DOGE height plus the orphaned valid v2 chunk that completed it.
+        async seedFold(chain, dogeHeight){
+            const invalid = await api.createStatus('invalid_archive');
+            const valid = await api.createStatus('valid');
+            sqlite.prepare(
+                'INSERT INTO anchor_actions ' +
+                '(action_index, version, chain, match_batch_seq, status_id, pre_archive_status_id, block_index_doge) ' +
+                'VALUES (100, 3, ?, 7, ?, ?, ?)'
+            ).run(chain, invalid, valid, dogeHeight);
+            sqlite.prepare(
+                'INSERT INTO anchor_actions ' +
+                '(action_index, version, match_batch_seq, chunk_index, status_id, block_index_doge) ' +
+                'VALUES (300, 2, 7, 1, ?, ?)'
+            ).run(valid, dogeHeight + 5);
         },
         head(){
             return Object.assign({}, sqlite.prepare(
@@ -129,4 +145,23 @@ describe('archive stamp journal rollback restore @regression @tier1', function (
             db.close();
         }
     });
+
+    // The reset must reach every head the forward pick can stamp, and no other v3 row.
+    for(const c of [
+        { name: 'restores a v3 fold archive head above the testnet DOGE fold floor', network: 'testnet', chain: null, above: true, expect: 'valid' },
+        { name: 'leaves a v3 row below the fold floor stamped', network: 'testnet', chain: null, above: false, expect: 'invalid_archive' },
+        { name: 'leaves a v3 chain section row stamped', network: 'testnet', chain: 'BTC', above: true, expect: 'invalid_archive' },
+    ]){
+        it(c.name, async function () {
+            const db = makeDb(c.network);
+            try {
+                const floor = foldArchiveHeadFloor('testnet', 'DOGE');
+                await db.seedFold(c.chain, c.above ? floor + 10 : floor - 10);
+                await batchHeads.resetOrphanedArchiveHeads(db, db.config, 100, 250);
+                assert.strictEqual(db.head().status, c.expect);
+            } finally {
+                db.close();
+            }
+        });
+    }
 });

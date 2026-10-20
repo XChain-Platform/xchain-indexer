@@ -204,10 +204,12 @@ describe('fee-quote transaction-lock budget', function () {
 
         it('a give-up opens no transaction, so it never rolls one back', async function () {
             let { ctx, calls } = makeDryRunCtx({ acquireRejects: true });
+            ctx.indexerDb.blockIndex = 105;
             await assert.rejects(
                 () => ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'T'], source: 's', timeoutMs: 300000, acquireTimeoutMs: 10 }),
                 (e) => e.code === 'TX_LOCK_BUSY');
             assert.strictEqual(calls.rollback, 0, 'no rollback for a transaction that never opened');
+            assert.strictEqual(ctx.indexerDb.blockIndex, 105, 'a give-up never touches the block-loop height');
         });
     });
 });

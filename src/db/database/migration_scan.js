@@ -88,7 +88,9 @@ function keywordDestroys(self, stmt){
     // silently instead of failing; and SET STATEMENT v=x FOR <stmt> hides a statement
     // behind the SET keyword from every check below.
     if(/^SET\b/i.test(stmt) && !autoEligibleSet(stmt))   return true;
-    if(/^DROP\s+(TABLE|DATABASE|SCHEMA)\b/i.test(stmt))  return true;
+    // DROP is an allow-list like CREATE: only a standalone index drop and a session temporary-table
+    // drop stay auto-eligible, since a sequence, trigger, view, event or routine drop loses state or behaviour.
+    if(/^DROP\b/i.test(stmt) && !/^DROP\s+(?:INDEX|TEMPORARY\s+TABLE)\b/i.test(stmt)) return true;
     // CREATE OR REPLACE TABLE is an atomic DROP TABLE IF EXISTS + CREATE: it destroys
     // every existing row. Plain CREATE TABLE / CREATE TABLE IF NOT EXISTS are additive
     // and stay unflagged (see the CREATE note below); only the OR REPLACE form loses
@@ -248,7 +250,8 @@ module.exports = {
     // first statement that can lose, truncate, or rename data - or null when the
     // file is safe to auto-run. Pure string logic (no DB), unit-tested directly.
     //
-    // Flagged as destructive: DROP TABLE/DATABASE/SCHEMA, TRUNCATE, RENAME TABLE,
+    // Flagged as destructive: any top-level DROP other than DROP INDEX and DROP TEMPORARY
+    // TABLE (sequences, triggers, views, events and routines too), TRUNCATE, RENAME TABLE,
     // DELETE (any form), REPLACE INTO (atomic DELETE+INSERT), INSERT ... ON DUPLICATE
     // KEY UPDATE (rewrites every colliding row), LOAD DATA (rows from a file the
     // scanner cannot read), UPDATE (except the
@@ -267,7 +270,8 @@ module.exports = {
     //
     // Deliberately NOT flagged (legitimate existing auto patterns): DROP INDEX/KEY,
     // DROP FOREIGN KEY/CONSTRAINT/CHECK/DEFAULT/PRIMARY KEY with the keyword bare and
-    // unquoted (structural, no row data lost), ADD ..., plain InnoDB or engine-less
+    // unquoted (structural, no row data lost), a standalone DROP INDEX ... ON and
+    // DROP TEMPORARY TABLE, ADD ..., plain InnoDB or engine-less
     // CREATE TABLE / CREATE TABLE IF NOT EXISTS (additive;
     // but CREATE OR REPLACE TABLE IS flagged - it is an atomic DROP+CREATE), CREATE
     // [UNIQUE] INDEX, MODIFY that widens/nullables a column, and ALTER ONLINE TABLE

@@ -26,13 +26,13 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
-const { CROSS_CHAIN_TABLES, REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT,
+const { CHAIN_ID_FENCED_TABLES, REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT,
         REFUSED_ROW_NAMED_CAP } = require('./mirror_tables.js');
 const { capabilitySnapshotKey } = require('./mirror_bounds.js');
 
 module.exports = {
 
-    // ── Chain identity fence for the three CROSS_CHAIN_TABLES ────────────────────
+    // ── Chain identity fence for the CHAIN_ID_FENCED_TABLES ──────────────────────
 
     // Record which Bitcoin chain this mirror's cross-chain rows must belong to.
     //
@@ -121,8 +121,9 @@ module.exports = {
     },
 
     async purgeChainScopedTables(expected, previous) {
-        let total = 0, refresh = { matches: false, calls: false, bridge: false, policy: false, listShare: false };
-        for (let table of CROSS_CHAIN_TABLES) {
+        let total = 0, refresh = { matches: false, calls: false, bridge: false, policy: false, listShare: false,
+                                   remoteToken: false };
+        for (let table of CHAIN_ID_FENCED_TABLES) {
             let result;
             try {
                 result = await this.hubDb.doQuery(
@@ -152,6 +153,7 @@ module.exports = {
             if (table === 'bridge_transfers')    refresh.bridge  = true;
             if (table === 'policy_snapshots')    refresh.policy  = true;
             if (table === 'list_snapshots')      refresh.listShare = true;
+            if (table === 'remote_token_snapshots') refresh.remoteToken = true;
         }
         return { total: total, refresh: refresh };
     },
@@ -192,6 +194,8 @@ module.exports = {
             if (refresh.bridge)  await this.refreshBridgeSyncTimestamp();
             if (refresh.policy)  await this.refreshPolicySyncTimestamp();
             if (refresh.listShare) await this.refreshListShareSyncState();
+            // No argument: the default never arms the remote token barrier before a full drain.
+            if (refresh.remoteToken) await this.refreshRemoteTokenSyncState();
             if (refresh.matches || refresh.calls) await this.releaseSnapshotWaiters();
         } catch (e) {
             getLogger().warn('HubDbSync: could not refresh the sync barriers after a foreign-chain purge:', e);
@@ -201,7 +205,7 @@ module.exports = {
     // True when this row belongs to a Bitcoin chain other than the one this mirror follows,
     // and must therefore not be applied.
     //
-    // Only the three CROSS_CHAIN_TABLES carry the column. A NULL (or absent) value applies
+    // Only the CHAIN_ID_FENCED_TABLES are fenced. A NULL (or absent) value applies
     // as before, and so does every row while no expectation is known: the fence refuses only
     // on positive evidence that the row names a different chain.
     //
@@ -210,7 +214,7 @@ module.exports = {
     // is supposed to be without - and failing the page closed here would wedge every
     // settlement barrier forever against a hub database nobody purged.
     refuseForeignChainRow(table, row) {
-        if (CROSS_CHAIN_TABLES.indexOf(table) === -1) return false;
+        if (CHAIN_ID_FENCED_TABLES.indexOf(table) === -1) return false;
         let expected = this._expectedBtcChainId;
         if (!expected) return false;
         let rowChainId = (row && typeof row.btc_chain_id === 'string') ? row.btc_chain_id.trim().toLowerCase() : null;
@@ -353,7 +357,7 @@ module.exports = {
     // purges the previous chain's rows before this row applies). A 'local' expectation is
     // this node's own measurement of the chain it indexes and is never adopted away from.
     async maybeAdoptHubChainId(table, row) {
-        if (CROSS_CHAIN_TABLES.indexOf(table) === -1) return;
+        if (CHAIN_ID_FENCED_TABLES.indexOf(table) === -1) return;
         let expected = this._expectedBtcChainId;
         if (!expected) return;
         let rowChainId = (row && typeof row.btc_chain_id === 'string') ? row.btc_chain_id.trim().toLowerCase() : null;

@@ -25,6 +25,7 @@ const { CONFIG_ENV } = require('../config.js');
 // resync on (see initBarrierTiming).
 const { resolveBarrierHoldCeilingMs } = require('../hub/hub_db_sync.js');
 const { resolveReadyNoCommitMs } = require('./readiness/verdict.js');
+const { resolveProofWaitGraceMs } = require('./stall_health.js');
 
 // Chain identity, stall and loop-liveness fields: what /health reads to tell an
 // advancing, deferring, wedged or silent block loop apart.
@@ -182,6 +183,11 @@ function initBarrierTiming(indexer){
     // mirror, so it is judged against this field, not healthStallGraceMs. Twice the generic
     // window by default. Purely operational, NOT a consensus parameter.
     indexer.priceLandingGraceMs = 2 * indexer.healthStallGraceMs;
+
+    // Own no-progress window (ms) for the roll-call and capability proof waits: twice the
+    // barrier hold ceiling, so *_proof_stuck shows before the wedge and its one restart.
+    // Purely operational, NOT a consensus parameter.
+    indexer.proofWaitGraceMs = resolveProofWaitGraceMs(indexer.healthStallGraceMs, indexer.barrierHoldCeilingMs);
 
     // Window (ms) the block-poll loop may go without completing an ITERATION before
     // isPollSilent() calls it dead. Sized off healthStallGraceMs, which is already at

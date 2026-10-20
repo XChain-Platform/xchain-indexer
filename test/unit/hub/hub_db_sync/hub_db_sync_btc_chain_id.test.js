@@ -12,9 +12,12 @@ process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
+const fs    = require('fs');
+const path  = require('path');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
+const { CHAIN_ID_FENCED_TABLES, MIRRORED_TABLES } = require('../../../../src/hub/hub_db_sync/mirror_tables.js');
 const Database  = require('../../../../src/db');
 const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
 
@@ -65,7 +68,7 @@ const inserts   = (seen) => seen.sql.filter((q) => /^INSERT /.test(q.sql));
 const chainDels = (seen) => seen.sql.filter((q) => /btc_chain_id IS NOT NULL AND btc_chain_id <> \?$/.test(q.sql));
 const lines     = (spy)  => spy.getCalls().map((c) => c.args.map(String).join(' '));
 
-// The three hub-mirrored cross-chain tables are scoped by `network` alone, and on regtest
+// The hub-mirrored chain-fenced tables are scoped by `network` alone, and on regtest
 // one network name spans every Bitcoin chain a venue has ever had: a re-genesis that leaves
 // the hub database in place keeps serving the dead chain's finalized matches and capability
 // snapshots to every fresh indexer. `btc_chain_id` is the hash of BITCOIN BLOCK 1 on the
@@ -99,13 +102,16 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
             'the fence refuses only on positive evidence, never on ignorance of this chain');
     });
 
-    it('fences only settlement cross-chain tables, not globally watermarked remote tokens', async function () {
+    it('fences remote token snapshots with the cross-chain tables, but not hub-state rows', async function () {
         const { sync, seen } = makeSync({ columns: ['id', 'network', 'btc_chain_id'] });
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'local');
         await sync.applyRow('state_checkpoints', { id: 1, network: 'regtest', btc_chain_id: CHAIN_OLD });
-        await sync.applyRow('remote_token_snapshots', { id: 2, network: 'regtest', btc_chain_id: CHAIN_OLD });
+        assert.strictEqual(await sync.applyRow('remote_token_snapshots',
+            { id: 2, network: 'regtest', btc_chain_id: CHAIN_OLD }), false,
+            'a dead-chain remote token row must not apply: its signed content omits btc_chain_id');
+        await sync.applyRow('remote_token_snapshots', { id: 3, network: 'regtest', btc_chain_id: CHAIN_NEW });
         assert.strictEqual(inserts(seen).length, 2,
-            'hub-state rows stay outside the settlement-table fence even when they carry chain provenance');
+            'the hub-state row and this chain\'s remote token row apply; the relic does not');
     });
 
     it('refuses relics through the drain, counts them in one line and still completes the page', async function () {
@@ -141,7 +147,8 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         const { sync } = makeSync({});
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'local');
         for (const table of ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
-                             'bridge_transfers', 'policy_snapshots', 'list_snapshots']) {
+                             'bridge_transfers', 'policy_snapshots', 'list_snapshots',
+                             'remote_token_snapshots']) {
             assert.strictEqual(await sync.applyRowsBatched(table, [matchRow(1, CHAIN_OLD), matchRow(2, CHAIN_OLD)]),
                 false, table + ' must fall to the per-row path where the fence runs');
         }
@@ -216,7 +223,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         assert.match(httpGet.firstCall.args[0], /^\/hub-db\/snapshot\/capability_snapshots\?since_id=0&limit=1$/);
         assert.strictEqual(sync._expectedBtcChainId, CHAIN_NEW, 'the hub restated its identity; the mirror follows');
         assert.strictEqual(inserts(seen).length, 1, 'the row applies once the mirror is on its chain');
-        assert.strictEqual(chainDels(seen).length, 6, 'adopting a new chain purges the previous chain\'s rows');
+        assert.strictEqual(chainDels(seen).length, 7, 'adopting a new chain purges the previous chain\'s rows');
     });
 
     it('refuses a live row the hub does not vouch for, and re-probes only once per id', async function () {
@@ -265,6 +272,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         const { sync, seen } = makeSync({ deleted: 3 });
         await sync.setExpectedBtcChainId(CHAIN_OLD, 'hub');
         seen.sql.length = 0;
+        const remoteTokenRefresh = sinon.spy(sync, 'refreshRemoteTokenSyncState');
 
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'hub');
 
@@ -275,8 +283,13 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
             'DELETE FROM capability_snapshots WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?',
             'DELETE FROM bridge_transfers WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?',
             'DELETE FROM policy_snapshots WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?',
-            'DELETE FROM list_snapshots WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?'
+            'DELETE FROM list_snapshots WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?',
+            'DELETE FROM remote_token_snapshots WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?'
         ]);
+        // Re-evaluate the remote token waiters, never arming the barrier before a full drain.
+        assert.strictEqual(remoteTokenRefresh.callCount, 1, 'a remote token purge re-reads its barrier');
+        assert.strictEqual(remoteTokenRefresh.firstCall.args.length, 0);
+        assert.strictEqual(sync.remoteTokenBootstrapped, false, 'a purge before any drain must not arm the barrier');
         assert.ok(dels.every((q) => q.args[0] === CHAIN_NEW), 'the predicate keeps THIS chain, and NULLs stay');
         assert.deepStrictEqual(seen.sql.filter(q =>
             /^DELETE FROM (state_checkpoints|anchor_reward_attestations)/.test(q.sql)).map(q => q.sql), [
@@ -284,7 +297,8 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
             'DELETE FROM anchor_reward_attestations WHERE network = ?'
         ]);
         for (const table of ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
-                             'bridge_transfers', 'policy_snapshots', 'list_snapshots'])
+                             'bridge_transfers', 'policy_snapshots', 'list_snapshots',
+                             'remote_token_snapshots'])
             assert.ok(lines(warn).includes('HubDbSync: purged 3 ' + table + ' row(s) from chain ' + CHAIN_OLD),
                 'the purge of ' + table + ' must be reported with its count and the chain it cleared');
         assert.strictEqual(seen.sql.filter((q) => /^SELECT MAX\(effective_time\) AS ts\b[\s\S]* FROM cross_chain_matches /.test(q.sql)).length, 1,
@@ -299,7 +313,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
 
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'local');
 
-        assert.strictEqual(chainDels(seen).length, 6,
+        assert.strictEqual(chainDels(seen).length, 7,
             'rows mirrored before block 1 existed carry a foreign id no later delivery re-offers');
     });
 });
@@ -316,6 +330,16 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
 
         assert.strictEqual(await sync.setExpectedBtcChainId(CHAIN_NEW, 'hub'), false);
         assert.strictEqual(chainDels(seen).length, 0);
+    });
+
+    // A mirrored table whose DDL carries btc_chain_id and sits outside the fence keeps
+    // serving dead-chain rows after a re-genesis, so classification is checked, not trusted.
+    it('fences exactly the mirrored tables whose DDL declares btc_chain_id', function () {
+        const sqlDir = path.join(__dirname, '../../../../src/sql');
+        const declaring = MIRRORED_TABLES.filter((table) =>
+            /^\s*btc_chain_id\s/m.test(fs.readFileSync(path.join(sqlDir, table + '.sql'), 'utf8')));
+        assert.ok(declaring.includes('remote_token_snapshots'), 'the DDL scan must see the column');
+        assert.deepStrictEqual(declaring.slice().sort(), CHAIN_ID_FENCED_TABLES.slice().sort());
     });
 
     // ── The identity read ────────────────────────────────────────────────────────

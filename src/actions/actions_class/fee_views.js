@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
+const { normalizeQuoteRequest, batchRequestWire } = require('./quote_answers.js');
 
 // Which database the fee schedule's price read came out of. Resolved exactly the way
 // util.getFeeOraclePrices resolves it, so the disclosure cannot drift from the
@@ -60,17 +61,21 @@ module.exports = {
     // API-key-gated when a key is configured. The 06-18 trial's AUTO_INCREMENT concern is
     // resolved (block hashes cover canonical strings; in-transaction index ids are dense-
     // explicit and roll back), so the gate is about compute, not consensus.
+    //
+    // Normalized as dispatch does (normalizeQuoteRequest), so `action` echoes what runs; a BATCH
+    // keeps its literal wire. No action-name refusal: with no deny-list here, a name dispatch
+    // re-splits is exactly what a real broadcast would carry.
     async computeFeeQuoteDryRun({ action, params, source, feeOutputs }){
-        action = String(action || '').toUpperCase();
-        if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
-        params = params.map(v => String(v).trim());
+        let rawAction = action, rawParams = params;
+        ({ action, params } = normalizeQuoteRequest(this.actionAliases, action, params));
+        let rawData = batchRequestWire(action, rawAction, rawParams);
 
         let coin           = this.config['COIN'];
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
         let nativeEnabled  = !!(feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
 
         let run = await this.dryRunAction({
-            action, params, source, feeOutputs,
+            action, params, source, feeOutputs, rawData,
             probeFeeDestination: null,
             timeoutMs: this.config['BLOCK_PROCESS_TIMEOUT'],
             label: 'feequotedryrun ' + (action || '')
@@ -97,7 +102,8 @@ module.exports = {
         // Native-fee sizing for the extracted fee, merged without letting a pricing failure
         // (missing/stale oracle) overwrite the handler's validity verdict: on this raw surface
         // the handler verdict is the headline and sizing is best-effort.
-        if(valid && nativeEnabled){
+        // A null fee is a withheld BATCH figure (dryRunOutcome), and pricing it would size zero.
+        if(valid && nativeEnabled && run.xchainFee != null){
             // Carry blockTime: it is what priceFeeQuote anchors the whole price read on (round
             // selection, staleness, flag-day gate). Without it this raw surface would silently
             // fall back to wall clock and quote off a different price set than the chain.

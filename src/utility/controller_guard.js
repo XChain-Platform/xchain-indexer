@@ -233,8 +233,9 @@ module.exports = {
         // address-controller guards, all guarded action classes) ONLY when a guard would truly run:
         // the caller reaches invokeController only after an effective controller resolved, so
         // uncontrolled tokens never hit this line and stay fully quotable, and a new guarded action
-        // inherits the refusal for free. GUARD_INERT is set only on computeFeeQuote's synthetic tx
-        // (never a decoded block tx, never the API-key-gated feequotedryrun), so this branch is dead
+        // inherits the refusal for free. GUARD_INERT is set only on the synthetic tx of the two
+        // public surfaces, computeFeeQuote and computePreflight (never a decoded block tx, never
+        // the API-key-gated feequotedryrun), so this branch is dead
         // on block processing and cannot skip a guard on a real transaction.
         //
         // The sentinel NAMES its cause. A caller that gets back a bare

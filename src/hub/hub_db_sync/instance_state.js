@@ -127,7 +127,8 @@ function initPriceBarrierState(sync) {
     // Highest block_timestamp among finalized rounds in the local price_snapshots copy.
     // Used by the time-keyed price barrier (waitForPriceSyncTime), which runs on EVERY chain
     // whenever sync is enabled and is not conditioned on the NATIVE_FEE_PRICE_TIME_GATE
-    // flag-day (XChainIndexer.js:877-903). Non-reference chains' heights are not comparable
+    // flag-day (see deferOnPriceSync in the indexer's XChainIndexer/price_barriers.js).
+    // Non-reference chains' heights are not comparable
     // to the rounds' BTC reference_block anchor, so catch-up is judged by the rounds'
     // consensus timestamps against the block's time instead (H-3); on BTC the time barrier
     // is ADDITIVE to the height one, since height coverage does not imply time coverage.
@@ -269,14 +270,14 @@ function initConsumerHooks(sync, options) {
     //    a legitimate one originated from our own rollback and always carries a
     //    PRE-bump generation (< our current), so anything else is refused. Absent
     //    (explorer's vendored mirror, direct-hub-DB mode) the check is skipped.
-    //  - trackedRollbackGeneration: last-observed retraction generation per
-    //    (table, source_chain). Generations are monotonic per source chain, so a
-    //    fenced event below the tracked value is a replay/stale duplicate; equal is
-    //    idempotent redelivery and still applied. In-memory: a restart only widens
-    //    back to the fence itself, never below it.
+    //  - the push_generation fence on every fenced DELETE. Retraction generations are
+    //    per-indexer counters, NOT monotonic per source chain: several initiators'
+    //    fences for one chain, and nested rollbacks drained out of order, reach this
+    //    mirror in any order, so ordering and replay safety come from the fenced DELETE
+    //    being idempotent (a late or lower fence cannot touch a row re-published at a
+    //    higher generation), never from skipping a fence below one already seen.
     sync.getOwnRollbackGeneration = (typeof options.getOwnRollbackGeneration === 'function')
         ? options.getOwnRollbackGeneration : null;
-    sync.trackedRollbackGeneration = {};
 
     // signed retractions: the network this mirror serves (mainnet |
     // testnet | regtest), which keys the RETRACTION_SIGNING flag-day and the
@@ -289,7 +290,7 @@ function initConsumerHooks(sync, options) {
 }
 
 function initChainIdentityState(sync) {
-    // ── Chain identity for the three CROSS_CHAIN_TABLES ─────────────────────────
+    // ── Chain identity for the CHAIN_ID_FENCED_TABLES ───────────────────────────
     //
     // `network` above scopes a mirrored row to mainnet/testnet/regtest, and on regtest
     // that is not enough: one network name spans every Bitcoin chain a venue has ever
@@ -308,7 +309,7 @@ function initChainIdentityState(sync) {
     // decoder database and sets it 'local': that is this node's own measurement of the
     // chain it indexes, and no hub can overrule it. Every other consumer (a DOGE or LTC
     // indexer, the explorer's vendored display mirror) has no Bitcoin chain of its own to
-    // read and learns the id 'hub', from the value the hub advertises on the three
+    // read and learns the id 'hub', from the value the hub advertises on the cross-chain
     // snapshot envelopes; a hub id is FOLLOWED, so a re-genesis the hub has already
     // adopted cannot strand a running non-BTC mirror on rows it refuses forever.
     //

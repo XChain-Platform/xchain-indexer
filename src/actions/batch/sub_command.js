@@ -125,10 +125,15 @@ function subCommandTick(action, command, normalize){
 // installFanOutWeights sets in limits.js (see its header for why it is not 1 + recipients),
 // so no path here reads the database and `data` and `normalize` are unused today.
 //
-// They and the async signature are kept for a possible later per-recipient weight. The
-// recipient count is NOT on the wire (AIRDROP carries a LIST_ACTION_INDEX and DIVIDEND
-// carries only a TICK), so such a weight would need a database read. That read must be
-// as-of (BLOCK_INDEX, ACTION_INDEX) and resolve-only, the discipline probeTokenInfo and
+// The flat weight is per sub-command: a multi-leg AIRDROP (FORMATs 1 to 3) weighs the same
+// as a single-leg one. A per-leg weight would need no database read, since the leg count
+// comes from the param count and FORMAT the way readAirdropLegs (airdrop/legs.js) reads it.
+//
+// `data`, `normalize` and the async signature are kept for a possible later per-recipient
+// weight. The recipient count is NOT on the wire (AIRDROP carries only LIST_ACTION_INDEXes, one
+// shared by every leg in FORMAT 1, and DIVIDEND carries only a TICK), so such a weight would need
+// a database read. That read must be as-of (BLOCK_INDEX, ACTION_INDEX) and resolve-only,
+// the discipline probeTokenInfo and
 // probeTickerId already set in this handler, or two nodes will weigh the same batch
 // differently and fork. Keeping the signature now means adding it later would not change
 // what parse() and batchWeight() are written against.

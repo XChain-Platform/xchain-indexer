@@ -29,7 +29,8 @@
 const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
-const crypto  = require('crypto');
+// The one checksum the runner and migrate.js compare, so a seeded ledger row can never disagree with them
+const { migrationChecksum } = require('../migration/checksum_verdict.js');
 const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 const { getLogger } = require('../../observability/index.js');
 const { recordShapeDrift } = require('../shared.js');
@@ -239,7 +240,7 @@ module.exports = {
             try {
                 for(const file of files){
                     const raw = fs.readFileSync(path.join(dir, file), 'utf8');
-                    const checksum = crypto.createHash('sha256').update(raw).digest('hex');
+                    const checksum = migrationChecksum(raw);
                     await db.query(
                         'INSERT INTO schema_migrations (name, checksum, mode, applied_at) VALUES (?, ?, ?, NOW()) ' +
                         'ON DUPLICATE KEY UPDATE name = name',

@@ -222,7 +222,8 @@ describe('Rollback @regression @tier3', function () {
 
     // ─── the anchor invalid_archive reset selects the shared archive-head version set ─────
     it('selects the anchor invalid_archive reset parents via the shared archive-head set', async function () {
-        const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../../../../src/consensus/state_hash.js');
+        const { ARCHIVE_HEAD_VERSIONS } = require('../../../../src/consensus/state_hash.js');
+        const { archiveHeadPickPredicate } = require('../../../../src/db/anchors/archive_head_pick.js');
         assert.deepStrictEqual(ARCHIVE_HEAD_VERSIONS, [1], 'shared archive-head set must be [1]');
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
         indexer.indexerDb.doQuery.resolves([]);
@@ -231,12 +232,12 @@ describe('Rollback @regression @tier3', function () {
         const anchorUpdate = indexer.indexerDb.doQuery.getCalls().find(c =>
             /UPDATE anchor_actions p/.test(c.args[0]) && /status = 'invalid_archive'/.test(c.args[0]));
         assert.ok(anchorUpdate, 'expected the anchor invalid_archive reset UPDATE');
-        assert.ok(anchorUpdate.args[0].includes('p.version ' + ARCHIVE_HEAD_VERSIONS_SQL),
+        assert.ok(anchorUpdate.args[0].includes(archiveHeadPickPredicate('p')),
             'the reset must select archive-head parents via the shared spliced predicate, ' +
             'or a reorg-orphaned archive batch stays wedged invalid_archive permanently');
-        assert.ok(!/p\.version = 1\b/.test(anchorUpdate.args[0]),
-            'a hand-written v1-only literal must stay out of the reset UPDATE: the set is ' +
-            'one member today and the splice is what carries the next one');
+        assert.ok(!/p\.version = 1\b/.test(anchorUpdate.args[0].replace(archiveHeadPickPredicate('p'), '')),
+            'a hand-written v1-only literal must stay out of the reset UPDATE: the forward ' +
+            'parent pick is the set, and the splice is what carries the next head version');
     });
 
     // ─── price_snapshots delete is reference_chain-qualified and BTC-only ─────

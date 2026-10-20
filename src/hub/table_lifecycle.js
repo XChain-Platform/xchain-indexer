@@ -260,6 +260,9 @@ const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({
 // alone; createOrderMatch only re-writes its own action's row), carried to followers
 // as updated-rows class 8 and re-derived on reorg. No hash commits it yet; a gated
 // state_hash term would, and would retire this entry.
+// `signing_pubkey_id` on contract_stakes/contract_unstakes is rewritten in place by the
+// DELEGATE v1 rotation sweep (rotateContractStakeKey), journaled in
+// contract_delegation_rotations, carried as the updated-rows rotation class and reversed on reorg.
 const CONTENT_PARITY_IN_PLACE_COLUMNS = Object.freeze({
     anchor_actions:       Object.freeze(['status_id', 'pre_archive_status_id']),
     attests:              Object.freeze(['request_status', 'resolved_block', 'callback_execute_action_index',
@@ -267,8 +270,8 @@ const CONTENT_PARITY_IN_PLACE_COLUMNS = Object.freeze({
     bet_feeds:            Object.freeze(['feed_status_id', 'closed_block', 'terminal_block']),
     bets:                 Object.freeze(['bet_status_id', 'settled_block']),
     contract_delegations: Object.freeze(['deactivation_block']),
-    contract_stakes:      Object.freeze(['amount', 'deactivation_block']),
-    contract_unstakes:    Object.freeze(['amount', 'status_id']),
+    contract_stakes:      Object.freeze(['amount', 'deactivation_block', 'signing_pubkey_id']),
+    contract_unstakes:    Object.freeze(['amount', 'status_id', 'signing_pubkey_id']),
     credits:              Object.freeze([]),
     delegations:          Object.freeze(['deactivation_block']),
     order_matches:        Object.freeze(['status_id']),

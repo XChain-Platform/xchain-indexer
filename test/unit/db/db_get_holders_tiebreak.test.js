@@ -16,7 +16,8 @@
  * CONSENSUS REGRESSION GUARD for db.getHolders() equal-balance tiebreak determinism.
  *
  * getHolders() builds the holder list that DIVIDEND, AIRDROP, and CALLBACK iterate to push
- * credits into the ledger (dividend.js / airdrop.js / callback.js). The two source queries
+ * credits into the ledger (the dividend/, airdrop/ and callback/ handlers under
+ * src/actions/). The two source queries
  * carry a GROUP BY but NO ORDER BY, so MariaDB returns equal-balance holders in engine-
  * arbitrary row order; Node's stable sort then preserves that arbitrary order whenever the
  * balance comparator returns 0. Two honest validators whose engine returns the GROUP BY tie
