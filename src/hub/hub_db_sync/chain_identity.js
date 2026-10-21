@@ -290,6 +290,8 @@ module.exports = {
     //   - Only CONTRADICTIONS are refused. A row the hub withheld is invisible here.
     //   - A 'held' row stays out of the mirror and is retried, and the block loop waits
     //     on the hold (barriers/capability_proof.js) rather than read a partial snapshot.
+    //     A retained hold is not a bootstrap hole: its retry state survives after the
+    //     page cursor advances, so the heartbeat gate may certify the rest of the mirror.
     //   - Every other non-refusal (unreached block, unconfigured capability, truncated
     //     set, a judge that threw, no authoritative db wired) applies the row. An
     //     unjudgeable row must never become a permanent mirror hole.
@@ -312,9 +314,19 @@ module.exports = {
         }
         if (options) options.verdict = verdict && verdict.verdict;
         if (verdict && verdict.verdict === 'held') {
+            let repageBeforeHold = this.repageOwedSeq('capability_snapshots');
             this.holdCapabilitySnapshot(row);
-            if (this._bootstrapping && !(options && options.retainHold))
-                throw new Error('capability snapshot held pending proof');
+            // holdCapabilitySnapshot owes a re-page for live delivery and overflow. During
+            // bootstrap, a row retained in the hold map is already retryable and the page
+            // itself is the complete source view, so only overflow still needs that re-page.
+            // Restore an older reason rather than erasing it: only the mark this hold added
+            // is redundant, and the drain can settle a mark it opened under in the usual way.
+            if (this._bootstrapping && !(options && options.retainHold) &&
+                this._capabilityProofHolds.has(rowKey) &&
+                this._repageOwed instanceof Map) {
+                if (repageBeforeHold === undefined) this._repageOwed.delete('capability_snapshots');
+                else this._repageOwed.set('capability_snapshots', repageBeforeHold);
+            }
             return true;
         }
         if (!(options && options.retainHold)) {

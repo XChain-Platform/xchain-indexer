@@ -55,15 +55,15 @@ module.exports = {
     // accounting, and advance the cursor past it. False stops the page at this row.
     async applyPendingRow(drain, row, batched) {
         let boundOut = this.decidePriceBound(drain, row);
-        let refused  = false;
+        let withheld = false;
         try {
             if (boundOut) drain.priceSkipped++;
-            // A row the chain-identity fence refuses reports false, and is counted
-            // out of `applied` below: "bootstrapped N rows" must not include rows
-            // this mirror deliberately did not take.
-            else if (!batched) refused = ((await this.applyRow(drain.table, row)) === false);
+            // A refused row or a capability-proof hold reports false, and is counted
+            // out of `applied`: neither row landed in this mirror. Both are handled
+            // outcomes, so their wire positions advance and do not become apply holes.
+            else if (!batched) withheld = ((await this.applyRow(drain.table, row)) === false);
             this.recordServedRow(drain, row);
-            if (!boundOut && !refused) drain.applied++;
+            if (!boundOut && !withheld) drain.applied++;
             if (!boundOut && drain.priceHorizon > 0 && !(Number(row.id) >= drain.minAppliedWireId))
                 drain.minAppliedWireId = Number(row.id);
         } catch (err) {
