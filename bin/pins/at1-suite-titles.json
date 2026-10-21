@@ -4552,6 +4552,13 @@
       "getanchorconfirmations anchor-by-txid pagination against a real MariaDB @tier3 never ends a page inside a bundle: a multi-section action at the boundary moves whole to the next page",
       "getanchorconfirmations anchor-by-txid pagination against a real MariaDB @tier3 partitions a set of ANCHOR_ROW_LIMIT * 2 + 3 rows across pages with no gap and no overlap"
     ],
+    "40339b152537b61d": [
+      "BATCH AIRDROP per-leg weight @regression @tier3 charges format 0 once and formats 1 to 3 once per decoded leg",
+      "BATCH AIRDROP per-leg weight @regression @tier3 counts eleven format 1 legs without resolving a list",
+      "BATCH AIRDROP per-leg weight @regression @tier3 keeps DIVIDEND and malformed AIRDROP at one table-weight unit",
+      "BATCH AIRDROP per-leg weight @regression @tier3 keeps the historical flat weight immediately below activation",
+      "BATCH AIRDROP per-leg weight @regression @tier3 uses the registered height gate at the exact regtest boundary"
+    ],
     "4056956385f780ce": [
       "repeated finalizeBlock exception status emits the exact wedged status fixture consumed by xchain-watch",
       "repeated finalizeBlock exception status promotes the second consecutive finalizeBlock exception and keeps it latched"
@@ -4838,28 +4845,6 @@
       "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms reads an epoch reset as the time left until it",
       "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms still prefers Retry-After over any reset header",
       "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms treats an epoch reset already in the past as no advertised wait"
-    ],
-    "4467a7e672e83aee": [
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 10 sub-commands at weight 25 exactly fill the budget",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 11 sub-commands at weight 25 exceed it, as one record",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster the same batch is fine when the weight is not in force",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster weights are summed across mixed classes, not taken per class",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) 10 AIRDROPs exactly fill the budget at weight 25",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) 11 AIRDROPs exceed it, as one record rather than eleven",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) DIVIDEND is weighed the same",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) below the weighting flag the same fan-out batch is unaffected",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) one fan-out plus 225 ordinary commands still fits",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) one fan-out plus ordinary commands is bounded by the SUM, not by either alone",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) the DROP alias cannot dodge the weight",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces 251 commands: one invalid record, no sub-command runs",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces below BATCH_ISSUANCE_LIMITS nothing bounds the batch, budget or not",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces empty elements still count, so a trailing \";\" tips 250 over",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces exactly 250 commands: valid, every command dispatched",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces the verdict AND the error string are identical with the budget on and off",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on a batch inside the count is weighed exactly once",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on a nonsense table entry falls back to 1 rather than admitting free work",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on an action absent from the table weighs the default 1",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on an oversized batch is refused WITHOUT weighing anything"
     ],
     "44760e88af686de8": [
       "bridge_settle: the XBRIDGE settle pass SLASH: the bridge engines are a slashable family maps XBRIDGE and XPOLICY to a capability, where an unmapped tag is refused",
@@ -5170,6 +5155,23 @@
       "guard emitted host request id below gate @regression @tier1 offsets the call path by emissions already stored for the host action",
       "guard emitted host request id below gate @regression @tier1 passes a composite guard root discriminator through unchanged"
     ],
+    "4952c9f2ec3e3c55": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
+      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the VM harness-activation twins in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the airdrop native-fee tally rollback row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the batch-airdrop leg-weight row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the bridge-checkpoint v3 section row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the gas-ceiling exhaustion row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the guard emitted-host discriminator row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the null-prototype TICK cache row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
+    ],
     "4952d3db984cc3ce": [
       "AnchorRecovery list snapshots @regression @tier2 fails when the natural list sequence already has another snapshot id",
       "AnchorRecovery list snapshots @regression @tier2 refuses a list row from a network other than the archive head",
@@ -5333,31 +5335,6 @@
       "genesis.injectProtocolToken and the bridged row creation @regression the wire string the helper builds keeps the fields past MINT_START_BLOCK when a later one is set",
       "genesis.injectProtocolToken and the bridged row creation @regression the wire string the helper builds never emits a TRANSFER: an injected row is created owned by its final owner"
     ],
-    "4aed600f19d6de80": [
-      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
-      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
-      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
-      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
-      "armed_map/manifest: collectRows carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights",
-      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
-      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
-      "armed_map/manifest: collectRows carries the three row families the design names",
-      "armed_map/manifest: collectRows carries the unarmed airdrop native-fee tally rollback gate",
-      "armed_map/manifest: collectRows carries the unarmed batch-airdrop leg-weight gate",
-      "armed_map/manifest: collectRows carries the unarmed guard emitted-host discriminator gate",
-      "armed_map/manifest: collectRows carries the unarmed null-prototype TICK cache gate",
-      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
-      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
-      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
-      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
-      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
-      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
-      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
-      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
-      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
-      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
-      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
-    ],
     "4aed6d7e717233e4": [
       "validator wire actions @regression @tier1 admits only the validator wire formats",
       "validator wire actions @regression @tier1 reads the name and format like the dispatcher",
@@ -5409,6 +5386,30 @@
       "getlatestblock hub_push_delivered @regression @tier1 an undelivered push at 100 holds delivery at 99 even with delivered pushes at 101",
       "getlatestblock hub_push_delivered @regression @tier1 an undelivered push whose action is gone reports null",
       "getlatestblock hub_push_delivered @regression @tier1 an unresolvable block time reports null"
+    ],
+    "4bff0fee163d2611": [
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 10 sub-commands at weight 25 exactly fill the budget",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 11 sub-commands at weight 25 exceed it, as one record",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster the same batch is fine when the weight is not in force",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster weights are summed across mixed classes, not taken per class",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) 10 AIRDROPs exactly fill the budget at weight 25",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) 11 AIRDROPs exceed it, as one record rather than eleven",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) DIVIDEND is weighed the same",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) a two-leg AIRDROP spends two weight units at the dedicated activation",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) below the weighting flag the same fan-out batch is unaffected",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) one fan-out plus 225 ordinary commands still fits",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) one fan-out plus ordinary commands is bounded by the SUM, not by either alone",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) the DROP alias cannot dodge the weight",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) the DROP alias keeps the per-leg multiplier",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces 251 commands: one invalid record, no sub-command runs",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces below BATCH_ISSUANCE_LIMITS nothing bounds the batch, budget or not",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces empty elements still count, so a trailing \";\" tips 250 over",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces exactly 250 commands: valid, every command dispatched",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces the verdict AND the error string are identical with the budget on and off",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on a batch inside the count is weighed exactly once",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on a nonsense table entry falls back to 1 rather than admitting free work",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on an action absent from the table weighs the default 1",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on an oversized batch is refused WITHOUT weighing anything"
     ],
     "4c1dae4cf2168305": [
       "Unstake handler @regression @tier2 v0: partial unstake AMOUNT equal to the full balance is state-identical to the absent form",
@@ -6347,6 +6348,17 @@
     ],
     "587ca334686b8a78": [
       "06 Genesis Bootstrap (full-scale) injects the full manifest within the genesis watchdog window"
+    ],
+    "58c95497712f6e76": [
+      "getAddressCreditDebit read baseline: JS fold over non_canonical rows @money @regression @tier1 no rows return an empty array",
+      "getAddressCreditDebit read baseline: JS fold over non_canonical rows @money @regression @tier1 sums per tick at the exact scale and keys the array by tick_id",
+      "getAddressCreditDebit read baseline: query and binds @regression @tier1 a numeric string tick_id binds the number",
+      "getAddressCreditDebit read baseline: query and binds @regression @tier1 a string address is bound as the id createAddress resolves",
+      "getAddressCreditDebit read baseline: query and binds @regression @tier1 a ticker name as tick_id adds no tick filter",
+      "getAddressCreditDebit read baseline: query and binds @regression @tier1 action_index wins over block_index and binds [address, action_index, tick_id]",
+      "getAddressCreditDebit read baseline: query and binds @regression @tier1 an action filter binds the id createAction resolves",
+      "getAddressCreditDebit read baseline: query and binds @regression @tier1 block_index is used when no action_index is given and binds [address, block_index]",
+      "getAddressCreditDebit read baseline: query and binds @regression @tier1 the escrows table issues no query and returns an empty array"
     ],
     "58fd73daf6487e45": [
       "02 Action Benchmarks SEND-only blocks",
@@ -7756,21 +7768,6 @@
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 filters ONLY the attestation capability",
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 keeps the echo fields and the response shape",
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 reconstructs the raw request height as block_index + CANONICAL_REORG_BUFFER"
-    ],
-    "6bdb8d1115c4bce2": [
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs fit the budget exactly and all of them dispatch",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs from a paying source are admitted, so the WEIGHT is what rejects 9",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 9 DEPLOYs report the budget, not the cap, and that string move is deliberate",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 9 EXECUTEs exceed it, as ONE record rather than nine",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) A3: two DEPLOYs still reject as \"invalid: DEPLOY (limit)\", weights and all",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) XEXEC cannot dodge the bound by being the other spelling",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) a chunk-carrier DEPLOY (format 4) weighs 1; every constructor format keeps 30",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) below the weighting flag every one of these batches keeps its old verdict",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) one DEPLOY may still carry companions, up to 220 of them",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) one DEPLOY plus 221 companions is one over",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the discount decides companions: 249 fit beside a chunk carrier, 221 overflow a constructor DEPLOY",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the table pins 30 for DEPLOY, EXECUTE and XEXEC",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the two VM spellings are summed together, not bounded per action"
     ],
     "6c0d603662abddb2": [
       "List @regression @tier3 unarmed list change rematch keeps a valid format 0 create on the storage-only path",
@@ -10061,13 +10058,6 @@
       "Send handler: caret-id pack keying @regression @tier1 INERT: the legacy lookup by the caret spelling finds no pack and the SEND passes",
       "Send handler: caret-id pack keying @regression @tier1 the new row is unarmed on mainnet and armed on testnet and regtest"
     ],
-    "8c68aac253d8f04e": [
-      "Airdrop multi-leg native fee action tally @regression @tier1 draws one non-BATCH native output across the legs and records their summed fee",
-      "Airdrop multi-leg native fee action tally @regression @tier1 leaves XCHAIN-balance fee settlement on the existing per-leg path",
-      "Airdrop multi-leg native fee action tally @regression @tier1 leaves a BATCH_VALUE_LEDGER on the existing per-leg path at the gate height",
-      "Airdrop multi-leg native fee action tally @regression @tier1 makes a FEE_PROBE quote the summed fee without drawing the action tally",
-      "Airdrop multi-leg native fee action tally @regression @tier1 rejects the unpaid second non-BATCH leg after the first leg draws the output"
-    ],
     "8c6b69def3f9000c": [
       "price-batch-query (getpricebatches) buildPriceBatchesResponse answers an empty range with an empty list, never null",
       "price-batch-query (getpricebatches) buildPriceBatchesResponse flags a full page as truncated so the caller pages instead of reading it as complete",
@@ -11583,6 +11573,15 @@
       "Chaos: Block Processing Resilience BK-09: @regression a failing block is NOT skipped; the loop halts at it instead of advancing",
       "Chaos: Block Processing Resilience BK-10: @regression a transient failure is retried on the next pass with no gap in committed blocks"
     ],
+    "9c95541b9ad230ad": [
+      "Airdrop multi-leg native fee action tally @regression @tier1 draws one non-BATCH native output across the legs and records their summed fee",
+      "Airdrop multi-leg native fee action tally @regression @tier1 drops a failed middle leg's fee and gas from the AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION tally",
+      "Airdrop multi-leg native fee action tally @regression @tier1 keeps a failed middle leg's fee and gas in the tally below the rollback gate",
+      "Airdrop multi-leg native fee action tally @regression @tier1 leaves XCHAIN-balance fee settlement on the existing per-leg path",
+      "Airdrop multi-leg native fee action tally @regression @tier1 leaves a BATCH_VALUE_LEDGER on the existing per-leg path at the gate height",
+      "Airdrop multi-leg native fee action tally @regression @tier1 makes a FEE_PROBE quote the summed fee without drawing the action tally",
+      "Airdrop multi-leg native fee action tally @regression @tier1 rejects the unpaid second non-BATCH leg after the first leg draws the output"
+    ],
     "9cafffef633a651c": [
       "Attest (ATTEST) @regression @tier3 v1: response a TRUNCATED capable set falls back to the per-signer capability probe",
       "Attest (ATTEST) @regression @tier3 v1: response checks signer capability at the REQUEST snapshot block, not the response block",
@@ -12033,6 +12032,32 @@
       "Supply & amount boundary tests @regression @tier1 AMT-02: Issue token with maximum supply MAX_SUPPLY = MAX_TOKEN_SUPPLY (10^21) with DECIMALS=0 \u2192 valid",
       "Supply & amount boundary tests @regression @tier1 AMT-03: Issue token exceeding maximum supply MAX_SUPPLY = 10^21 + 1 exceeds MAX_TOKEN_SUPPLY \u2192 invalid",
       "Supply & amount boundary tests @regression @tier1 AMT-04: Issue token with zero supply MAX_SUPPLY = 0 bypasses MIN_TOKEN_SUPPLY check (bcgt guard short-circuits) \u2192 valid"
+    ],
+    "a4072f9ca80387e8": [
+      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
+      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
+      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
+      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
+      "armed_map/manifest: collectRows carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights",
+      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
+      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
+      "armed_map/manifest: collectRows carries the three row families the design names",
+      "armed_map/manifest: collectRows carries the unarmed airdrop native-fee tally rollback gate",
+      "armed_map/manifest: collectRows carries the unarmed batch-airdrop leg-weight gate",
+      "armed_map/manifest: collectRows carries the unarmed bridge-checkpoint v3 section gate",
+      "armed_map/manifest: collectRows carries the unarmed guard emitted-host discriminator gate",
+      "armed_map/manifest: collectRows carries the unarmed null-prototype TICK cache gate",
+      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
+      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
+      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
+      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
+      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
+      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
+      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
+      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
+      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
+      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
+      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "a43841db7e6fd6b9": [
       "Database.slashContractStake() mid-cooldown double-count guard @regression @tier1 routes a mid-cooldown slash to contract_unstakes only (never the deactivated phantom)",
@@ -12976,22 +13001,6 @@
       "XChainIndexer prototype composition @tier1 no composed method shadows a class-body method",
       "XChainIndexer prototype composition @tier1 no method name is exported by two composed tables",
       "XChainIndexer prototype composition @tier1 reads a non-trivial set of method tables from the composition call"
-    ],
-    "b134392e296cfbc5": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
-      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
-      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the VM harness-activation twins in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the airdrop native-fee tally rollback row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the batch-airdrop leg-weight row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the gas-ceiling exhaustion row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the guard emitted-host discriminator row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the null-prototype TICK cache row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
     ],
     "b13b7b6bf4b68fae": [
       "Airdrop @regression @tier2 fee payment mode branches legacy fee path (UNIFIED_FEES=false): getTransactionFee called and fee computed",
@@ -13988,6 +13997,10 @@
       "Coinpay (COINPAY) @regression @tier2 valid settlement valid coinpay \u2192 createCoinpayStatus called with fulfilled",
       "Coinpay (COINPAY) @regression @tier2 valid settlement valid coinpay \u2192 mapper.createMappings called",
       "Coinpay (COINPAY) @regression @tier2 valid settlement valid coinpay \u2192 updateBalances and updateTokens called"
+    ],
+    "c08ee7609951ba59": [
+      "getappliedpolicy exact u64 list ids @regression @tier1 keeps an unsafe allow-list id exact while returning a safe block-list id as a number",
+      "getappliedpolicy exact u64 list ids @regression @tier1 keeps an unsafe block-list id exact while returning a safe allow-list id as a number"
     ],
     "c0917406521a91c5": [
       "Database getTickerId lookup order @unit @regression keeps canonical caret lookups on the id query",
@@ -18390,6 +18403,22 @@
       "Swap_Match payout token policies @regression @tier2 checks the active GIVE-token policy only against the matching payout",
       "Swap_Match payout token policies @regression @tier2 keeps the below-gate rule that checks the GET-token policy against both payouts"
     ],
+    "fc1e7722226a1a43": [
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs fit the budget exactly and all of them dispatch",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs from a paying source are admitted, so the WEIGHT is what rejects 9",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 9 DEPLOYs report the budget, not the cap, and that string move is deliberate",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 9 EXECUTEs exceed it, as ONE record rather than nine",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) A3: two DEPLOYs still reject as \"invalid: DEPLOY (limit)\", weights and all",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) XEXEC cannot dodge the bound by being the other spelling",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) a chunk-carrier DEPLOY (format 4) weighs 1; every constructor format keeps 30",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) below the weighting flag every one of these batches keeps its old verdict",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) one DEPLOY may still carry companions, up to 220 of them",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) one DEPLOY plus 221 companions is one over",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) sums VM weight with every AIRDROP leg after the leg-weight activation",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the discount decides companions: 249 fit beside a chunk carrier, 221 overflow a constructor DEPLOY",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the table pins 30 for DEPLOY, EXECUTE and XEXEC",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the two VM spellings are summed together, not bounded per action"
+    ],
     "fc2fa5a97f93cf1b": [
       "Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM) @phaseE a SENDER's own transfer address-controller ALLOW commits its OUTBOUND send (sanity passes)",
       "Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM) @phaseE a SENDER's own transfer address-controller DENY reverts its OUTBOUND send",
@@ -18663,8 +18692,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1482,
-      "titleCount": 14458,
+      "fileCount": 1485,
+      "titleCount": 14481,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19008,7 +19037,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
-        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "d5d2a5097677f9b1",
@@ -19018,8 +19047,9 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
+        "test/unit/actions/token/batch.test/airdrop_leg_weight.test.js": "40339b152537b61d",
         "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
-        "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
+        "test/unit/actions/token/batch.test/cost_budget.test.js": "4bff0fee163d2611",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
         "test/unit/actions/token/batch.test/limit_composition.test.js": "58140c764617368e",
@@ -19027,7 +19057,7 @@
         "test/unit/actions/token/batch.test/spam_collapse_creates.test.js": "9931e18386ea70e0",
         "test/unit/actions/token/batch.test/spam_collapse_execute.test.js": "bee640ffa66ca578",
         "test/unit/actions/token/batch.test/subaction_normalization.test.js": "b5503fa91f2c7c06",
-        "test/unit/actions/token/batch.test/vm_weight.test.js": "6bdb8d1115c4bce2",
+        "test/unit/actions/token/batch.test/vm_weight.test.js": "fc1e7722226a1a43",
         "test/unit/actions/token/broadcast.test.js": "36a22636a9d2b901",
         "test/unit/actions/token/broadcast.test/fee_length_gate.test.js": "51b3468275b1d232",
         "test/unit/actions/token/destroy.test.js": "85f55ffbe5c712da",
@@ -19215,6 +19245,7 @@
         "test/unit/api/rpc/token_policy_detach.test.js": "2645da1d4f547d2f",
         "test/unit/api/rpc/token_policy_list_ref.test.js": "0d061e71ba86eff6",
         "test/unit/api/rpc/token_policy_resolve_refs.test.js": "64c039d7b0a6d648",
+        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "bed4c39786728d9f",
         "test/unit/api/status_ready_route.test.js": "756ac889a13b142f",
         "test/unit/api/status_schema_ready.test.js": "e624e2e0e1e9bd13",
@@ -19355,7 +19386,7 @@
         "test/unit/consensus/anchor_reward_legacy_pins.test.js": "7f09f1cb1e4cefbf",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
-        "test/unit/consensus/armed_map/manifest.test.js": "4aed600f19d6de80",
+        "test/unit/consensus/armed_map/manifest.test.js": "a4072f9ca80387e8",
         "test/unit/consensus/armed_map/vm_gate_coverage.test.js": "fe8f001bb389e37d",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
@@ -19596,6 +19627,7 @@
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_admission_schema.test.js": "f774309cdb5aef1f",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
+        "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
         "test/unit/db/misc/credit_debit_sum_sql.test.js": "b765d11dc9d66fd9",
         "test/unit/db/orders/cross_chain_offer_lists.test.js": "87976ddf94e91add",
         "test/unit/db/orders/cross_chain_offer_lists_fold.test.js": "e411489fced259a6",
@@ -20002,7 +20034,7 @@
         "test/unit/remote_token/admitted_pin_read.test.js": "88660f9c2c7ccd2b",
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "b134392e296cfbc5",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "4952c9f2ec3e3c55",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
@@ -20526,8 +20558,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1126,
-      "titleCount": 11429,
+      "fileCount": 1129,
+      "titleCount": 11450,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20869,7 +20901,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
-        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
@@ -20879,8 +20911,9 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
+        "test/unit/actions/token/batch.test/airdrop_leg_weight.test.js": "40339b152537b61d",
         "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
-        "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
+        "test/unit/actions/token/batch.test/cost_budget.test.js": "4bff0fee163d2611",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
         "test/unit/actions/token/batch.test/limit_composition.test.js": "58140c764617368e",
@@ -20888,7 +20921,7 @@
         "test/unit/actions/token/batch.test/spam_collapse_creates.test.js": "9931e18386ea70e0",
         "test/unit/actions/token/batch.test/spam_collapse_execute.test.js": "bee640ffa66ca578",
         "test/unit/actions/token/batch.test/subaction_normalization.test.js": "b5503fa91f2c7c06",
-        "test/unit/actions/token/batch.test/vm_weight.test.js": "6bdb8d1115c4bce2",
+        "test/unit/actions/token/batch.test/vm_weight.test.js": "fc1e7722226a1a43",
         "test/unit/actions/token/broadcast.test.js": "36a22636a9d2b901",
         "test/unit/actions/token/broadcast.test/fee_length_gate.test.js": "51b3468275b1d232",
         "test/unit/actions/token/destroy.test.js": "85f55ffbe5c712da",
@@ -21015,6 +21048,7 @@
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
+        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "5301b4afc6223e03",
         "test/unit/attestation/attest_broadcast_fee_activation.test.js": "b65ffc6b93616abf",
         "test/unit/attestation/attest_mirror_fallthrough.test.js": "9868adc1e4c7f3d1",
@@ -21254,6 +21288,7 @@
         "test/unit/db/markets/order_info_batch.test.js": "32d28eacf6d12ab7",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
+        "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
@@ -21658,8 +21693,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 558,
-      "titleCount": 6006,
+      "fileCount": 560,
+      "titleCount": 6019,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21740,7 +21775,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
-        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
         "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
@@ -21816,6 +21851,7 @@
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
+        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "5301b4afc6223e03",
         "test/unit/attestation/attest_response_barrier.test.js": "da75b77071f55521",
         "test/unit/attestation/provider_min_stake_history.test.js": "88979a43d8107259",
@@ -21959,6 +21995,7 @@
         "test/unit/db/markets/markets_native_coin_pairs.test.js": "7176d07530da2fe0",
         "test/unit/db/markets/order_info_batch.test.js": "32d28eacf6d12ab7",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
+        "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
         "test/unit/db/sql_quote_backslash_escapes.test.js": "c8655466e49bee5a",
@@ -22222,8 +22259,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1126,
-      "titleCount": 11429,
+      "fileCount": 1129,
+      "titleCount": 11450,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22565,7 +22602,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
-        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
@@ -22575,8 +22612,9 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
+        "test/unit/actions/token/batch.test/airdrop_leg_weight.test.js": "40339b152537b61d",
         "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
-        "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
+        "test/unit/actions/token/batch.test/cost_budget.test.js": "4bff0fee163d2611",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
         "test/unit/actions/token/batch.test/limit_composition.test.js": "58140c764617368e",
@@ -22584,7 +22622,7 @@
         "test/unit/actions/token/batch.test/spam_collapse_creates.test.js": "9931e18386ea70e0",
         "test/unit/actions/token/batch.test/spam_collapse_execute.test.js": "bee640ffa66ca578",
         "test/unit/actions/token/batch.test/subaction_normalization.test.js": "b5503fa91f2c7c06",
-        "test/unit/actions/token/batch.test/vm_weight.test.js": "6bdb8d1115c4bce2",
+        "test/unit/actions/token/batch.test/vm_weight.test.js": "fc1e7722226a1a43",
         "test/unit/actions/token/broadcast.test.js": "36a22636a9d2b901",
         "test/unit/actions/token/broadcast.test/fee_length_gate.test.js": "51b3468275b1d232",
         "test/unit/actions/token/destroy.test.js": "85f55ffbe5c712da",
@@ -22711,6 +22749,7 @@
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
+        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "5301b4afc6223e03",
         "test/unit/attestation/attest_broadcast_fee_activation.test.js": "b65ffc6b93616abf",
         "test/unit/attestation/attest_mirror_fallthrough.test.js": "9868adc1e4c7f3d1",
@@ -22950,6 +22989,7 @@
         "test/unit/db/markets/order_info_batch.test.js": "32d28eacf6d12ab7",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
+        "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
