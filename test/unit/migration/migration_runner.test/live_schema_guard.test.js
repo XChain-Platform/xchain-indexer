@@ -134,7 +134,7 @@ describe('migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsign
     it('allows the retype when no stored id is negative', async function () {
         const got = await probedVerdict(signedId, ALIGN, 1);
         assert.strictEqual(got.message, null);
-        assert.ok(got.seen.includes('SELECT MIN(`id`) AS m FROM `cross_chain_matches`'), 'the MIN probe must run');
+        assert.ok(got.seen.includes('SELECT CAST(MIN(`id`) AS CHAR) AS m FROM `cross_chain_matches`'), 'the MIN probe must run');
     });
 
     it('allows the retype on an empty table and on a BigInt minimum', async function () {
