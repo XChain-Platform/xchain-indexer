@@ -15430,6 +15430,10 @@
       "Provider deadline-window overlay parity (VM injection) @regression @tier2 DEPLOY injects the CONFIGURED deadline windows into the VM",
       "Provider deadline-window overlay parity (VM injection) @regression @tier2 EXECUTE injects the CONFIGURED deadline windows into the VM"
     ],
+    "d448ca271f35d379": [
+      "terminal XCALL resolved_block @regression @tier1 stamps completion with the processing BLOCK_INDEX, not the request block",
+      "terminal XCALL resolved_block @regression @tier1 stamps expiry with the processing BLOCK_INDEX, not the request block"
+    ],
     "d44cf9f8cf86cabc": [
       "Dispenser_Close action handler @regression @tier2 1678 ownership cancel/expire routing gate @regression @tier1 at/after the flag-day a SWEEP still transfers ownership to the sweep destination",
       "Dispenser_Close action handler @regression @tier2 1678 ownership cancel/expire routing gate @regression @tier1 mainnet at/after the flag-day leaves ownership with SOURCE on a cancel (only clears the gate)",
@@ -18562,8 +18566,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1471,
-      "titleCount": 14389,
+      "fileCount": 1472,
+      "titleCount": 14391,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19532,6 +19536,7 @@
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/vm_snapshot/poll_snapshot_golden.test.js": "4ef434f00929b790",
         "test/unit/db/vm_snapshot/vm_snapshot_memo.test.js": "b0be5e75e30decd3",
+        "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
         "test/unit/e2e/explorer_launcher.test.js": "eae128db10b21f39",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
@@ -20410,8 +20415,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1115,
-      "titleCount": 11370,
+      "fileCount": 1116,
+      "titleCount": 11372,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21164,6 +21169,7 @@
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
+        "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": "6f3bf3f9c5f1d95a",
@@ -21531,8 +21537,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 549,
-      "titleCount": 5961,
+      "fileCount": 550,
+      "titleCount": 5963,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21853,6 +21859,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
+        "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
         "test/unit/fees/dry_run_batch_fee_withheld.test.js": "9620969f56b951f5",
         "test/unit/fees/dry_run_tip_under_mutex.test.js": "207bfef6e5b8871d",
@@ -22086,8 +22093,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1115,
-      "titleCount": 11370,
+      "fileCount": 1116,
+      "titleCount": 11372,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22840,6 +22847,7 @@
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
+        "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": "6f3bf3f9c5f1d95a",
