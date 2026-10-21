@@ -81,6 +81,151 @@ function requestFieldError(data, error){
     return error;
 }
 
+
+// The contract this request is emitted by, and the deterministic request_id over it.
+// The re-derivation itself lives in index.js beside REQUEST_ID_PREIMAGE_FIELDS, which
+// is the one place the preimage is spelled.
+async function requestAnchorErrorImpl(data, error) {
+    // Validate contract_index references a real contract
+    if(!error && data['CONTRACT_INDEX'] != null){
+        let contract = await this.indexerDb.getContract(data['CONTRACT_INDEX']);
+        if(!contract)
+            error = 'invalid: CONTRACT_INDEX (unknown)';
+    } else if(!error){
+        error = 'invalid: CONTRACT_INDEX (missing emitter)';
+    }
+
+    if(!error){
+        let derivation = this.requestIdDerivationError(data);
+        if(derivation) error = derivation;
+    }
+
+    return error;
+}
+
+
+// Cross-chain relay: the origin-side half of the cross-chain relay.
+// On LTC/DOGE computeResponsibleSet returns [] by construction (attestation
+// stake is BTC-only), and ATTEST_ADMISSION is already satisfied there on local
+// height, so today EVERY off-BTC request is rejected at admission. At/above
+// ATTEST_RELAY_ORIGIN such a request is instead admitted 'pending' and stamped
+// with its origin chain, which is what makes it visible to the hub's relay
+// driver; the driver materializes it onto BTC as a v3, where it gets a real BTC
+// block_index and a real responsible set. Nothing else about admission moves:
+// every other validation above still rejects, and on BTC this is a no-op
+// (relayOrigin is false there, and a BTC responsible set is never empty by
+// construction). Gated on block TIME, not height, because the rule must flip on
+// LTC and DOGE whose local heights sit millions of blocks above any BTC-derived
+// threshold; see the ATTEST_RELAY_ORIGIN note in protocol_changes.js.
+async function isRelayOriginRequestImpl(data, error) {
+    let relayOrigin = false;
+    if(!error && this.config['COIN'] !== HOME_CHAIN)
+        relayOrigin = await this.actions.protocolChanges.isEnabled('ATTEST_RELAY_ORIGIN', data['BLOCK_INDEX']);
+    return relayOrigin;
+}
+
+
+// Pkg 7 / 87441a53 admission rejection (flag-day gated): at/above the
+// ATTEST_ADMISSION activation, reject a request whose responsible set at
+// this block is smaller than REDUNDANCY. Unservable by construction: the
+// v1 path requires >= REDUNDANCY valid signatures and only responsible-set
+// members can sign, so the hub skips the round (unfinalizable-round guard)
+// and pre-gate the request would sit pending until deadline expiry. The
+// shrink comes from SWQ source-dedupe (one slot per staking source) or a
+// small qualifying snapshot. Below the gate the legacy accept-then-expire
+// path runs verbatim so replay stays bit-identical. Deterministic: the set
+// derives from block-anchored stake state every validator replays alike.
+// The computed set is reused as the pinned RESPONSIBLE_SET_JSON below.
+//
+// Returns the verdict and the set it computed, which the caller reuses as the pinned
+// RESPONSIBLE_SET_JSON rather than paying for the stake query twice.
+async function responsibleSetAdmissionImpl(data, error, relayOrigin) {
+    let admissionSet = null;
+    // LOCAL-HEIGHT plane: BLOCK_INDEX is this request's height on
+    // its own chain, which is what this gate is defined against. It is deliberately
+    // NOT the BTC-anchored plane the stake_weighted_quorum / price_sig_tally gates
+    // use; the attest_admission_activation row's note in src/protocol_changes/ says why
+    // the two differ and why the difference must not be "corrected" without its own flag-day.
+    if(!error && !relayOrigin && gateRegistry.activeAt('attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null)){
+        // The rules-aware filter reports how many keys it removed
+        // through this out-parameter; nothing else about the call moves.
+        let gatesStats = {};
+        admissionSet = await this.computeResponsibleSet(
+            String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX'], data['PROVIDER_ID'],
+            undefined, gatesStats);
+        let neededSlots = Math.max(1, Number(data['REDUNDANCY']) || 1);
+        if(admissionSet.length < neededSlots){
+            // FAIL CLOSED with the reason that is actually true. A set that
+            // was never large enough and a set the rules filter shrank need
+            // different literals: the first is a staking problem the requester can
+            // do nothing about, the second names a fleet that has not rolled a call
+            // covering the gates active at this block, which is an operator action.
+            // The rules-aware literal is tested FIRST so it wins whenever the
+            // filter dropped anybody. Neither is a refund: a v0 exists only as a VM
+            // emission and processEmission throws on a non-valid one, so the
+            // emitting EXECUTE reverts with its sibling writes.
+            error = (Number(gatesStats.dropped) > 0)
+                ? 'invalid: REDUNDANCY (rules-aware set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)'
+                : 'invalid: REDUNDANCY (responsible set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)';
+            let line = rgf.formatGatesFilterStats(gatesStats);
+            if(line) getLogger().info("\t ATTEST v0 : " + line);
+        }
+    }
+
+    return { error, set: admissionSet };
+}
+
+
+// Per-block admission caps. An admitted
+// request obliges REDUNDANCY validators to make a provider call, which for the
+// `llm` provider is a real invoice on each operator's own vendor account, while
+// the requester pays the same flat VM_ATTEST_REQUEST gas either way. Fees bound
+// that on a fee-bearing network; on testnet nothing is scarce, so the bound has
+// to be this rule. Refusal rather than deferral, because the action is already
+// in this block and there is no later block to carry it to - see the semantics
+// note in attest_request_cap_gate.js, which also records what the refusal
+// costs the author on a live chain: the emitting EXECUTE REVERTS (processEmission
+// throws on a non-'valid' emission), taking the under-cap siblings and the
+// execution's state writes with it, and no 'rejected' v0 row survives.
+//
+// Checked LAST among the admission rules, and only for an otherwise-valid
+// request, so a structurally invalid one never consumes a capped slot. Same
+// LOCAL-HEIGHT plane as the responsible-set gate directly above.
+async function requestCapErrorImpl(data, error) {
+    if(!error){
+        let caps   = attestRequestCap.ATTEST_REQUEST_CAPS;
+        let counts = await this.indexerDb.getAttestationAdmissionCounts(
+            data['BLOCK_INDEX'], data['ACTION_INDEX'], data['CONTRACT_INDEX']);
+        if(counts.byContract >= caps.perContract)
+            error = 'invalid: ATTEST cap (contract already has ' + counts.byContract +
+                    ' request(s) this block, max ' + caps.perContract + ')';
+        else if(counts.total >= caps.perBlock)
+            error = 'invalid: ATTEST cap (block already has ' + counts.total +
+                    ' request(s), max ' + caps.perBlock + ')';
+    }
+
+    return error;
+}
+
+
+// The responsible set as-of this request's block, pinned onto the row.
+async function pinRequestResponsibleSetImpl(data, admissionSet) {
+    // Pin the responsible set AS-OF this request's block so the reorg
+    // missed_count recompute (rollback.recomputeAttestationValidatorStats) reads the
+    // historical set verbatim rather than re-deriving it against the CURRENT mutable
+    // stakes.amount (a later SURVIVING slash reduces it, so a bare re-derive charges
+    // missed_count to the wrong set). Only a 'pending' request can ever expire and reach
+    // the recompute; a 'rejected' row is invisible to the expiry sweep, so skip the stake
+    // query for it. Uses the SAME computeResponsibleSet the v1 verify + v2 expiry paths
+    // use, evaluated at the request's own block_index (the set the recompute keys on).
+    // (Reuses the admission-gate set when the gate already computed it.)
+    if(data['REQUEST_STATUS'] === 'pending'){
+        let responsibleSet = admissionSet !== null ? admissionSet : await this.computeResponsibleSet(
+            String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX'], data['PROVIDER_ID']);
+        data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
+    }
+}
+
 module.exports = {
     // ATTEST v0: Request (VM emission only)
     async parseRequest(params, data, error){
@@ -102,7 +247,7 @@ module.exports = {
         let fee = await this.requestFeeFormatError(data, error);
         error = fee.error;
 
-        error = await this.requestAnchorError(data, error);
+        error = await requestAnchorErrorImpl.call(this, data, error);
 
         // GAS_ESCROW is not yet deducted from the fee-payer's balance at request time;
         // the fee-funding check below validates the payer holds the amount, and
@@ -113,11 +258,11 @@ module.exports = {
 
         error = await this.requestFeeFundingError(data, error, fee.feePresent);
 
-        let relayOrigin = await this.isRelayOriginRequest(data, error);
-        let admission   = await this.responsibleSetAdmission(data, error, relayOrigin);
+        let relayOrigin = await isRelayOriginRequestImpl.call(this, data, error);
+        let admission   = await responsibleSetAdmissionImpl.call(this, data, error, relayOrigin);
         error = admission.error;
 
-        error = await this.requestCapError(data, error);
+        error = await requestCapErrorImpl.call(this, data, error);
 
         let status = this.stampRequestStatus(data, error, relayOrigin);
 
@@ -128,135 +273,13 @@ module.exports = {
                     ' : fee=' + (fee.feePresent ? data['FEE_AMOUNT'] + ' ' + data['FEE_TICK'] : 'none') +
                     ' : ' + data['STATUS']);
 
-        await this.pinRequestResponsibleSet(data, admission.set);
+        await pinRequestResponsibleSetImpl.call(this, data, admission.set);
 
         await this.indexerDb.createAttestationRequest(data);
 
         await this.escrowRequestFee(data, status, fee.feePresent);
 
         await this.mapper.createMappings(data);
-    },
-
-    // The contract this request is emitted by, and the deterministic request_id over it.
-    // The re-derivation itself lives in index.js beside REQUEST_ID_PREIMAGE_FIELDS, which
-    // is the one place the preimage is spelled.
-    async requestAnchorError(data, error){
-        // Validate contract_index references a real contract
-        if(!error && data['CONTRACT_INDEX'] != null){
-            let contract = await this.indexerDb.getContract(data['CONTRACT_INDEX']);
-            if(!contract)
-                error = 'invalid: CONTRACT_INDEX (unknown)';
-        } else if(!error){
-            error = 'invalid: CONTRACT_INDEX (missing emitter)';
-        }
-
-        if(!error){
-            let derivation = this.requestIdDerivationError(data);
-            if(derivation) error = derivation;
-        }
-
-        return error;
-    },
-
-    // Cross-chain relay: the origin-side half of the cross-chain relay.
-    // On LTC/DOGE computeResponsibleSet returns [] by construction (attestation
-    // stake is BTC-only), and ATTEST_ADMISSION is already satisfied there on local
-    // height, so today EVERY off-BTC request is rejected at admission. At/above
-    // ATTEST_RELAY_ORIGIN such a request is instead admitted 'pending' and stamped
-    // with its origin chain, which is what makes it visible to the hub's relay
-    // driver; the driver materializes it onto BTC as a v3, where it gets a real BTC
-    // block_index and a real responsible set. Nothing else about admission moves:
-    // every other validation above still rejects, and on BTC this is a no-op
-    // (relayOrigin is false there, and a BTC responsible set is never empty by
-    // construction). Gated on block TIME, not height, because the rule must flip on
-    // LTC and DOGE whose local heights sit millions of blocks above any BTC-derived
-    // threshold; see the ATTEST_RELAY_ORIGIN note in protocol_changes.js.
-    async isRelayOriginRequest(data, error){
-        let relayOrigin = false;
-        if(!error && this.config['COIN'] !== HOME_CHAIN)
-            relayOrigin = await this.actions.protocolChanges.isEnabled('ATTEST_RELAY_ORIGIN', data['BLOCK_INDEX']);
-        return relayOrigin;
-    },
-
-    // Pkg 7 / 87441a53 admission rejection (flag-day gated): at/above the
-    // ATTEST_ADMISSION activation, reject a request whose responsible set at
-    // this block is smaller than REDUNDANCY. Unservable by construction: the
-    // v1 path requires >= REDUNDANCY valid signatures and only responsible-set
-    // members can sign, so the hub skips the round (unfinalizable-round guard)
-    // and pre-gate the request would sit pending until deadline expiry. The
-    // shrink comes from SWQ source-dedupe (one slot per staking source) or a
-    // small qualifying snapshot. Below the gate the legacy accept-then-expire
-    // path runs verbatim so replay stays bit-identical. Deterministic: the set
-    // derives from block-anchored stake state every validator replays alike.
-    // The computed set is reused as the pinned RESPONSIBLE_SET_JSON below.
-    //
-    // Returns the verdict and the set it computed, which the caller reuses as the pinned
-    // RESPONSIBLE_SET_JSON rather than paying for the stake query twice.
-    async responsibleSetAdmission(data, error, relayOrigin){
-        let admissionSet = null;
-        // LOCAL-HEIGHT plane: BLOCK_INDEX is this request's height on
-        // its own chain, which is what this gate is defined against. It is deliberately
-        // NOT the BTC-anchored plane the stake_weighted_quorum / price_sig_tally gates
-        // use; the attest_admission_activation row's note in src/protocol_changes/ says why
-        // the two differ and why the difference must not be "corrected" without its own flag-day.
-        if(!error && !relayOrigin && gateRegistry.activeAt('attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null)){
-            // The rules-aware filter reports how many keys it removed
-            // through this out-parameter; nothing else about the call moves.
-            let gatesStats = {};
-            admissionSet = await this.computeResponsibleSet(
-                String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX'], data['PROVIDER_ID'],
-                undefined, gatesStats);
-            let neededSlots = Math.max(1, Number(data['REDUNDANCY']) || 1);
-            if(admissionSet.length < neededSlots){
-                // FAIL CLOSED with the reason that is actually true. A set that
-                // was never large enough and a set the rules filter shrank need
-                // different literals: the first is a staking problem the requester can
-                // do nothing about, the second names a fleet that has not rolled a call
-                // covering the gates active at this block, which is an operator action.
-                // The rules-aware literal is tested FIRST so it wins whenever the
-                // filter dropped anybody. Neither is a refund: a v0 exists only as a VM
-                // emission and processEmission throws on a non-valid one, so the
-                // emitting EXECUTE reverts with its sibling writes.
-                error = (Number(gatesStats.dropped) > 0)
-                    ? 'invalid: REDUNDANCY (rules-aware set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)'
-                    : 'invalid: REDUNDANCY (responsible set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)';
-                let line = rgf.formatGatesFilterStats(gatesStats);
-                if(line) getLogger().info("\t ATTEST v0 : " + line);
-            }
-        }
-
-        return { error, set: admissionSet };
-    },
-
-    // Per-block admission caps. An admitted
-    // request obliges REDUNDANCY validators to make a provider call, which for the
-    // `llm` provider is a real invoice on each operator's own vendor account, while
-    // the requester pays the same flat VM_ATTEST_REQUEST gas either way. Fees bound
-    // that on a fee-bearing network; on testnet nothing is scarce, so the bound has
-    // to be this rule. Refusal rather than deferral, because the action is already
-    // in this block and there is no later block to carry it to - see the semantics
-    // note in attest_request_cap_gate.js, which also records what the refusal
-    // costs the author on a live chain: the emitting EXECUTE REVERTS (processEmission
-    // throws on a non-'valid' emission), taking the under-cap siblings and the
-    // execution's state writes with it, and no 'rejected' v0 row survives.
-    //
-    // Checked LAST among the admission rules, and only for an otherwise-valid
-    // request, so a structurally invalid one never consumes a capped slot. Same
-    // LOCAL-HEIGHT plane as the responsible-set gate directly above.
-    async requestCapError(data, error){
-        if(!error){
-            let caps   = attestRequestCap.ATTEST_REQUEST_CAPS;
-            let counts = await this.indexerDb.getAttestationAdmissionCounts(
-                data['BLOCK_INDEX'], data['ACTION_INDEX'], data['CONTRACT_INDEX']);
-            if(counts.byContract >= caps.perContract)
-                error = 'invalid: ATTEST cap (contract already has ' + counts.byContract +
-                        ' request(s) this block, max ' + caps.perContract + ')';
-            else if(counts.total >= caps.perBlock)
-                error = 'invalid: ATTEST cap (block already has ' + counts.total +
-                        ' request(s), max ' + caps.perBlock + ')';
-        }
-
-        return error;
     },
 
     // The two lifecycle columns and the relay identity, assigned once `error` is final.
@@ -304,22 +327,4 @@ module.exports = {
 
         return status;
     },
-
-    // The responsible set as-of this request's block, pinned onto the row.
-    async pinRequestResponsibleSet(data, admissionSet){
-        // Pin the responsible set AS-OF this request's block so the reorg
-        // missed_count recompute (rollback.recomputeAttestationValidatorStats) reads the
-        // historical set verbatim rather than re-deriving it against the CURRENT mutable
-        // stakes.amount (a later SURVIVING slash reduces it, so a bare re-derive charges
-        // missed_count to the wrong set). Only a 'pending' request can ever expire and reach
-        // the recompute; a 'rejected' row is invisible to the expiry sweep, so skip the stake
-        // query for it. Uses the SAME computeResponsibleSet the v1 verify + v2 expiry paths
-        // use, evaluated at the request's own block_index (the set the recompute keys on).
-        // (Reuses the admission-gate set when the gate already computed it.)
-        if(data['REQUEST_STATUS'] === 'pending'){
-            let responsibleSet = admissionSet !== null ? admissionSet : await this.computeResponsibleSet(
-                String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX'], data['PROVIDER_ID']);
-            data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
-        }
-    }
 };

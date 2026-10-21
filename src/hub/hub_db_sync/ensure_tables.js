@@ -269,4 +269,4 @@ async function ensureTables(dbConn, sqlDir) {
     }
 }
 
-module.exports = { ensureTables, parseDeclaredIndexes, reconcileDeclaredIndexes, parseDeclaredColumns, reconcileDeclaredColumns };
+module.exports = { ensureTables, parseDeclaredIndexes,parseDeclaredColumns,};

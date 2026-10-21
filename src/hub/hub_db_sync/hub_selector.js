@@ -170,4 +170,4 @@ function createHubSelector(networkOrOptions, maybeOptions) {
 
 module.exports = createHubSelector;
 module.exports.createHubSelector = createHubSelector;
-module.exports.HubSelector = HubSelector;
+

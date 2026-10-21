@@ -50,6 +50,32 @@ function priceUnifiedSweepFee(data, state){
 // the handler, exactly as the parse() code it came from. `state` is the object
 // loadSweepState() built: the fee writes land in state.fees, and a fee reserved out
 // of the swept balances replaces state.balances.
+
+// Below UNIFIED_FEES_SWEEP_CALLBACK: the per-database-hit price
+async function priceLegacySweepFeeImpl(data, state) {
+    let { fees, balances, ownerships, orderEscrows, swapEscrows, dispenserEscrows } = state;
+
+    // Legacy: database hits model. LEGACY_FEE_NUMERIC_DBHITS gates the db_hits
+    // string-concatenation fix: below THAT flag-day reproduce the original
+    // `+= bcmul(...)` concatenation byte-for-byte. The escrow term has no ternary
+    // guard, so even a zero-escrow SWEEP concatenated "0" onto db_hits
+    // (1 -> "10" -> "100") and inflated the fee; the below-flag path preserves that so
+    // a pre-activation replay commits the identical fee. At/above it accumulate
+    // numerically. See protocol_changes.js.
+    let numericDbHits = await this.actions.protocolChanges.isEnabled('LEGACY_FEE_NUMERIC_DBHITS', data['BLOCK_INDEX']);
+    let db_hits = 1;                                                                                                                        // 1 sweeps
+    if(numericDbHits){
+        db_hits += (data['BALANCES'])   ? Number(Object.keys(balances).length) * 4                                                   : 0;   // 1 debits, 1 credits, 2 balances
+        db_hits += Number(orderEscrows.length + swapEscrows.length + dispenserEscrows.length) * 4;                                          // 1 escrows, 1 credits, 2 balances (per affected offer)
+        db_hits += (data['OWNERSHIPS']) ? Number(Object.keys(ownerships).length) * 2                                                 : 0;   // 1 issue, 1 tokens
+    } else {
+        db_hits += (data['BALANCES'])   ? this.util.bcmul(Object.keys(balances).length, 4, 0)                                        : 0;   // 1 debits, 1 credits, 2 balances
+        db_hits += this.util.bcmul(orderEscrows.length + swapEscrows.length + dispenserEscrows.length, 4, 0);                               // 1 escrows, 1 credits, 2 balances (per affected offer)
+        db_hits += (data['OWNERSHIPS']) ? this.util.bcmul(Object.keys(ownerships).length, 2, 0)                                      : 0;   // 1 issue, 1 tokens
+    }
+    fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
+}
+
 module.exports = {
 
     // Split the escrows by the enabled close flags, then price the SWEEP into state.fees
@@ -72,32 +98,7 @@ module.exports = {
         if(unifiedFees)
             priceUnifiedSweepFee.call(this, data, state);
         else
-            await this.priceLegacySweepFee(data, state);
-    },
-
-    // Below UNIFIED_FEES_SWEEP_CALLBACK: the per-database-hit price
-    async priceLegacySweepFee(data, state){
-        let { fees, balances, ownerships, orderEscrows, swapEscrows, dispenserEscrows } = state;
-
-        // Legacy: database hits model. LEGACY_FEE_NUMERIC_DBHITS gates the db_hits
-        // string-concatenation fix: below THAT flag-day reproduce the original
-        // `+= bcmul(...)` concatenation byte-for-byte. The escrow term has no ternary
-        // guard, so even a zero-escrow SWEEP concatenated "0" onto db_hits
-        // (1 -> "10" -> "100") and inflated the fee; the below-flag path preserves that so
-        // a pre-activation replay commits the identical fee. At/above it accumulate
-        // numerically. See protocol_changes.js.
-        let numericDbHits = await this.actions.protocolChanges.isEnabled('LEGACY_FEE_NUMERIC_DBHITS', data['BLOCK_INDEX']);
-        let db_hits = 1;                                                                                                                        // 1 sweeps
-        if(numericDbHits){
-            db_hits += (data['BALANCES'])   ? Number(Object.keys(balances).length) * 4                                                   : 0;   // 1 debits, 1 credits, 2 balances
-            db_hits += Number(orderEscrows.length + swapEscrows.length + dispenserEscrows.length) * 4;                                          // 1 escrows, 1 credits, 2 balances (per affected offer)
-            db_hits += (data['OWNERSHIPS']) ? Number(Object.keys(ownerships).length) * 2                                                 : 0;   // 1 issue, 1 tokens
-        } else {
-            db_hits += (data['BALANCES'])   ? this.util.bcmul(Object.keys(balances).length, 4, 0)                                        : 0;   // 1 debits, 1 credits, 2 balances
-            db_hits += this.util.bcmul(orderEscrows.length + swapEscrows.length + dispenserEscrows.length, 4, 0);                               // 1 escrows, 1 credits, 2 balances (per affected offer)
-            db_hits += (data['OWNERSHIPS']) ? this.util.bcmul(Object.keys(ownerships).length, 2, 0)                                      : 0;   // 1 issue, 1 tokens
-        }
-        fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
+            await priceLegacySweepFeeImpl.call(this, data, state);
     },
 
     // Validate how SOURCE pays the fee, then reserve an XCHAIN-paid fee out of the swept

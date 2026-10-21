@@ -125,6 +125,82 @@ function stampRelayRequestRow(data, f, error){
     data['REQUEST_STATUS'] = (error) ? 'rejected' : 'pending';
 }
 
+
+// The two exactly-once guards, over the signature tail this leg shares with v4.
+async function relayRequestReplayErrorImpl(params, f, error) {
+    let { requestId, originChain, originAction } = f;
+    let sigs = error ? [] : this.parseRelaySigs(params, 9);
+    if(!error && sigs === null)
+        error = 'invalid: SIG_COUNT (malformed signature list)';
+
+    // One request_id materializes exactly once. A duplicate v3 is rejected here
+    // rather than deduped in the DB layer so the outcome is an explicit, stored
+    // verdict every node reaches identically.
+    //
+    // getRelayRequestById, not getAttestationRequestById: only an ADMITTED row
+    // consumes the id. request_id comes off the wire and is public before the
+    // federation broadcasts, so a guard that counted a refusal would let one
+    // malformed v3 naming a pending id answer this check for the real relay,
+    // permanently. persistRelayRequest withholds a refused v3's row, so the lookup's
+    // 'rejected' filter is defence in depth. Same reasoning as the relay-identity
+    // guard below, which also reads only admitted rows.
+    //
+    // Ungated on purpose, and the reason is a measurement with an expiry date: at
+    // the time of the change no ATTEST action of any version had ever been admitted
+    // on any live network (three mainnet chains, three testnet chains, regtest), so
+    // no stored verdict anywhere changes and a from-genesis replay is byte-identical
+    // with or without this line. That is what removed the flag day, and it stops
+    // being true the moment the first v3 lands: any later change to which rows this
+    // guard counts reinterprets real history and needs an activation height.
+    if(!error && await this.indexerDb.getRelayRequestById(requestId))
+        error = 'invalid: REQUEST_ID (already present on this chain)';
+
+    // ...and one RELAY IDENTITY materializes exactly once, which the check above does
+    // NOT imply. request_id is SHA256 over the origin TX_HASH (attests.sql), so an
+    // origin reorg deeper than the hub's confirmation depth that re-emits the same
+    // origin action_index from a different transaction produces a DIFFERENT request_id,
+    // clears the check above, and materializes a second BTC request that nothing on BTC
+    // can retract. Rejecting the second is the conservative side of that
+    // fork: the stranded origin request expires on its own deadline and refunds its
+    // escrow, whereas a double materialization spends real BTC fees irreversibly.
+    // Stored as an 'invalid' verdict rather than left to a DB constraint for the same
+    // reason the request_id check is: a UNIQUE violation would THROW mid-block inside a
+    // consensus indexer instead of producing the identical stored outcome on every node.
+    if(!error && await this.indexerDb.getRelayRequestByOrigin(originChain, originAction))
+        error = 'invalid: ORIGIN_ACTION_INDEX (relay identity already materialized on this chain)';
+
+    return { sigs, error };
+}
+
+async function relayRequestQuorumErrorImpl(f, sigs, snapshotBlock, error) {
+    let { requestId, originChain, originAction, providerId, requestPayload, redundancy, deadlineBlocks } = f;
+    if(!error){
+        let canonical = this.relayRequestCanonical({
+            requestId, snapshotBlock, network: this.config['NETWORK'],
+            originChain, originActionIndex: originAction, providerId,
+            requestPayload, redundancy, deadlineBlocks
+        });
+        let quorum = await this.verifyRelayQuorum(canonical, sigs, snapshotBlock, this.config['NETWORK']);
+        if(!quorum.ok)
+            error = 'invalid: cross_chain quorum (' + quorum.detail + ')';
+    }
+
+    return error;
+}
+
+async function pinRelayResponsibleSetImpl(data, f) {
+    let { requestId, providerId, redundancy } = f;
+    // Pin the responsible set as-of THIS block, the same pin-as-of-block rule a
+    // native v0 follows. This is the anchor the whole model exists to provide:
+    // block_index here is a genuine BTC height, so the set (and the block-echo
+    // determinism check that reads it back) resolves exactly as it would for a
+    // natively emitted request.
+    if(data['REQUEST_STATUS'] === 'pending'){
+        let responsibleSet = await this.computeResponsibleSet(requestId, redundancy, data['BLOCK_INDEX'], providerId);
+        data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
+    }
+}
+
 module.exports = {
     // ATTEST v3: relay request (federation-broadcast on the home chain).
     //
@@ -154,10 +230,10 @@ module.exports = {
         error = f.error;
         let { requestId, originChain, originAction, providerId, redundancy } = f;
 
-        let replay = await this.relayRequestReplayError(params, f, error);
+        let replay = await relayRequestReplayErrorImpl.call(this, params, f, error);
         error      = replay.error;
 
-        error = await this.relayRequestQuorumError(f, replay.sigs, snapshotBlock, error);
+        error = await relayRequestQuorumErrorImpl.call(this, f, replay.sigs, snapshotBlock, error);
 
         stampRelayRequestRow.call(this, data, f, error);
 
@@ -168,85 +244,10 @@ module.exports = {
                     ' : snapshot=' + snapshotBlock +
                     ' : ' + data['STATUS']);
 
-        await this.pinRelayResponsibleSet(data, f);
+        await pinRelayResponsibleSetImpl.call(this, data, f);
 
         await this.persistRelayRequest(data);
         await this.mapper.createMappings(data);
-    },
-
-    // The two exactly-once guards, over the signature tail this leg shares with v4.
-    async relayRequestReplayError(params, f, error){
-        let { requestId, originChain, originAction } = f;
-        let sigs = error ? [] : this.parseRelaySigs(params, 9);
-        if(!error && sigs === null)
-            error = 'invalid: SIG_COUNT (malformed signature list)';
-
-        // One request_id materializes exactly once. A duplicate v3 is rejected here
-        // rather than deduped in the DB layer so the outcome is an explicit, stored
-        // verdict every node reaches identically.
-        //
-        // getRelayRequestById, not getAttestationRequestById: only an ADMITTED row
-        // consumes the id. request_id comes off the wire and is public before the
-        // federation broadcasts, so a guard that counted a refusal would let one
-        // malformed v3 naming a pending id answer this check for the real relay,
-        // permanently. persistRelayRequest withholds a refused v3's row, so the lookup's
-        // 'rejected' filter is defence in depth. Same reasoning as the relay-identity
-        // guard below, which also reads only admitted rows.
-        //
-        // Ungated on purpose, and the reason is a measurement with an expiry date: at
-        // the time of the change no ATTEST action of any version had ever been admitted
-        // on any live network (three mainnet chains, three testnet chains, regtest), so
-        // no stored verdict anywhere changes and a from-genesis replay is byte-identical
-        // with or without this line. That is what removed the flag day, and it stops
-        // being true the moment the first v3 lands: any later change to which rows this
-        // guard counts reinterprets real history and needs an activation height.
-        if(!error && await this.indexerDb.getRelayRequestById(requestId))
-            error = 'invalid: REQUEST_ID (already present on this chain)';
-
-        // ...and one RELAY IDENTITY materializes exactly once, which the check above does
-        // NOT imply. request_id is SHA256 over the origin TX_HASH (attests.sql), so an
-        // origin reorg deeper than the hub's confirmation depth that re-emits the same
-        // origin action_index from a different transaction produces a DIFFERENT request_id,
-        // clears the check above, and materializes a second BTC request that nothing on BTC
-        // can retract. Rejecting the second is the conservative side of that
-        // fork: the stranded origin request expires on its own deadline and refunds its
-        // escrow, whereas a double materialization spends real BTC fees irreversibly.
-        // Stored as an 'invalid' verdict rather than left to a DB constraint for the same
-        // reason the request_id check is: a UNIQUE violation would THROW mid-block inside a
-        // consensus indexer instead of producing the identical stored outcome on every node.
-        if(!error && await this.indexerDb.getRelayRequestByOrigin(originChain, originAction))
-            error = 'invalid: ORIGIN_ACTION_INDEX (relay identity already materialized on this chain)';
-
-        return { sigs, error };
-    },
-
-    async relayRequestQuorumError(f, sigs, snapshotBlock, error){
-        let { requestId, originChain, originAction, providerId, requestPayload, redundancy, deadlineBlocks } = f;
-        if(!error){
-            let canonical = this.relayRequestCanonical({
-                requestId, snapshotBlock, network: this.config['NETWORK'],
-                originChain, originActionIndex: originAction, providerId,
-                requestPayload, redundancy, deadlineBlocks
-            });
-            let quorum = await this.verifyRelayQuorum(canonical, sigs, snapshotBlock, this.config['NETWORK']);
-            if(!quorum.ok)
-                error = 'invalid: cross_chain quorum (' + quorum.detail + ')';
-        }
-
-        return error;
-    },
-
-    async pinRelayResponsibleSet(data, f){
-        let { requestId, providerId, redundancy } = f;
-        // Pin the responsible set as-of THIS block, the same pin-as-of-block rule a
-        // native v0 follows. This is the anchor the whole model exists to provide:
-        // block_index here is a genuine BTC height, so the set (and the block-echo
-        // determinism check that reads it back) resolves exactly as it would for a
-        // natively emitted request.
-        if(data['REQUEST_STATUS'] === 'pending'){
-            let responsibleSet = await this.computeResponsibleSet(requestId, redundancy, data['BLOCK_INDEX'], providerId);
-            data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
-        }
     },
 
     async persistRelayRequest(data){

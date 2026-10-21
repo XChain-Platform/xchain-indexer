@@ -95,6 +95,89 @@ function stampRelayResponseRow(data, f, request, wire, error){
     data['VALIDATOR_SIGNATURES'] = null;
 }
 
+
+// Flag-day gate. The origin chain has no BTC height of its own, so the gate is
+// evaluated on the BTC-anchored SNAPSHOT_BLOCK the canonical carries, NOT on
+// where this action landed: a BTC-derived threshold compared against an LTC or
+// DOGE local height is already satisfied there and would ship the leg live
+// instead of inert (the ATTEST_ADMISSION plane trap). A broadcaster cannot use
+// that to jump the gate: the same value pins the signer set, so a forged
+// SNAPSHOT_BLOCK has to be signed by a quorum of the real cross_chain
+// federation, and the matching origin request only exists at all once
+// ATTEST_RELAY_ORIGIN has admitted it.
+function relayResponseArmedImpl(snapshotBlock) {
+    return Number.isFinite(snapshotBlock) &&
+           gateRegistry.activeAt(ATTEST_RELAY_KEY, this.config['NETWORK'], null, snapshotBlock, null);
+}
+
+
+// The local request this leg closes, and every reason it cannot be closed by relay.
+async function relayResponseRequestErrorImpl(requestId, data, error) {
+    // The local request must be one this chain admitted for relay and has not
+    // already closed. A native (non-relay) request is NOT relay-closable: it never
+    // left this chain, so a v4 naming it is either a mistake or an attempt to close
+    // a request the federation was never asked to service.
+    let request = null;
+    if(!error){
+        request = await this.indexerDb.getAttestationRequestById(requestId);
+        if(!request)
+            error = 'invalid: REQUEST_ID (no matching request)';
+        else if(String(request.origin_chain || '') !== String(this.config['COIN']))
+            error = 'invalid: REQUEST is not relay-eligible on this chain';
+        else if(request.request_status !== 'pending')
+            error = 'invalid: REQUEST already ' + request.request_status;
+        else if(gateRegistry.activeAt(RELAY_RESPONSE_DEADLINE_KEY,
+                this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
+                parseInt(data['BLOCK_INDEX']) > parseInt(request.deadline_block))
+            error = 'invalid: REQUEST expired (deadline_block=' + request.deadline_block + ')';
+    }
+
+    return { request, error };
+}
+
+async function relayResponseQuorumErrorImpl(f, request, wire, error) {
+    let { requestId, homeResponseIdx, responseStatus, meta, snapshotBlock } = f;
+    let { sigs, responseHash } = wire;
+    let validSigners = [];
+    if(!error){
+        let canonical = this.relayResponseCanonical({
+            requestId, snapshotBlock, network: this.config['NETWORK'],
+            originChain: String(this.config['COIN']),
+            homeResponseActionIndex: homeResponseIdx,
+            providerId: String(request.provider_id), responseHash,
+            status: responseStatus, meta
+        });
+        let quorum = await this.verifyRelayQuorum(canonical, sigs, snapshotBlock, this.config['NETWORK']);
+        if(!quorum.ok)
+            error = 'invalid: cross_chain quorum (' + quorum.detail + ')';
+        else
+            validSigners = quorum.validSigners;
+    }
+
+    return { error, validSigners };
+}
+
+
+// The terminal flip, the origin-side fee settle and the contract callback.
+async function settleRelayResponseImpl(request, data, requestId, responseStatus, validSigners) {
+    let newRequestStatus = (responseStatus === 'ok') ? 'fulfilled' : 'errored';
+    await this.indexerDb.updateAttestationRequestStatus(requestId, newRequestStatus, data['BLOCK_INDEX']);
+
+    await this.settleRequestFee(request, data, newRequestStatus, validSigners);
+
+    // Fire the contract callback here, on the chain the contract lives on.
+    // Same savepoint discipline as the v1 path: a failing callback must not
+    // roll back the response row.
+    try {
+        let callbackActionIndex = await this.injectRelayCallback(request, data);
+        if(callbackActionIndex)
+            await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
+    } catch(e){
+        rethrowIfInfraFault(e);
+        getLogger().warn('Attestation relay callback injection failed:', e);
+    }
+}
+
 module.exports = {
     // ATTEST v4: relay response (federation-broadcast on the origin chain).
     //
@@ -114,17 +197,17 @@ module.exports = {
         let f = relayResponseFields(params);
         let { requestId, homeResponseIdx, responseStatus, snapshotBlock } = f;
 
-        if(!this.relayResponseArmed(snapshotBlock))
+        if(!relayResponseArmedImpl.call(this, snapshotBlock))
             return;
 
         let wire = relayResponseWireError.call(this, params, f, error);
         error    = wire.error;
 
-        let lookup  = await this.relayResponseRequestError(requestId, data, error);
+        let lookup  = await relayResponseRequestErrorImpl.call(this, requestId, data, error);
         let request = lookup.request;
         error       = lookup.error;
 
-        let quorum = await this.relayResponseQuorumError(f, request, wire, error);
+        let quorum = await relayResponseQuorumErrorImpl.call(this, f, request, wire, error);
         error = quorum.error;
 
         stampRelayResponseRow.call(this, data, f, request, wire, error);
@@ -138,89 +221,9 @@ module.exports = {
         await this.indexerDb.createAttestationResponse(data);
 
         if(data['STATUS'] === 'valid')
-            await this.settleRelayResponse(
+            await settleRelayResponseImpl.call(this,
                 request, data, requestId, responseStatus, quorum.validSigners);
 
         await this.mapper.createMappings(data);
     },
-
-    // Flag-day gate. The origin chain has no BTC height of its own, so the gate is
-    // evaluated on the BTC-anchored SNAPSHOT_BLOCK the canonical carries, NOT on
-    // where this action landed: a BTC-derived threshold compared against an LTC or
-    // DOGE local height is already satisfied there and would ship the leg live
-    // instead of inert (the ATTEST_ADMISSION plane trap). A broadcaster cannot use
-    // that to jump the gate: the same value pins the signer set, so a forged
-    // SNAPSHOT_BLOCK has to be signed by a quorum of the real cross_chain
-    // federation, and the matching origin request only exists at all once
-    // ATTEST_RELAY_ORIGIN has admitted it.
-    relayResponseArmed(snapshotBlock){
-        return Number.isFinite(snapshotBlock) &&
-               gateRegistry.activeAt(ATTEST_RELAY_KEY, this.config['NETWORK'], null, snapshotBlock, null);
-    },
-
-    // The local request this leg closes, and every reason it cannot be closed by relay.
-    async relayResponseRequestError(requestId, data, error){
-        // The local request must be one this chain admitted for relay and has not
-        // already closed. A native (non-relay) request is NOT relay-closable: it never
-        // left this chain, so a v4 naming it is either a mistake or an attempt to close
-        // a request the federation was never asked to service.
-        let request = null;
-        if(!error){
-            request = await this.indexerDb.getAttestationRequestById(requestId);
-            if(!request)
-                error = 'invalid: REQUEST_ID (no matching request)';
-            else if(String(request.origin_chain || '') !== String(this.config['COIN']))
-                error = 'invalid: REQUEST is not relay-eligible on this chain';
-            else if(request.request_status !== 'pending')
-                error = 'invalid: REQUEST already ' + request.request_status;
-            else if(gateRegistry.activeAt(RELAY_RESPONSE_DEADLINE_KEY,
-                    this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
-                    parseInt(data['BLOCK_INDEX']) > parseInt(request.deadline_block))
-                error = 'invalid: REQUEST expired (deadline_block=' + request.deadline_block + ')';
-        }
-
-        return { request, error };
-    },
-
-    async relayResponseQuorumError(f, request, wire, error){
-        let { requestId, homeResponseIdx, responseStatus, meta, snapshotBlock } = f;
-        let { sigs, responseHash } = wire;
-        let validSigners = [];
-        if(!error){
-            let canonical = this.relayResponseCanonical({
-                requestId, snapshotBlock, network: this.config['NETWORK'],
-                originChain: String(this.config['COIN']),
-                homeResponseActionIndex: homeResponseIdx,
-                providerId: String(request.provider_id), responseHash,
-                status: responseStatus, meta
-            });
-            let quorum = await this.verifyRelayQuorum(canonical, sigs, snapshotBlock, this.config['NETWORK']);
-            if(!quorum.ok)
-                error = 'invalid: cross_chain quorum (' + quorum.detail + ')';
-            else
-                validSigners = quorum.validSigners;
-        }
-
-        return { error, validSigners };
-    },
-
-    // The terminal flip, the origin-side fee settle and the contract callback.
-    async settleRelayResponse(request, data, requestId, responseStatus, validSigners){
-        let newRequestStatus = (responseStatus === 'ok') ? 'fulfilled' : 'errored';
-        await this.indexerDb.updateAttestationRequestStatus(requestId, newRequestStatus, data['BLOCK_INDEX']);
-
-        await this.settleRequestFee(request, data, newRequestStatus, validSigners);
-
-        // Fire the contract callback here, on the chain the contract lives on.
-        // Same savepoint discipline as the v1 path: a failing callback must not
-        // roll back the response row.
-        try {
-            let callbackActionIndex = await this.injectRelayCallback(request, data);
-            if(callbackActionIndex)
-                await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
-        } catch(e){
-            rethrowIfInfraFault(e);
-            getLogger().warn('Attestation relay callback injection failed:', e);
-        }
-    }
 };

@@ -30,6 +30,43 @@ const { CROSS_CHAIN_TABLES, MIRRORED_TABLES } = require('./mirror_tables.js');
 const { PENDING_PRICE_EVENT_CAP } = require('./mirror_bounds.js');
 const { applyMirrorWrite } = require('./mirror_write.js');
 
+async function refreshInsertedTableImpl(table) {
+    if (table === 'price_snapshots')     await this.refreshPriceSyncHeight();
+    if (table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
+    if (table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
+    if (table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
+    if (table === 'bridge_transfers')    await this.refreshBridgeSyncTimestamp();
+    if (table === 'policy_snapshots')    await this.refreshPolicySyncTimestamp();
+    if (table === 'list_snapshots')      await this.refreshListShareSyncState();
+    if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this.releaseSnapshotWaiters();
+}
+
+async function handleDeletedRowEventImpl(event) {
+    await this.applyRetraction(event);
+    if (this._failoverPendingDrain) return;
+    if (event.table === 'price_snapshots')     await this.refreshPriceSyncHeight();
+    if (event.table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
+    if (event.table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
+    if (event.table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
+    // bridge_transfers refreshes inside applyRetraction (the only path that can
+    // delete one), so it is deliberately not repeated here; policy_snapshots and
+    // list_snapshots are never retracted at all.
+    if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls')
+        await this.releaseSnapshotWaiters();
+}
+
+
+// Apply only the post-archive metadata to a match the mirror already admitted.
+// There is deliberately no INSERT fallback: a missing row stays missing until a
+// REST bootstrap evaluates the full row through the normal admission path.
+async function applyMatchAnchorStampImpl(event) {
+    if (typeof event.match_id !== 'string' || event.match_id.length === 0 ||
+        typeof event.anchor_txid !== 'string' || event.anchor_txid.length === 0) return;
+    await applyMirrorWrite(this.hubDb,
+        'UPDATE cross_chain_matches SET anchor_txid = COALESCE(anchor_txid, ?) WHERE match_id = ?',
+        [event.anchor_txid, event.match_id]);
+}
+
 module.exports = {
 
     // Route one live row event (row:inserted / row:deleted) from the
@@ -67,7 +104,7 @@ module.exports = {
             return;
         }
         if (event.type === 'row:anchor-stamped' && event.table === 'cross_chain_matches') {
-            await this.applyMatchAnchorStamp(event);
+            await applyMatchAnchorStampImpl.call(this, event);
             return;
         }
         if (event.table === 'price_snapshots' && !this._priceDrained) {
@@ -77,7 +114,7 @@ module.exports = {
         if (event.type === 'row:inserted' && event.table && event.row) {
             await this.handleInsertedRowEvent(event);
         } else if (event.type === 'row:deleted' && event.table) {
-            await this.handleDeletedRowEvent(event);
+            await handleDeletedRowEventImpl.call(this, event);
         }
     },
 
@@ -91,43 +128,7 @@ module.exports = {
         await this.applyRow(event.table, event.row);
         this.reportRefusedChainRows(event.table);
         this.reportRefusedNetworkRows(event.table);
-        if (!this._failoverPendingDrain) await this.refreshInsertedTable(event.table);
-    },
-
-    async refreshInsertedTable(table) {
-        if (table === 'price_snapshots')     await this.refreshPriceSyncHeight();
-        if (table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
-        if (table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
-        if (table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
-        if (table === 'bridge_transfers')    await this.refreshBridgeSyncTimestamp();
-        if (table === 'policy_snapshots')    await this.refreshPolicySyncTimestamp();
-        if (table === 'list_snapshots')      await this.refreshListShareSyncState();
-        if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this.releaseSnapshotWaiters();
-    },
-
-    async handleDeletedRowEvent(event) {
-        await this.applyRetraction(event);
-        if (this._failoverPendingDrain) return;
-        if (event.table === 'price_snapshots')     await this.refreshPriceSyncHeight();
-        if (event.table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
-        if (event.table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
-        if (event.table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
-        // bridge_transfers refreshes inside applyRetraction (the only path that can
-        // delete one), so it is deliberately not repeated here; policy_snapshots and
-        // list_snapshots are never retracted at all.
-        if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls')
-            await this.releaseSnapshotWaiters();
-    },
-
-    // Apply only the post-archive metadata to a match the mirror already admitted.
-    // There is deliberately no INSERT fallback: a missing row stays missing until a
-    // REST bootstrap evaluates the full row through the normal admission path.
-    async applyMatchAnchorStamp(event) {
-        if (typeof event.match_id !== 'string' || event.match_id.length === 0 ||
-            typeof event.anchor_txid !== 'string' || event.anchor_txid.length === 0) return;
-        await applyMirrorWrite(this.hubDb,
-            'UPDATE cross_chain_matches SET anchor_txid = COALESCE(anchor_txid, ?) WHERE match_id = ?',
-            [event.anchor_txid, event.match_id]);
+        if (!this._failoverPendingDrain) await refreshInsertedTableImpl.call(this, event.table);
     },
 
     // Queue a live price_snapshots event for replay after the price bootstrap

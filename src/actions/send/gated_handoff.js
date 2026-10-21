@@ -21,6 +21,76 @@
 
 // Installed onto Send.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
+
+// Gated-file handoff rule: the handoff is CONDITIONAL. A gated FILE on a tick does
+// NOT make every send of it require a handoff; a pack only compels
+// one when the recipient will actually end up able to unlock it, judged on
+// POST-SEND balance (pre-send balance + everything this action sends them),
+// since a recipient who already holds enough crosses the threshold on any
+// transfer and one who holds nothing may not cross it even on a large one.
+// Above SEND_GATED_TOTAL_TICK_ID, gatedAmount is the action total per
+// (DESTINATION, resolved TICK_ID), so alternate spellings of one token
+// cannot split the threshold. Below it, gatedAmount remains the literal
+// consolidated leg amount. Self-send is deliberately NOT special-cased:
+// the rule applies literally, the resulting overcount is accepted for
+// determinism, and a sender's self-addressed MESSAGE satisfies the requirement.
+function gatedHandoffRequiredImpl(packs, send, tokenInfo, ctx, gatedAmount) {
+    if(gatedAmount === undefined) gatedAmount = send['AMOUNT'];
+    let destBal = ctx.destBalances[send['DESTINATION']] || {};
+    let held    = destBal[tokenInfo['TICK_ID']];
+    if(this.util.isNull(held)) held = '0';
+    let postSend = this.util.bcadd(held, gatedAmount, 18);
+
+    // "A pack requires the handoff" when it is unconditional (no threshold
+    // at all) or the post-send balance reaches its threshold, and "the
+    // MESSAGE is required if at least one pack requires it".
+    let required = false;
+    for(let pack of packs){
+        if(pack.threshold === null){ required = true; break; }
+        if(!this.util.bclt(postSend, pack.threshold)){ required = true; break; }
+    }
+    return required;
+}
+
+
+// Whether a MESSAGE v2 sibling of this action is addressed to the leg's DESTINATION, which
+// is the structural presence the gated-content rule asks for
+async function findGatedHandoffImpl(send, data) {
+    let siblings = data['SIBLING_ACTIONS'] || [];
+    let foundHandoff = false;
+
+    // Siblings hold WIRE parameters (batch.js splits the raw command and
+    // resolves no address references), while the SDK compacts a MESSAGE
+    // DESTINATION to `^<id>` for any already-indexed recipient, so a byte
+    // compare misses the ordinary wallet-composed handoff. A caret spelling
+    // is resolved first.
+
+    for(let s of siblings){
+        if(s.action !== 'MESSAGE') continue;
+        // MESSAGE v2 fields: VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE
+        // (s.params[0]=VERSION, [1]=COIN, [2]=DESTINATION, [3]=ENCRYPTED_MESSAGE)
+        let ver  = String(s.params[0] || '');
+        let dest = String(s.params[2] || '');
+        if(ver !== '2') continue;
+
+        // Caret-only, so a full-address handoff costs no extra read, and
+        // fail-closed on both edges: a rejected reference and a value still
+        // caret-prefixed after resolution match nothing.
+        if(dest.substring(0,1) === '^'){
+            let destRef = await this.indexerDb.resolveAddressRefChecked(dest, data['BLOCK_INDEX']);
+            if(destRef.rejected) continue;
+            dest = String(destRef.value || '');
+            if(dest.substring(0,1) === '^') continue;
+        }
+
+        if(dest === send['DESTINATION']){
+            foundHandoff = true;
+            break;
+        }
+    }
+    return foundHandoff;
+}
+
 module.exports = {
 
     // Gated-content rule: if TICK has any active gated FILEs, this
@@ -39,79 +109,11 @@ module.exports = {
                 if(resolvedTotal !== undefined)
                     gatedAmount = resolvedTotal;
             }
-            if(packs.length > 0 && this.gatedHandoffRequired(packs, send, tokenInfo, ctx, gatedAmount)){
-                if(!(await this.findGatedHandoff(send, data)))
+            if(packs.length > 0 && gatedHandoffRequiredImpl.call(this, packs, send, tokenInfo, ctx, gatedAmount)){
+                if(!(await findGatedHandoffImpl.call(this, send, data)))
                     error = 'invalid: gated token transfer requires key handoff message';
             }
         }
         return error;
     },
-
-    // Gated-file handoff rule: the handoff is CONDITIONAL. A gated FILE on a tick does
-    // NOT make every send of it require a handoff; a pack only compels
-    // one when the recipient will actually end up able to unlock it, judged on
-    // POST-SEND balance (pre-send balance + everything this action sends them),
-    // since a recipient who already holds enough crosses the threshold on any
-    // transfer and one who holds nothing may not cross it even on a large one.
-    // Above SEND_GATED_TOTAL_TICK_ID, gatedAmount is the action total per
-    // (DESTINATION, resolved TICK_ID), so alternate spellings of one token
-    // cannot split the threshold. Below it, gatedAmount remains the literal
-    // consolidated leg amount. Self-send is deliberately NOT special-cased:
-    // the rule applies literally, the resulting overcount is accepted for
-    // determinism, and a sender's self-addressed MESSAGE satisfies the requirement.
-    gatedHandoffRequired(packs, send, tokenInfo, ctx, gatedAmount){
-        if(gatedAmount === undefined) gatedAmount = send['AMOUNT'];
-        let destBal = ctx.destBalances[send['DESTINATION']] || {};
-        let held    = destBal[tokenInfo['TICK_ID']];
-        if(this.util.isNull(held)) held = '0';
-        let postSend = this.util.bcadd(held, gatedAmount, 18);
-
-        // "A pack requires the handoff" when it is unconditional (no threshold
-        // at all) or the post-send balance reaches its threshold, and "the
-        // MESSAGE is required if at least one pack requires it".
-        let required = false;
-        for(let pack of packs){
-            if(pack.threshold === null){ required = true; break; }
-            if(!this.util.bclt(postSend, pack.threshold)){ required = true; break; }
-        }
-        return required;
-    },
-
-    // Whether a MESSAGE v2 sibling of this action is addressed to the leg's DESTINATION, which
-    // is the structural presence the gated-content rule asks for
-    async findGatedHandoff(send, data){
-        let siblings = data['SIBLING_ACTIONS'] || [];
-        let foundHandoff = false;
-
-        // Siblings hold WIRE parameters (batch.js splits the raw command and
-        // resolves no address references), while the SDK compacts a MESSAGE
-        // DESTINATION to `^<id>` for any already-indexed recipient, so a byte
-        // compare misses the ordinary wallet-composed handoff. A caret spelling
-        // is resolved first.
-
-        for(let s of siblings){
-            if(s.action !== 'MESSAGE') continue;
-            // MESSAGE v2 fields: VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE
-            // (s.params[0]=VERSION, [1]=COIN, [2]=DESTINATION, [3]=ENCRYPTED_MESSAGE)
-            let ver  = String(s.params[0] || '');
-            let dest = String(s.params[2] || '');
-            if(ver !== '2') continue;
-
-            // Caret-only, so a full-address handoff costs no extra read, and
-            // fail-closed on both edges: a rejected reference and a value still
-            // caret-prefixed after resolution match nothing.
-            if(dest.substring(0,1) === '^'){
-                let destRef = await this.indexerDb.resolveAddressRefChecked(dest, data['BLOCK_INDEX']);
-                if(destRef.rejected) continue;
-                dest = String(destRef.value || '');
-                if(dest.substring(0,1) === '^') continue;
-            }
-
-            if(dest === send['DESTINATION']){
-                foundHandoff = true;
-                break;
-            }
-        }
-        return foundHandoff;
-    }
 };

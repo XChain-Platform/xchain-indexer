@@ -237,8 +237,6 @@ async function validateCaretTickExists(ctx){
 }
 
 module.exports = {
-    CHILD_TOKEN_INDEPENDENT_EDITS_KEY,
-    childTokenIndependentEditsActiveAt,
     validateTickName,
     validateTickForm,
     validateReservedTick,

@@ -101,6 +101,159 @@ function parseResponseSigs(params, error){
     return { sigs, error };
 }
 
+
+// The original request this response answers, and every reason a stored one cannot
+// be answered by this wire.
+async function responseRequestErrorImpl(requestId, providerId, data, error) {
+    // Look up the original request
+    let request = null;
+    if(!error){
+        request = await this.indexerDb.getAttestationRequestById(requestId);
+        if(!request){
+            error = 'invalid: REQUEST_ID (no matching request)';
+        } else if(this.isMirrorEraRequest(request)){
+            // THE FLAG-DAY GATE. At or above the response-mirror height a response
+            // reaches every indexer through the hub mirror, so an on-chain v1 for such
+            // a request is refused: without this a stale hub still running the legacy
+            // publisher would DOUBLE-DELIVER, the mirror applier and the chain handler
+            // each firing the callback and each settling the escrow.
+            //
+            // First among the request-derived branches on purpose. Every branch below
+            // also rejects, so an ordering that let one of them answer first could not
+            // admit the action, but it WOULD record a different reason for the same
+            // wire depending on the request's incidental state, and this string is
+            // consensus: it is the stored verdict a replay re-derives.
+            error = 'invalid: ATTEST v1 after mirror activation';
+        } else if(request.request_status !== 'pending'){
+            error = 'invalid: REQUEST already ' + request.request_status;
+        } else if(request.provider_id !== String(providerId)){
+            error = 'invalid: PROVIDER_ID does not match request';
+        } else if(parseInt(data['BLOCK_INDEX']) > parseInt(request.deadline_block)){
+            error = 'invalid: REQUEST expired (deadline_block=' + request.deadline_block + ')';
+        }
+    }
+
+    return { request, error };
+}
+
+async function verifyChainResponseImpl(wire, request, sigs, data, error) {
+    let { requestId, requestIdRaw, providerId, responseStatus, meta, responseBodyBytes } = wire;
+    // Verification proper lives in attest_response_verify.js: ONE implementation
+    // that this chain path and the hub-mirror applier both call, so the two
+    // delivery routes can never reach different verdicts on the same artifact
+    // (on-chain or hub mirror). Everything consensus-relevant lives
+    // there, comments included; what stays here is the wire parsing above and the
+    // persistence below.
+    //
+    // Three things are passed rather than read from `data` inside the module, and
+    // each is a deliberate seam for the mirror path:
+    //   atBlock    the block the response is judged AT. It drives the widening
+    //              ladder, which is evaluated at the RESPONSE's own height on
+    //              purpose. On this path that is the v1 action's block.
+    //   gateBlock  where ATTEST_CANONICAL_LOWERCASE_ID is evaluated. Today, and
+    //              here, the v1 ACTION's block; the module must not re-key it.
+    //   computeResponsibleSet  injected, because it is a method over this.config,
+    //              this.providerRegistry and this.indexerDb, and every site that
+    //              computes a request's responsible set has to use the one derivation.
+    //
+    // The snapshot height is deliberately NOT passed: the module buries the local
+    // request row's own block itself, so no caller can name the height its
+    // signatures are checked at.
+    let verdict = await avr.verifyAttestationResponse({
+        request,
+        sigs,
+        requestId,
+        requestIdRaw,
+        providerId,
+        responseStatus,
+        meta,
+        responseBodyBytes,
+        atBlock:         data['BLOCK_INDEX'],
+        gateBlock:       data['BLOCK_INDEX'],
+        error,
+        coin:            this.config['COIN'],
+        network:         this.config['NETWORK'],
+        indexerDb:       this.indexerDb,
+        protocolChanges: this.actions.protocolChanges,
+        computeResponsibleSet: this.computeResponsibleSet.bind(this),
+    });
+
+    return verdict;
+}
+
+
+// The effects a valid response has on the request it answers. Reached only for a
+// `valid` action, so every branch here is the protocol's, not the wire's.
+async function closeChainResponseImpl(request, data, requestId, providerId, responseStatus, verifiedSigs) {
+    // Bump fulfilled_count for each signing validator (only on STATUS=='ok')
+    if(String(responseStatus) === 'ok'){
+        for(let s of verifiedSigs){
+            await this.indexerDb.incrementAttestationValidatorStat(
+                s.pubkey, String(providerId), 'fulfilled_count', data['BLOCK_INDEX']
+            );
+        }
+    }
+
+    // Retryable response statuses leave the request OPEN. no_quorum means
+    // the responsible set could not agree this round; timeout / provider_error
+    // mean a fetch failed transiently. In all three cases another round may
+    // still succeed before the deadline, so the request stays `pending`; the
+    // deadline-expiry handler flips it to `expired` if no quorum is ever
+    // reached. Only `ok` (fulfilled) or a genuinely terminal failure closes the
+    // request and fires the callback. (allowedStatuses, see above, is
+    // ['ok','timeout','no_quorum','provider_error','expired']; an explicit
+    // `expired` response is terminal and maps to `errored`.)
+    const RETRYABLE_STATUSES = new Set(['no_quorum', 'timeout', 'provider_error']);
+    if(RETRYABLE_STATUSES.has(String(responseStatus))){
+        getLogger().info("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
+                    ' : retryable status=' + responseStatus + ', request left pending for retry');
+    } else {
+        await finishChainResponseImpl.call(this, request, data, requestId, responseStatus);
+    }
+}
+
+
+// The terminal flip and everything that hangs off it: the fee settle, the relay
+// deferral, and the contract callback. The caller writes the mappings row.
+async function finishChainResponseImpl(request, data, requestId, responseStatus) {
+    // Flip request status to its terminal value (resolved_block anchors
+    // the flip for the reorg-rollback reset)
+    let newRequestStatus = (responseStatus === 'ok') ? 'fulfilled' : 'errored';
+    await this.indexerDb.updateAttestationRequestStatus(data['REQUEST_ID'], newRequestStatus, data['BLOCK_INDEX']);
+
+    // Fee disposition. Release/refund rows are written at THIS
+    // v1 action_index, so a reorg of the v1 removes them generically
+    // and the v0 escrow (earlier action_index) survives intact.
+    await this.settleRequestFee(request, data, newRequestStatus);
+
+    // A relay-materialized request (v3) carries the ORIGIN chain it
+    // came from. Its contract lives there, not here, so BTC must not try to
+    // execute a callback against a contract_index that means nothing locally.
+    // The response relays back as a v4 instead and the origin chain fires the
+    // callback. Self-gating: only a v3, which is itself flag-day gated, can
+    // produce a row whose origin_chain differs from this coin, so no separate
+    // activation check is needed and pre-activation replay is untouched.
+    if(this.isForeignOrigin(request)){
+        getLogger().info("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
+                    ' : origin=' + request.origin_chain + ', callback deferred to the relay leg');
+        return;
+    }
+
+    // Inject the callback EXECUTE. Wrapped in a savepoint so a failing callback
+    // does NOT roll back the response row.
+    try {
+        let callbackActionIndex = await this.injectCallbackExecute(request, data);
+        if(callbackActionIndex)
+            await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
+    } catch(e){
+        // Infra faults (VM host down, DB driver errno) must halt the block
+        // rather than commit a locally-dropped callback that forks
+        // contract_hash against healthy peers (see consensus/fault_guard.js).
+        rethrowIfInfraFault(e);
+        getLogger().warn('Attestation callback injection failed:', e);
+    }
+}
+
 module.exports = {
     // ATTEST v1: Response (validator broadcast)
     async parseResponse(params, data, error){
@@ -112,11 +265,11 @@ module.exports = {
         let parsed = parseResponseSigs.call(this, params, error);
         error = parsed.error;
 
-        let lookup  = await this.responseRequestError(requestId, providerId, data, error);
+        let lookup  = await responseRequestErrorImpl.call(this, requestId, providerId, data, error);
         let request = lookup.request;
         error       = lookup.error;
 
-        let verdict      = await this.verifyChainResponse(wire, request, parsed.sigs, data, error);
+        let verdict      = await verifyChainResponseImpl.call(this, wire, request, parsed.sigs, data, error);
         error            = verdict.error;
         let validSigs    = verdict.validSigs;
         let verifiedSigs = verdict.verifiedSigs;
@@ -150,159 +303,9 @@ module.exports = {
         await this.indexerDb.createAttestationResponse(data);
 
         if(status === 'valid')
-            await this.closeChainResponse(request, data, requestId, providerId, responseStatus, verifiedSigs);
+            await closeChainResponseImpl.call(this, request, data, requestId, providerId, responseStatus, verifiedSigs);
 
         await this.mapper.createMappings(data);
-    },
-
-    // The original request this response answers, and every reason a stored one cannot
-    // be answered by this wire.
-    async responseRequestError(requestId, providerId, data, error){
-        // Look up the original request
-        let request = null;
-        if(!error){
-            request = await this.indexerDb.getAttestationRequestById(requestId);
-            if(!request){
-                error = 'invalid: REQUEST_ID (no matching request)';
-            } else if(this.isMirrorEraRequest(request)){
-                // THE FLAG-DAY GATE. At or above the response-mirror height a response
-                // reaches every indexer through the hub mirror, so an on-chain v1 for such
-                // a request is refused: without this a stale hub still running the legacy
-                // publisher would DOUBLE-DELIVER, the mirror applier and the chain handler
-                // each firing the callback and each settling the escrow.
-                //
-                // First among the request-derived branches on purpose. Every branch below
-                // also rejects, so an ordering that let one of them answer first could not
-                // admit the action, but it WOULD record a different reason for the same
-                // wire depending on the request's incidental state, and this string is
-                // consensus: it is the stored verdict a replay re-derives.
-                error = 'invalid: ATTEST v1 after mirror activation';
-            } else if(request.request_status !== 'pending'){
-                error = 'invalid: REQUEST already ' + request.request_status;
-            } else if(request.provider_id !== String(providerId)){
-                error = 'invalid: PROVIDER_ID does not match request';
-            } else if(parseInt(data['BLOCK_INDEX']) > parseInt(request.deadline_block)){
-                error = 'invalid: REQUEST expired (deadline_block=' + request.deadline_block + ')';
-            }
-        }
-
-        return { request, error };
-    },
-
-    async verifyChainResponse(wire, request, sigs, data, error){
-        let { requestId, requestIdRaw, providerId, responseStatus, meta, responseBodyBytes } = wire;
-        // Verification proper lives in attest_response_verify.js: ONE implementation
-        // that this chain path and the hub-mirror applier both call, so the two
-        // delivery routes can never reach different verdicts on the same artifact
-        // (on-chain or hub mirror). Everything consensus-relevant lives
-        // there, comments included; what stays here is the wire parsing above and the
-        // persistence below.
-        //
-        // Three things are passed rather than read from `data` inside the module, and
-        // each is a deliberate seam for the mirror path:
-        //   atBlock    the block the response is judged AT. It drives the widening
-        //              ladder, which is evaluated at the RESPONSE's own height on
-        //              purpose. On this path that is the v1 action's block.
-        //   gateBlock  where ATTEST_CANONICAL_LOWERCASE_ID is evaluated. Today, and
-        //              here, the v1 ACTION's block; the module must not re-key it.
-        //   computeResponsibleSet  injected, because it is a method over this.config,
-        //              this.providerRegistry and this.indexerDb, and every site that
-        //              computes a request's responsible set has to use the one derivation.
-        //
-        // The snapshot height is deliberately NOT passed: the module buries the local
-        // request row's own block itself, so no caller can name the height its
-        // signatures are checked at.
-        let verdict = await avr.verifyAttestationResponse({
-            request,
-            sigs,
-            requestId,
-            requestIdRaw,
-            providerId,
-            responseStatus,
-            meta,
-            responseBodyBytes,
-            atBlock:         data['BLOCK_INDEX'],
-            gateBlock:       data['BLOCK_INDEX'],
-            error,
-            coin:            this.config['COIN'],
-            network:         this.config['NETWORK'],
-            indexerDb:       this.indexerDb,
-            protocolChanges: this.actions.protocolChanges,
-            computeResponsibleSet: this.computeResponsibleSet.bind(this),
-        });
-
-        return verdict;
-    },
-
-    // The effects a valid response has on the request it answers. Reached only for a
-    // `valid` action, so every branch here is the protocol's, not the wire's.
-    async closeChainResponse(request, data, requestId, providerId, responseStatus, verifiedSigs){
-        // Bump fulfilled_count for each signing validator (only on STATUS=='ok')
-        if(String(responseStatus) === 'ok'){
-            for(let s of verifiedSigs){
-                await this.indexerDb.incrementAttestationValidatorStat(
-                    s.pubkey, String(providerId), 'fulfilled_count', data['BLOCK_INDEX']
-                );
-            }
-        }
-
-        // Retryable response statuses leave the request OPEN. no_quorum means
-        // the responsible set could not agree this round; timeout / provider_error
-        // mean a fetch failed transiently. In all three cases another round may
-        // still succeed before the deadline, so the request stays `pending`; the
-        // deadline-expiry handler flips it to `expired` if no quorum is ever
-        // reached. Only `ok` (fulfilled) or a genuinely terminal failure closes the
-        // request and fires the callback. (allowedStatuses, see above, is
-        // ['ok','timeout','no_quorum','provider_error','expired']; an explicit
-        // `expired` response is terminal and maps to `errored`.)
-        const RETRYABLE_STATUSES = new Set(['no_quorum', 'timeout', 'provider_error']);
-        if(RETRYABLE_STATUSES.has(String(responseStatus))){
-            getLogger().info("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
-                        ' : retryable status=' + responseStatus + ', request left pending for retry');
-        } else {
-            await this.finishChainResponse(request, data, requestId, responseStatus);
-        }
-    },
-
-    // The terminal flip and everything that hangs off it: the fee settle, the relay
-    // deferral, and the contract callback. The caller writes the mappings row.
-    async finishChainResponse(request, data, requestId, responseStatus){
-        // Flip request status to its terminal value (resolved_block anchors
-        // the flip for the reorg-rollback reset)
-        let newRequestStatus = (responseStatus === 'ok') ? 'fulfilled' : 'errored';
-        await this.indexerDb.updateAttestationRequestStatus(data['REQUEST_ID'], newRequestStatus, data['BLOCK_INDEX']);
-
-        // Fee disposition. Release/refund rows are written at THIS
-        // v1 action_index, so a reorg of the v1 removes them generically
-        // and the v0 escrow (earlier action_index) survives intact.
-        await this.settleRequestFee(request, data, newRequestStatus);
-
-        // A relay-materialized request (v3) carries the ORIGIN chain it
-        // came from. Its contract lives there, not here, so BTC must not try to
-        // execute a callback against a contract_index that means nothing locally.
-        // The response relays back as a v4 instead and the origin chain fires the
-        // callback. Self-gating: only a v3, which is itself flag-day gated, can
-        // produce a row whose origin_chain differs from this coin, so no separate
-        // activation check is needed and pre-activation replay is untouched.
-        if(this.isForeignOrigin(request)){
-            getLogger().info("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
-                        ' : origin=' + request.origin_chain + ', callback deferred to the relay leg');
-            return;
-        }
-
-        // Inject the callback EXECUTE. Wrapped in a savepoint so a failing callback
-        // does NOT roll back the response row.
-        try {
-            let callbackActionIndex = await this.injectCallbackExecute(request, data);
-            if(callbackActionIndex)
-                await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
-        } catch(e){
-            // Infra faults (VM host down, DB driver errno) must halt the block
-            // rather than commit a locally-dropped callback that forks
-            // contract_hash against healthy peers (see consensus/fault_guard.js).
-            rethrowIfInfraFault(e);
-            getLogger().warn('Attestation callback injection failed:', e);
-        }
     },
 
     // Is this request's response served by the hub mirror rather than by an on-chain

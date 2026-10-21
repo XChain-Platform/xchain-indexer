@@ -25,6 +25,114 @@
 
 // Installed onto Dispense.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
+
+// The fill count a Mode B match buys, then its unit price.
+async function applyOracleFillImpl(ctx, row, priceMatch) {
+let { block_index } = ctx;
+    let { dispenser } = row;
+    let multiplier = row.multiplier;
+
+                // priceMatch.units is how many TOKENS the payment buys at the oracle's
+                // published price. `multiplier` further down is a FILL count: it is
+                // multiplied by the dispenser's GIVE_AMOUNT to get the tokens credited.
+                // Assigning one to the other equates a token with a fill, so a dispenser
+                // giving N tokens per fill sold each token at 1/N of the published price.
+                // Measured on chain (LTC regtest 2026-07-31, DISPENSE 1956): oracle 1.5
+                // USD per XCHAIN, GIVE_AMOUNT 5, a 0.37 LTC payment worth $11.10 credited
+                // 35 XCHAIN, i.e. 7 fills at $1.50 each and $0.317 a token.
+                //
+                // A PRICE v1 oracle publishes the price of one TOKEN, and that reading is
+                // canonical: the docs, the oracle-fee base (`oracle_price x GIVE_ESCROW`,
+                // which only holds if the fiat cost of one dispense is `oracle_price x
+                // GIVE_AMOUNT`) and the wallet's publishing form all state it, and two of
+                // those are what an oracle operator is paid on. So SETTLEMENT is the side
+                // that moves:
+                // divide the affordable tokens by GIVE_AMOUNT to get whole fills.
+                //
+                // Gated because it is consensus: the same payment against the same
+                // dispenser credits a different number of tokens either side of the
+                // boundary, so an ungated flip forks a heterogeneous fleet on the first
+                // Mode B dispense with GIVE_AMOUNT != 1. Invisible at GIVE_AMOUNT 1,
+                // where fills and tokens coincide, which is why it survived every prior
+                // example and test.
+                //
+                // Divide priceMatch.rawUnits (un-floored) rather than .units so the value
+                // is floored exactly ONCE; see the note on reverseOraclePriceMatch. Fall
+                // back to .units when the matcher did not supply it.
+                //
+                // The giveAmountPositive guard is for a BALANCE dispenser carrying an
+                // empty or '0' GIVE_AMOUNT, which a format-0 create still accepts below
+                // dispenser_give_amount_activation (armed at genesis on mainnet too by
+                // the 2026-09-09 ruling, so this path is legacy-only history now).
+                // bcdiv returns 0 on a zero divisor, so dividing there would silently
+                // reject every such dispense as insufficient funds instead of leaving
+                // the legacy behavior in place.
+                //
+                // An ownership dispenser is NOT that case. `dispenser` reaches this
+                // handler only from getDispenserInfo, which virtualizes GIVE_AMOUNT to
+                // '1' on the GIVE_OWNERSHIP == 1 branch, so giveAmountPositive is always
+                // true for one and this per-token divide DOES run for it.
+                multiplier = priceMatch.units;
+
+    row.multiplier = multiplier;
+    await applyPerTokenOracleFillImpl.call(this, ctx, row, priceMatch);
+    await priceOracleUnitCostImpl.call(this, ctx, row, priceMatch);
+}
+
+
+// The per-token reading of a Mode B price: affordable tokens divided by the tokens
+// one fill hands out.
+async function applyPerTokenOracleFillImpl(ctx, row, priceMatch) {
+let { block_index } = ctx;
+    let { dispenser } = row;
+    let multiplier = row.multiplier;
+
+                let perTokenOracle = await this.actions.protocolChanges.isEnabled('DISPENSER_ORACLE_PER_TOKEN_PRICE', block_index);
+                let giveAmountPositive = !this.util.isNull(dispenser['GIVE_AMOUNT']) &&
+                                         this.util.bcgt(dispenser['GIVE_AMOUNT'], '0');
+                if(perTokenOracle && giveAmountPositive){
+                    let affordable = this.util.isNull(priceMatch.rawUnits)
+                        ? String(priceMatch.units)
+                        : priceMatch.rawUnits;
+                    // Saturating, not throwing: a throw here wedges the block loop, and a
+                    // sub-1 GIVE_AMOUNT can lift the fill count above the affordable token
+                    // count by orders of magnitude.
+                    multiplier = this.util.bcfloorSaturating(
+                        this.util.bcdiv(affordable, dispenser['GIVE_AMOUNT'], 64));
+                }
+
+    row.multiplier = multiplier;
+    row.perTokenOracle = perTokenOracle;
+    row.giveAmountPositive = giveAmountPositive;
+}
+
+
+// One fill priced in COIN, out of the affordability the matcher just computed.
+async function priceOracleUnitCostImpl(ctx, row, priceMatch) {
+let { ledger } = ctx;
+    let { dispenser, available, perTokenOracle, giveAmountPositive } = row;
+    let unitCoinCost = row.unitCoinCost;
+
+                // Price one fill in COIN from the affordability this matcher just
+                // computed rather than from a second price lookup, so the two can
+                // never disagree: `available` bought priceMatch.rawUnits tokens, so
+                // one token cost available/rawUnits, and a fill costs that times the
+                // tokens one fill hands out - GIVE_AMOUNT under the per-token rule,
+                // and exactly one token under the legacy reading, where the multiplier
+                // IS a token count priced one token per fill.
+                if(ledger){
+                    let rawTokens = this.util.isNull(priceMatch.rawUnits)
+                        ? String(priceMatch.units)
+                        : priceMatch.rawUnits;
+                    let coinPerToken = this.util.bcdiv(available, rawTokens, 64);
+                    unitCoinCost = (perTokenOracle && giveAmountPositive)
+                        ? this.util.bcmul(coinPerToken, dispenser['GIVE_AMOUNT'], 64)
+                        : coinPerToken;
+                }
+
+    row.unitCoinCost = unitCoinCost;
+}
+
 module.exports = {
 
     // Mode B: a user oracle (PRICE v1) prices the dispensed token directly.
@@ -51,117 +159,12 @@ module.exports = {
                     data['BLOCK_INDEX']
                 );
                 if(priceMatch){
-                    await this.applyOracleFill(ctx, row, priceMatch);
+                    await applyOracleFillImpl.call(this, ctx, row, priceMatch);
                 } else {
                     error = 'invalid: no matching oracle price';
                 }
 
         row.error = error;
-    },
-
-    // The fill count a Mode B match buys, then its unit price.
-    async applyOracleFill(ctx, row, priceMatch){
-    let { block_index } = ctx;
-        let { dispenser } = row;
-        let multiplier = row.multiplier;
-
-                    // priceMatch.units is how many TOKENS the payment buys at the oracle's
-                    // published price. `multiplier` further down is a FILL count: it is
-                    // multiplied by the dispenser's GIVE_AMOUNT to get the tokens credited.
-                    // Assigning one to the other equates a token with a fill, so a dispenser
-                    // giving N tokens per fill sold each token at 1/N of the published price.
-                    // Measured on chain (LTC regtest 2026-07-31, DISPENSE 1956): oracle 1.5
-                    // USD per XCHAIN, GIVE_AMOUNT 5, a 0.37 LTC payment worth $11.10 credited
-                    // 35 XCHAIN, i.e. 7 fills at $1.50 each and $0.317 a token.
-                    //
-                    // A PRICE v1 oracle publishes the price of one TOKEN, and that reading is
-                    // canonical: the docs, the oracle-fee base (`oracle_price x GIVE_ESCROW`,
-                    // which only holds if the fiat cost of one dispense is `oracle_price x
-                    // GIVE_AMOUNT`) and the wallet's publishing form all state it, and two of
-                    // those are what an oracle operator is paid on. So SETTLEMENT is the side
-                    // that moves:
-                    // divide the affordable tokens by GIVE_AMOUNT to get whole fills.
-                    //
-                    // Gated because it is consensus: the same payment against the same
-                    // dispenser credits a different number of tokens either side of the
-                    // boundary, so an ungated flip forks a heterogeneous fleet on the first
-                    // Mode B dispense with GIVE_AMOUNT != 1. Invisible at GIVE_AMOUNT 1,
-                    // where fills and tokens coincide, which is why it survived every prior
-                    // example and test.
-                    //
-                    // Divide priceMatch.rawUnits (un-floored) rather than .units so the value
-                    // is floored exactly ONCE; see the note on reverseOraclePriceMatch. Fall
-                    // back to .units when the matcher did not supply it.
-                    //
-                    // The giveAmountPositive guard is for a BALANCE dispenser carrying an
-                    // empty or '0' GIVE_AMOUNT, which a format-0 create still accepts below
-                    // dispenser_give_amount_activation (armed at genesis on mainnet too by
-                    // the 2026-09-09 ruling, so this path is legacy-only history now).
-                    // bcdiv returns 0 on a zero divisor, so dividing there would silently
-                    // reject every such dispense as insufficient funds instead of leaving
-                    // the legacy behavior in place.
-                    //
-                    // An ownership dispenser is NOT that case. `dispenser` reaches this
-                    // handler only from getDispenserInfo, which virtualizes GIVE_AMOUNT to
-                    // '1' on the GIVE_OWNERSHIP == 1 branch, so giveAmountPositive is always
-                    // true for one and this per-token divide DOES run for it.
-                    multiplier = priceMatch.units;
-
-        row.multiplier = multiplier;
-        await this.applyPerTokenOracleFill(ctx, row, priceMatch);
-        await this.priceOracleUnitCost(ctx, row, priceMatch);
-    },
-
-    // The per-token reading of a Mode B price: affordable tokens divided by the tokens
-    // one fill hands out.
-    async applyPerTokenOracleFill(ctx, row, priceMatch){
-    let { block_index } = ctx;
-        let { dispenser } = row;
-        let multiplier = row.multiplier;
-
-                    let perTokenOracle = await this.actions.protocolChanges.isEnabled('DISPENSER_ORACLE_PER_TOKEN_PRICE', block_index);
-                    let giveAmountPositive = !this.util.isNull(dispenser['GIVE_AMOUNT']) &&
-                                             this.util.bcgt(dispenser['GIVE_AMOUNT'], '0');
-                    if(perTokenOracle && giveAmountPositive){
-                        let affordable = this.util.isNull(priceMatch.rawUnits)
-                            ? String(priceMatch.units)
-                            : priceMatch.rawUnits;
-                        // Saturating, not throwing: a throw here wedges the block loop, and a
-                        // sub-1 GIVE_AMOUNT can lift the fill count above the affordable token
-                        // count by orders of magnitude.
-                        multiplier = this.util.bcfloorSaturating(
-                            this.util.bcdiv(affordable, dispenser['GIVE_AMOUNT'], 64));
-                    }
-
-        row.multiplier = multiplier;
-        row.perTokenOracle = perTokenOracle;
-        row.giveAmountPositive = giveAmountPositive;
-    },
-
-    // One fill priced in COIN, out of the affordability the matcher just computed.
-    async priceOracleUnitCost(ctx, row, priceMatch){
-    let { ledger } = ctx;
-        let { dispenser, available, perTokenOracle, giveAmountPositive } = row;
-        let unitCoinCost = row.unitCoinCost;
-
-                    // Price one fill in COIN from the affordability this matcher just
-                    // computed rather than from a second price lookup, so the two can
-                    // never disagree: `available` bought priceMatch.rawUnits tokens, so
-                    // one token cost available/rawUnits, and a fill costs that times the
-                    // tokens one fill hands out - GIVE_AMOUNT under the per-token rule,
-                    // and exactly one token under the legacy reading, where the multiplier
-                    // IS a token count priced one token per fill.
-                    if(ledger){
-                        let rawTokens = this.util.isNull(priceMatch.rawUnits)
-                            ? String(priceMatch.units)
-                            : priceMatch.rawUnits;
-                        let coinPerToken = this.util.bcdiv(available, rawTokens, 64);
-                        unitCoinCost = (perTokenOracle && giveAmountPositive)
-                            ? this.util.bcmul(coinPerToken, dispenser['GIVE_AMOUNT'], 64)
-                            : coinPerToken;
-                    }
-
-        row.unitCoinCost = unitCoinCost;
     },
 
     // v0 FIAT: the validator COIN/FIAT snapshot prices the fill.

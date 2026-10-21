@@ -23,6 +23,65 @@
 
 // Installed onto Bet.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
+
+/*****************************************************************
+ * DETAILS validation
+ ****************************************************************/
+// Validate the base64 JSON market definition. Returns an error string or null.
+function validateDetailsImpl(details, outcomeLabels) {
+    // Strict base64: charset with = padding, length % 4 == 0, and a re-encode
+    // that round-trips byte-identically (rejects non-canonical encodings)
+    if(!/^[A-Za-z0-9+/]+={0,2}$/.test(details) || details.length % 4 !== 0)
+        return 'invalid: DETAILS (format)';
+    let decoded = Buffer.from(details, 'base64');
+    if(decoded.toString('base64') !== details)
+        return 'invalid: DETAILS (format)';
+    if(decoded.length > this.config['MAX_BET_DETAILS_LENGTH'])
+        return 'invalid: DETAILS (length)';
+    let parsed = null;
+    try {
+        parsed = JSON.parse(decoded.toString('utf8'));
+    } catch(e){
+        return 'invalid: DETAILS (json)';
+    }
+    // Top-level object (not array/scalar) with bounded nesting depth: the depth
+    // cap bounds the recursion the SDK schema check and the explorer renderer
+    // perform on attacker-chosen input (total walk work is already bounded by
+    // MAX_BET_DETAILS_LENGTH)
+    if(parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+        return 'invalid: DETAILS (json shape)';
+    if(jsonDepthImpl.call(this, parsed) > this.config['MAX_BET_DETAILS_DEPTH'])
+        return 'invalid: DETAILS (json shape)';
+    // An `outcomes` key must be an array whose labels equal the canonical
+    // OUTCOMES exactly (order + count + byte-equal after trim); present-but-
+    // not-array is also a mismatch
+    if(Object.prototype.hasOwnProperty.call(parsed, 'outcomes')){
+        let list = parsed['outcomes'];
+        if(!Array.isArray(list) || list.length !== outcomeLabels.length)
+            return 'invalid: DETAILS (outcomes mismatch)';
+        for(let i = 0; i < list.length; i++){
+            if(String(list[i]).trim() !== outcomeLabels[i])
+                return 'invalid: DETAILS (outcomes mismatch)';
+        }
+    }
+    return null;
+}
+
+
+// Nesting depth of a parsed JSON value (objects and arrays count one level each)
+function jsonDepthImpl(node, depth = 1) {
+    if(node === null || typeof node !== 'object')
+        return depth;
+    let max = depth;
+    // Early exit once past the cap: bounded work on adversarial input
+    for(let key of Object.keys(node)){
+        let child = jsonDepthImpl.call(this, node[key], depth + 1);
+        if(child > max) max = child;
+        if(max > this.config['MAX_BET_DETAILS_DEPTH']) return max;
+    }
+    return max;
+}
+
 module.exports = {
 
     // Format 0 (Create Feed) validations, in three phases
@@ -180,65 +239,8 @@ module.exports = {
         // Validate DETAILS (optional): strict base64 wrapping a JSON object whose
         // optional `outcomes` array must agree with the consensus OUTCOMES field
         if(!error && !this.util.isNull(data['DETAILS']))
-            error = this.validateDetails(String(data['DETAILS']), outcomeLabels);
+            error = validateDetailsImpl.call(this, String(data['DETAILS']), outcomeLabels);
 
         return error;
     },
-
-    /*****************************************************************
-     * DETAILS validation
-     ****************************************************************/
-    // Validate the base64 JSON market definition. Returns an error string or null.
-    validateDetails(details, outcomeLabels){
-        // Strict base64: charset with = padding, length % 4 == 0, and a re-encode
-        // that round-trips byte-identically (rejects non-canonical encodings)
-        if(!/^[A-Za-z0-9+/]+={0,2}$/.test(details) || details.length % 4 !== 0)
-            return 'invalid: DETAILS (format)';
-        let decoded = Buffer.from(details, 'base64');
-        if(decoded.toString('base64') !== details)
-            return 'invalid: DETAILS (format)';
-        if(decoded.length > this.config['MAX_BET_DETAILS_LENGTH'])
-            return 'invalid: DETAILS (length)';
-        let parsed = null;
-        try {
-            parsed = JSON.parse(decoded.toString('utf8'));
-        } catch(e){
-            return 'invalid: DETAILS (json)';
-        }
-        // Top-level object (not array/scalar) with bounded nesting depth: the depth
-        // cap bounds the recursion the SDK schema check and the explorer renderer
-        // perform on attacker-chosen input (total walk work is already bounded by
-        // MAX_BET_DETAILS_LENGTH)
-        if(parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
-            return 'invalid: DETAILS (json shape)';
-        if(this.jsonDepth(parsed) > this.config['MAX_BET_DETAILS_DEPTH'])
-            return 'invalid: DETAILS (json shape)';
-        // An `outcomes` key must be an array whose labels equal the canonical
-        // OUTCOMES exactly (order + count + byte-equal after trim); present-but-
-        // not-array is also a mismatch
-        if(Object.prototype.hasOwnProperty.call(parsed, 'outcomes')){
-            let list = parsed['outcomes'];
-            if(!Array.isArray(list) || list.length !== outcomeLabels.length)
-                return 'invalid: DETAILS (outcomes mismatch)';
-            for(let i = 0; i < list.length; i++){
-                if(String(list[i]).trim() !== outcomeLabels[i])
-                    return 'invalid: DETAILS (outcomes mismatch)';
-            }
-        }
-        return null;
-    },
-
-    // Nesting depth of a parsed JSON value (objects and arrays count one level each)
-    jsonDepth(node, depth = 1){
-        if(node === null || typeof node !== 'object')
-            return depth;
-        let max = depth;
-        // Early exit once past the cap: bounded work on adversarial input
-        for(let key of Object.keys(node)){
-            let child = this.jsonDepth(node[key], depth + 1);
-            if(child > max) max = child;
-            if(max > this.config['MAX_BET_DETAILS_DEPTH']) return max;
-        }
-        return max;
-    }
 };

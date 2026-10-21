@@ -21,6 +21,31 @@ const { getLogger } = require('../../observability/index.js');
 
 // Installed onto Swap_Match.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the class method it was.
+
+// swapInfo.GIVE side → matchInfo's proceeds. If matchInfo sold a controlled token, its
+// stored royalty/fee split applies to these proceeds (applyProceedsSplit returns the
+// lone full credit when there are no legs, so the call is unconditional).
+async function settleSwapGiveSideImpl(data, swapInfo, matchInfo, credits, escrows) {
+    if(Number(swapInfo['GIVE_OWNERSHIP']||0) == 1){
+        await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, swapInfo['GIVE_TICK'], swapInfo['SOURCE'], matchInfo['GET_ADDRESS']);
+    } else {
+        // Negate via bcsub, not JS unary minus: -GET_AMOUNT coerces the
+        // bignumber string to a float and loses digits past ~15 sig figs,
+        // de-syncing this escrow debit from the full-precision split credits
+        // below (applyProceedsSplit conserves exactly to GET_AMOUNT).
+        escrows.push([matchInfo['GET_TICK'], this.util.bcsub(0, matchInfo['GET_AMOUNT'], 64), matchInfo['GET_ADDRESS']]);
+        let mDec = 0;
+        if(!this.util.isNull(matchInfo['PAYOUT_LEGS'])){
+            let mInfo = await this.indexerDb.getTokenInfo(matchInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            mDec = (mInfo && !this.util.isNull(mInfo['DECIMALS'])) ? parseInt(mInfo['DECIMALS']) : 0;
+        }
+        for(let c of this.util.applyProceedsSplit(matchInfo['GET_TICK'], matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS'], matchInfo['PAYOUT_LEGS'], mDec)){
+            credits.push(c);
+            this.util.addAddressTicker(c[2], c[0]);
+        }
+    }
+}
+
 module.exports = {
 
     // Settle a selected match: both GIVE sides move and both swaps complete
@@ -50,7 +75,7 @@ module.exports = {
         //   - matchInfo.GIVE → swapInfo.GET_ADDRESS
         // Ownership sides clear the escrow gate and atomically transfer ownership;
         // balance sides keep the existing escrow/credit pattern.
-        await this.settleSwapGiveSide(data, swapInfo, matchInfo, credits, escrows);
+        await settleSwapGiveSideImpl.call(this, data, swapInfo, matchInfo, credits, escrows);
         await this.settleMatchGiveSide(data, swapInfo, matchInfo, credits, escrows);
 
         // Process any transaction ledger changes (credits / debits / escrows)
@@ -71,30 +96,6 @@ module.exports = {
 
         // Create action mappings
         await this.mapper.createMappings(data);
-    },
-
-    // swapInfo.GIVE side → matchInfo's proceeds. If matchInfo sold a controlled token, its
-    // stored royalty/fee split applies to these proceeds (applyProceedsSplit returns the
-    // lone full credit when there are no legs, so the call is unconditional).
-    async settleSwapGiveSide(data, swapInfo, matchInfo, credits, escrows){
-        if(Number(swapInfo['GIVE_OWNERSHIP']||0) == 1){
-            await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, swapInfo['GIVE_TICK'], swapInfo['SOURCE'], matchInfo['GET_ADDRESS']);
-        } else {
-            // Negate via bcsub, not JS unary minus: -GET_AMOUNT coerces the
-            // bignumber string to a float and loses digits past ~15 sig figs,
-            // de-syncing this escrow debit from the full-precision split credits
-            // below (applyProceedsSplit conserves exactly to GET_AMOUNT).
-            escrows.push([matchInfo['GET_TICK'], this.util.bcsub(0, matchInfo['GET_AMOUNT'], 64), matchInfo['GET_ADDRESS']]);
-            let mDec = 0;
-            if(!this.util.isNull(matchInfo['PAYOUT_LEGS'])){
-                let mInfo = await this.indexerDb.getTokenInfo(matchInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-                mDec = (mInfo && !this.util.isNull(mInfo['DECIMALS'])) ? parseInt(mInfo['DECIMALS']) : 0;
-            }
-            for(let c of this.util.applyProceedsSplit(matchInfo['GET_TICK'], matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS'], matchInfo['PAYOUT_LEGS'], mDec)){
-                credits.push(c);
-                this.util.addAddressTicker(c[2], c[0]);
-            }
-        }
     },
 
     // matchInfo.GIVE side → swapInfo's proceeds. Same: apply swapInfo's stored split.

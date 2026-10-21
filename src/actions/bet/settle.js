@@ -24,6 +24,102 @@ const BET_WRITE_CHUNK = 50;
 
 // Installed onto Bet.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
+
+// One terminal flip per bet (current-status column + stamp + history row),
+// issued BET_WRITE_CHUNK bets at a time instead of one bet per round trip
+async function writeBetTerminalsImpl(data, flips) {
+    for(let i = 0; i < flips.length; i += BET_WRITE_CHUNK){
+        await Promise.all(flips.slice(i, i + BET_WRITE_CHUNK).map(async ([betActionIndex, status]) => {
+            await this.indexerDb.setBetSettled(betActionIndex, status, data['BLOCK_INDEX']);
+            await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betActionIndex, status);
+        }));
+    }
+}
+
+
+// Parimutuel settlement (consensus-critical). All arithmetic in
+// mathjs bignumber via the house bc* helpers; every division/floor at the feed
+// tick's DECIMALS. The pool predicate is normative: only bet_status='open' rows
+// are summed, and every summed row leaves 'open' in this same action.
+async function settleFeedImpl(data, feedInfo, feedTokenInfo, credits, escrows) {
+    let d       = feedTokenInfo['DECIMALS'];
+    let winning = Number(data['OUTCOME']);
+    let count   = String(feedInfo['OUTCOMES']).split(',').length;
+
+    let openBets = await this.indexerDb.getOpenBetsByFeed(feedInfo['ACTION_INDEX']);
+
+    // Outcome-range assertion (normative): a summed bet outside 0..count-1 is a
+    // consensus-fatal indexer error. HALT - never skip, never treat the pool as
+    // empty: the silent failure mode is a real winner flipping to resolved_void
+    // with everyone refunded and no error anywhere.
+    for(let betRow of openBets){
+        let o = Number(betRow['OUTCOME']);
+        if(!Number.isInteger(o) || o < 0 || o >= count)
+            throw new Error('BET settlement: bet ' + betRow['ACTION_INDEX'] + ' outcome ' + betRow['OUTCOME'] + ' outside 0..' + (count-1) + ' of feed ' + feedInfo['ACTION_INDEX'] + ' - consensus-fatal, halting');
+    }
+
+    // Pool totals from the open rows (T = all outcomes, W = winning outcome)
+    let T = 0, W = 0;
+    for(let betRow of openBets){
+        T = this.util.bcadd(T, betRow['AMOUNT'], d);
+        if(Number(betRow['OUTCOME']) === winning)
+            W = this.util.bcadd(W, betRow['AMOUNT'], d);
+    }
+
+    if(this.util.bcgt(W, 0)){
+        await settleWinningPoolImpl.call(this, data, feedInfo, d, winning, openBets, T, W, credits, escrows);
+    } else {
+        // Empty winning pool (decision E): full refund, NO oracle fee. Bettors
+        // never net-lose to an outcome nobody backed
+        await this.refundOpenBets(data, feedInfo, 'resolved_void', credits, escrows);
+    }
+}
+
+
+// Pay a resolved feed's winners pro-rata and credit the oracle its fee plus dust.
+// Every amount is mathjs bignumber through the house bc* helpers, floored at the
+// feed tick's DECIMALS.
+async function settleWinningPoolImpl(data, feedInfo, d, winning, openBets, T, W, credits, escrows) {
+    // Normal settlement: oracle fee off the top (FEE is a percent, so /100),
+    // winners split the pot pro-rata, floored at the tick's decimals; the
+    // rounding remainder (dust) rides the oracle credit
+    let feeFraction = this.util.bcdiv(feedInfo['FEE'], 100, 4);   // <=2dp percent -> exact 4dp fraction
+    let fee  = this.util.bcmulfloor(T, feeFraction, d);
+    let pot  = this.util.bcsub(T, fee, d);
+    let paid = 0;
+    let flips = [];
+    for(let betRow of openBets){
+        // Every open bet leaves escrow here, winner or loser: winners' payouts
+        // include their stake share by construction, losers' stakes are
+        // consumed by the pot
+        escrows.push([feedInfo['TICK'], this.util.bcsub(0, betRow['AMOUNT'], 64), betRow['SOURCE']]);
+        this.util.addAddressTicker(betRow['SOURCE'], feedInfo['TICK']);
+        if(Number(betRow['OUTCOME']) === winning){
+            let payout = this.util.bcmuldivfloor(betRow['AMOUNT'], pot, W, d);
+            // Zero-floor rule: a payout flooring to exactly zero emits NO
+            // credit row; the amount is absorbed into dust. The bet still
+            // transitions to won (at most one terminal credit per bet)
+            if(this.util.bcgt(payout, 0)){
+                credits.push([feedInfo['TICK'], payout, betRow['SOURCE']]);
+                paid = this.util.bcadd(paid, payout, d);
+            }
+            flips.push([betRow['ACTION_INDEX'], 'won']);
+        } else {
+            flips.push([betRow['ACTION_INDEX'], 'lost']);
+        }
+    }
+    await writeBetTerminalsImpl.call(this, data, flips);
+    // Oracle credit: fee plus rounding dust, one credit (absorbed by the
+    // flat-free resolve; never charged per-credit). Skipped when zero so a
+    // zero-fee dust-free market emits no empty ledger row
+    let oracleCredit = this.util.bcadd(fee, this.util.bcsub(pot, paid, d), d);
+    if(this.util.bcgt(oracleCredit, 0))
+        credits.push([feedInfo['TICK'], oracleCredit, feedInfo['SOURCE']]);
+    await this.indexerDb.setBetFeedTerminal(feedInfo['ACTION_INDEX'], 'resolved', data['BLOCK_INDEX']);
+    await this.indexerDb.createBetFeedStatus(data['ACTION_INDEX'], feedInfo['ACTION_INDEX'], 'resolved');
+    this.util.addAddressTicker(feedInfo['SOURCE'], feedInfo['TICK']);
+}
+
 module.exports = {
 
     // Lifecycle leg of a VALID bet: escrow or settle, then fees and balances
@@ -60,7 +156,7 @@ module.exports = {
 
             // Format 3 - Resolve Feed: settle inline (DISPENSE precedent)
             if(format==3)
-                await this.settleFeed(data, feedInfo, feedTokenInfo, credits, escrows);
+                await settleFeedImpl.call(this, data, feedInfo, feedTokenInfo, credits, escrows);
 
             // Handle any transaction FEE according to the user's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
@@ -100,103 +196,10 @@ module.exports = {
             this.util.addAddressTicker(betRow['SOURCE'], feedInfo['TICK']);
             flips.push([betRow['ACTION_INDEX'], 'refunded']);
         }
-        await this.writeBetTerminals(data, flips);
+        await writeBetTerminalsImpl.call(this, data, flips);
         // Feed terminal flip: current-status column + terminal_block stamp + history row
         await this.indexerDb.setBetFeedTerminal(feedInfo['ACTION_INDEX'], terminalStatus, data['BLOCK_INDEX']);
         await this.indexerDb.createBetFeedStatus(data['ACTION_INDEX'], feedInfo['ACTION_INDEX'], terminalStatus);
         this.util.addAddressTicker(feedInfo['SOURCE'], feedInfo['TICK']);
     },
-
-    // One terminal flip per bet (current-status column + stamp + history row),
-    // issued BET_WRITE_CHUNK bets at a time instead of one bet per round trip
-    async writeBetTerminals(data, flips){
-        for(let i = 0; i < flips.length; i += BET_WRITE_CHUNK){
-            await Promise.all(flips.slice(i, i + BET_WRITE_CHUNK).map(async ([betActionIndex, status]) => {
-                await this.indexerDb.setBetSettled(betActionIndex, status, data['BLOCK_INDEX']);
-                await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betActionIndex, status);
-            }));
-        }
-    },
-
-    // Parimutuel settlement (consensus-critical). All arithmetic in
-    // mathjs bignumber via the house bc* helpers; every division/floor at the feed
-    // tick's DECIMALS. The pool predicate is normative: only bet_status='open' rows
-    // are summed, and every summed row leaves 'open' in this same action.
-    async settleFeed(data, feedInfo, feedTokenInfo, credits, escrows){
-        let d       = feedTokenInfo['DECIMALS'];
-        let winning = Number(data['OUTCOME']);
-        let count   = String(feedInfo['OUTCOMES']).split(',').length;
-
-        let openBets = await this.indexerDb.getOpenBetsByFeed(feedInfo['ACTION_INDEX']);
-
-        // Outcome-range assertion (normative): a summed bet outside 0..count-1 is a
-        // consensus-fatal indexer error. HALT - never skip, never treat the pool as
-        // empty: the silent failure mode is a real winner flipping to resolved_void
-        // with everyone refunded and no error anywhere.
-        for(let betRow of openBets){
-            let o = Number(betRow['OUTCOME']);
-            if(!Number.isInteger(o) || o < 0 || o >= count)
-                throw new Error('BET settlement: bet ' + betRow['ACTION_INDEX'] + ' outcome ' + betRow['OUTCOME'] + ' outside 0..' + (count-1) + ' of feed ' + feedInfo['ACTION_INDEX'] + ' - consensus-fatal, halting');
-        }
-
-        // Pool totals from the open rows (T = all outcomes, W = winning outcome)
-        let T = 0, W = 0;
-        for(let betRow of openBets){
-            T = this.util.bcadd(T, betRow['AMOUNT'], d);
-            if(Number(betRow['OUTCOME']) === winning)
-                W = this.util.bcadd(W, betRow['AMOUNT'], d);
-        }
-
-        if(this.util.bcgt(W, 0)){
-            await this.settleWinningPool(data, feedInfo, d, winning, openBets, T, W, credits, escrows);
-        } else {
-            // Empty winning pool (decision E): full refund, NO oracle fee. Bettors
-            // never net-lose to an outcome nobody backed
-            await this.refundOpenBets(data, feedInfo, 'resolved_void', credits, escrows);
-        }
-    },
-
-    // Pay a resolved feed's winners pro-rata and credit the oracle its fee plus dust.
-    // Every amount is mathjs bignumber through the house bc* helpers, floored at the
-    // feed tick's DECIMALS.
-    async settleWinningPool(data, feedInfo, d, winning, openBets, T, W, credits, escrows){
-        // Normal settlement: oracle fee off the top (FEE is a percent, so /100),
-        // winners split the pot pro-rata, floored at the tick's decimals; the
-        // rounding remainder (dust) rides the oracle credit
-        let feeFraction = this.util.bcdiv(feedInfo['FEE'], 100, 4);   // <=2dp percent -> exact 4dp fraction
-        let fee  = this.util.bcmulfloor(T, feeFraction, d);
-        let pot  = this.util.bcsub(T, fee, d);
-        let paid = 0;
-        let flips = [];
-        for(let betRow of openBets){
-            // Every open bet leaves escrow here, winner or loser: winners' payouts
-            // include their stake share by construction, losers' stakes are
-            // consumed by the pot
-            escrows.push([feedInfo['TICK'], this.util.bcsub(0, betRow['AMOUNT'], 64), betRow['SOURCE']]);
-            this.util.addAddressTicker(betRow['SOURCE'], feedInfo['TICK']);
-            if(Number(betRow['OUTCOME']) === winning){
-                let payout = this.util.bcmuldivfloor(betRow['AMOUNT'], pot, W, d);
-                // Zero-floor rule: a payout flooring to exactly zero emits NO
-                // credit row; the amount is absorbed into dust. The bet still
-                // transitions to won (at most one terminal credit per bet)
-                if(this.util.bcgt(payout, 0)){
-                    credits.push([feedInfo['TICK'], payout, betRow['SOURCE']]);
-                    paid = this.util.bcadd(paid, payout, d);
-                }
-                flips.push([betRow['ACTION_INDEX'], 'won']);
-            } else {
-                flips.push([betRow['ACTION_INDEX'], 'lost']);
-            }
-        }
-        await this.writeBetTerminals(data, flips);
-        // Oracle credit: fee plus rounding dust, one credit (absorbed by the
-        // flat-free resolve; never charged per-credit). Skipped when zero so a
-        // zero-fee dust-free market emits no empty ledger row
-        let oracleCredit = this.util.bcadd(fee, this.util.bcsub(pot, paid, d), d);
-        if(this.util.bcgt(oracleCredit, 0))
-            credits.push([feedInfo['TICK'], oracleCredit, feedInfo['SOURCE']]);
-        await this.indexerDb.setBetFeedTerminal(feedInfo['ACTION_INDEX'], 'resolved', data['BLOCK_INDEX']);
-        await this.indexerDb.createBetFeedStatus(data['ACTION_INDEX'], feedInfo['ACTION_INDEX'], 'resolved');
-        this.util.addAddressTicker(feedInfo['SOURCE'], feedInfo['TICK']);
-    }
 };

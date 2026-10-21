@@ -148,5 +148,5 @@ async function remoteTokenAcceptError(handler, st){
 
 module.exports = {
     REMOTE_TOKEN_KEY, REMOTE_TOKEN_ADMISSION_KEY, REMOTE_TOKEN_RETRY_STALL_REASON,
-    remoteTokenCanonical, remoteTokenAdmissionField, remoteTokenAdmissionActive, remoteTokenAcceptError
+    remoteTokenCanonical,remoteTokenAdmissionActive, remoteTokenAcceptError
 };

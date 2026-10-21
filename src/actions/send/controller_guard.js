@@ -21,6 +21,65 @@
 
 // Installed onto Send.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
+
+// The SOURCE-side then the recipient-side `transfer` address-controller gate, each one's gas
+// reserved after the guard gas this leg already owes. Returns { error, guardFee }.
+async function runSendAddressGuardsImpl(idx, send, ctx, baseGasBalances, error, guardFee) {
+    // SOURCE-side gate: the SENDER's own `transfer` address-controller may gate its OUTBOUND
+    // transfers (self-imposed spending controls: velocity, allowlists, compliance). Runs
+    // after the token's guard, before the recipient gate. A single `transfer` address binding
+    // it fires whether the account is SOURCE (here) or DESTINATION (below); the
+    // guard distinguishes direction via its from/to (from === subject ⇒ outbound). SOURCE pays
+    // the guard gas, reserved cumulatively after this leg's token guardFee (a shallow clone, so
+    // gasBalances only commits in the valid block) so GAS can't be driven negative.
+    if(!error && !this.util.isNull(send['SOURCE'])){
+        let outbound = await runSendAddressGuardImpl.call(this, send['SOURCE'], idx, send, ctx, baseGasBalances, guardFee);
+        if(outbound.error)
+            error = 'invalid: ' + outbound.error;
+        else
+            guardFee = this.util.bcadd(guardFee, outbound.guardFee, 8);
+    }
+
+    // Recipient-side gate: the DESTINATION's own `transfer` address-controller may refuse an
+    // incoming direct SEND it didn't solicit (spam/compliance). Refusal reverts this leg;
+    // SOURCE pays the guard gas. Its reservation runs against the GAS balance ALREADY reduced
+    // by this leg's token guardFee (a shallow clone, so gasBalances only commits in the valid
+    // block), keeping the two-guard reservation cumulative so GAS can't be driven negative.
+    // DEX/dispense deliveries are solicited pulls, not direct sends, so they are never gated.
+    if(!error && !this.util.isNull(send['DESTINATION'])){
+        let recip = await runSendAddressGuardImpl.call(this, send['DESTINATION'], idx, send, ctx, baseGasBalances, guardFee);
+        if(recip.error)
+            error = 'invalid: ' + recip.error;
+        else
+            guardFee = this.util.bcadd(guardFee, recip.guardFee, 8);
+    }
+
+    return { error, guardFee };
+}
+
+
+// Run the `transfer` address-controller guard bound to `address` for this leg. Its gas
+// reservation is taken against a shallow clone already reduced by the guard gas charged so
+// far, so the reservation is cumulative and gasBalances only commits in the valid block.
+async function runSendAddressGuardImpl(address, idx, send, ctx, baseGasBalances, guardFee) {
+    let reserveBalances = baseGasBalances;
+    if(ctx.gasInfo && this.util.bcgt(guardFee, 0))
+        reserveBalances = this.util.debitBalances(Object.assign({}, baseGasBalances), ctx.gasInfo['TICK_ID'], guardFee);
+    return await this.util.maybeRunAddressControllerGuard(this.actions, this.indexerDb, {
+        actionType:  'SEND',
+        actionClass: 'transfer',
+        address:     address,
+        tick:        send['TICK'],
+        from:        send['SOURCE'],
+        to:          send['DESTINATION'],
+        amount:      send['AMOUNT'],
+        data:        send,
+        gasInfo:     ctx.gasInfo,
+        gasBalances: reserveBalances,
+        seq:         parseInt(idx) || 0
+    });
+}
+
 module.exports = {
 
     // Controller-bound token: defer to the bound contract's `guard` method
@@ -72,64 +131,7 @@ module.exports = {
                 guardFee = result.guardFee;
         }
 
-        ({ error, guardFee } = await this.runSendAddressGuards(idx, send, ctx, baseGasBalances, error, guardFee));
+        ({ error, guardFee } = await runSendAddressGuardsImpl.call(this, idx, send, ctx, baseGasBalances, error, guardFee));
         return { error, guardFee, sameTick };
     },
-
-    // The SOURCE-side then the recipient-side `transfer` address-controller gate, each one's gas
-    // reserved after the guard gas this leg already owes. Returns { error, guardFee }.
-    async runSendAddressGuards(idx, send, ctx, baseGasBalances, error, guardFee){
-        // SOURCE-side gate: the SENDER's own `transfer` address-controller may gate its OUTBOUND
-        // transfers (self-imposed spending controls: velocity, allowlists, compliance). Runs
-        // after the token's guard, before the recipient gate. A single `transfer` address binding
-        // it fires whether the account is SOURCE (here) or DESTINATION (below); the
-        // guard distinguishes direction via its from/to (from === subject ⇒ outbound). SOURCE pays
-        // the guard gas, reserved cumulatively after this leg's token guardFee (a shallow clone, so
-        // gasBalances only commits in the valid block) so GAS can't be driven negative.
-        if(!error && !this.util.isNull(send['SOURCE'])){
-            let outbound = await this.runSendAddressGuard(send['SOURCE'], idx, send, ctx, baseGasBalances, guardFee);
-            if(outbound.error)
-                error = 'invalid: ' + outbound.error;
-            else
-                guardFee = this.util.bcadd(guardFee, outbound.guardFee, 8);
-        }
-
-        // Recipient-side gate: the DESTINATION's own `transfer` address-controller may refuse an
-        // incoming direct SEND it didn't solicit (spam/compliance). Refusal reverts this leg;
-        // SOURCE pays the guard gas. Its reservation runs against the GAS balance ALREADY reduced
-        // by this leg's token guardFee (a shallow clone, so gasBalances only commits in the valid
-        // block), keeping the two-guard reservation cumulative so GAS can't be driven negative.
-        // DEX/dispense deliveries are solicited pulls, not direct sends, so they are never gated.
-        if(!error && !this.util.isNull(send['DESTINATION'])){
-            let recip = await this.runSendAddressGuard(send['DESTINATION'], idx, send, ctx, baseGasBalances, guardFee);
-            if(recip.error)
-                error = 'invalid: ' + recip.error;
-            else
-                guardFee = this.util.bcadd(guardFee, recip.guardFee, 8);
-        }
-
-        return { error, guardFee };
-    },
-
-    // Run the `transfer` address-controller guard bound to `address` for this leg. Its gas
-    // reservation is taken against a shallow clone already reduced by the guard gas charged so
-    // far, so the reservation is cumulative and gasBalances only commits in the valid block.
-    async runSendAddressGuard(address, idx, send, ctx, baseGasBalances, guardFee){
-        let reserveBalances = baseGasBalances;
-        if(ctx.gasInfo && this.util.bcgt(guardFee, 0))
-            reserveBalances = this.util.debitBalances(Object.assign({}, baseGasBalances), ctx.gasInfo['TICK_ID'], guardFee);
-        return await this.util.maybeRunAddressControllerGuard(this.actions, this.indexerDb, {
-            actionType:  'SEND',
-            actionClass: 'transfer',
-            address:     address,
-            tick:        send['TICK'],
-            from:        send['SOURCE'],
-            to:          send['DESTINATION'],
-            amount:      send['AMOUNT'],
-            data:        send,
-            gasInfo:     ctx.gasInfo,
-            gasBalances: reserveBalances,
-            seq:         parseInt(idx) || 0
-        });
-    }
 };

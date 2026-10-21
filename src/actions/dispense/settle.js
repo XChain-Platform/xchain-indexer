@@ -28,6 +28,102 @@ const { getLogger } = require('../../observability/index.js');
 
 // Installed onto Dispense.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
+
+// The credits, debits and escrow rows a valid dispense moves, then the balance
+// refresh and the action mappings that run whatever the verdict was.
+async function applyDispenseLedgerImpl(ctx, dispense, dispenser, status) {
+
+        // Process the dispense
+        if(status=='valid'){
+
+            // Array of credits, debits, and escrows
+            let credits = [],
+                debits  = [],
+                escrows = [];
+
+            if(Number(dispenser['GIVE_OWNERSHIP']||0) == 1){
+                // Ownership dispense: clear the escrow gate and atomically transfer ownership from the
+                // dispenser SOURCE to the buyer (data['SOURCE']). The synthetic ISSUE takes BLOCK_INDEX, TX_INDEX
+                // and BLOCK_TIME from the paying transaction's data, as every other caller does; the dispense row has none.
+                await this.util.transferTokenOwnership(this.indexerDb, this.mapper, ctx.data, dispense['GIVE_TICK'], dispenser['SOURCE'], dispense['DESTINATION']);
+            } else if(this.util.bcgt(dispense['GIVE_AMOUNT'], 0)){
+                // Balance dispense: debit from escrow, credit buyer
+                // Negate via bcsub, not JS unary minus: -GIVE_AMOUNT coerces the
+                // 64-precision bignumber string to a float and silently loses digits
+                // past ~15 sig figs, de-syncing the escrow debit from the full-precision
+                // credit below. Mirror the credit exactly at the same precision (64).
+                escrows.push([dispense['GIVE_TICK'], this.util.bcsub(0, dispense['GIVE_AMOUNT'], 64), dispense['DESTINATION']]);
+                credits.push([dispense['GIVE_TICK'],  dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
+            }
+
+            // Process any transaction ledger changes (credits / debits / escrows)
+            await this.util.processTransactionLedgerChanges(this.indexerDb, dispense, credits, debits, escrows);
+
+        }
+
+        // Get a list of addresses
+        let addresses = Object.keys(this.util.getAddressesList());
+
+        // Update address balances
+        await this.indexerDb.updateBalances(addresses);
+
+        // Create action mappings
+        await this.mapper.createMappings(dispense);
+}
+
+
+// Close the dispenser when it can no longer serve a buyer, or when it has reached
+// the MAX_DISPENSES cap.
+async function autoCloseDispenserImpl(ctx, dispense, dispenser, status) {
+let { block_index, block_time, tx_index, perUnitClose } = ctx;
+
+        // Close the dispenser when it can no longer serve a buyer. The correct
+        // threshold is the dispenser's PER-UNIT price (dispenser GIVE_AMOUNT):
+        // close only when remaining escrow cannot cover one more unit. The
+        // legacy comparison used the triggering dispense's aggregate
+        // give_amount (multiplier * per-unit), closing early after any large
+        // order; that behavior is preserved below the gate above so
+        // historical blocks replay byte-identically.
+        let closeThreshold = perUnitClose ? dispenser['GIVE_AMOUNT'] : dispense['GIVE_AMOUNT'];
+        if(status=='valid' && this.util.bclt(dispenser['GIVE_REMAINING'], closeThreshold)){
+            let action = 'DISPENSER_CLOSE';
+            // cdata, not data: `data` is parse()'s own transaction object, and a local
+            // by that name shadows it for the rest of this block, so a later edit
+            // reaching for the transaction's SOURCE / FEE_PROBE would silently read the
+            // synthetic close payload instead. Matches the MAX_DISPENSES branch below,
+            // which already names it this way for the same reason.
+            let cdata = {};
+            cdata['ACTION']                 = action;
+            cdata['BLOCK_INDEX']            = block_index;
+            cdata['BLOCK_TIME']             = block_time;
+            cdata['TX_INDEX']               = tx_index;
+            cdata['DISPENSER_ACTION_INDEX'] = dispenser['ACTION_INDEX'];
+            cdata['DISPENSER_STATUS']       = 'empty';
+            await this.actions.processAction(action, null, cdata, null);
+        } else if(status=='valid' && this.isDispenseCapsActive(block_time)){
+            // MAX_DISPENSES cap (see dispenser_caps_activation.js). The dispense
+            // that reaches the cap already executed above; now the dispenser auto-closes
+            // and refunds remaining escrow. DISPENSER_CLOSE routes the refund sweep >
+            // canceller > SOURCE: SOURCE for an 'open' dispenser, the sweep destination or
+            // recorded canceller for one already 'cancelling' (matched in its close-delay
+            // window). The count is derived from valid dispenses since the last
+            // refill (a refill resets it), matching Counterparty dispense.py. Gated with the
+            // dispenser-family cohort so historical replay stays byte-identical below it.
+            let dispenseCount = await this.indexerDb.getDispenserDispenseCount(dispenser['ACTION_INDEX']);
+            if(dispenseCount >= this.config['MAX_DISPENSES']){
+                let action = 'DISPENSER_CLOSE';
+                let cdata = {};
+                cdata['ACTION']                 = action;
+                cdata['BLOCK_INDEX']            = block_index;
+                cdata['BLOCK_TIME']             = block_time;
+                cdata['TX_INDEX']               = tx_index;
+                cdata['DISPENSER_ACTION_INDEX'] = dispenser['ACTION_INDEX'];
+                cdata['DISPENSER_STATUS']       = 'max_dispenses_reached';
+                await this.actions.processAction(action, null, cdata, null);
+            }
+        }
+}
+
 module.exports = {
 
     // One row of the dispenses[] the pricing pass built. The early return skips the rest
@@ -78,102 +174,8 @@ module.exports = {
 
             // Create record in the dispenses table
             await this.indexerDb.createDispense(dispense);
-            await this.applyDispenseLedger(ctx, dispense, dispenser, status);
-            await this.autoCloseDispenser(ctx, dispense, dispenser, status);
-    },
-
-    // The credits, debits and escrow rows a valid dispense moves, then the balance
-    // refresh and the action mappings that run whatever the verdict was.
-    async applyDispenseLedger(ctx, dispense, dispenser, status){
-
-            // Process the dispense
-            if(status=='valid'){
-
-                // Array of credits, debits, and escrows
-                let credits = [],
-                    debits  = [],
-                    escrows = [];
-
-                if(Number(dispenser['GIVE_OWNERSHIP']||0) == 1){
-                    // Ownership dispense: clear the escrow gate and atomically transfer ownership from the
-                    // dispenser SOURCE to the buyer (data['SOURCE']). The synthetic ISSUE takes BLOCK_INDEX, TX_INDEX
-                    // and BLOCK_TIME from the paying transaction's data, as every other caller does; the dispense row has none.
-                    await this.util.transferTokenOwnership(this.indexerDb, this.mapper, ctx.data, dispense['GIVE_TICK'], dispenser['SOURCE'], dispense['DESTINATION']);
-                } else if(this.util.bcgt(dispense['GIVE_AMOUNT'], 0)){
-                    // Balance dispense: debit from escrow, credit buyer
-                    // Negate via bcsub, not JS unary minus: -GIVE_AMOUNT coerces the
-                    // 64-precision bignumber string to a float and silently loses digits
-                    // past ~15 sig figs, de-syncing the escrow debit from the full-precision
-                    // credit below. Mirror the credit exactly at the same precision (64).
-                    escrows.push([dispense['GIVE_TICK'], this.util.bcsub(0, dispense['GIVE_AMOUNT'], 64), dispense['DESTINATION']]);
-                    credits.push([dispense['GIVE_TICK'],  dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
-                }
-
-                // Process any transaction ledger changes (credits / debits / escrows)
-                await this.util.processTransactionLedgerChanges(this.indexerDb, dispense, credits, debits, escrows);
-
-            }
-
-            // Get a list of addresses
-            let addresses = Object.keys(this.util.getAddressesList());
-
-            // Update address balances
-            await this.indexerDb.updateBalances(addresses);
-
-            // Create action mappings
-            await this.mapper.createMappings(dispense);
-    },
-
-    // Close the dispenser when it can no longer serve a buyer, or when it has reached
-    // the MAX_DISPENSES cap.
-    async autoCloseDispenser(ctx, dispense, dispenser, status){
-    let { block_index, block_time, tx_index, perUnitClose } = ctx;
-
-            // Close the dispenser when it can no longer serve a buyer. The correct
-            // threshold is the dispenser's PER-UNIT price (dispenser GIVE_AMOUNT):
-            // close only when remaining escrow cannot cover one more unit. The
-            // legacy comparison used the triggering dispense's aggregate
-            // give_amount (multiplier * per-unit), closing early after any large
-            // order; that behavior is preserved below the gate above so
-            // historical blocks replay byte-identically.
-            let closeThreshold = perUnitClose ? dispenser['GIVE_AMOUNT'] : dispense['GIVE_AMOUNT'];
-            if(status=='valid' && this.util.bclt(dispenser['GIVE_REMAINING'], closeThreshold)){
-                let action = 'DISPENSER_CLOSE';
-                // cdata, not data: `data` is parse()'s own transaction object, and a local
-                // by that name shadows it for the rest of this block, so a later edit
-                // reaching for the transaction's SOURCE / FEE_PROBE would silently read the
-                // synthetic close payload instead. Matches the MAX_DISPENSES branch below,
-                // which already names it this way for the same reason.
-                let cdata = {};
-                cdata['ACTION']                 = action;
-                cdata['BLOCK_INDEX']            = block_index;
-                cdata['BLOCK_TIME']             = block_time;
-                cdata['TX_INDEX']               = tx_index;
-                cdata['DISPENSER_ACTION_INDEX'] = dispenser['ACTION_INDEX'];
-                cdata['DISPENSER_STATUS']       = 'empty';
-                await this.actions.processAction(action, null, cdata, null);
-            } else if(status=='valid' && this.isDispenseCapsActive(block_time)){
-                // MAX_DISPENSES cap (see dispenser_caps_activation.js). The dispense
-                // that reaches the cap already executed above; now the dispenser auto-closes
-                // and refunds remaining escrow. DISPENSER_CLOSE routes the refund sweep >
-                // canceller > SOURCE: SOURCE for an 'open' dispenser, the sweep destination or
-                // recorded canceller for one already 'cancelling' (matched in its close-delay
-                // window). The count is derived from valid dispenses since the last
-                // refill (a refill resets it), matching Counterparty dispense.py. Gated with the
-                // dispenser-family cohort so historical replay stays byte-identical below it.
-                let dispenseCount = await this.indexerDb.getDispenserDispenseCount(dispenser['ACTION_INDEX']);
-                if(dispenseCount >= this.config['MAX_DISPENSES']){
-                    let action = 'DISPENSER_CLOSE';
-                    let cdata = {};
-                    cdata['ACTION']                 = action;
-                    cdata['BLOCK_INDEX']            = block_index;
-                    cdata['BLOCK_TIME']             = block_time;
-                    cdata['TX_INDEX']               = tx_index;
-                    cdata['DISPENSER_ACTION_INDEX'] = dispenser['ACTION_INDEX'];
-                    cdata['DISPENSER_STATUS']       = 'max_dispenses_reached';
-                    await this.actions.processAction(action, null, cdata, null);
-                }
-            }
+            await applyDispenseLedgerImpl.call(this, ctx, dispense, dispenser, status);
+            await autoCloseDispenserImpl.call(this, ctx, dispense, dispenser, status);
     },
 };
 

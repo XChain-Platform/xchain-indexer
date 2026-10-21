@@ -362,19 +362,6 @@ function rollbackBuckets(){
     return { RECOMPUTED, SPECIAL_CASE, ROLLBACK_EXEMPT };
 }
 
-// Replica-side coverage buckets (xchain-sync rollback-coverage guard).
-function replicaRollbackBuckets(){
-    let RECOMPUTED = tablesWhere(t => t.replicaRollback === 'recomputed');
-    let SPECIAL_CASE = tablesWhere(t => t.replicaRollback === 'special');
-    let ROLLBACK_EXEMPT = {};
-    let INDEXER_LOCAL = {};
-    for(let t of TABLES){
-        if(t.replicaRollback === 'exempt') ROLLBACK_EXEMPT[t.table] = t.note || '';
-        if(t.replicaRollback === 'local')  INDEXER_LOCAL[t.table]  = t.note || '';
-    }
-    return { RECOMPUTED, SPECIAL_CASE, ROLLBACK_EXEMPT, INDEXER_LOCAL };
-}
-
 // Tables declaring a given hash-coverage class.
 function hashClassTables(cls){
     return tablesWhere(t => t.hashed && t.hashed.classes.indexOf(cls) !== -1);
@@ -430,7 +417,7 @@ module.exports = {
     CONTENT_PARITY_IN_PLACE_COLUMNS,
     allTables, entry, tablesWhere,
     rollbackTables, replicaRollbackTables, streamTopology, blockKey,
-    rollbackBuckets, replicaRollbackBuckets, hashClassTables,
+    rollbackBuckets,hashClassTables,
     anchorRecoveryTables,
     contentParityCarveOut, contentParityMutableTables,
     contentParityExcludedColumns, contentParityLookupBound,

@@ -27,6 +27,59 @@ const MARKET_LIST_SOURCE_KEY = 'market_list_source_activation.MARKET_LIST_SOURCE
 
 // Installed onto Swap_Match.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the class method it was.
+
+// Token-leg reciprocity gate (defense-in-depth for the findSwapMatches reverse-leg
+// constraint). Scoped to the token-for-token path (all four ticks non-null); a
+// null-tick (native/other) side is left to its own routing. Settlement hardcodes
+// reciprocity (credits swapInfo.GET_TICK / matchInfo.GET_TICK), so BOTH legs must be
+// an exact tick+coin mirror: what this swap GIVES must equal what the match GETS, and
+// what it GETS must equal what the match GIVES. A non-mirrored pair would credit the
+// taker a token the maker never escrowed (a mint out of the global escrow pool).
+function swapCandidateIsReciprocalImpl(swapInfo, match) {
+    let bothTokenLegs = !this.util.isNull(swapInfo['GIVE_TICK']) && !this.util.isNull(swapInfo['GET_TICK']) &&
+                        !this.util.isNull(match['GIVE_TICK']) && !this.util.isNull(match['GET_TICK']);
+    return !(bothTokenLegs &&
+           (String(swapInfo['GIVE_TICK']) !== String(match['GET_TICK'])  || String(swapInfo['GIVE_COIN']) !== String(match['GET_COIN']) ||
+            String(swapInfo['GET_TICK'])  !== String(match['GIVE_TICK']) || String(swapInfo['GET_COIN'])  !== String(match['GIVE_COIN'])));
+}
+
+
+// Whether every allow/block list and payout policy admits this candidate; reads the
+// candidate's own lists. `ctx` carries the pass-level lists, policy flag and source flag.
+async function swapCandidateAllowedImpl(data, swapInfo, match, ctx) {
+    let { getTokenInfo, giveTokenInfo, getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
+          swapInfoAllowList, swapInfoBlockList, perTokenPolicy, checkCounterpartySource } = ctx;
+
+    // List of addresses allowed or blocked from matching with this matching SWAP
+    let matchInfoAllowList = (!this.util.isNull(match['ALLOW_LIST'])) ? await this.indexerDb.getList(match['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
+    let matchInfoBlockList = (!this.util.isNull(match['BLOCK_LIST'])) ? await this.indexerDb.getList(match['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
+
+    // Deny an address when any attached allow list resolves empty after activation.
+    let emptyAllowListDenies = gateRegistry.activeAt(EMPTY_ALLOW_LIST_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+    // Readers turn a NULL list column into 0, and an edit can store 0 to remove
+    // a list. Count only a nonzero id whose reader confirms a valid reference;
+    // null membership means the validity gate rejected the stored reference.
+    const attachedList = (id, list) => !this.util.isNull(id) && Number(id) !== 0 && Array.isArray(list);
+    let deniedByEmptyAllowList = emptyAllowListDenies &&
+        ((getTokenInfo && attachedList(getTokenInfo['ALLOW_LIST'], getTokenAllowList) && getTokenAllowList.length === 0) ||
+         (giveTokenInfo && attachedList(giveTokenInfo['ALLOW_LIST'], giveTokenAllowList) && giveTokenAllowList.length === 0) ||
+         (attachedList(swapInfo['ALLOW_LIST'], swapInfoAllowList) && swapInfoAllowList.length === 0) ||
+         (attachedList(match['ALLOW_LIST'], matchInfoAllowList) && matchInfoAllowList.length === 0));
+
+    // Check each payout against the policy for the token delivered there.
+    return !(deniedByEmptyAllowList ||
+       tokenPolicyRejects({ getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList },
+                          swapInfo['GET_ADDRESS'], match['GET_ADDRESS'], perTokenPolicy) ||
+       (swapInfoAllowList && swapInfoAllowList.length  && !swapInfoAllowList.includes(match['GET_ADDRESS']))     ||
+       (swapInfoBlockList && swapInfoBlockList.length  &&  swapInfoBlockList.includes(match['GET_ADDRESS']))     ||
+       (matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(swapInfo['GET_ADDRESS'])) ||
+       (matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(swapInfo['GET_ADDRESS'])) ||
+       (checkCounterpartySource && swapInfoAllowList && swapInfoAllowList.length && !swapInfoAllowList.includes(match['SOURCE'])) ||
+       (checkCounterpartySource && swapInfoBlockList && swapInfoBlockList.length &&  swapInfoBlockList.includes(match['SOURCE'])) ||
+       (checkCounterpartySource && matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(swapInfo['SOURCE'])) ||
+       (checkCounterpartySource && matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(swapInfo['SOURCE'])));
+}
+
 module.exports = {
 
     // Token info for both ticks and the allow/block lists every candidate is checked against
@@ -52,57 +105,6 @@ module.exports = {
                  giveTokenBlockList, swapInfoAllowList, swapInfoBlockList };
     },
 
-    // Token-leg reciprocity gate (defense-in-depth for the findSwapMatches reverse-leg
-    // constraint). Scoped to the token-for-token path (all four ticks non-null); a
-    // null-tick (native/other) side is left to its own routing. Settlement hardcodes
-    // reciprocity (credits swapInfo.GET_TICK / matchInfo.GET_TICK), so BOTH legs must be
-    // an exact tick+coin mirror: what this swap GIVES must equal what the match GETS, and
-    // what it GETS must equal what the match GIVES. A non-mirrored pair would credit the
-    // taker a token the maker never escrowed (a mint out of the global escrow pool).
-    swapCandidateIsReciprocal(swapInfo, match){
-        let bothTokenLegs = !this.util.isNull(swapInfo['GIVE_TICK']) && !this.util.isNull(swapInfo['GET_TICK']) &&
-                            !this.util.isNull(match['GIVE_TICK']) && !this.util.isNull(match['GET_TICK']);
-        return !(bothTokenLegs &&
-               (String(swapInfo['GIVE_TICK']) !== String(match['GET_TICK'])  || String(swapInfo['GIVE_COIN']) !== String(match['GET_COIN']) ||
-                String(swapInfo['GET_TICK'])  !== String(match['GIVE_TICK']) || String(swapInfo['GET_COIN'])  !== String(match['GIVE_COIN'])));
-    },
-
-    // Whether every allow/block list and payout policy admits this candidate; reads the
-    // candidate's own lists. `ctx` carries the pass-level lists, policy flag and source flag.
-    async swapCandidateAllowed(data, swapInfo, match, ctx){
-        let { getTokenInfo, giveTokenInfo, getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
-              swapInfoAllowList, swapInfoBlockList, perTokenPolicy, checkCounterpartySource } = ctx;
-
-        // List of addresses allowed or blocked from matching with this matching SWAP
-        let matchInfoAllowList = (!this.util.isNull(match['ALLOW_LIST'])) ? await this.indexerDb.getList(match['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
-        let matchInfoBlockList = (!this.util.isNull(match['BLOCK_LIST'])) ? await this.indexerDb.getList(match['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
-
-        // Deny an address when any attached allow list resolves empty after activation.
-        let emptyAllowListDenies = gateRegistry.activeAt(EMPTY_ALLOW_LIST_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
-        // Readers turn a NULL list column into 0, and an edit can store 0 to remove
-        // a list. Count only a nonzero id whose reader confirms a valid reference;
-        // null membership means the validity gate rejected the stored reference.
-        const attachedList = (id, list) => !this.util.isNull(id) && Number(id) !== 0 && Array.isArray(list);
-        let deniedByEmptyAllowList = emptyAllowListDenies &&
-            ((getTokenInfo && attachedList(getTokenInfo['ALLOW_LIST'], getTokenAllowList) && getTokenAllowList.length === 0) ||
-             (giveTokenInfo && attachedList(giveTokenInfo['ALLOW_LIST'], giveTokenAllowList) && giveTokenAllowList.length === 0) ||
-             (attachedList(swapInfo['ALLOW_LIST'], swapInfoAllowList) && swapInfoAllowList.length === 0) ||
-             (attachedList(match['ALLOW_LIST'], matchInfoAllowList) && matchInfoAllowList.length === 0));
-
-        // Check each payout against the policy for the token delivered there.
-        return !(deniedByEmptyAllowList ||
-           tokenPolicyRejects({ getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList },
-                              swapInfo['GET_ADDRESS'], match['GET_ADDRESS'], perTokenPolicy) ||
-           (swapInfoAllowList && swapInfoAllowList.length  && !swapInfoAllowList.includes(match['GET_ADDRESS']))     ||
-           (swapInfoBlockList && swapInfoBlockList.length  &&  swapInfoBlockList.includes(match['GET_ADDRESS']))     ||
-           (matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(swapInfo['GET_ADDRESS'])) ||
-           (matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(swapInfo['GET_ADDRESS'])) ||
-           (checkCounterpartySource && swapInfoAllowList && swapInfoAllowList.length && !swapInfoAllowList.includes(match['SOURCE'])) ||
-           (checkCounterpartySource && swapInfoBlockList && swapInfoBlockList.length &&  swapInfoBlockList.includes(match['SOURCE'])) ||
-           (checkCounterpartySource && matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(swapInfo['SOURCE'])) ||
-           (checkCounterpartySource && matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(swapInfo['SOURCE'])));
-    },
-
     // The first candidate that passes reciprocity and the allow/block lists, or false
     async findSwapMatch(data, swap, swapInfo, matches){
         let ctx = await this.loadSwapLists(data, swap, swapInfo);
@@ -111,8 +113,8 @@ module.exports = {
 
         // Loop through matches and take the first valid one
         for(let match of matches){
-            let reciprocal = module.exports.swapCandidateIsReciprocal.call(this, swapInfo, match);
-            let allowed = await module.exports.swapCandidateAllowed.call(this, data, swapInfo, match, ctx);
+            let reciprocal = swapCandidateIsReciprocalImpl.call(this, swapInfo, match);
+            let allowed = await swapCandidateAllowedImpl.call(this, data, swapInfo, match, ctx);
             if(reciprocal && allowed){
                 return match;
             }

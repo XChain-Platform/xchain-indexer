@@ -96,6 +96,120 @@ function isOwnershipFillExact(orderInfo, matchInfo, fill){
 
 // Installed onto Order_Match.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the class method it was.
+
+// Native-coin (COINPay) reciprocity: the mirror of the bothTokenLegs gate for the
+// two-phase path. findOrderMatches enforces the forward leg strictly but NULL-relaxes
+// the reverse leg (orderInfo.GET == matchInfo.GIVE), so a token-for-COIN order
+// (GET_TICK null) can pair with a token-for-token maker whose GIVE_TICK is a real
+// token. That pair is NOT a coin trade: no side gives native coin to the coin-wanting
+// side, yet native settlement below would mint a bogus COINPay obligation and
+// mis-assign the coin/seller roles, because this file's GET_TICK-aware detection
+// disagrees with coinpay.js / coinpay_expire.js's single-GIVE_TICK detection and so
+// releases the wrong order's escrowed token. A legitimate native match mirrors both
+// legs exactly (null-to-null, or the same real token+coin), so exactly one side GIVES
+// native coin; anything else is rejected. Gated by COINPAY_NATIVE_RECIPROCITY because
+// it is consensus-visible (changes which matches settle) and must flip at a
+// coordinated block, staying byte-identical below it.
+async function isNativeReciprocalImpl(data, orderInfo, matchInfo) {
+    let anyNullTick = this.util.isNull(orderInfo['GIVE_TICK']) || this.util.isNull(orderInfo['GET_TICK']) ||
+                      this.util.isNull(matchInfo['GIVE_TICK']) || this.util.isNull(matchInfo['GET_TICK']);
+    if(anyNullTick && await this.actions.protocolChanges.isEnabled('COINPAY_NATIVE_RECIPROCITY', data['BLOCK_INDEX'])){
+        let forwardMirror = (this.util.isNull(orderInfo['GIVE_TICK']) && this.util.isNull(matchInfo['GET_TICK'])) ||
+                            (!this.util.isNull(orderInfo['GIVE_TICK']) && !this.util.isNull(matchInfo['GET_TICK']) &&
+                             String(orderInfo['GIVE_TICK']) === String(matchInfo['GET_TICK']) &&
+                             String(orderInfo['GIVE_COIN']) === String(matchInfo['GET_COIN']));
+        let reverseMirror = (this.util.isNull(orderInfo['GET_TICK']) && this.util.isNull(matchInfo['GIVE_TICK'])) ||
+                            (!this.util.isNull(orderInfo['GET_TICK']) && !this.util.isNull(matchInfo['GIVE_TICK']) &&
+                             String(orderInfo['GET_TICK']) === String(matchInfo['GIVE_TICK']) &&
+                             String(orderInfo['GET_COIN']) === String(matchInfo['GIVE_COIN']));
+        if(!forwardMirror || !reverseMirror){
+            if(this.debug)
+                getLogger().info('Skipping non-reciprocal native match (leg mismatch)', orderInfo['GIVE_TICK'], orderInfo['GET_TICK'], matchInfo['GIVE_TICK'], matchInfo['GET_TICK']);
+            return false;
+        }
+    }
+    return true;
+}
+
+
+// Both sides still have something to GIVE and GET, and the prices cross.
+// priceCross is the order_match_price_cross_activation era at the ORDER_MATCH block.
+function hasFillRoomImpl(orderInfo, matchInfo, order, match, priceCross) {
+
+    // Ignore if we have nothing left to GIVE
+    if(this.util.bclte(match['GIVE_REMAINING'], 0) || this.util.bclte(order['GIVE_REMAINING'], 0)){
+        if(this.debug)
+            getLogger().info('Skipping: negative GIVE quantity remaining ', match['GIVE_REMAINING'], order['GIVE_REMAINING']);
+        return false;
+    }
+
+    // Ignore if we have nothing left to GET
+    if(this.util.bclte(match['GET_REMAINING'], 0) || this.util.bclte(order['GET_REMAINING'], 0)){
+        if(this.debug)
+            getLogger().info('Skipping: negative GET quantity remaining ', match['GET_REMAINING'], order['GET_REMAINING']);
+        return false;
+    }
+
+    // Ignore price mismatches. GIVE_PRICE is GET_AMOUNT / GIVE_AMOUNT and GET_PRICE is
+    // GIVE_AMOUNT / GET_AMOUNT (db/orders/order_info.js), so this order's GIVE_PRICE is
+    // its ask and the resting order's GET_PRICE is its bid, both in this order's GET
+    // units per GIVE unit. From the activation the pair is skipped when the ask exceeds
+    // the bid; the fill then settles at this order's ratio, which never exceeds the
+    // resting order's limit. Below it the legacy comparison runs the other way, kept
+    // byte-for-byte so historical replay is unchanged.
+    let mismatch = priceCross
+        ? this.util.bcgt(orderInfo['GIVE_PRICE'], matchInfo['GET_PRICE'])
+        : this.util.bcgt(matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
+    if(mismatch){
+        if(this.debug)
+            getLogger().info('Skipping due to price mismatch ', matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
+        return false;
+    }
+    return true;
+}
+
+
+// Each payout passes its received token's policy, this order's lists and the candidate's own
+async function isListAllowedImpl(data, orderInfo, matchInfo, lists) {
+    let { getTokenInfo, giveTokenInfo, getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
+          orderInfoAllowList, orderInfoBlockList } = lists;
+
+    // List of addresses allowed or blocked from matching with this matching ORDER
+    let matchInfoAllowList = (!this.util.isNull(matchInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(matchInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
+    let matchInfoBlockList = (!this.util.isNull(matchInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(matchInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
+
+    // Deny an address when any attached allow list resolves empty after activation.
+    let emptyAllowListDenies = gateRegistry.activeAt(EMPTY_ALLOW_LIST_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+    // Readers turn a NULL list column into 0, and an edit can store 0 to remove
+    // a list. Count only a nonzero id whose reader confirms a valid reference;
+    // null membership means the validity gate rejected the stored reference.
+    const attachedList = (id, list) => !this.util.isNull(id) && Number(id) !== 0 && Array.isArray(list);
+    let deniedByEmptyAllowList = emptyAllowListDenies &&
+        ((getTokenInfo && attachedList(getTokenInfo['ALLOW_LIST'], getTokenAllowList) && getTokenAllowList.length === 0) ||
+         (giveTokenInfo && attachedList(giveTokenInfo['ALLOW_LIST'], giveTokenAllowList) && giveTokenAllowList.length === 0) ||
+         (attachedList(orderInfo['ALLOW_LIST'], orderInfoAllowList) && orderInfoAllowList.length === 0) ||
+         (attachedList(matchInfo['ALLOW_LIST'], matchInfoAllowList) && matchInfoAllowList.length === 0));
+
+    // Check each payout against the policy for the token delivered there.
+    let perTokenPolicy = gateRegistry.activeAt(PAYOUT_POLICY_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+    let checkCounterpartySource = gateRegistry.activeAt(MARKET_LIST_SOURCE_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+    if(deniedByEmptyAllowList ||
+       tokenPolicyRejects(lists, orderInfo['GET_ADDRESS'], matchInfo['GET_ADDRESS'], perTokenPolicy) ||
+       (orderInfoAllowList && orderInfoAllowList.length && !orderInfoAllowList.includes(matchInfo['GET_ADDRESS'])) ||
+       (orderInfoBlockList && orderInfoBlockList.length &&  orderInfoBlockList.includes(matchInfo['GET_ADDRESS'])) ||
+       (matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['GET_ADDRESS'])) ||
+       (matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['GET_ADDRESS'])) ||
+       (checkCounterpartySource && orderInfoAllowList && orderInfoAllowList.length && !orderInfoAllowList.includes(matchInfo['SOURCE'])) ||
+       (checkCounterpartySource && orderInfoBlockList && orderInfoBlockList.length &&  orderInfoBlockList.includes(matchInfo['SOURCE'])) ||
+       (checkCounterpartySource && matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['SOURCE'])) ||
+       (checkCounterpartySource && matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['SOURCE']))){
+        if(this.debug)
+            getLogger().info('Skipping match due to allow/block list');
+        return false;
+    }
+    return true;
+}
+
 module.exports = {
 
     // Token info for both ticks and the allow/block lists every candidate is checked against
@@ -128,7 +242,7 @@ module.exports = {
 
         if(!isTokenReciprocal.call(this, orderInfo, matchInfo))
             return;
-        if(!(await this.isNativeReciprocal(data, orderInfo, matchInfo)))
+        if(!(await isNativeReciprocalImpl.call(this, data, orderInfo, matchInfo)))
             return;
 
         // Set get/give remaining amounts for this order match
@@ -142,7 +256,7 @@ module.exports = {
         }
 
         let priceCross = gateRegistry.activeAt(PRICE_CROSS_KEY, this.config['NETWORK'], this.config['COIN'], Number(data['BLOCK_INDEX']), null);
-        if(!this.hasFillRoom(orderInfo, matchInfo, order, match, priceCross))
+        if(!hasFillRoomImpl.call(this, orderInfo, matchInfo, order, match, priceCross))
             return;
 
         // Both fill amounts at precision 64, snapped onto each side's tick grid (order_match.js)
@@ -151,121 +265,10 @@ module.exports = {
             return;
         if(!isOwnershipFillExact.call(this, orderInfo, matchInfo, fill))
             return;
-        if(!(await this.isListAllowed(data, orderInfo, matchInfo, lists)))
+        if(!(await isListAllowedImpl.call(this, data, orderInfo, matchInfo, lists)))
             return;
 
         // Book and settle the fill (order_match/settle.js)
         await this.settleFill(data, orderInfo, matchInfo, order, match, fill);
     },
-
-    // Native-coin (COINPay) reciprocity: the mirror of the bothTokenLegs gate for the
-    // two-phase path. findOrderMatches enforces the forward leg strictly but NULL-relaxes
-    // the reverse leg (orderInfo.GET == matchInfo.GIVE), so a token-for-COIN order
-    // (GET_TICK null) can pair with a token-for-token maker whose GIVE_TICK is a real
-    // token. That pair is NOT a coin trade: no side gives native coin to the coin-wanting
-    // side, yet native settlement below would mint a bogus COINPay obligation and
-    // mis-assign the coin/seller roles, because this file's GET_TICK-aware detection
-    // disagrees with coinpay.js / coinpay_expire.js's single-GIVE_TICK detection and so
-    // releases the wrong order's escrowed token. A legitimate native match mirrors both
-    // legs exactly (null-to-null, or the same real token+coin), so exactly one side GIVES
-    // native coin; anything else is rejected. Gated by COINPAY_NATIVE_RECIPROCITY because
-    // it is consensus-visible (changes which matches settle) and must flip at a
-    // coordinated block, staying byte-identical below it.
-    async isNativeReciprocal(data, orderInfo, matchInfo){
-        let anyNullTick = this.util.isNull(orderInfo['GIVE_TICK']) || this.util.isNull(orderInfo['GET_TICK']) ||
-                          this.util.isNull(matchInfo['GIVE_TICK']) || this.util.isNull(matchInfo['GET_TICK']);
-        if(anyNullTick && await this.actions.protocolChanges.isEnabled('COINPAY_NATIVE_RECIPROCITY', data['BLOCK_INDEX'])){
-            let forwardMirror = (this.util.isNull(orderInfo['GIVE_TICK']) && this.util.isNull(matchInfo['GET_TICK'])) ||
-                                (!this.util.isNull(orderInfo['GIVE_TICK']) && !this.util.isNull(matchInfo['GET_TICK']) &&
-                                 String(orderInfo['GIVE_TICK']) === String(matchInfo['GET_TICK']) &&
-                                 String(orderInfo['GIVE_COIN']) === String(matchInfo['GET_COIN']));
-            let reverseMirror = (this.util.isNull(orderInfo['GET_TICK']) && this.util.isNull(matchInfo['GIVE_TICK'])) ||
-                                (!this.util.isNull(orderInfo['GET_TICK']) && !this.util.isNull(matchInfo['GIVE_TICK']) &&
-                                 String(orderInfo['GET_TICK']) === String(matchInfo['GIVE_TICK']) &&
-                                 String(orderInfo['GET_COIN']) === String(matchInfo['GIVE_COIN']));
-            if(!forwardMirror || !reverseMirror){
-                if(this.debug)
-                    getLogger().info('Skipping non-reciprocal native match (leg mismatch)', orderInfo['GIVE_TICK'], orderInfo['GET_TICK'], matchInfo['GIVE_TICK'], matchInfo['GET_TICK']);
-                return false;
-            }
-        }
-        return true;
-    },
-
-    // Both sides still have something to GIVE and GET, and the prices cross.
-    // priceCross is the order_match_price_cross_activation era at the ORDER_MATCH block.
-    hasFillRoom(orderInfo, matchInfo, order, match, priceCross){
-
-        // Ignore if we have nothing left to GIVE
-        if(this.util.bclte(match['GIVE_REMAINING'], 0) || this.util.bclte(order['GIVE_REMAINING'], 0)){
-            if(this.debug)
-                getLogger().info('Skipping: negative GIVE quantity remaining ', match['GIVE_REMAINING'], order['GIVE_REMAINING']);
-            return false;
-        }
-
-        // Ignore if we have nothing left to GET
-        if(this.util.bclte(match['GET_REMAINING'], 0) || this.util.bclte(order['GET_REMAINING'], 0)){
-            if(this.debug)
-                getLogger().info('Skipping: negative GET quantity remaining ', match['GET_REMAINING'], order['GET_REMAINING']);
-            return false;
-        }
-
-        // Ignore price mismatches. GIVE_PRICE is GET_AMOUNT / GIVE_AMOUNT and GET_PRICE is
-        // GIVE_AMOUNT / GET_AMOUNT (db/orders/order_info.js), so this order's GIVE_PRICE is
-        // its ask and the resting order's GET_PRICE is its bid, both in this order's GET
-        // units per GIVE unit. From the activation the pair is skipped when the ask exceeds
-        // the bid; the fill then settles at this order's ratio, which never exceeds the
-        // resting order's limit. Below it the legacy comparison runs the other way, kept
-        // byte-for-byte so historical replay is unchanged.
-        let mismatch = priceCross
-            ? this.util.bcgt(orderInfo['GIVE_PRICE'], matchInfo['GET_PRICE'])
-            : this.util.bcgt(matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
-        if(mismatch){
-            if(this.debug)
-                getLogger().info('Skipping due to price mismatch ', matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
-            return false;
-        }
-        return true;
-    },
-
-    // Each payout passes its received token's policy, this order's lists and the candidate's own
-    async isListAllowed(data, orderInfo, matchInfo, lists){
-        let { getTokenInfo, giveTokenInfo, getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
-              orderInfoAllowList, orderInfoBlockList } = lists;
-
-        // List of addresses allowed or blocked from matching with this matching ORDER
-        let matchInfoAllowList = (!this.util.isNull(matchInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(matchInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
-        let matchInfoBlockList = (!this.util.isNull(matchInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(matchInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
-
-        // Deny an address when any attached allow list resolves empty after activation.
-        let emptyAllowListDenies = gateRegistry.activeAt(EMPTY_ALLOW_LIST_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
-        // Readers turn a NULL list column into 0, and an edit can store 0 to remove
-        // a list. Count only a nonzero id whose reader confirms a valid reference;
-        // null membership means the validity gate rejected the stored reference.
-        const attachedList = (id, list) => !this.util.isNull(id) && Number(id) !== 0 && Array.isArray(list);
-        let deniedByEmptyAllowList = emptyAllowListDenies &&
-            ((getTokenInfo && attachedList(getTokenInfo['ALLOW_LIST'], getTokenAllowList) && getTokenAllowList.length === 0) ||
-             (giveTokenInfo && attachedList(giveTokenInfo['ALLOW_LIST'], giveTokenAllowList) && giveTokenAllowList.length === 0) ||
-             (attachedList(orderInfo['ALLOW_LIST'], orderInfoAllowList) && orderInfoAllowList.length === 0) ||
-             (attachedList(matchInfo['ALLOW_LIST'], matchInfoAllowList) && matchInfoAllowList.length === 0));
-
-        // Check each payout against the policy for the token delivered there.
-        let perTokenPolicy = gateRegistry.activeAt(PAYOUT_POLICY_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
-        let checkCounterpartySource = gateRegistry.activeAt(MARKET_LIST_SOURCE_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
-        if(deniedByEmptyAllowList ||
-           tokenPolicyRejects(lists, orderInfo['GET_ADDRESS'], matchInfo['GET_ADDRESS'], perTokenPolicy) ||
-           (orderInfoAllowList && orderInfoAllowList.length && !orderInfoAllowList.includes(matchInfo['GET_ADDRESS'])) ||
-           (orderInfoBlockList && orderInfoBlockList.length &&  orderInfoBlockList.includes(matchInfo['GET_ADDRESS'])) ||
-           (matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['GET_ADDRESS'])) ||
-           (matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['GET_ADDRESS'])) ||
-           (checkCounterpartySource && orderInfoAllowList && orderInfoAllowList.length && !orderInfoAllowList.includes(matchInfo['SOURCE'])) ||
-           (checkCounterpartySource && orderInfoBlockList && orderInfoBlockList.length &&  orderInfoBlockList.includes(matchInfo['SOURCE'])) ||
-           (checkCounterpartySource && matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['SOURCE'])) ||
-           (checkCounterpartySource && matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['SOURCE']))){
-            if(this.debug)
-                getLogger().info('Skipping match due to allow/block list');
-            return false;
-        }
-        return true;
-    }
 };

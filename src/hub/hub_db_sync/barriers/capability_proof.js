@@ -29,19 +29,44 @@ const { CAPABILITY_SNAPSHOT_KEY_CAP, capabilitySnapshotKey } = require('../mirro
 
 const CAPABILITY_PROOF_RETRY_MS = 15000;
 
+function capabilityProofWaiterSatisfiedImpl(waiter) {
+    if (!this.enabled) return true;
+    if (!waiter || !(waiter.holds instanceof Set)) return this.capabilityProofSatisfied();
+    for (let key of waiter.holds) {
+        if (this._capabilityProofHolds.has(key)) return false;
+    }
+    return !waiter.overflow || !this._capabilityProofOverflow;
+}
+
+function scheduleCapabilityProofRetryImpl() {
+    if ((this._capabilityProofHolds.size === 0 && !this._capabilityProofOverflow) ||
+        this._capabilityProofRetryTimer !== null) return;
+    this._capabilityProofRetryTimer = setTimeout(() => {
+        this._capabilityProofRetryTimer = null;
+        this.retryHeldCapabilityRows().catch(err => {
+            getLogger().warn('HubDbSync: capability proof retry failed:', err);
+            scheduleCapabilityProofRetryImpl.call(this);
+        });
+    }, CAPABILITY_PROOF_RETRY_MS);
+    if (this._capabilityProofRetryTimer.unref) this._capabilityProofRetryTimer.unref();
+}
+
+async function retryCapabilityProofOverflowImpl() {
+    if (!this._capabilityProofOverflow || this._capabilityProofHolds.size > 0 || this._bootstrapping) return;
+    this._capabilityProofOverflow = false;
+    let mark = null;
+    try {
+        mark = await this.bootstrapTable('capability_snapshots');
+    } catch (err) {
+        getLogger().warn('HubDbSync: capability proof overflow re-page failed:', err);
+    }
+    if (mark === null && this._capabilityProofHolds.size === 0) this._capabilityProofOverflow = true;
+}
+
 module.exports = {
 
     capabilityProofSatisfied() {
         return !this.enabled || (this._capabilityProofHolds.size === 0 && !this._capabilityProofOverflow);
-    },
-
-    capabilityProofWaiterSatisfied(waiter) {
-        if (!this.enabled) return true;
-        if (!waiter || !(waiter.holds instanceof Set)) return this.capabilityProofSatisfied();
-        for (let key of waiter.holds) {
-            if (this._capabilityProofHolds.has(key)) return false;
-        }
-        return !waiter.overflow || !this._capabilityProofOverflow;
     },
 
     waitForCapabilityProof(timeoutMs) {
@@ -71,7 +96,7 @@ module.exports = {
     releaseCapabilityProofWaiters() {
         let waiting = [];
         for (let waiter of this._capabilityProofWaiters) {
-            if (!this.capabilityProofWaiterSatisfied(waiter)) {
+            if (!capabilityProofWaiterSatisfiedImpl.call(this, waiter)) {
                 waiting.push(waiter);
                 continue;
             }
@@ -93,20 +118,7 @@ module.exports = {
         }
         if (!this._capabilityProofHolds.has(key)) this._capabilityProofOverflow = true;
         this.markRepageOwed(['capability_snapshots']);
-        this.scheduleCapabilityProofRetry();
-    },
-
-    scheduleCapabilityProofRetry() {
-        if ((this._capabilityProofHolds.size === 0 && !this._capabilityProofOverflow) ||
-            this._capabilityProofRetryTimer !== null) return;
-        this._capabilityProofRetryTimer = setTimeout(() => {
-            this._capabilityProofRetryTimer = null;
-            this.retryHeldCapabilityRows().catch(err => {
-                getLogger().warn('HubDbSync: capability proof retry failed:', err);
-                this.scheduleCapabilityProofRetry();
-            });
-        }, CAPABILITY_PROOF_RETRY_MS);
-        if (this._capabilityProofRetryTimer.unref) this._capabilityProofRetryTimer.unref();
+        scheduleCapabilityProofRetryImpl.call(this);
     },
 
     async retryHeldCapabilityRows() {
@@ -148,24 +160,12 @@ module.exports = {
                     this._capabilityProofRetryApproved.delete(key);
                 }
             }
-            await this.retryCapabilityProofOverflow();
+            await retryCapabilityProofOverflowImpl.call(this);
         } finally {
             this._capabilityProofRetrying = false;
             this.releaseCapabilityProofWaiters();
-            this.scheduleCapabilityProofRetry();
+            scheduleCapabilityProofRetryImpl.call(this);
         }
-    },
-
-    async retryCapabilityProofOverflow() {
-        if (!this._capabilityProofOverflow || this._capabilityProofHolds.size > 0 || this._bootstrapping) return;
-        this._capabilityProofOverflow = false;
-        let mark = null;
-        try {
-            mark = await this.bootstrapTable('capability_snapshots');
-        } catch (err) {
-            getLogger().warn('HubDbSync: capability proof overflow re-page failed:', err);
-        }
-        if (mark === null && this._capabilityProofHolds.size === 0) this._capabilityProofOverflow = true;
     },
 
 };

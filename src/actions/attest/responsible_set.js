@@ -54,6 +54,59 @@ function rankResponsibleSet(validators, requestId, redundancy, weighted, widen){
     return withHash.slice(0, Math.max(1, Number(redundancy) || 1) + extra).map(v => v.pubkey);
 }
 
+
+// The set itself, on the plane the guard above established: the capability read, the
+// rules-aware filter, the provider floor and the deterministic ranking.
+async function resolveResponsibleSetImpl(requestId, redundancy, blockIndex, providerId, widen, stats) {
+    // On BTC, `blockIndex` IS a BTC height, so the gate is on its intended plane
+    // and flips at the anchor in lockstep with the hub.
+    //
+    // `blockIndex` is the DECLARED height (the request's block). Two different things
+    // come off it, and the difference matters (see parseResponse):
+    //   - the STAKE_WEIGHTED_QUORUM flag-day is evaluated on the declared height,
+    //     verbatim, because moving a cutover block by the reorg buffer is its own fork;
+    //   - the set is RESOLVED at the declared height BURIED by CANONICAL_REORG_BUFFER,
+    //     which is where the hub's CapabilitySnapshot resolved it (AttestationRound
+    //     hands it the raw request.block_index and it subtracts the buffer). Resolving
+    //     at the raw height selects a different responsible set than the hub whenever a
+    //     validator's stake activates or deactivates inside (declared - 6, declared],
+    //     which is exactly the byte-for-byte agreement this routine's header demands.
+    // Burying HERE rather than at the call sites is deliberate: five paths compute this
+    // request's responsible set (v0 admission, the persisted RESPONSIBLE_SET_JSON, the
+    // v1 verify filter, the v2 expiry missed_count charge, the fulfilled fee split) and
+    // they must resolve ONE set or the stat columns and the fee split desynchronize.
+    // Flag-day gated, so below the gate this is the declared height unchanged.
+    let weighted = swq.isStakeWeightedQuorumActive(blockIndex, this.config['NETWORK']);
+    let resolveBlock = srb.buriedSnapshotBlock(blockIndex, this.config['NETWORK']);
+    let validators = weighted
+        ? await this.indexerDb.getStakeWeightsByCapability('attestation', resolveBlock)
+        : await this.indexerDb.getValidatorsByCapability('attestation', resolveBlock);
+    if(!validators || validators.length === 0) return [];
+    // RULES-AWARE FILTER. Applied ONCE, here: after the capability
+    // read and before both the provider floor and the hash ranking, so a slot the
+    // filter frees is filled by the next qualifying validator instead of leaving a
+    // hole in the draw. The hub receives an already-filtered set from
+    // getcapabilityvalidators and rollback.js filters the same snapshot at the same
+    // block, so all three derive one set. Inert (and query-free) wherever
+    // ROLLCALL_GATES_ACTIVATION is null, which is mainnet today; testnet is armed
+    // at epoch 152208.
+    validators = await rgf.filterByRolledGates({
+        db: this.indexerDb, validators, requestBlock: blockIndex,
+        network: this.config['NETWORK'], stats
+    });
+    if(!validators || validators.length === 0) return [];
+    // Provider floor, weighted path only. Applied BEFORE the hash ranking so the
+    // slot the filter frees is filled by the next qualifying validator, exactly as
+    // the hub does; every key of a source carries the source's aggregate weight, so
+    // this removes whole sources and the source-dedupe below is unaffected by it.
+    if(weighted){
+        validators = this.providerFloorFilter(validators, providerId, blockIndex);
+        if(validators.length === 0) return [];
+    }
+
+    return rankResponsibleSet.call(this, validators, requestId, redundancy, weighted, widen);
+}
+
 module.exports = {
     // Compute the responsible validator set for a given request (same deterministic rule
     // the hub uses (xchain-hub AttestationRound): sort capability validators by
@@ -112,59 +165,7 @@ module.exports = {
         // what makes it safe to ship ungated; the rebase replays it identically.
         if(this.config['COIN'] !== 'BTC')
             return [];
-        return await this.resolveResponsibleSet(requestId, redundancy, blockIndex, providerId, widen, stats);
-    },
-
-    // The set itself, on the plane the guard above established: the capability read, the
-    // rules-aware filter, the provider floor and the deterministic ranking.
-    async resolveResponsibleSet(requestId, redundancy, blockIndex, providerId, widen, stats){
-        // On BTC, `blockIndex` IS a BTC height, so the gate is on its intended plane
-        // and flips at the anchor in lockstep with the hub.
-        //
-        // `blockIndex` is the DECLARED height (the request's block). Two different things
-        // come off it, and the difference matters (see parseResponse):
-        //   - the STAKE_WEIGHTED_QUORUM flag-day is evaluated on the declared height,
-        //     verbatim, because moving a cutover block by the reorg buffer is its own fork;
-        //   - the set is RESOLVED at the declared height BURIED by CANONICAL_REORG_BUFFER,
-        //     which is where the hub's CapabilitySnapshot resolved it (AttestationRound
-        //     hands it the raw request.block_index and it subtracts the buffer). Resolving
-        //     at the raw height selects a different responsible set than the hub whenever a
-        //     validator's stake activates or deactivates inside (declared - 6, declared],
-        //     which is exactly the byte-for-byte agreement this routine's header demands.
-        // Burying HERE rather than at the call sites is deliberate: five paths compute this
-        // request's responsible set (v0 admission, the persisted RESPONSIBLE_SET_JSON, the
-        // v1 verify filter, the v2 expiry missed_count charge, the fulfilled fee split) and
-        // they must resolve ONE set or the stat columns and the fee split desynchronize.
-        // Flag-day gated, so below the gate this is the declared height unchanged.
-        let weighted = swq.isStakeWeightedQuorumActive(blockIndex, this.config['NETWORK']);
-        let resolveBlock = srb.buriedSnapshotBlock(blockIndex, this.config['NETWORK']);
-        let validators = weighted
-            ? await this.indexerDb.getStakeWeightsByCapability('attestation', resolveBlock)
-            : await this.indexerDb.getValidatorsByCapability('attestation', resolveBlock);
-        if(!validators || validators.length === 0) return [];
-        // RULES-AWARE FILTER. Applied ONCE, here: after the capability
-        // read and before both the provider floor and the hash ranking, so a slot the
-        // filter frees is filled by the next qualifying validator instead of leaving a
-        // hole in the draw. The hub receives an already-filtered set from
-        // getcapabilityvalidators and rollback.js filters the same snapshot at the same
-        // block, so all three derive one set. Inert (and query-free) wherever
-        // ROLLCALL_GATES_ACTIVATION is null, which is mainnet today; testnet is armed
-        // at epoch 152208.
-        validators = await rgf.filterByRolledGates({
-            db: this.indexerDb, validators, requestBlock: blockIndex,
-            network: this.config['NETWORK'], stats
-        });
-        if(!validators || validators.length === 0) return [];
-        // Provider floor, weighted path only. Applied BEFORE the hash ranking so the
-        // slot the filter frees is filled by the next qualifying validator, exactly as
-        // the hub does; every key of a source carries the source's aggregate weight, so
-        // this removes whole sources and the source-dedupe below is unaffected by it.
-        if(weighted){
-            validators = this.providerFloorFilter(validators, providerId, blockIndex);
-            if(validators.length === 0) return [];
-        }
-
-        return rankResponsibleSet.call(this, validators, requestId, redundancy, weighted, widen);
+        return await resolveResponsibleSetImpl.call(this, requestId, redundancy, blockIndex, providerId, widen, stats);
     },
 
     // Drop weighted-snapshot rows whose staking source does not clear the provider's

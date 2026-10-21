@@ -21,6 +21,31 @@
 
 // Installed onto Airdrop.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
+
+// Look up the LIST the leg names and require a supported type. Returns { error, type, list },
+// with type false and list null when an earlier check already failed the leg.
+async function lookupAirdropListImpl(airdrop, data, error) {
+    // Placeholder for list and list type
+    let type = false,
+        list = null;
+
+    // Lookup list information
+    if(!error){
+        type = await this.indexerDb.getListType(airdrop['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
+        list = await this.indexerDb.getList(airdrop['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
+    }
+
+    // Verify LIST exist
+    if(!error && type===false)
+        error = 'invalid: LIST (unknown)';
+
+    // Verify LIST type is supported
+    if(!error && !this.listTypes.includes(type))
+        error = 'invalid: LIST TYPE (unsupported)';
+
+    return { error, type, list };
+}
+
 module.exports = {
 
     // TICK, FORMAT and general validations for one leg, then the LIST it names
@@ -70,31 +95,7 @@ module.exports = {
         if(!error && String(airdrop['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        return this.lookupAirdropList(airdrop, data, error);
-    },
-
-    // Look up the LIST the leg names and require a supported type. Returns { error, type, list },
-    // with type false and list null when an earlier check already failed the leg.
-    async lookupAirdropList(airdrop, data, error){
-        // Placeholder for list and list type
-        let type = false,
-            list = null;
-
-        // Lookup list information
-        if(!error){
-            type = await this.indexerDb.getListType(airdrop['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
-            list = await this.indexerDb.getList(airdrop['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
-        }
-
-        // Verify LIST exist
-        if(!error && type===false)
-            error = 'invalid: LIST (unknown)';
-
-        // Verify LIST type is supported
-        if(!error && !this.listTypes.includes(type))
-            error = 'invalid: LIST TYPE (unsupported)';
-
-        return { error, type, list };
+        return lookupAirdropListImpl.call(this, airdrop, data, error);
     },
 
     // The SOURCE-side checks that run between the recipient expansion and the approval: the

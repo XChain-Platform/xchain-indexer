@@ -23,6 +23,50 @@ const { getLogger } = require('../../observability/index.js');
 
 // Installed onto Dividend.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
+
+// The valid dividend's ledger: debit the total, bill any guard gas, handle the fee, credit each
+// recipient its share, then refresh the touched balances and supplies
+async function applyDividendLedgerImpl(data, dividend, fees, recipients, gasTick, guardFee) {
+
+    // Array of credits and debits
+    let credits = [],
+        debits  = [];
+
+    // Add DIVIDEND_TICK and DEBIT to debits array
+    debits.push([dividend['DIVIDEND_TICK'], dividend['DEBIT'], dividend['SOURCE']]);
+
+    // Bill the controller-guard gas to SOURCE (a GAS burn with no offsetting credit); the
+    // end-of-action updateTokens recomputes GAS supply from the ledger so sanityCheck holds.
+    if(this.util.bcgt(guardFee, 0)){
+        debits.push([gasTick, guardFee, dividend['SOURCE']]);
+        this.util.addAddressTicker(dividend['SOURCE'], gasTick);
+    }
+
+    // Handle any transaction FEE according the users's ADDRESS preferences
+    [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
+
+    // Loop through recipient addresses
+    for(let address in recipients){
+
+        // Store the recipient ADDRESS and TICK in addresses list
+        this.util.addAddressTicker(address, dividend['DIVIDEND_TICK']);
+
+        // Credit address with DIVIDEND_TICK AMOUNT
+        credits.push([dividend['DIVIDEND_TICK'], recipients[address], address]);
+    }
+
+    // Process any transaction ledger changes (credits / debits)
+    await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+
+    // Get a list of tickers & addresses
+    let tickers   = this.util.getTickersList(),
+        addresses = Object.keys(this.util.getAddressesList());
+
+    // Update address balances and token supply
+    await this.indexerDb.updateBalances(addresses);
+    await this.indexerDb.updateTokens(tickers);
+}
+
 module.exports = {
 
     // Require a balance that covers the DIVIDEND_TICK total DEBIT, then take the DEBIT out of the
@@ -56,52 +100,9 @@ module.exports = {
 
         // If this was a valid transaction, then create the credit and debit records
         if(status=='valid')
-            await this.applyDividendLedger(data, dividend, fees, recipients, ctx.gasTick, guardFee);
+            await applyDividendLedgerImpl.call(this, data, dividend, fees, recipients, ctx.gasTick, guardFee);
 
         // Create action mappings
         await this.mapper.createMappings(data);
     },
-
-    // The valid dividend's ledger: debit the total, bill any guard gas, handle the fee, credit each
-    // recipient its share, then refresh the touched balances and supplies
-    async applyDividendLedger(data, dividend, fees, recipients, gasTick, guardFee){
-
-        // Array of credits and debits
-        let credits = [],
-            debits  = [];
-
-        // Add DIVIDEND_TICK and DEBIT to debits array
-        debits.push([dividend['DIVIDEND_TICK'], dividend['DEBIT'], dividend['SOURCE']]);
-
-        // Bill the controller-guard gas to SOURCE (a GAS burn with no offsetting credit); the
-        // end-of-action updateTokens recomputes GAS supply from the ledger so sanityCheck holds.
-        if(this.util.bcgt(guardFee, 0)){
-            debits.push([gasTick, guardFee, dividend['SOURCE']]);
-            this.util.addAddressTicker(dividend['SOURCE'], gasTick);
-        }
-
-        // Handle any transaction FEE according the users's ADDRESS preferences
-        [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
-
-        // Loop through recipient addresses
-        for(let address in recipients){
-
-            // Store the recipient ADDRESS and TICK in addresses list
-            this.util.addAddressTicker(address, dividend['DIVIDEND_TICK']);
-
-            // Credit address with DIVIDEND_TICK AMOUNT
-            credits.push([dividend['DIVIDEND_TICK'], recipients[address], address]);
-        }
-
-        // Process any transaction ledger changes (credits / debits)
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
-
-        // Get a list of tickers & addresses
-        let tickers   = this.util.getTickersList(),
-            addresses = Object.keys(this.util.getAddressesList());
-
-        // Update address balances and token supply
-        await this.indexerDb.updateBalances(addresses);
-        await this.indexerDb.updateTokens(tickers);
-    }
 };

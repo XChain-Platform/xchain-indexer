@@ -37,6 +37,27 @@ const failover = require('./failover/triggers.js');
 const SAME_HUB_RECONNECT_DELAY_MS = 5000;
 const FAILOVER_RECONNECT_DELAY_MS = 0;
 
+
+// Polling fallback when ws is not available. Poll-mode mirrors do NOT get the
+// same liveness semantics as the WS heartbeat (#2476): the REST snapshot
+// endpoints are append-only, so a poll cycle can observe new-id INSERTs but can
+// never receive an in-place upsert or a row:deleted retraction. bootstrapAll
+// therefore refuses to advance the stream watermark while _pollMode is set, so
+// the settlement barriers fail closed (defer) rather than certify against a
+// mirror that may be silently stale. Bootstrapping/mirroring still runs each cycle.
+function startPollingImpl() {
+    let poll = async () => {
+        if (!this.running) return;
+        try {
+            await this.bootstrapAll();
+        } catch (err) {
+            getLogger().warn('HubDbSync: poll error:', err);
+        }
+        if (this.running) setTimeout(poll, this.pollIntervalMs);
+    };
+    setTimeout(poll, this.pollIntervalMs);
+}
+
 module.exports = {
 
     // Start: open WebSocket and await the hub's ready acknowledgement (confirming
@@ -77,7 +98,7 @@ module.exports = {
         await this.bootstrapAll();
 
         if (!WebSocket) {
-            this.startPolling();
+            startPollingImpl.call(this);
         }
     },
 
@@ -382,26 +403,6 @@ module.exports = {
             }
         }, delayMs);
         this._reconnectTimer = reconnectTimer;
-    },
-
-    // Polling fallback when ws is not available. Poll-mode mirrors do NOT get the
-    // same liveness semantics as the WS heartbeat (#2476): the REST snapshot
-    // endpoints are append-only, so a poll cycle can observe new-id INSERTs but can
-    // never receive an in-place upsert or a row:deleted retraction. bootstrapAll
-    // therefore refuses to advance the stream watermark while _pollMode is set, so
-    // the settlement barriers fail closed (defer) rather than certify against a
-    // mirror that may be silently stale. Bootstrapping/mirroring still runs each cycle.
-    startPolling() {
-        let poll = async () => {
-            if (!this.running) return;
-            try {
-                await this.bootstrapAll();
-            } catch (err) {
-                getLogger().warn('HubDbSync: poll error:', err);
-            }
-            if (this.running) setTimeout(poll, this.pollIntervalMs);
-        };
-        setTimeout(poll, this.pollIntervalMs);
     },
 
 };

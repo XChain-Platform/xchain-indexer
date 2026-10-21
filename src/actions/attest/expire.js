@@ -33,6 +33,22 @@
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { getLogger } = require('../../observability/index.js');
 
+async function fireExpiryCallbackImpl(request, data) {
+    // Synthesize the callback EXECUTE so the contract can clean up (status='expired').
+    // Skipped for a relay-materialized row on the home chain, whose contract
+    // lives on the origin chain (see the same guard on the v1 path). The origin
+    // chain's own copy of the request expires on its own deadline and fires the
+    // contract's expired callback there.
+    try {
+        if(!this.isForeignOrigin(request))
+            await this.injectExpiredCallback(request, data);
+    } catch(e){
+        // Same infra-fault gate as the response-path callback above (consensus/fault_guard.js).
+        rethrowIfInfraFault(e);
+        getLogger().warn('Attestation expiry callback failed:', e);
+    }
+}
+
 module.exports = {
     // ATTEST v2: Expire (system-synthesized)
     async parseExpire(params, data, error){
@@ -80,7 +96,7 @@ module.exports = {
 
         await this.chargeExpiryMisses(request, requestId, data);
 
-        await this.fireExpiryCallback(request, data);
+        await fireExpiryCallbackImpl.call(this, request, data);
 
         await this.mapper.createMappings(data);
     },
@@ -108,20 +124,4 @@ module.exports = {
             getLogger().warn('Attestation expire: missed_count update failed:', e);
         }
     },
-
-    async fireExpiryCallback(request, data){
-        // Synthesize the callback EXECUTE so the contract can clean up (status='expired').
-        // Skipped for a relay-materialized row on the home chain, whose contract
-        // lives on the origin chain (see the same guard on the v1 path). The origin
-        // chain's own copy of the request expires on its own deadline and fires the
-        // contract's expired callback there.
-        try {
-            if(!this.isForeignOrigin(request))
-                await this.injectExpiredCallback(request, data);
-        } catch(e){
-            // Same infra-fault gate as the response-path callback above (consensus/fault_guard.js).
-            rethrowIfInfraFault(e);
-            getLogger().warn('Attestation expiry callback failed:', e);
-        }
-    }
 };

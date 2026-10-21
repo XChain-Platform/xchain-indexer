@@ -28,6 +28,39 @@ const { getLogger } = require('../../../observability/index.js');
 const { PRICE_FINALIZED_KEY_CAP, priceRoundKey, CAPABILITY_SNAPSHOT_KEY_CAP,
         capabilitySnapshotKey, ORACLE_PRICE_KEY_CAP, oraclePriceKey } = require('../mirror_bounds.js');
 
+
+// Decide the bound BEFORE the apply, and record the round on both
+// sides of it. A row with no usable block_timestamp (0/absent) is never
+// bounded out - the bound only ever narrows on evidence. Returns whether the
+// row is bound out; false on every drain that carries no bound.
+function decidePriceBoundImpl(drain, row) {
+    if (!(drain.priceHorizon > 0)) return false;
+    let boundOut = false;
+    let rowTs = Number(row.block_timestamp);
+    if (Number.isFinite(rowTs) && rowTs > 0 && rowTs < drain.priceHorizon) {
+        let finalizedRound = (String(row.status) === 'finalized');
+        if (finalizedRound) drain.preHorizonServed.add(String(row.round_number));
+        if (rowTs < drain.priceFloor) boundOut = true;
+        else if (finalizedRound) drain.preHorizonRetained.add(String(row.round_number));
+    }
+    // Per-pair latest-price coverage, decided on the same pass. A finalized
+    // row this drain APPLIES covers its pair whichever side of the horizon it
+    // sits on; a finalized row the bound DECLINES becomes that pair's held
+    // predecessor candidate, newest round winning, for the pass after the
+    // drain to apply when the pair ends up covered by nothing else.
+    if (String(row.status) === 'finalized') {
+        let pair = String(row.coin_pair);
+        if (!boundOut) drain.pricePairCovered.add(pair);
+        else {
+            let rn   = Number(row.round_number);
+            let held = drain.pricePairHeld.get(pair);
+            if (Number.isFinite(rn) && (!held || rn > Number(held.round_number)))
+                drain.pricePairHeld.set(pair, row);
+        }
+    }
+    return boundOut;
+}
+
 module.exports = {
 
     // Rows held back for the batch, in wire order. The flush applies them as ONE
@@ -54,7 +87,7 @@ module.exports = {
     // Apply one held row (or take the batch's word that it landed), keep the drain's
     // accounting, and advance the cursor past it. False stops the page at this row.
     async applyPendingRow(drain, row, batched) {
-        let boundOut = this.decidePriceBound(drain, row);
+        let boundOut = decidePriceBoundImpl.call(this, drain, row);
         let refused  = false;
         try {
             if (boundOut) drain.priceSkipped++;
@@ -88,38 +121,6 @@ module.exports = {
             this._bootstrapProgressTicks = (Number(this._bootstrapProgressTicks) || 0) + 1;
         }
         return true;
-    },
-
-    // Decide the bound BEFORE the apply, and record the round on both
-    // sides of it. A row with no usable block_timestamp (0/absent) is never
-    // bounded out - the bound only ever narrows on evidence. Returns whether the
-    // row is bound out; false on every drain that carries no bound.
-    decidePriceBound(drain, row) {
-        if (!(drain.priceHorizon > 0)) return false;
-        let boundOut = false;
-        let rowTs = Number(row.block_timestamp);
-        if (Number.isFinite(rowTs) && rowTs > 0 && rowTs < drain.priceHorizon) {
-            let finalizedRound = (String(row.status) === 'finalized');
-            if (finalizedRound) drain.preHorizonServed.add(String(row.round_number));
-            if (rowTs < drain.priceFloor) boundOut = true;
-            else if (finalizedRound) drain.preHorizonRetained.add(String(row.round_number));
-        }
-        // Per-pair latest-price coverage, decided on the same pass. A finalized
-        // row this drain APPLIES covers its pair whichever side of the horizon it
-        // sits on; a finalized row the bound DECLINES becomes that pair's held
-        // predecessor candidate, newest round winning, for the pass after the
-        // drain to apply when the pair ends up covered by nothing else.
-        if (String(row.status) === 'finalized') {
-            let pair = String(row.coin_pair);
-            if (!boundOut) drain.pricePairCovered.add(pair);
-            else {
-                let rn   = Number(row.round_number);
-                let held = drain.pricePairHeld.get(pair);
-                if (Number.isFinite(rn) && (!held || rn > Number(held.round_number)))
-                    drain.pricePairHeld.set(pair, row);
-            }
-        }
-        return boundOut;
     },
 
     // What the hub SERVED, for the reconciliation passes: the natural keys and the

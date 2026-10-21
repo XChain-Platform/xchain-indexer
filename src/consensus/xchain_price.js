@@ -242,7 +242,4 @@ module.exports = {
     deriveXchainRate,
     referenceRateFromUsd,
     toUsd,
-    WINSOR_BAND_FACTOR,
-    RATE_PRECISION,
-    PRICE_PRECISION,
 };

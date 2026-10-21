@@ -26,6 +26,22 @@
 const { getLogger } = require('../../observability/index.js');
 const { REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT } = require('./mirror_tables.js');
 
+
+// The names of the rows purgeForeignNetworkRows is about to delete, read first so its line
+// can say which rows went. A bounded read; a failure names nothing and deletes as before.
+async function foreignNetworkRowNamesImpl(table, network) {
+    let spec = REFUSED_ROW_NAMES[table];
+    let column = spec ? spec.column : 'id';
+    try {
+        let rows = await this.hubDb.doQuery('SELECT ' + column + ' AS name FROM ' + table +
+            ' WHERE network <> ? ORDER BY id LIMIT ' + (REFUSED_ROW_NAME_LIMIT * 5), [network]);
+        return (Array.isArray(rows) ? rows : []).map(r => r && r.name)
+            .filter(n => n !== null && n !== undefined && n !== '').map(String);
+    } catch (e) {
+        return [];
+    }
+}
+
 module.exports = {
 
     // The network this mirror may hold rows for, or null when that cannot be proven.
@@ -61,7 +77,7 @@ module.exports = {
     // Remove rows that cannot satisfy readers scoped to this mirror's network.
     // Network identity comes from each row, independent of snapshot completeness.
     async purgeForeignNetworkRows(table, network) {
-        let names = await this.foreignNetworkRowNames(table, network);
+        let names = await foreignNetworkRowNamesImpl.call(this, table, network);
         let result;
         try {
             result = await this.hubDb.doQuery('DELETE FROM ' + table + ' WHERE network <> ?', [network]);
@@ -84,21 +100,6 @@ module.exports = {
             'other than ' + network + '; a mirror holds only rows for its configured network' +
             this.nameRefusedRows(table, names, removed));
         return removed;
-    },
-
-    // The names of the rows purgeForeignNetworkRows is about to delete, read first so its line
-    // can say which rows went. A bounded read; a failure names nothing and deletes as before.
-    async foreignNetworkRowNames(table, network) {
-        let spec = REFUSED_ROW_NAMES[table];
-        let column = spec ? spec.column : 'id';
-        try {
-            let rows = await this.hubDb.doQuery('SELECT ' + column + ' AS name FROM ' + table +
-                ' WHERE network <> ? ORDER BY id LIMIT ' + (REFUSED_ROW_NAME_LIMIT * 5), [network]);
-            return (Array.isArray(rows) ? rows : []).map(r => r && r.name)
-                .filter(n => n !== null && n !== undefined && n !== '').map(String);
-        } catch (e) {
-            return [];
-        }
     },
 
     // True when a row the hub served names a network other than the one this mirror serves,

@@ -220,31 +220,6 @@ function columnSpec(entry){
     return [entry.type, UTF8MB4_CHARSET_CLAUSE, entry.tail].filter(Boolean).join(' ');
 }
 
-// `MODIFY \`col\` <spec>` - the clause body of an ALTER TABLE, used by the migrations and
-// by the xchain-sync replica widen.
-function modifyClause(entry){
-    return 'MODIFY `' + entry.column + '` ' + columnSpec(entry);
-}
-
-// The whole statement for one entry, for callers that widen a single column at a time.
-function alterStatement(entry){
-    return 'ALTER TABLE `' + entry.table + '` ' + modifyClause(entry);
-}
-
-// Entries grouped by table, preserving declaration order, so a migration or a replica
-// pass can issue one ALTER per table instead of one per column (each ALTER is a COPY
-// rebuild under a metadata lock, so batching matters on a large table).
-function byTable(entries){
-    const out = new Map();
-    for(const entry of (entries || UTF8MB4_RAW_FIELD_COLUMNS)){
-        if(!out.has(entry.table)) out.set(entry.table, []);
-        out.get(entry.table).push(entry);
-    }
-    return out;
-}
-
-const forMode = (mode) => UTF8MB4_RAW_FIELD_COLUMNS.filter(e => e.mode === mode);
-
 // True when an information_schema.columns row already reports the column as utf8mb4, so
 // the widen is a no-op. MariaDB 10.6 renamed utf8 to utf8mb3, so this reads the positive
 // (already wide) case rather than comparing against a legacy charset spelling.
@@ -255,12 +230,7 @@ function isAlreadyUtf8mb4(row){
 }
 
 module.exports = {
-    UTF8MB4_CHARSET_CLAUSE,
     UTF8MB4_RAW_FIELD_COLUMNS,
     columnSpec,
-    modifyClause,
-    alterStatement,
-    byTable,
-    forMode,
     isAlreadyUtf8mb4,
 };

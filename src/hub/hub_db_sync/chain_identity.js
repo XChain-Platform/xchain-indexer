@@ -30,6 +30,149 @@ const { CHAIN_ID_FENCED_TABLES, REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT,
         REFUSED_ROW_NAMED_CAP } = require('./mirror_tables.js');
 const { capabilitySnapshotKey } = require('./mirror_bounds.js');
 
+
+// The hub follows a different chain from the one this node indexes. Logged once per
+// process: it is an operator-visible misconfiguration (or a hub that has not caught up
+// with a venue re-genesis), not a per-row event, and the local measurement stands
+// either way, so every row naming the hub's chain is refused.
+function noteForeignHubChainImpl(hubChainId) {
+    if (this._foreignHubChainNoted) return;
+    this._foreignHubChainNoted = true;
+    getLogger().warn('HubDbSync: the hub follows a different chain (it advertises btc_chain_id ' + hubChainId +
+        ', this node indexes ' + this._expectedBtcChainId + '); its cross-chain rows for that chain are refused');
+}
+
+
+// Clear the mirrored cross-chain rows of a chain this mirror no longer follows.
+//
+// Runs when the expectation is first learned and whenever it changes, which is the one
+// window the apply-time filter cannot cover: rows the hub served before block 1 existed
+// were applied with no expectation to check them against, and nothing later re-delivers
+// them for the filter to refuse.
+//
+// Deletion rests on the warrant purgeForeignNetworkRows states: belonging to another
+// chain is a property of the ROW, provable from the row and this mirror's own
+// expectation, with no dependence on what one snapshot response happened to contain. A
+// NULL is not such a property - it means "written before the column existed" - so NULL
+// rows are always left in place.
+async function purgeForeignChainIdRowsImpl(previous) {
+    let expected = this._expectedBtcChainId;
+    if (!expected) return 0;
+    // Pending until every DELETE below has reported a result; a failed one sets it again.
+    // _chainIdPurgeLegacyDue remembers that the legacy slice is owed across a retry,
+    // which has no `previous` of its own to say so.
+    this._chainIdPurgePending = false;
+    if (previous) this._chainIdPurgeLegacyDue = true;
+    let scoped = await purgeChainScopedTablesImpl.call(this, expected, previous);
+    let total = scoped.total;
+    // These quorum-signed tables predate btc_chain_id on their row shape. A change
+    // in the followed Bitcoin identity invalidates the whole local network slice.
+    if (this._chainIdPurgeLegacyDue) total += await purgeLegacyChainTablesImpl.call(this);
+    await refreshPurgedBarriersImpl.call(this, scoped.refresh);
+    return total;
+}
+
+async function purgeChainScopedTablesImpl(expected, previous) {
+    let total = 0, refresh = { matches: false, calls: false, bridge: false, policy: false, listShare: false,
+                               remoteToken: false };
+    for (let table of CHAIN_ID_FENCED_TABLES) {
+        let result;
+        try {
+            result = await this.hubDb.doQuery(
+                'DELETE FROM ' + table + ' WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?', [expected]);
+        } catch (e) {
+            getLogger().warn('HubDbSync: could not clear foreign-chain rows from ' + table + ':', e);
+            this._chainIdPurgePending = true;
+            continue;
+        }
+        // doQuery collapses a non-transactional query error into [], which carries no
+        // affectedRows and is otherwise indistinguishable from a clean zero-row delete.
+        // Say so: an unreported purge leaves relics that the apply-time filter can never
+        // reach again, which is the silent state this method exists to end.
+        let removed = Number(result && result.affectedRows);
+        if (!Number.isFinite(removed)) {
+            getLogger().warn('HubDbSync: foreign-chain purge of ' + table + ' reported no result; ' +
+                'if this mirror keeps holding rows from a dead chain, this read is where to look');
+            this._chainIdPurgePending = true;
+            continue;
+        }
+        if (removed <= 0) continue;
+        total += removed;
+        getLogger().warn('HubDbSync: purged ' + removed + ' ' + table + ' row(s) from ' +
+            (previous ? ('chain ' + previous) : 'another chain'));
+        if (table === 'cross_chain_matches') refresh.matches = true;
+        if (table === 'cross_chain_calls')   refresh.calls   = true;
+        if (table === 'bridge_transfers')    refresh.bridge  = true;
+        if (table === 'policy_snapshots')    refresh.policy  = true;
+        if (table === 'list_snapshots')      refresh.listShare = true;
+        if (table === 'remote_token_snapshots') refresh.remoteToken = true;
+    }
+    return { total: total, refresh: refresh };
+}
+
+async function purgeLegacyChainTablesImpl() {
+    let total = 0, failed = false;
+    for (let table of ['state_checkpoints', 'anchor_reward_attestations']) {
+        let result;
+        try {
+            let scoped = typeof this.network === 'string' && this.network !== '';
+            result = await this.hubDb.doQuery('DELETE FROM ' + table + (scoped ? ' WHERE network = ?' : ''),
+                                              scoped ? [this.network] : undefined);
+        } catch (e) {
+            getLogger().warn('HubDbSync: could not clear rows from ' + table + ' after btc_chain_id changed:', e);
+            failed = true;
+            continue;
+        }
+        let removed = Number(result && result.affectedRows);
+        if (!Number.isFinite(removed)) {
+            getLogger().warn('HubDbSync: btc_chain_id change purge of ' + table + ' reported no result');
+            failed = true;
+            continue;
+        }
+        if (removed > 0) total += removed;
+    }
+    if (failed) this._chainIdPurgePending = true;
+    else this._chainIdPurgeLegacyDue = false;
+    return total;
+}
+
+async function refreshPurgedBarriersImpl(refresh) {
+    // Re-read every affected barrier after the purge. The clock-keyed barriers may
+    // have cached a removed maximum; the height-keyed list barrier must re-probe the
+    // table and re-evaluate its waiters over the cleaned mirror.
+    try {
+        if (refresh.matches) await this.refreshMatchSyncTimestamp();
+        if (refresh.calls)   await this.refreshCallSyncTimestamp();
+        if (refresh.bridge)  await this.refreshBridgeSyncTimestamp();
+        if (refresh.policy)  await this.refreshPolicySyncTimestamp();
+        if (refresh.listShare) await this.refreshListShareSyncState();
+        // No argument: the default never arms the remote token barrier before a full drain.
+        if (refresh.remoteToken) await this.refreshRemoteTokenSyncState();
+        if (refresh.matches || refresh.calls) await this.releaseSnapshotWaiters();
+    } catch (e) {
+        getLogger().warn('HubDbSync: could not refresh the sync barriers after a foreign-chain purge:', e);
+    }
+}
+
+
+// The natural id that names `row` of `table` (REFUSED_ROW_NAMES), or its hub id for a
+// table with none listed; null when the row carries neither.
+function refusedRowNameImpl(table, row) {
+    let spec  = REFUSED_ROW_NAMES[table];
+    let value = row ? row[spec ? spec.column : 'id'] : null;
+    return (value === null || value === undefined || value === '') ? null : String(value);
+}
+
+
+// The authoritative-stake database, resolved lazily. Capability stakes are indexed
+// into the INDEXER db; the mirror db only holds the hub's copy of them, which is the
+// very thing under test here, so re-deriving against it would be self-certification.
+function authoritativeStakeDbImpl() {
+    if (this.authoritativeDb) return this.authoritativeDb;
+    let parent = this.hubDb && this.hubDb.indexer;
+    return (parent && parent.indexerDb) ? parent.indexerDb : null;
+}
+
 module.exports = {
 
     // ── Chain identity fence for the CHAIN_ID_FENCED_TABLES ──────────────────────
@@ -60,14 +203,14 @@ module.exports = {
         // A local measurement is never replaced by a hub value; a disagreement is the hub's
         // to explain, and it is reported rather than acted on.
         if (source === 'hub' && this._btcChainIdSource === 'local') {
-            if (next !== this._expectedBtcChainId) this.noteForeignHubChain(next);
+            if (next !== this._expectedBtcChainId) noteForeignHubChainImpl.call(this, next);
             return false;
         }
         if (next === this._expectedBtcChainId) {
             this._btcChainIdSource = source;               // same chain, now measured locally
             // A restated id is the retry point for a purge that failed earlier: a DELETE that
             // threw or reported nothing left relics that nothing else will ever come back for.
-            if (this._chainIdPurgePending) await this.purgeForeignChainIdRows(null);
+            if (this._chainIdPurgePending) await purgeForeignChainIdRowsImpl.call(this, null);
             return false;
         }
         let previous = this._expectedBtcChainId;
@@ -76,130 +219,8 @@ module.exports = {
         this._chainIdProbedIds.clear();
         getLogger().info('HubDbSync: cross-chain rows are fenced to Bitcoin chain ' + next + ' (block 1, ' +
             (source === 'local' ? 'read from this node\'s own chain' : 'as advertised by the hub') + ')');
-        await this.purgeForeignChainIdRows(previous);
+        await purgeForeignChainIdRowsImpl.call(this, previous);
         return true;
-    },
-
-    // The hub follows a different chain from the one this node indexes. Logged once per
-    // process: it is an operator-visible misconfiguration (or a hub that has not caught up
-    // with a venue re-genesis), not a per-row event, and the local measurement stands
-    // either way, so every row naming the hub's chain is refused.
-    noteForeignHubChain(hubChainId) {
-        if (this._foreignHubChainNoted) return;
-        this._foreignHubChainNoted = true;
-        getLogger().warn('HubDbSync: the hub follows a different chain (it advertises btc_chain_id ' + hubChainId +
-            ', this node indexes ' + this._expectedBtcChainId + '); its cross-chain rows for that chain are refused');
-    },
-
-    // Clear the mirrored cross-chain rows of a chain this mirror no longer follows.
-    //
-    // Runs when the expectation is first learned and whenever it changes, which is the one
-    // window the apply-time filter cannot cover: rows the hub served before block 1 existed
-    // were applied with no expectation to check them against, and nothing later re-delivers
-    // them for the filter to refuse.
-    //
-    // Deletion rests on the warrant purgeForeignNetworkRows states: belonging to another
-    // chain is a property of the ROW, provable from the row and this mirror's own
-    // expectation, with no dependence on what one snapshot response happened to contain. A
-    // NULL is not such a property - it means "written before the column existed" - so NULL
-    // rows are always left in place.
-    async purgeForeignChainIdRows(previous) {
-        let expected = this._expectedBtcChainId;
-        if (!expected) return 0;
-        // Pending until every DELETE below has reported a result; a failed one sets it again.
-        // _chainIdPurgeLegacyDue remembers that the legacy slice is owed across a retry,
-        // which has no `previous` of its own to say so.
-        this._chainIdPurgePending = false;
-        if (previous) this._chainIdPurgeLegacyDue = true;
-        let scoped = await this.purgeChainScopedTables(expected, previous);
-        let total = scoped.total;
-        // These quorum-signed tables predate btc_chain_id on their row shape. A change
-        // in the followed Bitcoin identity invalidates the whole local network slice.
-        if (this._chainIdPurgeLegacyDue) total += await this.purgeLegacyChainTables();
-        await this.refreshPurgedBarriers(scoped.refresh);
-        return total;
-    },
-
-    async purgeChainScopedTables(expected, previous) {
-        let total = 0, refresh = { matches: false, calls: false, bridge: false, policy: false, listShare: false,
-                                   remoteToken: false };
-        for (let table of CHAIN_ID_FENCED_TABLES) {
-            let result;
-            try {
-                result = await this.hubDb.doQuery(
-                    'DELETE FROM ' + table + ' WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?', [expected]);
-            } catch (e) {
-                getLogger().warn('HubDbSync: could not clear foreign-chain rows from ' + table + ':', e);
-                this._chainIdPurgePending = true;
-                continue;
-            }
-            // doQuery collapses a non-transactional query error into [], which carries no
-            // affectedRows and is otherwise indistinguishable from a clean zero-row delete.
-            // Say so: an unreported purge leaves relics that the apply-time filter can never
-            // reach again, which is the silent state this method exists to end.
-            let removed = Number(result && result.affectedRows);
-            if (!Number.isFinite(removed)) {
-                getLogger().warn('HubDbSync: foreign-chain purge of ' + table + ' reported no result; ' +
-                    'if this mirror keeps holding rows from a dead chain, this read is where to look');
-                this._chainIdPurgePending = true;
-                continue;
-            }
-            if (removed <= 0) continue;
-            total += removed;
-            getLogger().warn('HubDbSync: purged ' + removed + ' ' + table + ' row(s) from ' +
-                (previous ? ('chain ' + previous) : 'another chain'));
-            if (table === 'cross_chain_matches') refresh.matches = true;
-            if (table === 'cross_chain_calls')   refresh.calls   = true;
-            if (table === 'bridge_transfers')    refresh.bridge  = true;
-            if (table === 'policy_snapshots')    refresh.policy  = true;
-            if (table === 'list_snapshots')      refresh.listShare = true;
-            if (table === 'remote_token_snapshots') refresh.remoteToken = true;
-        }
-        return { total: total, refresh: refresh };
-    },
-
-    async purgeLegacyChainTables() {
-        let total = 0, failed = false;
-        for (let table of ['state_checkpoints', 'anchor_reward_attestations']) {
-            let result;
-            try {
-                let scoped = typeof this.network === 'string' && this.network !== '';
-                result = await this.hubDb.doQuery('DELETE FROM ' + table + (scoped ? ' WHERE network = ?' : ''),
-                                                  scoped ? [this.network] : undefined);
-            } catch (e) {
-                getLogger().warn('HubDbSync: could not clear rows from ' + table + ' after btc_chain_id changed:', e);
-                failed = true;
-                continue;
-            }
-            let removed = Number(result && result.affectedRows);
-            if (!Number.isFinite(removed)) {
-                getLogger().warn('HubDbSync: btc_chain_id change purge of ' + table + ' reported no result');
-                failed = true;
-                continue;
-            }
-            if (removed > 0) total += removed;
-        }
-        if (failed) this._chainIdPurgePending = true;
-        else this._chainIdPurgeLegacyDue = false;
-        return total;
-    },
-
-    async refreshPurgedBarriers(refresh) {
-        // Re-read every affected barrier after the purge. The clock-keyed barriers may
-        // have cached a removed maximum; the height-keyed list barrier must re-probe the
-        // table and re-evaluate its waiters over the cleaned mirror.
-        try {
-            if (refresh.matches) await this.refreshMatchSyncTimestamp();
-            if (refresh.calls)   await this.refreshCallSyncTimestamp();
-            if (refresh.bridge)  await this.refreshBridgeSyncTimestamp();
-            if (refresh.policy)  await this.refreshPolicySyncTimestamp();
-            if (refresh.listShare) await this.refreshListShareSyncState();
-            // No argument: the default never arms the remote token barrier before a full drain.
-            if (refresh.remoteToken) await this.refreshRemoteTokenSyncState();
-            if (refresh.matches || refresh.calls) await this.releaseSnapshotWaiters();
-        } catch (e) {
-            getLogger().warn('HubDbSync: could not refresh the sync barriers after a foreign-chain purge:', e);
-        }
     },
 
     // True when this row belongs to a Bitcoin chain other than the one this mirror follows,
@@ -227,18 +248,10 @@ module.exports = {
         return true;
     },
 
-    // The natural id that names `row` of `table` (REFUSED_ROW_NAMES), or its hub id for a
-    // table with none listed; null when the row carries neither.
-    refusedRowName(table, row) {
-        let spec  = REFUSED_ROW_NAMES[table];
-        let value = row ? row[spec ? spec.column : 'id'] : null;
-        return (value === null || value === undefined || value === '') ? null : String(value);
-    },
-
     // Keep a refused row's name on its pending report entry. Only a bounded handful per entry:
     // the report names at most REFUSED_ROW_NAME_LIMIT of them and counts the rest.
     noteRefusedRowName(entry, table, row) {
-        let name = this.refusedRowName(table, row);
+        let name = refusedRowNameImpl.call(this, table, row);
         if (name && entry.names.length < REFUSED_ROW_NAME_LIMIT * 5 && entry.names.indexOf(name) === -1)
             entry.names.push(name);
     },
@@ -261,15 +274,6 @@ module.exports = {
         let more = Math.max(0, Number(total) - shown.length);
         return ' [' + (spec && spec.tag ? spec.tag + ' ' : '') + (spec ? spec.column : 'id') + ' ' +
             shown.join(', ') + (more > 0 ? ' and ' + more + ' more' : '') + ']';
-    },
-
-    // The authoritative-stake database, resolved lazily. Capability stakes are indexed
-    // into the INDEXER db; the mirror db only holds the hub's copy of them, which is the
-    // very thing under test here, so re-deriving against it would be self-certification.
-    authoritativeStakeDb() {
-        if (this.authoritativeDb) return this.authoritativeDb;
-        let parent = this.hubDb && this.hubDb.indexer;
-        return (parent && parent.indexerDb) ? parent.indexerDb : null;
     },
 
     // Re-derivation and proof fence for one mirrored capability_snapshots row.
@@ -296,7 +300,7 @@ module.exports = {
     async refuseUnprovenCapabilitySnapshot(row, options) {
         let rowKey = capabilitySnapshotKey(row);
         if (this._capabilityProofRetryApproved.delete(rowKey)) return false;
-        let db = this.authoritativeStakeDb();
+        let db = authoritativeStakeDbImpl.call(this);
         // The explorer's vendored display mirror carries no such db and no such method.
         if (!db || typeof db.verifyCapabilitySnapshotRow !== 'function') return false;
         let verdict;
@@ -363,7 +367,7 @@ module.exports = {
         if (!expected) return;
         let rowChainId = (row && typeof row.btc_chain_id === 'string') ? row.btc_chain_id.trim().toLowerCase() : null;
         if (!rowChainId || rowChainId === expected) return;
-        if (this._btcChainIdSource !== 'hub') { this.noteForeignHubChain(rowChainId); return; }
+        if (this._btcChainIdSource !== 'hub') { noteForeignHubChainImpl.call(this, rowChainId); return; }
         if (this._chainIdProbedIds.has(rowChainId)) return;  // asked once for this id already
         this._chainIdProbedIds.add(rowChainId);
         let envelope;

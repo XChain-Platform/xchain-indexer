@@ -102,4 +102,4 @@ async function recordAttestationCopy(sync, row){
     }
 }
 
-module.exports = { COPIES_TABLE, copyDigest, copyInsert, recordAttestationCopy };
+module.exports = {copyDigest, copyInsert, recordAttestationCopy };

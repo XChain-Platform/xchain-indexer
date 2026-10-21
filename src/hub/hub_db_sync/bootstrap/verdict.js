@@ -33,6 +33,29 @@ const { PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS, PRICE_MIRROR_LOOKBACK_GROWTH,
         PRICE_MIRROR_LOOKBACK_MAX_S } = require('../mirror_bounds.js');
 const { hasExpectedSchemaVersion, schemaVersionLabel } = require('../schema_version_check.js');
 
+
+// Replay the live rounds buffered during this drain (#2422),
+// serialized through the message chain: every already-received
+// event is guaranteed buffered ahead of this task and no new
+// event can interleave mid-flush; the task flips _priceDrained
+// before the next event task runs, so the live apply path
+// resumes exactly at the replay boundary with no ordering gap.
+// A failed or disconnect-raced flush reports the table
+// not-drained (return null) so bootstrapAll retries from the
+// still-contiguous drain position, the same fail-closed contract as
+// the page loop (BOOTSTRAP-HOLE-1).
+async function replayDrainedPriceEventsImpl() {
+    let flushed = false;
+    let epoch = this._wsEpoch;
+    this._msgChain = this._msgChain.then(async () => {
+        flushed = await this.flushPendingPriceEvents();
+        if (flushed && epoch === this._wsEpoch) this._priceDrained = true;
+        else flushed = false;
+    });
+    await this._msgChain;
+    return flushed;
+}
+
 module.exports = {
 
     // Defense-in-depth: if the hub told us its max_id at subscription time and our
@@ -204,7 +227,7 @@ module.exports = {
             if (drain.fullTable || drain.floorStart)
                 await this.reconcileForeignPriceRounds(drain.servedPriceKeys, drain.priceKeysComplete, drain.maxServedRound,
                                                        drain.floorStart ? drain.priceFloor : 0);
-            if (!(await this.replayDrainedPriceEvents())) return false;
+            if (!(await replayDrainedPriceEventsImpl.call(this))) return false;
             await this.refreshPriceSyncHeight();
         }
         if (table === 'oracle_prices')       await this.refreshOracleSyncTimestamp(true);
@@ -218,28 +241,6 @@ module.exports = {
         // snapshot-presence: re-evaluate the snapshot barrier on any cross-chain table.
         if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this.releaseSnapshotWaiters();
         return true;
-    },
-
-    // Replay the live rounds buffered during this drain (#2422),
-    // serialized through the message chain: every already-received
-    // event is guaranteed buffered ahead of this task and no new
-    // event can interleave mid-flush; the task flips _priceDrained
-    // before the next event task runs, so the live apply path
-    // resumes exactly at the replay boundary with no ordering gap.
-    // A failed or disconnect-raced flush reports the table
-    // not-drained (return null) so bootstrapAll retries from the
-    // still-contiguous drain position, the same fail-closed contract as
-    // the page loop (BOOTSTRAP-HOLE-1).
-    async replayDrainedPriceEvents() {
-        let flushed = false;
-        let epoch = this._wsEpoch;
-        this._msgChain = this._msgChain.then(async () => {
-            flushed = await this.flushPendingPriceEvents();
-            if (flushed && epoch === this._wsEpoch) this._priceDrained = true;
-            else flushed = false;
-        });
-        await this._msgChain;
-        return flushed;
     },
 
     // The unix-second horizon for this drain's price_snapshots bound, or 0 when

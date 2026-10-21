@@ -49,13 +49,11 @@ const COIN_FILES = {
 const ALLOWED_COINS = Object.keys(COIN_FILES);
 const NETWORKS      = ['mainnet', 'testnet', 'regtest'];
 
-// tick -> full lowercase chain name (the hub configs-table coin key) and back.
+// tick -> full lowercase chain name (the hub configs-table coin key).
 const COIN_FULL_NAME = {};
-const FULL_NAME_TO_TICK = {};
 for(const tick of ALLOWED_COINS){
     const full = COIN_FILES[tick].fullName;
     COIN_FULL_NAME[tick] = full;
-    FULL_NAME_TO_TICK[full] = tick;
 }
 
 // Default cross-chain attestation confirmations per coin (hub DEFAULT_CONFIRMATIONS).
@@ -263,13 +261,6 @@ function getCoinConfig(tick, network){
     return resolved;
 }
 
-// Convenience: resolve by full chain name ('bitcoin') instead of ticker.
-function getCoinConfigByFullName(fullName, network){
-    const tick = FULL_NAME_TO_TICK[fullName];
-    if(!tick) throw new Error('Unknown coin full name: ' + fullName);
-    return getCoinConfig(tick, network);
-}
-
 // Deterministic canonical JSON: object keys sorted recursively, no insignificant
 // whitespace. Same idea the consensus primitives use so the hash is reproducible.
 function canonicalJson(value){
@@ -415,16 +406,12 @@ module.exports = {
     ALLOWED_COINS,
     NETWORKS,
     COIN_FULL_NAME,
-    FULL_NAME_TO_TICK,
     DEFAULT_CONFIRMATIONS,
-    WIRE_FORMAT,
     resolveConfirmations,
     getCoinConfig,
-    getCoinConfigByFullName,
     consensusSubset,
     consensusHash,
     consensusHashes,
     verifyConsensusPin,
     canonicalJson,
-    resolveFullnode,   // #1283: exported for network-normalization conformance testing
 };

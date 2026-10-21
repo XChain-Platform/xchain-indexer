@@ -33,6 +33,21 @@ const { consumerTargetHeight } = require('../../consensus/gates/mirror_admission
 const { WATERMARK_STALL_CHECK_MS, watermarkStallVerdict, sanitizeHeights,
         heightsAdvanced } = require('./watermark_config.js');
 
+
+// True while a bootstrap is running and has made progress within the stall window. The
+// drain bumps _bootstrapProgressTicks per page and per row; progress is timed on this
+// detector's own clock from the sample that first saw the counter move, the same guard
+// requestResync applies with its hold ceiling.
+function drainProgressingImpl(now) {
+    if (!this._bootstrapping) return false;
+    let ticks = Number(this._bootstrapProgressTicks) || 0;
+    if (ticks !== this._stallSeenProgressTicks) {
+        this._stallSeenProgressTicks = ticks;
+        this._stallSeenProgressAt = now;
+    }
+    return (now - this._stallSeenProgressAt) < this.watermarkStallMs;
+}
+
 module.exports = {
 
     // Advance the stream watermark (monotonic) and re-evaluate every pending
@@ -240,7 +255,7 @@ module.exports = {
         if (verdict === 'ok') return verdict;
         // A forced resync forgets every position, so restarting a long re-page that is still
         // moving would only begin it again; the frozen watermark waits for it instead.
-        if (this.drainProgressing(now)) return 'draining';
+        if (drainProgressingImpl.call(this, now)) return 'draining';
 
         const frozenFrom = (this._lastWatermarkAdvanceAt == null)
             ? this._heightsLastAdvanceAt : this._lastWatermarkAdvanceAt;
@@ -278,20 +293,6 @@ module.exports = {
         else getLogger().error('HubDbSync: no onFatalStall handler wired, so this mirror stays up and ' +
             'keeps re-driving; a consumer that wants a supervisor restart must wire one.');
         return verdict;
-    },
-
-    // True while a bootstrap is running and has made progress within the stall window. The
-    // drain bumps _bootstrapProgressTicks per page and per row; progress is timed on this
-    // detector's own clock from the sample that first saw the counter move, the same guard
-    // requestResync applies with its hold ceiling.
-    drainProgressing(now) {
-        if (!this._bootstrapping) return false;
-        let ticks = Number(this._bootstrapProgressTicks) || 0;
-        if (ticks !== this._stallSeenProgressTicks) {
-            this._stallSeenProgressTicks = ticks;
-            this._stallSeenProgressAt = now;
-        }
-        return (now - this._stallSeenProgressAt) < this.watermarkStallMs;
     },
 
     // Cadence for the sampler, clamped down when the windows themselves are small so a

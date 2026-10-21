@@ -44,6 +44,24 @@ const { BLOCK_HASH_VERSION } = require('./shared.js');
 // previous-block hashes), which is the order the guards compare the literals in.
 const actionIndex = require('./actions/action_index.js');
 
+
+// The state_hash preimage (see the note at the call site in getBlockHashes).
+async function buildBlockStateHashDataImpl(block_index) {
+    let staking = this.config['STAKING'];
+    let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
+    return buildStateHashData(this, block_index, {
+        activationDelay: activationDelay,
+        gasTick:         this.config['GAS'],
+        // network gates the additive index-map class (id-determinism P4); coin extends
+        // the lookup to the per-chain '<COIN>:<network>' keys the mid-chain-armed
+        // classes (poll_finalize / token_supply) use. The sync follower's recompute
+        // (BlockHasher.computeStateHash) MUST pass the same pair or the conformance
+        // hash diverges at the activation heights.
+        network:         this.config['NETWORK'],
+        coin:            this.config['COIN']
+    });
+}
+
 module.exports = {
 
     // Get block hashes using credits/debits/actions table data and previous hash
@@ -85,7 +103,7 @@ module.exports = {
         // divergence HALT on the first deactivation-bearing block, and the feature's primary row
         // class never hashed.
         info['state'] = [];
-        info['state']['hash'] = this.util.getDataHash(await this.buildBlockStateHashData(block_index));
+        info['state']['hash'] = this.util.getDataHash(await buildBlockStateHashDataImpl.call(this, block_index));
         return info;
     },
 
@@ -351,23 +369,6 @@ module.exports = {
             info[table]['hash'] = this.util.getDataHash(data);
         });
         return info;
-    },
-
-    // The state_hash preimage (see the note at the call site in getBlockHashes).
-    async buildBlockStateHashData(block_index){
-        let staking = this.config['STAKING'];
-        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
-        return buildStateHashData(this, block_index, {
-            activationDelay: activationDelay,
-            gasTick:         this.config['GAS'],
-            // network gates the additive index-map class (id-determinism P4); coin extends
-            // the lookup to the per-chain '<COIN>:<network>' keys the mid-chain-armed
-            // classes (poll_finalize / token_supply) use. The sync follower's recompute
-            // (BlockHasher.computeStateHash) MUST pass the same pair or the conformance
-            // hash diverges at the activation heights.
-            network:         this.config['NETWORK'],
-            coin:            this.config['COIN']
-        });
     },
 
     ...actionIndex,

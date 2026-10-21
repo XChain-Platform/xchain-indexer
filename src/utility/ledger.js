@@ -41,6 +41,31 @@ function setOwn(object, key, value){
 
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
+async function assertControllerCompletenessImpl(db, data, debits) {
+    // Programmable policy layer: completeness assertion (opt-in, test/audit only via
+    // ASSERT_CONTROLLER_COMPLETENESS). Anti-drift backstop: if a transfer-controlled token is
+    // debited from SOURCE but its controller was never consulted this action, a handler shipped
+    // an ungated path. OFF by default so it can never affect production or the normal suite.
+    if(db.config && db.config['ASSERT_CONTROLLER_COMPLETENESS'] && data && !data['IS_EMISSION'] && !data['IS_GUARD_EMISSION']){
+        let custodyAction = data['ACTION'] === 'DEPOSIT' || data['ACTION'] === 'WITHDRAW';
+        if(custodyAction && !data['_CUSTODY_GUARD_ARMED']) return;
+        let guarded = data['_GUARDED_TICKS'] || {};
+        let custodyAddress = 'C:' + db.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'];
+        for(let [tick, amount, address] of debits){
+            if(address !== data['SOURCE'] && (!custodyAction || address !== custodyAddress)) continue;
+            if(String(tick) === String(db.config['GAS'])) continue;
+            if(!this.bcgt(amount, '0')) continue;
+            let tickId = await db.getTickerId(tick);
+            if(this.isNull(tickId)) continue;
+            let eff = await db.getEffectiveTokenControllerForGuard(tickId, 'transfer', data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            if(eff && !(hasOwn(guarded, String(tick)) && guarded[String(tick)])){
+                let source = (address === data['SOURCE']) ? 'SOURCE' : address;
+                throw new Error('controller completeness: unguarded transfer-controlled debit of ' + tick + ' from ' + source + ' (action ' + data['ACTION_INDEX'] + ')');
+            }
+        }
+    }
+}
+
 module.exports = {
 
     // Detect a contract's derived ledger address (e.g. "C:BTC:500"). Contracts ARE
@@ -258,34 +283,9 @@ module.exports = {
         return result;
     },
 
-    async assertControllerCompleteness(db, data, debits){
-        // Programmable policy layer: completeness assertion (opt-in, test/audit only via
-        // ASSERT_CONTROLLER_COMPLETENESS). Anti-drift backstop: if a transfer-controlled token is
-        // debited from SOURCE but its controller was never consulted this action, a handler shipped
-        // an ungated path. OFF by default so it can never affect production or the normal suite.
-        if(db.config && db.config['ASSERT_CONTROLLER_COMPLETENESS'] && data && !data['IS_EMISSION'] && !data['IS_GUARD_EMISSION']){
-            let custodyAction = data['ACTION'] === 'DEPOSIT' || data['ACTION'] === 'WITHDRAW';
-            if(custodyAction && !data['_CUSTODY_GUARD_ARMED']) return;
-            let guarded = data['_GUARDED_TICKS'] || {};
-            let custodyAddress = 'C:' + db.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'];
-            for(let [tick, amount, address] of debits){
-                if(address !== data['SOURCE'] && (!custodyAction || address !== custodyAddress)) continue;
-                if(String(tick) === String(db.config['GAS'])) continue;
-                if(!this.bcgt(amount, '0')) continue;
-                let tickId = await db.getTickerId(tick);
-                if(this.isNull(tickId)) continue;
-                let eff = await db.getEffectiveTokenControllerForGuard(tickId, 'transfer', data['BLOCK_INDEX'], data['ACTION_INDEX']);
-                if(eff && !(hasOwn(guarded, String(tick)) && guarded[String(tick)])){
-                    let source = (address === data['SOURCE']) ? 'SOURCE' : address;
-                    throw new Error('controller completeness: unguarded transfer-controlled debit of ' + tick + ' from ' + source + ' (action ' + data['ACTION_INDEX'] + ')');
-                }
-            }
-        }
-    },
-
     // Process any transaction ledger changes (credits / debits / escrows)
     async processTransactionLedgerChanges(db, data, credits, debits, escrows){
-        await this.assertControllerCompleteness(db, data, debits);
+        await assertControllerCompletenessImpl.call(this, db, data, debits);
         // Consolidate the credit / debit / escrow records to write as few records as possible
         debits  = this.consolidateLedgerRecords(debits);
         credits = this.consolidateLedgerRecords(credits);

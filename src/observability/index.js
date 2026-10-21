@@ -426,7 +426,6 @@ module.exports = {
     collectDefaultMetrics,
     createLogShipper,
     patchConsole,
-    unpatchConsole,
     getLogger,
     getRegistry,
     _resetObservability

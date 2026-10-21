@@ -105,7 +105,6 @@ module.exports = {
     moveHub,
     noteConnectFailure,
     noteConnected,
-    noteNotCaughtUpAnswer,
     rejectUncaughtUpReadyFrame,
     stallFailoverAction,
     uncaughtUpBlocks

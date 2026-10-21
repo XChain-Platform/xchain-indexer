@@ -27,6 +27,61 @@ const crypto = require('crypto');
 
 const { getLogger } = require('../../observability/index.js');
 
+
+// Verify one airdrop bucket's snapshot and credit each holder its pro-rata share, in
+// the hash-pinned file order loadAirdropRows returns.
+async function creditAirdropBucketImpl(gas, tick, b, snapshot, blockToParse, blockTime) {
+    verifyAirdropFile.call(this, b);
+    let rows  = loadAirdropRows.call(this, b.file);
+    let total = '0';
+    for(let r of rows)
+        total = this.util.bcadd(total, r.quantity, 8);
+    if(!this.util.bcgt(total, 0))
+        throw new Error('GENESIS FATAL: airdrop snapshot ' + b.file + ' has no positive holder quantities');
+    getLogger().info('GENESIS: airdrop bucket ' + b.name + ' - ' + rows.length + ' holders, '
+        + b.amount + ' ' + tick + ' (snapshot block ' + snapshot + ')');
+    let credited = 0;
+    for(let r of rows){
+        let credit = prorate.call(this, b.amount, r.quantity, total);
+        if(!this.util.bcgt(credit, 0))
+            continue; // holder's share floors to zero at 8 decimals
+        await creditIssueImpl.call(this, gas, tick, r.address, credit, b.name, blockToParse, blockTime);
+        credited++;
+    }
+    getLogger().info('GENESIS: airdrop bucket ' + b.name + ' complete - ' + credited + ' credits');
+}
+
+
+// Synthesize one airdrop credit: ISSUE format 2 from GAS carrying only MINT_SUPPLY and
+// TRANSFER_SUPPLY (VERSION|TICK|MAX_MINT|MINT_SUPPLY|TRANSFER_SUPPLY|...), so the token's
+// existing params are untouched (empty ISSUE fields inherit the current settings) and the
+// pipeline both mints the credit and lands it on the holder in a single action. The tx
+// hash digests (coin, bucket, address): addresses are deduped per bucket, so it is unique.
+async function creditIssueImpl(gas, tick, holder, credit, bucketName, blockToParse, blockTime) {
+    let fields = ['ISSUE', '2', tick,
+        '',       // MAX_MINT (inherit)
+        credit,   // MINT_SUPPLY
+        holder    // TRANSFER_SUPPLY
+    ];
+    let digest = crypto.createHash('sha256')
+        .update(this.config['COIN'] + '|AIRDROP|' + bucketName + '|' + holder).digest('hex').slice(0, 48);
+    let tx = {
+        data:          fields.join('|'),
+        source:        gas,
+        destination:   null,
+        amount:        null,
+        tx_hash:       'GENESIS-' + this.config['COIN'] + '-A-' + digest,
+        vout:          0,
+        block_index:   blockToParse,
+        block_time:    blockTime,
+        raw_data:      null,
+        fee:           null,
+        source_pubkey: null,
+        tx_outputs:    []
+    };
+    await this.actions.processTransaction(tx, true); // isGenesis = true
+}
+
 module.exports = {
 
     // Airdrop pass: credit the CP/DP native-token (XCP/XDP) airdrop allocation to snapshot
@@ -56,30 +111,7 @@ module.exports = {
         let snapshot = this.config['GENESIS_AIRDROP_SNAPSHOT_BLOCK'] || 'unpinned';
         verifyAirdropSetHash.call(this, buckets, pin);
         for(let b of buckets)
-            await this.creditAirdropBucket(gas, tick, b, snapshot, blockToParse, blockTime);
-    },
-
-    // Verify one airdrop bucket's snapshot and credit each holder its pro-rata share, in
-    // the hash-pinned file order loadAirdropRows returns.
-    async creditAirdropBucket(gas, tick, b, snapshot, blockToParse, blockTime){
-        verifyAirdropFile.call(this, b);
-        let rows  = loadAirdropRows.call(this, b.file);
-        let total = '0';
-        for(let r of rows)
-            total = this.util.bcadd(total, r.quantity, 8);
-        if(!this.util.bcgt(total, 0))
-            throw new Error('GENESIS FATAL: airdrop snapshot ' + b.file + ' has no positive holder quantities');
-        getLogger().info('GENESIS: airdrop bucket ' + b.name + ' - ' + rows.length + ' holders, '
-            + b.amount + ' ' + tick + ' (snapshot block ' + snapshot + ')');
-        let credited = 0;
-        for(let r of rows){
-            let credit = prorate.call(this, b.amount, r.quantity, total);
-            if(!this.util.bcgt(credit, 0))
-                continue; // holder's share floors to zero at 8 decimals
-            await this.creditIssue(gas, tick, r.address, credit, b.name, blockToParse, blockTime);
-            credited++;
-        }
-        getLogger().info('GENESIS: airdrop bucket ' + b.name + ' complete - ' + credited + ' credits');
+            await creditAirdropBucketImpl.call(this, gas, tick, b, snapshot, blockToParse, blockTime);
     },
 
     // sha256 over the canonical `name:hash:amount` line per bucket, newline-joined, in the
@@ -134,36 +166,6 @@ module.exports = {
         // unique names (the house comparator), not UTF-16 code-unit order, which differs for non-BMP names.
         buckets.sort((a, b) => Buffer.compare(Buffer.from(a.name, 'utf8'), Buffer.from(b.name, 'utf8')));
         return buckets;
-    },
-
-    // Synthesize one airdrop credit: ISSUE format 2 from GAS carrying only MINT_SUPPLY and
-    // TRANSFER_SUPPLY (VERSION|TICK|MAX_MINT|MINT_SUPPLY|TRANSFER_SUPPLY|...), so the token's
-    // existing params are untouched (empty ISSUE fields inherit the current settings) and the
-    // pipeline both mints the credit and lands it on the holder in a single action. The tx
-    // hash digests (coin, bucket, address): addresses are deduped per bucket, so it is unique.
-    async creditIssue(gas, tick, holder, credit, bucketName, blockToParse, blockTime){
-        let fields = ['ISSUE', '2', tick,
-            '',       // MAX_MINT (inherit)
-            credit,   // MINT_SUPPLY
-            holder    // TRANSFER_SUPPLY
-        ];
-        let digest = crypto.createHash('sha256')
-            .update(this.config['COIN'] + '|AIRDROP|' + bucketName + '|' + holder).digest('hex').slice(0, 48);
-        let tx = {
-            data:          fields.join('|'),
-            source:        gas,
-            destination:   null,
-            amount:        null,
-            tx_hash:       'GENESIS-' + this.config['COIN'] + '-A-' + digest,
-            vout:          0,
-            block_index:   blockToParse,
-            block_time:    blockTime,
-            raw_data:      null,
-            fee:           null,
-            source_pubkey: null,
-            tx_outputs:    []
-        };
-        await this.actions.processTransaction(tx, true); // isGenesis = true
     },
 
 };

@@ -140,7 +140,6 @@ function buildReorgHistoryResponse(rows, filter, opts) {
     };
 }
 
-module.exports = {
-    BLOCK_HASH_RE, DEFAULT_LIMIT, MAX_LIMIT,
+module.exports = {DEFAULT_LIMIT, MAX_LIMIT,
     validateReorgHistoryParams, parseReorgEvent, buildReorgHistoryResponse
 };

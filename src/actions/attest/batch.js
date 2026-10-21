@@ -86,6 +86,77 @@ function stampBatchColumns(data, parsed, chunkIndex){
     data['BTC_BLOCK_HEIGHT'] = parsed.btcBlockHeight;
 }
 
+
+// The head wire itself: its rail, its layout, the network it names, and this
+// publisher's slice of what is already on chain under its key. Returns the parsed
+// head, that slice, and the verdict.
+async function batchHeadWireImpl(params, data, error) {
+    // DOGE-plane guard. Stored as a verdict rather than hard-returned like the relay
+    // legs, because a batch is publisher-broadcast on a known rail: one landing on
+    // BTC or LTC is a publisher fault worth a visible row, not an unknown version.
+    if(!error && String(this.config['COIN']) !== BATCH_CHAIN)
+        error = 'invalid: ATTEST v5 (batches ride the ' + BATCH_CHAIN + ' rail)';
+
+    let head = null;
+    if(!error){
+        head = abw.parseAttestBatchHead(params);
+        if(!head.ok) error = head.status;
+    }
+
+    // A batch names the network it covers, and the mirror is network-scoped, so a
+    // batch for another network must not be absorbed by this one even when both
+    // chains are reachable from one operator's stack.
+    if(!error && head.network !== String(this.config['NETWORK']))
+        error = 'invalid: NETWORK (batch declares ' + head.network + ')';
+
+    // Everything already on chain under this key, and the slice of it that is this
+    // publisher's. The read happens even for a single-wire batch, because the
+    // duplicate-head test below needs it whatever the geometry says.
+    let author = String(data['SOURCE'] || '');
+    let mine   = [];
+    if(!error){
+        // Scoped in the QUERY, not only here: the row limit inside it is only safe
+        // after the author partition, because a batch key is a hash over the window it
+        // names, so anyone can derive it and file wires under it ahead of the honest
+        // publisher. The JS filter stays as a harmless second pass.
+        mine = this.authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey, author,
+            { totalChunks: head.totalChunks, batchCrc32: head.batchCrc32 }), author);
+        if(this.canonicalBatchHead(mine))
+            error = 'invalid: BATCH_KEY (this publisher already has a head for the window)';
+    }
+
+    return { head, mine, error };
+}
+
+
+// Reassembly and the batch quorum, the two judgements a head can only reach once
+// every chunk it names is on chain.
+async function assembleBatchHeadImpl(head, mine, error) {
+    // Reassembly, then the quorum. A multi-chunk batch is absorbed only once its
+    // continuations are on chain; until then the head is a structurally sound action
+    // that has delivered nothing, which is the ANCHOR archive head's behaviour and for
+    // the same reason (a head can legitimately land before its chunks). When the head
+    // lands LAST it reassembles here, against the chunks already stored, so the batch
+    // absorbs exactly once whichever order the wires arrive in.
+    let batch = null;
+    if(!error){
+        let stored = (head.totalChunks === 1) ? [] : this.continuationsOfHead(head, mine);
+        let assembled = abw.reassembleAttestBatch(head, stored, isAdmissionEra);
+        if(assembled.ok) batch = assembled.batch;
+        // Incomplete coverage is the ONE failure that is not a verdict: the missing
+        // chunks may still be mined. Every other one is the batch's, and is recorded
+        // identically on every node from the same bytes.
+        else if(assembled.reason !== abw.ATTEST_BATCH_FAIL_REASONS.COVERAGE) error = assembled.status;
+    }
+
+    if(!error && batch){
+        let quorum = await this.verifyBatchQuorum(batch);
+        if(!quorum.ok) error = quorum.error;
+    }
+
+    return { batch, error };
+}
+
 module.exports = {
     // ATTEST v5: the response BATCH head.
     //
@@ -117,10 +188,10 @@ module.exports = {
     // squatting a window deny the honest publisher outright.
     async parseBatchHead(params, data, error){
 
-        let wire = await this.batchHeadWire(params, data, error);
+        let wire = await batchHeadWireImpl.call(this, params, data, error);
         error    = wire.error;
 
-        let assembled = await this.assembleBatchHead(wire.head, wire.mine, error);
+        let assembled = await assembleBatchHeadImpl.call(this, wire.head, wire.mine, error);
         error         = assembled.error;
         let batch     = assembled.batch;
         let head      = wire.head;
@@ -152,75 +223,6 @@ module.exports = {
         }
 
         await this.mapper.createMappings(data);
-    },
-
-    // The head wire itself: its rail, its layout, the network it names, and this
-    // publisher's slice of what is already on chain under its key. Returns the parsed
-    // head, that slice, and the verdict.
-    async batchHeadWire(params, data, error){
-        // DOGE-plane guard. Stored as a verdict rather than hard-returned like the relay
-        // legs, because a batch is publisher-broadcast on a known rail: one landing on
-        // BTC or LTC is a publisher fault worth a visible row, not an unknown version.
-        if(!error && String(this.config['COIN']) !== BATCH_CHAIN)
-            error = 'invalid: ATTEST v5 (batches ride the ' + BATCH_CHAIN + ' rail)';
-
-        let head = null;
-        if(!error){
-            head = abw.parseAttestBatchHead(params);
-            if(!head.ok) error = head.status;
-        }
-
-        // A batch names the network it covers, and the mirror is network-scoped, so a
-        // batch for another network must not be absorbed by this one even when both
-        // chains are reachable from one operator's stack.
-        if(!error && head.network !== String(this.config['NETWORK']))
-            error = 'invalid: NETWORK (batch declares ' + head.network + ')';
-
-        // Everything already on chain under this key, and the slice of it that is this
-        // publisher's. The read happens even for a single-wire batch, because the
-        // duplicate-head test below needs it whatever the geometry says.
-        let author = String(data['SOURCE'] || '');
-        let mine   = [];
-        if(!error){
-            // Scoped in the QUERY, not only here: the row limit inside it is only safe
-            // after the author partition, because a batch key is a hash over the window it
-            // names, so anyone can derive it and file wires under it ahead of the honest
-            // publisher. The JS filter stays as a harmless second pass.
-            mine = this.authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey, author,
-                { totalChunks: head.totalChunks, batchCrc32: head.batchCrc32 }), author);
-            if(this.canonicalBatchHead(mine))
-                error = 'invalid: BATCH_KEY (this publisher already has a head for the window)';
-        }
-
-        return { head, mine, error };
-    },
-
-    // Reassembly and the batch quorum, the two judgements a head can only reach once
-    // every chunk it names is on chain.
-    async assembleBatchHead(head, mine, error){
-        // Reassembly, then the quorum. A multi-chunk batch is absorbed only once its
-        // continuations are on chain; until then the head is a structurally sound action
-        // that has delivered nothing, which is the ANCHOR archive head's behaviour and for
-        // the same reason (a head can legitimately land before its chunks). When the head
-        // lands LAST it reassembles here, against the chunks already stored, so the batch
-        // absorbs exactly once whichever order the wires arrive in.
-        let batch = null;
-        if(!error){
-            let stored = (head.totalChunks === 1) ? [] : this.continuationsOfHead(head, mine);
-            let assembled = abw.reassembleAttestBatch(head, stored, isAdmissionEra);
-            if(assembled.ok) batch = assembled.batch;
-            // Incomplete coverage is the ONE failure that is not a verdict: the missing
-            // chunks may still be mined. Every other one is the batch's, and is recorded
-            // identically on every node from the same bytes.
-            else if(assembled.reason !== abw.ATTEST_BATCH_FAIL_REASONS.COVERAGE) error = assembled.status;
-        }
-
-        if(!error && batch){
-            let quorum = await this.verifyBatchQuorum(batch);
-            if(!quorum.ok) error = quorum.error;
-        }
-
-        return { batch, error };
     },
 
     // ATTEST v6: a batch continuation chunk.

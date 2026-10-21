@@ -47,6 +47,14 @@ function sanitizeLanded(raw){
     return out;
 }
 
+
+// The landing chains this block must wait on by time: the per-network set minus this coin.
+function landingChainsForImpl() {
+    const set = this.landingChainSet();
+    const own = (this.coin === null || this.coin === undefined) ? null : String(this.coin).trim().toUpperCase();
+    return set.filter((c) => c !== own);
+}
+
 module.exports = {
 
     // Install the landed map off a watermark frame. No usable object clears the map, so a
@@ -90,13 +98,6 @@ module.exports = {
         return Object.prototype.hasOwnProperty.call(table, this.network) ? table[this.network] : [];
     },
 
-    // The landing chains this block must wait on by time: the per-network set minus this coin.
-    landingChainsFor(){
-        const set = this.landingChainSet();
-        const own = (this.coin === null || this.coin === undefined) ? null : String(this.coin).trim().toUpperCase();
-        return set.filter((c) => c !== own);
-    },
-
     strictLandingActiveAt(blockHeight){
         const own = (this.coin === null || this.coin === undefined) ? null : String(this.coin).trim().toUpperCase();
         if(!this.landingChainSet().includes(own)) return false;
@@ -116,7 +117,7 @@ module.exports = {
             if(have === null || !Number.isFinite(need) || have < need)
                 return { chain: own, have: have, need: need, unit: 'block' };
         }
-        for(const chain of this.landingChainsFor()){
+        for(const chain of landingChainsForImpl.call(this)){
             const e = landed[chain];
             const have = e ? e.protocol_time : null;
             if(!Number.isFinite(t) || have === null || !(have > t))

@@ -28,6 +28,229 @@ const tallyScaleActivation = require('./dispense_payment_tally_scale_gate.js');
 
 // Installed onto Dispense.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
+
+// The three pricing paths, in the chain they always formed.
+async function priceDispenseFillImpl(ctx, row) {
+let { data, block_index } = ctx;
+    let { dispenser, error, available } = row;
+
+        // FIAT dispenser: reverse price match to determine effective GET_AMOUNT
+        // Two pricing modes:
+        //   - With ORACLE_ADDRESS: use a user oracle (PRICE v1) for TOKEN/FIAT pricing.
+        //     The oracle prices the dispensed token directly; FIAT_AMOUNT is ignored.
+        //   - Without ORACLE_ADDRESS: use the validator COIN/FIAT snapshot (PRICE v0).
+        //     FIAT_AMOUNT defines how much of the FIAT currency 1 GIVE unit costs.
+        //
+        // FIAT_DISPENSER_PRICING gate (protocol_changes.js). Genesis-active on every
+        // network today, so this reads true in production and the reverse-match paths
+        // below behave exactly as before. It exists so the settlement path appears in
+        // the activation inventory alongside every sibling dispenser rule, and so a
+        // future correction to the matching algorithm has a height to hang off. Below
+        // activation a FIAT dispenser cannot settle: rejecting is the only well-defined
+        // "off" state, because the pre-FIAT code would have divided by the GET_AMOUNT
+        // of 0 that FIAT dispensers carry by convention.
+        let fiatPricingActive = this.util.isNull(dispenser['FIAT'])
+            ? true
+            : await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', block_index);
+        if(!error && !this.util.isNull(dispenser['FIAT']) && !fiatPricingActive){
+            row.error = 'invalid: FIAT dispenser pricing not active';
+        } else if(!error && !this.util.isNull(dispenser['FIAT']) && !this.util.isNull(dispenser['ORACLE_ADDRESS'])){
+            await this.priceFromOracle(ctx, row);
+        } else if(!error && !this.util.isNull(dispenser['FIAT'])){
+            await this.priceFromValidatorSnapshot(ctx, row);
+        }
+
+        // Non-FIAT dispenser: verify COIN_AMOUNT >= GET_AMOUNT and calculate multiplier
+        if(!row.error && this.util.isNull(dispenser['FIAT'])){
+            await this.priceFromNativeAmount(ctx, row);
+        }
+}
+
+
+// The self-trigger refusal, the single-shot ownership cap, and the clamp to what
+// the dispenser can still give.
+async function applyDispenseFillRulesImpl(ctx, row) {
+let { data } = ctx;
+    let { dispenser } = row;
+    let multiplier = row.multiplier;
+    let error = row.error;
+
+        // Ignore if DISPENSE is being triggered by GET_ADDRESS (dispenser can't trigger itself)
+        if(!error && data['SOURCE']==dispenser['GET_ADDRESS'])
+            error = 'invalid: SOURCE and GET_ADDRESS can not be same';
+
+        // Ownership dispensers are single-shot: cap multiplier at 1 regardless of overpayment
+        // (extra coin is absorbed as a tip, matching the existing overpayment behavior).
+        let isOwnershipDispenser = (Number(dispenser['GIVE_OWNERSHIP']||0) == 1);
+        if(isOwnershipDispenser && multiplier > 1)
+            multiplier = 1;
+
+    row.multiplier = multiplier;
+    row.error = error;
+    clampFillToRemainingImpl.call(this, ctx, row);
+    checkDispenseFillCountImpl.call(this, ctx, row);
+}
+
+
+// Clamp the fill count to what the dispenser can actually still give.
+function clampFillToRemainingImpl(ctx, row) {
+    let { dispenser } = row;
+    let multiplier = row.multiplier;
+
+        // Give out the maximum amount allowed by the dispenser and payment amount:
+        // clamp the multiplier to what the dispenser can actually still give.
+        //
+        // This replaces a decrement loop (multiplier--, with a bignumber multiply
+        // per iteration) that was O(multiplier). On a FIAT dispenser the multiplier
+        // scales with an externally-chosen price rather than with GET_AMOUNT, so it
+        // can be many orders of magnitude larger: a payment worth ~1e7 units against
+        // a nearly-empty dispenser spun ten million bignumber multiplies inside one
+        // block and could blow BLOCK_PROCESS_TIMEOUT.
+        //
+        // Identical by construction, not merely equivalent: the loop stopped at the
+        // largest m <= multiplier with m * GIVE_AMOUNT <= GIVE_REMAINING, and that is
+        // exactly min(multiplier, floor(GIVE_REMAINING / GIVE_AMOUNT)).
+        //
+        // Two guards keep the rewrite byte-identical on the edges:
+        //   - GIVE_AMOUNT is empty or '0' on a BALANCE dispenser created below
+        //     dispenser_give_amount_activation (armed at genesis on mainnet too by
+        //     the 2026-09-09 ruling, so this is legacy-only history now), where
+        //     bcmul() coerced it to 0 so `0 > GIVE_REMAINING` was
+        //     false and the loop never ran. Skip the clamp there rather than
+        //     dividing by zero. An ownership dispenser is NOT that case and must
+        //     not be bypassed here: getDispenserInfo virtualizes its GIVE_AMOUNT to
+        //     '1' and its GIVE_REMAINING to '1' before a dispense / '0' once one is
+        //     recorded, so this clamp DOES run for it and is the second line of
+        //     defense on the single-shot rule - with GIVE_REMAINING '0' it drives
+        //     multiplier to 0 and the check below refuses with 'invalid:
+        //     insufficient funds ', even if the cap above and the DISPENSER_CLOSE
+        //     auto-close both failed to fire.
+        //   - capacity is only computed when the overspill test says the multiplier
+        //     does NOT fit, which means capacity < multiplier, and multiplier is
+        //     already a safe JS integer. So this bcfloor can never be the one that
+        //     overflows.
+        let giveAmountIsPositive = !this.util.isNull(dispenser['GIVE_AMOUNT']) &&
+                                   this.util.bcgt(dispenser['GIVE_AMOUNT'], '0');
+        let give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
+        if(multiplier > 0 && giveAmountIsPositive &&
+           this.util.bcgt(give_amount, dispenser['GIVE_REMAINING'])){
+            multiplier  = this.util.bcfloor(
+                this.util.bcdiv(dispenser['GIVE_REMAINING'], dispenser['GIVE_AMOUNT'], 64));
+            give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
+        }
+
+    row.multiplier = multiplier;
+    row.give_amount = give_amount;
+}
+
+
+// At least one whole unit must be dispensable.
+function checkDispenseFillCountImpl(ctx, row) {
+    let multiplier = row.multiplier;
+    let error = row.error;
+
+        // Verify at least one unit can be dispensed (multiplier > 0). Guard the fill
+        // count, not a price field, because three pricing paths produce it.
+        if(!error && !this.util.bcgt(multiplier, '0'))
+            error = 'invalid: insufficient funds ';
+
+    row.error = error;
+}
+
+
+
+// Draw what THIS dispense was priced at out of the tally.
+async function drainDispenseTallyImpl(ctx, row) {
+let { data, ledger, tallyScale } = ctx;
+    let { dispenser, multiplier, unitCoinCost, error } = row;
+    let available = row.available;
+    let attributedCost = row.attributedCost;
+
+        // Draw what THIS dispense was actually priced at out of the batch pool. Placed
+        // here, at the end of the iteration, because every rejection above (allow and
+        // block lists included) lands in `error` first, and a dispense that never
+        // settles must consume nothing - the same rule the native-fee pool follows.
+        // The second loop below derives its status from this same `error`, so "!error
+        // here" and "valid there" are the same set.
+        //
+        // Cost is the FINAL multiplier (post ownership cap and post GIVE_REMAINING
+        // clamp) times one fill's coin price, so a dispense clamped to what the
+        // dispenser can still give consumes only what it bought. Overpayment above the
+        // last whole fill stays in the pool: it is a tip today, it was paid to the
+        // triggered address, and leaving it available lets a sibling command against
+        // another dispenser at that same address draw on it exactly as it can today.
+        //
+        // Draining per fill (not the whole payment) is what makes N fills' worth of
+        // payment cover exactly N fills, whichever pricing path priced them. The clamp
+        // to `available` is a rounding guard only: bcmul rounds at tallyScale, and the
+        // pool must never go negative. Ledger values stay decimal STRINGS.
+        //
+        // isNull rather than !== null on unitCoinCost: an undefined price would
+        // multiply out to a silent zero, which now also lands in the row's GET_AMOUNT
+        // and would read as "this dispense was free". Unreachable in production (all
+        // three pricing paths set it before a dispense can be valid); the strict form
+        // keeps it that way.
+        if(ledger && !error && !this.util.isNull(unitCoinCost) && multiplier > 0){
+            // A Mode A fill on the exact tally is charged multiplier x FIAT_AMOUNT / price.
+            let cost = row.fiatFillPrice ? this.util.fiatFillCost(multiplier, row.fiatFillPrice, tallyScale)
+                                         : this.util.bcmul(multiplier, unitCoinCost, tallyScale);
+            if(this.util.bclt(available, cost))
+                cost = available;
+            // Row 18: the row records what this dispense was CHARGED, not the whole
+            // payment. Taken from the same `cost` the pool is drained by, on purpose:
+            // the record and the accounting are one number, so they can never
+            // disagree. Under the old shape three batched sub-commands each wrote the
+            // full payment into their own row while consuming a third of it, and the
+            // multi-dispenser loop did the same outside a batch.
+            //
+            // Rendered at the legacy 8 dp whenever that width is EXACT, so every
+            // dispense the wide tally does not reprice keeps its byte-identical row,
+            // and at full precision only where 8 dp would write a false zero for a
+            // sub-satoshi charge. Same value either way, so record and accounting
+            // still cannot disagree.
+            let legacyRender = this.util.bcformat(cost, tallyScaleActivation.DISPENSE_TALLY_LEGACY_SCALE);
+            let legacyIsExact = !this.util.bclt(legacyRender, cost) && !this.util.bcgt(legacyRender, cost);
+            attributedCost = legacyIsExact ? legacyRender : this.util.bcstr(cost);
+            ledger['coinAmountConsumed'] = this.util.bcformat(
+                this.util.bcadd(ledger['coinAmountConsumed'], cost, tallyScale), tallyScale);
+        }
+
+    row.attributedCost = attributedCost;
+}
+
+
+// The dispenses[] row this dispenser produced.
+function recordDispenseRowImpl(ctx, row) {
+let { data, block_index, block_time, tx_index, dispenses } = ctx;
+    let { action_index, dispenser, multiplier, attributedCost, error, give_amount } = row;
+
+        // Add the dispense info to the dispenses array;
+        //
+        // GET_AMOUNT is the attributed cost when a tally priced this dispense, and
+        // otherwise the whole payment exactly as before. That makes the flag the gate
+        // for the record shape too: below it, or on a dispense that settled nothing,
+        // nothing is attributed and the legacy figure stands. The column is not a hash
+        // preimage anywhere (table_lifecycle.js classes `dispenses` as a derived
+        // projection, and getBlockHashes covers credits/debits/escrows/actions/
+        // contracts only), so this is a record correction rather than a consensus
+        // change. It is gated regardless: replicas mirror these rows verbatim and no
+        // hash would catch a fleet writing two different values, and get_amount is the
+        // coin leg of the XCHAIN/BTC price derivation over realized dispense fills
+        // (xchain_price_query.js DISPENSE_FILLS_SQL), which is built to feed native fee
+        // bands. An ungated record change is a silent divergence there.
+        dispenses.push({
+            DISPENSER_ACTION_INDEX: action_index,
+            GIVE_COIN:              dispenser['GIVE_COIN'],
+            GIVE_TICK:              dispenser['GIVE_TICK'],
+            GIVE_AMOUNT:            give_amount,
+            GET_COIN:               dispenser['GET_COIN'],
+            GET_TICK:               dispenser['GET_TICK'],
+            GET_AMOUNT:             (attributedCost !== null) ? attributedCost : data['COIN_AMOUNT'],
+            DESTINATION:            data['SOURCE'],
+            STATUS:                 error
+        });
+}
+
 module.exports = {
 
     // One dispenser behind the paid address. The early return skips the rest of this
@@ -70,136 +293,11 @@ module.exports = {
             let attributedCost = null;
 
         let row = { action_index, dispenser, error, available, unitCoinCost, attributedCost, multiplier: 0 };
-        await this.priceDispenseFill(ctx, row);
-        await this.applyDispenseFillRules(ctx, row);
+        await priceDispenseFillImpl.call(this, ctx, row);
+        await applyDispenseFillRulesImpl.call(this, ctx, row);
         await this.checkDispenseSettlement(ctx, row);
-        await this.drainDispenseTally(ctx, row);
-        this.recordDispenseRow(ctx, row);
-    },
-
-    // The three pricing paths, in the chain they always formed.
-    async priceDispenseFill(ctx, row){
-    let { data, block_index } = ctx;
-        let { dispenser, error, available } = row;
-
-            // FIAT dispenser: reverse price match to determine effective GET_AMOUNT
-            // Two pricing modes:
-            //   - With ORACLE_ADDRESS: use a user oracle (PRICE v1) for TOKEN/FIAT pricing.
-            //     The oracle prices the dispensed token directly; FIAT_AMOUNT is ignored.
-            //   - Without ORACLE_ADDRESS: use the validator COIN/FIAT snapshot (PRICE v0).
-            //     FIAT_AMOUNT defines how much of the FIAT currency 1 GIVE unit costs.
-            //
-            // FIAT_DISPENSER_PRICING gate (protocol_changes.js). Genesis-active on every
-            // network today, so this reads true in production and the reverse-match paths
-            // below behave exactly as before. It exists so the settlement path appears in
-            // the activation inventory alongside every sibling dispenser rule, and so a
-            // future correction to the matching algorithm has a height to hang off. Below
-            // activation a FIAT dispenser cannot settle: rejecting is the only well-defined
-            // "off" state, because the pre-FIAT code would have divided by the GET_AMOUNT
-            // of 0 that FIAT dispensers carry by convention.
-            let fiatPricingActive = this.util.isNull(dispenser['FIAT'])
-                ? true
-                : await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', block_index);
-            if(!error && !this.util.isNull(dispenser['FIAT']) && !fiatPricingActive){
-                row.error = 'invalid: FIAT dispenser pricing not active';
-            } else if(!error && !this.util.isNull(dispenser['FIAT']) && !this.util.isNull(dispenser['ORACLE_ADDRESS'])){
-                await this.priceFromOracle(ctx, row);
-            } else if(!error && !this.util.isNull(dispenser['FIAT'])){
-                await this.priceFromValidatorSnapshot(ctx, row);
-            }
-
-            // Non-FIAT dispenser: verify COIN_AMOUNT >= GET_AMOUNT and calculate multiplier
-            if(!row.error && this.util.isNull(dispenser['FIAT'])){
-                await this.priceFromNativeAmount(ctx, row);
-            }
-    },
-
-    // The self-trigger refusal, the single-shot ownership cap, and the clamp to what
-    // the dispenser can still give.
-    async applyDispenseFillRules(ctx, row){
-    let { data } = ctx;
-        let { dispenser } = row;
-        let multiplier = row.multiplier;
-        let error = row.error;
-
-            // Ignore if DISPENSE is being triggered by GET_ADDRESS (dispenser can't trigger itself)
-            if(!error && data['SOURCE']==dispenser['GET_ADDRESS'])
-                error = 'invalid: SOURCE and GET_ADDRESS can not be same';
-
-            // Ownership dispensers are single-shot: cap multiplier at 1 regardless of overpayment
-            // (extra coin is absorbed as a tip, matching the existing overpayment behavior).
-            let isOwnershipDispenser = (Number(dispenser['GIVE_OWNERSHIP']||0) == 1);
-            if(isOwnershipDispenser && multiplier > 1)
-                multiplier = 1;
-
-        row.multiplier = multiplier;
-        row.error = error;
-        this.clampFillToRemaining(ctx, row);
-        this.checkDispenseFillCount(ctx, row);
-    },
-
-    // Clamp the fill count to what the dispenser can actually still give.
-    clampFillToRemaining(ctx, row){
-        let { dispenser } = row;
-        let multiplier = row.multiplier;
-
-            // Give out the maximum amount allowed by the dispenser and payment amount:
-            // clamp the multiplier to what the dispenser can actually still give.
-            //
-            // This replaces a decrement loop (multiplier--, with a bignumber multiply
-            // per iteration) that was O(multiplier). On a FIAT dispenser the multiplier
-            // scales with an externally-chosen price rather than with GET_AMOUNT, so it
-            // can be many orders of magnitude larger: a payment worth ~1e7 units against
-            // a nearly-empty dispenser spun ten million bignumber multiplies inside one
-            // block and could blow BLOCK_PROCESS_TIMEOUT.
-            //
-            // Identical by construction, not merely equivalent: the loop stopped at the
-            // largest m <= multiplier with m * GIVE_AMOUNT <= GIVE_REMAINING, and that is
-            // exactly min(multiplier, floor(GIVE_REMAINING / GIVE_AMOUNT)).
-            //
-            // Two guards keep the rewrite byte-identical on the edges:
-            //   - GIVE_AMOUNT is empty or '0' on a BALANCE dispenser created below
-            //     dispenser_give_amount_activation (armed at genesis on mainnet too by
-            //     the 2026-09-09 ruling, so this is legacy-only history now), where
-            //     bcmul() coerced it to 0 so `0 > GIVE_REMAINING` was
-            //     false and the loop never ran. Skip the clamp there rather than
-            //     dividing by zero. An ownership dispenser is NOT that case and must
-            //     not be bypassed here: getDispenserInfo virtualizes its GIVE_AMOUNT to
-            //     '1' and its GIVE_REMAINING to '1' before a dispense / '0' once one is
-            //     recorded, so this clamp DOES run for it and is the second line of
-            //     defense on the single-shot rule - with GIVE_REMAINING '0' it drives
-            //     multiplier to 0 and the check below refuses with 'invalid:
-            //     insufficient funds ', even if the cap above and the DISPENSER_CLOSE
-            //     auto-close both failed to fire.
-            //   - capacity is only computed when the overspill test says the multiplier
-            //     does NOT fit, which means capacity < multiplier, and multiplier is
-            //     already a safe JS integer. So this bcfloor can never be the one that
-            //     overflows.
-            let giveAmountIsPositive = !this.util.isNull(dispenser['GIVE_AMOUNT']) &&
-                                       this.util.bcgt(dispenser['GIVE_AMOUNT'], '0');
-            let give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
-            if(multiplier > 0 && giveAmountIsPositive &&
-               this.util.bcgt(give_amount, dispenser['GIVE_REMAINING'])){
-                multiplier  = this.util.bcfloor(
-                    this.util.bcdiv(dispenser['GIVE_REMAINING'], dispenser['GIVE_AMOUNT'], 64));
-                give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
-            }
-
-        row.multiplier = multiplier;
-        row.give_amount = give_amount;
-    },
-
-    // At least one whole unit must be dispensable.
-    checkDispenseFillCount(ctx, row){
-        let multiplier = row.multiplier;
-        let error = row.error;
-
-            // Verify at least one unit can be dispensed (multiplier > 0). Guard the fill
-            // count, not a price field, because three pricing paths produce it.
-            if(!error && !this.util.bcgt(multiplier, '0'))
-                error = 'invalid: insufficient funds ';
-
-        row.error = error;
+        await drainDispenseTallyImpl.call(this, ctx, row);
+        recordDispenseRowImpl.call(this, ctx, row);
     },
 
     // Escrow, balance and allow/block-list checks for a dispense that priced a fill.
@@ -295,97 +393,5 @@ module.exports = {
                 }
 
         return error;
-    },
-
-
-    // Draw what THIS dispense was priced at out of the tally.
-    async drainDispenseTally(ctx, row){
-    let { data, ledger, tallyScale } = ctx;
-        let { dispenser, multiplier, unitCoinCost, error } = row;
-        let available = row.available;
-        let attributedCost = row.attributedCost;
-
-            // Draw what THIS dispense was actually priced at out of the batch pool. Placed
-            // here, at the end of the iteration, because every rejection above (allow and
-            // block lists included) lands in `error` first, and a dispense that never
-            // settles must consume nothing - the same rule the native-fee pool follows.
-            // The second loop below derives its status from this same `error`, so "!error
-            // here" and "valid there" are the same set.
-            //
-            // Cost is the FINAL multiplier (post ownership cap and post GIVE_REMAINING
-            // clamp) times one fill's coin price, so a dispense clamped to what the
-            // dispenser can still give consumes only what it bought. Overpayment above the
-            // last whole fill stays in the pool: it is a tip today, it was paid to the
-            // triggered address, and leaving it available lets a sibling command against
-            // another dispenser at that same address draw on it exactly as it can today.
-            //
-            // Draining per fill (not the whole payment) is what makes N fills' worth of
-            // payment cover exactly N fills, whichever pricing path priced them. The clamp
-            // to `available` is a rounding guard only: bcmul rounds at tallyScale, and the
-            // pool must never go negative. Ledger values stay decimal STRINGS.
-            //
-            // isNull rather than !== null on unitCoinCost: an undefined price would
-            // multiply out to a silent zero, which now also lands in the row's GET_AMOUNT
-            // and would read as "this dispense was free". Unreachable in production (all
-            // three pricing paths set it before a dispense can be valid); the strict form
-            // keeps it that way.
-            if(ledger && !error && !this.util.isNull(unitCoinCost) && multiplier > 0){
-                // A Mode A fill on the exact tally is charged multiplier x FIAT_AMOUNT / price.
-                let cost = row.fiatFillPrice ? this.util.fiatFillCost(multiplier, row.fiatFillPrice, tallyScale)
-                                             : this.util.bcmul(multiplier, unitCoinCost, tallyScale);
-                if(this.util.bclt(available, cost))
-                    cost = available;
-                // Row 18: the row records what this dispense was CHARGED, not the whole
-                // payment. Taken from the same `cost` the pool is drained by, on purpose:
-                // the record and the accounting are one number, so they can never
-                // disagree. Under the old shape three batched sub-commands each wrote the
-                // full payment into their own row while consuming a third of it, and the
-                // multi-dispenser loop did the same outside a batch.
-                //
-                // Rendered at the legacy 8 dp whenever that width is EXACT, so every
-                // dispense the wide tally does not reprice keeps its byte-identical row,
-                // and at full precision only where 8 dp would write a false zero for a
-                // sub-satoshi charge. Same value either way, so record and accounting
-                // still cannot disagree.
-                let legacyRender = this.util.bcformat(cost, tallyScaleActivation.DISPENSE_TALLY_LEGACY_SCALE);
-                let legacyIsExact = !this.util.bclt(legacyRender, cost) && !this.util.bcgt(legacyRender, cost);
-                attributedCost = legacyIsExact ? legacyRender : this.util.bcstr(cost);
-                ledger['coinAmountConsumed'] = this.util.bcformat(
-                    this.util.bcadd(ledger['coinAmountConsumed'], cost, tallyScale), tallyScale);
-            }
-
-        row.attributedCost = attributedCost;
-    },
-
-    // The dispenses[] row this dispenser produced.
-    recordDispenseRow(ctx, row){
-    let { data, block_index, block_time, tx_index, dispenses } = ctx;
-        let { action_index, dispenser, multiplier, attributedCost, error, give_amount } = row;
-
-            // Add the dispense info to the dispenses array;
-            //
-            // GET_AMOUNT is the attributed cost when a tally priced this dispense, and
-            // otherwise the whole payment exactly as before. That makes the flag the gate
-            // for the record shape too: below it, or on a dispense that settled nothing,
-            // nothing is attributed and the legacy figure stands. The column is not a hash
-            // preimage anywhere (table_lifecycle.js classes `dispenses` as a derived
-            // projection, and getBlockHashes covers credits/debits/escrows/actions/
-            // contracts only), so this is a record correction rather than a consensus
-            // change. It is gated regardless: replicas mirror these rows verbatim and no
-            // hash would catch a fleet writing two different values, and get_amount is the
-            // coin leg of the XCHAIN/BTC price derivation over realized dispense fills
-            // (xchain_price_query.js DISPENSE_FILLS_SQL), which is built to feed native fee
-            // bands. An ungated record change is a silent divergence there.
-            dispenses.push({
-                DISPENSER_ACTION_INDEX: action_index,
-                GIVE_COIN:              dispenser['GIVE_COIN'],
-                GIVE_TICK:              dispenser['GIVE_TICK'],
-                GIVE_AMOUNT:            give_amount,
-                GET_COIN:               dispenser['GET_COIN'],
-                GET_TICK:               dispenser['GET_TICK'],
-                GET_AMOUNT:             (attributedCost !== null) ? attributedCost : data['COIN_AMOUNT'],
-                DESTINATION:            data['SOURCE'],
-                STATUS:                 error
-            });
     },
 };

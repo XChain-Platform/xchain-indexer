@@ -46,6 +46,28 @@ function callbackParamsOf(request){
     return callbackParams;
 }
 
+
+// Unique per injected callback: a fixed name would be destroyed and re-created
+// by MariaDB on re-use, corrupting rollback when EXECUTE nests its own savepoints
+// or multiple attestation callbacks fire in one block transaction.
+//
+// The savepoint is released on a clean run and rolled back on a throw, so a failing
+// callback never takes the response row with it.
+async function runCallbackSavepointImpl(name, actionParams, emissionData, emissionActionIndex, warnText) {
+    let savepoint = await this.indexerDb.createSavepoint(name + parseInt(emissionActionIndex));
+    try {
+        await this.actions.actionExecute.parse(actionParams, emissionData, null);
+        if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid'){
+            getLogger().warn(warnText + emissionData['STATUS']);
+        }
+        await this.indexerDb.releaseSavepoint(savepoint);
+        return emissionActionIndex;
+    } catch(e){
+        await this.indexerDb.rollbackToSavepoint(savepoint);
+        throw e;
+    }
+}
+
 module.exports = {
     // Inject the contract callback for a relayed response. The 'ok' path is the v1
     // callback verbatim; a relayed 'expired' delivers the same empty-payload shape
@@ -102,7 +124,7 @@ module.exports = {
         });
 
         // Unique per injected callback (the savepoint note lives on runCallbackSavepoint).
-        return await this.runCallbackSavepoint('attestation_callback_', actionParams, emissionData,
+        return await runCallbackSavepointImpl.call(this, 'attestation_callback_', actionParams, emissionData,
                                               emissionActionIndex,
                                               'Attestation callback execute returned non-valid status: ');
     },
@@ -154,7 +176,7 @@ module.exports = {
         });
 
         // Unique per injected callback (the savepoint note lives on runCallbackSavepoint).
-        return await this.runCallbackSavepoint('attestation_expire_callback_', actionParams, emissionData,
+        return await runCallbackSavepointImpl.call(this, 'attestation_expire_callback_', actionParams, emissionData,
                                               emissionActionIndex,
                                               'Attestation expiry callback returned non-valid status: ');
     },
@@ -177,25 +199,4 @@ module.exports = {
             ...callbackArgs
         ];
     },
-
-    // Unique per injected callback: a fixed name would be destroyed and re-created
-    // by MariaDB on re-use, corrupting rollback when EXECUTE nests its own savepoints
-    // or multiple attestation callbacks fire in one block transaction.
-    //
-    // The savepoint is released on a clean run and rolled back on a throw, so a failing
-    // callback never takes the response row with it.
-    async runCallbackSavepoint(name, actionParams, emissionData, emissionActionIndex, warnText){
-        let savepoint = await this.indexerDb.createSavepoint(name + parseInt(emissionActionIndex));
-        try {
-            await this.actions.actionExecute.parse(actionParams, emissionData, null);
-            if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid'){
-                getLogger().warn(warnText + emissionData['STATUS']);
-            }
-            await this.indexerDb.releaseSavepoint(savepoint);
-            return emissionActionIndex;
-        } catch(e){
-            await this.indexerDb.rollbackToSavepoint(savepoint);
-            throw e;
-        }
-    }
 };

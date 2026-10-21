@@ -28,6 +28,122 @@ const { getLogger } = require('../../observability/index.js');
 const { PRICE_FINALIZED_KEY_CAP, priceRoundKey, CAPABILITY_SNAPSHOT_KEY_CAP,
         capabilitySnapshotKey, ORACLE_PRICE_KEY_CAP, oraclePriceKey } = require('./mirror_bounds.js');
 
+
+// The local finalized rows the drain proves foreign, by natural key when the served
+// set is complete and by the round ceiling when it overflowed. Null when the pass
+// must not run at all: a read failed, or the key derivation itself looks broken. A
+// floorTs above zero judges only rows at or above that block time: the drain started at
+// the mirror floor (choosePriceRepageStart) and served nothing older.
+async function staleForeignPriceRoundIdsImpl(servedKeys, keysComplete, maxServedRound, floorTs) {
+    let floor = (Number(floorTs) > 0) ? [Number(floorTs)] : [];
+    let locals, stale;
+    if (!keysComplete) {
+        // The set overflowed its memory cap, so absence from it proves nothing. Fall
+        // back to the weaker half that needs no set: the drain saw every row the hub
+        // holds, so no round above the highest it served exists there. This still
+        // clears the shape that poisons the ORDER BY round_number DESC readers, and
+        // leaves any lower-numbered foreign round for the operator.
+        getLogger().warn('HubDbSync: price round reconciliation exceeded its key cap (' +
+            PRICE_FINALIZED_KEY_CAP + '); falling back to the round-ceiling rule ' +
+            '(rounds above ' + maxServedRound + ' only)');
+        try {
+            locals = await this.hubDb.doQuery(
+                "SELECT id FROM price_snapshots WHERE status = 'finalized' AND round_number > ?",
+                [maxServedRound]);
+        } catch (e) {
+            getLogger().warn('HubDbSync: price round reconciliation skipped (read failed):', e);
+            return null;
+        }
+        stale = (locals || []).map(r => Number(r.id)).filter(Number.isFinite);
+    } else {
+        try {
+            locals = await this.hubDb.doQuery(
+                "SELECT id, round_number, coin_pair FROM price_snapshots WHERE status = 'finalized'" +
+                (floor.length ? ' AND block_timestamp >= ?' : ''), floor);
+        } catch (e) {
+            getLogger().warn('HubDbSync: price round reconciliation skipped (read failed):', e);
+            return null;
+        }
+        locals = locals || [];
+        stale = locals
+            .filter(r => !servedKeys.has(priceRoundKey(r.round_number, r.coin_pair)))
+            .map(r => Number(r.id))
+            .filter(Number.isFinite);
+        // Sanity fence on the KEY DERIVATION itself, not on the data. Every finalized
+        // row this drain served was applied to the local table moments ago, so it must
+        // read back into the served set. If the hub served finalized rounds and NOT ONE
+        // local finalized row matched, the two sides are not producing the same key
+        // (a column rename, a driver type change) and this pass would empty a healthy
+        // mirror. Refuse, loudly: a stalled reconciliation is recoverable, a wiped
+        // price history under a mirror the operator believes is converging is not.
+        if (servedKeys.size > 0 && locals.length > 0 && stale.length === locals.length) {
+            getLogger().error('HubDbSync: price round reconciliation refused: the hub served ' +
+                servedKeys.size + ' finalized round(s) but NONE of the ' + locals.length +
+                ' local finalized row(s) matched a served key. That is a key-derivation ' +
+                'mismatch, not contamination; leaving the mirror untouched.');
+            return null;
+        }
+    }
+    return stale;
+}
+
+
+// The local rows that predate the drain and that the drain proves foreign, by natural
+// key when the served set is complete and by the snapshot_block ceiling when it
+// overflowed. Null when the pass must not run: a read failed, or the key derivation
+// itself looks broken.
+async function staleForeignSnapshotIdsImpl(servedKeys, keysComplete, maxServedBlock, preDrainMaxId) {
+    let stale;
+    if (!keysComplete) {
+        // The set overflowed its memory cap, so absence from it proves nothing. Fall back
+        // to the weaker half that needs no set: the drain saw every row the hub holds, so
+        // no boundary above the highest it served exists there. That still clears the
+        // shape this pass exists for (a foreign chain's height sits ABOVE anything a
+        // younger network has reached) and leaves any lower foreign boundary alone.
+        getLogger().warn('HubDbSync: capability snapshot reconciliation exceeded its key cap (' +
+            CAPABILITY_SNAPSHOT_KEY_CAP + '); falling back to the snapshot_block-ceiling rule ' +
+            '(boundaries above ' + maxServedBlock + ' only)');
+        let rows;
+        try {
+            rows = await this.hubDb.doQuery(
+                'SELECT id FROM capability_snapshots WHERE id <= ? AND snapshot_block > ?',
+                [preDrainMaxId, maxServedBlock]);
+        } catch (e) {
+            getLogger().warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
+            return null;
+        }
+        stale = (rows || []).map(r => Number(r.id)).filter(Number.isFinite);
+    } else {
+        let locals;
+        try {
+            // Unrestricted read: the id fence decides what may be DELETED, but the
+            // key-derivation fence below has to weigh every local row, including the ones
+            // this drain just applied. On a mirror whose whole pre-drain content is
+            // foreign - the repoint case - those fresh rows are the only proof that the
+            // two sides still derive the same key.
+            locals = await this.hubDb.doQuery(
+                'SELECT id, snapshot_block, capability, signing_pubkey, source FROM capability_snapshots');
+        } catch (e) {
+            getLogger().warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
+            return null;
+        }
+        locals = locals || [];
+        let matched = locals.filter(r => servedKeys.has(capabilitySnapshotKey(r))).length;
+        if (servedKeys.size > 0 && locals.length > 0 && matched === 0) {
+            getLogger().error('HubDbSync: capability snapshot reconciliation refused: the hub served ' +
+                servedKeys.size + ' row(s) but NONE of the ' + locals.length + ' local row(s) matched ' +
+                'a served key. That is a key-derivation mismatch, not contamination; leaving the ' +
+                'mirror untouched.');
+            return null;
+        }
+        stale = locals
+            .filter(r => Number(r.id) <= preDrainMaxId && !servedKeys.has(capabilitySnapshotKey(r)))
+            .map(r => Number(r.id))
+            .filter(Number.isFinite);
+    }
+    return stale;
+}
+
 module.exports = {
 
     // Converge the half of a retract/revive the bootstrap cannot re-deliver (#3211).
@@ -135,7 +251,7 @@ module.exports = {
     // left alone: no consensus read sees them, and the upsert converges them in place.
     async reconcileForeignPriceRounds(servedKeys, keysComplete, maxServedRound, floorTs) {
         if (!servedKeys) return;
-        let stale = await this.staleForeignPriceRoundIds(servedKeys, keysComplete, maxServedRound, floorTs);
+        let stale = await staleForeignPriceRoundIdsImpl.call(this, servedKeys, keysComplete, maxServedRound, floorTs);
         if (stale === null || stale.length === 0) return;
         // Chunked so one oversized IN list can never blow the statement limit.
         for (let i = 0; i < stale.length; i += 500) {
@@ -152,64 +268,6 @@ module.exports = {
             'not hold (a repointed or rebuilt hub leaves the previous one\'s rounds behind, and the newest ' +
             'round_number wins every price read); the mirror now holds only what this hub serves');
         await this.refreshPriceSyncHeight();
-    },
-
-    // The local finalized rows the drain proves foreign, by natural key when the served
-    // set is complete and by the round ceiling when it overflowed. Null when the pass
-    // must not run at all: a read failed, or the key derivation itself looks broken. A
-    // floorTs above zero judges only rows at or above that block time: the drain started at
-    // the mirror floor (choosePriceRepageStart) and served nothing older.
-    async staleForeignPriceRoundIds(servedKeys, keysComplete, maxServedRound, floorTs) {
-        let floor = (Number(floorTs) > 0) ? [Number(floorTs)] : [];
-        let locals, stale;
-        if (!keysComplete) {
-            // The set overflowed its memory cap, so absence from it proves nothing. Fall
-            // back to the weaker half that needs no set: the drain saw every row the hub
-            // holds, so no round above the highest it served exists there. This still
-            // clears the shape that poisons the ORDER BY round_number DESC readers, and
-            // leaves any lower-numbered foreign round for the operator.
-            getLogger().warn('HubDbSync: price round reconciliation exceeded its key cap (' +
-                PRICE_FINALIZED_KEY_CAP + '); falling back to the round-ceiling rule ' +
-                '(rounds above ' + maxServedRound + ' only)');
-            try {
-                locals = await this.hubDb.doQuery(
-                    "SELECT id FROM price_snapshots WHERE status = 'finalized' AND round_number > ?",
-                    [maxServedRound]);
-            } catch (e) {
-                getLogger().warn('HubDbSync: price round reconciliation skipped (read failed):', e);
-                return null;
-            }
-            stale = (locals || []).map(r => Number(r.id)).filter(Number.isFinite);
-        } else {
-            try {
-                locals = await this.hubDb.doQuery(
-                    "SELECT id, round_number, coin_pair FROM price_snapshots WHERE status = 'finalized'" +
-                    (floor.length ? ' AND block_timestamp >= ?' : ''), floor);
-            } catch (e) {
-                getLogger().warn('HubDbSync: price round reconciliation skipped (read failed):', e);
-                return null;
-            }
-            locals = locals || [];
-            stale = locals
-                .filter(r => !servedKeys.has(priceRoundKey(r.round_number, r.coin_pair)))
-                .map(r => Number(r.id))
-                .filter(Number.isFinite);
-            // Sanity fence on the KEY DERIVATION itself, not on the data. Every finalized
-            // row this drain served was applied to the local table moments ago, so it must
-            // read back into the served set. If the hub served finalized rounds and NOT ONE
-            // local finalized row matched, the two sides are not producing the same key
-            // (a column rename, a driver type change) and this pass would empty a healthy
-            // mirror. Refuse, loudly: a stalled reconciliation is recoverable, a wiped
-            // price history under a mirror the operator believes is converging is not.
-            if (servedKeys.size > 0 && locals.length > 0 && stale.length === locals.length) {
-                getLogger().error('HubDbSync: price round reconciliation refused: the hub served ' +
-                    servedKeys.size + ' finalized round(s) but NONE of the ' + locals.length +
-                    ' local finalized row(s) matched a served key. That is a key-derivation ' +
-                    'mismatch, not contamination; leaving the mirror untouched.');
-                return null;
-            }
-        }
-        return stale;
     },
 
     // Clear capability snapshots this hub does not hold (#1837).
@@ -258,7 +316,7 @@ module.exports = {
         // read that failed reports 0 (see localMaxId), where deleting on a guess is the
         // one outcome worse than waiting for the next drain.
         if (!Number.isFinite(preDrainMaxId) || preDrainMaxId <= 0) return;
-        let stale = await this.staleForeignSnapshotIds(servedKeys, keysComplete, maxServedBlock, preDrainMaxId);
+        let stale = await staleForeignSnapshotIdsImpl.call(this, servedKeys, keysComplete, maxServedBlock, preDrainMaxId);
         if (stale === null || stale.length === 0) return;
         // Chunked so one oversized IN list can never blow the statement limit.
         for (let i = 0; i < stale.length; i += 500) {
@@ -274,62 +332,6 @@ module.exports = {
         getLogger().warn('HubDbSync: removed ' + stale.length + ' capability_snapshots row(s) this hub does not ' +
             'hold (a repointed or rebuilt hub leaves the previous one\'s validator sets behind, and every ' +
             'read of this table keys on snapshot_block); the mirror now holds only what this hub serves');
-    },
-
-    // The local rows that predate the drain and that the drain proves foreign, by natural
-    // key when the served set is complete and by the snapshot_block ceiling when it
-    // overflowed. Null when the pass must not run: a read failed, or the key derivation
-    // itself looks broken.
-    async staleForeignSnapshotIds(servedKeys, keysComplete, maxServedBlock, preDrainMaxId) {
-        let stale;
-        if (!keysComplete) {
-            // The set overflowed its memory cap, so absence from it proves nothing. Fall back
-            // to the weaker half that needs no set: the drain saw every row the hub holds, so
-            // no boundary above the highest it served exists there. That still clears the
-            // shape this pass exists for (a foreign chain's height sits ABOVE anything a
-            // younger network has reached) and leaves any lower foreign boundary alone.
-            getLogger().warn('HubDbSync: capability snapshot reconciliation exceeded its key cap (' +
-                CAPABILITY_SNAPSHOT_KEY_CAP + '); falling back to the snapshot_block-ceiling rule ' +
-                '(boundaries above ' + maxServedBlock + ' only)');
-            let rows;
-            try {
-                rows = await this.hubDb.doQuery(
-                    'SELECT id FROM capability_snapshots WHERE id <= ? AND snapshot_block > ?',
-                    [preDrainMaxId, maxServedBlock]);
-            } catch (e) {
-                getLogger().warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
-                return null;
-            }
-            stale = (rows || []).map(r => Number(r.id)).filter(Number.isFinite);
-        } else {
-            let locals;
-            try {
-                // Unrestricted read: the id fence decides what may be DELETED, but the
-                // key-derivation fence below has to weigh every local row, including the ones
-                // this drain just applied. On a mirror whose whole pre-drain content is
-                // foreign - the repoint case - those fresh rows are the only proof that the
-                // two sides still derive the same key.
-                locals = await this.hubDb.doQuery(
-                    'SELECT id, snapshot_block, capability, signing_pubkey, source FROM capability_snapshots');
-            } catch (e) {
-                getLogger().warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
-                return null;
-            }
-            locals = locals || [];
-            let matched = locals.filter(r => servedKeys.has(capabilitySnapshotKey(r))).length;
-            if (servedKeys.size > 0 && locals.length > 0 && matched === 0) {
-                getLogger().error('HubDbSync: capability snapshot reconciliation refused: the hub served ' +
-                    servedKeys.size + ' row(s) but NONE of the ' + locals.length + ' local row(s) matched ' +
-                    'a served key. That is a key-derivation mismatch, not contamination; leaving the ' +
-                    'mirror untouched.');
-                return null;
-            }
-            stale = locals
-                .filter(r => Number(r.id) <= preDrainMaxId && !servedKeys.has(capabilitySnapshotKey(r)))
-                .map(r => Number(r.id))
-                .filter(Number.isFinite);
-        }
-        return stale;
     },
 
     // Clear oracle rows the hub has retracted.

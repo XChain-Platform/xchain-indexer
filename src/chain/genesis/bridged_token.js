@@ -35,6 +35,81 @@ const BRIDGE_ROW_LOCKS = {
     LOCK_CALLBACK:    '1'
 };
 
+
+// Ensure the bridge ROOT row `<origin>` exists and is bridge-owned, creating it when
+// absent. Returns { ok, reason, rootCreated } - ok false means the caller must return
+// immediately without touching the child row (see injectBridgedToken's EXISTING ROWS
+// comment for why an existing root under a foreign owner refuses the whole leg).
+async function ensureBridgeRootRowImpl(origin, owner, ctx) {
+    let rootInfo = await this.tokenRow(origin);
+    if(rootInfo){
+        if(String(rootInfo['OWNER']) !== String(owner))
+            return {
+                ok:          false,
+                reason:      'root row ' + origin + ' is owned by ' + rootInfo['OWNER'] + ', not the bridge role address ' + owner,
+                rootCreated: false
+            };
+        return { ok: true, reason: null, rootCreated: false };
+    }
+    let res = await this.injectProtocolToken({
+        tick:           origin,
+        owner:          owner,
+        maxSupply:      '',             // uncapped sentinel
+        decimals:       '0',
+        lockMaxSupply:  '',             // see injectBridgedToken's comment: never set
+        mintStartBlock: '999999999',
+        mintSupply:     '',
+        description:    'Bridge root for assets native to ' + origin,
+        locks:          BRIDGE_ROW_LOCKS
+    }, Object.assign({}, ctx, { txHashFamily: 'BRIDGE' }));
+    return { ok: true, reason: null, rootCreated: res.created };
+}
+
+
+// Ensure the bridge CHILD row `<origin>.<name>` exists with the signed DECIMALS,
+// creating or re-parameterizing it as injectBridgedToken's EXISTING ROWS comment
+// describes. Returns { ok, reason, childCreated, reparameterized }.
+async function ensureBridgeChildRowImpl(child, origin, owner, decimals, ctx) {
+    let childInfo = await this.tokenRow(child);
+    if(!childInfo){
+        let res = await this.injectProtocolToken({
+            tick:           child,
+            owner:          owner,
+            maxSupply:      '',             // uncapped sentinel
+            decimals:       String(decimals),
+            lockMaxSupply:  '',
+            mintStartBlock: '999999999',
+            mintSupply:     '',
+            description:    'Bridged from ' + origin,
+            locks:          BRIDGE_ROW_LOCKS
+        }, Object.assign({}, ctx, { txHashFamily: 'BRIDGE' }));
+        return { ok: true, reason: null, childCreated: res.created, reparameterized: false };
+    }
+
+    if(String(childInfo['DECIMALS']) === String(decimals))
+        return { ok: true, reason: null, childCreated: false, reparameterized: false };
+
+    let supply = this.util.isNull(childInfo['SUPPLY']) ? '0' : String(childInfo['SUPPLY']);
+    if(this.util.bcgt(supply, '0'))
+        return {
+            ok:              false,
+            reason:          'decimals mismatch on ' + child + ': record ' + decimals + ', row ' + childInfo['DECIMALS'] + ', supply ' + supply,
+            childCreated:    false,
+            reparameterized: false
+        };
+
+    // SUPPLY is 0, so the precision still moves. An ISSUE format 0 carrying only the new
+    // DECIMALS: every empty field back-fills from the current row, so the owner, locks,
+    // description and window are untouched. The new precision is the hash salt, which is
+    // what keeps this transaction distinct from the creation (and from a later
+    // re-parameterization to a different precision) for the same tick.
+    let fields = ['ISSUE', '0', child, '', '', String(decimals)];
+    let tx     = this.syntheticIssueTx(fields, child, owner,
+        Object.assign({}, ctx, { txHashFamily: 'BRIDGEDEC', txHashSalt: String(decimals) }));
+    await this.actions.processTransaction(tx, true); // isGenesis = true
+    return { ok: true, reason: null, childCreated: false, reparameterized: true };
+}
+
 module.exports = {
 
     /**
@@ -77,12 +152,12 @@ module.exports = {
         let child  = origin + '.' + String(params.name);
 
         // Root row.
-        let root = await this.ensureBridgeRootRow(origin, owner, ctx);
+        let root = await ensureBridgeRootRowImpl.call(this, origin, owner, ctx);
         if(!root.ok)
             return { ok: false, reason: root.reason, tick: child, rootCreated: false, childCreated: false, reparameterized: false };
 
         // Child row.
-        let kid = await this.ensureBridgeChildRow(child, origin, owner, params.decimals, ctx);
+        let kid = await ensureBridgeChildRowImpl.call(this, child, origin, owner, params.decimals, ctx);
         return {
             ok:              kid.ok,
             reason:          kid.reason,
@@ -91,79 +166,6 @@ module.exports = {
             childCreated:    kid.childCreated,
             reparameterized: kid.reparameterized
         };
-    },
-
-    // Ensure the bridge ROOT row `<origin>` exists and is bridge-owned, creating it when
-    // absent. Returns { ok, reason, rootCreated } - ok false means the caller must return
-    // immediately without touching the child row (see injectBridgedToken's EXISTING ROWS
-    // comment for why an existing root under a foreign owner refuses the whole leg).
-    async ensureBridgeRootRow(origin, owner, ctx){
-        let rootInfo = await this.tokenRow(origin);
-        if(rootInfo){
-            if(String(rootInfo['OWNER']) !== String(owner))
-                return {
-                    ok:          false,
-                    reason:      'root row ' + origin + ' is owned by ' + rootInfo['OWNER'] + ', not the bridge role address ' + owner,
-                    rootCreated: false
-                };
-            return { ok: true, reason: null, rootCreated: false };
-        }
-        let res = await this.injectProtocolToken({
-            tick:           origin,
-            owner:          owner,
-            maxSupply:      '',             // uncapped sentinel
-            decimals:       '0',
-            lockMaxSupply:  '',             // see injectBridgedToken's comment: never set
-            mintStartBlock: '999999999',
-            mintSupply:     '',
-            description:    'Bridge root for assets native to ' + origin,
-            locks:          BRIDGE_ROW_LOCKS
-        }, Object.assign({}, ctx, { txHashFamily: 'BRIDGE' }));
-        return { ok: true, reason: null, rootCreated: res.created };
-    },
-
-    // Ensure the bridge CHILD row `<origin>.<name>` exists with the signed DECIMALS,
-    // creating or re-parameterizing it as injectBridgedToken's EXISTING ROWS comment
-    // describes. Returns { ok, reason, childCreated, reparameterized }.
-    async ensureBridgeChildRow(child, origin, owner, decimals, ctx){
-        let childInfo = await this.tokenRow(child);
-        if(!childInfo){
-            let res = await this.injectProtocolToken({
-                tick:           child,
-                owner:          owner,
-                maxSupply:      '',             // uncapped sentinel
-                decimals:       String(decimals),
-                lockMaxSupply:  '',
-                mintStartBlock: '999999999',
-                mintSupply:     '',
-                description:    'Bridged from ' + origin,
-                locks:          BRIDGE_ROW_LOCKS
-            }, Object.assign({}, ctx, { txHashFamily: 'BRIDGE' }));
-            return { ok: true, reason: null, childCreated: res.created, reparameterized: false };
-        }
-
-        if(String(childInfo['DECIMALS']) === String(decimals))
-            return { ok: true, reason: null, childCreated: false, reparameterized: false };
-
-        let supply = this.util.isNull(childInfo['SUPPLY']) ? '0' : String(childInfo['SUPPLY']);
-        if(this.util.bcgt(supply, '0'))
-            return {
-                ok:              false,
-                reason:          'decimals mismatch on ' + child + ': record ' + decimals + ', row ' + childInfo['DECIMALS'] + ', supply ' + supply,
-                childCreated:    false,
-                reparameterized: false
-            };
-
-        // SUPPLY is 0, so the precision still moves. An ISSUE format 0 carrying only the new
-        // DECIMALS: every empty field back-fills from the current row, so the owner, locks,
-        // description and window are untouched. The new precision is the hash salt, which is
-        // what keeps this transaction distinct from the creation (and from a later
-        // re-parameterization to a different precision) for the same tick.
-        let fields = ['ISSUE', '0', child, '', '', String(decimals)];
-        let tx     = this.syntheticIssueTx(fields, child, owner,
-            Object.assign({}, ctx, { txHashFamily: 'BRIDGEDEC', txHashSalt: String(decimals) }));
-        await this.actions.processTransaction(tx, true); // isGenesis = true
-        return { ok: true, reason: null, childCreated: false, reparameterized: true };
     },
 
 };

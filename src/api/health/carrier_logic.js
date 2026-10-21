@@ -56,4 +56,4 @@ function carrierLogicDigest(){
     return cached;
 }
 
-module.exports = { carrierLogicDigest, digestOf, PIN_PATH, UNREADABLE };
+module.exports = { carrierLogicDigest,UNREADABLE };

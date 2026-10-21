@@ -19,6 +19,16 @@
  *
  ********************************************************************/
 
+
+// Whether this schema carries rollcall_actions. Asked of information_schema, not
+// inferred from a failed SELECT, because doQuery collapses a missing-table error to [].
+async function hasRollcallActionsTableImpl() {
+    let rows = await this.doQuery(
+        `SELECT TABLE_NAME FROM information_schema.TABLES
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rollcall_actions'`, []);
+    return Array.isArray(rows) && rows.length > 0;
+}
+
 module.exports = {
 
     // ROLLCALL presence signatures, DOGE side. Raw hex, never mapper ids: the BTC
@@ -85,15 +95,6 @@ module.exports = {
         return rows.length;
     },
 
-    // Whether this schema carries rollcall_actions. Asked of information_schema, not
-    // inferred from a failed SELECT, because doQuery collapses a missing-table error to [].
-    async hasRollcallActionsTable(){
-        let rows = await this.doQuery(
-            `SELECT TABLE_NAME FROM information_schema.TABLES
-              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rollcall_actions'`, []);
-        return Array.isArray(rows) && rows.length > 0;
-    },
-
     // Explorer list/detail feed (/api/rollcalls), newest action first, optionally for
     // one action_index. Every row: action_index, block_index, epoch_height, ledger_hash,
     // publisher, gates, carried_count, first_seen_count.
@@ -110,7 +111,7 @@ module.exports = {
         if(one !== null && !Number.isFinite(one)) return [];
         let where = (one === null) ? '' : 'WHERE action_index = ?';
         let args = (one === null) ? [n] : [one, n];
-        if(await this.hasRollcallActionsTable()){
+        if(await hasRollcallActionsTableImpl.call(this)){
             return await this.doQuery(
                 `SELECT action_index, block_index, epoch_height, ledger_hash, publisher, gates,
                         carried_count, first_seen_count

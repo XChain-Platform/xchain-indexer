@@ -23,6 +23,33 @@ const gateRegistry = require('../../consensus/gate_registry');
 
 // Installed onto Send.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
+
+// Append one leg per wire group, by FORMAT: 0 a single send, 1 a brief multi-send of one
+// TICK, 2 a full multi-send, 3 a full multi-send carrying a MEMO per leg
+function pushSendLegsImpl(sends, params, format, memo) {
+    let lastIdx = params.length - 1;
+    for(let idx in params){
+        // Force index to integer value (for-in yields string keys)
+        idx = parseInt(idx);
+
+        // Single Send
+        if(format==0 && idx==0)
+            sends.push([params[1], params[2], params[3], memo]);
+
+        // Multi-Send (Brief)
+        if(format==1 && idx>1 && idx%2==1)
+            sends.push([params[1], params[idx-1], params[idx], memo]);
+
+        // Multi-Send (Full)
+        if(format==2 && idx>0 && idx%3==1 && idx < lastIdx)
+            sends.push([params[idx], params[(idx+1)], params[idx+2], memo]);
+
+        // Multi-Send (Full) with Multiple Memos
+        if(format==3 && idx>0 && idx%4==1 && idx < lastIdx)
+            sends.push([params[idx], params[idx+1], params[idx+2], params[idx+3]]);
+    }
+}
+
 module.exports = {
 
     // Validate the FORMAT and read the wire parameters into legs of [TICK, AMOUNT, DESTINATION,
@@ -55,34 +82,8 @@ module.exports = {
         if(error)
             sends.push([params[0], params[1], memo]);
 
-        this.pushSendLegs(sends, params, format, memo);
+        pushSendLegsImpl.call(this, sends, params, format, memo);
         return { error, sends };
-    },
-
-    // Append one leg per wire group, by FORMAT: 0 a single send, 1 a brief multi-send of one
-    // TICK, 2 a full multi-send, 3 a full multi-send carrying a MEMO per leg
-    pushSendLegs(sends, params, format, memo){
-        let lastIdx = params.length - 1;
-        for(let idx in params){
-            // Force index to integer value (for-in yields string keys)
-            idx = parseInt(idx);
-
-            // Single Send
-            if(format==0 && idx==0)
-                sends.push([params[1], params[2], params[3], memo]);
-
-            // Multi-Send (Brief)
-            if(format==1 && idx>1 && idx%2==1)
-                sends.push([params[1], params[idx-1], params[idx], memo]);
-
-            // Multi-Send (Full)
-            if(format==2 && idx>0 && idx%3==1 && idx < lastIdx)
-                sends.push([params[idx], params[(idx+1)], params[idx+2], memo]);
-
-            // Multi-Send (Full) with Multiple Memos
-            if(format==3 && idx>0 && idx%4==1 && idx < lastIdx)
-                sends.push([params[idx], params[idx+1], params[idx+2], params[idx+3]]);
-        }
     },
 
     // Consolidate sends by DESTINATION and TICK.

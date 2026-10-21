@@ -34,6 +34,30 @@ const BECH32_GEN      = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a146
 
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
+
+// BIP-173 BCH polymod over the expanded HRP plus the given 5-bit data values.
+// Shared by bech32Decode (verify: result must equal the checksum constant) and
+// bech32Encode (create: result over data + six zeros, XOR the constant, yields
+// the 6 checksum values).
+function bech32PolymodImpl(hrp, data) {
+    let values = [];
+    for(let i=0; i<hrp.length; i++)
+        values.push(hrp.charCodeAt(i)>>5);
+    values.push(0);
+    for(let i=0; i<hrp.length; i++)
+        values.push(hrp.charCodeAt(i)&31);
+    values = values.concat(data);
+    let chk = 1;
+    for(let value of values){
+        let top = chk>>25;
+        chk = ((chk&0x1ffffff)<<5)^value;
+        for(let i=0; i<5; i++)
+            if((top>>i)&1)
+                chk ^= BECH32_GEN[i];
+    }
+    return chk;
+}
+
 module.exports = {
 
     // Decode a base58check string and return its payload bytes, or false if the
@@ -96,7 +120,7 @@ module.exports = {
             data.push(value);
         }
         // Verify the BCH checksum (BIP-173 polymod over expanded hrp + data)
-        let chk = this.bech32Polymod(hrp, data);
+        let chk = bech32PolymodImpl.call(this, hrp, data);
         // Witness version is the first data value; remaining values (minus the
         // 6 checksum chars) are the witness program in 5-bit groups
         let version = data[0];
@@ -123,29 +147,6 @@ module.exports = {
         if(version==0 && program.length!=20 && program.length!=32)
             return false;
         return { hrp: hrp, version: version, program: program };
-    },
-
-    // BIP-173 BCH polymod over the expanded HRP plus the given 5-bit data values.
-    // Shared by bech32Decode (verify: result must equal the checksum constant) and
-    // bech32Encode (create: result over data + six zeros, XOR the constant, yields
-    // the 6 checksum values).
-    bech32Polymod(hrp, data){
-        let values = [];
-        for(let i=0; i<hrp.length; i++)
-            values.push(hrp.charCodeAt(i)>>5);
-        values.push(0);
-        for(let i=0; i<hrp.length; i++)
-            values.push(hrp.charCodeAt(i)&31);
-        values = values.concat(data);
-        let chk = 1;
-        for(let value of values){
-            let top = chk>>25;
-            chk = ((chk&0x1ffffff)<<5)^value;
-            for(let i=0; i<5; i++)
-                if((top>>i)&1)
-                    chk ^= BECH32_GEN[i];
-        }
-        return chk;
     },
 
     // Encode payload bytes as a base58check string (inverse of base58CheckDecode):
@@ -196,7 +197,7 @@ module.exports = {
         if(bits>0)
             data.push((acc<<(5-bits))&31);
         // Checksum: polymod over hrp + data + six zero placeholders, XOR the version's constant
-        let chk = this.bech32Polymod(hrp, data.concat([0,0,0,0,0,0])) ^ (version==0 ? BECH32_CONST : BECH32M_CONST);
+        let chk = bech32PolymodImpl.call(this, hrp, data.concat([0,0,0,0,0,0])) ^ (version==0 ? BECH32_CONST : BECH32M_CONST);
         for(let i=0; i<6; i++)
             data.push((chk>>(5*(5-i)))&31);
         let str = hrp + '1';

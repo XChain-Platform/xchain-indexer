@@ -24,6 +24,99 @@ const { getLogger } = require('../../observability/index.js');
 
 // Installed onto Coinpay.prototype by index.js; each method runs with `this` bound to
 // the handler, exactly as the class method it was.
+
+// Per-payee payment resolution INSIDE a batch (BATCH_ISSUANCE_LIMITS, spec row 25).
+//
+// Outside a batch this handler is reached once per native-coin output: db.js
+// getDecoderBlockData emits one row per stored output and output_fanout.js leaves
+// a COINPAY transaction's rows alone, so COIN_DESTINATION/COIN_AMOUNT walk the
+// whole output set and exactly the row paying the payee settles.
+//
+// A BATCH row is NOT a per-output settlement row (its top-level action is BATCH),
+// so collapseOutputFanout keeps only the LOWEST-VOUT row and every sub-command
+// sees that one output's COIN_DESTINATION. N sub-commands paying N different
+// sellers therefore cleared exactly one of them: the rest failed the destination
+// check against a payment that was never meant for them.
+//
+// The fix is NOT to fan a BATCH row out per output - that would re-execute every
+// sub-command (every ISSUE, SEND, ORDER) once per output. It is for this handler to
+// read the output set directly: getDecoderBlockData attaches the FULL, vout-sorted
+// tx_outputs of the transaction to EVERY emitted row (db.js, `outputsByTx`), so the
+// surviving row already carries every payee's output; only the consumer was missing.
+//
+// Gated by the ledger's presence, which is this spec's flag AND the in-a-batch
+// marker. Off the batch path payeeOutput stays null and the destination check below
+// is the unchanged single-output test. On the READ capability, not the write one:
+// resolving which output pays this payee is a question about the transaction, and a
+// probe that cannot ask it quotes a mismatch the chain does not report.
+async function resolvePayeeOutputImpl(data, pool) {
+    let { batchLedger, payee } = pool;
+    let payeeOutput = batchLedger ? this.findPaymentOutput(data['TX_OUTPUTS'], payee) : null;
+
+    // Early exit: if this output's destination does not match the payee address
+    if(!payeeOutput && data['COIN_DESTINATION'] != payee){
+        getLogger().info("\t COINPAY (skip): destination mismatch tx=" + data['COIN_DESTINATION'] + " payee=" + payee);
+        await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
+        return false;
+    }
+    pool.payeeOutput = payeeOutput;
+    return true;
+}
+
+
+// Which pool this obligation draws on, and this is the whole reason the tally is
+// kept per address, not as a single scalar.
+//
+// coinAmountConsumed was correct while every consumer drew on ONE output: COINPAY
+// and coin-paid DISPENSE both spent the surviving row's COIN_DESTINATION output and
+// nothing else was reachable. Once an obligation can resolve its OWN output, a
+// scalar is wrong in exactly the way a scalar oracle-fee tally would have been
+// wrong (utility.js validateOracleFee, which keys by oracle address for this same
+// reason): seller A's settlement would eat the output that pays seller B, and two
+// sellers each paid in full would settle only once.
+//
+// So the model is per-ADDRESS, with the existing scalar kept as the cell for one
+// address - the row's own COIN_DESTINATION. That address's arithmetic is then
+// untouched (paidAmount IS data['COIN_AMOUNT'], the tally IS coinAmountConsumed),
+// which preserves the single-address behavior byte for byte and keeps the pool that
+// actions/dispense.js shares through the same key. Every OTHER payee gets its own
+// cell in coinPayeeConsumed, created lazily here rather than seeded in batch.js,
+// and one payee's exhausted output can never invalidate a sibling paid separately.
+async function measurePoolImpl(data, obligationInfo, pool) {
+    let { batchLedger, ledger, payee, payeeOutput } = pool;
+    let settledOutput = (payee == data['COIN_DESTINATION']) ? null : payeeOutput;
+
+    let paidAmount = settledOutput
+                        ? (settledOutput.value || settledOutput.amount || 0)
+                        : data['COIN_AMOUNT'];
+    let payeeTally = (ledger && ledger['coinPayeeConsumed'] && typeof ledger['coinPayeeConsumed'] === 'object')
+                        ? ledger['coinPayeeConsumed'] : null;
+    let consumed   = settledOutput
+                        ? (payeeTally ? (payeeTally[payee] || '0') : '0')
+                        : (ledger ? ledger['coinAmountConsumed'] : '0');
+    // A probe holds the read capability and no write one, so `consumed` is '0' on both
+    // branches above and this reduces to the payee's OWN output undrained. That is the
+    // point: quoting against data['COIN_AMOUNT'] would price this obligation off the
+    // lowest-vout output, which belongs to a DIFFERENT payee. The quote is deliberately
+    // optimistic about siblings (nothing tracks what an earlier sub-command of the same
+    // probe would have spent), exactly as validateNativeCoinFee's probe path already is.
+    let available  = batchLedger ? this.util.bcsub(paidAmount, consumed, 8) : data['COIN_AMOUNT'];
+
+    // A later sub-command that the REMAINING payment cannot fully cover takes the
+    // existing short-payment path: it skips, settles nothing, and consumes nothing.
+    // Partial settlement is deliberately not invented here - an obligation is settled
+    // in full or not at all (getCoinpayObligationInfo has no partial-fill state), so
+    // "one payment settles one obligation, not N" is enforced by refusing the later
+    // command outright rather than by part-paying it.
+    if(this.util.bclt(available, obligationInfo['COIN_AMOUNT'])){
+        getLogger().info("\t COINPAY (skip): amount short tx=" + available + " owed=" + obligationInfo['COIN_AMOUNT']);
+        await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
+        return false;
+    }
+    Object.assign(pool, { settledOutput, paidAmount, payeeTally, consumed });
+    return true;
+}
+
 module.exports = {
 
     // The pool this obligation draws on: { batchLedger, ledger, payee, payeeOutput,
@@ -43,9 +136,9 @@ module.exports = {
             });
             return pool;
         }
-        if(!(await this.resolvePayeeOutput(data, pool)))
+        if(!(await resolvePayeeOutputImpl.call(this, data, pool)))
             return null;
-        if(!(await this.measurePool(data, obligationInfo, pool)))
+        if(!(await measurePoolImpl.call(this, data, obligationInfo, pool)))
             return null;
         return pool;
     },
@@ -87,97 +180,6 @@ module.exports = {
                             ? data['BATCH_VALUE_LEDGER'] : null;
         let ledger      = data['FEE_PROBE'] ? null : batchLedger;
         return { batchLedger, ledger };
-    },
-
-    // Per-payee payment resolution INSIDE a batch (BATCH_ISSUANCE_LIMITS, spec row 25).
-    //
-    // Outside a batch this handler is reached once per native-coin output: db.js
-    // getDecoderBlockData emits one row per stored output and output_fanout.js leaves
-    // a COINPAY transaction's rows alone, so COIN_DESTINATION/COIN_AMOUNT walk the
-    // whole output set and exactly the row paying the payee settles.
-    //
-    // A BATCH row is NOT a per-output settlement row (its top-level action is BATCH),
-    // so collapseOutputFanout keeps only the LOWEST-VOUT row and every sub-command
-    // sees that one output's COIN_DESTINATION. N sub-commands paying N different
-    // sellers therefore cleared exactly one of them: the rest failed the destination
-    // check against a payment that was never meant for them.
-    //
-    // The fix is NOT to fan a BATCH row out per output - that would re-execute every
-    // sub-command (every ISSUE, SEND, ORDER) once per output. It is for this handler to
-    // read the output set directly: getDecoderBlockData attaches the FULL, vout-sorted
-    // tx_outputs of the transaction to EVERY emitted row (db.js, `outputsByTx`), so the
-    // surviving row already carries every payee's output; only the consumer was missing.
-    //
-    // Gated by the ledger's presence, which is this spec's flag AND the in-a-batch
-    // marker. Off the batch path payeeOutput stays null and the destination check below
-    // is the unchanged single-output test. On the READ capability, not the write one:
-    // resolving which output pays this payee is a question about the transaction, and a
-    // probe that cannot ask it quotes a mismatch the chain does not report.
-    async resolvePayeeOutput(data, pool){
-        let { batchLedger, payee } = pool;
-        let payeeOutput = batchLedger ? this.findPaymentOutput(data['TX_OUTPUTS'], payee) : null;
-
-        // Early exit: if this output's destination does not match the payee address
-        if(!payeeOutput && data['COIN_DESTINATION'] != payee){
-            getLogger().info("\t COINPAY (skip): destination mismatch tx=" + data['COIN_DESTINATION'] + " payee=" + payee);
-            await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
-            return false;
-        }
-        pool.payeeOutput = payeeOutput;
-        return true;
-    },
-
-    // Which pool this obligation draws on, and this is the whole reason the tally is
-    // kept per address, not as a single scalar.
-    //
-    // coinAmountConsumed was correct while every consumer drew on ONE output: COINPAY
-    // and coin-paid DISPENSE both spent the surviving row's COIN_DESTINATION output and
-    // nothing else was reachable. Once an obligation can resolve its OWN output, a
-    // scalar is wrong in exactly the way a scalar oracle-fee tally would have been
-    // wrong (utility.js validateOracleFee, which keys by oracle address for this same
-    // reason): seller A's settlement would eat the output that pays seller B, and two
-    // sellers each paid in full would settle only once.
-    //
-    // So the model is per-ADDRESS, with the existing scalar kept as the cell for one
-    // address - the row's own COIN_DESTINATION. That address's arithmetic is then
-    // untouched (paidAmount IS data['COIN_AMOUNT'], the tally IS coinAmountConsumed),
-    // which preserves the single-address behavior byte for byte and keeps the pool that
-    // actions/dispense.js shares through the same key. Every OTHER payee gets its own
-    // cell in coinPayeeConsumed, created lazily here rather than seeded in batch.js,
-    // and one payee's exhausted output can never invalidate a sibling paid separately.
-    async measurePool(data, obligationInfo, pool){
-        let { batchLedger, ledger, payee, payeeOutput } = pool;
-        let settledOutput = (payee == data['COIN_DESTINATION']) ? null : payeeOutput;
-
-        let paidAmount = settledOutput
-                            ? (settledOutput.value || settledOutput.amount || 0)
-                            : data['COIN_AMOUNT'];
-        let payeeTally = (ledger && ledger['coinPayeeConsumed'] && typeof ledger['coinPayeeConsumed'] === 'object')
-                            ? ledger['coinPayeeConsumed'] : null;
-        let consumed   = settledOutput
-                            ? (payeeTally ? (payeeTally[payee] || '0') : '0')
-                            : (ledger ? ledger['coinAmountConsumed'] : '0');
-        // A probe holds the read capability and no write one, so `consumed` is '0' on both
-        // branches above and this reduces to the payee's OWN output undrained. That is the
-        // point: quoting against data['COIN_AMOUNT'] would price this obligation off the
-        // lowest-vout output, which belongs to a DIFFERENT payee. The quote is deliberately
-        // optimistic about siblings (nothing tracks what an earlier sub-command of the same
-        // probe would have spent), exactly as validateNativeCoinFee's probe path already is.
-        let available  = batchLedger ? this.util.bcsub(paidAmount, consumed, 8) : data['COIN_AMOUNT'];
-
-        // A later sub-command that the REMAINING payment cannot fully cover takes the
-        // existing short-payment path: it skips, settles nothing, and consumes nothing.
-        // Partial settlement is deliberately not invented here - an obligation is settled
-        // in full or not at all (getCoinpayObligationInfo has no partial-fill state), so
-        // "one payment settles one obligation, not N" is enforced by refusing the later
-        // command outright rather than by part-paying it.
-        if(this.util.bclt(available, obligationInfo['COIN_AMOUNT'])){
-            getLogger().info("\t COINPAY (skip): amount short tx=" + available + " owed=" + obligationInfo['COIN_AMOUNT']);
-            await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
-            return false;
-        }
-        Object.assign(pool, { settledOutput, paidAmount, payeeTally, consumed });
-        return true;
     },
 
     // Draw this obligation's OWED amount (never the whole payment) out of the batch

@@ -162,4 +162,4 @@ function assertNoDeclaredKeyDrop(file, statements, sqlFor){
     }
 }
 
-module.exports = { assertNoDeclaredKeyDrop, declaredKeys, keyEvents };
+module.exports = { assertNoDeclaredKeyDrop,};

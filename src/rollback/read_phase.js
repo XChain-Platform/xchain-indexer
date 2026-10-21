@@ -29,6 +29,82 @@
 const Database  = require('../db');
 const readSql   = require('../db/rollback/read_phase.js');
 
+
+// Fold one read-phase row into the recompute sets: its addresses and tickers into
+// the util lists, its market pair into `markets` (deduped by marketKeys).
+function absorbEntityRowImpl(row, markets, marketKeys) {
+    // Populate addresses and tickers arrays
+    if(!this.util.isNull(row.address))
+        this.util.addAddressTicker(row.address, row.tick);
+    if(!this.util.isNull(row.address2))
+        this.util.addAddressTicker(row.address2, row.tick);
+    if(!this.util.isNull(row.address3))
+        this.util.addAddressTicker(row.address3, row.tick);
+    // Build out list of DEX market pairs. A tickerless (native-coin) side
+    // reads as 0, the sentinel `markets` keys it under, so this collector
+    // keeps exactly the pairs the block path collects (Database.getMarkets).
+    // Dropping those rows instead left every token/native market out of the
+    // post-reorg recompute, so its stats stayed at whatever the orphaned
+    // range last wrote.
+    if(!this.util.isNull(row.tick1_id) || !this.util.isNull(row.tick2_id)){
+        let tick1_id = Database.marketTickId(row.tick1_id);
+        let tick2_id = Database.marketTickId(row.tick2_id);
+        let coin1_id = Number(row.coin1_id) || 0;
+        let coin2_id = Number(row.coin2_id) || 0;
+        let key      = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
+        if(!marketKeys.has(key)){
+            marketKeys.add(key);
+            markets.push({ tick1_id, tick2_id, coin1_id, coin2_id });
+        }
+    }
+}
+
+
+// The ATTEST v5/v6 batches whose chain wire this reorg orphans (spec §6.3, row 55).
+//
+// A batch is un-landed when ANY of its wires is orphaned, not only its head. The
+// delivery fires on the action that COMPLETES the batch's chunk coverage (row 52), so
+// a reorg that takes one continuation leaves a head standing whose batch no longer
+// exists on the surviving chain, and the hub is still serving the link that delivery
+// stamped. Joining every rolled-back chunk row back to its head is what catches that
+// case; scoping the join to the head's own key is what makes the result the identity
+// the retraction has to carry (the key, its signed window and the HEAD's action index,
+// which is the value the hub stamped).
+//
+// Only VALID heads: a batch whose reassembly or quorum failed was stamped invalid on
+// its head and never pushed, so there is no link to retract. A head that is valid but
+// never completed its coverage is harmless the other way: the retraction matches no
+// link on the hub and is answered as an accepted no-op.
+//
+// The CHUNK side carries the same two predicates, because collection has to describe
+// the same chunk set forward assembly accepted (db.getAttestBatchChunks) and nothing
+// less. A batch key is sha256 over the window its head declares, so anyone can derive
+// it and file rows under it: A BATCH'S IDENTITY IS (KEY, AUTHOR), NEVER THE KEY ALONE
+// (actions/attest/batch.js authoredBy). Joining on the key alone let a row that is no part
+// of the batch un-land it - a rejected duplicate, or a foreign publisher's chunk, sitting
+// anywhere in the orphaned range pulled in a SURVIVING head and queued a retraction that
+// cleared a live batch's hub links. The hub cannot catch that: the retraction names a
+// genuinely valid window, and the link is set-once, so nothing ever restores it.
+//
+// The author joins are INNER on purpose, mirroring authoredBy's fail-closed rule that an
+// unresolvable broadcaster scopes to NOTHING. A publisher whose author cannot be resolved
+// never assembles a batch forward either, so no link was ever stamped and there is nothing
+// to retract.
+//
+// doQueryStrict, like the two reads above it and for the same reason: this runs
+// outside the transaction, where doQuery collapses a transient DB fault into an empty
+// result, which here is indistinguishable from "no batch was un-landed" and would
+// silently skip a retraction the reorg is never retried to re-issue.
+async function collectUnlandedAttestBatchesImpl(firstActionIndex) {
+    let rows = await readSql.readUnlandedAttestBatchRows(this.indexerView, firstActionIndex);
+    return (rows || []).map(r => ({
+        batch_key:    String(r.batch_key),
+        action_index: Number(r.action_index),
+        window_start: Number(r.window_start),
+        window_end:   Number(r.window_end)
+    }));
+}
+
 module.exports = {
 
     // The rolled-back action range and the ATTEST batches the reorg un-lands, all read
@@ -64,7 +140,7 @@ module.exports = {
         // longer exists locally by the time it is sent.
         let unlandedAttestBatches = [];
         if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled)
-            unlandedAttestBatches = await this.collectUnlandedAttestBatches(firstActionIndex);
+            unlandedAttestBatches = await collectUnlandedAttestBatchesImpl.call(this, firstActionIndex);
         return { firstActionIndex, lastActionIndex, unlandedAttestBatches };
     },
 
@@ -104,7 +180,7 @@ module.exports = {
                 if(query){
                     let rows = await this.indexerView.doQueryStrict(query, args);
                     for(let row of rows){
-                        this.absorbEntityRow(row, markets, marketKeys);
+                        absorbEntityRowImpl.call(this, row, markets, marketKeys);
                     }
                 }
             }
@@ -114,80 +190,6 @@ module.exports = {
         let addresses = this.util.getAddressesList();
         let tickers   = this.util.getTickersList();
         return { markets, addresses, tickers };
-    },
-
-    // Fold one read-phase row into the recompute sets: its addresses and tickers into
-    // the util lists, its market pair into `markets` (deduped by marketKeys).
-    absorbEntityRow(row, markets, marketKeys){
-        // Populate addresses and tickers arrays
-        if(!this.util.isNull(row.address))
-            this.util.addAddressTicker(row.address, row.tick);
-        if(!this.util.isNull(row.address2))
-            this.util.addAddressTicker(row.address2, row.tick);
-        if(!this.util.isNull(row.address3))
-            this.util.addAddressTicker(row.address3, row.tick);
-        // Build out list of DEX market pairs. A tickerless (native-coin) side
-        // reads as 0, the sentinel `markets` keys it under, so this collector
-        // keeps exactly the pairs the block path collects (Database.getMarkets).
-        // Dropping those rows instead left every token/native market out of the
-        // post-reorg recompute, so its stats stayed at whatever the orphaned
-        // range last wrote.
-        if(!this.util.isNull(row.tick1_id) || !this.util.isNull(row.tick2_id)){
-            let tick1_id = Database.marketTickId(row.tick1_id);
-            let tick2_id = Database.marketTickId(row.tick2_id);
-            let coin1_id = Number(row.coin1_id) || 0;
-            let coin2_id = Number(row.coin2_id) || 0;
-            let key      = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
-            if(!marketKeys.has(key)){
-                marketKeys.add(key);
-                markets.push({ tick1_id, tick2_id, coin1_id, coin2_id });
-            }
-        }
-    },
-
-    // The ATTEST v5/v6 batches whose chain wire this reorg orphans (spec §6.3, row 55).
-    //
-    // A batch is un-landed when ANY of its wires is orphaned, not only its head. The
-    // delivery fires on the action that COMPLETES the batch's chunk coverage (row 52), so
-    // a reorg that takes one continuation leaves a head standing whose batch no longer
-    // exists on the surviving chain, and the hub is still serving the link that delivery
-    // stamped. Joining every rolled-back chunk row back to its head is what catches that
-    // case; scoping the join to the head's own key is what makes the result the identity
-    // the retraction has to carry (the key, its signed window and the HEAD's action index,
-    // which is the value the hub stamped).
-    //
-    // Only VALID heads: a batch whose reassembly or quorum failed was stamped invalid on
-    // its head and never pushed, so there is no link to retract. A head that is valid but
-    // never completed its coverage is harmless the other way: the retraction matches no
-    // link on the hub and is answered as an accepted no-op.
-    //
-    // The CHUNK side carries the same two predicates, because collection has to describe
-    // the same chunk set forward assembly accepted (db.getAttestBatchChunks) and nothing
-    // less. A batch key is sha256 over the window its head declares, so anyone can derive
-    // it and file rows under it: A BATCH'S IDENTITY IS (KEY, AUTHOR), NEVER THE KEY ALONE
-    // (actions/attest/batch.js authoredBy). Joining on the key alone let a row that is no part
-    // of the batch un-land it - a rejected duplicate, or a foreign publisher's chunk, sitting
-    // anywhere in the orphaned range pulled in a SURVIVING head and queued a retraction that
-    // cleared a live batch's hub links. The hub cannot catch that: the retraction names a
-    // genuinely valid window, and the link is set-once, so nothing ever restores it.
-    //
-    // The author joins are INNER on purpose, mirroring authoredBy's fail-closed rule that an
-    // unresolvable broadcaster scopes to NOTHING. A publisher whose author cannot be resolved
-    // never assembles a batch forward either, so no link was ever stamped and there is nothing
-    // to retract.
-    //
-    // doQueryStrict, like the two reads above it and for the same reason: this runs
-    // outside the transaction, where doQuery collapses a transient DB fault into an empty
-    // result, which here is indistinguishable from "no batch was un-landed" and would
-    // silently skip a retraction the reorg is never retried to re-issue.
-    async collectUnlandedAttestBatches(firstActionIndex){
-        let rows = await readSql.readUnlandedAttestBatchRows(this.indexerView, firstActionIndex);
-        return (rows || []).map(r => ({
-            batch_key:    String(r.batch_key),
-            action_index: Number(r.action_index),
-            window_start: Number(r.window_start),
-            window_end:   Number(r.window_end)
-        }));
     },
 
 };

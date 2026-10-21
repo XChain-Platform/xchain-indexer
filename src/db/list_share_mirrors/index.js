@@ -42,6 +42,23 @@ const PINNED_REMOTE_TOKEN_ADMITTED_SQL = Object.freeze({
          LIMIT 1`
 });
 
+
+// MIRROR (db.mirrorDb()). The admitted form of the pin read: the newest finalized row
+// whose admit_block_<chain> is at or below admission.height. Fails the block closed when
+// this block skipped the remote-token barrier (see assertRemoteTokenBarrierNotSkipped).
+async function getAdmittedRemoteTokenImpl(network, coin, tick, admission) {
+    this.assertRemoteTokenBarrierNotSkipped('getPinnedRemoteToken');
+    const chain = String(admission && admission.chain);
+    const sql = Object.prototype.hasOwnProperty.call(PINNED_REMOTE_TOKEN_ADMITTED_SQL, chain)
+        ? PINNED_REMOTE_TOKEN_ADMITTED_SQL[chain] : null;
+    const height = Number(admission && admission.height);
+    if(sql === null || !Number.isSafeInteger(height) || height < 0)
+        this.util.throwError('getPinnedRemoteToken: unusable admission ' + JSON.stringify(admission));
+    const rows = await this.doQueryStrict(sql,
+        [String(network), String(coin).toUpperCase(), String(tick), height]);
+    return rows.length > 0 ? rows[0] : null;
+}
+
 module.exports = {
 
     // MIRROR (db.mirrorDb()). Latest finalized federation snapshot for one remote token.
@@ -51,29 +68,13 @@ module.exports = {
     // time to fall back on, so a NULL column means "not admitted here".
     async getPinnedRemoteToken(network, coin, tick, admission){
         if(admission !== undefined)
-            return await this.getAdmittedRemoteToken(network, coin, tick, admission);
+            return await getAdmittedRemoteTokenImpl.call(this, network, coin, tick, admission);
         const rows = await this.doQueryStrict(
             `SELECT * FROM remote_token_snapshots
              WHERE status = 'finalized' AND network = ? AND coin = ? AND tick = ?
              ORDER BY snapshot_block DESC, source_action_index DESC, snapshot_id DESC
              LIMIT 1`,
             [String(network), String(coin).toUpperCase(), String(tick)]);
-        return rows.length > 0 ? rows[0] : null;
-    },
-
-    // MIRROR (db.mirrorDb()). The admitted form of the pin read: the newest finalized row
-    // whose admit_block_<chain> is at or below admission.height. Fails the block closed when
-    // this block skipped the remote-token barrier (see assertRemoteTokenBarrierNotSkipped).
-    async getAdmittedRemoteToken(network, coin, tick, admission){
-        this.assertRemoteTokenBarrierNotSkipped('getPinnedRemoteToken');
-        const chain = String(admission && admission.chain);
-        const sql = Object.prototype.hasOwnProperty.call(PINNED_REMOTE_TOKEN_ADMITTED_SQL, chain)
-            ? PINNED_REMOTE_TOKEN_ADMITTED_SQL[chain] : null;
-        const height = Number(admission && admission.height);
-        if(sql === null || !Number.isSafeInteger(height) || height < 0)
-            this.util.throwError('getPinnedRemoteToken: unusable admission ' + JSON.stringify(admission));
-        const rows = await this.doQueryStrict(sql,
-            [String(network), String(coin).toUpperCase(), String(tick), height]);
         return rows.length > 0 ? rows[0] : null;
     },
 

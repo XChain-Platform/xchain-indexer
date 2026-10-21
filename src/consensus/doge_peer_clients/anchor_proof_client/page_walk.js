@@ -88,4 +88,4 @@ async function walkAnchorPages(client, txid){
     return anchors;
 }
 
-module.exports = { walkAnchorPages, MAX_ANCHOR_PAGES };
+module.exports = { walkAnchorPages,};
