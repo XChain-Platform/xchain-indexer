@@ -44,7 +44,15 @@ function exactU64(value){
 
 function exactU64TypeCast(field, next){
     if(field.type !== 'BIGINT') return next();
-    return exactU64(field.string());
+    const text = field.string();
+    // A signed BIGINT column (a pre-alignment mirror id, a MIN(id) probe) can
+    // legitimately read negative; that is not a u64 wire field, so keep it exact
+    // without the unsigned bound instead of failing the whole row read.
+    if(typeof text === 'string' && /^-\d+$/.test(text)){
+        const signed = BigInt(text);
+        return signed >= -MAX_SAFE_INTEGER ? Number(signed) : signed.toString();
+    }
+    return exactU64(text);
 }
 
 module.exports = { exactU64, exactU64TypeCast };
