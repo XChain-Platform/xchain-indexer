@@ -63,7 +63,10 @@ async function resolveChunkParent(handler, data, error){
 // does not collide either.
 async function checkDuplicateChunk(handler, data, parent, scope, error){
     if(!error && parent){
-        let existing = await handler.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
+        let ignoreMismatchedTotal = reassembly.archiveOrphanGeometryActive(handler, parent);
+        let existing = await handler.indexerDb.getAnchorChunks(
+            Number(data['MATCH_BATCH_SEQ']), scope, Number(parent.total_chunks),
+            ignoreMismatchedTotal);
         if(existing.some(c => Number(c.chunk_index) === Number(data['CHUNK_INDEX'])))
             error = 'invalid: CHUNK_INDEX (duplicate)';
     }
