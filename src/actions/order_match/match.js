@@ -28,6 +28,72 @@ const PRICE_CROSS_KEY = 'order_match_price_cross_activation.ORDER_MATCH_PRICE_CR
  *
  ********************************************************************/
 
+// Reciprocity gate (defense-in-depth for the findOrderMatches reverse-leg
+// constraint). Scoped to the INSTANT token-for-token path (all four ticks
+// non-null); the native-coin / COINPay path (any null tick) settles two-phase
+// with its own routing and is intentionally asymmetric, so it is left untouched.
+// On the instant path settlement hardcodes reciprocity (releases/credits
+// orderInfo.GET_TICK, matchInfo.GET_TICK), so BOTH legs must be an exact
+// tick+coin mirror: what this order GIVES must equal what the match GETS, and
+// what it GETS must equal what the match GIVES. A non-mirrored pair would credit
+// the taker a token the maker never escrowed (a mint out of the global escrow pool).
+function isTokenReciprocal(orderInfo, matchInfo){
+    let bothTokenLegs = !this.util.isNull(orderInfo['GIVE_TICK']) && !this.util.isNull(orderInfo['GET_TICK']) &&
+                        !this.util.isNull(matchInfo['GIVE_TICK']) && !this.util.isNull(matchInfo['GET_TICK']);
+    if(bothTokenLegs &&
+       (String(orderInfo['GIVE_TICK']) !== String(matchInfo['GET_TICK'])  || String(orderInfo['GIVE_COIN']) !== String(matchInfo['GET_COIN']) ||
+        String(orderInfo['GET_TICK'])  !== String(matchInfo['GIVE_TICK']) || String(orderInfo['GET_COIN'])  !== String(matchInfo['GIVE_COIN']))){
+        if(this.debug)
+            getLogger().info('Skipping non-reciprocal match (tick/coin mismatch)', orderInfo['GIVE_TICK'], orderInfo['GET_TICK'], matchInfo['GIVE_TICK'], matchInfo['GET_TICK']);
+        return false;
+    }
+    return true;
+}
+
+// A fill that quantized to zero on either side is dropped, never settled as dust
+function isNonZeroFill(fill){
+    let { give_amount, get_amount } = fill;
+
+    // Ignore zero quantity GIVE
+    if(this.util.bclte(give_amount, 0)){
+        if(this.debug)
+            getLogger().info('Skipping zero quantity GIVE amount ', give_amount);
+        return false;
+    }
+
+    // Ignore zero quantity GET
+    if(this.util.bclte(get_amount, 0)){
+        if(this.debug)
+            getLogger().info('Skipping zero quantity GET amount ', get_amount);
+        return false;
+    }
+    return true;
+}
+
+// Ownership orders are single-fill: amounts must exactly equal the order's
+// canonical sides (no partials). The counter-order must offer the full price.
+function isOwnershipFillExact(orderInfo, matchInfo, fill){
+    let { give_amount, get_amount } = fill;
+    let orderIsOwnership = (Number(orderInfo['GIVE_OWNERSHIP']||0)==1 || Number(orderInfo['GET_OWNERSHIP']||0)==1);
+    let matchIsOwnership = (Number(matchInfo['GIVE_OWNERSHIP']||0)==1 || Number(matchInfo['GET_OWNERSHIP']||0)==1);
+    if(orderIsOwnership || matchIsOwnership){
+        let expectedGive = (Number(orderInfo['GIVE_OWNERSHIP']||0)==1) ? '1' : orderInfo['GIVE_AMOUNT'];
+        let expectedGet  = (Number(orderInfo['GET_OWNERSHIP']||0)==1)  ? '1' : orderInfo['GET_AMOUNT'];
+        // Equality is written as "not greater and not less" because these amounts are
+        // BigNumber strings: a direct == compares text, so '1.0' and '1' would read as
+        // different fills and an ownership order would be refused a counter-party that
+        // offered exactly the asked price.
+        let giveEqual = (!this.util.bcgt(give_amount, expectedGive) && !this.util.bclt(give_amount, expectedGive));
+        let getEqual  = (!this.util.bcgt(get_amount,  expectedGet)  && !this.util.bclt(get_amount,  expectedGet));
+        if(!giveEqual || !getEqual){
+            if(this.debug)
+                getLogger().info('Skipping ownership match: amounts must be exact (single-fill)', give_amount, expectedGive, get_amount, expectedGet);
+            return false;
+        }
+    }
+    return true;
+}
+
 // Installed onto Order_Match.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the class method it was.
 module.exports = {
@@ -60,7 +126,7 @@ module.exports = {
     // this came from would `continue` to the next candidate.
     async fillMatch(data, orderInfo, matchInfo, order, match, lists){
 
-        if(!this.isTokenReciprocal(orderInfo, matchInfo))
+        if(!isTokenReciprocal.call(this, orderInfo, matchInfo))
             return;
         if(!(await this.isNativeReciprocal(data, orderInfo, matchInfo)))
             return;
@@ -81,37 +147,15 @@ module.exports = {
 
         // Both fill amounts at precision 64, snapped onto each side's tick grid (order_match.js)
         let fill = this.computeFillAmounts(orderInfo, matchInfo, order, lists);
-        if(!this.isNonZeroFill(fill))
+        if(!isNonZeroFill.call(this, fill))
             return;
-        if(!this.isOwnershipFillExact(orderInfo, matchInfo, fill))
+        if(!isOwnershipFillExact.call(this, orderInfo, matchInfo, fill))
             return;
         if(!(await this.isListAllowed(data, orderInfo, matchInfo, lists)))
             return;
 
         // Book and settle the fill (order_match/settle.js)
         await this.settleFill(data, orderInfo, matchInfo, order, match, fill);
-    },
-
-    // Reciprocity gate (defense-in-depth for the findOrderMatches reverse-leg
-    // constraint). Scoped to the INSTANT token-for-token path (all four ticks
-    // non-null); the native-coin / COINPay path (any null tick) settles two-phase
-    // with its own routing and is intentionally asymmetric, so it is left untouched.
-    // On the instant path settlement hardcodes reciprocity (releases/credits
-    // orderInfo.GET_TICK, matchInfo.GET_TICK), so BOTH legs must be an exact
-    // tick+coin mirror: what this order GIVES must equal what the match GETS, and
-    // what it GETS must equal what the match GIVES. A non-mirrored pair would credit
-    // the taker a token the maker never escrowed (a mint out of the global escrow pool).
-    isTokenReciprocal(orderInfo, matchInfo){
-        let bothTokenLegs = !this.util.isNull(orderInfo['GIVE_TICK']) && !this.util.isNull(orderInfo['GET_TICK']) &&
-                            !this.util.isNull(matchInfo['GIVE_TICK']) && !this.util.isNull(matchInfo['GET_TICK']);
-        if(bothTokenLegs &&
-           (String(orderInfo['GIVE_TICK']) !== String(matchInfo['GET_TICK'])  || String(orderInfo['GIVE_COIN']) !== String(matchInfo['GET_COIN']) ||
-            String(orderInfo['GET_TICK'])  !== String(matchInfo['GIVE_TICK']) || String(orderInfo['GET_COIN'])  !== String(matchInfo['GIVE_COIN']))){
-            if(this.debug)
-                getLogger().info('Skipping non-reciprocal match (tick/coin mismatch)', orderInfo['GIVE_TICK'], orderInfo['GET_TICK'], matchInfo['GIVE_TICK'], matchInfo['GET_TICK']);
-            return false;
-        }
-        return true;
     },
 
     // Native-coin (COINPay) reciprocity: the mirror of the bothTokenLegs gate for the
@@ -180,50 +224,6 @@ module.exports = {
             if(this.debug)
                 getLogger().info('Skipping due to price mismatch ', matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
             return false;
-        }
-        return true;
-    },
-
-    // A fill that quantized to zero on either side is dropped, never settled as dust
-    isNonZeroFill(fill){
-        let { give_amount, get_amount } = fill;
-
-        // Ignore zero quantity GIVE
-        if(this.util.bclte(give_amount, 0)){
-            if(this.debug)
-                getLogger().info('Skipping zero quantity GIVE amount ', give_amount);
-            return false;
-        }
-
-        // Ignore zero quantity GET
-        if(this.util.bclte(get_amount, 0)){
-            if(this.debug)
-                getLogger().info('Skipping zero quantity GET amount ', get_amount);
-            return false;
-        }
-        return true;
-    },
-
-    // Ownership orders are single-fill: amounts must exactly equal the order's
-    // canonical sides (no partials). The counter-order must offer the full price.
-    isOwnershipFillExact(orderInfo, matchInfo, fill){
-        let { give_amount, get_amount } = fill;
-        let orderIsOwnership = (Number(orderInfo['GIVE_OWNERSHIP']||0)==1 || Number(orderInfo['GET_OWNERSHIP']||0)==1);
-        let matchIsOwnership = (Number(matchInfo['GIVE_OWNERSHIP']||0)==1 || Number(matchInfo['GET_OWNERSHIP']||0)==1);
-        if(orderIsOwnership || matchIsOwnership){
-            let expectedGive = (Number(orderInfo['GIVE_OWNERSHIP']||0)==1) ? '1' : orderInfo['GIVE_AMOUNT'];
-            let expectedGet  = (Number(orderInfo['GET_OWNERSHIP']||0)==1)  ? '1' : orderInfo['GET_AMOUNT'];
-            // Equality is written as "not greater and not less" because these amounts are
-            // BigNumber strings: a direct == compares text, so '1.0' and '1' would read as
-            // different fills and an ownership order would be refused a counter-party that
-            // offered exactly the asked price.
-            let giveEqual = (!this.util.bcgt(give_amount, expectedGive) && !this.util.bclt(give_amount, expectedGive));
-            let getEqual  = (!this.util.bcgt(get_amount,  expectedGet)  && !this.util.bclt(get_amount,  expectedGet));
-            if(!giveEqual || !getEqual){
-                if(this.debug)
-                    getLogger().info('Skipping ownership match: amounts must be exact (single-fill)', give_amount, expectedGive, get_amount, expectedGet);
-                return false;
-            }
         }
         return true;
     },
