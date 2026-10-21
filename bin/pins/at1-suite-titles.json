@@ -5155,6 +5155,23 @@
       "guard emitted host request id below gate @regression @tier1 offsets the call path by emissions already stored for the host action",
       "guard emitted host request id below gate @regression @tier1 passes a composite guard root discriminator through unchanged"
     ],
+    "4952c9f2ec3e3c55": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
+      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the VM harness-activation twins in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the airdrop native-fee tally rollback row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the batch-airdrop leg-weight row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the bridge-checkpoint v3 section row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the gas-ceiling exhaustion row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the guard emitted-host discriminator row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the null-prototype TICK cache row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
+    ],
     "4952d3db984cc3ce": [
       "AnchorRecovery list snapshots @regression @tier2 fails when the natural list sequence already has another snapshot id",
       "AnchorRecovery list snapshots @regression @tier2 refuses a list row from a network other than the archive head",
@@ -5317,31 +5334,6 @@
       "genesis.injectProtocolToken and the bridged row creation @regression the wire string the helper builds carries the ISSUE format 0 fields in order and trims only the trailing empties",
       "genesis.injectProtocolToken and the bridged row creation @regression the wire string the helper builds keeps the fields past MINT_START_BLOCK when a later one is set",
       "genesis.injectProtocolToken and the bridged row creation @regression the wire string the helper builds never emits a TRANSFER: an injected row is created owned by its final owner"
-    ],
-    "4aed600f19d6de80": [
-      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
-      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
-      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
-      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
-      "armed_map/manifest: collectRows carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights",
-      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
-      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
-      "armed_map/manifest: collectRows carries the three row families the design names",
-      "armed_map/manifest: collectRows carries the unarmed airdrop native-fee tally rollback gate",
-      "armed_map/manifest: collectRows carries the unarmed batch-airdrop leg-weight gate",
-      "armed_map/manifest: collectRows carries the unarmed guard emitted-host discriminator gate",
-      "armed_map/manifest: collectRows carries the unarmed null-prototype TICK cache gate",
-      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
-      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
-      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
-      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
-      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
-      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
-      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
-      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
-      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
-      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
-      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "4aed6d7e717233e4": [
       "validator wire actions @regression @tier1 admits only the validator wire formats",
@@ -12030,6 +12022,32 @@
       "Supply & amount boundary tests @regression @tier1 AMT-03: Issue token exceeding maximum supply MAX_SUPPLY = 10^21 + 1 exceeds MAX_TOKEN_SUPPLY \u2192 invalid",
       "Supply & amount boundary tests @regression @tier1 AMT-04: Issue token with zero supply MAX_SUPPLY = 0 bypasses MIN_TOKEN_SUPPLY check (bcgt guard short-circuits) \u2192 valid"
     ],
+    "a4072f9ca80387e8": [
+      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
+      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
+      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
+      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
+      "armed_map/manifest: collectRows carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights",
+      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
+      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
+      "armed_map/manifest: collectRows carries the three row families the design names",
+      "armed_map/manifest: collectRows carries the unarmed airdrop native-fee tally rollback gate",
+      "armed_map/manifest: collectRows carries the unarmed batch-airdrop leg-weight gate",
+      "armed_map/manifest: collectRows carries the unarmed bridge-checkpoint v3 section gate",
+      "armed_map/manifest: collectRows carries the unarmed guard emitted-host discriminator gate",
+      "armed_map/manifest: collectRows carries the unarmed null-prototype TICK cache gate",
+      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
+      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
+      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
+      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
+      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
+      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
+      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
+      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
+      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
+      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
+      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
+    ],
     "a43841db7e6fd6b9": [
       "Database.slashContractStake() mid-cooldown double-count guard @regression @tier1 routes a mid-cooldown slash to contract_unstakes only (never the deactivated phantom)",
       "Database.slashContractStake() mid-cooldown double-count guard @regression @tier1 still slashes an active (never-unstaked) staker from contract_stakes (Pass 1)"
@@ -12979,22 +12997,6 @@
       "XChainIndexer prototype composition @tier1 no composed method shadows a class-body method",
       "XChainIndexer prototype composition @tier1 no method name is exported by two composed tables",
       "XChainIndexer prototype composition @tier1 reads a non-trivial set of method tables from the composition call"
-    ],
-    "b134392e296cfbc5": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
-      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
-      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the VM harness-activation twins in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the airdrop native-fee tally rollback row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the batch-airdrop leg-weight row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the gas-ceiling exhaustion row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the guard emitted-host discriminator row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the null-prototype TICK cache row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
     ],
     "b13b7b6bf4b68fae": [
       "Airdrop @regression @tier2 fee payment mode branches legacy fee path (UNIFIED_FEES=false): getTransactionFee called and fee computed",
@@ -18668,7 +18670,7 @@
   "scripts": {
     "test": {
       "fileCount": 1482,
-      "titleCount": 14462,
+      "titleCount": 14464,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19360,7 +19362,7 @@
         "test/unit/consensus/anchor_reward_legacy_pins.test.js": "7f09f1cb1e4cefbf",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
-        "test/unit/consensus/armed_map/manifest.test.js": "4aed600f19d6de80",
+        "test/unit/consensus/armed_map/manifest.test.js": "a4072f9ca80387e8",
         "test/unit/consensus/armed_map/vm_gate_coverage.test.js": "fe8f001bb389e37d",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
@@ -20006,7 +20008,7 @@
         "test/unit/remote_token/admitted_pin_read.test.js": "88660f9c2c7ccd2b",
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "b134392e296cfbc5",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "4952c9f2ec3e3c55",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
