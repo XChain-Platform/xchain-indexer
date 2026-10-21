@@ -14,6 +14,17 @@ const {
     resolveBalanceDeltaMode,
 } = require('../../../src/config/balance_delta_mode.js');
 
+const CONFIG_PATH = require.resolve('../../../src/config.js');
+
+function configuredBalanceDeltaMode(raw){
+    if(raw === undefined)
+        delete process.env.BALANCE_DELTA_MODE;
+    else
+        process.env.BALANCE_DELTA_MODE = raw;
+    delete require.cache[CONFIG_PATH];
+    return require(CONFIG_PATH).getConfig('BTC', 'regtest')['BALANCE_DELTA_MODE'];
+}
+
 describe('balance delta mode configuration', function(){
     it('exports the supported modes', function(){
         assert.deepStrictEqual(BALANCE_DELTA_MODES, ['off', 'verify', 'on']);
@@ -48,5 +59,36 @@ describe('balance delta mode configuration', function(){
             (error) => error instanceof Error &&
                 error.message.includes('BALANCE_DELTA_MODE')
         );
+    });
+
+    describe('applyBalanceDeltaMode', function(){
+        const hadOriginalMode = Object.prototype.hasOwnProperty.call(
+            process.env, 'BALANCE_DELTA_MODE'
+        );
+        const originalMode = process.env.BALANCE_DELTA_MODE;
+
+        afterEach(function(){
+            if(hadOriginalMode)
+                process.env.BALANCE_DELTA_MODE = originalMode;
+            else
+                delete process.env.BALANCE_DELTA_MODE;
+            delete require.cache[CONFIG_PATH];
+        });
+
+        it('keeps the configuration default off for unset and blank values', function(){
+            assert.strictEqual(configuredBalanceDeltaMode(undefined), 'off');
+            assert.strictEqual(configuredBalanceDeltaMode('   '), 'off');
+        });
+
+        it('normalizes a configured mode through the strict resolver', function(){
+            assert.strictEqual(configuredBalanceDeltaMode(' VeRiFy '), 'verify');
+        });
+
+        it('rejects an unknown configured mode instead of silently using off', function(){
+            assert.throws(
+                () => configuredBalanceDeltaMode('sometimes'),
+                /BALANCE_DELTA_MODE must be one of: off, verify, on/
+            );
+        });
     });
 });

@@ -13317,6 +13317,21 @@
       "push_generation stamping on hub-pinned federation reads (item 2367) @regression getpendingcrosschaincalls reads the generation BEFORE the rows (HUB-RETRACT-1 ordering)",
       "push_generation stamping on hub-pinned federation reads (item 2367) @regression getpendingcrosschaincalls reads the source-chain push generation"
     ],
+    "b7ca2aca3b5a37c6": [
+      "balance delta mode configuration accepts off",
+      "balance delta mode configuration accepts on",
+      "balance delta mode configuration accepts verify",
+      "balance delta mode configuration applyBalanceDeltaMode keeps the configuration default off for unset and blank values",
+      "balance delta mode configuration applyBalanceDeltaMode normalizes a configured mode through the strict resolver",
+      "balance delta mode configuration applyBalanceDeltaMode rejects an unknown configured mode instead of silently using off",
+      "balance delta mode configuration defaults a null value to off",
+      "balance delta mode configuration defaults a whitespace-only value to off",
+      "balance delta mode configuration defaults an empty value to off",
+      "balance delta mode configuration defaults an undefined value to off",
+      "balance delta mode configuration exports the supported modes",
+      "balance delta mode configuration normalizes surrounding whitespace and letter case",
+      "balance delta mode configuration rejects an unknown mode and names BALANCE_DELTA_MODE"
+    ],
     "b85c12080a6c6211": [
       "bridge_settle: row-fields refusals and the per-block cap preserves the legacy cap behavior before activation",
       "bridge_settle: row-fields refusals and the per-block cap settles the good row behind 25 malformed rows after activation"
@@ -14230,18 +14245,6 @@
       "Smoke: REST /status SM-05j: GET /status surfaces hubMirror disconnected without claiming connected",
       "Smoke: REST /status SM-05k: GET /status reports hubMirror as unconfigured, never throwing, when the mirror is absent",
       "Smoke: REST /status SM-05l: GET /status degrades to the disabled hubMirror shape when the snapshot call throws"
-    ],
-    "c4c306e18e19f547": [
-      "balance delta mode configuration accepts off",
-      "balance delta mode configuration accepts on",
-      "balance delta mode configuration accepts verify",
-      "balance delta mode configuration defaults a null value to off",
-      "balance delta mode configuration defaults a whitespace-only value to off",
-      "balance delta mode configuration defaults an empty value to off",
-      "balance delta mode configuration defaults an undefined value to off",
-      "balance delta mode configuration exports the supported modes",
-      "balance delta mode configuration normalizes surrounding whitespace and letter case",
-      "balance delta mode configuration rejects an unknown mode and names BALANCE_DELTA_MODE"
     ],
     "c4cd22d5892484be": [
       "Database validator-set ordering below activation @regression @tier1 getActiveValidators orders by bare pubkey on mainnet",
@@ -15565,6 +15568,10 @@
     "d3fc3400946a48ae": [
       "Provider deadline-window overlay parity (VM injection) @regression @tier2 DEPLOY injects the CONFIGURED deadline windows into the VM",
       "Provider deadline-window overlay parity (VM injection) @regression @tier2 EXECUTE injects the CONFIGURED deadline windows into the VM"
+    ],
+    "d448ca271f35d379": [
+      "terminal XCALL resolved_block @regression @tier1 stamps completion with the processing BLOCK_INDEX, not the request block",
+      "terminal XCALL resolved_block @regression @tier1 stamps expiry with the processing BLOCK_INDEX, not the request block"
     ],
     "d44cf9f8cf86cabc": [
       "Dispenser_Close action handler @regression @tier2 1678 ownership cancel/expire routing gate @regression @tier1 at/after the flag-day a SWEEP still transfers ownership to the sweep destination",
@@ -18566,8 +18573,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1471,
-      "titleCount": 14393,
+      "fileCount": 1472,
+      "titleCount": 14398,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19223,7 +19230,7 @@
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
         "test/unit/coins/fee_payment_mode_comment_twin.test.js": "489e8a6cb9e1177e",
         "test/unit/coins/fee_payment_mode_registry.test.js": "04f3052dcfe1e047",
-        "test/unit/config/balance_delta_mode.test.js": "c4c306e18e19f547",
+        "test/unit/config/balance_delta_mode.test.js": "b7ca2aca3b5a37c6",
         "test/unit/config/config.test.js": "ca901868920fa051",
         "test/unit/config/config.test/env_overrides.test.js": "09dab1f1abfabefd",
         "test/unit/config/config.test/hub_overlay.test.js": "4a3bc9fb11877228",
@@ -19536,6 +19543,7 @@
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/vm_snapshot/poll_snapshot_golden.test.js": "4ef434f00929b790",
         "test/unit/db/vm_snapshot/vm_snapshot_memo.test.js": "b0be5e75e30decd3",
+        "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
         "test/unit/e2e/explorer_launcher.test.js": "eae128db10b21f39",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
@@ -20414,8 +20422,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1115,
-      "titleCount": 11377,
+      "fileCount": 1116,
+      "titleCount": 11379,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21168,6 +21176,7 @@
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
+        "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": "6f3bf3f9c5f1d95a",
@@ -21535,8 +21544,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 549,
-      "titleCount": 5968,
+      "fileCount": 550,
+      "titleCount": 5970,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21857,6 +21866,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
+        "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
         "test/unit/fees/dry_run_batch_fee_withheld.test.js": "9620969f56b951f5",
         "test/unit/fees/dry_run_tip_under_mutex.test.js": "207bfef6e5b8871d",
@@ -22090,8 +22100,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1115,
-      "titleCount": 11377,
+      "fileCount": 1116,
+      "titleCount": 11379,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22844,6 +22854,7 @@
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
+        "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": "6f3bf3f9c5f1d95a",
