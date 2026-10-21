@@ -144,6 +144,30 @@ describe('consensus identity GATES field and pin comparison', function () {
         }
     });
 
+    it('pins the null-prototype TICK cache row in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATION';
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
+    it('pins the airdrop native-fee tally rollback row in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION';
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
+    it('pins the guard emitted-host discriminator row in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'guard_emitted_host_discriminator_activation.GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION';
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
     it('pins the VM harness-activation twins in both checkout readings', function () {
         const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
         const keys = [

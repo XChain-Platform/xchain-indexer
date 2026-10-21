@@ -106,6 +106,24 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.ok(data['STATUS'].includes('invalid'));
         });
+
+        for(const tick of ['constructor', '__proto__']){
+            it(`regtest treats Object.prototype TICK ${tick} as unknown`, async function () {
+                indexer.indexerDb.getTokenInfo.withArgs(tick).resolves(null);
+                indexer.indexerDb.getAddressBalances.resolves({});
+                indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+
+                const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
+                const params = ['0', tick, '10', '1', null];
+
+                await handler.parse(params, data, null);
+
+                assert.ok(indexer.indexerDb.getTokenInfo.calledWith(
+                    tick, data['BLOCK_INDEX'], data['ACTION_INDEX']));
+                assert.strictEqual(data['STATUS'], 'invalid: TICK (unknown)');
+                assert.ok(indexer.indexerDb.createAirdrop.calledOnce);
+            });
+        }
     });
 
     describe('format 0: single airdrop', function () {

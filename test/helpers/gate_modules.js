@@ -198,6 +198,9 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'bridge_escrow_anchor_match_activation',
     'archive_orphan_geometry_activation',
     'bridge_checkpoint_v3_section_activation',
+    'tick_cache_null_prototype_activation',
+    'airdrop_native_fee_tally_rollback_activation',
+    'guard_emitted_host_discriminator_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

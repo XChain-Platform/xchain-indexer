@@ -47,6 +47,7 @@ function makeCtx(emittedActions) {
         opts: { seq: 0 },
         contractIndex: 7,
         guardRootDiscrim: '0',
+        guardCallPath: '',
         derived: 'contract-address',
         callDepth: 1,
         guardMethod: 'onSend',
