@@ -22,6 +22,18 @@
 
 'use strict';
 
+const gateRegistry = require('../../consensus/gate_registry');
+
+const TICK_CACHE_GATE = 'tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATION';
+
+function createTickCache(handler, data){
+    let config = handler.config;
+    let active = config && typeof config['NETWORK'] === 'string' && typeof config['COIN'] === 'string' &&
+        gateRegistry.activeAt(TICK_CACHE_GATE, config['NETWORK'], config['COIN'],
+            Number(data['BLOCK_INDEX']), null);
+    return active ? Object.create(null) : {};
+}
+
 // The legs one DESTROY names, in wire order. A VERSION error still yields one leg, so a
 // refused action leaves its row in the destroys table.
 function buildDestroys(params, format, error){
@@ -67,7 +79,7 @@ function buildDestroys(params, format, error){
 // The token row for every distinct TICK the legs name, read once each in leg order.
 async function loadTicks(destroys, data){
     // Get token data for every TICK (reduces duplicated sql queries)
-    let ticks = {};
+    let ticks = createTickCache(this, data);
     for(let destroy of destroys){
         let tick = destroy[0];
         if(ticks[tick] === undefined)
