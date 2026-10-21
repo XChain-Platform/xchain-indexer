@@ -9119,6 +9119,11 @@
       "Withdraw custody guard handler integration @regression @tier1 settles an owner-address denial before activation",
       "Withdraw custody guard handler integration @regression @tier1 shows both guards the withdrawal leg from custody to SOURCE"
     ],
+    "83bbad471905a8ed": [
+      "getNetBalances batched read @regression @tier1 answers every key in one statement and matches getNetBalance",
+      "getNetBalances batched read @regression @tier1 dedupes keys, chunks large sets, and reads nothing for an empty set",
+      "getNetBalances batched read @regression @tier1 is the read threadBalancesRoot uses instead of a per-key loop"
+    ],
     "83da8fca88416040": [
       "JSON-RPC anchor family @regression @tier1 every anchor read refuses without a database and reports a throw",
       "JSON-RPC anchor family @regression @tier1 getanchoraction runs the owned SQL through doQuery and answers checkpoint_anchored",
@@ -19873,6 +19878,7 @@
         "test/unit/setup/equivalence_state_tree.test.js": "e1beee0e6aee2508",
         "test/unit/setup/indexer_launcher_production_passes.test.js": "90617fbb668986fc",
         "test/unit/setup/perf_instrumented_processor.test.js": "4517543dc8d46e2a",
+        "test/unit/state_commitment/batched_net_balance.test.js": "83bbad471905a8ed",
         "test/unit/state_commitment/db_smt_resolver_cache_abort.test.js": "9e1105f82b6bc9c9",
         "test/unit/state_commitment/db_state_key_collation.test.js": "69f2a0c873378615",
         "test/unit/state_commitment/ledger_keys_block_filter.test.js": "78a1a7a1cdc81872",
@@ -21384,6 +21390,7 @@
         "test/unit/security/sql-safety/decimal_precision.test.js": "347825e427284ec5",
         "test/unit/security/sql-safety/table_whitelist.test.js": "f24b13eaba177c97",
         "test/unit/setup/equivalence_schema_migrations.test.js": "ed1bf127f12c7630",
+        "test/unit/state_commitment/batched_net_balance.test.js": "83bbad471905a8ed",
         "test/unit/state_commitment/db_smt_resolver_cache_abort.test.js": "9e1105f82b6bc9c9",
         "test/unit/state_commitment/db_state_key_collation.test.js": "69f2a0c873378615",
         "test/unit/state_commitment/ledger_keys_block_filter.test.js": "161f7fb283a9bea4",
@@ -21444,8 +21451,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 546,
-      "titleCount": 5944,
+      "fileCount": 547,
+      "titleCount": 5947,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21970,6 +21977,7 @@
         "test/unit/security/sql-safety/decimal_precision.test.js": "347825e427284ec5",
         "test/unit/security/sql-safety/table_whitelist.test.js": "f24b13eaba177c97",
         "test/unit/setup/equivalence_schema_migrations.test.js": "ed1bf127f12c7630",
+        "test/unit/state_commitment/batched_net_balance.test.js": "83bbad471905a8ed",
         "test/unit/state_commitment/db_state_key_collation.test.js": "69f2a0c873378615",
         "test/unit/state_commitment/ledger_keys_block_filter.test.js": "161f7fb283a9bea4",
         "test/unit/utility/address_reencode.test.js": "bd25e784269fe34a",
@@ -23055,6 +23063,7 @@
         "test/unit/security/sql-safety/decimal_precision.test.js": "347825e427284ec5",
         "test/unit/security/sql-safety/table_whitelist.test.js": "f24b13eaba177c97",
         "test/unit/setup/equivalence_schema_migrations.test.js": "ed1bf127f12c7630",
+        "test/unit/state_commitment/batched_net_balance.test.js": "83bbad471905a8ed",
         "test/unit/state_commitment/db_smt_resolver_cache_abort.test.js": "9e1105f82b6bc9c9",
         "test/unit/state_commitment/db_state_key_collation.test.js": "69f2a0c873378615",
         "test/unit/state_commitment/ledger_keys_block_filter.test.js": "161f7fb283a9bea4",
