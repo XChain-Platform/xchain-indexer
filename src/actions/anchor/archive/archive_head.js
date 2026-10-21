@@ -34,12 +34,16 @@ const V1_REISSUE_REFUSAL_GATE =
     'archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION';
 
 async function checkReplayGuards(handler, data, error, validOnly){
+    // Regtest chains can be reset below rows already archived on DOGE. Unverified
+    // rows from the abandoned chain must not become permanent replay watermarks.
+    let replayValidOnly = validOnly || data['NETWORK'] === 'regtest';
     // Replay guards: never accept a seq BELOW the recorded max. Equal is allowed: a v0
     // and its v1 share the same checkpoint_seq by design (same wrapper), and an exact
     // replay is signature-bound to identical content, so it can only produce a harmless
     // duplicate row.
     if(!error){
-        let maxSeq = await handler.indexerDb.getMaxAnchorCheckpointSeq(data['CHAIN'], data['NETWORK'], validOnly);
+        let maxSeq = await handler.indexerDb.getMaxAnchorCheckpointSeq(
+            data['CHAIN'], data['NETWORK'], replayValidOnly);
         if(maxSeq !== null && Number(data['CHECKPOINT_SEQ']) < maxSeq)
             error = 'invalid: CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
     }
@@ -72,7 +76,7 @@ async function checkReplayGuards(handler, data, error, validOnly){
     if(!error){
         let wrapperRows = await handler.actions.protocolChanges.isEnabled(
             'ARCHIVE_REPLAY_WRAPPER_WATERMARK', Number(data['BLOCK_INDEX']));
-        let wm = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows, validOnly);
+        let wm = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows, replayValidOnly);
         let batchStale      = (wm.batchSeq !== null && Number(data['MATCH_BATCH_SEQ']) < wm.batchSeq);
         let checkpointStale = (wm.checkpointSeq !== null && Number(data['CHECKPOINT_SEQ']) < wm.checkpointSeq);
         if(batchStale && checkpointStale)

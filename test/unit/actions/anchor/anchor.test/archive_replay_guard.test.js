@@ -75,6 +75,34 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '2', seq: '961000' }), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
     });
+
+    it('accepts a fresh regtest head below unverified watermarks left by a chain reset', async function () {
+        const env = 'XC_ANCHOR_CHECKPOINT_SEQ_BIND_REGTEST_ACTIVATION';
+        const saved = process.env[env];
+        delete process.env[env];
+        indexer.indexerDb.getMaxAnchorCheckpointSeq.callsFake(
+            async (_chain, _network, validOnly) => validOnly ? null : 900000);
+        indexer.indexerDb.getArchiveReplayWatermarks.callsFake(
+            async (_wrapperRows, validOnly) => validOnly
+                ? { batchSeq: null, checkpointSeq: null }
+                : { batchSeq: 40, checkpointSeq: 900000 });
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
+
+        try {
+            await handler.parse(v1Params(ARCHIVE_JSON, {
+                batch_seq: '0', seq: '100', snapshot: '100'
+            }), data, null);
+        } finally {
+            if(saved === undefined) delete process.env[env];
+            else process.env[env] = saved;
+        }
+
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.ok(indexer.indexerDb.getMaxAnchorCheckpointSeq.calledOnceWithExactly(
+            'BTC', 'regtest', true));
+        assert.strictEqual(indexer.indexerDb.getArchiveReplayWatermarks.callCount, 1);
+        assert.strictEqual(indexer.indexerDb.getArchiveReplayWatermarks.firstCall.args[1], true);
+    });
 });
 
 describe('Anchor (ANCHOR) @regression @tier3', function () {
