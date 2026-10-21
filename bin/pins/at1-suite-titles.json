@@ -5985,6 +5985,12 @@
       "planListShareInputs returns an empty plan for no heads without reading a tail",
       "planListShareInputs returns only rows admitted at the current block"
     ],
+    "57db721baf7e9f80": [
+      "ANCHOR orphan geometry activation @regression @tier1 filters the mismatch from content lookup and recovery before per-index dedupe",
+      "ANCHOR orphan geometry activation @regression @tier1 makes head-first and orphan-first geometry mismatches reach the same verdict",
+      "ANCHOR orphan geometry activation @regression @tier1 registers the head-height gate on the rollout networks",
+      "ANCHOR orphan geometry activation @regression @tier1 retains the historical order dependence below the gate"
+    ],
     "58140c764617368e": [
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) composition of the ISSUE, MINT and DEPLOY limits gate OFF: the 251-command padded batch is still just the pre-flag ISSUE reject",
       "Batch @regression @tier3 D5 DEPLOY cap and D7 per-token MINT cap (BATCH_ISSUANCE_LIMITS) composition of the ISSUE, MINT and DEPLOY limits gate OFF: the use-case batch keeps the pre-flag reject (children are not exempt)",
@@ -18518,8 +18524,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1466,
-      "titleCount": 14355,
+      "fileCount": 1467,
+      "titleCount": 14359,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18569,6 +18575,7 @@
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "5c969c0d766afbe1",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
+        "test/unit/actions/anchor/anchor_orphan_geometry_gate.test.js": "57db721baf7e9f80",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/anchor_reward_family.test.js": "45cd36a015e28085",
         "test/unit/actions/anchor/archive/anchor_archive_failure_report.test.js": "7875766421d5118b",
@@ -20361,8 +20368,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1114,
-      "titleCount": 11362,
+      "fileCount": 1115,
+      "titleCount": 11366,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20451,6 +20458,7 @@
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "5c969c0d766afbe1",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
+        "test/unit/actions/anchor/anchor_orphan_geometry_gate.test.js": "57db721baf7e9f80",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "d0251082e34791fc",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "11a6bfdbba48cf64",
@@ -21481,8 +21489,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 548,
-      "titleCount": 5957,
+      "fileCount": 549,
+      "titleCount": 5961,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21502,6 +21510,7 @@
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
+        "test/unit/actions/anchor/anchor_orphan_geometry_gate.test.js": "57db721baf7e9f80",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "d0251082e34791fc",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "11a6bfdbba48cf64",
         "test/unit/actions/attest.test/responsible_set_gates.test.js": "90165b8ec993c4e6",
@@ -22035,8 +22044,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1114,
-      "titleCount": 11362,
+      "fileCount": 1115,
+      "titleCount": 11366,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22125,6 +22134,7 @@
         "test/unit/actions/anchor/anchor_failed_events.test.js": "685776d6426cb162",
         "test/unit/actions/anchor/anchor_headside_reassembly.test.js": "5c969c0d766afbe1",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
+        "test/unit/actions/anchor/anchor_orphan_geometry_gate.test.js": "57db721baf7e9f80",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "d0251082e34791fc",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "11a6bfdbba48cf64",
