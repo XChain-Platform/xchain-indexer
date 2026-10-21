@@ -220,6 +220,22 @@ function validateGasTick(ctx){
     ctx.error = error;
 }
 
+// ISSUE_CARET_TICK_NO_CREATE: a caret ^<id> TICK may only EDIT a token that exists. Runs
+// after the token row is read (ctx.tokenInfo). A rejected ISSUE interns its attempted TICK
+// and so mints a ticker id; without this rule a later 'ISSUE ^<id>' resolves that bare name
+// and lands valid, creating a token through the id form. Gated (tightens validity): below
+// the flag the historical verdict stands. IS_GENESIS is exempt like the other creation rules.
+async function validateCaretTickExists(ctx){
+    let { data, str, tokenInfo } = ctx;
+    let error = ctx.error;
+
+    if(!error && !tokenInfo && !data['IS_GENESIS'] && str.substring(0,1)=='^' &&
+       await this.actions.protocolChanges.isEnabled('ISSUE_CARET_TICK_NO_CREATE', data['BLOCK_INDEX']))
+        error = 'invalid: TICK (unknown)';
+
+    ctx.error = error;
+}
+
 module.exports = {
     CHILD_TOKEN_INDEPENDENT_EDITS_KEY,
     childTokenIndependentEditsActiveAt,
@@ -227,4 +243,5 @@ module.exports = {
     validateTickForm,
     validateReservedTick,
     validateGasTick,
+    validateCaretTickExists,
 };

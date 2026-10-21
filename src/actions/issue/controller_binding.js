@@ -81,12 +81,13 @@ async function validateControllerBinding(ctx){
             } else {
                 // BIND: CONTROLLER required, no controller may already gate this class (no
                 // stacking; replace = unbind-then-bind, which preserves the cooldown's teeth),
-                // and any COOLDOWN_BLOCKS given must be a non-negative integer.
+                // and any COOLDOWN_BLOCKS given must be a non-negative integer that fits
+                // the INT UNSIGNED column (<= 4294967295); a larger value would halt the block insert.
                 if(this.util.isNull(data['CONTROLLER']))
                     error = 'invalid: CONTROLLER (null)';
                 else if(effective)
                     error = 'invalid: ACTION_CLASS (already bound)';
-                else if(!this.util.isNull(issue['COOLDOWN_BLOCKS']) && !/^\d+$/.test(String(issue['COOLDOWN_BLOCKS'])))
+                else if(!this.util.isNull(issue['COOLDOWN_BLOCKS']) && (!/^\d+$/.test(String(issue['COOLDOWN_BLOCKS'])) || Number(issue['COOLDOWN_BLOCKS']) > 4294967295))
                     error = 'invalid: COOLDOWN_BLOCKS (format)';
             }
         }
