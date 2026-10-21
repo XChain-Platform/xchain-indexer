@@ -130,3 +130,27 @@ addGate('archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION',
     testnet: 68009330,
     regtest: 0,
 });
+
+// tick_cache_null_prototype_activation
+// Height on the processing chain's own block_index. From it AIRDROP, SEND and DESTROY keep their per-action TICK cache on a null-prototype object, so a TICK spelled like an Object.prototype member (constructor, __proto__) reads as unknown. Below it the cache is a plain object as before. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// airdrop_native_fee_tally_rollback_activation
+// Height on the processing chain's own block_index. From it a multi-leg AIRDROP leg that fails its native coin fee check takes its fee and gas back out of the action tally, so the tally covers only the valid legs. Below it a failed leg's fee and gas stay in the tally. Kept apart from airdrop_native_fee_tally_activation, which is armed on testnet, so testnet fee replay stays identical. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// guard_emitted_host_discriminator_activation
+// Height on the processing chain's own block_index. From it a controller guard roots each guarded emitted host's emission subtree at its own request_id discriminator, so two guarded emitted hosts under one root derive distinct request_ids. Below it those ids are derived as before. Unarmed on mainnet and testnet with no testnet instant, active from genesis on regtest.
+addGate('guard_emitted_host_discriminator_activation.GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
