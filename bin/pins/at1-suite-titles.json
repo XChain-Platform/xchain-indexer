@@ -10902,6 +10902,17 @@
       "policy apply: detach gate boundaries injects nothing when null lists have no pointers to detach",
       "policy apply: detach gate boundaries keeps pointed lists attached below the detach gate"
     ],
+    "954c7a168f6a266b": [
+      "bin/count_u64_above_2p53 columnCountSql throws on a name holding a back-quote or a space",
+      "bin/count_u64_above_2p53 counts above 2^53 and reads the maximum as CAST(MAX(col) AS CHAR)",
+      "bin/count_u64_above_2p53 lists the BIGINT columns from information_schema.COLUMNS",
+      "bin/count_u64_above_2p53 parseArgs reads --db and --json and rejects anything else",
+      "bin/count_u64_above_2p53 render omits a non-wire column with count zero",
+      "bin/count_u64_above_2p53 render prints one line per wire or non-zero column and a summary, or JSON",
+      "bin/count_u64_above_2p53 scan issues SELECT statements only",
+      "bin/count_u64_above_2p53 scan keeps a wire column at zero and a non-wire column at two with the exact maximum",
+      "bin/count_u64_above_2p53 the exit verdict is 1 only when a count is non-zero"
+    ],
     "95778e56f402428b": [
       "stateCommitment: DbNodeStore.putMany SQL shape @regression an empty batch issues no statement at all",
       "stateCommitment: DbNodeStore.putMany SQL shape @regression chunks a full-depth path so no single statement grows unbounded",
@@ -18669,8 +18680,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1482,
-      "titleCount": 14464,
+      "fileCount": 1483,
+      "titleCount": 14473,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19247,6 +19258,7 @@
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
+        "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
