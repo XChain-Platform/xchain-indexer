@@ -42,9 +42,30 @@ function exactU64(value){
     return exact <= MAX_SAFE_INTEGER ? Number(exact) : exact.toString();
 }
 
+const I64_MIN = -9223372036854775808n;
+const I64_MAX = 9223372036854775807n;
+
+// Normalize a signed BIGINT read the same way: a safe integer (negative ones
+// included) as a Number, anything wider as its exact decimal string. Signed
+// columns and expressions such as MIN(id) on a signed cursor legitimately hold
+// negatives, which the u64 check would refuse mid-row and so kill the
+// connection.
+function exactI64(value){
+    if(value === null || value === undefined) return null;
+    if(typeof value !== 'string' || !/^-?\d+$/.test(value))
+        throw new TypeError('i64 value is not an integer');
+    const exact = BigInt(value);
+    if(exact < I64_MIN || exact > I64_MAX)
+        throw new RangeError('i64 value is outside the signed 64-bit range');
+    return exact >= -MAX_SAFE_INTEGER && exact <= MAX_SAFE_INTEGER ? Number(exact) : exact.toString();
+}
+
+// Pool typeCast: only BIGINT UNSIGNED columns carry u64 wire values, so only
+// they take the u64 rule; a signed BIGINT takes the i64 rule.
 function exactU64TypeCast(field, next){
     if(field.type !== 'BIGINT') return next();
+    if(typeof field.signed === 'function' && field.signed()) return exactI64(field.string());
     return exactU64(field.string());
 }
 
-module.exports = { exactU64, exactU64TypeCast };
+module.exports = { exactU64, exactI64, exactU64TypeCast };

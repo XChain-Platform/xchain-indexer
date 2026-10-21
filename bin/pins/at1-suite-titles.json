@@ -5034,6 +5034,15 @@
       "protocol_changes active-stake collation gate @regression @tier1 is inert when height is null or non-finite",
       "protocol_changes active-stake collation gate @regression @tier1 registers a height gate unarmed on mainnet, armed on testnet at its v0.25.0 heights, and active from regtest genesis"
     ],
+    "467278efba55c298": [
+      "database pool exact u64 typeCast @regression @tier1 delegates every non-BIGINT field to the connector",
+      "database pool exact u64 typeCast @regression @tier1 keeps a signed BIGINT beyond the safe range as an exact decimal string",
+      "database pool exact u64 typeCast @regression @tier1 keeps the unsigned 64-bit maximum as an exact decimal string",
+      "database pool exact u64 typeCast @regression @tier1 preserves SQL null without invoking the connector fallback",
+      "database pool exact u64 typeCast @regression @tier1 reads a negative signed BIGINT as a Number instead of refusing it",
+      "database pool exact u64 typeCast @regression @tier1 returns safe BIGINT values as Numbers",
+      "database pool exact u64 typeCast @regression @tier1 still refuses a negative value on an unsigned BIGINT"
+    ],
     "4675f3133a96b7c1": [
       "mirror-admission replay witness each side resolves, from the env the parent hands it, the era A3 expects",
       "mirror-admission replay witness runs parameterized SQL through the indexer Database wrapper",
@@ -17361,12 +17370,6 @@
       "HubDbSync anchor reward copies never hold the drain @regression @tier1 probes a missing copies table once and still applies every main row",
       "HubDbSync anchor reward copies never hold the drain @regression @tier1 records the copy beside the main row when the table is present"
     ],
-    "e9669b80ec394de7": [
-      "database pool exact u64 typeCast @regression @tier1 delegates every non-BIGINT field to the connector",
-      "database pool exact u64 typeCast @regression @tier1 keeps the unsigned 64-bit maximum as an exact decimal string",
-      "database pool exact u64 typeCast @regression @tier1 preserves SQL null without invoking the connector fallback",
-      "database pool exact u64 typeCast @regression @tier1 returns safe BIGINT values as Numbers"
-    ],
     "e9c3f47b50704d38": [
       "HubDbSync failover when no candidate is caught up a caught-up ready frame clears the record",
       "HubDbSync failover when no candidate is caught up serves from the current hub after the grace when no candidate is caught up",
@@ -18787,7 +18790,7 @@
   "scripts": {
     "test": {
       "fileCount": 1497,
-      "titleCount": 14551,
+      "titleCount": 14554,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19621,7 +19624,7 @@
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
         "test/unit/db/coinpays/coinpay_bet_u64_exact_read.test.js": "15664d8749435175",
         "test/unit/db/database/exact_u64.test.js": "c171a686246e7883",
-        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
+        "test/unit/db/database/u64_pool_typecast.test.js": "467278efba55c298",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
@@ -20665,7 +20668,7 @@
     },
     "test:regression": {
       "fileCount": 1134,
-      "titleCount": 11471,
+      "titleCount": 11474,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21307,7 +21310,7 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
-        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
+        "test/unit/db/database/u64_pool_typecast.test.js": "467278efba55c298",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
@@ -21805,7 +21808,7 @@
     },
     "test:regression:fast": {
       "fileCount": 564,
-      "titleCount": 6035,
+      "titleCount": 6038,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22029,7 +22032,7 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
-        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
+        "test/unit/db/database/u64_pool_typecast.test.js": "467278efba55c298",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
@@ -22375,7 +22378,7 @@
     },
     "test:regression:full": {
       "fileCount": 1134,
-      "titleCount": 11471,
+      "titleCount": 11474,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23017,7 +23020,7 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
-        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
+        "test/unit/db/database/u64_pool_typecast.test.js": "467278efba55c298",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
