@@ -146,3 +146,11 @@ addGate('airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_R
     testnet: UNARMED,
     regtest: 0,
 });
+
+// guard_emitted_host_discriminator_activation
+// Height on the processing chain's own block_index. From it a controller guard roots each guarded emitted host's emission subtree at its own request_id discriminator, so two guarded emitted hosts under one root derive distinct request_ids. Below it those ids are derived as before. Unarmed on mainnet and testnet with no testnet instant, active from genesis on regtest.
+addGate('guard_emitted_host_discriminator_activation.GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
