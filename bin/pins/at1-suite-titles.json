@@ -1911,6 +1911,16 @@
       "HubDbSync feed authentication leaves push and reorg credentials on their dedicated environment keys",
       "HubDbSync feed authentication presents HUB_FEED_API_KEY to mirror requests while retaining HUB_API_KEY"
     ],
+    "1a6981490efe8f5f": [
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpoint binds both versions of [0, 3] ahead of chain, network and height",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpoint binds a single 0 for the number 0",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpoint binds a single 0 for [0]",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpoint keeps state_root IS NOT NULL, status 'valid', the ORDER BY and LIMIT 1",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpointAfterAnchor binds both versions of [0, 3] ahead of chain, network and height",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpointAfterAnchor binds a single 0 for the number 0",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpointAfterAnchor binds a single 0 for [0]",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpointAfterAnchor keeps state_root IS NOT NULL, status 'valid', the ORDER BY and LIMIT 1"
+    ],
     "1ae5f78fde3d87fe": [
       "db.getRecordedPolicyRefusalIds @regression @tier1 reads only refused rows with one bound placeholder per snapshot id"
     ],
@@ -18573,8 +18583,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1472,
-      "titleCount": 14398,
+      "fileCount": 1473,
+      "titleCount": 14406,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19267,6 +19277,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "1a6981490efe8f5f",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -20422,8 +20433,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1116,
-      "titleCount": 11379,
+      "fileCount": 1117,
+      "titleCount": 11387,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20981,6 +20992,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "1a6981490efe8f5f",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
@@ -21544,8 +21556,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 550,
-      "titleCount": 5970,
+      "fileCount": 551,
+      "titleCount": 5978,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21718,6 +21730,7 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "1a6981490efe8f5f",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
@@ -22100,8 +22113,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1116,
-      "titleCount": 11379,
+      "fileCount": 1117,
+      "titleCount": 11387,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22659,6 +22672,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "1a6981490efe8f5f",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
