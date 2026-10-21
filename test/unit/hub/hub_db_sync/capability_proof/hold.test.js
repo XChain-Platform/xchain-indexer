@@ -219,23 +219,48 @@ describe('capability snapshot proof hold barrier @regression @tier1', function (
         assert.strictEqual(sync.capabilityProofSatisfied(), true);
     });
 
-    it('keeps the wire position before a held row during bootstrap', async function () {
-        const made = makeSync(async row => ({ verdict: row.id === 31 ? 'held' : 'verified' }));
+    it('a retained bootstrap hold preserves a re-page reason the drain opened under', async function () {
+        const made = makeSync(async () => ({ verdict: 'held' }));
         const { sync } = made;
         syncs.push(sync);
-        sync._drainPositions.capability_snapshots = ROW.id - 1;
+        sync.markRepageOwed(['capability_snapshots']);
+        const owed = sync.repageOwedSeq('capability_snapshots');
+
+        sync._bootstrapping = true;
+        assert.strictEqual(await sync.refuseUnprovenCapabilitySnapshot(ROW), true);
+        sync._bootstrapping = false;
+
+        assert.strictEqual(sync.repageOwedSeq('capability_snapshots'), owed);
+    });
+
+    it('a frontier hold ends the drain and leaves the heartbeat gate open', async function () {
+        const made = makeSync(async row => ({
+            verdict: row.id === ROW.id ? 'held' : 'verified',
+            reason: row.id === ROW.id ? 'SNAPSHOT_NOT_YET_CHECKPOINTED' : undefined
+        }));
+        const { sync, inserted } = made;
+        syncs.push(sync);
+        const before = Object.assign({}, ROW, { id: ROW.id - 1, signing_pubkey: '0011' });
         sync.httpGet.callsFake(async path => path.includes('/hub-db/snapshot/capability_snapshots')
-            ? { schema_version: HUB_SCHEMA_VERSION, rows: [ROW, Object.assign({}, ROW, { id: 32, signing_pubkey: 'bb22' })], watermark: 91 }
+            ? { schema_version: HUB_SCHEMA_VERSION, rows: [before, ROW], watermark: 91 }
             : { proof: 'ok' });
         sinon.stub(sync, 'mirrorNetworkScope').resolves(null);
         sinon.stub(sync, 'reconcileForeignCapabilitySnapshots').resolves();
         sinon.stub(sync, 'releaseSnapshotWaiters').resolves();
+        const bootstrapTable = sync.bootstrapTable.bind(sync);
+        sinon.stub(sync, 'bootstrapTable').callsFake(async table =>
+            table === 'capability_snapshots' ? bootstrapTable(table) : 100);
 
-        sync._bootstrapping = true;
-        assert.strictEqual(await sync.bootstrapTable('capability_snapshots'), null);
-        sync._bootstrapping = false;
-        assert.strictEqual(sync._drainPositions.capability_snapshots, ROW.id - 1);
+        await sync.bootstrapAll();
+
+        assert.strictEqual(inserted.length, 1, 'the verified predecessor applies');
+        assert.strictEqual(sync._drainPositions.capability_snapshots, ROW.id,
+            'the held frontier is a handled wire position');
         assert.strictEqual(sync._capabilityProofHolds.size, 1);
+        assert.strictEqual(sync.capabilityProofSatisfied(), false, 'the proof barrier remains closed');
+        assert.strictEqual(sync.repageOwedSeq('capability_snapshots'), undefined);
+        assert.strictEqual(sync._bootstrapDrained, true, 'the heartbeat gate opens after the complete drain');
+        assert.strictEqual(sync.streamWatermark, 91);
     });
 
     it('re-serves and later applies a held row after a restart with persisted local rows', async function () {
@@ -251,10 +276,10 @@ describe('capability snapshot proof hold barrier @regression @tier1', function (
         sinon.stub(beforeRestart.sync, 'reconcileForeignCapabilitySnapshots').resolves();
         sinon.stub(beforeRestart.sync, 'releaseSnapshotWaiters').resolves();
         beforeRestart.sync._bootstrapping = true;
-        assert.strictEqual(await beforeRestart.sync.bootstrapTable('capability_snapshots'), null);
+        assert.strictEqual(await beforeRestart.sync.bootstrapTable('capability_snapshots'), 90);
         beforeRestart.sync._bootstrapping = false;
         assert.strictEqual(beforeRestart.inserted.length, 0);
-        assert.strictEqual(beforeRestart.sync._drainPositions.capability_snapshots, ROW.id - 1);
+        assert.strictEqual(beforeRestart.sync._drainPositions.capability_snapshots, ROW.id);
         stopRetry(beforeRestart.sync);
 
         const afterRestart = makeSync(async () => ({ verdict }), persistent);
@@ -271,7 +296,7 @@ describe('capability snapshot proof hold barrier @regression @tier1', function (
         sinon.stub(sync, 'releaseSnapshotWaiters').resolves();
 
         sync._bootstrapping = true;
-        assert.strictEqual(await sync.bootstrapTable('capability_snapshots'), null);
+        assert.strictEqual(await sync.bootstrapTable('capability_snapshots'), 91);
         sync._bootstrapping = false;
         const snapshotCall = sync.httpGet.getCalls().find(call =>
             call.args[0].includes('/hub-db/snapshot/capability_snapshots'));
