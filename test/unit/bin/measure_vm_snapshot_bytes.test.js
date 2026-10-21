@@ -43,13 +43,13 @@ function makeDb(executionRows){
 }
 
 describe('bin/measure_vm_snapshot_bytes', function () {
-    it('parses bounds, limit, database and JSON mode', function () {
+    it('parses bounds, limit, database, cached and JSON modes', function () {
         assert.deepStrictEqual(parseArgs([]), {
-            from: null, to: null, limit: 50, db: null, json: false,
+            from: null, to: null, limit: 50, db: null, cached: false, json: false,
         });
         assert.deepStrictEqual(parseArgs([
-            '--from', '0', '--to', '12', '--limit', '5', '--db', 'indexer', '--json',
-        ]), { from: 0, to: 12, limit: 5, db: 'indexer', json: true });
+            '--from', '0', '--to', '12', '--limit', '5', '--db', 'indexer', '--cached', '--json',
+        ]), { from: 0, to: 12, limit: 5, db: 'indexer', cached: true, json: true });
     });
 
     it('rejects unknown flags and invalid numeric arguments', function () {
@@ -108,11 +108,93 @@ describe('bin/measure_vm_snapshot_bytes', function () {
         assert.strictEqual(result.maxBuildMs, 7);
         assert.strictEqual(result.sentBeforeBytes, expected[0] * 3 + expected[1]);
         assert.strictEqual(result.sentAfterBytes, expected[0] + expected[1]);
+        assert.strictEqual(result.cache, undefined);
 
         const builderQueries = queries.filter(query => SETTLEMENT_SQL.test(query.sql) || XCALLS_SQL.test(query.sql));
         assert.deepStrictEqual(builderQueries.slice(0, 4).map(query => query.args), [[12], [12], [8], [8]]);
         assert.ok(builderQueries.slice(0, 4).every(query => typeof query.args[0] === 'number'));
         assert.deepStrictEqual(queries[0].args, [5, 12, 2]);
+    });
+
+    it('reports one miss then hits in oldest-first cached mode and restores database state', async function () {
+        const snapshot = { attestations: {}, settled: {}, calls: {} };
+        const originalBuilder = async () => snapshot;
+        const db = {
+            blockIndex: 7,
+            _vmSnapshotMemo: null,
+            doQueryStrict: async () => [
+                { block_index: '12', executions: 2 },
+                { block_index: '11', executions: 1 },
+                { block_index: '10', executions: 1 },
+            ],
+            buildCrossChainDataForVM: originalBuilder,
+            async getCrossChainDataForVM(blockIndex){
+                if(!this.cachedSnapshot)
+                    this.cachedSnapshot = await this.buildCrossChainDataForVM(blockIndex);
+                return this.cachedSnapshot;
+            },
+        };
+        let tick = 0;
+        const result = await measure(db, { from: null, to: null, limit: 5, cached: true }, () => tick++);
+
+        assert.deepStrictEqual(result.cache, {
+            hits: 2,
+            misses: 1,
+            maxHitMs: 1,
+            maxMissMs: 1,
+            blocks: [
+                { blockIndex: 10, hit: false, ms: 1 },
+                { blockIndex: 11, hit: true, ms: 1 },
+                { blockIndex: 12, hit: true, ms: 1 },
+            ],
+        });
+        assert.strictEqual(db.buildCrossChainDataForVM, originalBuilder);
+        assert.strictEqual(db.blockIndex, 7);
+        assert.strictEqual(db._vmSnapshotMemo, null);
+        assert.match(render(result, false), /\n# cache blocks=3 hits=2 misses=1 max-hit=1ms max-miss=1ms$/);
+        assert.deepStrictEqual(JSON.parse(render(result, true)).cache, result.cache);
+    });
+
+    it('restores the original builder and database state when cached measurement throws', async function () {
+        const snapshot = { attestations: {}, settled: {}, calls: {} };
+        let calls = 0;
+        const originalBuilder = async () => {
+            if(++calls === 2) throw new Error('builder failed');
+            return snapshot;
+        };
+        const db = {
+            blockIndex: 44,
+            _vmSnapshotMemo: null,
+            doQueryStrict: async () => [{ block_index: '12', executions: 1 }],
+            buildCrossChainDataForVM: originalBuilder,
+            async getCrossChainDataForVM(blockIndex){
+                return this.buildCrossChainDataForVM(blockIndex);
+            },
+        };
+
+        await assert.rejects(
+            measure(db, { from: null, to: null, limit: 1, cached: true }, () => 0),
+            /builder failed/);
+        assert.strictEqual(db.buildCrossChainDataForVM, originalBuilder);
+        assert.strictEqual(db.blockIndex, 44);
+        assert.strictEqual(db._vmSnapshotMemo, null);
+    });
+
+    it('measures cached mode with getCrossChainDataForVM from src/db/blocks', async function () {
+        const { db } = makeDb([
+            { block_index: '12', executions: '1' },
+            { block_index: '8', executions: '1' },
+        ]);
+        db.blockIndex = 20;
+        db._vmSnapshotMemo = null;
+        const result = await measure(
+            db, { from: null, to: null, limit: 2, cached: true }, () => 0);
+
+        assert.deepStrictEqual(result.cache.blocks.map(block => block.blockIndex), [8, 12]);
+        assert.strictEqual(result.cache.blocks[0].hit, false);
+        assert.strictEqual(result.cache.hits + result.cache.misses, result.scanned);
+        assert.strictEqual(db.blockIndex, 20);
+        assert.strictEqual(db._vmSnapshotMemo, null);
     });
 
     it('times one serialization per block with a counter clock and prices both send shapes', async function () {
