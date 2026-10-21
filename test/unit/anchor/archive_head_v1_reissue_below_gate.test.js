@@ -16,6 +16,7 @@ const {
 
 const FOLD_GATE = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const SOURCE_AUTHOR_GATE = 'anchor_fold_reissue_source_author_activation.ANCHOR_FOLD_REISSUE_SOURCE_AUTHOR_ACTIVATION';
+const V1_REISSUE_GATE = 'archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION';
 
 function foldWire(){
     let params = v3Params();
@@ -39,6 +40,8 @@ describe('ANCHOR archive head same-author re-issue below the fold gate @regressi
             assert.strictEqual(batchSeq, 0);
             return [{ batch_crc32: 'cafef00d', match_count: 99 }];
         });
+        // Regtest arms the v1 re-issue refusal from genesis; this case pins the head below it.
+        sinon.stub(gateRegistry, 'activeAt').callThrough().withArgs(V1_REISSUE_GATE).returns(false);
 
         await armed.handler.parse(v1Params(ARCHIVE_JSON), data, null);
 
