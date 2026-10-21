@@ -388,8 +388,16 @@ function collectDefaultMetrics(registry, { service = 'unknown', version = '', co
 
 module.exports = {
     Registry,
+    Counter,
+    Gauge,
+    Histogram,
     collectDefaultMetrics,
     DEFAULT_DURATION_BUCKETS,
-    // exported for services that build their own labels
-    escapeLabelValue
+    DEFAULT_MAX_SERIES,
+    // exported for the unit suite and for services that build their own names
+    escapeLabelValue,
+    escapeHelp,
+    formatValue,
+    METRIC_NAME_RE,
+    LABEL_NAME_RE
 };

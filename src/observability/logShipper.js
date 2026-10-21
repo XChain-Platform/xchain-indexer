@@ -370,5 +370,7 @@ class LogShipper {
 function createLogShipper(opts = {}) { return new LogShipper(opts); }
 
 module.exports = {
-    createLogShipper, readLogEnv, redactFields, scrubMessage, formatTextLine
+    LogShipper, createLogShipper, readLogEnv, redactFields, scrubMessage,
+    formatTextLine, formatFieldValue, safeStringify, LEVELS, REDACTED,
+    SECRET_KEY_RE, SECRET_INLINE_RE
 };
