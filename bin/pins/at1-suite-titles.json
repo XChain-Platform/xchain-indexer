@@ -8906,6 +8906,18 @@
       "LEGACY_ANCHOR_REWARD_PIN mints an unpinned tuple with the gate on",
       "LEGACY_ANCHOR_REWARD_PIN skips a pinned tuple once the gate is on"
     ],
+    "7f1d1631109c4278": [
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate admits one 60-leg AIRDROP with 225 SENDs",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate dispatches all ten 40-leg AIRDROPs at the budget boundary",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate pins AIRDROP and DIVIDEND to 25 in commandWeights",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate pins weight 25 across every AIRDROP format and representative leg counts",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate refuses eleven 40-leg AIRDROPs as one batch before dispatch",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate refuses one 60-leg AIRDROP with 226 SENDs",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate sums four mixed-format AIRDROPs and five SENDs to 105",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate weighing fan-out commands reads neither token info nor balances",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate weighs DIVIDEND and the DROP alias as fan-out commands through batchWeight",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate weighs a one-leg and a 100-leg AIRDROP identically"
+    ],
     "7f39aa26f210b97a": [
       "consensus_rules_digest (indexer copy) changes when a height changes and not when prose does",
       "consensus_rules_digest (indexer copy) is identical to the hub copy gate for gate",
@@ -18559,8 +18571,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1471,
-      "titleCount": 14386,
+      "fileCount": 1472,
+      "titleCount": 14396,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18909,6 +18921,7 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
+        "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
         "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
@@ -20407,8 +20420,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1115,
-      "titleCount": 11370,
+      "fileCount": 1116,
+      "titleCount": 11380,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20755,6 +20768,7 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
+        "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
         "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
@@ -22083,8 +22097,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1115,
-      "titleCount": 11370,
+      "fileCount": 1116,
+      "titleCount": 11380,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22431,6 +22445,7 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
+        "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
         "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
