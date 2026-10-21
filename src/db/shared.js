@@ -267,7 +267,6 @@ module.exports = {
     withPinnedSqlMode,
     sqlModeAllowsBackslashEscapes,
     ATTEST_BATCH_CHUNK_ROW_LIMIT,
-    STAKE_WEIGHT_NUMERIC,
     requireStakeWeight,
     normalizeStakeAmount,
     AUTO_DEDUP_TABLES,
