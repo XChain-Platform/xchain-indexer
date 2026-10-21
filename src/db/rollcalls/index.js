@@ -34,8 +34,25 @@ module.exports = {
     //
     // `gates` is the ROLLCALL v1 GATES field as carried (null on a v0 row), stored raw
     // because the BTC close rebuilds the v1 canonical from it.
-    async insertRollcallSigners(rows){
+    //
+    // `action` is the ROLLCALL action's own summary ({action_index, block_index,
+    // epoch_height, ledger_hash, publisher, gates}). When given, one rollcall_actions
+    // row is written for it, with carried_count = rows.length and first_seen_count =
+    // the rows whose (epoch, pubkey) was not already present, counted BEFORE the signer
+    // insert so a replay of the block counts the same set. It is written even when that
+    // count is zero: an action carrying only already-seen pubkeys adds no signer row
+    // and would otherwise not exist for the explorer. INSERT IGNORE on action_index.
+    async insertRollcallSigners(rows, action){
         if(!Array.isArray(rows) || rows.length === 0) return 0;
+        let seen = 0;
+        if(action){
+            let keys = rows.map((r) => String(r.pubkey).toLowerCase());
+            let found = await this.doQuery(
+                `SELECT COUNT(*) AS seen FROM rollcall_signers
+                  WHERE epoch_height = ? AND pubkey IN (${keys.map(() => '?').join(', ')})`,
+                [parseInt(rows[0].epoch_height)].concat(keys));
+            seen = (found && found[0]) ? parseInt(found[0].seen) || 0 : 0;
+        }
         let placeholders = rows.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
         let values = [];
         for(let r of rows){
@@ -54,7 +71,59 @@ module.exports = {
                         (epoch_height, pubkey, sig, ledger_hash, publisher, action_index, block_index, gates)
                      VALUES ${placeholders}`;
         await this.doQuery(query, values);
+        if(action){
+            await this.doQuery(
+                `INSERT IGNORE INTO rollcall_actions
+                    (action_index, block_index, epoch_height, ledger_hash, publisher, gates,
+                     carried_count, first_seen_count)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [parseInt(action.action_index), parseInt(action.block_index), parseInt(action.epoch_height),
+                 String(action.ledger_hash).toLowerCase(), String(action.publisher).toLowerCase(),
+                 (action.gates === undefined || action.gates === null) ? null : String(action.gates),
+                 rows.length, Math.max(0, rows.length - seen)]);
+        }
         return rows.length;
+    },
+
+    // Whether this schema carries rollcall_actions. Asked of information_schema, not
+    // inferred from a failed SELECT, because doQuery collapses a missing-table error to [].
+    async hasRollcallActionsTable(){
+        let rows = await this.doQuery(
+            `SELECT TABLE_NAME FROM information_schema.TABLES
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rollcall_actions'`, []);
+        return Array.isArray(rows) && rows.length > 0;
+    },
+
+    // Explorer list/detail feed (/api/rollcalls), newest action first, optionally for
+    // one action_index. Every row: action_index, block_index, epoch_height, ledger_hash,
+    // publisher, gates, carried_count, first_seen_count.
+    //
+    // SCHEMA PROBE: a replica that has not applied the rollcall_actions migration falls
+    // back to grouping rollcall_signers by action_index. That is the de-blank baseline:
+    // it renders every action that added a signer, with carried_count equal to
+    // first_seen_count, and cannot show an action that added none.
+    async getRollcallActions(limit, actionIndex){
+        let n = parseInt(limit);
+        if(!Number.isFinite(n) || n <= 0) n = 20;
+        if(n > 100) n = 100;
+        let one = (actionIndex === undefined || actionIndex === null) ? null : parseInt(actionIndex);
+        if(one !== null && !Number.isFinite(one)) return [];
+        let where = (one === null) ? '' : 'WHERE action_index = ?';
+        let args = (one === null) ? [n] : [one, n];
+        if(await this.hasRollcallActionsTable()){
+            return await this.doQuery(
+                `SELECT action_index, block_index, epoch_height, ledger_hash, publisher, gates,
+                        carried_count, first_seen_count
+                   FROM rollcall_actions ${where}
+                  ORDER BY action_index DESC LIMIT ?`, args);
+        }
+        return await this.doQuery(
+            `SELECT action_index, MIN(block_index) AS block_index, MIN(epoch_height) AS epoch_height,
+                    MIN(ledger_hash) AS ledger_hash, MIN(publisher) AS publisher, MIN(gates) AS gates,
+                    COUNT(*) AS carried_count, COUNT(*) AS first_seen_count
+               FROM rollcall_signers ${where}
+              GROUP BY action_index
+              ORDER BY action_index DESC LIMIT ?`, args);
     },
 
     // First-seen signature rows for an epoch, BOUNDED BY THE CALLER'S KEY LIST.
