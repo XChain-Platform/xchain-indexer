@@ -495,6 +495,36 @@
       "policy barrier: content shortcut scoped by the follower stamp window @regression @tier1 opens once the newest stamp covers the whole stamp spread",
       "policy barrier: content shortcut scoped by the follower stamp window @regression @tier1 opens the content shortcut only on a drained connection"
     ],
+    "094a3c4326457ea4": [
+      "Address action handler @regression @tier3 accepts DISPENSER_PREFERENCE=1",
+      "Address action handler @regression @tier3 accepts DISPENSER_PREFERENCE=2",
+      "Address action handler @regression @tier3 accepts FEE_PREFERENCE=0",
+      "Address action handler @regression @tier3 accepts FEE_PREFERENCE=1",
+      "Address action handler @regression @tier3 accepts FEE_PREFERENCE=2",
+      "Address action handler @regression @tier3 accepts REQUIRE_MEMO=0",
+      "Address action handler @regression @tier3 accepts REQUIRE_MEMO=1",
+      "Address action handler @regression @tier3 accepts blank DISPENSER_PREFERENCE (preserves prior preference)",
+      "Address action handler @regression @tier3 calls createAddressOption on the indexerDb",
+      "Address action handler @regression @tier3 calls mapper.createMappings after parse",
+      "Address action handler @regression @tier3 format 1 : controller bind persistence a REFUSED bind still writes its audit row, and binds nothing",
+      "Address action handler @regression @tier3 format 1 : controller bind persistence a REFUSED unbind is readable too",
+      "Address action handler @regression @tier3 format 1 : controller bind persistence a valid bind writes both the audit row and the controller event",
+      "Address action handler @regression @tier3 format 1 : controller bind persistence a valid unbind appends the drop and its cooldown end block",
+      "Address action handler @regression @tier3 format 1 : controller bind persistence an unknown ACTION_CLASS is readable rather than silent",
+      "Address action handler @regression @tier3 format 1 : controller bind persistence rejects COOLDOWN_BLOCKS 4294967296 (over INT UNSIGNED) and records no controller event",
+      "Address action handler @regression @tier3 format 1 : controller bind persistence still accepts COOLDOWN_BLOCKS 4294967295 (the column maximum)",
+      "Address action handler @regression @tier3 format 1 : controller bind persistence the audit row carries the verdict, not preferences",
+      "Address action handler @regression @tier3 rejects DISPENSER_PREFERENCE=0 as invalid value",
+      "Address action handler @regression @tier3 rejects DISPENSER_PREFERENCE=3 (out of valid range)",
+      "Address action handler @regression @tier3 rejects FEE_PREFERENCE=3 as invalid value",
+      "Address action handler @regression @tier3 rejects FEE_PREFERENCE=5 (out of valid range)",
+      "Address action handler @regression @tier3 rejects MEMO containing a pipe character",
+      "Address action handler @regression @tier3 rejects MEMO containing a semicolon",
+      "Address action handler @regression @tier3 rejects MEMO exceeding MAX_MEMO_LENGTH",
+      "Address action handler @regression @tier3 rejects REQUIRE_MEMO=2 as invalid value",
+      "Address action handler @regression @tier3 rejects non-numeric DISPENSER_PREFERENCE",
+      "Address action handler @regression @tier3 rejects when SOURCE is sleeping"
+    ],
     "095a443c3cec5cd4": [
       "Xcall (XCALL) @regression @tier3 v2: expire flips a pending request to expired BEFORE injecting the callback (interlock order)",
       "Xcall (XCALL) @regression @tier3 v2: expire is a no-op when the request is already terminal (race-protected)",
@@ -5582,6 +5612,19 @@
       "HubClient setAddressSource() routes reorg pushes through the current address with the reorg key",
       "HubClient setAddressSource() uses the constructor address when no source is set"
     ],
+    "51b18424f3d44a94": [
+      "Issue: caret TICK may not create a token (ISSUE_CARET_TICK_NO_CREATE) @regression @tier1 an owner caret v1 edit of an existing token stays valid with the flag on",
+      "Issue: caret TICK may not create a token (ISSUE_CARET_TICK_NO_CREATE) @regression @tier1 is invalid: TICK (unknown) and never calls createToken when the flag is on",
+      "Issue: caret TICK may not create a token (ISSUE_CARET_TICK_NO_CREATE) @regression @tier1 stays valid when the flag is off",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" is rejected as invalid: TICK (caret dot) when the flag is active",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" reproduces the PRE-FLAG (defective) valid verdict when the flag is off",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12\" (no dot) is still accepted when the flag is active",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12.5\" is rejected as invalid: TICK (caret dot) when the flag is active",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12.5\" reproduces the PRE-FLAG (defective) valid verdict when the flag is off",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) a plain dotted child TICK (\"JDOG.1\") is still accepted; the caret rule does not touch it",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect B: no free ticker interning once an ISSUE has already errored performs NO ticker insert for the already-invalid TICK when the flag is active",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect B: no free ticker interning once an ISSUE has already errored still performs the ticker insert (unsuppressed) for the already-invalid TICK when the flag is OFF"
+    ],
     "51b3468275b1d232": [
       "BROADCAST FEE length gate @regression @tier1 accepts an 11-character FEE when active without reading the gate",
       "BROADCAST FEE length gate @regression @tier1 keeps a legacy 12-character FEE valid and stores its first 11 characters",
@@ -5964,6 +6007,17 @@
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 binding rule (utility.selectApplicableAttestationResponses) binds at the predicted block, and NOT one block earlier",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 binding rule (utility.selectApplicableAttestationResponses) never binds a row whose first satisfying block is past the deadline (AT3, first half)",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 binding rule (utility.selectApplicableAttestationResponses) skips a row whose local request is absent, already terminal, or legacy-era"
+    ],
+    "57b7aef949668b52": [
+      "Controller-bound token: Phase-1 single-column model retired @regression the permanent-lock (LOCK_CONTROLLER) is gone everywhere LOCK_CONTROLLER is not a config LOCK field",
+      "Controller-bound token: Phase-1 single-column model retired @regression the permanent-lock (LOCK_CONTROLLER) is gone everywhere LOCK_CONTROLLER is not in the Issue handler LOCK field list",
+      "Controller-bound token: Phase-1 single-column model retired @regression the permanent-lock (LOCK_CONTROLLER) is gone everywhere no ISSUE format string mentions LOCK_CONTROLLER",
+      "Controller-bound token: Phase-1 single-column model retired @regression the reusable guard engine is retained Execute still exposes runControllerGuard",
+      "Controller-bound token: Phase-1 single-column model retired @regression the reusable guard engine is retained the per-chain gas schedule still defines VM_GUARD_GAS_CEILING",
+      "Controller-bound token: Phase-1 single-column model retired @regression the single-column CONTROLLER no longer rides the token-edit formats CONTROLLER lives only on the dedicated binding format (6)",
+      "Controller-bound token: Phase-1 single-column model retired @regression the single-column CONTROLLER no longer rides the token-edit formats ISSUE format 0 (full) does not carry CONTROLLER",
+      "ISSUE v6 COOLDOWN_BLOCKS range @regression 4294967295 stays valid",
+      "ISSUE v6 COOLDOWN_BLOCKS range @regression 4294967296 is invalid: COOLDOWN_BLOCKS (format) and records no event"
     ],
     "57b9f89aaea7e18e": [
       "planListShareInputs passes the cap to the due-version planner",
@@ -6982,34 +7036,6 @@
       "list share mirror membership re-read @regression @tier1 halts when the mirror list is unreadable",
       "list share mirror membership re-read @regression @tier1 rejects invalid inputs before reading the mirror",
       "list share mirror membership re-read @regression @tier1 returns a sorted copy after exactly one read at the requested block"
-    ],
-    "671fba5d3851ac97": [
-      "Address action handler @regression @tier3 accepts DISPENSER_PREFERENCE=1",
-      "Address action handler @regression @tier3 accepts DISPENSER_PREFERENCE=2",
-      "Address action handler @regression @tier3 accepts FEE_PREFERENCE=0",
-      "Address action handler @regression @tier3 accepts FEE_PREFERENCE=1",
-      "Address action handler @regression @tier3 accepts FEE_PREFERENCE=2",
-      "Address action handler @regression @tier3 accepts REQUIRE_MEMO=0",
-      "Address action handler @regression @tier3 accepts REQUIRE_MEMO=1",
-      "Address action handler @regression @tier3 accepts blank DISPENSER_PREFERENCE (preserves prior preference)",
-      "Address action handler @regression @tier3 calls createAddressOption on the indexerDb",
-      "Address action handler @regression @tier3 calls mapper.createMappings after parse",
-      "Address action handler @regression @tier3 format 1 : controller bind persistence a REFUSED bind still writes its audit row, and binds nothing",
-      "Address action handler @regression @tier3 format 1 : controller bind persistence a REFUSED unbind is readable too",
-      "Address action handler @regression @tier3 format 1 : controller bind persistence a valid bind writes both the audit row and the controller event",
-      "Address action handler @regression @tier3 format 1 : controller bind persistence a valid unbind appends the drop and its cooldown end block",
-      "Address action handler @regression @tier3 format 1 : controller bind persistence an unknown ACTION_CLASS is readable rather than silent",
-      "Address action handler @regression @tier3 format 1 : controller bind persistence the audit row carries the verdict, not preferences",
-      "Address action handler @regression @tier3 rejects DISPENSER_PREFERENCE=0 as invalid value",
-      "Address action handler @regression @tier3 rejects DISPENSER_PREFERENCE=3 (out of valid range)",
-      "Address action handler @regression @tier3 rejects FEE_PREFERENCE=3 as invalid value",
-      "Address action handler @regression @tier3 rejects FEE_PREFERENCE=5 (out of valid range)",
-      "Address action handler @regression @tier3 rejects MEMO containing a pipe character",
-      "Address action handler @regression @tier3 rejects MEMO containing a semicolon",
-      "Address action handler @regression @tier3 rejects MEMO exceeding MAX_MEMO_LENGTH",
-      "Address action handler @regression @tier3 rejects REQUIRE_MEMO=2 as invalid value",
-      "Address action handler @regression @tier3 rejects non-numeric DISPENSER_PREFERENCE",
-      "Address action handler @regression @tier3 rejects when SOURCE is sleeping"
     ],
     "672945fd69f1b757": [
       "SLEEP LOCK_SLEEP guard and the policy-inheritance exemption @regression @consensus admits the injected WAKE shape, a resume block equal to this block",
@@ -13804,15 +13830,6 @@
       "Mint handler @regression @tier1 DESTINATION invalid DESTINATION format \u2192 invalid",
       "Mint handler @regression @tier1 DESTINATION valid DESTINATION \u2192 credit goes to DESTINATION, debit from SOURCE"
     ],
-    "c258afd178cb16c7": [
-      "Controller-bound token: Phase-1 single-column model retired @regression the permanent-lock (LOCK_CONTROLLER) is gone everywhere LOCK_CONTROLLER is not a config LOCK field",
-      "Controller-bound token: Phase-1 single-column model retired @regression the permanent-lock (LOCK_CONTROLLER) is gone everywhere LOCK_CONTROLLER is not in the Issue handler LOCK field list",
-      "Controller-bound token: Phase-1 single-column model retired @regression the permanent-lock (LOCK_CONTROLLER) is gone everywhere no ISSUE format string mentions LOCK_CONTROLLER",
-      "Controller-bound token: Phase-1 single-column model retired @regression the reusable guard engine is retained Execute still exposes runControllerGuard",
-      "Controller-bound token: Phase-1 single-column model retired @regression the reusable guard engine is retained the per-chain gas schedule still defines VM_GUARD_GAS_CEILING",
-      "Controller-bound token: Phase-1 single-column model retired @regression the single-column CONTROLLER no longer rides the token-edit formats CONTROLLER lives only on the dedicated binding format (6)",
-      "Controller-bound token: Phase-1 single-column model retired @regression the single-column CONTROLLER no longer rides the token-edit formats ISSUE format 0 (full) does not carry CONTROLLER"
-    ],
     "c262ebb8f7e7ced1": [
       "ANCHOR checkpoint sequence binding gate @regression @tier1 arms regtest at the height named by the environment",
       "ANCHOR checkpoint sequence binding gate @regression @tier1 binds every v3 section after activation",
@@ -16831,16 +16848,6 @@
       "Utility @regression @tier1 processCooldownCompletions() history mapping maps each fresh completion action to its source address and released tick",
       "Utility @regression @tier1 processCooldownCompletions() history mapping writes no mapping on the legacy path, whose credit reuses the already-mapped UNSTAKE index"
     ],
-    "e6aed40fa235b3b4": [
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" is rejected as invalid: TICK (caret dot) when the flag is active",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" reproduces the PRE-FLAG (defective) valid verdict when the flag is off",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12\" (no dot) is still accepted when the flag is active",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12.5\" is rejected as invalid: TICK (caret dot) when the flag is active",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12.5\" reproduces the PRE-FLAG (defective) valid verdict when the flag is off",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) a plain dotted child TICK (\"JDOG.1\") is still accepted; the caret rule does not touch it",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect B: no free ticker interning once an ISSUE has already errored performs NO ticker insert for the already-invalid TICK when the flag is active",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect B: no free ticker interning once an ISSUE has already errored still performs the ticker insert (unsuppressed) for the already-invalid TICK when the flag is OFF"
-    ],
     "e6be9c3df5e9ecad": [
       "SQL schema column parity (definition path vs ledger path) @regression a baselined column removed from its definition is reported as retired, not reordered @regression",
       "SQL schema column parity (definition path vs ledger path) @regression a pre-ledger baselined column has not changed shape or relative position @regression",
@@ -18516,7 +18523,7 @@
   "scripts": {
     "test": {
       "fileCount": 1466,
-      "titleCount": 14352,
+      "titleCount": 14359,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18847,7 +18854,7 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
-        "test/unit/actions/token/address.test.js": "671fba5d3851ac97",
+        "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
@@ -19278,7 +19285,7 @@
         "test/unit/contract_state_subtree.test/contract_state_root_strict_read_faults.test.js": "151ff98884592964",
         "test/unit/contract_state_subtree.test/contract_state_root_strict_reads.test.js": "6d955dc4007ee59e",
         "test/unit/contracts/contract_meta_text.test.js": "c660c73606f39ac4",
-        "test/unit/contracts/controller_bound_token.test.js": "c258afd178cb16c7",
+        "test/unit/contracts/controller_bound_token.test.js": "57b7aef949668b52",
         "test/unit/contracts/controller_enforcement.test.js": "04f2b1458c348cb3",
         "test/unit/contracts/controller_enforcement.test/custody_completeness.test.js": "47d45f1d606adbef",
         "test/unit/contracts/controller_enforcement.test/custody_guard_deposit_bindings.test.js": "cb6dfcd8bd1e5b65",
@@ -19392,7 +19399,7 @@
         "test/unit/db/ledger/db_ledger_amount_precision.test.js": "91e1c4091acd208f",
         "test/unit/db/ledger/db_list_edit_resolution.test.js": "fb233aaecb5f96ff",
         "test/unit/db/ledger/destroys_leg_ordinal.test.js": "42d2e6ea86973412",
-        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "e6aed40fa235b3b4",
+        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "51b18424f3d44a94",
         "test/unit/db/ledger/issue_caret_dot_and_intern.test/parent_lookup.test.js": "662f4b652a7fa471",
         "test/unit/db/ledger/issues_backfill_transfer_supply_id.test.js": "1da74f76ac51fa9c",
         "test/unit/db/ledger/lock_null_prior_unset.test.js": "6dcc6a046f0abfb6",
@@ -20359,7 +20366,7 @@
     },
     "test:regression": {
       "fileCount": 1114,
-      "titleCount": 11359,
+      "titleCount": 11366,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20689,7 +20696,7 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
-        "test/unit/actions/token/address.test.js": "671fba5d3851ac97",
+        "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
@@ -20948,7 +20955,7 @@
         "test/unit/contract_state_subtree.test/contract_state_root_strict_read_faults.test.js": "151ff98884592964",
         "test/unit/contract_state_subtree.test/contract_state_root_strict_reads.test.js": "6d955dc4007ee59e",
         "test/unit/contracts/contract_meta_text.test.js": "c660c73606f39ac4",
-        "test/unit/contracts/controller_bound_token.test.js": "c258afd178cb16c7",
+        "test/unit/contracts/controller_bound_token.test.js": "57b7aef949668b52",
         "test/unit/contracts/controller_enforcement.test.js": "04f2b1458c348cb3",
         "test/unit/contracts/controller_enforcement.test/custody_guard_deposit_bindings.test.js": "cb6dfcd8bd1e5b65",
         "test/unit/contracts/controller_enforcement.test/custody_guard_deposit_gas.test.js": "d3788b1222e8bc68",
@@ -21040,7 +21047,7 @@
         "test/unit/db/ledger/db_ledger_amount_precision.test.js": "91e1c4091acd208f",
         "test/unit/db/ledger/db_list_edit_resolution.test.js": "fb233aaecb5f96ff",
         "test/unit/db/ledger/destroys_leg_ordinal.test.js": "42d2e6ea86973412",
-        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "e6aed40fa235b3b4",
+        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "51b18424f3d44a94",
         "test/unit/db/ledger/issue_caret_dot_and_intern.test/parent_lookup.test.js": "662f4b652a7fa471",
         "test/unit/db/ledger/issues_backfill_transfer_supply_id.test.js": "1da74f76ac51fa9c",
         "test/unit/db/ledger/lock_null_prior_unset.test.js": "6dcc6a046f0abfb6",
@@ -21479,7 +21486,7 @@
     },
     "test:regression:fast": {
       "fileCount": 548,
-      "titleCount": 5954,
+      "titleCount": 5957,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21741,7 +21748,7 @@
         "test/unit/db/ledger/db_create_token_lock_mint_supply.test.js": "6211c0307b8e5b60",
         "test/unit/db/ledger/db_ledger_amount_precision.test.js": "91e1c4091acd208f",
         "test/unit/db/ledger/db_list_edit_resolution.test.js": "fb233aaecb5f96ff",
-        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "e6aed40fa235b3b4",
+        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "51b18424f3d44a94",
         "test/unit/db/ledger/issue_caret_dot_and_intern.test/parent_lookup.test.js": "662f4b652a7fa471",
         "test/unit/db/ledger/issues_backfill_transfer_supply_id.test.js": "1da74f76ac51fa9c",
         "test/unit/db/ledger/lock_null_prior_unset.test.js": "6dcc6a046f0abfb6",
@@ -22033,7 +22040,7 @@
     },
     "test:regression:full": {
       "fileCount": 1114,
-      "titleCount": 11359,
+      "titleCount": 11366,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22363,7 +22370,7 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
-        "test/unit/actions/token/address.test.js": "671fba5d3851ac97",
+        "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
@@ -22622,7 +22629,7 @@
         "test/unit/contract_state_subtree.test/contract_state_root_strict_read_faults.test.js": "151ff98884592964",
         "test/unit/contract_state_subtree.test/contract_state_root_strict_reads.test.js": "6d955dc4007ee59e",
         "test/unit/contracts/contract_meta_text.test.js": "c660c73606f39ac4",
-        "test/unit/contracts/controller_bound_token.test.js": "c258afd178cb16c7",
+        "test/unit/contracts/controller_bound_token.test.js": "57b7aef949668b52",
         "test/unit/contracts/controller_enforcement.test.js": "04f2b1458c348cb3",
         "test/unit/contracts/controller_enforcement.test/custody_guard_deposit_bindings.test.js": "cb6dfcd8bd1e5b65",
         "test/unit/contracts/controller_enforcement.test/custody_guard_deposit_gas.test.js": "d3788b1222e8bc68",
@@ -22714,7 +22721,7 @@
         "test/unit/db/ledger/db_ledger_amount_precision.test.js": "91e1c4091acd208f",
         "test/unit/db/ledger/db_list_edit_resolution.test.js": "fb233aaecb5f96ff",
         "test/unit/db/ledger/destroys_leg_ordinal.test.js": "42d2e6ea86973412",
-        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "e6aed40fa235b3b4",
+        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "51b18424f3d44a94",
         "test/unit/db/ledger/issue_caret_dot_and_intern.test/parent_lookup.test.js": "662f4b652a7fa471",
         "test/unit/db/ledger/issues_backfill_transfer_supply_id.test.js": "1da74f76ac51fa9c",
         "test/unit/db/ledger/lock_null_prior_unset.test.js": "6dcc6a046f0abfb6",

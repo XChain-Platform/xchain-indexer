@@ -297,6 +297,21 @@ describe('Address action handler @regression @tier3', function () {
             assert.ok(indexer.indexerDb.recordAddressControllerEvent.notCalled);
         });
 
+        it('rejects COOLDOWN_BLOCKS 4294967296 (over INT UNSIGNED) and records no controller event', async function () {
+            const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 1, ACTION_INDEX: 1793 });
+            await handler.parse(bindParams({ cooldown: '4294967296' }), data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: COOLDOWN_BLOCKS (format)');
+            assert.ok(indexer.indexerDb.createAddressOption.calledOnce, 'the refusal is still readable');
+            assert.ok(indexer.indexerDb.recordAddressControllerEvent.notCalled);
+        });
+
+        it('still accepts COOLDOWN_BLOCKS 4294967295 (the column maximum)', async function () {
+            const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 1, ACTION_INDEX: 1794 });
+            await handler.parse(bindParams({ cooldown: '4294967295' }), data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(indexer.indexerDb.recordAddressControllerEvent.firstCall.args[0].cooldown_blocks, 4294967295);
+        });
+
         it('a valid unbind appends the drop and its cooldown end block', async function () {
             indexer.indexerDb.getEffectiveAddressController.resolves({
                 action_index: 1700, contract_index: 1500, is_unbind: 0, cooldown_blocks: 144, cooldown_end_block: null
