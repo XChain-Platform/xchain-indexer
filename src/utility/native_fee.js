@@ -84,6 +84,14 @@ function drawNativeFeeOutput(util, ledger, available, paidAmount, band, prices, 
     };
 }
 
+// Runs with `this` bound to the Utility instance, like the exported methods.
+function addProbeNativeFee(data, amount){
+    let disclosure = this.probePaymentDisclosure(data);
+    if(disclosure)
+        disclosure.nativeFeeOwed = this.bcformat(
+            this.bcadd(disclosure.nativeFeeOwed, amount, 8), 8);
+}
+
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
 module.exports = {
@@ -98,13 +106,6 @@ module.exports = {
             probePaymentDisclosures.set(data, disclosure);
         }
         return disclosure;
-    },
-
-    addProbeNativeFee(data, amount){
-        let disclosure = this.probePaymentDisclosure(data);
-        if(disclosure)
-            disclosure.nativeFeeOwed = this.bcformat(
-                this.bcadd(disclosure.nativeFeeOwed, amount, 8), 8);
     },
 
     addProbeCoinPayment(data, payee, amount){
@@ -259,7 +260,7 @@ module.exports = {
         }
 
         let band = this.computeNativeFeeBand(xchainAmount, prices.xchainUsdPrice, prices.coinUsdPrice, toleranceMin, toleranceMax);
-        this.addProbeNativeFee(data, band.expectedNative);
+        addProbeNativeFee.call(this, data, band.expectedNative);
         return drawNativeFeeOutput(this, ledger, available, paidAmount, band, prices, coin);
     }
 };
