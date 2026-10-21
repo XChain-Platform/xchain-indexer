@@ -84,27 +84,28 @@ describe('exact u64 order reads @regression @tier1', function(){
     });
 
     it('keeps cross-chain offer expiration and list ids exact', async function(){
+        const offerRow = {
+            kind: 'swap',
+            action_index: '7',
+            give_coin: 'BTC',
+            give_tick: 'GIVE',
+            give_amount: '10',
+            give_ownership: '0',
+            get_coin: 'LTC',
+            get_tick: 'GET',
+            get_amount: '20',
+            get_ownership: '0',
+            get_address: 'destination',
+            source: 'source',
+            expiration: U64_MAX,
+            allow_list: '9007199254740993',
+            block_list: '42',
+            payout_legs: null,
+            block_index: '6'
+        };
         let db = {
             util: util(),
-            doQuery: async () => [{
-                kind: 'swap',
-                action_index: '7',
-                give_coin: 'BTC',
-                give_tick: 'GIVE',
-                give_amount: '10',
-                give_ownership: '0',
-                get_coin: 'LTC',
-                get_tick: 'GET',
-                get_amount: '20',
-                get_ownership: '0',
-                get_address: 'destination',
-                source: 'source',
-                expiration: U64_MAX,
-                allow_list: '9007199254740993',
-                block_list: '42',
-                payout_legs: null,
-                block_index: '6'
-            }]
+            doQuery: async () => [offerRow]
         };
 
         let offers = await crossChainOffers.getOpenCrossChainOffers.call(db, 10, null, null, null);
@@ -112,5 +113,12 @@ describe('exact u64 order reads @regression @tier1', function(){
         assert.strictEqual(offers[0].expiration, U64_MAX);
         assert.strictEqual(offers[0].allow_list, '9007199254740993');
         assert.strictEqual(offers[0].block_list, 42);
+
+        db.doQuery = async () => [Object.assign({}, offerRow, { expiration: null, allow_list: null, block_list: null })];
+        offers = await crossChainOffers.getOpenCrossChainOffers.call(db, 10, null, null, null);
+
+        assert.strictEqual(offers[0].expiration, 0);
+        assert.strictEqual(offers[0].allow_list, null);
+        assert.strictEqual(offers[0].block_list, null);
     });
 });
