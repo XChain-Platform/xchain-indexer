@@ -83,7 +83,7 @@ module.exports = {
 
     // Process any orders, swaps, or dispensers which are past expiration
     // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
-    // TODO: Revisit this code and handle calculating block time more elegantly
+    // Block time is part of the consensus rules, so it is deliberately left as is
     async processExpirations(actions, db, block_index, block_time){
         let expired = await db.getExpiredItems(block_time);
         for(let info of expired){
@@ -209,7 +209,7 @@ module.exports = {
 
     // Process any dispensers which have been cancelled and need to be closed
     // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
-    // TODO: Revisit this code and handle calculating block time more elegantly
+    // Block time is part of the consensus rules, so it is deliberately left as is
     async processCancellations(actions, db, block_index, block_time){
         let cancels = await db.findCancelledDispensers(block_time, block_index);
         for(let action_index of cancels){

@@ -265,7 +265,6 @@ module.exports = {
     SESSION_SQL_MODE,
     SESSION_INIT_SQL,
     withPinnedSqlMode,
-    sqlModeIsPinned,
     sqlModeAllowsBackslashEscapes,
     ATTEST_BATCH_CHUNK_ROW_LIMIT,
     STAKE_WEIGHT_NUMERIC,
