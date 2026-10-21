@@ -12798,6 +12798,11 @@
       "price landing barrier, TBTC action 376 fixture @regression @tier1 holds block 155120 until landed.DOGE passes its time, then live equals replay at round 5447",
       "price landing barrier, TBTC action 376 fixture @regression @tier1 the fixture spans rounds 5435 to 5448"
     ],
+    "aecb8d3a7d8be1fc": [
+      "archive heads reading script documentation @regression @tier1 has exactly one README row naming every Usage flag",
+      "archive heads reading script documentation @regression @tier1 keeps the Usage flags and parseArgs comparisons identical",
+      "archive heads reading script documentation @regression @tier1 reports expect-conflict when that flag is removed from the README row"
+    ],
     "aee3b085c2dff406": [
       "ATTEST per-block admission caps (spec \u00a711.1) @regression ATTEST_REQUEST_CAPS keeps the per-contract cap below the per-block ceiling",
       "ATTEST per-block admission caps (spec \u00a711.1) @regression ATTEST_REQUEST_CAPS pins the consensus cap values"
@@ -18818,8 +18823,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1498,
-      "titleCount": 14581,
+      "fileCount": 1499,
+      "titleCount": 14584,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20177,6 +20182,7 @@
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_documented.test.js": "aecb8d3a7d8be1fc",
         "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/repo_guards/sibling_checkout.test.js": "595bbb01e039e4ad",
         "test/unit/repo_guards/sibling_coverage.test.js": "d8d1e52267ea606f",
@@ -20697,8 +20703,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1135,
-      "titleCount": 11478,
+      "fileCount": 1136,
+      "titleCount": 11481,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21732,6 +21738,7 @@
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_documented.test.js": "aecb8d3a7d8be1fc",
         "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/rewards/create_validator_reward_callsites.test.js": "42b3ffd148cc346b",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
@@ -21838,8 +21845,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 565,
-      "titleCount": 6041,
+      "fileCount": 566,
+      "titleCount": 6044,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22361,6 +22368,7 @@
         "test/unit/remote_token/admitted_pin_read.test.js": "76ff5d508163927d",
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_documented.test.js": "aecb8d3a7d8be1fc",
         "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/rewards/create_validator_reward_callsites.test.js": "42b3ffd148cc346b",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
@@ -22409,8 +22417,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1135,
-      "titleCount": 11478,
+      "fileCount": 1136,
+      "titleCount": 11481,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23444,6 +23452,7 @@
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_documented.test.js": "aecb8d3a7d8be1fc",
         "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/rewards/create_validator_reward_callsites.test.js": "42b3ffd148cc346b",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
