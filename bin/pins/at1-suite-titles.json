@@ -1098,12 +1098,16 @@
       "Dispenser refill controller guard @regression @tier2 active: an edit that adds no escrow is not guarded",
       "Dispenser refill controller guard @regression @tier2 inactive: the same denied refill is unguarded and settles"
     ],
-    "0ec8a8b3eee6cb90": [
-      "bin/bench_net_balance issues no batched query and returns no batch without --batched",
+    "84150d96eb17417e": [
+      "bin/bench_net_balance issues no optional queries and returns no optional results without their flags",
       "bin/bench_net_balance parses --batched to true and its absence to false",
+      "bin/bench_net_balance parses --blocks through the positive integer check and defaults it off",
+      "bin/bench_net_balance render prints per-block detail and summary lines only when present",
       "bin/bench_net_balance render prints the batch line only when a batch is present",
       "bin/bench_net_balance reports a mismatch when the batched net differs for a key",
+      "bin/bench_net_balance returns a zero per-block summary when the recent-block query is empty",
       "bin/bench_net_balance returns zeros for no keys",
+      "bin/bench_net_balance times each recent block over its touched keys",
       "bin/bench_net_balance times getNetBalances over the same keys under --batched"
     ],
     "0ef5583765eab080": [
@@ -19369,7 +19373,7 @@
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/archive_heads_by_author.test.js": "464e44254a160d66",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
-        "test/unit/bin/bench_net_balance.test.js": "0ec8a8b3eee6cb90",
+        "test/unit/bin/bench_net_balance.test.js": "84150d96eb17417e",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
