@@ -107,4 +107,4 @@ function installObservabilityLayers(app, { indexer, CONFIG_ENV, INDEXER_NETWORK 
     installIndexerMetrics(observability, indexer);
 }
 
-module.exports = { installMiddleware, jsonBodyErrorHandler };
+module.exports = { installMiddleware };

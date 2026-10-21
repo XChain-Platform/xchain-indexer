@@ -486,7 +486,7 @@
     },
     "armed_map_row_count": 465,
     "gates_field_hash": "3d31976181db95861cd0a92ecb1c01ada526278c421a199bbe15f3136c71b9dd",
-    "carrier_logic_digest": "27a814f221a5f54eb01ef637eb5d3788e82b6c83cb7575765faaad3706d0cb11",
+    "carrier_logic_digest": "d19385c1b4b3e17bd7bcc4f2173f554ff672a5751386469763a0476bb2a9876e",
     "consensus_rules_digest": "cac4806586d5e35020f85dd9f0a6b8106f9838a259c9a4b94a6c6cecb2678c06",
     "gate_key_count": 47,
     "consensus_rules_gates": {
@@ -1022,7 +1022,7 @@
     },
     "armed_map_row_count": 465,
     "gates_field_hash": "3d31976181db95861cd0a92ecb1c01ada526278c421a199bbe15f3136c71b9dd",
-    "carrier_logic_digest": "27a814f221a5f54eb01ef637eb5d3788e82b6c83cb7575765faaad3706d0cb11",
+    "carrier_logic_digest": "d19385c1b4b3e17bd7bcc4f2173f554ff672a5751386469763a0476bb2a9876e",
     "consensus_rules_digest": "d13f3a42fe657441fc3b66f0589703593789b3304165f78a6f26dc1e71764472",
     "gate_key_count": 47,
     "consensus_rules_gates": {

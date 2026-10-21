@@ -47,7 +47,7 @@ const { gatherStakeEntries, buildStakesRoot, resetStakesMemo } = require('./stak
 const { assembleStateRoot, extraSubRootColumn, computeBlockMerkleRoot } = require('./state_root.js');
 const FULL = require('./full_balances_root.js');
 const { enforceTouchedSet, assertCommittedLeaves } = require('./touch_guards.js');
-const { getNetBalance, ledgerKeysForBlock } = require('../db/state_commitment/ledger_reads.js');
+const { getNetBalance, getNetBalances, ledgerKeysForBlock } = require('../db/state_commitment/ledger_reads.js');
 const { getPriorBalancesRoot, storeStateTreeRoots } = require('../db/state_commitment/roots.js');
 const PSMT = require('./persistent_smt.js');
 const { EMPTY_ROOT_HEX, DbNodeStore, MemoryNodeStore, PersistentSMT, reportOrphanStats } = PSMT;
@@ -231,9 +231,12 @@ async function threadBalancesRoot(db, smt, chain, network, blockIndex, priorRoot
     let root = priorRoot;
     const touched = db._smtTouched ? Array.from(db._smtTouched) : [];
     const shadowBalanceUpdates = escShadow ? [] : null;
+    // One batched read for every touched key; the smt updates below still apply in
+    // touched order, so the threaded root is unchanged.
+    const nets = await getNetBalances(db, touched.map(e => e.split('\t')));
     for(const entry of touched){
         const [address, tick] = entry.split('\t');
-        const balLeaf = leafOrNull(await getNetBalance(db, address, tick));
+        const balLeaf = leafOrNull(nets.get(entry));
         const balKey  = M.balanceKey(chain, network, address, tick);
         root = await smt.update(root, balKey, balLeaf);
         if(shadowBalanceUpdates) shadowBalanceUpdates.push({ key: balKey, leaf: balLeaf });

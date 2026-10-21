@@ -13,7 +13,7 @@
 --********************************************************************
 
 DROP TABLE IF EXISTS messages;
--- TODO : Convert encryption_method field to INTEGER UNSIGNED and force value to 0-9 (0=null)
+-- Note: encryption_method stays VARCHAR(1) for now; converting to INTEGER UNSIGNED (0-9, 0=null) needs the writers and readers changed in the same release.
 CREATE TABLE messages (
     action_index        BIGINT UNSIGNED NOT NULL, -- Unique action index
     coin                VARCHAR(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,               -- Destination coin network (BTC, LTC, DOGE)

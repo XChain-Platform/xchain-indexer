@@ -217,6 +217,11 @@
       "EXECUTE host-fault propagation: halt, not fabricate @regression @tier1 propagates a HostFaultError from the VM (does not commit/fabricate)",
       "EXECUTE host-fault propagation: halt, not fabricate @regression @tier1 still COMMITS for a normal VM failure result (fabricate path unchanged)"
     ],
+    "047d84192e26ff62": [
+      "recovery: unsigned price columns are not proven by the archive does not let a forged row overwrite an existing row with its unsigned columns",
+      "recovery: unsigned price columns are not proven by the archive ignores malformed unsigned columns instead of treating them as proof or rejecting the batch",
+      "recovery: unsigned price columns are not proven by the archive re-derives forged source_chain, source_action_index and batch_block_time to the defaults"
+    ],
     "049843dad5d3e7f1": [
       "XCALL/VM protocol constants agree across vm/indexer/sdk runs inside one of the three participating repos",
       "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-indexer carries this guard, byte-identical",
@@ -1885,6 +1890,14 @@
       "Rollback contract slash-restore order @regression @tier3 restores the pre-slash amount when a re-entrant nested EXECUTE slashes first under a higher action_index",
       "Rollback contract slash-restore order @regression @tier3 restores the pre-slash amount when the orphaned slashes arrive in ascending execution order",
       "Rollback contract slash-restore order @regression @tier3 touches nothing when every debit survives the rollback"
+    ],
+    "1ef5df479a5d3d5d": [
+      "bin/compare_credit_debit_sum folds credits and debits per key without exponential notation",
+      "bin/compare_credit_debit_sum issues SELECT statements only",
+      "bin/compare_credit_debit_sum parseArgs reads --db and --json and rejects anything else",
+      "bin/compare_credit_debit_sum reports a key whose SQL sum drifted, with both values",
+      "bin/compare_credit_debit_sum reports no difference when the fold and the SQL sum agree",
+      "bin/compare_credit_debit_sum treats a key present on one side only as a difference against zero"
     ],
     "1f0e549847cee838": [
       "HubDbSync stream-watermark stall recovery @regression @tier1 _checkWatermarkStall wiring a PARTIAL advance re-arms stage 1 rather than falling through to the exit",
@@ -8973,16 +8986,6 @@
       "native coin fee quote @regression @tier1 getFeeOraclePrices() single chain-time anchor refTime before the gate => INACTIVE, and selection/staleness use that same refTime",
       "native coin fee quote @regression @tier1 getFeeOraclePrices() single chain-time anchor takes no wall-clock override: a 6th argument cannot split the anchor"
     ],
-    "80c898a220b34027": [
-      "AnchorRecovery checkpoint and price tables @regression @tier2 applies a tombstone and lets a later batch restore the republished round",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 fails a checkpoint sequence collision with different content",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 lets later batches overwrite a disputed flip and a late batch_block_time",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged checkpoint signature and writes none of the batch",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged disputed price proof and writes none of the batch",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged signature-proofed price round and writes none of the batch",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects an object-form batch proof that lacks price quorum",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 uses the ABP archive key orders and only the full writer restores both tables"
-    ],
     "816161175d723844": [
       "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
       "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
@@ -9136,6 +9139,11 @@
       "Withdraw custody guard handler integration @regression @tier1 settles a token-bound denial before activation",
       "Withdraw custody guard handler integration @regression @tier1 settles an owner-address denial before activation",
       "Withdraw custody guard handler integration @regression @tier1 shows both guards the withdrawal leg from custody to SOURCE"
+    ],
+    "83bbad471905a8ed": [
+      "getNetBalances batched read @regression @tier1 answers every key in one statement and matches getNetBalance",
+      "getNetBalances batched read @regression @tier1 dedupes keys, chunks large sets, and reads nothing for an empty set",
+      "getNetBalances batched read @regression @tier1 is the read threadBalancesRoot uses instead of a per-key loop"
     ],
     "83da8fca88416040": [
       "JSON-RPC anchor family @regression @tier1 every anchor read refuses without a database and reports a throw",
@@ -9572,6 +9580,15 @@
       "protocol_changes BET feed list edit row @regression @tier1 registers a height map unarmed on mainnet and armed on each testnet chain, with regtest active from genesis",
       "protocol_changes BET feed list edit row @regression @tier1 stays inactive on mainnet and activates on each testnet chain at its height and at regtest genesis"
     ],
+    "8c1a2b86359acf1e": [
+      "VM snapshot cross-block cache @regression @tier1 bounds the cache size",
+      "VM snapshot cross-block cache @regression @tier1 does not serve a cached snapshot outside a block pass",
+      "VM snapshot cross-block cache @regression @tier1 flushes on a dropped invalidation when the block index goes backwards",
+      "VM snapshot cross-block cache @regression @tier1 invalidate() on a db that never cached anything is a no-op",
+      "VM snapshot cross-block cache @regression @tier1 invalidate(fromBlock) drops only snapshots whose bound is above fromBlock",
+      "VM snapshot cross-block cache @regression @tier1 rebuilds after a rollback and re-apply of the same blocks",
+      "VM snapshot cross-block cache @regression @tier1 serves the same snapshot to a later block without rebuilding"
+    ],
     "8c20f0a6066f53f4": [
       "Utility @regression @tier1 consolidateLedgerRecords() should consolidate duplicate tick+address entries",
       "Utility @regression @tier1 consolidateLedgerRecords() should keep different addresses separate",
@@ -9690,6 +9707,16 @@
       "ANCHOR v3 same-publisher archive re-issue does not query a fold without an archive section",
       "ANCHOR v3 same-publisher archive re-issue does not query before fold activation",
       "ANCHOR v3 same-publisher archive re-issue rejects different content under the publisher sequence with a retry reason"
+    ],
+    "8db754e1337df6d1": [
+      "AnchorRecovery checkpoint and price tables @regression @tier2 applies a tombstone and lets a later batch restore the republished round",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 fails a checkpoint sequence collision with different content",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 lets later batches overwrite a disputed flip but never a forged batch_block_time",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged checkpoint signature and writes none of the batch",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged disputed price proof and writes none of the batch",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged signature-proofed price round and writes none of the batch",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects an object-form batch proof that lacks price quorum",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 uses the ABP archive key orders and only the full writer restores both tables"
     ],
     "8e2845a99501f6fb": [
       "DELEGATE v1 rotation reaches all three lookup surfaces @regression @tier1 getActiveContractStakeByPubkey resolves the stake under the rotated key",
@@ -12838,6 +12865,13 @@
       "ATTEST broadcast-fee activation (spec \u00a711) @regression broadcastFeeCapNative rejects sign / exponent / hex forms a float parse used to swallow",
       "ATTEST broadcast-fee activation (spec \u00a711) @regression broadcastFeeCapNative renders at fixed 8dp so the string a node compares is byte-stable",
       "ATTEST broadcast-fee activation (spec \u00a711) @regression broadcastFeeCapNative returns the shipped per-provider allowance for a known provider"
+    ],
+    "b765d11dc9d66fd9": [
+      "creditDebitSumQuery @tier1 accepts canonical amounts in the shared pattern",
+      "creditDebitSumQuery @tier1 builds the exact SQL for credits and debits with a filter",
+      "creditDebitSumQuery @tier1 builds the exact SQL for credits and debits without a filter",
+      "creditDebitSumQuery @tier1 refuses non-canonical amounts in the shared pattern",
+      "creditDebitSumQuery @tier1 throws for any table but credits and debits"
     ],
     "b784b2ff10c1589f": [
       "dispenser_fiat_pricing_activation: shared coin-payment tally @regression @tier1 armed, every recorded charge covers the fiat value of the fills it bought",
@@ -18484,8 +18518,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1461,
-      "titleCount": 14331,
+      "fileCount": 1466,
+      "titleCount": 14355,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19052,6 +19086,7 @@
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
+        "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
@@ -19404,6 +19439,7 @@
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_admission_schema.test.js": "f774309cdb5aef1f",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
+        "test/unit/db/misc/credit_debit_sum_sql.test.js": "b765d11dc9d66fd9",
         "test/unit/db/orders/cross_chain_offer_lists.test.js": "87976ddf94e91add",
         "test/unit/db/orders/cross_chain_offer_lists_fold.test.js": "e411489fced259a6",
         "test/unit/db/prices/landed_bound_clause.test.js": "d5f3085637164b79",
@@ -19444,6 +19480,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/vm_snapshot/vm_snapshot_memo.test.js": "b0be5e75e30decd3",
         "test/unit/e2e/explorer_launcher.test.js": "eae128db10b21f39",
@@ -19788,7 +19825,8 @@
         "test/unit/recovery/recovery.test/admit_block_columns.test.js": "33d276ce0f8066c0",
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
-        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "80c898a220b34027",
+        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
+        "test/unit/recovery/recovery.test/checkpoint_price_unsigned_columns.test.js": "047d84192e26ff62",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
@@ -19870,6 +19908,7 @@
         "test/unit/setup/equivalence_state_tree.test.js": "e1beee0e6aee2508",
         "test/unit/setup/indexer_launcher_production_passes.test.js": "90617fbb668986fc",
         "test/unit/setup/perf_instrumented_processor.test.js": "4517543dc8d46e2a",
+        "test/unit/state_commitment/batched_net_balance.test.js": "83bbad471905a8ed",
         "test/unit/state_commitment/db_smt_resolver_cache_abort.test.js": "9e1105f82b6bc9c9",
         "test/unit/state_commitment/db_state_key_collation.test.js": "69f2a0c873378615",
         "test/unit/state_commitment/ledger_keys_block_filter.test.js": "78a1a7a1cdc81872",
@@ -20322,8 +20361,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1112,
-      "titleCount": 11352,
+      "fileCount": 1114,
+      "titleCount": 11362,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21073,6 +21112,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
@@ -21322,7 +21362,7 @@
         "test/unit/recovery/recovery.test/admit_block_columns.test.js": "33d276ce0f8066c0",
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
-        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "80c898a220b34027",
+        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
@@ -21380,6 +21420,7 @@
         "test/unit/security/sql-safety/decimal_precision.test.js": "347825e427284ec5",
         "test/unit/security/sql-safety/table_whitelist.test.js": "f24b13eaba177c97",
         "test/unit/setup/equivalence_schema_migrations.test.js": "ed1bf127f12c7630",
+        "test/unit/state_commitment/batched_net_balance.test.js": "83bbad471905a8ed",
         "test/unit/state_commitment/db_smt_resolver_cache_abort.test.js": "9e1105f82b6bc9c9",
         "test/unit/state_commitment/db_state_key_collation.test.js": "69f2a0c873378615",
         "test/unit/state_commitment/ledger_keys_block_filter.test.js": "161f7fb283a9bea4",
@@ -21440,8 +21481,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 546,
-      "titleCount": 5947,
+      "fileCount": 548,
+      "titleCount": 5957,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21759,6 +21800,7 @@
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
         "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
+        "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
         "test/unit/fees/dry_run_batch_fee_withheld.test.js": "9620969f56b951f5",
@@ -21966,6 +22008,7 @@
         "test/unit/security/sql-safety/decimal_precision.test.js": "347825e427284ec5",
         "test/unit/security/sql-safety/table_whitelist.test.js": "f24b13eaba177c97",
         "test/unit/setup/equivalence_schema_migrations.test.js": "ed1bf127f12c7630",
+        "test/unit/state_commitment/batched_net_balance.test.js": "83bbad471905a8ed",
         "test/unit/state_commitment/db_state_key_collation.test.js": "69f2a0c873378615",
         "test/unit/state_commitment/ledger_keys_block_filter.test.js": "161f7fb283a9bea4",
         "test/unit/utility/address_reencode.test.js": "bd25e784269fe34a",
@@ -21992,8 +22035,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1112,
-      "titleCount": 11352,
+      "fileCount": 1114,
+      "titleCount": 11362,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22743,6 +22786,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
@@ -22992,7 +23036,7 @@
         "test/unit/recovery/recovery.test/admit_block_columns.test.js": "33d276ce0f8066c0",
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
-        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "80c898a220b34027",
+        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
@@ -23050,6 +23094,7 @@
         "test/unit/security/sql-safety/decimal_precision.test.js": "347825e427284ec5",
         "test/unit/security/sql-safety/table_whitelist.test.js": "f24b13eaba177c97",
         "test/unit/setup/equivalence_schema_migrations.test.js": "ed1bf127f12c7630",
+        "test/unit/state_commitment/batched_net_balance.test.js": "83bbad471905a8ed",
         "test/unit/state_commitment/db_smt_resolver_cache_abort.test.js": "9e1105f82b6bc9c9",
         "test/unit/state_commitment/db_state_key_collation.test.js": "69f2a0c873378615",
         "test/unit/state_commitment/ledger_keys_block_filter.test.js": "161f7fb283a9bea4",
