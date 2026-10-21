@@ -57,6 +57,57 @@ async function getNetBalance(db, address, tick){
     return db.util.bcstr(db.util.bcsub(cr, dr, 18));
 }
 
+// Keys per statement of getNetBalances: each key binds two parameters, so a chunk
+// stays far under the placeholder limit while a block still costs one round trip.
+const NET_BALANCES_CHUNK = 500;
+
+// getNetBalance for many keys at once: one statement per chunk of keys rather than one
+// serial query per key. Each key is the same correlated authoritative sum as
+// getNetBalance (same joins, same equality on the canonical strings), so a key's net is
+// byte-identical to the single-key read, including whatever collation folding the
+// index tables apply. Returns a Map of address<TAB>tick to the minimal-decimal net; a
+// key with no ledger rows is '0', exactly as getNetBalance reports it.
+async function getNetBalances(db, keys){
+    const wanted = [];
+    const seen = new Set();
+    for(const [address, tick] of keys){
+        const id = address + '\t' + tick;
+        if(seen.has(id)) continue;
+        seen.add(id);
+        wanted.push([address, tick, id]);
+    }
+    const out = new Map();
+    for(let off = 0; off < wanted.length; off += NET_BALANCES_CHUNK){
+        const chunk = wanted.slice(off, off + NET_BALANCES_CHUNK);
+        const params = [];
+        const inputs = chunk.map((k, i) => {
+            params.push(k[0], k[1]);
+            return i === 0 ? 'SELECT 0 AS i, ? AS address, ? AS tick'
+                           : 'SELECT ' + i + ', ?, ?';
+        }).join(' UNION ALL ');
+        const rows = await db.doQueryStrict(
+            `SELECT k.i AS i,
+                (SELECT COALESCE(SUM(CAST(c.amount AS DECIMAL(60,18))),0) FROM credits c
+                    INNER JOIN index_addresses a ON a.id=c.address_id
+                    INNER JOIN index_tickers   t ON t.id=c.tick_id
+                    WHERE a.address=k.address AND t.tick=k.tick) AS cr,
+                (SELECT COALESCE(SUM(CAST(d.amount AS DECIMAL(60,18))),0) FROM debits d
+                    INNER JOIN index_addresses a ON a.id=d.address_id
+                    INNER JOIN index_tickers   t ON t.id=d.tick_id
+                    WHERE a.address=k.address AND t.tick=k.tick) AS dr
+               FROM (${inputs}) k`, params);
+        const byIdx = new Map();
+        (rows || []).forEach((r, pos) => byIdx.set(r.i == null ? pos : Number(r.i), r));
+        chunk.forEach((k, i) => {
+            const r = byIdx.get(i);
+            const cr = r ? String(r.cr) : '0';
+            const dr = r ? String(r.dr) : '0';
+            out.set(k[2], db.util.bcstr(db.util.bcsub(cr, dr, 18)));
+        });
+    }
+    return out;
+}
+
 // Every (address, tick) with a nonzero net across the whole ledger, as
 // { address, tick, net } rows: the input of the flag-day full balances build
 // (state_commitment/full_balances_root.js).
@@ -129,6 +180,7 @@ async function getHottestLedgerKeys(db, limit){
 module.exports = {
     getHottestLedgerKeys,
     getNetBalance,
+    getNetBalances,
     getNonzeroNetBalances,
     ledgerKeysForBlock
 };
