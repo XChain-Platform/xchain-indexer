@@ -5569,6 +5569,19 @@
       "HubClient setAddressSource() routes reorg pushes through the current address with the reorg key",
       "HubClient setAddressSource() uses the constructor address when no source is set"
     ],
+    "51b18424f3d44a94": [
+      "Issue: caret TICK may not create a token (ISSUE_CARET_TICK_NO_CREATE) @regression @tier1 an owner caret v1 edit of an existing token stays valid with the flag on",
+      "Issue: caret TICK may not create a token (ISSUE_CARET_TICK_NO_CREATE) @regression @tier1 is invalid: TICK (unknown) and never calls createToken when the flag is on",
+      "Issue: caret TICK may not create a token (ISSUE_CARET_TICK_NO_CREATE) @regression @tier1 stays valid when the flag is off",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" is rejected as invalid: TICK (caret dot) when the flag is active",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" reproduces the PRE-FLAG (defective) valid verdict when the flag is off",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12\" (no dot) is still accepted when the flag is active",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12.5\" is rejected as invalid: TICK (caret dot) when the flag is active",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12.5\" reproduces the PRE-FLAG (defective) valid verdict when the flag is off",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) a plain dotted child TICK (\"JDOG.1\") is still accepted; the caret rule does not touch it",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect B: no free ticker interning once an ISSUE has already errored performs NO ticker insert for the already-invalid TICK when the flag is active",
+      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect B: no free ticker interning once an ISSUE has already errored still performs the ticker insert (unsuppressed) for the already-invalid TICK when the flag is OFF"
+    ],
     "51b3468275b1d232": [
       "BROADCAST FEE length gate @regression @tier1 accepts an 11-character FEE when active without reading the gate",
       "BROADCAST FEE length gate @regression @tier1 keeps a legacy 12-character FEE valid and stores its first 11 characters",
@@ -16797,16 +16810,6 @@
       "Utility @regression @tier1 processCooldownCompletions() history mapping maps each fresh completion action to its source address and released tick",
       "Utility @regression @tier1 processCooldownCompletions() history mapping writes no mapping on the legacy path, whose credit reuses the already-mapped UNSTAKE index"
     ],
-    "e6aed40fa235b3b4": [
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" is rejected as invalid: TICK (caret dot) when the flag is active",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" reproduces the PRE-FLAG (defective) valid verdict when the flag is off",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12\" (no dot) is still accepted when the flag is active",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12.5\" is rejected as invalid: TICK (caret dot) when the flag is active",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^12.5\" reproduces the PRE-FLAG (defective) valid verdict when the flag is off",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) a plain dotted child TICK (\"JDOG.1\") is still accepted; the caret rule does not touch it",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect B: no free ticker interning once an ISSUE has already errored performs NO ticker insert for the already-invalid TICK when the flag is active",
-      "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect B: no free ticker interning once an ISSUE has already errored still performs the ticker insert (unsuppressed) for the already-invalid TICK when the flag is OFF"
-    ],
     "e6be9c3df5e9ecad": [
       "SQL schema column parity (definition path vs ledger path) @regression a baselined column removed from its definition is reported as retired, not reordered @regression",
       "SQL schema column parity (definition path vs ledger path) @regression a pre-ledger baselined column has not changed shape or relative position @regression",
@@ -18482,7 +18485,7 @@
   "scripts": {
     "test": {
       "fileCount": 1461,
-      "titleCount": 14328,
+      "titleCount": 14331,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19357,7 +19360,7 @@
         "test/unit/db/ledger/db_ledger_amount_precision.test.js": "91e1c4091acd208f",
         "test/unit/db/ledger/db_list_edit_resolution.test.js": "fb233aaecb5f96ff",
         "test/unit/db/ledger/destroys_leg_ordinal.test.js": "42d2e6ea86973412",
-        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "e6aed40fa235b3b4",
+        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "51b18424f3d44a94",
         "test/unit/db/ledger/issue_caret_dot_and_intern.test/parent_lookup.test.js": "662f4b652a7fa471",
         "test/unit/db/ledger/issues_backfill_transfer_supply_id.test.js": "1da74f76ac51fa9c",
         "test/unit/db/ledger/lock_null_prior_unset.test.js": "6dcc6a046f0abfb6",
@@ -20320,7 +20323,7 @@
     },
     "test:regression": {
       "fileCount": 1112,
-      "titleCount": 11349,
+      "titleCount": 11352,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21001,7 +21004,7 @@
         "test/unit/db/ledger/db_ledger_amount_precision.test.js": "91e1c4091acd208f",
         "test/unit/db/ledger/db_list_edit_resolution.test.js": "fb233aaecb5f96ff",
         "test/unit/db/ledger/destroys_leg_ordinal.test.js": "42d2e6ea86973412",
-        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "e6aed40fa235b3b4",
+        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "51b18424f3d44a94",
         "test/unit/db/ledger/issue_caret_dot_and_intern.test/parent_lookup.test.js": "662f4b652a7fa471",
         "test/unit/db/ledger/issues_backfill_transfer_supply_id.test.js": "1da74f76ac51fa9c",
         "test/unit/db/ledger/lock_null_prior_unset.test.js": "6dcc6a046f0abfb6",
@@ -21438,7 +21441,7 @@
     },
     "test:regression:fast": {
       "fileCount": 546,
-      "titleCount": 5944,
+      "titleCount": 5947,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21700,7 +21703,7 @@
         "test/unit/db/ledger/db_create_token_lock_mint_supply.test.js": "6211c0307b8e5b60",
         "test/unit/db/ledger/db_ledger_amount_precision.test.js": "91e1c4091acd208f",
         "test/unit/db/ledger/db_list_edit_resolution.test.js": "fb233aaecb5f96ff",
-        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "e6aed40fa235b3b4",
+        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "51b18424f3d44a94",
         "test/unit/db/ledger/issue_caret_dot_and_intern.test/parent_lookup.test.js": "662f4b652a7fa471",
         "test/unit/db/ledger/issues_backfill_transfer_supply_id.test.js": "1da74f76ac51fa9c",
         "test/unit/db/ledger/lock_null_prior_unset.test.js": "6dcc6a046f0abfb6",
@@ -21990,7 +21993,7 @@
     },
     "test:regression:full": {
       "fileCount": 1112,
-      "titleCount": 11349,
+      "titleCount": 11352,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22671,7 +22674,7 @@
         "test/unit/db/ledger/db_ledger_amount_precision.test.js": "91e1c4091acd208f",
         "test/unit/db/ledger/db_list_edit_resolution.test.js": "fb233aaecb5f96ff",
         "test/unit/db/ledger/destroys_leg_ordinal.test.js": "42d2e6ea86973412",
-        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "e6aed40fa235b3b4",
+        "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": "51b18424f3d44a94",
         "test/unit/db/ledger/issue_caret_dot_and_intern.test/parent_lookup.test.js": "662f4b652a7fa471",
         "test/unit/db/ledger/issues_backfill_transfer_supply_id.test.js": "1da74f76ac51fa9c",
         "test/unit/db/ledger/lock_null_prior_unset.test.js": "6dcc6a046f0abfb6",
