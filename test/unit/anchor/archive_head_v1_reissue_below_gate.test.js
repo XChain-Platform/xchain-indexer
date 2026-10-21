@@ -33,8 +33,12 @@ describe('ANCHOR archive head same-author re-issue below the fold gate @regressi
 
     it('indexes a v1 head valid over a stored row with a different CRC and match count, without reading it', async function(){
         const db = armed.indexer.indexerDb;
-        db.getArchiveHeadsByAuthorAndSeq = sinon.stub().resolves([{ batch_crc32: 'cafef00d', match_count: 99 }]);
         const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
+        db.getArchiveHeadsByAuthorAndSeq = sinon.stub().callsFake(async (author, batchSeq) => {
+            assert.strictEqual(author, data.SOURCE);
+            assert.strictEqual(batchSeq, 0);
+            return [{ batch_crc32: 'cafef00d', match_count: 99 }];
+        });
 
         await armed.handler.parse(v1Params(ARCHIVE_JSON), data, null);
 
@@ -59,6 +63,7 @@ describe('ANCHOR archive head same-author re-issue below the fold gate @regressi
         await armed.handler.parse(foldWire(), data, null);
 
         assert.strictEqual(data.STATUS, ARCHIVE_REISSUE_RETRY_REASON);
-        sinon.assert.calledOnce(db.getArchiveHeadsByAuthorAndSeq);
+        sinon.assert.calledOnceWithExactly(db.getArchiveHeadsByAuthorAndSeq,
+            vectors.fixture.bundle_v3.publisher, Number(vectors.fixture.bundle_v3.match_batch_seq));
     });
 });
