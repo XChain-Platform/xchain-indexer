@@ -140,7 +140,17 @@ function buildGrownDatabaseMetric(youngStats, grownStats) {
     const blockRatio  = youngMedian > 0 ? +(grownMedian / youngMedian).toFixed(3) : null;
     const expiryRatio = youngExpiry > 0 ? +(grownExpiry / youngExpiry).toFixed(3) : null;
 
+    // The 8 per-block supply scans (3 in refreshTokenSuppliesForBlock, 5 in sanityCheck)
+    // are timed by the supplyRefresh and sanityCheck phases, reported young vs grown.
+    const supplyScan = {};
+    for (const phase of ['supplyRefresh', 'sanityCheck']) {
+        const y = youngStats.phaseTiming[phase].p50;
+        const g = grownStats.phaseTiming[phase].p50;
+        supplyScan[phase] = { youngMedianMs: y, grownMedianMs: g, ratio: y > 0 ? +(g / y).toFixed(3) : null };
+    }
+
     const metric = {
+        supplyScan,
         measureBlocks: MEASURE_BLOCKS,
         warmupBlocks: WARMUP_BLOCKS,
         growBlocks: GROW_BLOCKS,
@@ -171,6 +181,8 @@ function printGrownDatabaseMetric(values, youngStats, grownStats) {
     console.log(` young median      : ${youngMedian} ms (${youngStats.measuredBlocks} blocks)`);
     console.log(` grown median      : ${grownMedian} ms (${grownStats.measuredBlocks} blocks)`);
     console.log(` block-time ratio  : ${blockRatio}x (ceiling ${MAX_RATIO}x)`);
+    for (const [phase, r] of Object.entries(values.metric.supplyScan))
+        console.log(` ${phase.padEnd(17)} : ${r.youngMedianMs} -> ${r.grownMedianMs} ms (${r.ratio}x)`);
     console.log(` expiry sweep ratio: ${expiryRatio}x (young ${youngExpiry} -> grown ${grownExpiry} ms)`);
     console.log('='.repeat(70));
     console.log('');
@@ -228,6 +240,13 @@ it('block time does not regress beyond MAX_RATIO as the standing set grows', asy
                 assert.ok(grownMedian <= MAX_GROWN_MS,
                     `grown-window median block time ${grownMedian}ms exceeded absolute ` +
                     `fallback ceiling ${MAX_GROWN_MS}ms`);
+            }
+
+            // Supply-scan reading: recorded in the JSON report, not ratio-gated. The scans
+            // are a consensus safety net (ruling in finalizeBlock); this guards only a hang.
+            for (const [phase, r] of Object.entries(metric.supplyScan)) {
+                assert.ok(r.grownMedianMs <= MAX_GROWN_MS,
+                    `${phase} grown median ${r.grownMedianMs}ms exceeded absolute ceiling ${MAX_GROWN_MS}ms`);
             }
 
             // Secondary gate: the expiry-sweep phase in isolation, the sharpest signal
