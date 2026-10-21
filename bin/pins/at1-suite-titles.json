@@ -1098,14 +1098,6 @@
       "Dispenser refill controller guard @regression @tier2 active: an edit that adds no escrow is not guarded",
       "Dispenser refill controller guard @regression @tier2 inactive: the same denied refill is unguarded and settles"
     ],
-    "0ec8a8b3eee6cb90": [
-      "bin/bench_net_balance issues no batched query and returns no batch without --batched",
-      "bin/bench_net_balance parses --batched to true and its absence to false",
-      "bin/bench_net_balance render prints the batch line only when a batch is present",
-      "bin/bench_net_balance reports a mismatch when the batched net differs for a key",
-      "bin/bench_net_balance returns zeros for no keys",
-      "bin/bench_net_balance times getNetBalances over the same keys under --batched"
-    ],
     "0ef5583765eab080": [
       "repair-validator-stats missed_count @regression a legacy row re-derives through the same routine the reorg recompute uses",
       "repair-validator-stats missed_count @regression an empty pin charges nobody",
@@ -1485,11 +1477,6 @@
       "Dispenser action handler @regression @tier2 Format 0 - oracle usage fee rejects the create when the oracle fee output is missing",
       "Dispenser action handler @regression @tier2 Format 0 - oracle usage fee rejects the create when the oracle has no effective price",
       "Dispenser action handler @regression @tier2 Format 0 - separate hub-copy oracle prices validates Mode 2 from the hub copy when the local database has no price rows"
-    ],
-    "13d650f354d6841c": [
-      "ledgerArrayFromSumRows returns an empty array for no rows",
-      "ledgerArrayFromSumRows returns null when any row is non canonical, as number, string or BigInt",
-      "ledgerArrayFromSumRows shapes grouped rows into the array the fold returns"
     ],
     "13dfdbaefb6250f2": [
       "Security: bundled sibling lockfile snapshots @regression @tier4 SNAP-1: package.json still declares the bundled siblings as local paths",
@@ -2516,6 +2503,15 @@
       "Xcall (XCALL) @regression @tier3 processResult skips a result whose target_chain does not match the local request (forged routing)",
       "Xcall (XCALL) @regression @tier3 processResult the signed canonical binds result_status + payload hash (sig verified over the exact string)",
       "Xcall (XCALL) @regression @tier3 processResult verifies sigs, flips to completed, injects the callback with the decoded payload"
+    ],
+    "23cf03fcc5a7c4b7": [
+      "bin/measure_vm_snapshot_bytes builds newest-first grouped SQL with optional bounds and a final limit argument",
+      "bin/measure_vm_snapshot_bytes issues SELECT statements only",
+      "bin/measure_vm_snapshot_bytes measures real builder bytes and transfer totals for each execution block",
+      "bin/measure_vm_snapshot_bytes parses bounds, limit, database and JSON mode",
+      "bin/measure_vm_snapshot_bytes rejects unknown flags and invalid numeric arguments",
+      "bin/measure_vm_snapshot_bytes renders block lines, the summary line and JSON",
+      "bin/measure_vm_snapshot_bytes returns a zero summary when no execution blocks match"
     ],
     "23dc27a953bbb6c6": [
       "bridge_checkpoint_check: D2 escrow cross-check falsification: one broken binding at a time applies nothing refuses a checkpoint from BELOW the transfer snapshot_block (the stale-proof forgery)",
@@ -18716,8 +18712,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1488,
-      "titleCount": 14499,
+      "fileCount": 1487,
+      "titleCount": 14497,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19294,10 +19290,10 @@
         "test/unit/attestation/repair_validator_stats_drift.test.js": "b2c12d6af08b6d99",
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
-        "test/unit/bin/bench_net_balance.test.js": "0ec8a8b3eee6cb90",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
+        "test/unit/bin/measure_vm_snapshot_bytes.test.js": "23cf03fcc5a7c4b7",
         "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
@@ -19654,7 +19650,6 @@
         "test/unit/db/mirror_admission_schema.test.js": "f774309cdb5aef1f",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
         "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
-        "test/unit/db/misc/credit_debit_sum_rows.test.js": "13d650f354d6841c",
         "test/unit/db/misc/credit_debit_sum_sql.test.js": "b765d11dc9d66fd9",
         "test/unit/db/orders/cross_chain_offer_lists.test.js": "87976ddf94e91add",
         "test/unit/db/orders/cross_chain_offer_lists_fold.test.js": "e411489fced259a6",
