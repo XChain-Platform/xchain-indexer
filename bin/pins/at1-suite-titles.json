@@ -5010,19 +5010,6 @@
       "compat gate: startup-required tables every required table has a src/sql definition the product createTable can build",
       "compat gate: startup-required tables exports the startup table reader and builder"
     ],
-    "b111170e06e231ab": [
-      "bin/archive_heads_by_author adds the from-seq filter and argument before the limit",
-      "bin/archive_heads_by_author builds an all-status query without a from-seq filter",
-      "bin/archive_heads_by_author does not count another invalid status as refused",
-      "bin/archive_heads_by_author maps the redraw expectation and summary to an exit code",
-      "bin/archive_heads_by_author parses the required author and optional filters",
-      "bin/archive_heads_by_author reads through doQueryStrict and returns rows with their summary",
-      "bin/archive_heads_by_author rejects missing and invalid arguments",
-      "bin/archive_heads_by_author renders every head followed by the summary",
-      "bin/archive_heads_by_author renders the complete result as JSON",
-      "bin/archive_heads_by_author requires a valid head above every refused sequence for redrawn-above",
-      "bin/archive_heads_by_author summarizes no rows"
-    ],
     "46583f298dcec09f": [
       "protocol_changes active-stake collation gate @regression @tier1 is inert when height is null or non-finite",
       "protocol_changes active-stake collation gate @regression @tier1 registers a height gate unarmed on mainnet, armed on testnet at its v0.25.0 heights, and active from regtest genesis"
@@ -13063,6 +13050,19 @@
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 rolls back the parent row with the emissions when a guard emission fails (denied guard leaves no record)",
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 writes a contract_executions parent row keyed to the native action_index (so the contract_hash INNER JOIN resolves the emissions)"
     ],
+    "b111170e06e231ab": [
+      "bin/archive_heads_by_author adds the from-seq filter and argument before the limit",
+      "bin/archive_heads_by_author builds an all-status query without a from-seq filter",
+      "bin/archive_heads_by_author does not count another invalid status as refused",
+      "bin/archive_heads_by_author maps the redraw expectation and summary to an exit code",
+      "bin/archive_heads_by_author parses the required author and optional filters",
+      "bin/archive_heads_by_author reads through doQueryStrict and returns rows with their summary",
+      "bin/archive_heads_by_author rejects missing and invalid arguments",
+      "bin/archive_heads_by_author renders every head followed by the summary",
+      "bin/archive_heads_by_author renders the complete result as JSON",
+      "bin/archive_heads_by_author requires a valid head above every refused sequence for redrawn-above",
+      "bin/archive_heads_by_author summarizes no rows"
+    ],
     "b119a047da6992c8": [
       "XChainIndexer prototype composition @tier1 no composed method shadows a class-body method",
       "XChainIndexer prototype composition @tier1 no method name is exported by two composed tables",
@@ -18795,7 +18795,7 @@
   "scripts": {
     "test": {
       "fileCount": 1497,
-      "titleCount": 14558,
+      "titleCount": 14559,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
