@@ -9282,6 +9282,18 @@
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-20-attestation-responses-batch-action-idx.sql: if tagged mode=auto, passes the destructive-DDL scan",
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-21-rollcall-actions.sql: if tagged mode=auto, passes the destructive-DDL scan"
     ],
+    "7f1d1631109c4278": [
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate admits one 60-leg AIRDROP with 225 SENDs",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate dispatches all ten 40-leg AIRDROPs at the budget boundary",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate pins AIRDROP and DIVIDEND to 25 in commandWeights",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate pins weight 25 across every AIRDROP format and representative leg counts",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate refuses eleven 40-leg AIRDROPs as one batch before dispatch",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate refuses one 60-leg AIRDROP with 226 SENDs",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate sums four mixed-format AIRDROPs and five SENDs to 105",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate weighing fan-out commands reads neither token info nor balances",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate weighs DIVIDEND and the DROP alias as fan-out commands through batchWeight",
+      "Batch @regression @tier3 AIRDROP leg count below the weighting gate weighs a one-leg and a 100-leg AIRDROP identically"
+    ],
     "7f39aa26f210b97a": [
       "consensus_rules_digest (indexer copy) changes when a height changes and not when prose does",
       "consensus_rules_digest (indexer copy) is identical to the hub copy gate for gate",
@@ -9420,6 +9432,10 @@
       "Smoke: handler instantiation and basic action processing SM-10: Actions constructor instantiates all handlers",
       "Smoke: handler instantiation and basic action processing SM-11: Basic ISSUE processes validly",
       "Smoke: handler instantiation and basic action processing SM-12: Basic SEND processes validly"
+    ],
+    "817d2f1665ad0f9e": [
+      "Airdrop multi-leg native fee failed leg on testnet @regression @tier1 charges only the surviving leg below the tally gate height",
+      "Airdrop multi-leg native fee failed leg on testnet @regression @tier1 keeps the failed leg increment in the tally at the tally gate height"
     ],
     "81a72d318183f418": [
       "dispense value accounting: multi-dispenser payment outside a batch @regression @tier1 BELOW the flag the same payment still fills all THREE (the replay case)",
@@ -18607,8 +18623,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1477,
-      "titleCount": 14422,
+      "fileCount": 1479,
+      "titleCount": 14434,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18949,6 +18965,7 @@
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
@@ -18959,6 +18976,7 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
+        "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
         "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
@@ -20461,8 +20479,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1121,
-      "titleCount": 11401,
+      "fileCount": 1123,
+      "titleCount": 11413,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20801,6 +20819,7 @@
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
@@ -20811,6 +20830,7 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
+        "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
         "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
@@ -21588,8 +21608,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 554,
-      "titleCount": 5990,
+      "fileCount": 555,
+      "titleCount": 5992,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21667,6 +21687,7 @@
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
@@ -22148,8 +22169,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1121,
-      "titleCount": 11401,
+      "fileCount": 1123,
+      "titleCount": 11413,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22488,6 +22509,7 @@
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
@@ -22498,6 +22520,7 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
+        "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
         "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
