@@ -5864,6 +5864,11 @@
       "pass progress retirement: getcrosschaincallresult @regression reports an executed call exactly as before",
       "pass progress retirement: the activation row @regression is a height row, unarmed on mainnet, armed on testnet at its v0.24.0 heights, inert on regtest unless the venue arms it"
     ],
+    "50c2d5be38c49446": [
+      "selectCheckpoint v3 section pick @regression @tier1 applies the same list on the anchor axis for a DOGE origin, and only at the flag day",
+      "selectCheckpoint v3 section pick @regression @tier1 reads [0, 3] from anchor_actions at and above the flag day",
+      "selectCheckpoint v3 section pick @regression @tier1 reads version 0 alone below the flag day (negative control)"
+    ],
     "50ed779f04dda399": [
       "listMetaHash matches the documentation metadata vectors"
     ],
@@ -18669,8 +18674,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1482,
-      "titleCount": 14464,
+      "fileCount": 1483,
+      "titleCount": 14467,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19371,6 +19376,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "50c2d5be38c49446",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
@@ -20532,8 +20538,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1126,
-      "titleCount": 11435,
+      "fileCount": 1127,
+      "titleCount": 11438,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21099,6 +21105,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "50c2d5be38c49446",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -21664,8 +21671,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 557,
-      "titleCount": 6004,
+      "fileCount": 558,
+      "titleCount": 6007,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21843,6 +21850,7 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "50c2d5be38c49446",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -22227,8 +22235,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1126,
-      "titleCount": 11435,
+      "fileCount": 1127,
+      "titleCount": 11438,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22794,6 +22802,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "50c2d5be38c49446",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",

@@ -27,6 +27,7 @@
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
+const gateRegistry = require('../gate_registry');
 const { anchorMatched } = require('../bridge_checkpoint_check/anchor_match.js');
 
 // The ANCHOR wire version that carries a checkpoint SECTION in its own right. Version 1 is the
@@ -37,6 +38,20 @@ const { anchorMatched } = require('../bridge_checkpoint_check/anchor_match.js');
 // (see sql/anchor_actions.sql), so admitting it here would select a rootless "checkpoint" that
 // fails CHECKPOINT_ROOTLESS and turn a provable transfer into a refusal.
 const ANCHOR_SECTION_VERSION = 0;
+
+// From this gate the post-fold ANCHOR version 3 (the chain-bearing side of a folded action) is
+// a checkpoint section too, so the pick reads versions [0, 3]. Below it the pick reads version 0
+// alone, exactly as before. The list lives here and not in anchor_sql.js, whose
+// CHECKPOINT_SECTION_VERSIONS also feeds getanchoraction and must not move with this flag day.
+const V3_SECTION_KEY = 'bridge_checkpoint_v3_section_activation.BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION';
+const ANCHOR_SECTION_VERSIONS_V3 = [0, 3];
+
+// Read at the settling chain's own block, so every node applying the same block answers the same.
+function sectionVersions(ctx){
+    const on = !!ctx && typeof ctx === 'object' &&
+               gateRegistry.activeAt(V3_SECTION_KEY, ctx.network, ctx.coin, ctx.blockIndex, null);
+    return on ? ANCHOR_SECTION_VERSIONS_V3 : ANCHOR_SECTION_VERSION;
+}
 
 // A finite non-negative integer, or null. Heights arrive from a MariaDB driver that may hand
 // back a number, a string or a BigInt depending on its bigint options.
@@ -175,6 +190,7 @@ async function selectCheckpoint(row, ctx){
     const db = ctx.indexerDb;
     const candidates = [];
     const onAnchor = anchorMatched(chain, ctx);
+    const versions = sectionVersions(ctx);
 
     // Source 1: locally parsed ANCHOR v0 sections whose quorum this node verified at parse
     // time. status 'valid' ONLY: 'unverified' means this node had no capability snapshot and
@@ -184,8 +200,8 @@ async function selectCheckpoint(row, ctx){
     // block is not committed and is retried, so a fault on one source never shrinks the
     // candidate set into a pick a healthy peer holding the same rows would not make.
     const anchors = onAnchor
-        ? await db.getEarliestValidAnchorCheckpointAfterAnchor(ANCHOR_SECTION_VERSION, chain, network, atOrAfter)
-        : await db.getEarliestValidAnchorCheckpoint(ANCHOR_SECTION_VERSION, chain, network, atOrAfter);
+        ? await db.getEarliestValidAnchorCheckpointAfterAnchor(versions, chain, network, atOrAfter)
+        : await db.getEarliestValidAnchorCheckpoint(versions, chain, network, atOrAfter);
     for(const a of anchors)
         candidates.push({ chain: a.chain, network: a.network, block_index: height(a.block_index),
                           checkpoint_seq: height(a.checkpoint_seq), snapshot_block: height(a.snapshot_block),
@@ -221,4 +237,4 @@ async function selectCheckpoint(row, ctx){
     return usable[0];
 }
 
-module.exports = { ANCHOR_SECTION_VERSION, height, checkpointCanonical, verifyCheckpointQuorum, selectCheckpoint };
+module.exports = { ANCHOR_SECTION_VERSION, ANCHOR_SECTION_VERSIONS_V3, V3_SECTION_KEY, height, checkpointCanonical, verifyCheckpointQuorum, selectCheckpoint };
