@@ -1103,6 +1103,14 @@
       "repair-validator-stats missed_count @regression an empty pin charges nobody",
       "repair-validator-stats missed_count @regression charges the pinned responsible set and never re-derives"
     ],
+    "0fb60df74d8c331e": [
+      "plain-object TICK caches below the prototype gate @regression @tier1 fetchAirdropTicks reads an ordinary repeated TICK once and caches it under its own name",
+      "plain-object TICK caches below the prototype gate @regression @tier1 fetchAirdropTicks skips Object.prototype-named TICKs and leaves no own cache keys",
+      "plain-object TICK caches below the prototype gate @regression @tier1 loadTicks reads an ordinary repeated TICK once and caches it under its own name",
+      "plain-object TICK caches below the prototype gate @regression @tier1 loadTicks skips Object.prototype-named TICKs and leaves no own cache keys",
+      "plain-object TICK caches below the prototype gate @regression @tier1 prefetchSendContext reads an ordinary repeated TICK and its gated packs once",
+      "plain-object TICK caches below the prototype gate @regression @tier1 prefetchSendContext skips reads for Object.prototype-named TICKs in both caches"
+    ],
     "0fb9ebffb6c5d0cd": [
       "bridge_settle: terminal policy refusal follower parity mints identical action index and refused record on every follower"
     ],
@@ -18577,8 +18585,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1473,
-      "titleCount": 14400,
+      "fileCount": 1474,
+      "titleCount": 14406,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18911,6 +18919,7 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
+        "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
@@ -20427,8 +20436,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1117,
-      "titleCount": 11381,
+      "fileCount": 1118,
+      "titleCount": 11387,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20759,6 +20768,7 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
+        "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
@@ -21550,8 +21560,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 551,
-      "titleCount": 5972,
+      "fileCount": 552,
+      "titleCount": 5978,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21625,6 +21635,7 @@
         "test/unit/actions/stake/vote_sleep_gate.test.js": "aa7188891f17a98e",
         "test/unit/actions/stake/withdraw.test/custody_bypass_witness.test.js": "7e5ad9b78be748e3",
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
+        "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
@@ -22107,8 +22118,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1117,
-      "titleCount": 11381,
+      "fileCount": 1118,
+      "titleCount": 11387,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22439,6 +22450,7 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
+        "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
