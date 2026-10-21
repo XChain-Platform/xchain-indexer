@@ -12,7 +12,8 @@ const assert = require('assert');
 const { ARCHIVE_REISSUE_RETRY_REASON } =
     require('../../../src/actions/anchor/archive/archive_reissue.js');
 const {
-    parseArgs, archiveHeadsQuery, summarize, exitCodeFor, readHeads, render,
+    parseArgs, archiveHeadsQuery, summarize, exitCodeFor, conflicts, conflictExitCode,
+    readHeads, render,
 } = require('../../../bin/archive_heads_by_author.js');
 
 const heads = [
@@ -37,14 +38,17 @@ describe('bin/archive_heads_by_author', function () {
     it('parses the required author and optional filters', function () {
         assert.deepStrictEqual(parseArgs(['--author', 'A']), {
             author: 'A', fromSeq: null, limit: 50, db: null, json: false,
-            expectRedrawn: false
+            expectRedrawn: false, expectConflict: false
         });
         assert.deepStrictEqual(
             parseArgs([
                 '--author', 'A', '--from-seq', '0', '--limit', '7', '--db', 'x', '--json',
-                '--expect-redrawn'
+                '--expect-redrawn', '--expect-conflict'
             ]),
-            { author: 'A', fromSeq: 0, limit: 7, db: 'x', json: true, expectRedrawn: true });
+            {
+                author: 'A', fromSeq: 0, limit: 7, db: 'x', json: true,
+                expectRedrawn: true, expectConflict: true
+            });
     });
 
     it('rejects missing and invalid arguments', function () {
@@ -95,6 +99,7 @@ describe('bin/archive_heads_by_author', function () {
         assert.deepStrictEqual(calls[0].args, ['A', 4, 10]);
         assert.strictEqual(result.author, 'A');
         assert.strictEqual(result.rows, heads);
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(result, 'conflict'), false);
         assert.deepStrictEqual(result.summary, {
             count: 3, seqs: 2, refused: 1, refusedSeqs: [4],
             maxValidSeq: 5, redrawnAbove: true
@@ -122,6 +127,77 @@ describe('bin/archive_heads_by_author', function () {
         assert.strictEqual(exitCodeFor(noRefusal, on), 1);
         assert.strictEqual(exitCodeFor(notRedrawn, on), 1);
         assert.strictEqual(exitCodeFor(redrawn, on), 0);
+    });
+
+    it('confirms refused heads only from earlier conflicting content at the same seq', function () {
+        const duplicate = {
+            action_index: 42, match_batch_seq: 4, batch_crc32: 'AAAA', match_count: 2,
+            status: ARCHIVE_REISSUE_RETRY_REASON
+        };
+        const fresh = {
+            action_index: 43, match_batch_seq: 9, batch_crc32: 'dddd', match_count: 1,
+            status: ARCHIVE_REISSUE_RETRY_REASON
+        };
+        const lateValid = {
+            action_index: 50, match_batch_seq: 10, batch_crc32: 'eeee', match_count: 2,
+            status: 'valid'
+        };
+        const beforeLate = {
+            action_index: 44, match_batch_seq: 10, batch_crc32: 'ffff', match_count: 3,
+            status: ARCHIVE_REISSUE_RETRY_REASON
+        };
+
+        assert.deepStrictEqual(conflicts(heads.slice(0, 2)), {
+            refused: 1, confirmed: 1, unexplained: 0, unexplainedActions: []
+        });
+        assert.deepStrictEqual(conflicts(heads.slice(0, 2).concat([duplicate, fresh])), {
+            refused: 3, confirmed: 1, unexplained: 2, unexplainedActions: [42, 43]
+        });
+        assert.deepStrictEqual(conflicts([beforeLate, lateValid]), {
+            refused: 1, confirmed: 0, unexplained: 1, unexplainedActions: [44]
+        });
+    });
+
+    it('accepts an earlier unverified head as conflict evidence', function () {
+        const rows = [{
+            action_index: 10, match_batch_seq: '7', batch_crc32: 'aaaa', match_count: 2,
+            status: 'unverified'
+        }, {
+            action_index: '11', match_batch_seq: 7, batch_crc32: 'bbbb', match_count: 2,
+            status: ARCHIVE_REISSUE_RETRY_REASON
+        }];
+
+        assert.deepStrictEqual(conflicts(rows), {
+            refused: 1, confirmed: 1, unexplained: 0, unexplainedActions: []
+        });
+    });
+
+    it('maps the conflict expectation and evidence to an exit code', function () {
+        const confirmed = conflicts(heads.slice(0, 2));
+        const unexplained = conflicts([heads[1]]);
+        const none = conflicts([heads[0]]);
+        const off = { expectConflict: false };
+        const on = { expectConflict: true };
+
+        assert.strictEqual(conflictExitCode(undefined, off), 0);
+        assert.strictEqual(conflictExitCode(confirmed, off), 0);
+        assert.strictEqual(conflictExitCode(unexplained, off), 0);
+        assert.strictEqual(conflictExitCode(undefined, on), 1);
+        assert.strictEqual(conflictExitCode(none, on), 1);
+        assert.strictEqual(conflictExitCode(unexplained, on), 1);
+        assert.strictEqual(conflictExitCode(confirmed, on), 0);
+    });
+
+    it('adds conflict evidence to read results only when requested', async function () {
+        const db = { doQueryStrict: async () => heads.slice(0, 2) };
+        const opts = { author: 'A', fromSeq: null, limit: 5, expectConflict: false };
+
+        const ordinary = await readHeads(db, opts);
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(ordinary, 'conflict'), false);
+        const expected = await readHeads(db, { ...opts, expectConflict: true });
+        assert.deepStrictEqual(expected.conflict, {
+            refused: 1, confirmed: 1, unexplained: 0, unexplainedActions: []
+        });
     });
 
     it('does not count another invalid status as refused', function () {
@@ -152,6 +228,19 @@ describe('bin/archive_heads_by_author', function () {
             render({ author: 'A', rows: heads.slice(0, 2), summary: summarize(heads.slice(0, 2)) }, false)
                 .split('\n').pop(),
             '# heads=2 seqs=1 refused=1 max-valid-seq=4 redrawn-above=no');
+    });
+
+    it('appends conflict evidence only when present', function () {
+        const result = {
+            author: 'A', rows: heads.slice(0, 2), summary: summarize(heads.slice(0, 2)),
+            conflict: conflicts(heads.slice(0, 2))
+        };
+
+        assert.strictEqual(
+            render(result, false).split('\n').pop(),
+            '# conflict refused=1 confirmed=1 unexplained=0');
+        const ordinary = { author: result.author, rows: result.rows, summary: result.summary };
+        assert.strictEqual(render(ordinary, false).includes('# conflict'), false);
     });
 
     it('renders the complete result as JSON', function () {

@@ -13068,10 +13068,15 @@
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 rolls back the parent row with the emissions when a guard emission fails (denied guard leaves no record)",
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 writes a contract_executions parent row keyed to the native action_index (so the contract_hash INNER JOIN resolves the emissions)"
     ],
-    "b111170e06e231ab": [
+    "03a05246418ce8ac": [
+      "bin/archive_heads_by_author accepts an earlier unverified head as conflict evidence",
+      "bin/archive_heads_by_author adds conflict evidence to read results only when requested",
       "bin/archive_heads_by_author adds the from-seq filter and argument before the limit",
+      "bin/archive_heads_by_author appends conflict evidence only when present",
       "bin/archive_heads_by_author builds an all-status query without a from-seq filter",
+      "bin/archive_heads_by_author confirms refused heads only from earlier conflicting content at the same seq",
       "bin/archive_heads_by_author does not count another invalid status as refused",
+      "bin/archive_heads_by_author maps the conflict expectation and evidence to an exit code",
       "bin/archive_heads_by_author maps the redraw expectation and summary to an exit code",
       "bin/archive_heads_by_author parses the required author and optional filters",
       "bin/archive_heads_by_author reads through doQueryStrict and returns rows with their summary",
@@ -19385,7 +19390,7 @@
         "test/unit/attestation/relayed_attestation_requests.test.js": "3904e3eba82ab03f",
         "test/unit/attestation/repair_validator_stats_drift.test.js": "b2c12d6af08b6d99",
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
-        "test/unit/bin/archive_heads_by_author.test.js": "b111170e06e231ab",
+        "test/unit/bin/archive_heads_by_author.test.js": "03a05246418ce8ac",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/bench_net_balance.test.js": "84150d96eb17417e",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
