@@ -2018,6 +2018,14 @@
       "Amount representability @regression @tier1 isValidAmountFormat(): the credited number vs the validated text the defect: 5e-19 validates but bcadd credits a DIFFERENT number",
       "Amount representability @regression @tier1 isValidAmountFormat(): the credited number vs the validated text the gate only ever REJECTS more: every legacy-valid case stays valid armed"
     ],
+    "1bad9b47321f3b9e": [
+      "selectCheckpoint section reads on testnet @regression @tier1 BTC origin at blockIndex 157500 reads the block_index axis",
+      "selectCheckpoint section reads on testnet @regression @tier1 DOGE origin at blockIndex 157000, below the anchor-match activation, reads the block_index axis",
+      "selectCheckpoint section reads on testnet @regression @tier1 DOGE origin at blockIndex 157500 reads the anchor axis and never the block_index read",
+      "selectCheckpoint section reads on testnet @regression @tier1 every empty read returns null",
+      "selectCheckpoint section reads on testnet @regression @tier1 picks a returned version 0 anchor row with source anchor_actions",
+      "selectCheckpoint section reads on testnet @regression @tier1 reads section version 0 only"
+    ],
     "1bdf11fda7eec5f4": [
       "Utility guardInertError() @regression @tier1 names a token binding while preserving the inert sentinel",
       "Utility guardInertError() @regression @tier1 names an address binding while preserving the inert sentinel"
@@ -18607,8 +18615,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1477,
-      "titleCount": 14422,
+      "fileCount": 1478,
+      "titleCount": 14428,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19304,6 +19312,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
+        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "1bad9b47321f3b9e",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
@@ -20461,8 +20470,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1121,
-      "titleCount": 11401,
+      "fileCount": 1122,
+      "titleCount": 11407,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21023,6 +21032,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
+        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "1bad9b47321f3b9e",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -21588,8 +21598,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 554,
-      "titleCount": 5990,
+      "fileCount": 555,
+      "titleCount": 5996,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21764,6 +21774,7 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
+        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "1bad9b47321f3b9e",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -22148,8 +22159,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1121,
-      "titleCount": 11401,
+      "fileCount": 1122,
+      "titleCount": 11407,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22710,6 +22721,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
+        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "1bad9b47321f3b9e",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
