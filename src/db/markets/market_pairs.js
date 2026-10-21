@@ -23,7 +23,7 @@
 module.exports = {
 
     // Lookup market pairs by block
-    // TODO: Circle back and add support for cross-chain market data (different coin_id)
+    // Cross-chain market data with different coin IDs is not currently supported.
     async getMarkets(block_index, update){
         let markets    = [];
         // Orientation-free keys of the pairs already collected, so the dedupe below is a lookup
