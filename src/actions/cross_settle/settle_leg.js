@@ -335,7 +335,5 @@ async function recordNoopSettlement(data, m, localActionIndex){
 
 module.exports = {
     settleSwapLeg,
-    settleOrderLeg,
-    proceedsCredits,
-    recordNoopSettlement
+    settleOrderLeg
 };
