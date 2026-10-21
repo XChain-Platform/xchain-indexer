@@ -194,9 +194,8 @@ module.exports = {
                             m1.action_index=?
                         LIMIT 1`,
     // SEND action
-    // TODO: Revisit this code and optimize it to support Multi-sends (right now shows first send status instead of every send status as it should)
-    // Until then, "first" is at least well defined: ORDER BY leg_ordinal pins the
-    // returned leg to the first one as broadcast rather than an engine-arbitrary row.
+    // Multi-sends return the first leg's status, with ORDER BY leg_ordinal
+    // selecting the first broadcast leg instead of an arbitrary row.
     SEND: `SELECT
                             a2.action,
                             s1.action_index,
