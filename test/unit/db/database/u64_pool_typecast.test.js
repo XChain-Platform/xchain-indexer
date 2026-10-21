@@ -25,6 +25,7 @@ describe('database pool exact u64 typeCast @regression @tier1', function () {
         dbName: 'd',
     });
     const bigint = (value) => ({ type: 'BIGINT', string: () => value });
+    const signedBigint = (value) => ({ type: 'BIGINT', signed: () => true, string: () => value });
 
     it('keeps the unsigned 64-bit maximum as an exact decimal string', function () {
         assert.strictEqual(
@@ -50,6 +51,35 @@ describe('database pool exact u64 typeCast @regression @tier1', function () {
             params.typeCast(bigint(null), () => assert.fail('unexpected fallback')),
             null
         );
+    });
+
+    it('reads a negative signed BIGINT as a Number instead of refusing it', function () {
+        // MIN(id) over a signed cursor holding a negative id must read back,
+        // not throw inside the row parser and destroy the connection.
+        assert.strictEqual(
+            params.typeCast(signedBigint('-5'), () => assert.fail('unexpected fallback')),
+            -5
+        );
+        assert.strictEqual(
+            params.typeCast(signedBigint('42'), () => assert.fail('unexpected fallback')),
+            42
+        );
+    });
+
+    it('keeps a signed BIGINT beyond the safe range as an exact decimal string', function () {
+        assert.strictEqual(
+            params.typeCast(signedBigint('-9223372036854775808'), () => assert.fail('unexpected fallback')),
+            '-9223372036854775808'
+        );
+        assert.strictEqual(
+            params.typeCast(signedBigint('9223372036854775807'), () => assert.fail('unexpected fallback')),
+            '9223372036854775807'
+        );
+    });
+
+    it('still refuses a negative value on an unsigned BIGINT', function () {
+        const unsigned = { type: 'BIGINT', signed: () => false, string: () => '-1' };
+        assert.throws(() => params.typeCast(unsigned, () => assert.fail('unexpected fallback')), /u64 value/);
     });
 
     it('delegates every non-BIGINT field to the connector', function () {
