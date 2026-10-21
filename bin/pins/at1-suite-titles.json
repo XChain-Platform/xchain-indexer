@@ -5168,6 +5168,10 @@
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) below the flag-day the split is not applied (legacy full credit)",
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) fail-closed: a leg that does not re-encode yields NO split (full proceeds credit)"
     ],
+    "47fe733ee948f0cb": [
+      "ANCHOR archive head same-author re-issue below the fold gate @regression @tier3 indexes a v1 head valid over a stored row with a different CRC and match count, without reading it",
+      "ANCHOR archive head same-author re-issue below the fold gate @regression @tier3 refuses a v3 fold in the same stored-row case with one read once the fold gate is active"
+    ],
     "482e2d76b66b5661": [
       "protocol_changes/APPLY_LENGTH_METER row @regression @tier1 is present in the class table and registry in the same shape",
       "protocol_changes/APPLY_LENGTH_METER row @regression @tier1 is unarmed on mainnet, armed on testnet at its instant and active from regtest genesis"
@@ -18591,8 +18595,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1475,
-      "titleCount": 14410,
+      "fileCount": 1476,
+      "titleCount": 14412,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19076,6 +19080,7 @@
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
         "test/unit/anchor/archive_anchor_content_query.test.js": "383eb974c61ae810",
+        "test/unit/anchor/archive_head_v1_reissue_below_gate.test.js": "47fe733ee948f0cb",
         "test/unit/anchor/archive_heads_by_author_seq.test.js": "a82395728a43dff5",
         "test/unit/anchor/archive_reissue_classify.test.js": "2031d812648e76ea",
         "test/unit/anchor/archive_reissue_guard.test.js": "47918a353044a5d4",
@@ -20443,8 +20448,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1119,
-      "titleCount": 11391,
+      "fileCount": 1120,
+      "titleCount": 11393,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20897,6 +20902,7 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "71bf81156e7d6e58",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
         "test/unit/anchor/archive_anchor_content_query.test.js": "383eb974c61ae810",
+        "test/unit/anchor/archive_head_v1_reissue_below_gate.test.js": "47fe733ee948f0cb",
         "test/unit/anchor/db_get_anchor_v1_by_batch_seq_tieorder.test.js": "44cb0b8ed3723f66",
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
         "test/unit/anchor/diagnostic_events.test.js": "3d9f64cbeacabe25",
@@ -22127,8 +22133,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1119,
-      "titleCount": 11391,
+      "fileCount": 1120,
+      "titleCount": 11393,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22581,6 +22587,7 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "71bf81156e7d6e58",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
         "test/unit/anchor/archive_anchor_content_query.test.js": "383eb974c61ae810",
+        "test/unit/anchor/archive_head_v1_reissue_below_gate.test.js": "47fe733ee948f0cb",
         "test/unit/anchor/db_get_anchor_v1_by_batch_seq_tieorder.test.js": "44cb0b8ed3723f66",
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
         "test/unit/anchor/diagnostic_events.test.js": "3d9f64cbeacabe25",
