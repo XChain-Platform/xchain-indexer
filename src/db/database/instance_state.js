@@ -26,6 +26,31 @@
 const { CONFIG_ENV } = require('../../config.js');
 const { withPinnedSqlMode } = require('../shared.js');
 
+// User-chosen u64 wire columns: any BIGINT read under one of these names is returned as a
+// Number when it is a safe integer (so every value at or below 2^53-1 reads exactly as
+// before) and as its exact decimal string above that, instead of a rounded Number.
+const U64_WIRE_COLUMNS = new Set([
+    'expiration', 'effective_expiration', 'allow_list', 'block_list', 'deadline', 'expire_at'
+]);
+
+function u64TypeCast(column, next){
+    if(column.type === 'BIGINT' && U64_WIRE_COLUMNS.has(String(column.name()).toLowerCase())){
+        let text = column.string();
+        if(text === null) return null;
+        let num = Number(text);
+        return Number.isSafeInteger(num) ? num : text;
+    }
+    return next();
+}
+
+// Reader helper for the Number(value) conversions of those columns: a value the pool left
+// as an exact decimal string stays a string, everything else converts as it always did.
+function exactU64(value){
+    return (typeof value === 'string' && /^\d+$/.test(value) && !Number.isSafeInteger(Number(value)))
+        ? value
+        : Number(value);
+}
+
 // The direct-connection parameters (verifyDatabase and createDatabase build their own,
 // without the database name, because the database may not exist yet).
 function connectionParams(self){
@@ -66,9 +91,9 @@ function connectionPoolParams(self){
         // (heights, indexes, times) stay within Number.MAX_SAFE_INTEGER, but
         // the user-chosen u64 wire fields (EXPIRATION, DEADLINE, ALLOW_LIST
         // and the rest bounded at U64_MAX in config/wire_fields.js) are not:
-        // a stored value above 2^53 reads back rounded here, and is
-        // replicated rounded, until those reads move to an exact form.
+        // typeCast below reads those columns as an exact decimal string above 2^53.
         bigIntAsNumber:       true,
+        typeCast:             u64TypeCast,
         minDelayValidation:   3000,
         queryTimeout:         parseInt(CONFIG_ENV.DB_QUERY_TIMEOUT) || 30000
     });
@@ -187,6 +212,9 @@ function initTransactionState(self){
 }
 
 module.exports = {
+    U64_WIRE_COLUMNS,
+    u64TypeCast,
+    exactU64,
     connectionParams,
     connectionPoolParams,
     initIndexIdState,

@@ -19,6 +19,8 @@
  *
  ********************************************************************/
 
+const { exactU64 } = require('../database/instance_state.js');
+
 // The bets mixin is cut into parts by behaviour under bets/; this entry merges them
 // back into the one method set db/index.js installs, at the position those methods held here.
 const records       = require('./records.js');
@@ -103,7 +105,7 @@ function formatBetFeedInfo(row, util){
         // rejecting all bets. Amount-ish fields (fee/min_amount) stay
         // strings for bignumber math
         if(!util.isNull(value) && numericFields.includes(name))
-            value = Number(value);
+            value = exactU64(value);
         feed[name] = value;
     }
     return feed;

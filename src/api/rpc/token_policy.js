@@ -20,7 +20,10 @@
  *
  ********************************************************************/
 
+
 const crypto = require('crypto');
+const { exactU64 } = require('../../db/database/instance_state.js');
+
 const { getLogger } = require('../../observability/index.js');
 const gateRegistry = require('../../consensus/gate_registry');
 const { policyHash } = require('../../consensus/bridge_settle/policy_membership.js');
@@ -146,8 +149,8 @@ function appliedPolicyRpc({ indexer }){
                 return {
                     tick:         t,
                     bridged:      Number(info.BRIDGED) === 1,
-                    allow_list:   (info.ALLOW_LIST != null) ? Number(info.ALLOW_LIST) : null,
-                    block_list:   (info.BLOCK_LIST != null) ? Number(info.BLOCK_LIST) : null,
+                    allow_list:   (info.ALLOW_LIST != null) ? exactU64(info.ALLOW_LIST) : null,
+                    block_list:   (info.BLOCK_LIST != null) ? exactU64(info.BLOCK_LIST) : null,
                     sleeping:     !!sleeping,
                     policy_seq:   applied ? Number(applied.policy_seq)   : null,
                     origin_block: applied ? Number(applied.origin_block) : null,
