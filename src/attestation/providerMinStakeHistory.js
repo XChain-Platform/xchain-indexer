@@ -152,7 +152,6 @@ function meetsProviderFloor(weight, minStake){
 
 module.exports = {
     PROVIDER_MIN_STAKE_ACTIVATIONS,
-    normalizeFloor,
     providerMinStakeAt,
     meetsProviderFloor,
 };
