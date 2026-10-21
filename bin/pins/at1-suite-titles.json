@@ -1103,14 +1103,6 @@
       "repair-validator-stats missed_count @regression an empty pin charges nobody",
       "repair-validator-stats missed_count @regression charges the pinned responsible set and never re-derives"
     ],
-    "0fb60df74d8c331e": [
-      "plain-object TICK caches below the prototype gate @regression @tier1 fetchAirdropTicks reads an ordinary repeated TICK once and caches it under its own name",
-      "plain-object TICK caches below the prototype gate @regression @tier1 fetchAirdropTicks skips Object.prototype-named TICKs and leaves no own cache keys",
-      "plain-object TICK caches below the prototype gate @regression @tier1 loadTicks reads an ordinary repeated TICK once and caches it under its own name",
-      "plain-object TICK caches below the prototype gate @regression @tier1 loadTicks skips Object.prototype-named TICKs and leaves no own cache keys",
-      "plain-object TICK caches below the prototype gate @regression @tier1 prefetchSendContext reads an ordinary repeated TICK and its gated packs once",
-      "plain-object TICK caches below the prototype gate @regression @tier1 prefetchSendContext skips reads for Object.prototype-named TICKs in both caches"
-    ],
     "0fb9ebffb6c5d0cd": [
       "bridge_settle: terminal policy refusal follower parity mints identical action index and refused record on every follower"
     ],
@@ -1918,6 +1910,16 @@
       "HubDbSync feed authentication falls back to HUB_API_KEY for subscriptions and snapshots",
       "HubDbSync feed authentication leaves push and reorg credentials on their dedicated environment keys",
       "HubDbSync feed authentication presents HUB_FEED_API_KEY to mirror requests while retaining HUB_API_KEY"
+    ],
+    "1a6981490efe8f5f": [
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpoint binds both versions of [0, 3] ahead of chain, network and height",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpoint binds a single 0 for the number 0",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpoint binds a single 0 for [0]",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpoint keeps state_root IS NOT NULL, status 'valid', the ORDER BY and LIMIT 1",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpointAfterAnchor binds both versions of [0, 3] ahead of chain, network and height",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpointAfterAnchor binds a single 0 for the number 0",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpointAfterAnchor binds a single 0 for [0]",
+      "getEarliestValidAnchorCheckpoint reads bind the section version list @regression @tier1 getEarliestValidAnchorCheckpointAfterAnchor keeps state_root IS NOT NULL, status 'valid', the ORDER BY and LIMIT 1"
     ],
     "1ae5f78fde3d87fe": [
       "db.getRecordedPolicyRefusalIds @regression @tier1 reads only refused rows with one bound placeholder per snapshot id"
@@ -5168,10 +5170,6 @@
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) below the flag-day the split is not applied (legacy full credit)",
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) fail-closed: a leg that does not re-encode yields NO split (full proceeds credit)"
     ],
-    "47fe733ee948f0cb": [
-      "ANCHOR archive head same-author re-issue below the fold gate @regression @tier3 indexes a v1 head valid over a stored row with a different CRC and match count, without reading it",
-      "ANCHOR archive head same-author re-issue below the fold gate @regression @tier3 refuses a v3 fold in the same stored-row case with one read once the fold gate is active"
-    ],
     "482e2d76b66b5661": [
       "protocol_changes/APPLY_LENGTH_METER row @regression @tier1 is present in the class table and registry in the same shape",
       "protocol_changes/APPLY_LENGTH_METER row @regression @tier1 is unarmed on mainnet, armed on testnet at its instant and active from regtest genesis"
@@ -5193,12 +5191,6 @@
     ],
     "48ec89675a1f39f8": [
       "consensus block-hash conformance twins (static drift-lock) @regression state_key collation gate and splice match across xchain-indexer and xchain-sync"
-    ],
-    "494348d00a38395f": [
-      "guard emitted host request id below gate @regression @tier1 assigns consecutive call paths to two emissions from one guard",
-      "guard emitted host request id below gate @regression @tier1 collides with the ordinary root host request id under the legacy discriminator",
-      "guard emitted host request id below gate @regression @tier1 offsets the call path by emissions already stored for the host action",
-      "guard emitted host request id below gate @regression @tier1 passes a composite guard root discriminator through unchanged"
     ],
     "4952d3db984cc3ce": [
       "AnchorRecovery list snapshots @regression @tier2 fails when the natural list sequence already has another snapshot id",
@@ -13407,10 +13399,6 @@
       "HubDbSync chain-id purge retry @regression @tier2 stays pending while the retry keeps failing",
       "HubDbSync chain-id purge retry @regression @tier2 still owes the legacy-table purge on retry after a chain change"
     ],
-    "b9742e252f175ed5": [
-      "cross-chain VM snapshot cross-block cache wiring @regression @tier1 rebuilds getCrossChainDataForVM after rollback resets in-place flips",
-      "cross-chain VM snapshot cross-block cache wiring @regression @tier1 serves getCrossChainDataForVM from the cross-block cache in a later pass"
-    ],
     "b97d2027d5c02535": [
       "JSON-RPC fee family @regression @tier1 feequote, preflight, feeschedule and feequotedryrun delegate to the actions engine",
       "JSON-RPC fee family @regression @tier1 reports engine throws generically, except the dry-run which surfaces the message",
@@ -18595,8 +18583,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1476,
-      "titleCount": 14412,
+      "fileCount": 1473,
+      "titleCount": 14406,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18784,7 +18772,6 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
-        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
@@ -18930,7 +18917,6 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
-        "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
@@ -19080,7 +19066,6 @@
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
         "test/unit/anchor/archive_anchor_content_query.test.js": "383eb974c61ae810",
-        "test/unit/anchor/archive_head_v1_reissue_below_gate.test.js": "47fe733ee948f0cb",
         "test/unit/anchor/archive_heads_by_author_seq.test.js": "a82395728a43dff5",
         "test/unit/anchor/archive_reissue_classify.test.js": "2031d812648e76ea",
         "test/unit/anchor/archive_reissue_guard.test.js": "47918a353044a5d4",
@@ -19292,6 +19277,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "1a6981490efe8f5f",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -19563,7 +19549,6 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
-        "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/cross_chain_snapshot_golden.test.js": "0cb9a34b3a919984",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
@@ -20448,8 +20433,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1120,
-      "titleCount": 11393,
+      "fileCount": 1117,
+      "titleCount": 11387,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20653,7 +20638,6 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
-        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
@@ -20781,7 +20765,6 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
-        "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
@@ -20902,7 +20885,6 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "71bf81156e7d6e58",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
         "test/unit/anchor/archive_anchor_content_query.test.js": "383eb974c61ae810",
-        "test/unit/anchor/archive_head_v1_reissue_below_gate.test.js": "47fe733ee948f0cb",
         "test/unit/anchor/db_get_anchor_v1_by_batch_seq_tieorder.test.js": "44cb0b8ed3723f66",
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
         "test/unit/anchor/diagnostic_events.test.js": "3d9f64cbeacabe25",
@@ -21010,6 +20992,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "1a6981490efe8f5f",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
@@ -21203,7 +21186,6 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
-        "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
@@ -21574,8 +21556,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 553,
-      "titleCount": 5982,
+      "fileCount": 551,
+      "titleCount": 5978,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21625,7 +21607,6 @@
         "test/unit/actions/contract/execute_host_fault.test.js": "044af0ce102bf587",
         "test/unit/actions/contract/execute_slash_ledger_consolidation.test.js": "5cc340e05ad6f3cf",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
-        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
@@ -21650,7 +21631,6 @@
         "test/unit/actions/stake/vote_sleep_gate.test.js": "aa7188891f17a98e",
         "test/unit/actions/stake/withdraw.test/custody_bypass_witness.test.js": "7e5ad9b78be748e3",
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
-        "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "8c68aac253d8f04e",
@@ -21750,6 +21730,7 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "1a6981490efe8f5f",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
@@ -21896,7 +21877,6 @@
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
         "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
-        "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
@@ -22133,8 +22113,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1120,
-      "titleCount": 11393,
+      "fileCount": 1117,
+      "titleCount": 11387,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22338,7 +22318,6 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
-        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
@@ -22466,7 +22445,6 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
-        "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
         "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
@@ -22587,7 +22565,6 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "71bf81156e7d6e58",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
         "test/unit/anchor/archive_anchor_content_query.test.js": "383eb974c61ae810",
-        "test/unit/anchor/archive_head_v1_reissue_below_gate.test.js": "47fe733ee948f0cb",
         "test/unit/anchor/db_get_anchor_v1_by_batch_seq_tieorder.test.js": "44cb0b8ed3723f66",
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
         "test/unit/anchor/diagnostic_events.test.js": "3d9f64cbeacabe25",
@@ -22695,6 +22672,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "1a6981490efe8f5f",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
@@ -22888,7 +22866,6 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
-        "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
