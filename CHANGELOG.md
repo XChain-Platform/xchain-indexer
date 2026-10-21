@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Armed ISSUE_CARET_TICK_NO_CREATE on BTC:testnet at 1792674000.
 - Armed ISSUE_CARET_TICK_NO_CREATE on LTC:testnet at 1792674000.
 - Armed ISSUE_CARET_TICK_NO_CREATE on DOGE:testnet at 1792674000.
+- Refused compressed request bodies on the API with 415, since the indexer stays on its pinned Node 22.23.2 runtime until a coordinated fleet-engine change moves it.
 
 ## [0.26.1] - 2026-10-21
 
