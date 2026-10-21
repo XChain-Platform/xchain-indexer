@@ -181,7 +181,7 @@ function registerObjectBatchProofTest(){
 }
 
 function registerPriceOverwriteTest(){
-    it('lets later batches overwrite a disputed flip and a late batch_block_time', async function(){
+    it('lets later batches overwrite a disputed flip but never a forged batch_block_time', async function(){
         let initial = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
             { prices: [rawPrice(204, 'BTC/USD')] });
         let initialArchive = await new AnchorRecovery(memDb([], []), quiet).verifyBatch(initial.v1);
@@ -202,7 +202,7 @@ function registerPriceOverwriteTest(){
         assert.strictEqual(report.prices, 3);
         assert.strictEqual(db.prices.length, 1);
         assert.strictEqual(db.prices[0].status, 'disputed');
-        assert.strictEqual(db.prices[0].batch_block_time, 1700000999);
+        assert.strictEqual(db.prices[0].batch_block_time, 0, 'the unsigned landing clock is not restored');
     });
 }
 

@@ -254,6 +254,7 @@ class Issue {
 
         // The existing token row, then the FORMAT and General validations against it
         await tokenState.loadTokenState.call(this, ctx);
+        await tickRules.validateCaretTickExists.call(this, ctx);
         tokenState.validateFieldFormats.call(this, ctx);
         await tokenState.validateOwnership.call(this, ctx);
         await supplyRules.validateSupplyFields.call(this, ctx);

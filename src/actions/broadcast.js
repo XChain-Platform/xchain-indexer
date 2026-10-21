@@ -91,12 +91,12 @@ class Broadcast {
         // Print status message
         getLogger().info("\t BROADCAST : " + data['MESSAGE'] + ' : ' +  data['VALUE'] + ' : ' + data['STATUS']);
 
-        await this.storeBroadcast(data, format, status);
+        await this.storeBroadcast(data);
 
     }
 
     // Write the broadcast row, register the address, and map the action
-    async storeBroadcast(data, format, status){
+    async storeBroadcast(data){
 
         // Create record in broadcasts table
         await this.indexerDb.createBroadcast(data);
@@ -106,17 +106,6 @@ class Broadcast {
 
         // Create action mappings
         await this.mapper.createMappings(data);
-
-        if(status=='valid'){
-
-            // Resolve any open bets on this feed
-            if(format==3){
-
-                // TODO : Add support for resolving bets
-
-            }
-
-        }
 
     }
 

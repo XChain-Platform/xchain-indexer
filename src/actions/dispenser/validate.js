@@ -45,7 +45,7 @@ module.exports = {
             error = "invalid: GIVE_COIN (network)";
 
         // validate GET_COIN network is current COIN network
-        // TODO: cross-chain dispensers (GET_COIN != GIVE_COIN) are not currently wired; this guard enforces same-chain only
+        // Cross-chain dispensers (GET_COIN != GIVE_COIN) are not wired; this guard enforces same-chain only
         if(!error && format==0 && this.config['COIN']!=data['GET_COIN'])
             error = "invalid: GET_COIN (network)";
 

@@ -19,6 +19,20 @@
  *
  ********************************************************************/
 
+// Fold one guard verdict into the SWEEP, the same way for both guard loops: a deny
+// becomes the error; otherwise any guard gas joins state.guardFee and is reserved out
+// of the swept GAS balance. Returns the error.
+function chargeSweepGuard(result, state, error){
+    if(result.error){
+        error = 'invalid: ' + result.error;
+    } else if(this.util.bcgt(result.guardFee, 0)){
+        state.guardFee = this.util.bcadd(state.guardFee, result.guardFee, 8);
+        if(state.gasInfo)
+            state.balances = this.util.debitBalances(state.balances, state.gasInfo['TICK_ID'], result.guardFee);
+    }
+    return error;
+}
+
 // Installed onto Sweep.prototype by index.js; each method runs with `this` bound to
 // the handler, exactly as the parse() code it came from. `state` is the object
 // loadSweepState() built: the guard gas accrues in state.guardFee and each reserve
@@ -67,7 +81,7 @@ module.exports = {
                     gasBalances: state.balances,
                     seq:         Number(tick_id) || 0
                 });
-                error = this.chargeSweepGuard(result, state, error);
+                error = chargeSweepGuard.call(this, result, state, error);
             }
         }
         return error;
@@ -108,23 +122,9 @@ module.exports = {
                     gasBalances: state.balances,
                     seq:         ownershipSeq++
                 });
-                error = this.chargeSweepGuard(result, state, error);
+                error = chargeSweepGuard.call(this, result, state, error);
             }
         }
         return error;
     },
-
-    // Fold one guard verdict into the SWEEP, the same way for both guard loops: a deny
-    // becomes the error; otherwise any guard gas joins state.guardFee and is reserved out
-    // of the swept GAS balance. Returns the error.
-    chargeSweepGuard(result, state, error){
-        if(result.error){
-            error = 'invalid: ' + result.error;
-        } else if(this.util.bcgt(result.guardFee, 0)){
-            state.guardFee = this.util.bcadd(state.guardFee, result.guardFee, 8);
-            if(state.gasInfo)
-                state.balances = this.util.debitBalances(state.balances, state.gasInfo['TICK_ID'], result.guardFee);
-        }
-        return error;
-    }
 };

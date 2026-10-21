@@ -31,6 +31,56 @@ const rgf     = require('./gates/rollcall_gates_filter.js');
 const { getLogger } = require('../../observability/index.js');
 const { HOME_CHAIN } = require('./constants.js');
 
+// The v0 wire, field by field. Positional throughout, so the only thing that can
+// move here is the wire itself.
+function extractRequestParams(params, data){
+    // Extract positional params
+    data['REQUEST_ID']      = params[1];
+    data['PROVIDER_ID']     = params[2];
+    data['REQUEST_PAYLOAD'] = params[3];
+    data['CALLBACK_METHOD'] = params[4];
+    data['CALLBACK_PARAMS'] = params[5];
+    data['REDUNDANCY']      = params[6];
+    data['DEADLINE_BLOCKS'] = params[7];
+    data['FEE_TICK']        = (params[8] !== undefined && String(params[8]).trim() !== '') ? String(params[8]).trim() : null;
+    data['FEE_AMOUNT']      = (params[9] !== undefined && String(params[9]).trim() !== '') ? String(params[9]).trim() : null;
+    // EMITTER carries the contract's action_index (set by execute.processEmission)
+    data['CONTRACT_INDEX']  = data['EMITTER'];
+}
+
+// The structural rules over those fields: id shape, provider, callback, redundancy,
+// payload size and deadline window. Returns the caller's own `error` untouched when
+// nothing new is wrong, so a verdict set earlier keeps its exact value.
+function requestFieldError(data, error){
+    if(!error && (!data['REQUEST_ID'] || !/^[0-9a-fA-F]{64}$/.test(String(data['REQUEST_ID']))))
+        error = 'invalid: REQUEST_ID (format)';
+
+    if(!error && this.util.isNull(data['PROVIDER_ID']))
+        error = 'invalid: PROVIDER_ID (required)';
+
+    if(!error && !this.providerRegistry.isKnown(data['PROVIDER_ID']))
+        error = 'invalid: PROVIDER_ID (unknown)';
+
+    if(!error && this.util.isNull(data['CALLBACK_METHOD']))
+        error = 'invalid: CALLBACK_METHOD (required)';
+
+    let redundancy = parseInt(data['REDUNDANCY']);
+    if(!error && !this.providerRegistry.isRedundancyAllowed(data['PROVIDER_ID'], redundancy))
+        error = 'invalid: REDUNDANCY (not allowed for provider)';
+
+    let payloadBytes = Buffer.byteLength(String(data['REQUEST_PAYLOAD'] || ''), 'utf8');
+    if(!error && !this.providerRegistry.isPayloadSizeAllowed(data['PROVIDER_ID'], payloadBytes))
+        error = 'invalid: REQUEST_PAYLOAD (exceeds provider max)';
+
+    let deadlineBlocks = parseInt(data['DEADLINE_BLOCKS']);
+    let deadlineBlock  = parseInt(data['BLOCK_INDEX']) + (Number.isFinite(deadlineBlocks) ? deadlineBlocks : 0);
+    data['DEADLINE_BLOCK'] = deadlineBlock;
+    if(!error && !this.providerRegistry.isDeadlineAllowed(data['PROVIDER_ID'], parseInt(data['BLOCK_INDEX']), deadlineBlock))
+        error = 'invalid: DEADLINE (outside provider window)';
+
+    return error;
+}
+
 module.exports = {
     // ATTEST v0: Request (VM emission only)
     async parseRequest(params, data, error){
@@ -40,12 +90,12 @@ module.exports = {
         if(!error && !data['IS_EMISSION'])
             error = 'invalid: ATTEST v0 must originate from VM emission';
 
-        this.extractRequestParams(params, data);
+        extractRequestParams.call(this, params, data);
 
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        error = this.requestFieldError(data, error);
+        error = requestFieldError.call(this, data, error);
 
         // The fee phases live in fees.js: the format and precision rules here, the
         // funding check below, and the escrow after the row is written.
@@ -85,56 +135,6 @@ module.exports = {
         await this.escrowRequestFee(data, status, fee.feePresent);
 
         await this.mapper.createMappings(data);
-    },
-
-    // The v0 wire, field by field. Positional throughout, so the only thing that can
-    // move here is the wire itself.
-    extractRequestParams(params, data){
-        // Extract positional params
-        data['REQUEST_ID']      = params[1];
-        data['PROVIDER_ID']     = params[2];
-        data['REQUEST_PAYLOAD'] = params[3];
-        data['CALLBACK_METHOD'] = params[4];
-        data['CALLBACK_PARAMS'] = params[5];
-        data['REDUNDANCY']      = params[6];
-        data['DEADLINE_BLOCKS'] = params[7];
-        data['FEE_TICK']        = (params[8] !== undefined && String(params[8]).trim() !== '') ? String(params[8]).trim() : null;
-        data['FEE_AMOUNT']      = (params[9] !== undefined && String(params[9]).trim() !== '') ? String(params[9]).trim() : null;
-        // EMITTER carries the contract's action_index (set by execute.processEmission)
-        data['CONTRACT_INDEX']  = data['EMITTER'];
-    },
-
-    // The structural rules over those fields: id shape, provider, callback, redundancy,
-    // payload size and deadline window. Returns the caller's own `error` untouched when
-    // nothing new is wrong, so a verdict set earlier keeps its exact value.
-    requestFieldError(data, error){
-        if(!error && (!data['REQUEST_ID'] || !/^[0-9a-fA-F]{64}$/.test(String(data['REQUEST_ID']))))
-            error = 'invalid: REQUEST_ID (format)';
-
-        if(!error && this.util.isNull(data['PROVIDER_ID']))
-            error = 'invalid: PROVIDER_ID (required)';
-
-        if(!error && !this.providerRegistry.isKnown(data['PROVIDER_ID']))
-            error = 'invalid: PROVIDER_ID (unknown)';
-
-        if(!error && this.util.isNull(data['CALLBACK_METHOD']))
-            error = 'invalid: CALLBACK_METHOD (required)';
-
-        let redundancy = parseInt(data['REDUNDANCY']);
-        if(!error && !this.providerRegistry.isRedundancyAllowed(data['PROVIDER_ID'], redundancy))
-            error = 'invalid: REDUNDANCY (not allowed for provider)';
-
-        let payloadBytes = Buffer.byteLength(String(data['REQUEST_PAYLOAD'] || ''), 'utf8');
-        if(!error && !this.providerRegistry.isPayloadSizeAllowed(data['PROVIDER_ID'], payloadBytes))
-            error = 'invalid: REQUEST_PAYLOAD (exceeds provider max)';
-
-        let deadlineBlocks = parseInt(data['DEADLINE_BLOCKS']);
-        let deadlineBlock  = parseInt(data['BLOCK_INDEX']) + (Number.isFinite(deadlineBlocks) ? deadlineBlocks : 0);
-        data['DEADLINE_BLOCK'] = deadlineBlock;
-        if(!error && !this.providerRegistry.isDeadlineAllowed(data['PROVIDER_ID'], parseInt(data['BLOCK_INDEX']), deadlineBlock))
-            error = 'invalid: DEADLINE (outside provider window)';
-
-        return error;
     },
 
     // The contract this request is emitted by, and the deterministic request_id over it.

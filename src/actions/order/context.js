@@ -92,7 +92,7 @@ async function loadRecords(handler, st){
         if(!isNativeCoinGet && data['GET_COIN']==handler.config['COIN']){
             getTokenInfo = await handler.indexerDb.getTokenInfo(data['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], { supply: false });
         } else if(!isNativeCoinGet) {
-            // TODO : add code to xchain-hub to validate that GET_TICK is valid on GET_COIN, and if not, mark as invalid
+            // GET_TICK is not validated against GET_COIN for foreign-chain coins here; xchain-hub does not yet provide that check
         }
     }
 

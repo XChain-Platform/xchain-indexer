@@ -101,41 +101,6 @@ module.exports = {
      * @param {Object} params - see injectProtocolToken
      * @returns {string[]} the field list, ready to join with '|'
      */
-    issueFields(params){
-        let locks = params.locks || {};
-        let v     = (x) => this.util.isNull(x) ? '' : String(x);
-        let fields = [
-            'ISSUE',
-            '0',
-            String(params.tick),
-            v(params.maxSupply),             // MAX_SUPPLY (empty = uncapped sentinel)
-            '',                              // MAX_MINT (no per-tx cap)
-            v(params.decimals),              // DECIMALS
-            v(params.description),           // DESCRIPTION
-            v(params.mintSupply),            // MINT_SUPPLY
-            '',                              // TRANSFER (owner is the SOURCE)
-            '',                              // TRANSFER_SUPPLY
-            v(params.lockMaxSupply),         // LOCK_MAX_SUPPLY
-            v(locks['LOCK_MAX_MINT']),       // LOCK_MAX_MINT
-            v(locks['LOCK_DESCRIPTION']),    // LOCK_DESCRIPTION
-            v(locks['LOCK_SLEEP']),          // LOCK_SLEEP
-            v(locks['LOCK_CALLBACK']),       // LOCK_CALLBACK
-            '',                              // CALLBACK_BLOCK
-            '',                              // CALLBACK_TICK
-            '',                              // CALLBACK_AMOUNT
-            '',                              // ALLOW_LIST
-            '',                              // BLOCK_LIST
-            '',                              // MINT_ADDRESS_MAX
-            v(params.mintStartBlock),        // MINT_START_BLOCK
-            '',                              // MINT_STOP_BLOCK
-            v(locks['LOCK_MINT']),           // LOCK_MINT
-            v(locks['LOCK_MINT_SUPPLY'])     // LOCK_MINT_SUPPLY
-        ];
-        while(fields.length > 3 && fields[fields.length - 1] === '')
-            fields.pop();
-        return fields;
-    },
-
     /**
      * Wrap a field list in the synthetic transaction the injected passes use. The tx hash is
      * deterministic so a reindex replays to identical action indexes and hashes.
@@ -267,9 +232,44 @@ module.exports = {
             if(existing)
                 return { created: false, tick: tick };
         }
-        let tx = this.syntheticIssueTx(this.issueFields(params), tick, params.owner, ctx);
+        let tx = this.syntheticIssueTx(issueFields.call(this, params), tick, params.owner, ctx);
         await this.actions.processTransaction(tx, true); // isGenesis = true (stamps IS_GENESIS)
         return { created: true, tick: tick };
     },
 
 };
+
+function issueFields(params){
+    let locks = params.locks || {};
+    let v     = (x) => this.util.isNull(x) ? '' : String(x);
+    let fields = [
+        'ISSUE',
+        '0',
+        String(params.tick),
+        v(params.maxSupply),             // MAX_SUPPLY (empty = uncapped sentinel)
+        '',                              // MAX_MINT (no per-tx cap)
+        v(params.decimals),              // DECIMALS
+        v(params.description),           // DESCRIPTION
+        v(params.mintSupply),            // MINT_SUPPLY
+        '',                              // TRANSFER (owner is the SOURCE)
+        '',                              // TRANSFER_SUPPLY
+        v(params.lockMaxSupply),         // LOCK_MAX_SUPPLY
+        v(locks['LOCK_MAX_MINT']),       // LOCK_MAX_MINT
+        v(locks['LOCK_DESCRIPTION']),    // LOCK_DESCRIPTION
+        v(locks['LOCK_SLEEP']),          // LOCK_SLEEP
+        v(locks['LOCK_CALLBACK']),       // LOCK_CALLBACK
+        '',                              // CALLBACK_BLOCK
+        '',                              // CALLBACK_TICK
+        '',                              // CALLBACK_AMOUNT
+        '',                              // ALLOW_LIST
+        '',                              // BLOCK_LIST
+        '',                              // MINT_ADDRESS_MAX
+        v(params.mintStartBlock),        // MINT_START_BLOCK
+        '',                              // MINT_STOP_BLOCK
+        v(locks['LOCK_MINT']),           // LOCK_MINT
+        v(locks['LOCK_MINT_SUPPLY'])     // LOCK_MINT_SUPPLY
+    ];
+    while(fields.length > 3 && fields[fields.length - 1] === '')
+        fields.pop();
+    return fields;
+}

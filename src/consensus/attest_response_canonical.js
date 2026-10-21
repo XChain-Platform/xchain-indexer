@@ -151,7 +151,6 @@ function buildResponseCanonicalRaw(fields){
 
 module.exports = {
     MIRROR_FIELD_SEPARATOR,
-    ADMISSION_FIELD_LABEL,
     isCanonicalIntSpelling,
     buildResponseCanonicalRaw
 };

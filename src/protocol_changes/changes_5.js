@@ -217,6 +217,16 @@ const CHANGES = [
     // TOSTRING_SIZE_METER mirrors the VM's block-time activation table.
     ['TOSTRING_SIZE_METER', '0.2.0', TOSTRING_SIZE_METER_MAINNET_TIME,
         TOSTRING_SIZE_METER_TESTNET_TIME, 0, 0, 0, 0],
+
+    // ISSUE_CARET_TICK_NO_CREATE refuses token creation through a caret ^<id> TICK.
+    // A rejected ISSUE (say a non-owner 'ISSUE PARENT.X') still interns its attempted
+    // TICK, giving that name a dense ticker id; a later 'ISSUE ^<id>' then resolves a
+    // name with no token row and lands valid, creating a token through the id form. At/
+    // above the flag a caret TICK that resolves to no existing token is 'invalid: TICK
+    // (unknown)'; an owner's caret edit of an existing token is untouched. UNARMED on
+    // every network until the operator sizes the instant from the read-only per-chain
+    // count of tokens created through a caret TICK; regtest arms at genesis.
+    ['ISSUE_CARET_TICK_NO_CREATE', '0.2.0', UNARMED, UNARMED, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;

@@ -175,11 +175,9 @@ async function selectArmed(rows, ctx, opts){
 }
 
 module.exports = {
-    APPLY_ORDER_KEY,
     XPOLICY_SEQ_GAP_BOUND_S,
     applyOrderActive,
     lockInLegDecimals,
-    seqVerdict,
     orderVerdict,
     selectArmed,
 };
