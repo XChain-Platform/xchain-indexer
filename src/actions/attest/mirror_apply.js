@@ -32,6 +32,63 @@ const { getLogger } = require('../../observability/index.js');
 const { ATTEST_RESPONSE_BODY_MAX_BYTES, MIRROR_TERMINAL_STATUSES } = require('./constants.js');
 const wid     = require('../../consensus/gates/attest_responsible_widening_gate.js');
 
+// Re-gates rather than trusting the pass that selected this row: the selection
+// and the apply are separated by a synthesized action, and a guard that only
+// exists in the selector is one refactor away from being the only guard.
+//
+// Returns the skip reason, or null when the row is still applicable.
+function mirrorRowSkipReason(row, request){
+    if(!request || String(request.request_status) !== 'pending')
+        return 'local request not pending';
+    if(!this.isMirrorEraRequest(request))
+        return 'request is legacy-era, response must arrive on chain';
+    if(String(request.provider_id) !== String(row.provider_id))
+        return 'provider_id does not match the request';
+    if(MIRROR_TERMINAL_STATUSES.indexOf(String(row.status)) === -1)
+        return 'non-terminal status ' + row.status;
+    return null;
+}
+
+// Signature list, format-checked and lower-cased exactly as the wire parser does
+// it, because the shared verifier's contract is that its caller has already done
+// so. Deliberately NOT deduped here: the verifier dedupes before verifying, and
+// one implementation of that rule is the point of the module.
+//
+// Returns { sigs } or the { skip } reason the row cannot carry a signature list.
+function mirrorRowSigs(row){
+    let declared = null;
+    try { declared = JSON.parse(String(row.signatures == null ? '' : row.signatures)); }
+    catch(_){ declared = null; }
+    if(!Array.isArray(declared) || declared.length === 0)
+        return { skip: 'signatures column is not a non-empty JSON array' };
+    let sigs = [];
+    for(let s of declared){
+        let pubkey = String((s && s.pubkey) || '').toLowerCase();
+        let sig    = String((s && s.sig) || '').toLowerCase();
+        if(!/^[0-9a-f]{64}$/.test(pubkey) || !/^[0-9a-f]{128}$/.test(sig))
+            return { skip: 'signature entry format' };
+        sigs.push({ pubkey, sig });
+    }
+    return { sigs };
+}
+
+// The body as bytes. The mirror stores the DECODE of the attested bytes (as
+// `attests.response_payload` does), so re-encoding is the only bytes available
+// here; a body that is not UTF-8 round-trippable cannot reproduce the hash the
+// canonical signs, and the echo check below is what makes that a clean skip
+// instead of an opaque signature failure.
+//
+// Returns { bytes } or the { skip } reason the stored body cannot be the signed one.
+function mirrorRowBody(row){
+    let responseBodyBytes = Buffer.from(String(row.response_payload == null ? '' : row.response_payload), 'utf8');
+    if(responseBodyBytes.length > ATTEST_RESPONSE_BODY_MAX_BYTES)
+        return { skip: 'body ' + responseBodyBytes.length + ' bytes over the ' + ATTEST_RESPONSE_BODY_MAX_BYTES + '-byte cap' };
+    let echoHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
+    if(echoHash !== String(row.response_hash || '').toLowerCase())
+        return { skip: 'response_hash does not match the stored body' };
+    return { bytes: responseBodyBytes };
+}
+
 module.exports = {
     // THE MIRROR APPLIER. Applies one finalized
     // response that arrived through the hub mirror instead of on a validator-paid
@@ -63,13 +120,13 @@ module.exports = {
             return { rejected: true, source: 'attestation_responses', row: requestId, code: why };
         };
 
-        let gate = this.mirrorRowSkipReason(row, request);
+        let gate = mirrorRowSkipReason.call(this, row, request);
         if(gate) return skip(gate);
 
-        let parsed = this.mirrorRowSigs(row);
+        let parsed = mirrorRowSigs(row);
         if(parsed.skip) return skip(parsed.skip);
 
-        let body = this.mirrorRowBody(row);
+        let body = mirrorRowBody(row);
         if(body.skip) return skip(body.skip);
 
         let verdict = await this.verifyMirroredResponse(row, request, requestId, parsed.sigs, body.bytes, data);
@@ -81,63 +138,6 @@ module.exports = {
         await this.settleMirroredResponse(data, row, request, requestId, verdict);
 
         await this.mapper.createMappings(data);
-    },
-
-    // Re-gates rather than trusting the pass that selected this row: the selection
-    // and the apply are separated by a synthesized action, and a guard that only
-    // exists in the selector is one refactor away from being the only guard.
-    //
-    // Returns the skip reason, or null when the row is still applicable.
-    mirrorRowSkipReason(row, request){
-        if(!request || String(request.request_status) !== 'pending')
-            return 'local request not pending';
-        if(!this.isMirrorEraRequest(request))
-            return 'request is legacy-era, response must arrive on chain';
-        if(String(request.provider_id) !== String(row.provider_id))
-            return 'provider_id does not match the request';
-        if(MIRROR_TERMINAL_STATUSES.indexOf(String(row.status)) === -1)
-            return 'non-terminal status ' + row.status;
-        return null;
-    },
-
-    // Signature list, format-checked and lower-cased exactly as the wire parser does
-    // it, because the shared verifier's contract is that its caller has already done
-    // so. Deliberately NOT deduped here: the verifier dedupes before verifying, and
-    // one implementation of that rule is the point of the module.
-    //
-    // Returns { sigs } or the { skip } reason the row cannot carry a signature list.
-    mirrorRowSigs(row){
-        let declared = null;
-        try { declared = JSON.parse(String(row.signatures == null ? '' : row.signatures)); }
-        catch(_){ declared = null; }
-        if(!Array.isArray(declared) || declared.length === 0)
-            return { skip: 'signatures column is not a non-empty JSON array' };
-        let sigs = [];
-        for(let s of declared){
-            let pubkey = String((s && s.pubkey) || '').toLowerCase();
-            let sig    = String((s && s.sig) || '').toLowerCase();
-            if(!/^[0-9a-f]{64}$/.test(pubkey) || !/^[0-9a-f]{128}$/.test(sig))
-                return { skip: 'signature entry format' };
-            sigs.push({ pubkey, sig });
-        }
-        return { sigs };
-    },
-
-    // The body as bytes. The mirror stores the DECODE of the attested bytes (as
-    // `attests.response_payload` does), so re-encoding is the only bytes available
-    // here; a body that is not UTF-8 round-trippable cannot reproduce the hash the
-    // canonical signs, and the echo check below is what makes that a clean skip
-    // instead of an opaque signature failure.
-    //
-    // Returns { bytes } or the { skip } reason the stored body cannot be the signed one.
-    mirrorRowBody(row){
-        let responseBodyBytes = Buffer.from(String(row.response_payload == null ? '' : row.response_payload), 'utf8');
-        if(responseBodyBytes.length > ATTEST_RESPONSE_BODY_MAX_BYTES)
-            return { skip: 'body ' + responseBodyBytes.length + ' bytes over the ' + ATTEST_RESPONSE_BODY_MAX_BYTES + '-byte cap' };
-        let echoHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
-        if(echoHash !== String(row.response_hash || '').toLowerCase())
-            return { skip: 'response_hash does not match the stored body' };
-        return { bytes: responseBodyBytes };
     },
 
     async verifyMirroredResponse(row, request, requestId, sigs, responseBodyBytes, data){

@@ -28,6 +28,103 @@ const ATTEST_RELAY_KEY = 'attest_relay_activation.ATTEST_RELAY_ACTIVATION';
 const { getLogger } = require('../../../observability/index.js');
 const { HOME_CHAIN, ALLOWED_ORIGIN_CHAINS } = require('../constants.js');
 
+// Flag-day gate, and it takes BOTH planes because the two answer different
+// questions and only one of them is shared with the rest of the federation.
+//
+// The landing block_index is what makes the leg inert before the flag day:
+// on the home chain it IS a BTC height and cannot be forged, so a v3 carrying
+// an invented future SNAPSHOT_BLOCK still persists nothing below activation,
+// byte-identical to how a node without relay support treats VERSION 3.
+//
+// The carried SNAPSHOT_BLOCK is what keeps this node on the same activation
+// predicate as everyone else. It is the ONLY plane the hub can gate on, since
+// the hub decides whether to co-sign and broadcast BEFORE the action has a
+// landing height at all (xchain-hub AttestationRelay.validateRowEnvelope and
+// the request-round gate), and it is the plane the v4 leg, the
+// isAttestRelayActive contract, and the SNAPSHOT_BLOCK field spec all name.
+// Without it the window landing >= activation > snapshot is accepted here and
+// refused by the hub, and the signer set it resolves quorum against is the
+// pre-activation one.
+//
+// A malformed or negative SNAPSHOT_BLOCK is deliberately NOT hard-returned
+// here: it keeps falling through to the stored 'invalid: SNAPSHOT_BLOCK'
+// verdict below, so this gate changes acceptance for exactly the divergent
+// case and is a strict no-op on any network whose threshold is 0.
+function relayRequestArmed(data, snapshotBlock){
+    if(!gateRegistry.activeAt(ATTEST_RELAY_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null))
+        return false;
+    if(snapshotBlock >= 0 && !gateRegistry.activeAt(ATTEST_RELAY_KEY, this.config['NETWORK'], null, snapshotBlock, null))
+        return false;
+    return true;
+}
+
+// The v3 wire's fields and their structural rules, including the deadline the
+// landing block implies and the bound on the snapshot the federation signed at.
+function relayRequestFields(params, data, snapshotBlock, error){
+    let requestId      = String(params[1] || '').toLowerCase();
+    let originChain    = String(params[2] || '');
+    let originAction   = parseInt(params[3]);
+    let providerId     = String(params[4] || '');
+    let requestPayload = (params[5] == null) ? '' : String(params[5]);
+    let redundancy     = parseInt(params[6]);
+    let deadlineBlocks = parseInt(params[7]);
+
+    if(!error && !/^[0-9a-f]{64}$/.test(requestId))
+        error = 'invalid: REQUEST_ID (format)';
+    if(!error && ALLOWED_ORIGIN_CHAINS.indexOf(originChain) === -1)
+        error = 'invalid: ORIGIN_CHAIN (unknown)';
+    if(!error && (!Number.isInteger(originAction) || originAction <= 0))
+        error = 'invalid: ORIGIN_ACTION_INDEX (must be a positive integer)';
+    if(!error && !this.providerRegistry.isKnown(providerId))
+        error = 'invalid: PROVIDER_ID (unknown)';
+    if(!error && !this.providerRegistry.isRedundancyAllowed(providerId, redundancy))
+        error = 'invalid: REDUNDANCY (not allowed for provider)';
+    if(!error && !this.providerRegistry.isPayloadSizeAllowed(providerId, Buffer.byteLength(requestPayload, 'utf8')))
+        error = 'invalid: REQUEST_PAYLOAD (exceeds provider max)';
+
+    let deadlineBlock = parseInt(data['BLOCK_INDEX']) + (Number.isFinite(deadlineBlocks) ? deadlineBlocks : 0);
+    if(!error && !this.providerRegistry.isDeadlineAllowed(providerId, parseInt(data['BLOCK_INDEX']), deadlineBlock))
+        error = 'invalid: DEADLINE (outside provider window)';
+
+    // The snapshot the federation signed against must already exist at this
+    // action's height. Without the upper bound a broadcaster could name a future
+    // snapshot and have the quorum resolved against whatever the mirror holds
+    // latest, which both defeats the flag-day and un-pins the signer set from the
+    // block it was supposed to be frozen at.
+    if(!error && (!Number.isFinite(snapshotBlock) || snapshotBlock < 0 || snapshotBlock > parseInt(data['BLOCK_INDEX'])))
+        error = 'invalid: SNAPSHOT_BLOCK (must be a past or current block on this chain)';
+
+    return { requestId, originChain, originAction, providerId, requestPayload,
+             redundancy, deadlineBlocks, deadlineBlock, error };
+}
+
+// The request row this leg materializes, verdict included.
+function stampRelayRequestRow(data, f, error){
+    let { requestId, originChain, originAction, providerId, requestPayload, redundancy, deadlineBlock } = f;
+    data['REQUEST_ID']          = requestId;
+    data['PROVIDER_ID']         = providerId;
+    data['REQUEST_PAYLOAD']     = requestPayload;
+    // The callback lives on the origin chain and never runs here, so these stay
+    // off the home-chain wire and out of the home-chain row entirely.
+    data['CALLBACK_METHOD']     = null;
+    data['CALLBACK_PARAMS']     = null;
+    data['REDUNDANCY']          = redundancy;
+    data['DEADLINE_BLOCK']      = deadlineBlock;
+    data['GAS_ESCROW']          = '0';
+    // Feeless on the home chain: the requester's fee was escrowed on the origin
+    // chain at its v0 and settles there. A fee_payer here would name an address
+    // that never paid anything on this chain.
+    data['FEE_PAYER']           = null;
+    data['FEE_TICK']            = null;
+    data['FEE_AMOUNT']          = null;
+    data['CONTRACT_INDEX']      = null;
+    data['ORIGIN_CHAIN']        = originChain;
+    data['ORIGIN_ACTION_INDEX'] = originAction;
+
+    data['STATUS']         = (error) ? error : 'valid';
+    data['REQUEST_STATUS'] = (error) ? 'rejected' : 'pending';
+}
+
 module.exports = {
     // ATTEST v3: relay request (federation-broadcast on the home chain).
     //
@@ -50,10 +147,10 @@ module.exports = {
         }
 
         let snapshotBlock = parseInt(params[8]);
-        if(!this.relayRequestArmed(data, snapshotBlock))
+        if(!relayRequestArmed.call(this, data, snapshotBlock))
             return;
 
-        let f = this.relayRequestFields(params, data, snapshotBlock, error);
+        let f = relayRequestFields.call(this, params, data, snapshotBlock, error);
         error = f.error;
         let { requestId, originChain, originAction, providerId, redundancy } = f;
 
@@ -62,7 +159,7 @@ module.exports = {
 
         error = await this.relayRequestQuorumError(f, replay.sigs, snapshotBlock, error);
 
-        this.stampRelayRequestRow(data, f, error);
+        stampRelayRequestRow.call(this, data, f, error);
 
         getLogger().info("\t ATTEST v3 : id=" + requestId.substring(0,16) + '...' +
                     ' : origin=' + originChain + ':' + originAction +
@@ -75,76 +172,6 @@ module.exports = {
 
         await this.persistRelayRequest(data);
         await this.mapper.createMappings(data);
-    },
-
-    // Flag-day gate, and it takes BOTH planes because the two answer different
-    // questions and only one of them is shared with the rest of the federation.
-    //
-    // The landing block_index is what makes the leg inert before the flag day:
-    // on the home chain it IS a BTC height and cannot be forged, so a v3 carrying
-    // an invented future SNAPSHOT_BLOCK still persists nothing below activation,
-    // byte-identical to how a node without relay support treats VERSION 3.
-    //
-    // The carried SNAPSHOT_BLOCK is what keeps this node on the same activation
-    // predicate as everyone else. It is the ONLY plane the hub can gate on, since
-    // the hub decides whether to co-sign and broadcast BEFORE the action has a
-    // landing height at all (xchain-hub AttestationRelay.validateRowEnvelope and
-    // the request-round gate), and it is the plane the v4 leg, the
-    // isAttestRelayActive contract, and the SNAPSHOT_BLOCK field spec all name.
-    // Without it the window landing >= activation > snapshot is accepted here and
-    // refused by the hub, and the signer set it resolves quorum against is the
-    // pre-activation one.
-    //
-    // A malformed or negative SNAPSHOT_BLOCK is deliberately NOT hard-returned
-    // here: it keeps falling through to the stored 'invalid: SNAPSHOT_BLOCK'
-    // verdict below, so this gate changes acceptance for exactly the divergent
-    // case and is a strict no-op on any network whose threshold is 0.
-    relayRequestArmed(data, snapshotBlock){
-        if(!gateRegistry.activeAt(ATTEST_RELAY_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null))
-            return false;
-        if(snapshotBlock >= 0 && !gateRegistry.activeAt(ATTEST_RELAY_KEY, this.config['NETWORK'], null, snapshotBlock, null))
-            return false;
-        return true;
-    },
-
-    // The v3 wire's fields and their structural rules, including the deadline the
-    // landing block implies and the bound on the snapshot the federation signed at.
-    relayRequestFields(params, data, snapshotBlock, error){
-        let requestId      = String(params[1] || '').toLowerCase();
-        let originChain    = String(params[2] || '');
-        let originAction   = parseInt(params[3]);
-        let providerId     = String(params[4] || '');
-        let requestPayload = (params[5] == null) ? '' : String(params[5]);
-        let redundancy     = parseInt(params[6]);
-        let deadlineBlocks = parseInt(params[7]);
-
-        if(!error && !/^[0-9a-f]{64}$/.test(requestId))
-            error = 'invalid: REQUEST_ID (format)';
-        if(!error && ALLOWED_ORIGIN_CHAINS.indexOf(originChain) === -1)
-            error = 'invalid: ORIGIN_CHAIN (unknown)';
-        if(!error && (!Number.isInteger(originAction) || originAction <= 0))
-            error = 'invalid: ORIGIN_ACTION_INDEX (must be a positive integer)';
-        if(!error && !this.providerRegistry.isKnown(providerId))
-            error = 'invalid: PROVIDER_ID (unknown)';
-        if(!error && !this.providerRegistry.isRedundancyAllowed(providerId, redundancy))
-            error = 'invalid: REDUNDANCY (not allowed for provider)';
-        if(!error && !this.providerRegistry.isPayloadSizeAllowed(providerId, Buffer.byteLength(requestPayload, 'utf8')))
-            error = 'invalid: REQUEST_PAYLOAD (exceeds provider max)';
-
-        let deadlineBlock = parseInt(data['BLOCK_INDEX']) + (Number.isFinite(deadlineBlocks) ? deadlineBlocks : 0);
-        if(!error && !this.providerRegistry.isDeadlineAllowed(providerId, parseInt(data['BLOCK_INDEX']), deadlineBlock))
-            error = 'invalid: DEADLINE (outside provider window)';
-
-        // The snapshot the federation signed against must already exist at this
-        // action's height. Without the upper bound a broadcaster could name a future
-        // snapshot and have the quorum resolved against whatever the mirror holds
-        // latest, which both defeats the flag-day and un-pins the signer set from the
-        // block it was supposed to be frozen at.
-        if(!error && (!Number.isFinite(snapshotBlock) || snapshotBlock < 0 || snapshotBlock > parseInt(data['BLOCK_INDEX'])))
-            error = 'invalid: SNAPSHOT_BLOCK (must be a past or current block on this chain)';
-
-        return { requestId, originChain, originAction, providerId, requestPayload,
-                 redundancy, deadlineBlocks, deadlineBlock, error };
     },
 
     // The two exactly-once guards, over the signature tail this leg shares with v4.
@@ -207,33 +234,6 @@ module.exports = {
         }
 
         return error;
-    },
-
-    // The request row this leg materializes, verdict included.
-    stampRelayRequestRow(data, f, error){
-        let { requestId, originChain, originAction, providerId, requestPayload, redundancy, deadlineBlock } = f;
-        data['REQUEST_ID']          = requestId;
-        data['PROVIDER_ID']         = providerId;
-        data['REQUEST_PAYLOAD']     = requestPayload;
-        // The callback lives on the origin chain and never runs here, so these stay
-        // off the home-chain wire and out of the home-chain row entirely.
-        data['CALLBACK_METHOD']     = null;
-        data['CALLBACK_PARAMS']     = null;
-        data['REDUNDANCY']          = redundancy;
-        data['DEADLINE_BLOCK']      = deadlineBlock;
-        data['GAS_ESCROW']          = '0';
-        // Feeless on the home chain: the requester's fee was escrowed on the origin
-        // chain at its v0 and settles there. A fee_payer here would name an address
-        // that never paid anything on this chain.
-        data['FEE_PAYER']           = null;
-        data['FEE_TICK']            = null;
-        data['FEE_AMOUNT']          = null;
-        data['CONTRACT_INDEX']      = null;
-        data['ORIGIN_CHAIN']        = originChain;
-        data['ORIGIN_ACTION_INDEX'] = originAction;
-
-        data['STATUS']         = (error) ? error : 'valid';
-        data['REQUEST_STATUS'] = (error) ? 'rejected' : 'pending';
     },
 
     async pinRelayResponsibleSet(data, f){

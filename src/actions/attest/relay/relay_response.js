@@ -31,6 +31,70 @@ const { rethrowIfInfraFault } = require('../../../consensus/fault_guard.js');
 const { getLogger } = require('../../../observability/index.js');
 const { HOME_CHAIN } = require('../constants.js');
 
+// The v4 wire, field by field.
+function relayResponseFields(params){
+    let requestId       = String(params[1] || '').toLowerCase();
+    let homeResponseIdx = parseInt(params[2]);
+    let payloadB64      = String(params[3] || '');
+    let responseStatus  = String(params[4] || '');
+    let meta            = (params[5] == null) ? '' : String(params[5]);
+    let snapshotBlock   = parseInt(params[6]);
+
+    return { requestId, homeResponseIdx, payloadB64, responseStatus, meta, snapshotBlock };
+}
+
+// The structural rules over those fields, the decoded body and the signature tail.
+function relayResponseWireError(params, f, error){
+    let { requestId, homeResponseIdx, payloadB64, responseStatus } = f;
+    if(!error && !/^[0-9a-f]{64}$/.test(requestId))
+        error = 'invalid: REQUEST_ID (format)';
+    if(!error && (!Number.isInteger(homeResponseIdx) || homeResponseIdx <= 0))
+        error = 'invalid: HOME_RESPONSE_ACTION_INDEX (must be a positive integer)';
+
+    // Only the two TERMINAL outcomes relay. The retryable statuses
+    // (no_quorum / timeout / provider_error) leave the home-chain request pending
+    // for another round, so relaying one would close an origin request the home
+    // chain still intends to fulfill.
+    let allowedStatuses = ['ok', 'expired'];
+    if(!error && allowedStatuses.indexOf(responseStatus) === -1)
+        error = 'invalid: STATUS (not a terminal relay status)';
+
+    let responseBodyBytes;
+    try { responseBodyBytes = Buffer.from(payloadB64, 'base64'); }
+    catch(_){ responseBodyBytes = Buffer.alloc(0); }
+    let responsePayload = responseBodyBytes.toString('utf8');
+    let responseHash    = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
+
+    let sigs = error ? [] : this.parseRelaySigs(params, 7);
+    if(!error && sigs === null)
+        error = 'invalid: SIG_COUNT (malformed signature list)';
+
+    return { sigs, responsePayload, responseHash, error };
+}
+
+function stampRelayResponseRow(data, f, request, wire, error){
+    let { requestId, homeResponseIdx, responseStatus, meta, snapshotBlock } = f;
+    let { responsePayload, responseHash } = wire;
+    data['REQUEST_ID']       = requestId;
+    // attests.provider_id is NOT NULL, and a v4 does not carry the provider on the
+    // wire (the request row owns it). A rejected v4 with no matching request has no
+    // provider to name, so it stores the empty string rather than failing the INSERT
+    // and losing the audit row.
+    data['PROVIDER_ID']      = request ? String(request.provider_id) : '';
+    data['RESPONSE_PAYLOAD'] = responsePayload;
+    data['RESPONSE_STATUS']  = responseStatus;
+    data['META']             = meta;
+    data['RESPONSE_HASH']    = responseHash;
+    data['SNAPSHOT_BLOCK']   = snapshotBlock;
+    data['VALID_SIGS']       = 0;
+    data['STATUS']           = (error) ? error : 'valid';
+    // The signatures on this row are cross_chain relay signatures, not the
+    // attestation quorum that produced the body. That quorum is recorded on the
+    // home chain's v1 row, which homeResponseIdx names; inlining them here would
+    // invite a reader to mistake one for the other.
+    data['VALIDATOR_SIGNATURES'] = null;
+}
+
 module.exports = {
     // ATTEST v4: relay response (federation-broadcast on the origin chain).
     //
@@ -47,13 +111,13 @@ module.exports = {
             return;
         }
 
-        let f = this.relayResponseFields(params);
+        let f = relayResponseFields(params);
         let { requestId, homeResponseIdx, responseStatus, snapshotBlock } = f;
 
         if(!this.relayResponseArmed(snapshotBlock))
             return;
 
-        let wire = this.relayResponseWireError(params, f, error);
+        let wire = relayResponseWireError.call(this, params, f, error);
         error    = wire.error;
 
         let lookup  = await this.relayResponseRequestError(requestId, data, error);
@@ -63,7 +127,7 @@ module.exports = {
         let quorum = await this.relayResponseQuorumError(f, request, wire, error);
         error = quorum.error;
 
-        this.stampRelayResponseRow(data, f, request, wire, error);
+        stampRelayResponseRow.call(this, data, f, request, wire, error);
 
         getLogger().info("\t ATTEST v4 : id=" + requestId.substring(0,16) + '...' +
                     ' : home_response=' + homeResponseIdx +
@@ -80,18 +144,6 @@ module.exports = {
         await this.mapper.createMappings(data);
     },
 
-    // The v4 wire, field by field.
-    relayResponseFields(params){
-        let requestId       = String(params[1] || '').toLowerCase();
-        let homeResponseIdx = parseInt(params[2]);
-        let payloadB64      = String(params[3] || '');
-        let responseStatus  = String(params[4] || '');
-        let meta            = (params[5] == null) ? '' : String(params[5]);
-        let snapshotBlock   = parseInt(params[6]);
-
-        return { requestId, homeResponseIdx, payloadB64, responseStatus, meta, snapshotBlock };
-    },
-
     // Flag-day gate. The origin chain has no BTC height of its own, so the gate is
     // evaluated on the BTC-anchored SNAPSHOT_BLOCK the canonical carries, NOT on
     // where this action landed: a BTC-derived threshold compared against an LTC or
@@ -104,35 +156,6 @@ module.exports = {
     relayResponseArmed(snapshotBlock){
         return Number.isFinite(snapshotBlock) &&
                gateRegistry.activeAt(ATTEST_RELAY_KEY, this.config['NETWORK'], null, snapshotBlock, null);
-    },
-
-    // The structural rules over those fields, the decoded body and the signature tail.
-    relayResponseWireError(params, f, error){
-        let { requestId, homeResponseIdx, payloadB64, responseStatus } = f;
-        if(!error && !/^[0-9a-f]{64}$/.test(requestId))
-            error = 'invalid: REQUEST_ID (format)';
-        if(!error && (!Number.isInteger(homeResponseIdx) || homeResponseIdx <= 0))
-            error = 'invalid: HOME_RESPONSE_ACTION_INDEX (must be a positive integer)';
-
-        // Only the two TERMINAL outcomes relay. The retryable statuses
-        // (no_quorum / timeout / provider_error) leave the home-chain request pending
-        // for another round, so relaying one would close an origin request the home
-        // chain still intends to fulfill.
-        let allowedStatuses = ['ok', 'expired'];
-        if(!error && allowedStatuses.indexOf(responseStatus) === -1)
-            error = 'invalid: STATUS (not a terminal relay status)';
-
-        let responseBodyBytes;
-        try { responseBodyBytes = Buffer.from(payloadB64, 'base64'); }
-        catch(_){ responseBodyBytes = Buffer.alloc(0); }
-        let responsePayload = responseBodyBytes.toString('utf8');
-        let responseHash    = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
-
-        let sigs = error ? [] : this.parseRelaySigs(params, 7);
-        if(!error && sigs === null)
-            error = 'invalid: SIG_COUNT (malformed signature list)';
-
-        return { sigs, responsePayload, responseHash, error };
     },
 
     // The local request this leg closes, and every reason it cannot be closed by relay.
@@ -179,29 +202,6 @@ module.exports = {
         }
 
         return { error, validSigners };
-    },
-
-    stampRelayResponseRow(data, f, request, wire, error){
-        let { requestId, homeResponseIdx, responseStatus, meta, snapshotBlock } = f;
-        let { responsePayload, responseHash } = wire;
-        data['REQUEST_ID']       = requestId;
-        // attests.provider_id is NOT NULL, and a v4 does not carry the provider on the
-        // wire (the request row owns it). A rejected v4 with no matching request has no
-        // provider to name, so it stores the empty string rather than failing the INSERT
-        // and losing the audit row.
-        data['PROVIDER_ID']      = request ? String(request.provider_id) : '';
-        data['RESPONSE_PAYLOAD'] = responsePayload;
-        data['RESPONSE_STATUS']  = responseStatus;
-        data['META']             = meta;
-        data['RESPONSE_HASH']    = responseHash;
-        data['SNAPSHOT_BLOCK']   = snapshotBlock;
-        data['VALID_SIGS']       = 0;
-        data['STATUS']           = (error) ? error : 'valid';
-        // The signatures on this row are cross_chain relay signatures, not the
-        // attestation quorum that produced the body. That quorum is recorded on the
-        // home chain's v1 row, which homeResponseIdx names; inlining them here would
-        // invite a reader to mistake one for the other.
-        data['VALIDATOR_SIGNATURES'] = null;
     },
 
     // The terminal flip, the origin-side fee settle and the contract callback.
