@@ -9559,6 +9559,15 @@
       "protocol_changes BET feed list edit row @regression @tier1 registers a height map unarmed on mainnet and armed on each testnet chain, with regtest active from genesis",
       "protocol_changes BET feed list edit row @regression @tier1 stays inactive on mainnet and activates on each testnet chain at its height and at regtest genesis"
     ],
+    "8c1a2b86359acf1e": [
+      "VM snapshot cross-block cache @regression @tier1 bounds the cache size",
+      "VM snapshot cross-block cache @regression @tier1 does not serve a cached snapshot outside a block pass",
+      "VM snapshot cross-block cache @regression @tier1 flushes on a dropped invalidation when the block index goes backwards",
+      "VM snapshot cross-block cache @regression @tier1 invalidate() on a db that never cached anything is a no-op",
+      "VM snapshot cross-block cache @regression @tier1 invalidate(fromBlock) drops only snapshots whose bound is above fromBlock",
+      "VM snapshot cross-block cache @regression @tier1 rebuilds after a rollback and re-apply of the same blocks",
+      "VM snapshot cross-block cache @regression @tier1 serves the same snapshot to a later block without rebuilding"
+    ],
     "8c20f0a6066f53f4": [
       "Utility @regression @tier1 consolidateLedgerRecords() should consolidate duplicate tick+address entries",
       "Utility @regression @tier1 consolidateLedgerRecords() should keep different addresses separate",
@@ -18481,8 +18490,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1461,
-      "titleCount": 14328,
+      "fileCount": 1462,
+      "titleCount": 14335,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19441,6 +19450,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/vm_snapshot/vm_snapshot_memo.test.js": "b0be5e75e30decd3",
         "test/unit/e2e/explorer_launcher.test.js": "eae128db10b21f39",
@@ -20319,8 +20329,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1112,
-      "titleCount": 11349,
+      "fileCount": 1113,
+      "titleCount": 11356,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21070,6 +21080,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
@@ -21437,8 +21448,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 546,
-      "titleCount": 5944,
+      "fileCount": 547,
+      "titleCount": 5951,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21756,6 +21767,7 @@
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
         "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
+        "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
         "test/unit/fees/dry_run_batch_fee_withheld.test.js": "9620969f56b951f5",
@@ -21989,8 +22001,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1112,
-      "titleCount": 11349,
+      "fileCount": 1113,
+      "titleCount": 11356,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22740,6 +22752,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
