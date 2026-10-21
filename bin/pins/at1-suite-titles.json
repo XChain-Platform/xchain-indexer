@@ -16710,19 +16710,6 @@
       "Send handler: conditional gated handoff (PC-29) @regression @tier1 vector 2, TWO ACTIONS in one transaction: the snapshot base compounds",
       "Send handler: conditional gated handoff (PC-29) @regression @tier1 vector 3, SELF-SEND: applied literally, and the self-addressed MESSAGE satisfies it"
     ],
-    "eb59df70c735f939": [
-      "bin/measure_vm_snapshot_bytes builds newest-first grouped SQL with optional bounds and a final limit argument",
-      "bin/measure_vm_snapshot_bytes issues SELECT statements only",
-      "bin/measure_vm_snapshot_bytes measures cached mode with getCrossChainDataForVM from src/db/blocks",
-      "bin/measure_vm_snapshot_bytes measures real builder bytes and transfer totals for each execution block",
-      "bin/measure_vm_snapshot_bytes parses bounds, limit, database, cached and JSON modes",
-      "bin/measure_vm_snapshot_bytes rejects unknown flags and invalid numeric arguments",
-      "bin/measure_vm_snapshot_bytes renders block lines, the summary line and JSON",
-      "bin/measure_vm_snapshot_bytes reports one miss then hits in oldest-first cached mode and restores database state",
-      "bin/measure_vm_snapshot_bytes restores the original builder and database state when cached measurement throws",
-      "bin/measure_vm_snapshot_bytes returns a zero summary when no execution blocks match",
-      "bin/measure_vm_snapshot_bytes times one serialization per block with a counter clock and prices both send shapes"
-    ],
     "e114e1b97d1caeb4": [
       "hubConfigStaleness (#2607) @regression derives the staleness limit as 3 poll intervals",
       "hubConfigStaleness (#2607) @regression exactly at the limit is not yet stale (boundary is exclusive)",
@@ -17470,6 +17457,19 @@
       "stateCommitment.reportOrphanStats @regression @tier2 reports zero orphans when every node is reachable from the single retained root",
       "stateCommitment.reportOrphanStats @regression @tier2 returns all-zero for an empty store",
       "stateCommitment.reportOrphanStats @regression @tier2 stops the walk at maxNodes and flags the truncated figure as an estimate"
+    ],
+    "eb59df70c735f939": [
+      "bin/measure_vm_snapshot_bytes builds newest-first grouped SQL with optional bounds and a final limit argument",
+      "bin/measure_vm_snapshot_bytes issues SELECT statements only",
+      "bin/measure_vm_snapshot_bytes measures cached mode with getCrossChainDataForVM from src/db/blocks",
+      "bin/measure_vm_snapshot_bytes measures real builder bytes and transfer totals for each execution block",
+      "bin/measure_vm_snapshot_bytes parses bounds, limit, database, cached and JSON modes",
+      "bin/measure_vm_snapshot_bytes rejects unknown flags and invalid numeric arguments",
+      "bin/measure_vm_snapshot_bytes renders block lines, the summary line and JSON",
+      "bin/measure_vm_snapshot_bytes reports one miss then hits in oldest-first cached mode and restores database state",
+      "bin/measure_vm_snapshot_bytes restores the original builder and database state when cached measurement throws",
+      "bin/measure_vm_snapshot_bytes returns a zero summary when no execution blocks match",
+      "bin/measure_vm_snapshot_bytes times one serialization per block with a counter clock and prices both send shapes"
     ],
     "eb89e21438d117f3": [
       "ROLLCALL base-rail regtest resolver matches the running parser @regression @tier1 agrees with regtestHeight on every accepted, refused and garbage input",
@@ -18803,7 +18803,7 @@
   "scripts": {
     "test": {
       "fileCount": 1498,
-      "titleCount": 14562,
+      "titleCount": 14565,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
