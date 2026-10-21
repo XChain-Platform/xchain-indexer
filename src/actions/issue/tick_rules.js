@@ -24,6 +24,25 @@
 
 'use strict';
 
+const { createRegistry, UNARMED } = require('../../protocol_changes/core.js');
+
+const CHILD_TOKEN_INDEPENDENT_EDITS_KEY =
+    'child_token_independent_edits_activation.CHILD_TOKEN_INDEPENDENT_EDITS_ACTIVATION';
+const childTokenIndependentEditsGate = createRegistry();
+childTokenIndependentEditsGate.addGate(CHILD_TOKEN_INDEPENDENT_EDITS_KEY, 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 157235,
+    'LTC:testnet': 4930600,
+    'DOGE:testnet': 68012800,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+function childTokenIndependentEditsActiveAt(network, coin, blockIndex){
+    return childTokenIndependentEditsGate.activeAt(
+        CHILD_TOKEN_INDEPENDENT_EDITS_KEY, network, coin, blockIndex, null);
+}
+
 // The BATCH_ISSUANCE_LIMITS flag, then the null, period, parent/child and character
 // rules. Leaves ctx.str, ctx.parent and ctx.parentInfo for the rules after it.
 async function validateTickName(ctx){
@@ -63,14 +82,19 @@ async function validateTickName(ctx){
         if(!error && !parentInfo)
             error = 'invalid: TICK (parent unknown)';
 
+        let existingChild = false;
+        if(!error && parentInfo && str.substring(0,1)!='^' &&
+           childTokenIndependentEditsActiveAt(this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX']))
+            existingChild = !!(await this.resolveOnlyGetTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']));
+
         // Verify ISSUE is coming from PARENT TICK owner
-        if(!error && parentInfo && parentInfo['OWNER']!=data['SOURCE'])
+        if(!error && parentInfo && !existingChild && parentInfo['OWNER']!=data['SOURCE'])
             error = 'invalid: TICK (parent issued by another address)';
 
         // Reject child issuance while the parent's ownership is escrowed in an open offer.
         // Genesis has no escrows (the escrows table is empty during bootstrap), so the
         // check is a guaranteed false; skip the read.
-        if(!error && parentInfo && !data['IS_GENESIS'] && await this.indexerDb.isOwnershipEscrowed(parent))
+        if(!error && parentInfo && !existingChild && !data['IS_GENESIS'] && await this.indexerDb.isOwnershipEscrowed(parent))
             error = 'invalid: TICK (parent ownership escrowed)';
     }
 
@@ -196,4 +220,28 @@ function validateGasTick(ctx){
     ctx.error = error;
 }
 
-module.exports = { validateTickName, validateTickForm, validateReservedTick, validateGasTick };
+// ISSUE_CARET_TICK_NO_CREATE: a caret ^<id> TICK may only EDIT a token that exists. Runs
+// after the token row is read (ctx.tokenInfo). A rejected ISSUE interns its attempted TICK
+// and so mints a ticker id; without this rule a later 'ISSUE ^<id>' resolves that bare name
+// and lands valid, creating a token through the id form. Gated (tightens validity): below
+// the flag the historical verdict stands. IS_GENESIS is exempt like the other creation rules.
+async function validateCaretTickExists(ctx){
+    let { data, str, tokenInfo } = ctx;
+    let error = ctx.error;
+
+    if(!error && !tokenInfo && !data['IS_GENESIS'] && str.substring(0,1)=='^' &&
+       await this.actions.protocolChanges.isEnabled('ISSUE_CARET_TICK_NO_CREATE', data['BLOCK_INDEX']))
+        error = 'invalid: TICK (unknown)';
+
+    ctx.error = error;
+}
+
+module.exports = {
+    CHILD_TOKEN_INDEPENDENT_EDITS_KEY,
+    childTokenIndependentEditsActiveAt,
+    validateTickName,
+    validateTickForm,
+    validateReservedTick,
+    validateGasTick,
+    validateCaretTickExists,
+};

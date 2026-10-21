@@ -112,6 +112,17 @@ addGate('bridge_escrow_anchor_match_activation.BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVA
     regtest: 0,
 });
 
+// Height on the archive head's DOGE block_index. From it author-scoped chunk
+// reads ignore orphan rows whose declared total_chunks differs from that head.
+addGate('archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 157073,
+    'LTC:testnet': 4928460,
+    'DOGE:testnet': 68009330,
+    testnet: 68009330,
+    regtest: 0,
+});
+
 // batch_airdrop_leg_weight_activation
 // Height on the processing chain's own block_index. From it a BATCH airdrop leg is weighted by its own amount when the action is split. Below it legs are weighted as before. Unarmed on mainnet and testnet, active from genesis on regtest.
 addGate('batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION', 'height', {
