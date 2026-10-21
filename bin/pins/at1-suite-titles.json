@@ -6349,17 +6349,6 @@
     "587ca334686b8a78": [
       "06 Genesis Bootstrap (full-scale) injects the full manifest within the genesis watchdog window"
     ],
-    "58c95497712f6e76": [
-      "getAddressCreditDebit read baseline: JS fold over non_canonical rows @money @regression @tier1 no rows return an empty array",
-      "getAddressCreditDebit read baseline: JS fold over non_canonical rows @money @regression @tier1 sums per tick at the exact scale and keys the array by tick_id",
-      "getAddressCreditDebit read baseline: query and binds @regression @tier1 a numeric string tick_id binds the number",
-      "getAddressCreditDebit read baseline: query and binds @regression @tier1 a string address is bound as the id createAddress resolves",
-      "getAddressCreditDebit read baseline: query and binds @regression @tier1 a ticker name as tick_id adds no tick filter",
-      "getAddressCreditDebit read baseline: query and binds @regression @tier1 action_index wins over block_index and binds [address, action_index, tick_id]",
-      "getAddressCreditDebit read baseline: query and binds @regression @tier1 an action filter binds the id createAction resolves",
-      "getAddressCreditDebit read baseline: query and binds @regression @tier1 block_index is used when no action_index is given and binds [address, block_index]",
-      "getAddressCreditDebit read baseline: query and binds @regression @tier1 the escrows table issues no query and returns an empty array"
-    ],
     "58fd73daf6487e45": [
       "02 Action Benchmarks SEND-only blocks",
       "02 Action Benchmarks heavy-dex (ORDER creates)",
@@ -10913,6 +10902,17 @@
       "policy apply: detach gate boundaries injects nothing when null lists have no pointers to detach",
       "policy apply: detach gate boundaries keeps pointed lists attached below the detach gate"
     ],
+    "954c7a168f6a266b": [
+      "bin/count_u64_above_2p53 columnCountSql throws on a name holding a back-quote or a space",
+      "bin/count_u64_above_2p53 counts above 2^53 and reads the maximum as CAST(MAX(col) AS CHAR)",
+      "bin/count_u64_above_2p53 lists the BIGINT columns from information_schema.COLUMNS",
+      "bin/count_u64_above_2p53 parseArgs reads --db and --json and rejects anything else",
+      "bin/count_u64_above_2p53 render omits a non-wire column with count zero",
+      "bin/count_u64_above_2p53 render prints one line per wire or non-zero column and a summary, or JSON",
+      "bin/count_u64_above_2p53 scan issues SELECT statements only",
+      "bin/count_u64_above_2p53 scan keeps a wire column at zero and a non-wire column at two with the exact maximum",
+      "bin/count_u64_above_2p53 the exit verdict is 1 only when a count is non-zero"
+    ],
     "95778e56f402428b": [
       "stateCommitment: DbNodeStore.putMany SQL shape @regression an empty batch issues no statement at all",
       "stateCommitment: DbNodeStore.putMany SQL shape @regression chunks a full-depth path so no single statement grows unbounded",
@@ -12323,6 +12323,13 @@
       "action-scoped price barrier every price-mirror read is guarded getPricesInTimeRange fails the block closed instead of reading an uncovered mirror",
       "action-scoped price barrier skip-flag lifecycle in the block loop a committed block clears the skip flag and retires its own escalation",
       "action-scoped price barrier skip-flag lifecycle in the block loop a rolled-back block clears the skip flag but KEEPS its escalation"
+    ],
+    "a9439878e8612289": [
+      "exactU64 keeps 2^53 + 1 as a string instead of rounding it",
+      "exactU64 keeps the u64 maximum exact from a string and from a bigint",
+      "exactU64 refuses values outside the unsigned 64-bit integer range",
+      "exactU64 returns a Number for a safe integer from a string, bigint or number",
+      "exactU64 returns null for null and for undefined"
     ],
     "a95e9ad2b91123c7": [
       "Price v2 (PRICE batch) @regression @tier3 structural checks (step 2) accepts exactly PRICE_BATCH_MAX_ROUND_COUNT and refuses one more",
@@ -13998,10 +14005,6 @@
       "Coinpay (COINPAY) @regression @tier2 valid settlement valid coinpay \u2192 mapper.createMappings called",
       "Coinpay (COINPAY) @regression @tier2 valid settlement valid coinpay \u2192 updateBalances and updateTokens called"
     ],
-    "c08ee7609951ba59": [
-      "getappliedpolicy exact u64 list ids @regression @tier1 keeps an unsafe allow-list id exact while returning a safe block-list id as a number",
-      "getappliedpolicy exact u64 list ids @regression @tier1 keeps an unsafe block-list id exact while returning a safe allow-list id as a number"
-    ],
     "c0917406521a91c5": [
       "Database getTickerId lookup order @unit @regression keeps canonical caret lookups on the id query",
       "Database getTickerId lookup order @unit @regression orders a case-insensitive name lookup by ascending id and returns the first row",
@@ -14035,15 +14038,6 @@
     "c126f106c7f18f5a": [
       "integration harness VM block rhythm through production's passes leaves the cache open when a pass throws inside the window, and the next attempt opens a fresh one",
       "integration harness VM block rhythm through production's passes opens the cache first inside the block and closes it after every pass group, just before createBlock"
-    ],
-    "c171a686246e7883": [
-      "exactU64 delegates non-BIGINT fields to the connector",
-      "exactU64 keeps 2^53 + 1 as a string instead of rounding it",
-      "exactU64 keeps the u64 maximum exact from a string and from a bigint",
-      "exactU64 refuses values outside the unsigned 64-bit integer range",
-      "exactU64 returns a Number for a safe integer from a string, bigint or number",
-      "exactU64 returns null for null and for undefined",
-      "exactU64 type-casts BIGINT fields through the exact u64 boundary"
     ],
     "c18d29a26d5a4f54": [
       "slashContractStake active-first gate @regression @tier1 armed: debits visible active stake before a newer pending-activation row",
@@ -17272,12 +17266,6 @@
       "HubDbSync anchor reward copies never hold the drain @regression @tier1 probes a missing copies table once and still applies every main row",
       "HubDbSync anchor reward copies never hold the drain @regression @tier1 records the copy beside the main row when the table is present"
     ],
-    "e9669b80ec394de7": [
-      "database pool exact u64 typeCast @regression @tier1 delegates every non-BIGINT field to the connector",
-      "database pool exact u64 typeCast @regression @tier1 keeps the unsigned 64-bit maximum as an exact decimal string",
-      "database pool exact u64 typeCast @regression @tier1 preserves SQL null without invoking the connector fallback",
-      "database pool exact u64 typeCast @regression @tier1 returns safe BIGINT values as Numbers"
-    ],
     "e9c3f47b50704d38": [
       "HubDbSync failover when no candidate is caught up a caught-up ready frame clears the record",
       "HubDbSync failover when no candidate is caught up serves from the current hub after the grace when no candidate is caught up",
@@ -18692,8 +18680,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1485,
-      "titleCount": 14481,
+      "fileCount": 1483,
+      "titleCount": 14473,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19245,7 +19233,6 @@
         "test/unit/api/rpc/token_policy_detach.test.js": "2645da1d4f547d2f",
         "test/unit/api/rpc/token_policy_list_ref.test.js": "0d061e71ba86eff6",
         "test/unit/api/rpc/token_policy_resolve_refs.test.js": "64c039d7b0a6d648",
-        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "bed4c39786728d9f",
         "test/unit/api/status_ready_route.test.js": "756ac889a13b142f",
         "test/unit/api/status_schema_ready.test.js": "e624e2e0e1e9bd13",
@@ -19271,6 +19258,7 @@
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
+        "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
@@ -19518,8 +19506,7 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
-        "test/unit/db/database/exact_u64.test.js": "c171a686246e7883",
-        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
+        "test/unit/db/database/exact_u64.test.js": "a9439878e8612289",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
@@ -19627,7 +19614,6 @@
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_admission_schema.test.js": "f774309cdb5aef1f",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
-        "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
         "test/unit/db/misc/credit_debit_sum_sql.test.js": "b765d11dc9d66fd9",
         "test/unit/db/orders/cross_chain_offer_lists.test.js": "87976ddf94e91add",
         "test/unit/db/orders/cross_chain_offer_lists_fold.test.js": "e411489fced259a6",
@@ -20558,8 +20544,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1129,
-      "titleCount": 11450,
+      "fileCount": 1126,
+      "titleCount": 11435,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21048,7 +21034,6 @@
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
-        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "5301b4afc6223e03",
         "test/unit/attestation/attest_broadcast_fee_activation.test.js": "b65ffc6b93616abf",
         "test/unit/attestation/attest_mirror_fallthrough.test.js": "9868adc1e4c7f3d1",
@@ -21198,7 +21183,6 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
-        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
@@ -21288,7 +21272,6 @@
         "test/unit/db/markets/order_info_batch.test.js": "32d28eacf6d12ab7",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
-        "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
@@ -21693,8 +21676,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 560,
-      "titleCount": 6019,
+      "fileCount": 557,
+      "titleCount": 6004,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21851,7 +21834,6 @@
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
-        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "5301b4afc6223e03",
         "test/unit/attestation/attest_response_barrier.test.js": "da75b77071f55521",
         "test/unit/attestation/provider_min_stake_history.test.js": "88979a43d8107259",
@@ -21916,7 +21898,6 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
-        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
@@ -21995,7 +21976,6 @@
         "test/unit/db/markets/markets_native_coin_pairs.test.js": "7176d07530da2fe0",
         "test/unit/db/markets/order_info_batch.test.js": "32d28eacf6d12ab7",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
-        "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
         "test/unit/db/sql_quote_backslash_escapes.test.js": "c8655466e49bee5a",
@@ -22259,8 +22239,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1129,
-      "titleCount": 11450,
+      "fileCount": 1126,
+      "titleCount": 11435,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22749,7 +22729,6 @@
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
-        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "5301b4afc6223e03",
         "test/unit/attestation/attest_broadcast_fee_activation.test.js": "b65ffc6b93616abf",
         "test/unit/attestation/attest_mirror_fallthrough.test.js": "9868adc1e4c7f3d1",
@@ -22899,7 +22878,6 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
-        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
@@ -22989,7 +22967,6 @@
         "test/unit/db/markets/order_info_batch.test.js": "32d28eacf6d12ab7",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
-        "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
