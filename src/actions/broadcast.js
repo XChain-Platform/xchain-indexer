@@ -109,13 +109,6 @@ class Broadcast {
 
         if(status=='valid'){
 
-            // Resolve any open bets on this feed
-            if(format==3){
-
-                // TODO : Add support for resolving bets
-
-            }
-
         }
 
     }

@@ -89,9 +89,6 @@ async function resolveRefsAndClone(ctx){
             error = 'invalid: TRANSFER_SUPPLY (unresolvable ^id)';
     }
 
-    // TODO: Decode any base64 tickers
-    // if(this.util.isBase64(data['TICK']))
-    //     $data['TICK'] = this.util.base64Decode(data['TICK']);
     // Clone the raw data for storage in issues table
     let issue = Object.assign({}, data);
 

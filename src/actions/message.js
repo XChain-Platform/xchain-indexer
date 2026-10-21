@@ -93,7 +93,7 @@ class Message {
         if(!error && format===2 && this.util.isNull(data['ENCRYPTION_METHOD']))
             data['ENCRYPTION_METHOD'] = 1;
 
-        // TODO : Make sure that ENCRYPTION_METHOD is a numeric value or null (stop storing 'u' in database when undefined)
+        // ENCRYPTION_METHOD is checked as numeric-or-null in validateMessageFormats.
 
         error = this.validateMessageFormats(data, error);
 
