@@ -188,5 +188,5 @@ async function divergenceAnswerStands(db, chain, network, height, subRoots, cp){
 
 module.exports = {
     DIVERGENCE_SETTLE_BLOCKS, CHECKPOINT_STREAM_STALL_BLOCKS,
-    subRootsOf, reproducesSignedRoot, divergenceSettled, checkpointStreamStopped, divergenceAnswerStands,
+    subRootsOf, divergenceSettled, checkpointStreamStopped, divergenceAnswerStands,
 };

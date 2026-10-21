@@ -18,6 +18,34 @@
  *
  ********************************************************************/
 
+// At/after UNIFIED_FEES_SWEEP_CALLBACK: SWEEP_BASE plus SWEEP_PER_ITEM per settled item
+function priceUnifiedSweepFee(data, state){
+    let { fees, balances, ownerships, orderEscrows, swapEscrows, dispenserEscrows } = state;
+
+    // Unified gas schedule: a flat base plus one per-item charge, at DIVIDEND/AIRDROP
+    // per-recipient parity. An ITEM is one unit of settlement work this SWEEP commits:
+    // one swept balance, one closed order/swap/dispenser escrow, or one transferred
+    // ownership. It counts exactly what the settlement block below writes, and reads
+    // the same `balances` / `ownerships` / escrow views the legacy db_hits count read,
+    // at the same point in the handler (BEFORE any controller-guard fee debits it), so
+    // the two models see identical inputs and only the price changes.
+    // The flags are tested with `== 1`, the way the settlement blocks below test
+    // them, NOT with the legacy branch's bare truthiness. Those fields arrive as
+    // wire strings ('0') or mathjs bignumbers, and BOTH are truthy in JS, so the
+    // legacy `(data['BALANCES']) ? ...` charged for balances a BALANCES=0 sweep
+    // never moves. Correcting that here is safe precisely because it is a NEW
+    // price behind a NEW flag day: the legacy branch is untouched, so every
+    // pre-activation fee still replays byte-for-byte.
+    let items = 0;
+    items += (data['BALANCES']==1)   ? Number(Object.keys(balances).length)   : 0;
+    items += Number(orderEscrows.length + swapEscrows.length + dispenserEscrows.length);
+    items += (data['OWNERSHIPS']==1) ? Number(Object.keys(ownerships).length) : 0;
+    let result = this.util.getUnifiedBaseItemFee(items, 'SWEEP_BASE', 'SWEEP_PER_ITEM');
+    fees['GAS_COST']    = result.gasCost;
+    fees['AMOUNT']      = result.fee;
+    fees['FEE_VERSION'] = 2;
+}
+
 // Installed onto Sweep.prototype by index.js; each method runs with `this` bound to
 // the handler, exactly as the parse() code it came from. `state` is the object
 // loadSweepState() built: the fee writes land in state.fees, and a fee reserved out
@@ -42,37 +70,9 @@ module.exports = {
         // protocol_changes.js.
         let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES_SWEEP_CALLBACK', data['BLOCK_INDEX']);
         if(unifiedFees)
-            this.priceUnifiedSweepFee(data, state);
+            priceUnifiedSweepFee.call(this, data, state);
         else
             await this.priceLegacySweepFee(data, state);
-    },
-
-    // At/after UNIFIED_FEES_SWEEP_CALLBACK: SWEEP_BASE plus SWEEP_PER_ITEM per settled item
-    priceUnifiedSweepFee(data, state){
-        let { fees, balances, ownerships, orderEscrows, swapEscrows, dispenserEscrows } = state;
-
-        // Unified gas schedule: a flat base plus one per-item charge, at DIVIDEND/AIRDROP
-        // per-recipient parity. An ITEM is one unit of settlement work this SWEEP commits:
-        // one swept balance, one closed order/swap/dispenser escrow, or one transferred
-        // ownership. It counts exactly what the settlement block below writes, and reads
-        // the same `balances` / `ownerships` / escrow views the legacy db_hits count read,
-        // at the same point in the handler (BEFORE any controller-guard fee debits it), so
-        // the two models see identical inputs and only the price changes.
-        // The flags are tested with `== 1`, the way the settlement blocks below test
-        // them, NOT with the legacy branch's bare truthiness. Those fields arrive as
-        // wire strings ('0') or mathjs bignumbers, and BOTH are truthy in JS, so the
-        // legacy `(data['BALANCES']) ? ...` charged for balances a BALANCES=0 sweep
-        // never moves. Correcting that here is safe precisely because it is a NEW
-        // price behind a NEW flag day: the legacy branch is untouched, so every
-        // pre-activation fee still replays byte-for-byte.
-        let items = 0;
-        items += (data['BALANCES']==1)   ? Number(Object.keys(balances).length)   : 0;
-        items += Number(orderEscrows.length + swapEscrows.length + dispenserEscrows.length);
-        items += (data['OWNERSHIPS']==1) ? Number(Object.keys(ownerships).length) : 0;
-        let result = this.util.getUnifiedBaseItemFee(items, 'SWEEP_BASE', 'SWEEP_PER_ITEM');
-        fees['GAS_COST']    = result.gasCost;
-        fees['AMOUNT']      = result.fee;
-        fees['FEE_VERSION'] = 2;
     },
 
     // Below UNIFIED_FEES_SWEEP_CALLBACK: the per-database-hit price

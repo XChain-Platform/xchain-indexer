@@ -93,7 +93,7 @@ module.exports = {
             for(let table of this.dataTables){
 
                 // Build out the correct SQL to pull address and ticker data from the various tables
-                query = this.entityQueryForTable(table);
+                query = entityQueryForTable.call(this, table);
                 args  = [firstActionIndex];
 
                 // Run the query and populate the addresses, tickers, and markets arrays.
@@ -114,16 +114,6 @@ module.exports = {
         let addresses = this.util.getAddressesList();
         let tickers   = this.util.getTickersList();
         return { markets, addresses, tickers };
-    },
-
-    // The read-phase query for one rolled-back table, or false when the table names no
-    // address, ticker or market pair. Grouped by the join each family needs, which is
-    // the only thing that differs between them.
-    entityQueryForTable(table){
-        return readSql.entityQueryForLedgerTables(table)
-            || readSql.entityQueryForTransferTables(table)
-            || readSql.entityQueryForDexTables(table)
-            || readSql.entityQueryForCoinpayTables(table);
     },
 
     // Fold one read-phase row into the recompute sets: its addresses and tickers into
@@ -201,3 +191,13 @@ module.exports = {
     },
 
 };
+
+// The read-phase query for one rolled-back table, or false when the table names no
+// address, ticker or market pair. Grouped by the join each family needs, which is
+// the only thing that differs between them.
+function entityQueryForTable(table){
+    return readSql.entityQueryForLedgerTables(table)
+        || readSql.entityQueryForTransferTables(table)
+        || readSql.entityQueryForDexTables(table)
+        || readSql.entityQueryForCoinpayTables(table);
+}
