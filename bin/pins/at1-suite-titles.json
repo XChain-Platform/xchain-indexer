@@ -17733,6 +17733,11 @@
       "config currencies applies only the consensus coin and fiat currency lists",
       "config currencies produces an equal result when applied twice"
     ],
+    "f06356417a9239f4": [
+      "operator reading scripts ship with their runtime dependencies @regression @tier1 covers each script and every relative require with a Dockerfile COPY source",
+      "operator reading scripts ship with their runtime dependencies @regression @tier1 limits bare requires to Node builtins and declared production dependencies",
+      "operator reading scripts ship with their runtime dependencies @regression @tier1 reports a reading script when its COPY line is removed"
+    ],
     "f0b2b5a7508e3997": [
       "Coinpay (COINPAY) @regression @tier2 null matchOrders / orderInfo guard orders marked complete when GIVE_REMAINING <= 0 after settlement",
       "Coinpay (COINPAY) @regression @tier2 null matchOrders / orderInfo guard returns early when getOrderMatchOrders returns falsy",
@@ -18794,8 +18799,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1497,
-      "titleCount": 14559,
+      "fileCount": 1498,
+      "titleCount": 14562,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20153,6 +20158,7 @@
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/repo_guards/sibling_checkout.test.js": "595bbb01e039e4ad",
         "test/unit/repo_guards/sibling_coverage.test.js": "d8d1e52267ea606f",
         "test/unit/repo_guards/vm_execute_network.test.js": "7413c1c4c27e27e9",
@@ -20672,8 +20678,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1134,
-      "titleCount": 11474,
+      "fileCount": 1135,
+      "titleCount": 11477,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21707,6 +21713,7 @@
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/rewards/create_validator_reward_callsites.test.js": "42b3ffd148cc346b",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/derived_projections/market_stamp_surviving_tip.test.js": "bd9cc053b1689615",
@@ -21812,8 +21819,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 564,
-      "titleCount": 6038,
+      "fileCount": 565,
+      "titleCount": 6041,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22335,6 +22342,7 @@
         "test/unit/remote_token/admitted_pin_read.test.js": "76ff5d508163927d",
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/rewards/create_validator_reward_callsites.test.js": "42b3ffd148cc346b",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
@@ -22382,8 +22390,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1134,
-      "titleCount": 11474,
+      "fileCount": 1135,
+      "titleCount": 11477,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23417,6 +23425,7 @@
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/rewards/create_validator_reward_callsites.test.js": "42b3ffd148cc346b",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/derived_projections/market_stamp_surviving_tip.test.js": "bd9cc053b1689615",
