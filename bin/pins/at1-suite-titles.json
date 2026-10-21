@@ -3530,10 +3530,6 @@
       "oracle snapshot age seconds query @regression @tier1 returns the sentinel when the latest timestamp is null",
       "oracle snapshot age seconds query @regression @tier1 returns the sentinel when the query returns no row"
     ],
-    "33a8520912f9069e": [
-      "fresh and migrated schema convergence against a real MariaDB @tier3 converges after replaying every migration through the operator CLI",
-      "fresh and migrated schema convergence against a real MariaDB @tier3 starts from a materially older schema rather than a second fresh install"
-    ],
     "33ad0789078ca418": [
       "Database.getBlockHashes() consensus id-independence (reorg fork fix) @regression @tier1 produces identical block hashes for the same canonical chain regardless of local id assignment",
       "Database.getBlockHashes() consensus id-independence (reorg fork fix) @regression @tier1 selects no AUTO_INCREMENT lookup id into any consensus hash projection"
@@ -3578,19 +3574,6 @@
       "contract_state_root: key derivation @regression contract_index type does not change the key (driver bigint config is not consensus)",
       "contract_state_root: key derivation @regression is domain-separated from the balance and escrow key domains",
       "contract_state_root: key derivation @regression separates chain, network, contract and key (no field can be smeared into another)"
-    ],
-    "34e85525857991c5": [
-      "relay-identity lookup against a real MariaDB @tier3 THROWS on a query fault instead of silently admitting a duplicate",
-      "relay-identity lookup against a real MariaDB @tier3 binds a large origin_action_index EXACTLY, matching no neighbour",
-      "relay-identity lookup against a real MariaDB @tier3 counts every NON-rejected lifecycle state, terminal ones included",
-      "relay-identity lookup against a real MariaDB @tier3 documents where Number fidelity ends, above the range the schema claims",
-      "relay-identity lookup against a real MariaDB @tier3 excludes a rejected v0 row, so one malformed v3 cannot grief the identity",
-      "relay-identity lookup against a real MariaDB @tier3 excludes the v1 response row that shares the relay identity",
-      "relay-identity lookup against a real MariaDB @tier3 never matches a native request, whose relay columns are NULL",
-      "relay-identity lookup against a real MariaDB @tier3 parses and returns the pending v0 row holding a relay identity",
-      "relay-identity lookup against a real MariaDB @tier3 returns null for a relay identity this chain has never materialized",
-      "relay-identity lookup against a real MariaDB @tier3 returns the FIRST materialization when two rows share the identity",
-      "relay-identity lookup against a real MariaDB @tier3 sees past a rejected row to the real materialization behind it"
     ],
     "34ed169482d2ec78": [
       "13 \u2013 Cross-node equivalence @regression @tier1 1. two nodes over the same decoder DB are byte-identical (ids included)",
@@ -4936,6 +4919,12 @@
     ],
     "48ec89675a1f39f8": [
       "consensus block-hash conformance twins (static drift-lock) @regression state_key collation gate and splice match across xchain-indexer and xchain-sync"
+    ],
+    "494348d00a38395f": [
+      "guard emitted host request id below gate @regression @tier1 assigns consecutive call paths to two emissions from one guard",
+      "guard emitted host request id below gate @regression @tier1 collides with the ordinary root host request id under the legacy discriminator",
+      "guard emitted host request id below gate @regression @tier1 offsets the call path by emissions already stored for the host action",
+      "guard emitted host request id below gate @regression @tier1 passes a composite guard root discriminator through unchanged"
     ],
     "4952d3db984cc3ce": [
       "AnchorRecovery list snapshots @regression @tier2 fails when the natural list sequence already has another snapshot id",
@@ -6484,6 +6473,12 @@
     "5db30922de7745c3": [
       "UNSTAKE deactivation setters exclude pending-activation rows @regression @tier1 setContractStakeDeactivationByPubkey filters by activation window (currentBlock)",
       "UNSTAKE deactivation setters exclude pending-activation rows @regression @tier1 setStakeDeactivationByPubkey filters by activation window (currentBlock)"
+    ],
+    "5e264992bfb49d8e": [
+      "getAddressBalances tick_id filter against MariaDB @integration keeps the full map when given a ticker name instead of a tick_id",
+      "getAddressBalances tick_id filter against MariaDB @integration omits the GAS entry when filtered to another token, and still honours the action bound",
+      "getAddressBalances tick_id filter against MariaDB @integration returns every token below the bound when no tick_id is given",
+      "getAddressBalances tick_id filter against MariaDB @integration returns only the GAS entry, valued as in the full map, for a numeric or digit-string tick_id"
     ],
     "5e848392b2703195": [
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) admits a relay identity this chain has not materialized",
@@ -14077,6 +14072,18 @@
       "Utility isCryptoAddress() boundary tests @regression @tier3 isCryptoAddress: valid bech32 P2WSH (32-byte program) \u2192 valid",
       "Utility isCryptoAddress() boundary tests @regression @tier3 isCryptoAddress: valid bech32m P2TR (taproot) \u2192 valid"
     ],
+    "c486b4ffbf8516a2": [
+      "relay-identity lookup against a real MariaDB @tier3 THROWS on a query fault instead of silently admitting a duplicate",
+      "relay-identity lookup against a real MariaDB @tier3 binds a large origin_action_index EXACTLY, matching no neighbour",
+      "relay-identity lookup against a real MariaDB @tier3 documents where Number fidelity ends, above the range the schema claims",
+      "relay-identity lookup against a real MariaDB @tier3 excludes a rejected v0 row, so one malformed v3 cannot grief the identity",
+      "relay-identity lookup against a real MariaDB @tier3 excludes the v1 response row that shares the relay identity",
+      "relay-identity lookup against a real MariaDB @tier3 never matches a native request, whose relay columns are NULL",
+      "relay-identity lookup against a real MariaDB @tier3 parses and returns the pending v0 row holding a relay identity",
+      "relay-identity lookup against a real MariaDB @tier3 returns null for a relay identity this chain has never materialized",
+      "relay-identity lookup against a real MariaDB @tier3 returns the FIRST materialization when two rows share the identity",
+      "relay-identity lookup against a real MariaDB @tier3 sees past a rejected row to the real materialization behind it"
+    ],
     "c4b143a4fd63fe51": [
       "Issue handler @regression @tier1 ALLOW_LIST / BLOCK_LIST validation invalid ALLOW_LIST reference \u2192 invalid",
       "Issue handler @regression @tier1 ALLOW_LIST / BLOCK_LIST validation invalid BLOCK_LIST reference \u2192 invalid",
@@ -15528,6 +15535,10 @@
       "XCHAIN price derivation: fill selection @regression end to end against the formula volume-weights a dispense and a DEX fill together with no venue preference",
       "XCHAIN price derivation: fill selection @regression getWindowFills() fails rather than returns empty when the ticker cannot be resolved",
       "XCHAIN price derivation: fill selection @regression getWindowFills() reports an empty window as a success, not a failure"
+    ],
+    "d5a4d9b585aa85b0": [
+      "ATTEST v1 batch link scope against MariaDB @integration clears the link on the same valid row when a reorg passes NULL",
+      "ATTEST v1 batch link scope against MariaDB @integration stamps the batch link on the valid v1 row only, never on a rejected v1 or the v0 request"
     ],
     "d5d2a5097677f9b1": [
       "Amount representability @regression @tier1 activation module an unknown network and a non-finite blockTime both read as off",
@@ -17368,6 +17379,11 @@
       "mirror-twin BIGINT signedness conformance @regression sanity: every declared twin exists on both sides (list is not vacuous)",
       "mirror-twin BIGINT signedness conformance @regression state_checkpoints: every shared BIGINT column matches the hub UNSIGNED declaration"
     ],
+    "ef1265310a539530": [
+      "fresh and migrated schema convergence against a real MariaDB @tier3 converges after replaying every migration through the operator CLI",
+      "fresh and migrated schema convergence against a real MariaDB @tier3 converges along the boot path: reconcile, boot migrations, operator CLI, next boot",
+      "fresh and migrated schema convergence against a real MariaDB @tier3 starts from a materially older schema rather than a second fresh install"
+    ],
     "ef698dc60d5299ef": [
       "Programmable policy layer : Phase B enforcement @regression CONTROLLER_GUARD activation gate honored at the chokepoint at/above activation \u2192 guard runs, can deny, and surfaces payout_legs",
       "Programmable policy layer : Phase B enforcement @regression CONTROLLER_GUARD activation gate honored at the chokepoint below activation \u2192 address-side controller is also a strict no-op",
@@ -18559,8 +18575,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1471,
-      "titleCount": 14386,
+      "fileCount": 1472,
+      "titleCount": 14390,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18748,6 +18764,7 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
@@ -20167,19 +20184,21 @@
       }
     },
     "test:integration": {
-      "fileCount": 70,
-      "titleCount": 434,
+      "fileCount": 72,
+      "titleCount": 440,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
-        "test/integration/attest_relay_identity.test.js": "34e85525857991c5",
+        "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
+        "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
         "test/integration/attest_relay_identity.test/attest_relay_identity_migration.test.js": "feadcd4727782c6d",
         "test/integration/attest_relay_identity.test/attest_relay_identity_request_id.test.js": "38927f13832ace8b",
         "test/integration/datetime_migrations_real.test.js": "db5cccdf7f214cc5",
         "test/integration/execution_text_clip_db.test.js": "7d0a4c1edba09f78",
         "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
+        "test/integration/ledger_balance_tick_filter.test.js": "5e264992bfb49d8e",
         "test/integration/markets_native_coin_migration.test.js": "3bd193539b3a5957",
         "test/integration/migration_live_schema_guard.test.js": "afa55fee6bb13a1b",
         "test/integration/migration_live_schema_guard.test/key_witness.test.js": "b4443ec53650d3cb",
@@ -20238,24 +20257,26 @@
         "test/integration/scenarios/parity/15_vm_balance_reader.test.js": "f4d512605040b459",
         "test/integration/scenarios/parity/16_rollback_replay_idempotency.test.js": "a28902a7c4dd4771",
         "test/integration/scenarios/parity/18_fullnode_reward_determinism.test.js": "c2c55cee18ad3b7e",
-        "test/integration/schema_fresh_vs_migrated.test.js": "33a8520912f9069e",
+        "test/integration/schema_fresh_vs_migrated.test.js": "ef1265310a539530",
         "test/integration/schema_isolation.test.js": "7f87cdd50704d954"
       }
     },
     "test:integration:ci": {
-      "fileCount": 70,
-      "titleCount": 434,
+      "fileCount": 72,
+      "titleCount": 440,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
-        "test/integration/attest_relay_identity.test.js": "34e85525857991c5",
+        "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
+        "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
         "test/integration/attest_relay_identity.test/attest_relay_identity_migration.test.js": "feadcd4727782c6d",
         "test/integration/attest_relay_identity.test/attest_relay_identity_request_id.test.js": "38927f13832ace8b",
         "test/integration/datetime_migrations_real.test.js": "db5cccdf7f214cc5",
         "test/integration/execution_text_clip_db.test.js": "7d0a4c1edba09f78",
         "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
+        "test/integration/ledger_balance_tick_filter.test.js": "5e264992bfb49d8e",
         "test/integration/markets_native_coin_migration.test.js": "3bd193539b3a5957",
         "test/integration/migration_live_schema_guard.test.js": "afa55fee6bb13a1b",
         "test/integration/migration_live_schema_guard.test/key_witness.test.js": "b4443ec53650d3cb",
@@ -20314,7 +20335,7 @@
         "test/integration/scenarios/parity/15_vm_balance_reader.test.js": "f4d512605040b459",
         "test/integration/scenarios/parity/16_rollback_replay_idempotency.test.js": "a28902a7c4dd4771",
         "test/integration/scenarios/parity/18_fullnode_reward_determinism.test.js": "c2c55cee18ad3b7e",
-        "test/integration/schema_fresh_vs_migrated.test.js": "33a8520912f9069e",
+        "test/integration/schema_fresh_vs_migrated.test.js": "ef1265310a539530",
         "test/integration/schema_isolation.test.js": "7f87cdd50704d954"
       }
     },
@@ -20407,8 +20428,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1115,
-      "titleCount": 11370,
+      "fileCount": 1116,
+      "titleCount": 11374,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20612,6 +20633,7 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
@@ -21528,8 +21550,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 549,
-      "titleCount": 5961,
+      "fileCount": 550,
+      "titleCount": 5965,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21579,6 +21601,7 @@
         "test/unit/actions/contract/execute_host_fault.test.js": "044af0ce102bf587",
         "test/unit/actions/contract/execute_slash_ledger_consolidation.test.js": "5cc340e05ad6f3cf",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
@@ -22083,8 +22106,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1115,
-      "titleCount": 11370,
+      "fileCount": 1116,
+      "titleCount": 11374,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22288,6 +22311,7 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
