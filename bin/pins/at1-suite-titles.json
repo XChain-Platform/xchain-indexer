@@ -4994,6 +4994,18 @@
       "compat gate: startup-required tables every required table has a src/sql definition the product createTable can build",
       "compat gate: startup-required tables exports the startup table reader and builder"
     ],
+    "464e44254a160d66": [
+      "bin/archive_heads_by_author adds the from-seq filter and argument before the limit",
+      "bin/archive_heads_by_author builds an all-status query without a from-seq filter",
+      "bin/archive_heads_by_author does not count another invalid status as refused",
+      "bin/archive_heads_by_author parses the required author and optional filters",
+      "bin/archive_heads_by_author reads through doQueryStrict and returns rows with their summary",
+      "bin/archive_heads_by_author rejects missing and invalid arguments",
+      "bin/archive_heads_by_author renders every head followed by the summary",
+      "bin/archive_heads_by_author renders the complete result as JSON",
+      "bin/archive_heads_by_author requires a valid head above every refused sequence for redrawn-above",
+      "bin/archive_heads_by_author summarizes no rows"
+    ],
     "46583f298dcec09f": [
       "protocol_changes active-stake collation gate @regression @tier1 is inert when height is null or non-finite",
       "protocol_changes active-stake collation gate @regression @tier1 registers a height gate unarmed on mainnet, armed on testnet at its v0.25.0 heights, and active from regtest genesis"
@@ -18725,8 +18737,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1489,
-      "titleCount": 14506,
+      "fileCount": 1490,
+      "titleCount": 14516,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19302,6 +19314,7 @@
         "test/unit/attestation/relayed_attestation_requests.test.js": "3904e3eba82ab03f",
         "test/unit/attestation/repair_validator_stats_drift.test.js": "b2c12d6af08b6d99",
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
+        "test/unit/bin/archive_heads_by_author.test.js": "464e44254a160d66",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/bench_net_balance.test.js": "0ec8a8b3eee6cb90",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
