@@ -94,7 +94,7 @@ function candidateArgs(references){
 }
 
 function referencesTarget(value, targets){
-    if(value === null || value === undefined || value === false || Number(value) === 0)
+    if(value === null || value === undefined || value === false || String(value) === '0')
         return false;
     return targets.has(String(value));
 }
