@@ -20,7 +20,8 @@
  * Issues SELECTs only.
  *
  * Reads connection settings from the indexer environment (INDEXER_DB_HOST/PORT/
- * NAME/USER/PASS, INDEXER_COIN, INDEXER_NETWORK).
+ * NAME/USER/PASS, INDEXER_COIN, INDEXER_NETWORK). Exits 0 on success, 1 when
+ * a batched net differs from the per-key net, and 2 on a usage or database error.
  *
  * Usage:  node bin/bench_net_balance.js [--keys N] [--repeat R] [--blocks N] [--db NAME] [--batched] [--json]
  *
@@ -219,6 +220,10 @@ function render(result, json){
     return lines.join('\n');
 }
 
+function exitCodeFor(result){
+    return result.batch && result.batch.mismatches > 0 ? 1 : 0;
+}
+
 async function openIndexerDb(opts){
     const Database = require('../src/db');
     const config   = require('../src/config.js');
@@ -241,16 +246,18 @@ async function main(argv){
     try {
         const result = await bench(db, opts);
         console.log(render(result, opts.json));
-        if(result.batch && result.batch.mismatches) process.exitCode = 1;
+        return exitCodeFor(result);
     } finally {
         if(db.close) await db.close();
     }
 }
 
 if(require.main === module){
-    main(process.argv.slice(2)).catch(err => {
+    main(process.argv.slice(2)).then(code => {
+        process.exit(code);
+    }).catch(err => {
         console.error('bench_net_balance: ' + err.message);
-        process.exit(1);
+        process.exit(2);
     });
 }
 
@@ -263,5 +270,6 @@ module.exports = {
     timeBatch,
     timeBlocks,
     bench,
-    render
+    render,
+    exitCodeFor
 };
