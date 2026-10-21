@@ -31,6 +31,29 @@ const rgf     = require('./gates/rollcall_gates_filter.js');
 const pmsh    = require('../../attestation/providerMinStakeHistory.js');
 const { getLogger } = require('../../observability/index.js');
 
+// The deterministic draw: rank by SHA256(request_id || pubkey), dedupe by staking
+// source on the weighted path, and take REDUNDANCY slots plus the ladder's extras.
+function rankResponsibleSet(validators, requestId, redundancy, weighted, widen){
+    let withHash = validators.map(v => {
+        let pk = String(v.pubkey).toLowerCase();
+        let h  = crypto.createHash('sha256').update(String(requestId), 'utf8').update(pk, 'utf8').digest('hex');
+        return { pubkey: pk, source: (v.source != null ? String(v.source) : null), hash: h };
+    });
+    withHash.sort((a, b) => (a.hash < b.hash) ? -1 : (a.hash > b.hash ? 1 : 0));
+    if(weighted){
+        let seen = new Set();
+        withHash = withHash.filter(v => {
+            if(v.source === null) return true;
+            if(seen.has(v.source)) return false;
+            seen.add(v.source);
+            return true;
+        });
+    }
+    let extra = Number(widen);
+    if(!Number.isFinite(extra) || extra < 0) extra = 0;
+    return withHash.slice(0, Math.max(1, Number(redundancy) || 1) + extra).map(v => v.pubkey);
+}
+
 module.exports = {
     // Compute the responsible validator set for a given request (same deterministic rule
     // the hub uses (xchain-hub AttestationRound): sort capability validators by
@@ -141,30 +164,7 @@ module.exports = {
             if(validators.length === 0) return [];
         }
 
-        return this.rankResponsibleSet(validators, requestId, redundancy, weighted, widen);
-    },
-
-    // The deterministic draw: rank by SHA256(request_id || pubkey), dedupe by staking
-    // source on the weighted path, and take REDUNDANCY slots plus the ladder's extras.
-    rankResponsibleSet(validators, requestId, redundancy, weighted, widen){
-        let withHash = validators.map(v => {
-            let pk = String(v.pubkey).toLowerCase();
-            let h  = crypto.createHash('sha256').update(String(requestId), 'utf8').update(pk, 'utf8').digest('hex');
-            return { pubkey: pk, source: (v.source != null ? String(v.source) : null), hash: h };
-        });
-        withHash.sort((a, b) => (a.hash < b.hash) ? -1 : (a.hash > b.hash ? 1 : 0));
-        if(weighted){
-            let seen = new Set();
-            withHash = withHash.filter(v => {
-                if(v.source === null) return true;
-                if(seen.has(v.source)) return false;
-                seen.add(v.source);
-                return true;
-            });
-        }
-        let extra = Number(widen);
-        if(!Number.isFinite(extra) || extra < 0) extra = 0;
-        return withHash.slice(0, Math.max(1, Number(redundancy) || 1) + extra).map(v => v.pubkey);
+        return rankResponsibleSet.call(this, validators, requestId, redundancy, weighted, widen);
     },
 
     // Drop weighted-snapshot rows whose staking source does not clear the provider's
