@@ -119,3 +119,14 @@ addGate('batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION
     testnet: UNARMED,
     regtest: 0,
 });
+
+// Height on the archive head's DOGE block_index. From it author-scoped chunk
+// reads ignore orphan rows whose declared total_chunks differs from that head.
+addGate('archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 157073,
+    'LTC:testnet': 4928460,
+    'DOGE:testnet': 68009330,
+    testnet: 68009330,
+    regtest: 0,
+});

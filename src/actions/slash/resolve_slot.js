@@ -242,5 +242,5 @@ async function resolveSlot(deps, engineTag, roundId, contentA, contentB, oracleR
         || { error: 'invalid: ENGINE_TAG (no snapshot_block rule)' };
 }
 
-module.exports = { resolveSlot, resolveFieldSlot, resolveOracleSlot, resolveBatchSlot, resolveAttestSlot,
+module.exports = { resolveSlot, resolveAttestSlot,
     listShareSlashable };

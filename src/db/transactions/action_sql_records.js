@@ -129,7 +129,7 @@ module.exports = {
                         WHERE 
                             f1.action_index=?
                         LIMIT 1`,
-    // TODO: Add code to lookup actual file data from transactions and return an `data` item
+    // FILE actions return metadata without looking up transaction file data.
     // LINK action
     LINK: `SELECT
                             a2.action,

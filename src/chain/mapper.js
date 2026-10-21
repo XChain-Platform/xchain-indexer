@@ -39,7 +39,7 @@ class Mapper {
         await this.writeAddressTickMappings(action_index);
 
         // Handle creating link mappings.
-        // TODO: Add support for verifying links across multiple COIN networks in xchain-hub
+        // Link verification covers a single COIN network; cross-network verification depends on xchain-hub
         if(action=='LINK' && status=='valid')
             await this.linkFileToIssueMapping(data);
     }
