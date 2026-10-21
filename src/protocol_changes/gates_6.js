@@ -131,6 +131,13 @@ addGate('archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION',
     regtest: 0,
 });
 
+// Height on the processing chain's own block_index. Registers the BRIDGE_CHECKPOINT_V3 section activation. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('bridge_checkpoint_v3_section_activation.BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
 // tick_cache_null_prototype_activation
 // Height on the processing chain's own block_index. From it AIRDROP, SEND and DESTROY keep their per-action TICK cache on a null-prototype object, so a TICK spelled like an Object.prototype member (constructor, __proto__) reads as unknown. Below it the cache is a plain object as before. Unarmed on mainnet and testnet, active from genesis on regtest.
 addGate('tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATION', 'height', {

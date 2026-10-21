@@ -50,7 +50,7 @@ function fundedForVm() {
 // reports 'invalid: ACTION (unknown)' instead of the budget string. This block needs
 // them known, so a VALID verdict is a real verdict rather than an activation artefact.
 function stubVmGates(weightsOn) {
-    const known = ['BATCH', 'SEND', 'DEPLOY', 'EXECUTE', 'XEXEC', 'ISSUANCE_FEE', 'UNIFIED_FEES'];
+    const known = ['BATCH', 'SEND', 'AIRDROP', 'DEPLOY', 'EXECUTE', 'XEXEC', 'ISSUANCE_FEE', 'UNIFIED_FEES'];
     actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => {
         if (name === 'BATCH_SUBACTION_NORMALIZATION') return true;
         if (name === 'BATCH_ISSUANCE_LIMITS') return true;
@@ -60,14 +60,17 @@ function stubVmGates(weightsOn) {
     handler = new Batch(actionsCtx);
 }
 
-async function runVm(weightsOn, commands) {
+async function runVm(weightsOn, commands, activation) {
     stubVmGates(weightsOn);
+    if(activation && activation.network)
+        handler.config.NETWORK = activation.network;
     fundedForVm();
     const data = createBaseData({
         ACTION:  'BATCH',
         FORMAT:  0,
         SOURCE,
         TX_DATA: 'BATCH|0|' + commands.join(';'),
+        ...(activation && activation.blockIndex !== undefined ? { BLOCK_INDEX: activation.blockIndex } : {}),
     });
     indexer.indexerDb.isActionAllowed.resolves(true);
     await handler.parse(['0'], data, null);
@@ -193,6 +196,17 @@ describe('Batch @regression @tier3', function () {
 
                 assert.strictEqual(data['STATUS'], 'valid');
                 assert.strictEqual(indexer.indexerDb.createBatch.callCount, 1);
+            });
+
+            it('sums VM weight with every AIRDROP leg after the leg-weight activation', async function () {
+                const commands = execs(7).concat(['AIRDROP|1|10|TEST|1|TEST|2|memo']);
+                const below = await runVm(true, commands, { network: 'regtest', blockIndex: -1 });
+                assert.strictEqual(below['STATUS'], 'valid', '210 VM + historical flat 25 must fit');
+
+                actionsCtx.processAction.resetHistory();
+                const active = await runVm(true, commands, { network: 'regtest', blockIndex: 0 });
+                assert.strictEqual(active['STATUS'], 'invalid: COMMAND (limit)', '210 VM + two AIRDROP legs is 260');
+                assert.strictEqual(actionsCtx.processAction.callCount, 0);
             });
 
             it('one DEPLOY may still carry companions, up to 220 of them', async function () {

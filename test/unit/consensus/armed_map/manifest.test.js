@@ -235,6 +235,18 @@ describe('armed_map/manifest: collectRows', function () {
         });
     });
 
+    it('carries the unarmed bridge-checkpoint v3 section gate', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        const key = 'bridge_checkpoint_v3_section_activation.BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION';
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.deepStrictEqual(row, {
+            mainnet: ProtocolChanges.UNARMED,
+            testnet: ProtocolChanges.UNARMED,
+            regtest: 0,
+        });
+    });
+
     it('carries the unarmed null-prototype TICK cache gate', function () {
         const byKey = new Map(manifest.collectRows().rows);
         const key = 'tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATION';

@@ -14,6 +14,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 const { createBaseData } = require('../../../../fixtures/mocks');
+const { stubGate } = require('../../../../helpers/gate_modules.js');
 const { SOURCE, useBatchHarness } = require('./helpers/batch_harness.js');
 
 const Batch = require('../../../../../src/actions/batch/index.js');
@@ -22,6 +23,8 @@ let indexer, actionsCtx, handler;
 const bind = (h) => { ({ indexer, actionsCtx, handler } = h); };
 
 const ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
+// Regtest arms the per-leg weight from genesis, so these flat-weight cases hold it off.
+const LEG_WEIGHT_GATE = 'batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION';
 
 function airdrop(format, legs) {
     let command;
@@ -47,6 +50,7 @@ function sends(n) {
 }
 
 function stubGates() {
+    stubGate(sinon, LEG_WEIGHT_GATE, false);
     const known = ['BATCH', 'SEND', 'AIRDROP', 'DIVIDEND'];
     actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => {
         if (name === 'BATCH_SUBACTION_NORMALIZATION') return true;
