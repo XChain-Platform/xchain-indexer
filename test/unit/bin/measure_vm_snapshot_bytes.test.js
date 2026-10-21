@@ -87,7 +87,7 @@ describe('bin/measure_vm_snapshot_bytes', function () {
         db.getCrossChainDataForVM = async () => {
             throw new Error('cached getter must not be used');
         };
-        const ticks = [100, 104, 200, 207];
+        const ticks = [100, 104, 104, 106, 200, 207, 207, 210];
         const result = await measure(db, { from: 5, to: 12, limit: 2 }, () => ticks.shift());
         const expected = [];
         for(const blockIndex of [12, 8]){
@@ -100,6 +100,7 @@ describe('bin/measure_vm_snapshot_bytes', function () {
         assert.deepStrictEqual(result.blocks.map(block => block.bytes), expected);
         assert.deepStrictEqual(result.blocks.map(block => block.executions), [3, 1]);
         assert.deepStrictEqual(result.blocks.map(block => block.buildMs), [4, 7]);
+        assert.deepStrictEqual(result.blocks.map(block => block.serializeMs), [2, 3]);
         assert.deepStrictEqual(result.blocks.map(block => block.sentBefore), [expected[0] * 3, expected[1]]);
         assert.deepStrictEqual(result.blocks.map(block => block.sentAfter), expected);
         assert.strictEqual(result.scanned, 2);
@@ -114,12 +115,39 @@ describe('bin/measure_vm_snapshot_bytes', function () {
         assert.deepStrictEqual(queries[0].args, [5, 12, 2]);
     });
 
+    it('times one serialization per block with a counter clock and prices both send shapes', async function () {
+        const snapshot = { attestations: {}, settled: { 'BTC:7': true }, calls: {} };
+        const db = {
+            doQueryStrict: async () => [{ block_index: '12', executions: 3 }],
+            buildCrossChainDataForVM: async () => snapshot,
+        };
+        let reads = 0;
+        const result = await measure(db, { from: null, to: null, limit: 5 }, () => reads++);
+        const bytes = Buffer.byteLength(JSON.stringify(snapshot));
+
+        assert.strictEqual(reads, 4);
+        assert.strictEqual(result.blocks[0].buildMs, 1);
+        assert.strictEqual(result.blocks[0].serializeMs, 1);
+        assert.strictEqual(result.blocks[0].sentBeforeMs, 3);
+        assert.strictEqual(result.blocks[0].sentAfterMs, 1);
+        assert.strictEqual(result.maxSerializeMs, 1);
+        assert.strictEqual(result.sentBeforeMs, 3);
+        assert.strictEqual(result.sentAfterMs, 1);
+        assert.strictEqual(result.sentBeforeBytes, bytes * 3);
+        assert.strictEqual(result.sentAfterBytes, bytes);
+        assert.deepStrictEqual(render(result, false).split('\n').map(line => line.replace(/^.* (serialize=|max-serialize=)/, '$1')), [
+            'serialize=1ms sent-before-ms=3 sent-after-ms=1',
+            'max-serialize=1ms sent-before-ms=3 sent-after-ms=1',
+        ]);
+    });
+
     it('returns a zero summary when no execution blocks match', async function () {
         const { db } = makeDb([]);
         const result = await measure(db, { from: null, to: null, limit: 50 });
 
         assert.deepStrictEqual(result, {
             blocks: [], scanned: 0, maxBytes: 0, maxBuildMs: 0,
+            maxSerializeMs: 0, sentBeforeMs: 0, sentAfterMs: 0,
             sentBeforeBytes: 0, sentAfterBytes: 0,
         });
     });
@@ -128,15 +156,19 @@ describe('bin/measure_vm_snapshot_bytes', function () {
         const result = {
             blocks: [{
                 blockIndex: 12, executions: 3, bytes: 80, buildMs: 4,
+                serializeMs: 1, sentBeforeMs: 3, sentAfterMs: 1,
                 sentBefore: 240, sentAfter: 80,
             }],
             scanned: 1, maxBytes: 80, maxBuildMs: 4,
+            maxSerializeMs: 1, sentBeforeMs: 3, sentAfterMs: 1,
             sentBeforeBytes: 240, sentAfterBytes: 80,
         };
 
         assert.strictEqual(render(result, false),
-            'block=12 executions=3 bytes=80 build=4ms sent-before=240 sent-after=80\n'
-            + '# blocks=1 max-bytes=80 max-build=4ms sent-before=240 sent-after=80');
+            'block=12 executions=3 bytes=80 build=4ms sent-before=240 sent-after=80'
+            + ' serialize=1ms sent-before-ms=3 sent-after-ms=1\n'
+            + '# blocks=1 max-bytes=80 max-build=4ms sent-before=240 sent-after=80'
+            + ' max-serialize=1ms sent-before-ms=3 sent-after-ms=1');
         assert.deepStrictEqual(JSON.parse(render(result, true)), result);
     });
 

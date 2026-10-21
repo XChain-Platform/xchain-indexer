@@ -15,7 +15,9 @@
  * XChain Indexer - VM snapshot byte measurement
  *
  * Read-only. Builds the uncached cross-chain VM snapshot for recent
- * contract-execution blocks and reports its serialized size and build time.
+ * contract-execution blocks and reports its serialized size, build time and
+ * serialization time. The serialization time is the sending half of the
+ * worker IPC send: one JSON.stringify of the snapshot per send.
  *
  * Usage: node bin/measure_vm_snapshot_bytes.js
  *        [--from N] [--to N] [--limit N] [--db NAME] [--json]
@@ -83,14 +85,21 @@ async function measure(db, opts, now = Date.now){
         const blockIndex = Number(row.block_index);
         const started = now();
         const snapshot = await db.buildCrossChainDataForVM(blockIndex);
-        const buildMs = now() - started;
-        const bytes = Buffer.byteLength(JSON.stringify(snapshot));
+        const built = now();
+        const buildMs = built - started;
+        const serializeStarted = now();
+        const serialized = JSON.stringify(snapshot);
+        const serializeMs = now() - serializeStarted;
+        const bytes = Buffer.byteLength(serialized);
         const executions = Number(row.executions);
         blocks.push({
             blockIndex,
             executions,
             bytes,
             buildMs,
+            serializeMs,
+            sentBeforeMs: serializeMs * executions,
+            sentAfterMs: serializeMs,
             sentBefore: bytes * executions,
             sentAfter: bytes,
         });
@@ -100,6 +109,9 @@ async function measure(db, opts, now = Date.now){
         scanned: blocks.length,
         maxBytes: blocks.reduce((max, block) => Math.max(max, block.bytes), 0),
         maxBuildMs: blocks.reduce((max, block) => Math.max(max, block.buildMs), 0),
+        maxSerializeMs: blocks.reduce((max, block) => Math.max(max, block.serializeMs), 0),
+        sentBeforeMs: blocks.reduce((sum, block) => sum + block.sentBeforeMs, 0),
+        sentAfterMs: blocks.reduce((sum, block) => sum + block.sentAfterMs, 0),
         sentBeforeBytes: blocks.reduce((sum, block) => sum + block.sentBefore, 0),
         sentAfterBytes: blocks.reduce((sum, block) => sum + block.sentAfter, 0),
     };
@@ -113,12 +125,18 @@ function render(result, json){
         ' bytes=' + block.bytes +
         ' build=' + block.buildMs + 'ms' +
         ' sent-before=' + block.sentBefore +
-        ' sent-after=' + block.sentAfter);
+        ' sent-after=' + block.sentAfter +
+        ' serialize=' + block.serializeMs + 'ms' +
+        ' sent-before-ms=' + block.sentBeforeMs +
+        ' sent-after-ms=' + block.sentAfterMs);
     lines.push('# blocks=' + result.scanned +
         ' max-bytes=' + result.maxBytes +
         ' max-build=' + result.maxBuildMs + 'ms' +
         ' sent-before=' + result.sentBeforeBytes +
-        ' sent-after=' + result.sentAfterBytes);
+        ' sent-after=' + result.sentAfterBytes +
+        ' max-serialize=' + result.maxSerializeMs + 'ms' +
+        ' sent-before-ms=' + result.sentBeforeMs +
+        ' sent-after-ms=' + result.sentAfterMs);
     return lines.join('\n');
 }
 

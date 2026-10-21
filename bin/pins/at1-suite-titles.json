@@ -2525,15 +2525,6 @@
       "Xcall (XCALL) @regression @tier3 processResult the signed canonical binds result_status + payload hash (sig verified over the exact string)",
       "Xcall (XCALL) @regression @tier3 processResult verifies sigs, flips to completed, injects the callback with the decoded payload"
     ],
-    "23cf03fcc5a7c4b7": [
-      "bin/measure_vm_snapshot_bytes builds newest-first grouped SQL with optional bounds and a final limit argument",
-      "bin/measure_vm_snapshot_bytes issues SELECT statements only",
-      "bin/measure_vm_snapshot_bytes measures real builder bytes and transfer totals for each execution block",
-      "bin/measure_vm_snapshot_bytes parses bounds, limit, database and JSON mode",
-      "bin/measure_vm_snapshot_bytes rejects unknown flags and invalid numeric arguments",
-      "bin/measure_vm_snapshot_bytes renders block lines, the summary line and JSON",
-      "bin/measure_vm_snapshot_bytes returns a zero summary when no execution blocks match"
-    ],
     "23dc27a953bbb6c6": [
       "bridge_checkpoint_check: D2 escrow cross-check falsification: one broken binding at a time applies nothing refuses a checkpoint from BELOW the transfer snapshot_block (the stale-proof forgery)",
       "bridge_checkpoint_check: D2 escrow cross-check falsification: one broken binding at a time applies nothing refuses a checkpoint from another network",
@@ -16705,6 +16696,16 @@
       "Send handler: conditional gated handoff (PC-29) @regression @tier1 vector 2, TWO ACTIONS in one transaction: the snapshot base compounds",
       "Send handler: conditional gated handoff (PC-29) @regression @tier1 vector 3, SELF-SEND: applied literally, and the self-addressed MESSAGE satisfies it"
     ],
+    "e0eeac17fa63a759": [
+      "bin/measure_vm_snapshot_bytes builds newest-first grouped SQL with optional bounds and a final limit argument",
+      "bin/measure_vm_snapshot_bytes issues SELECT statements only",
+      "bin/measure_vm_snapshot_bytes measures real builder bytes and transfer totals for each execution block",
+      "bin/measure_vm_snapshot_bytes parses bounds, limit, database and JSON mode",
+      "bin/measure_vm_snapshot_bytes rejects unknown flags and invalid numeric arguments",
+      "bin/measure_vm_snapshot_bytes renders block lines, the summary line and JSON",
+      "bin/measure_vm_snapshot_bytes returns a zero summary when no execution blocks match",
+      "bin/measure_vm_snapshot_bytes times one serialization per block with a counter clock and prices both send shapes"
+    ],
     "e114e1b97d1caeb4": [
       "hubConfigStaleness (#2607) @regression derives the staleness limit as 3 poll intervals",
       "hubConfigStaleness (#2607) @regression exactly at the limit is not yet stale (boundary is exclusive)",
@@ -19369,7 +19370,7 @@
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
-        "test/unit/bin/measure_vm_snapshot_bytes.test.js": "23cf03fcc5a7c4b7",
+        "test/unit/bin/measure_vm_snapshot_bytes.test.js": "e0eeac17fa63a759",
         "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
