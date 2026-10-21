@@ -141,6 +141,9 @@ neither source sets one, so these defaults hold on an unconfigured box:
 |---|---|
 | `npm run api` | Start the indexer and API server |
 | `bin/run-db-tiers.sh` | Run the DB-backed tiers against a throwaway MariaDB it starts and drops |
+| `node bin/archive_heads_by_author.js --author ADDRESS` | Read-only; issues SELECTs only. Lists the author's archive heads at every status and summarizes refused sequences and later valid or unverified heads. `--expect-redrawn` exits 1 when no valid head follows a refused sequence. |
+| `node bin/bench_net_balance.js` | Read-only; issues SELECTs only. Times `getNetBalance` for the address and tick pairs with the longest credit/debit history, then reports per-key timings and p50/p95/max. `--batched` also times and checks grouped reads; `--blocks N` benchmarks recent ledger-changing blocks. |
+| `node bin/measure_vm_snapshot_bytes.js` | Read-only; issues SELECTs only. Builds uncached cross-chain VM snapshots for recent contract-execution blocks and reports serialized size, build time and serialization time. Select blocks with `--from N`, `--to N` and `--limit N`; add `--cached` to report cross-block cache hits and misses for the same blocks. |
 | `npm test` | Run unit tests (~9,881 tests) |
 | `npm run test:integration` | Integration tests (~293 tests, requires MariaDB) |
 | `npm run test:e2e` | End-to-end tests (46 tests, requires full stack) |
@@ -161,6 +164,8 @@ neither source sets one, so these defaults hold on an unconfigured box:
 | `npm run test:regression:full` | Full regression suite (8,566 tests) |
 | `npm run test:nodb` | All tests that don't require a database (10,134 tests) |
 | `npm run test:full` | Complete test suite (10,500 tests) |
+
+Run these readings from the indexer working directory against the database named by the indexer's own `INDEXER_DB_*` environment, and use `--json` to print JSON.
 
 ### Running the DB-backed tiers
 

@@ -20,13 +20,13 @@
  * worker IPC send: one JSON.stringify of the snapshot per send.
  *
  * Usage: node bin/measure_vm_snapshot_bytes.js
- *        [--from N] [--to N] [--limit N] [--db NAME] [--json]
+ *        [--from N] [--to N] [--limit N] [--db NAME] [--cached] [--json]
  *
  ********************************************************************/
 
 'use strict';
 
-const DEFAULTS = { from: null, to: null, limit: 50, db: null, json: false };
+const DEFAULTS = { from: null, to: null, limit: 50, db: null, cached: false, json: false };
 
 function integerArg(flag, value, positive){
     if(value === undefined || !/^\d+$/.test(value))
@@ -48,6 +48,7 @@ function parseArgs(argv){
             opts.db = argv[++i];
             if(!opts.db) throw new Error('--db needs a database name');
         }
+        else if(arg === '--cached') opts.cached = true;
         else if(arg === '--json') opts.json = true;
         else throw new Error('unknown argument ' + arg);
     }
@@ -104,7 +105,7 @@ async function measure(db, opts, now = Date.now){
             sentAfter: bytes,
         });
     }
-    return {
+    const result = {
         blocks,
         scanned: blocks.length,
         maxBytes: blocks.reduce((max, block) => Math.max(max, block.bytes), 0),
@@ -115,6 +116,41 @@ async function measure(db, opts, now = Date.now){
         sentBeforeBytes: blocks.reduce((sum, block) => sum + block.sentBefore, 0),
         sentAfterBytes: blocks.reduce((sum, block) => sum + block.sentAfter, 0),
     };
+    if(!opts.cached) return result;
+
+    const originalBuilder = db.buildCrossChainDataForVM;
+    const priorBlockIndex = db.blockIndex;
+    const cacheBlocks = [];
+    let builds = 0;
+    db.buildCrossChainDataForVM = async function(...args){
+        builds++;
+        return originalBuilder.apply(this, args);
+    };
+    try {
+        for(const block of blocks.slice().reverse()){
+            db.blockIndex = block.blockIndex;
+            db._vmSnapshotMemo = new Map();
+            builds = 0;
+            const started = now();
+            await db.getCrossChainDataForVM(block.blockIndex);
+            const ms = now() - started;
+            cacheBlocks.push({ blockIndex: block.blockIndex, hit: builds === 0, ms });
+        }
+    } finally {
+        db.buildCrossChainDataForVM = originalBuilder;
+        db.blockIndex = priorBlockIndex;
+        db._vmSnapshotMemo = null;
+    }
+    const hits = cacheBlocks.filter(block => block.hit);
+    const misses = cacheBlocks.filter(block => !block.hit);
+    result.cache = {
+        hits: hits.length,
+        misses: misses.length,
+        maxHitMs: hits.reduce((max, block) => Math.max(max, block.ms), 0),
+        maxMissMs: misses.reduce((max, block) => Math.max(max, block.ms), 0),
+        blocks: cacheBlocks,
+    };
+    return result;
 }
 
 function render(result, json){
@@ -137,6 +173,11 @@ function render(result, json){
         ' max-serialize=' + result.maxSerializeMs + 'ms' +
         ' sent-before-ms=' + result.sentBeforeMs +
         ' sent-after-ms=' + result.sentAfterMs);
+    if(result.cache) lines.push('# cache blocks=' + result.cache.blocks.length +
+        ' hits=' + result.cache.hits +
+        ' misses=' + result.cache.misses +
+        ' max-hit=' + result.cache.maxHitMs + 'ms' +
+        ' max-miss=' + result.cache.maxMissMs + 'ms');
     return lines.join('\n');
 }
 

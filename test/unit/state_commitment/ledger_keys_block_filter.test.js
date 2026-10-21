@@ -55,11 +55,12 @@ describe('ledgerKeysForBlock per-branch block filter @regression @tier1', functi
 describe('getNetBalance benchmark', function(){
     it('parses defaults and validates positive integer options', function(){
         assert.deepStrictEqual(BalanceBench.parseArgs([]),
-            { keys: 20, repeat: 3, db: null, json: false, batched: false });
+            { keys: 20, repeat: 3, blocks: 0, db: null, json: false, batched: false });
         assert.deepStrictEqual(BalanceBench.parseArgs(
             ['--keys', '7', '--repeat', '4', '--db', 'venue', '--json']),
-            { keys: 7, repeat: 4, db: 'venue', json: true, batched: false });
+            { keys: 7, repeat: 4, blocks: 0, db: 'venue', json: true, batched: false });
         assert.strictEqual(BalanceBench.parseArgs(['--batched']).batched, true);
+        assert.strictEqual(BalanceBench.parseArgs(['--blocks', '5']).blocks, 5);
         assert.throws(() => BalanceBench.parseArgs(['--keys', '0']), /positive integer/);
         assert.throws(() => BalanceBench.parseArgs(['--repeat']), /positive integer/);
         assert.throws(() => BalanceBench.parseArgs(['--db']), /database name/);

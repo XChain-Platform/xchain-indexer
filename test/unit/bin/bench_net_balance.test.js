@@ -7,9 +7,9 @@
 
 'use strict';
 
-// bin/bench_net_balance.js times getNetBalance per hot key and, under --batched,
-// the grouped getNetBalances over the same keys. Driven here with an injected
-// clock and a stub db whose doQueryStrict answers by SQL substring.
+// bin/bench_net_balance.js times getNetBalance per hot key and can time grouped
+// reads for those keys or for each recent block's touched keys. Driven here with
+// an injected clock and a stub db whose doQueryStrict answers by SQL substring.
 
 process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -18,7 +18,14 @@ const assert = require('assert');
 
 const { getTestConfig } = require('../../fixtures/config');
 const Utility = require('../../../src/utility');
-const { parseArgs, timeBatch, bench, render } = require('../../../bin/bench_net_balance.js');
+const {
+    parseArgs,
+    recentLedgerBlocksQuery,
+    timeBatch,
+    timeBlocks,
+    bench,
+    render
+} = require('../../../bin/bench_net_balance.js');
 
 const util = new Utility(getTestConfig());
 
@@ -29,14 +36,21 @@ const HOT = [
 ];
 const NETS = { 'a1\tXCHAIN': '10', 'a2\tXCHAIN': '2.5', 'a3\tPEPE': '0' };
 
-function stubDb(batchedOverride) {
+function stubDb(batchedOverride, recentBlocks, blockKeys) {
     const queries = [];
     return {
         util,
         queries,
-        batched() { return queries.filter(q => /SELECT 0 AS i/.test(q)); },
+        batched() { return queries.filter(q => /SELECT 0 AS i/.test(q.sql)); },
+        recentBlocks() { return queries.filter(q => /SELECT DISTINCT s\.block_index/.test(q.sql)); },
+        blockKeyReads() { return queries.filter(q => /WHERE a\.block_index = \?/.test(q.sql)); },
         async doQueryStrict(sql, params) {
-            queries.push(sql);
+            queries.push({ sql, params });
+            if (/SELECT DISTINCT s\.block_index/.test(sql))
+                return (recentBlocks || []).map(block_index => ({ block_index }));
+            if (/WHERE a\.block_index = \?/.test(sql))
+                return ((blockKeys && blockKeys[Number(params[0])]) || [])
+                    .map(([address, tick]) => ({ address, tick }));
             if (/LIMIT \d+/.test(sql)) return HOT.map(h => ({ address: h.address, tick: h.tick, rows: h.rows }));
             if (/SELECT 0 AS i/.test(sql)) {
                 const rows = [];
@@ -66,11 +80,28 @@ describe('bin/bench_net_balance', function () {
         assert.strictEqual(parseArgs([]).batched, false);
     });
 
-    it('issues no batched query and returns no batch without --batched', async function () {
+    it('parses --blocks through the positive integer check and defaults it off', function () {
+        assert.strictEqual(parseArgs(['--blocks', '5']).blocks, 5);
+        assert.strictEqual(parseArgs([]).blocks, 0);
+        assert.throws(() => parseArgs(['--blocks', '0']), /needs a positive integer/);
+        assert.throws(() => parseArgs(['--blocks', 'x']), /needs a positive integer/);
+        const query = recentLedgerBlocksQuery(7);
+        assert.deepStrictEqual(query.args, [7]);
+        assert.match(query.sql, /^SELECT DISTINCT/);
+        assert.match(query.sql, /FROM credits c/);
+        assert.match(query.sql, /FROM debits d/);
+        assert.strictEqual((query.sql.match(/INNER JOIN actions/g) || []).length, 2);
+        assert.match(query.sql, /ORDER BY s\.block_index DESC\s+LIMIT \?$/);
+    });
+
+    it('issues no optional queries and returns no optional results without their flags', async function () {
         const db = stubDb();
         const res = await bench(db, parseArgs(['--keys', '3', '--repeat', '2']), stepClock([1]));
         assert.strictEqual(db.batched().length, 0);
+        assert.strictEqual(db.recentBlocks().length, 0);
+        assert.strictEqual(db.blockKeyReads().length, 0);
         assert.strictEqual(res.batch, undefined);
+        assert.strictEqual(res.perBlock, undefined);
         assert.strictEqual(res.timings.length, 3);
     });
 
@@ -101,6 +132,46 @@ describe('bin/bench_net_balance', function () {
         assert.strictEqual(batch.mismatches, 0);
     });
 
+    it('times each recent block over its touched keys', async function () {
+        const db = stubDb(null, ['12', 9], {
+            12: [['a1', 'XCHAIN'], ['a2', 'XCHAIN'], ['a3', 'PEPE']],
+            9: [['a2', 'XCHAIN']],
+        });
+        const hotKeySteps = new Array(12).fill(1);
+        const blockSteps = [0, 3, 0, 7, 0, 4, 0, 2, 0, 6, 0, 5];
+        const result = await bench(
+            db,
+            parseArgs(['--keys', '3', '--repeat', '2', '--blocks', '2']),
+            stepClock(hotKeySteps.concat(blockSteps))
+        );
+
+        assert.strictEqual(db.recentBlocks().length, 1);
+        assert.deepStrictEqual(db.recentBlocks()[0].params, [2]);
+        assert.deepStrictEqual(db.blockKeyReads().map(q => q.params), [[12, 12], [9, 9]]);
+        assert.strictEqual(db.batched().length, 4);
+        assert.deepStrictEqual(db.batched().map(q => q.params), [
+            ['a1', 'XCHAIN', 'a2', 'XCHAIN', 'a3', 'PEPE'],
+            ['a1', 'XCHAIN', 'a2', 'XCHAIN', 'a3', 'PEPE'],
+            ['a2', 'XCHAIN'],
+            ['a2', 'XCHAIN'],
+        ]);
+        assert.deepStrictEqual(result.perBlock, {
+            blocks: [
+                { block: 12, keys: 3, keysMs: 3, coldMs: 7, ms: 4 },
+                { block: 9, keys: 1, keysMs: 2, coldMs: 6, ms: 5 },
+            ],
+            summary: { count: 2, maxKeys: 3, p50Ms: 4, p95Ms: 5, maxMs: 5 },
+        });
+    });
+
+    it('returns a zero per-block summary when the recent-block query is empty', async function () {
+        const perBlock = await timeBlocks(stubDb(), 4, 2, stepClock([1]));
+        assert.deepStrictEqual(perBlock, {
+            blocks: [],
+            summary: { count: 0, maxKeys: 0, p50Ms: 0, p95Ms: 0, maxMs: 0 },
+        });
+    });
+
     it('render prints the batch line only when a batch is present', function () {
         const base = { keys: 1, repeat: 2, timings: [], summary: { count: 0, p50Ms: 0, p95Ms: 0, maxMs: 0 } };
         assert.ok(!/# batch/.test(render(base, false)));
@@ -109,5 +180,18 @@ describe('bin/bench_net_balance', function () {
         }), false);
         assert.ok(out.split('\n').includes('# batch keys=3 repeat=2 cold=8.00ms best=4.00ms per-key=1.33ms mismatches=1'));
         assert.strictEqual(JSON.parse(render(Object.assign({}, base, { batch: { keys: 3 } }), true)).batch.keys, 3);
+    });
+
+    it('render prints per-block detail and summary lines only when present', function () {
+        const base = { keys: 1, repeat: 2, timings: [], summary: { count: 0, p50Ms: 0, p95Ms: 0, maxMs: 0 } };
+        assert.ok(!/# block/.test(render(base, false)));
+        const perBlock = {
+            blocks: [{ block: 12, keys: 3, keysMs: 3, coldMs: 7, ms: 4 }],
+            summary: { count: 1, maxKeys: 3, p50Ms: 4, p95Ms: 4, maxMs: 4 },
+        };
+        const out = render(Object.assign({}, base, { perBlock }), false).split('\n');
+        assert.ok(out.includes('# block 12 keys=3 keys-read=3.00ms cold=7.00ms best=4.00ms'));
+        assert.ok(out.includes('# per-block blocks=1 max-keys=3 p50=4.00ms p95=4.00ms max=4.00ms'));
+        assert.deepStrictEqual(JSON.parse(render(Object.assign({}, base, { perBlock }), true)).perBlock, perBlock);
     });
 });

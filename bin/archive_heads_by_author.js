@@ -19,11 +19,11 @@
  * SELECTs only.
  *
  * Reads connection settings from the indexer environment (INDEXER_DB_HOST/PORT/
- * NAME/USER/PASS, INDEXER_COIN, INDEXER_NETWORK). Exits 0 on success and 2 on
- * a usage or database error.
+ * NAME/USER/PASS, INDEXER_COIN, INDEXER_NETWORK). Exits 0 on success, 1 when
+ * an expected redraw is absent, and 2 on a usage or database error.
  *
  * Usage:  node bin/archive_heads_by_author.js --author ADDRESS
- *         [--from-seq N] [--limit N] [--db NAME] [--json]
+ *         [--from-seq N] [--limit N] [--db NAME] [--json] [--expect-redrawn]
  *
  ********************************************************************/
 
@@ -32,7 +32,9 @@
 const { ARCHIVE_REISSUE_RETRY_REASON } =
     require('../src/actions/anchor/archive/archive_reissue.js');
 
-const DEFAULTS = { author: null, fromSeq: null, limit: 50, db: null, json: false };
+const DEFAULTS = {
+    author: null, fromSeq: null, limit: 50, db: null, json: false, expectRedrawn: false
+};
 
 function valueAfter(argv, index, flag){
     const value = argv[index + 1];
@@ -59,6 +61,7 @@ function parseArgs(argv){
         else if(arg === '--limit') opts.limit = integerArg(valueAfter(argv, i++, arg), arg, false);
         else if(arg === '--db') opts.db = valueAfter(argv, i++, arg);
         else if(arg === '--json') opts.json = true;
+        else if(arg === '--expect-redrawn') opts.expectRedrawn = true;
         else throw new Error('unknown argument ' + arg);
     }
     if(!opts.author) throw new Error('--author is required');
@@ -117,6 +120,11 @@ function summarize(rows){
     };
 }
 
+function exitCodeFor(summary, opts){
+    if(opts.expectRedrawn && (summary.refused === 0 || !summary.redrawnAbove)) return 1;
+    return 0;
+}
+
 async function readHeads(db, opts){
     const query = archiveHeadsQuery(opts);
     const rows = await db.doQueryStrict(query.sql, query.args);
@@ -162,11 +170,12 @@ async function main(argv){
     const opts = parseArgs(argv);
     const db = await openIndexerDb(opts);
     try {
-        console.log(render(await readHeads(db, opts), opts.json));
+        const result = await readHeads(db, opts);
+        console.log(render(result, opts.json));
+        return exitCodeFor(result.summary, opts);
     } finally {
         if(db.close) await db.close();
     }
-    return 0;
 }
 
 if(require.main === module){
@@ -176,4 +185,4 @@ if(require.main === module){
     });
 }
 
-module.exports = { parseArgs, archiveHeadsQuery, summarize, readHeads, render };
+module.exports = { parseArgs, archiveHeadsQuery, summarize, exitCodeFor, readHeads, render };

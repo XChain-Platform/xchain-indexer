@@ -1098,14 +1098,6 @@
       "Dispenser refill controller guard @regression @tier2 active: an edit that adds no escrow is not guarded",
       "Dispenser refill controller guard @regression @tier2 inactive: the same denied refill is unguarded and settles"
     ],
-    "0ec8a8b3eee6cb90": [
-      "bin/bench_net_balance issues no batched query and returns no batch without --batched",
-      "bin/bench_net_balance parses --batched to true and its absence to false",
-      "bin/bench_net_balance render prints the batch line only when a batch is present",
-      "bin/bench_net_balance reports a mismatch when the batched net differs for a key",
-      "bin/bench_net_balance returns zeros for no keys",
-      "bin/bench_net_balance times getNetBalances over the same keys under --batched"
-    ],
     "0ef5583765eab080": [
       "repair-validator-stats missed_count @regression a legacy row re-derives through the same routine the reorg recompute uses",
       "repair-validator-stats missed_count @regression an empty pin charges nobody",
@@ -5017,18 +5009,6 @@
       "compat gate: startup-required tables covers every table named in each assert*TablesPresent REQUIRED list",
       "compat gate: startup-required tables every required table has a src/sql definition the product createTable can build",
       "compat gate: startup-required tables exports the startup table reader and builder"
-    ],
-    "464e44254a160d66": [
-      "bin/archive_heads_by_author adds the from-seq filter and argument before the limit",
-      "bin/archive_heads_by_author builds an all-status query without a from-seq filter",
-      "bin/archive_heads_by_author does not count another invalid status as refused",
-      "bin/archive_heads_by_author parses the required author and optional filters",
-      "bin/archive_heads_by_author reads through doQueryStrict and returns rows with their summary",
-      "bin/archive_heads_by_author rejects missing and invalid arguments",
-      "bin/archive_heads_by_author renders every head followed by the summary",
-      "bin/archive_heads_by_author renders the complete result as JSON",
-      "bin/archive_heads_by_author requires a valid head above every refused sequence for redrawn-above",
-      "bin/archive_heads_by_author summarizes no rows"
     ],
     "46583f298dcec09f": [
       "protocol_changes active-stake collation gate @regression @tier1 is inert when height is null or non-finite",
@@ -9665,6 +9645,18 @@
       "Legacy db-hits fee accumulation @regression @tier3 SWEEP below flag-day: db_hits reproduces the \"1400\" string-concat",
       "Legacy db-hits fee accumulation @regression @tier3 SWEEP: db_hits stays an integer Number across all three += terms"
     ],
+    "84150d96eb17417e": [
+      "bin/bench_net_balance issues no optional queries and returns no optional results without their flags",
+      "bin/bench_net_balance parses --batched to true and its absence to false",
+      "bin/bench_net_balance parses --blocks through the positive integer check and defaults it off",
+      "bin/bench_net_balance render prints per-block detail and summary lines only when present",
+      "bin/bench_net_balance render prints the batch line only when a batch is present",
+      "bin/bench_net_balance reports a mismatch when the batched net differs for a key",
+      "bin/bench_net_balance returns a zero per-block summary when the recent-block query is empty",
+      "bin/bench_net_balance returns zeros for no keys",
+      "bin/bench_net_balance times each recent block over its touched keys",
+      "bin/bench_net_balance times getNetBalances over the same keys under --batched"
+    ],
     "847077f2b2d82a7e": [
       "protocol_changes SEND_GATED_TOTAL_TICK_ID row is active on regtest at genesis, inactive on every mainnet chain and armed on each testnet chain",
       "protocol_changes SEND_GATED_TOTAL_TICK_ID row registers the per-network time map"
@@ -13057,6 +13049,19 @@
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 offsets emission position by emissions already recorded for the action (multiple guards on one action_index stay collision-free)",
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 rolls back the parent row with the emissions when a guard emission fails (denied guard leaves no record)",
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 writes a contract_executions parent row keyed to the native action_index (so the contract_hash INNER JOIN resolves the emissions)"
+    ],
+    "b111170e06e231ab": [
+      "bin/archive_heads_by_author adds the from-seq filter and argument before the limit",
+      "bin/archive_heads_by_author builds an all-status query without a from-seq filter",
+      "bin/archive_heads_by_author does not count another invalid status as refused",
+      "bin/archive_heads_by_author maps the redraw expectation and summary to an exit code",
+      "bin/archive_heads_by_author parses the required author and optional filters",
+      "bin/archive_heads_by_author reads through doQueryStrict and returns rows with their summary",
+      "bin/archive_heads_by_author rejects missing and invalid arguments",
+      "bin/archive_heads_by_author renders every head followed by the summary",
+      "bin/archive_heads_by_author renders the complete result as JSON",
+      "bin/archive_heads_by_author requires a valid head above every refused sequence for redrawn-above",
+      "bin/archive_heads_by_author summarizes no rows"
     ],
     "b119a047da6992c8": [
       "XChainIndexer prototype composition @tier1 no composed method shadows a class-body method",
@@ -16705,16 +16710,6 @@
       "Send handler: conditional gated handoff (PC-29) @regression @tier1 vector 2, TWO ACTIONS in one transaction: the snapshot base compounds",
       "Send handler: conditional gated handoff (PC-29) @regression @tier1 vector 3, SELF-SEND: applied literally, and the self-addressed MESSAGE satisfies it"
     ],
-    "e0eeac17fa63a759": [
-      "bin/measure_vm_snapshot_bytes builds newest-first grouped SQL with optional bounds and a final limit argument",
-      "bin/measure_vm_snapshot_bytes issues SELECT statements only",
-      "bin/measure_vm_snapshot_bytes measures real builder bytes and transfer totals for each execution block",
-      "bin/measure_vm_snapshot_bytes parses bounds, limit, database and JSON mode",
-      "bin/measure_vm_snapshot_bytes rejects unknown flags and invalid numeric arguments",
-      "bin/measure_vm_snapshot_bytes renders block lines, the summary line and JSON",
-      "bin/measure_vm_snapshot_bytes returns a zero summary when no execution blocks match",
-      "bin/measure_vm_snapshot_bytes times one serialization per block with a counter clock and prices both send shapes"
-    ],
     "e114e1b97d1caeb4": [
       "hubConfigStaleness (#2607) @regression derives the staleness limit as 3 poll intervals",
       "hubConfigStaleness (#2607) @regression exactly at the limit is not yet stale (boundary is exclusive)",
@@ -17463,6 +17458,19 @@
       "stateCommitment.reportOrphanStats @regression @tier2 returns all-zero for an empty store",
       "stateCommitment.reportOrphanStats @regression @tier2 stops the walk at maxNodes and flags the truncated figure as an estimate"
     ],
+    "eb59df70c735f939": [
+      "bin/measure_vm_snapshot_bytes builds newest-first grouped SQL with optional bounds and a final limit argument",
+      "bin/measure_vm_snapshot_bytes issues SELECT statements only",
+      "bin/measure_vm_snapshot_bytes measures cached mode with getCrossChainDataForVM from src/db/blocks",
+      "bin/measure_vm_snapshot_bytes measures real builder bytes and transfer totals for each execution block",
+      "bin/measure_vm_snapshot_bytes parses bounds, limit, database, cached and JSON modes",
+      "bin/measure_vm_snapshot_bytes rejects unknown flags and invalid numeric arguments",
+      "bin/measure_vm_snapshot_bytes renders block lines, the summary line and JSON",
+      "bin/measure_vm_snapshot_bytes reports one miss then hits in oldest-first cached mode and restores database state",
+      "bin/measure_vm_snapshot_bytes restores the original builder and database state when cached measurement throws",
+      "bin/measure_vm_snapshot_bytes returns a zero summary when no execution blocks match",
+      "bin/measure_vm_snapshot_bytes times one serialization per block with a counter clock and prices both send shapes"
+    ],
     "eb89e21438d117f3": [
       "ROLLCALL base-rail regtest resolver matches the running parser @regression @tier1 agrees with regtestHeight on every accepted, refused and garbage input",
       "ROLLCALL base-rail regtest resolver matches the running parser @regression @tier1 lands on the documented values, so agreement is not two copies of one mistake"
@@ -17727,6 +17735,11 @@
     "f04d7472fea5effd": [
       "config currencies applies only the consensus coin and fiat currency lists",
       "config currencies produces an equal result when applied twice"
+    ],
+    "f06356417a9239f4": [
+      "operator reading scripts ship with their runtime dependencies @regression @tier1 covers each script and every relative require with a Dockerfile COPY source",
+      "operator reading scripts ship with their runtime dependencies @regression @tier1 limits bare requires to Node builtins and declared production dependencies",
+      "operator reading scripts ship with their runtime dependencies @regression @tier1 reports a reading script when its COPY line is removed"
     ],
     "f0b2b5a7508e3997": [
       "Coinpay (COINPAY) @regression @tier2 null matchOrders / orderInfo guard orders marked complete when GIVE_REMAINING <= 0 after settlement",
@@ -18789,8 +18802,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1497,
-      "titleCount": 14554,
+      "fileCount": 1498,
+      "titleCount": 14565,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19367,13 +19380,13 @@
         "test/unit/attestation/relayed_attestation_requests.test.js": "3904e3eba82ab03f",
         "test/unit/attestation/repair_validator_stats_drift.test.js": "b2c12d6af08b6d99",
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
-        "test/unit/bin/archive_heads_by_author.test.js": "464e44254a160d66",
+        "test/unit/bin/archive_heads_by_author.test.js": "b111170e06e231ab",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
-        "test/unit/bin/bench_net_balance.test.js": "0ec8a8b3eee6cb90",
+        "test/unit/bin/bench_net_balance.test.js": "84150d96eb17417e",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
-        "test/unit/bin/measure_vm_snapshot_bytes.test.js": "e0eeac17fa63a759",
+        "test/unit/bin/measure_vm_snapshot_bytes.test.js": "eb59df70c735f939",
         "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
@@ -20148,6 +20161,7 @@
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/repo_guards/sibling_checkout.test.js": "595bbb01e039e4ad",
         "test/unit/repo_guards/sibling_coverage.test.js": "d8d1e52267ea606f",
         "test/unit/repo_guards/vm_execute_network.test.js": "7413c1c4c27e27e9",
@@ -20667,8 +20681,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1134,
-      "titleCount": 11474,
+      "fileCount": 1135,
+      "titleCount": 11477,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21702,6 +21716,7 @@
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/rewards/create_validator_reward_callsites.test.js": "42b3ffd148cc346b",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/derived_projections/market_stamp_surviving_tip.test.js": "bd9cc053b1689615",
@@ -21807,8 +21822,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 564,
-      "titleCount": 6038,
+      "fileCount": 565,
+      "titleCount": 6041,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22330,6 +22345,7 @@
         "test/unit/remote_token/admitted_pin_read.test.js": "76ff5d508163927d",
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/rewards/create_validator_reward_callsites.test.js": "42b3ffd148cc346b",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
@@ -22377,8 +22393,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1134,
-      "titleCount": 11474,
+      "fileCount": 1135,
+      "titleCount": 11477,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23412,6 +23428,7 @@
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
+        "test/unit/repo_guards/reading_scripts_ship.test.js": "f06356417a9239f4",
         "test/unit/rewards/create_validator_reward_callsites.test.js": "42b3ffd148cc346b",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/derived_projections/market_stamp_surviving_tip.test.js": "bd9cc053b1689615",

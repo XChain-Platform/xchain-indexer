@@ -22,7 +22,7 @@
  * Reads connection settings from the indexer environment (INDEXER_DB_HOST/PORT/
  * NAME/USER/PASS, INDEXER_COIN, INDEXER_NETWORK).
  *
- * Usage:  node bin/bench_net_balance.js [--keys N] [--repeat R] [--db NAME] [--batched] [--json]
+ * Usage:  node bin/bench_net_balance.js [--keys N] [--repeat R] [--blocks N] [--db NAME] [--batched] [--json]
  *
  * --batched (default off) also times the grouped getNetBalances over the same
  * hot keys, after the per-key timings, and checks each batched net against the
@@ -32,9 +32,14 @@
 
 'use strict';
 
-const { getNetBalance, getNetBalances, getHottestLedgerKeys } = require('../src/db/state_commitment/ledger_reads.js');
+const {
+    getNetBalance,
+    getNetBalances,
+    getHottestLedgerKeys,
+    ledgerKeysForBlock
+} = require('../src/db/state_commitment/ledger_reads.js');
 
-const DEFAULTS = { keys: 20, repeat: 3, db: null, json: false, batched: false };
+const DEFAULTS = { keys: 20, repeat: 3, blocks: 0, db: null, json: false, batched: false };
 
 function positiveInt(flag, raw){
     const n = Number(raw);
@@ -49,6 +54,7 @@ function parseArgs(argv){
         const a = argv[i];
         if(a === '--keys')        opts.keys   = positiveInt(a, argv[++i]);
         else if(a === '--repeat') opts.repeat = positiveInt(a, argv[++i]);
+        else if(a === '--blocks') opts.blocks = positiveInt(a, argv[++i]);
         else if(a === '--db'){
             opts.db = argv[++i];
             if(!opts.db) throw new Error('--db needs a database name');
@@ -76,6 +82,21 @@ function summarize(timings){
         p50Ms: percentile(ms, 50),
         p95Ms: percentile(ms, 95),
         maxMs: ms.length ? Math.max(...ms) : 0
+    };
+}
+
+function recentLedgerBlocksQuery(limit){
+    return {
+        sql: `SELECT DISTINCT s.block_index AS block_index FROM (
+                SELECT a.block_index FROM credits c
+                  INNER JOIN actions a ON a.action_index = c.action_index
+                UNION ALL
+                SELECT a.block_index FROM debits d
+                  INNER JOIN actions a ON a.action_index = d.action_index
+              ) s
+              ORDER BY s.block_index DESC
+              LIMIT ?`,
+        args: [limit]
     };
 }
 
@@ -121,11 +142,53 @@ async function timeBatch(db, timings, repeat, now){
     return { keys, coldMs: cold === null ? 0 : cold, ms, perKeyMs: keys ? ms / keys : 0, mismatches };
 }
 
+async function timeBlocks(db, limit, repeat, now){
+    const clock = now || (() => Number(process.hrtime.bigint()) / 1e6);
+    const query = recentLedgerBlocksQuery(limit);
+    const rows = await db.doQueryStrict(query.sql, query.args);
+    const blocks = [];
+    for(const row of (rows || [])){
+        const block = Number(row.block_index);
+        const keysStarted = clock();
+        const keySet = await ledgerKeysForBlock(db, block);
+        const keysMs = clock() - keysStarted;
+        const pairs = Array.from(keySet, key => key.split('\t'));
+        let coldMs = null;
+        let bestMs = Infinity;
+        for(let i = 0; i < repeat; i++){
+            const started = clock();
+            await getNetBalances(db, pairs);
+            const elapsed = clock() - started;
+            if(coldMs === null) coldMs = elapsed;
+            if(elapsed < bestMs) bestMs = elapsed;
+        }
+        blocks.push({
+            block,
+            keys: pairs.length,
+            keysMs,
+            coldMs: coldMs === null ? 0 : coldMs,
+            ms: coldMs === null ? 0 : bestMs
+        });
+    }
+    const timings = blocks.map(block => block.ms);
+    return {
+        blocks,
+        summary: {
+            count: blocks.length,
+            maxKeys: blocks.length ? Math.max(...blocks.map(block => block.keys)) : 0,
+            p50Ms: percentile(timings, 50),
+            p95Ms: percentile(timings, 95),
+            maxMs: timings.length ? Math.max(...timings) : 0
+        }
+    };
+}
+
 async function bench(db, opts, now){
     const keys = await getHottestLedgerKeys(db, opts.keys);
     const timings = await timeKeys(db, keys, opts.repeat, now);
     const result = { keys: keys.length, repeat: opts.repeat, timings, summary: summarize(timings) };
     if(opts.batched) result.batch = await timeBatch(db, timings, opts.repeat, now);
+    if(opts.blocks > 0) result.perBlock = await timeBlocks(db, opts.blocks, opts.repeat, now);
     return result;
 }
 
@@ -143,6 +206,16 @@ function render(result, json){
         lines.push('# batch keys=' + b.keys + ' repeat=' + result.repeat + ' cold=' + b.coldMs.toFixed(2) +
                    'ms best=' + b.ms.toFixed(2) + 'ms per-key=' + b.perKeyMs.toFixed(2) +
                    'ms mismatches=' + b.mismatches);
+    const perBlock = result.perBlock;
+    if(perBlock){
+        for(const block of perBlock.blocks)
+            lines.push('# block ' + block.block + ' keys=' + block.keys + ' keys-read=' + block.keysMs.toFixed(2) +
+                       'ms cold=' + block.coldMs.toFixed(2) + 'ms best=' + block.ms.toFixed(2) + 'ms');
+        const summary = perBlock.summary;
+        lines.push('# per-block blocks=' + summary.count + ' max-keys=' + summary.maxKeys +
+                   ' p50=' + summary.p50Ms.toFixed(2) + 'ms p95=' + summary.p95Ms.toFixed(2) +
+                   'ms max=' + summary.maxMs.toFixed(2) + 'ms');
+    }
     return lines.join('\n');
 }
 
@@ -181,4 +254,14 @@ if(require.main === module){
     });
 }
 
-module.exports = { parseArgs, percentile, summarize, timeKeys, timeBatch, bench, render };
+module.exports = {
+    parseArgs,
+    percentile,
+    summarize,
+    recentLedgerBlocksQuery,
+    timeKeys,
+    timeBatch,
+    timeBlocks,
+    bench,
+    render
+};
