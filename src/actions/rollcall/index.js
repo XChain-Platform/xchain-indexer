@@ -121,7 +121,16 @@ class Rollcall {
                 // rebuilds from this column, so any normalisation here would break
                 // every signature it re-checks. Null on a v0 row.
                 gates:        gates
-            })));
+            })), {
+                // The action's own row (db/rollcalls): written even when every pubkey
+                // was already seen and no signer row lands, so it can still be listed.
+                action_index: data['ACTION_INDEX'],
+                block_index:  data['BLOCK_INDEX'],
+                epoch_height: epochHeight,
+                ledger_hash:  ledgerHash,
+                publisher:    publisher,
+                gates:        gates
+            });
         }
 
         data['STATUS'] = (error) ? error : 'valid';
