@@ -39,6 +39,40 @@ function connectionParams(self){
     });
 }
 
+// The user-chosen u64 wire columns (config/wire_fields.js, bounded at U64_MAX). Every other
+// BIGINT column is chain-bounded and keeps the plain Number read.
+const U64_WIRE_COLUMNS = new Set([
+    'expiration', 'deadline', 'allow_list', 'block_list', 'refund_window', 'expire_at'
+]);
+
+// Exact form of a u64 read: a JS Number while the value is a safe integer (identical to the
+// bigIntAsNumber read, so every ordinary value is untouched), the exact decimal string above
+// 2^53 where a Number would round. A null column reads as nullValue (null by default; the
+// readers that used Number(null) === 0 pass 0 to keep that read); non-numeric input is
+// returned unchanged.
+function exactU64(value, nullValue = null){
+    if(value === null)
+        return nullValue;
+    if(value === undefined || value === false)
+        return value;
+    if(typeof value === 'bigint')
+        return (value <= BigInt(Number.MAX_SAFE_INTEGER)) ? Number(value) : value.toString();
+    if(typeof value === 'number')
+        return value;
+    let text = String(value);
+    if(!/^\d+$/.test(text))
+        return value;
+    return (BigInt(text) <= BigInt(Number.MAX_SAFE_INTEGER)) ? Number(text) : text;
+}
+
+// Pool typeCast: read the u64 wire BIGINT columns through exactU64 (via their text form, which
+// the driver hands over unrounded) and leave every other column to the default cast.
+function u64TypeCast(column, next){
+    if(column.type === 'LONGLONG' && U64_WIRE_COLUMNS.has(String(column.name()).toLowerCase()))
+        return exactU64(column.string());
+    return next();
+}
+
 // The pool parameters: the same credentials plus the pool's own connection options.
 function connectionPoolParams(self){
     return withPinnedSqlMode({
@@ -66,9 +100,10 @@ function connectionPoolParams(self){
         // (heights, indexes, times) stay within Number.MAX_SAFE_INTEGER, but
         // the user-chosen u64 wire fields (EXPIRATION, DEADLINE, ALLOW_LIST
         // and the rest bounded at U64_MAX in config/wire_fields.js) are not:
-        // a stored value above 2^53 reads back rounded here, and is
-        // replicated rounded, until those reads move to an exact form.
+        // a stored value above 2^53 would read back rounded, so those
+        // columns go through u64TypeCast and read as an exact decimal string.
         bigIntAsNumber:       true,
+        typeCast:             u64TypeCast,
         minDelayValidation:   3000,
         queryTimeout:         parseInt(CONFIG_ENV.DB_QUERY_TIMEOUT) || 30000
     });
@@ -187,6 +222,8 @@ function initTransactionState(self){
 }
 
 module.exports = {
+    exactU64,
+    u64TypeCast,
     connectionParams,
     connectionPoolParams,
     initIndexIdState,

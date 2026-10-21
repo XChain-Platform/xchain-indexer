@@ -21,6 +21,7 @@
 
 // The bets mixin is cut into parts by behaviour under bets/; this entry merges them
 // back into the one method set db/index.js installs, at the position those methods held here.
+const { exactU64 } = require('../database/instance_state');
 const records       = require('./records.js');
 const listings      = require('./listings.js');
 const terminalBatch = require('./terminal_batch.js');
@@ -94,6 +95,7 @@ function formatBetFeedInfo(row, util){
         'ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'DEADLINE', 'REFUND_WINDOW',
         'EXPIRE_AT', 'ALLOW_LIST', 'BLOCK_LIST', 'CLOSED_BLOCK', 'TERMINAL_BLOCK'
     ];
+    const u64Fields = ['DEADLINE', 'REFUND_WINDOW', 'EXPIRE_AT', 'ALLOW_LIST', 'BLOCK_LIST'];
     for(let key in row){
         let name  = String(key).toUpperCase();
         let value = row[key];
@@ -103,7 +105,7 @@ function formatBetFeedInfo(row, util){
         // rejecting all bets. Amount-ish fields (fee/min_amount) stay
         // strings for bignumber math
         if(!util.isNull(value) && numericFields.includes(name))
-            value = Number(value);
+            value = u64Fields.includes(name) ? exactU64(value) : Number(value);
         feed[name] = value;
     }
     return feed;
