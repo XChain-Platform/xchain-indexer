@@ -1,4 +1,4 @@
-// Fixture for rollcall_actions (XC-5960). Run: node --test src/sql/rollcall_actions.test.js
+// Fixture for rollcall_actions. Run: node --test src/sql/rollcall_actions.test.js
 // Self-contained: a tiny in-memory stand-in for doQuery, no database or mocha needed.
 const test = require('node:test');
 const assert = require('node:assert');
