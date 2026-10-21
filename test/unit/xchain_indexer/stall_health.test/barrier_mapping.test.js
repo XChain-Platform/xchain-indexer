@@ -133,13 +133,13 @@ const EXPECTED = [
     ['snapshot_sync_barrier',           null,                          'null'],          // presence, not wall clock
     // Host faults, not mirror barriers: none of them has a clock instant to name, and a
     // grace field appearing on one would be a category error rather than a drift.
-    ['parse_exception:',                null,                          'null'],          // repeated parse failure, by prefix
     ['vm_executor_unavailable',         null,                          'null'],
     ['anchor_reward_proof_unavailable', null,                          'null'],
     ['bridge_proof_barrier',            null,                          'null'],
     ['rollcall_proof_unavailable',      null,                          'null'],
     ['list_share_snapshot_barrier',     null,                          'null'],
-    ['list_share_halt',                 null,                          'null']
+    ['list_share_halt',                 null,                          'null'],
+    ['parse_exception:',                null,                          'null']          // repeated parse failure, by prefix
 ];
 describe('barrier stallClearsAt grace-field mapping @regression', function () {
 

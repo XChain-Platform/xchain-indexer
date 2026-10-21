@@ -164,8 +164,10 @@ const ARCHIVE_HEAD_AUTHOR_SQL =
 // orphan chunk is parsed with no parent to authenticate against, so a junk chunk
 // broadcast ahead of the head can only be excluded here.
 //
-// Callers dedupe to one row per chunk_index (lowest action_index wins) after this
-// query; the ORDER BY makes that deterministic. Params: [batchSeq, foldFloor, batchSeq].
+// Callers resolve each chunk_index by lowest action_index after this query; recovery
+// first keeps one candidate per declared geometry so the head total can discard a
+// mismatched orphan without hiding a later correct row. The ORDER BY makes both
+// tie-breaks deterministic. Params: [batchSeq, foldFloor, batchSeq].
 // Shared verbatim by db.getAnchorChunks and recovery.js's reassembly (which holds only
 // a doQuery handle) so the two cannot drift. Two other places join v2 chunks to a head
 // by seq. The invalid_archive rollback reset self-join (db/rollback/batch_heads.js)

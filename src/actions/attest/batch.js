@@ -58,11 +58,32 @@ function stampBatchContinuation(context, data, chunk, error){
     data['REQUEST_ID'] = chunk && chunk.ok ? chunk.batchKey : '';
     data['VERSION']    = abw.ATTEST_BATCH_CONTINUATION_VERSION;
     data['STATUS']     = error || 'valid';
-    context.stampBatchColumns(data, chunk, chunk && chunk.ok ? chunk.chunkIndex : null);
+    stampBatchColumns(data, chunk, chunk && chunk.ok ? chunk.chunkIndex : null);
 
     getLogger().info("\t ATTEST v6 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
                 (chunk && chunk.ok ? ' : chunk=' + chunk.chunkIndex + '/' + chunk.totalChunks : '') +
                 ' : ' + data['STATUS']);
+}
+
+// Persist the chunk-table half of a batch action: this wire's slot, its body slice and,
+// on a head, the window header. The header is stored because it is the INPUT to a later
+// reassembly: a continuation landing after the head has no other way to rebuild the head
+// it must verify the assembled body against.
+//
+// @param {Object} data the landing action
+// @param {Object} parsed the parsed head or continuation (null/failed leaves every column NULL)
+// @param {number} chunkIndex this wire's slot: 0 for a head, its own index for a continuation
+function stampBatchColumns(data, parsed, chunkIndex){
+    if(!parsed || parsed.ok !== true) return;
+    data['BATCH_CRC32']  = parsed.batchCrc32;
+    data['TOTAL_CHUNKS'] = parsed.totalChunks;
+    data['CHUNK_INDEX']  = chunkIndex;
+    data['CHUNK_B64']    = parsed.chunkB64;
+    if(chunkIndex !== 0) return;
+    data['WINDOW_START']     = parsed.windowStart;
+    data['WINDOW_END']       = parsed.windowEnd;
+    data['ROW_COUNT']        = parsed.rowCount;
+    data['BTC_BLOCK_HEIGHT'] = parsed.btcBlockHeight;
 }
 
 module.exports = {
@@ -107,7 +128,7 @@ module.exports = {
         data['REQUEST_ID'] = head && head.ok ? head.batchKey : '';
         data['VERSION']    = abw.ATTEST_BATCH_HEAD_VERSION;
         data['STATUS']     = error || 'valid';
-        this.stampBatchColumns(data, head, 0);
+        stampBatchColumns(data, head, 0);
 
         getLogger().info("\t ATTEST v5 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
                     (head && head.ok ? ' : window=' + head.windowStart + '-' + head.windowEnd +
@@ -261,27 +282,6 @@ module.exports = {
             await this.absorbCompletedBatch(headRow, stored, chunk, data);
 
         await this.mapper.createMappings(data);
-    },
-
-    // Persist the chunk-table half of a batch action: this wire's slot, its body slice and,
-    // on a head, the window header. The header is stored because it is the INPUT to a later
-    // reassembly: a continuation landing after the head has no other way to rebuild the head
-    // it must verify the assembled body against.
-    //
-    // @param {Object} data the landing action
-    // @param {Object} parsed the parsed head or continuation (null/failed leaves every column NULL)
-    // @param {number} chunkIndex this wire's slot: 0 for a head, its own index for a continuation
-    stampBatchColumns(data, parsed, chunkIndex){
-        if(!parsed || parsed.ok !== true) return;
-        data['BATCH_CRC32']  = parsed.batchCrc32;
-        data['TOTAL_CHUNKS'] = parsed.totalChunks;
-        data['CHUNK_INDEX']  = chunkIndex;
-        data['CHUNK_B64']    = parsed.chunkB64;
-        if(chunkIndex !== 0) return;
-        data['WINDOW_START']     = parsed.windowStart;
-        data['WINDOW_END']       = parsed.windowEnd;
-        data['ROW_COUNT']        = parsed.rowCount;
-        data['BTC_BLOCK_HEIGHT'] = parsed.btcBlockHeight;
     },
 
     // One publisher's slice of everything filed under a batch key.

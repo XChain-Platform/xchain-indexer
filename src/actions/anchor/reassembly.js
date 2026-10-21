@@ -22,6 +22,8 @@
 
 const gateRegistry = require('../../consensus/gate_registry');
 const aaq  = require('./anchor_action_query.js');
+const { archiveOrphanGeometryActive: orphanGeometryActive } =
+    require('./anchor_action_query/archive_query.js');
 const { reportArchiveFailure } = require('./archive/archive_verdict.js');
 
 const FOLD_GATE = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
@@ -62,8 +64,13 @@ async function reassembleAtHead(handler, data, error, format){
         // The head reassembles its OWN publisher's chunks: archiveAuthorScope scopes the
         // set to the head's source at every height whenever the batch has a canonical head.
         let scope = await handler.archiveAuthorScope(data['MATCH_BATCH_SEQ'], data['SOURCE']);
-        let chunks = await handler.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
-        let ordered = aaq.archiveChunkCoverage(chunks, Number(data['TOTAL_CHUNKS']));
+        let ignoreMismatchedTotal = orphanGeometryActive(
+            handler.config, data['BLOCK_INDEX']);
+        let chunks = await handler.indexerDb.getAnchorChunks(
+            Number(data['MATCH_BATCH_SEQ']), scope, Number(data['TOTAL_CHUNKS']),
+            ignoreMismatchedTotal);
+        let ordered = aaq.archiveChunkCoverage(
+            chunks, Number(data['TOTAL_CHUNKS']), ignoreMismatchedTotal);
         if(ordered){
             let b64 = String(data['ARCHIVE_B64'] || '');
             for(let c of ordered) b64 += c.archive_b64;
@@ -128,8 +135,12 @@ async function reassembleAtChunk(handler, data, parent, scope, error){
         Number(data['BLOCK_INDEX']), null);
     if(!error && parent && (data['STATUS'] === 'valid' || data['STATUS'] === 'unverified') &&
        await chunkParentStatusAdmitted(handler, data, parent, journal)){
-        let chunks = await handler.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
-        let ordered = aaq.archiveChunkCoverage(chunks, Number(data['TOTAL_CHUNKS']));
+        let ignoreMismatchedTotal = archiveOrphanGeometryActive(handler, parent);
+        let chunks = await handler.indexerDb.getAnchorChunks(
+            Number(data['MATCH_BATCH_SEQ']), scope, Number(parent.total_chunks),
+            ignoreMismatchedTotal);
+        let ordered = aaq.archiveChunkCoverage(
+            chunks, Number(parent.total_chunks), ignoreMismatchedTotal);
         if(ordered){
             let b64 = String(parent.archive_b64 || '');
             for(let c of ordered) b64 += c.archive_b64;
@@ -174,4 +185,8 @@ async function reassembleAtChunk(handler, data, parent, scope, error){
     }
 }
 
-module.exports = { reassembleAtHead, reassembleAtChunk };
+function archiveOrphanGeometryActive(handler, parent){
+    return orphanGeometryActive(handler.config, parent && parent.block_index_doge);
+}
+
+module.exports = { reassembleAtHead, reassembleAtChunk, archiveOrphanGeometryActive };

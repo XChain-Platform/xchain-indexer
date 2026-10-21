@@ -101,7 +101,6 @@ function clampSwapReleaseToEscrow(data, m, coin, leg, swapInfo){
 }
 
 module.exports = {
-    settlementBoundsAt,
     mismatchesOffer,
     clampSwapReleaseToEscrow
 };
