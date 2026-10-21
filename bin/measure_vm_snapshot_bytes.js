@@ -22,13 +22,17 @@
  * same way.
  *
  * Usage: node bin/measure_vm_snapshot_bytes.js
- *        [--from N] [--to N] [--limit N] [--db NAME] [--cached] [--polls] [--json]
+ *        [--from N] [--to N] [--limit N] [--db NAME] [--cached] [--expect-hits] [--polls] [--json]
+ * Exits 0 on success, 1 when --expect-hits finds no cache hit, and 2 on a usage or database error.
  *
  ********************************************************************/
 
 'use strict';
 
-const DEFAULTS = { from: null, to: null, limit: 50, db: null, cached: false, polls: false, json: false };
+const DEFAULTS = {
+    from: null, to: null, limit: 50, db: null,
+    cached: false, expectHits: false, polls: false, json: false,
+};
 
 function integerArg(flag, value, positive){
     if(value === undefined || !/^\d+$/.test(value))
@@ -51,6 +55,10 @@ function parseArgs(argv){
             if(!opts.db) throw new Error('--db needs a database name');
         }
         else if(arg === '--cached') opts.cached = true;
+        else if(arg === '--expect-hits'){
+            opts.expectHits = true;
+            opts.cached = true;
+        }
         else if(arg === '--polls') opts.polls = true;
         else if(arg === '--json') opts.json = true;
         else throw new Error('unknown argument ' + arg);
@@ -210,6 +218,10 @@ function render(result, json){
     return lines.join('\n');
 }
 
+function exitCodeFor(result, opts){
+    return opts.expectHits && (!result.cache || result.cache.hits === 0) ? 1 : 0;
+}
+
 async function openIndexerDb(opts){
     const Database = require('../src/db');
     const config = require('../src/config.js');
@@ -230,11 +242,12 @@ async function main(argv){
     const opts = parseArgs(argv);
     const db = await openIndexerDb(opts);
     try {
-        console.log(render(await measure(db, opts), opts.json));
+        const result = await measure(db, opts);
+        console.log(render(result, opts.json));
+        return exitCodeFor(result, opts);
     } finally {
         if(db.close) await db.close();
     }
-    return 0;
 }
 
 if(require.main === module){
@@ -244,4 +257,4 @@ if(require.main === module){
     });
 }
 
-module.exports = { parseArgs, vmBlocksQuery, measure, render };
+module.exports = { parseArgs, vmBlocksQuery, measure, render, exitCodeFor };

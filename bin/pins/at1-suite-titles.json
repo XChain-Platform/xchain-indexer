@@ -10961,7 +10961,7 @@
       "ROLLCALL epoch close (\u00a73.4) the publish reward pays the ELECTED leader, at the earn/materialisation heights the rollback keys on",
       "ROLLCALL epoch close (\u00a73.4) the publish reward throws rather than silently skipping a refused reward write"
     ],
-    "94d492de24b5f7e3": [
+    "d6fa40e537d3f44b": [
       "bin/measure_vm_snapshot_bytes --polls calls buildPollResultsForVM with each block and true in walked order, and not without the flag",
       "bin/measure_vm_snapshot_bytes --polls matches the bytes of buildPollResultsForVM from src/db/polls/vm_snapshot over fixture polls and poll_results rows",
       "bin/measure_vm_snapshot_bytes --polls renders the polls line after the blocks line and before the cache line, and leaves no-flag output unchanged",
@@ -10971,12 +10971,14 @@
       "bin/measure_vm_snapshot_bytes measures cached mode with getCrossChainDataForVM from src/db/blocks",
       "bin/measure_vm_snapshot_bytes measures real builder bytes and transfer totals for each execution block",
       "bin/measure_vm_snapshot_bytes parses --polls to true and its absence to false",
-      "bin/measure_vm_snapshot_bytes parses bounds, limit, database, cached and JSON modes",
+      "bin/measure_vm_snapshot_bytes parses bounds, limit, database, cached, expect-hits and JSON modes",
       "bin/measure_vm_snapshot_bytes rejects unknown flags and invalid numeric arguments",
       "bin/measure_vm_snapshot_bytes renders block lines, the summary line and JSON",
       "bin/measure_vm_snapshot_bytes reports one miss then hits in oldest-first cached mode and restores database state",
       "bin/measure_vm_snapshot_bytes restores the original builder and database state when cached measurement throws",
       "bin/measure_vm_snapshot_bytes returns a zero summary when no execution blocks match",
+      "bin/measure_vm_snapshot_bytes returns cache-hit expectation exit codes for cached measurement results",
+      "bin/measure_vm_snapshot_bytes returns zero without expect-hits and requires a positive hit with it",
       "bin/measure_vm_snapshot_bytes times one serialization per block with a counter clock and prices both send shapes"
     ],
     "94ee2fc5a1183871": [
@@ -19392,7 +19394,7 @@
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
-        "test/unit/bin/measure_vm_snapshot_bytes.test.js": "94d492de24b5f7e3",
+        "test/unit/bin/measure_vm_snapshot_bytes.test.js": "d6fa40e537d3f44b",
         "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
