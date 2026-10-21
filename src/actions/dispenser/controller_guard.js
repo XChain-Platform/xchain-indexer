@@ -42,7 +42,7 @@ module.exports = {
         // split. dispense.js has no royalty path: it credits the give token to the
         // buyer directly, and dispense proceeds are native coin paid directly
         // on-chain. So a controller cannot veto or take a cut per buy at dispense
-        // time. TODO: if dispenser sales must honor the royalty split, that needs
+        // time. Honoring the royalty split for dispenser sales would need
         // dedicated design for a per-buy split/veto over native-coin proceeds; it is
         // NOT implemented today. Do not read this comment as an enforced invariant.
         let guardFee = 0;

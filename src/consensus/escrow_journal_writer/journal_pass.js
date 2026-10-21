@@ -207,7 +207,6 @@ module.exports = {
     SCALE,
     KEY_CHUNK,
     chunked,
-    indexIds,
     priorTotals,
     gatherEscrowRows,
     sumByLocker,

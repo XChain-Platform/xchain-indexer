@@ -272,7 +272,6 @@ async function runSweep(db, chain, network, cfg, opts){
 module.exports = {
     EMPTY_CONSTANTS,
     parseRetentionConfig,
-    resolveSweepIntervalMs,
     MIN_SWEEP_INTERVAL_MS,
     ROOT_RETENTION_REORG_FLOOR,
     LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR,

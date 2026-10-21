@@ -32,15 +32,84 @@ const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_M
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { getLogger } = require('../../observability/index.js');
 
+// The v1 wire: the fixed-position fields, their structural rules, and the id
+// normalization the rest of the path keys on. Returns the fields plus the verdict,
+// which is the caller's own `error` untouched when nothing new is wrong.
+function readResponseWire(params, error){
+    // Extract fixed-position fields. RESPONSE_PAYLOAD travels as base64
+    // (binary-safe, no embedded `|` chars). We decode to bytes for
+    // signature verification (must hash the same bytes the hub signed)
+    // and to UTF-8 text for storage + callback delivery.
+    let requestId          = params[1];
+    let providerId         = params[2];
+    let responsePayloadB64 = String(params[3] || '');
+    let responseBodyBytes;
+    try { responseBodyBytes = Buffer.from(responsePayloadB64, 'base64'); }
+    catch(_)            { responseBodyBytes = Buffer.alloc(0); }
+    let responsePayload    = responseBodyBytes.toString('utf8');
+    let responseStatus     = params[4];
+    let meta               = params[5];
+
+    if(!error && (!requestId || !/^[0-9a-fA-F]{64}$/.test(String(requestId))))
+        error = 'invalid: REQUEST_ID (format)';
+    if(!error && this.util.isNull(providerId))
+        error = 'invalid: PROVIDER_ID (required)';
+    let allowedStatuses = ['ok', 'timeout', 'no_quorum', 'provider_error', 'expired'];
+    if(!error && allowedStatuses.indexOf(String(responseStatus)) === -1)
+        error = 'invalid: STATUS (unknown)';
+
+    // Normalize the id for every non-consensus use (request lookup, responsible-set
+    // hash, the stored row): the hub signs the LOWERCASE rid
+    // (AttestationConsensus.buildCanonical) and the only live producer lowercases
+    // before broadcast. The CANONICAL signing bytes themselves are the exception:
+    // whether they use the raw wire case or the lowercased id is CONSENSUS
+    // BEHAVIOUR. Legacy nodes build the canonical from the RAW wire id,
+    // so a case-mutated replay of a pending v1 fails signature verification there;
+    // lowercasing ungated would make the same wire bytes verify on an upgraded
+    // node and fork the fleet. The raw id is therefore kept for the canonical
+    // below the ATTEST_CANONICAL_LOWERCASE_ID flag-day and the lowercased id used
+    // at/after it (making the byte-identity with the hub self-contained instead of
+    // resting on the producer invariant).
+    let requestIdRaw = (requestId == null) ? requestId : String(requestId);
+    if(requestId != null) requestId = String(requestId).toLowerCase();
+
+    return { requestId, requestIdRaw, providerId, responsePayload, responseBodyBytes,
+             responseStatus, meta, error };
+}
+
+function parseResponseSigs(params, error){
+    // Parse variable-length sig list
+    let sigCount, sigs = [];
+    if(!error){
+        try {
+            sigCount = parseInt(params[6]);
+            if(!Number.isFinite(sigCount) || sigCount < 1)
+                throw new Error('invalid SIG_COUNT');
+            for(let i = 0; i < sigCount; i++){
+                let pubkey = params[7 + 2 * i];
+                let sig    = params[7 + 2 * i + 1];
+                if(!pubkey || !sig) throw new Error('missing sig data at index ' + i);
+                if(!/^[0-9a-fA-F]{64}$/.test(pubkey))  throw new Error('invalid pubkey format at index ' + i);
+                if(!/^[0-9a-fA-F]{128}$/.test(sig))    throw new Error('invalid sig format at index ' + i);
+                sigs.push({ pubkey: pubkey.toLowerCase(), sig: sig.toLowerCase() });
+            }
+        } catch(e){
+            if(!error) error = 'invalid: ' + e.message;
+        }
+    }
+
+    return { sigs, error };
+}
+
 module.exports = {
     // ATTEST v1: Response (validator broadcast)
     async parseResponse(params, data, error){
 
-        let wire = this.readResponseWire(params, error);
+        let wire = readResponseWire.call(this, params, error);
         error    = wire.error;
         let { requestId, providerId, responsePayload, responseStatus, meta } = wire;
 
-        let parsed = this.parseResponseSigs(params, error);
+        let parsed = parseResponseSigs.call(this, params, error);
         error = parsed.error;
 
         let lookup  = await this.responseRequestError(requestId, providerId, data, error);
@@ -84,75 +153,6 @@ module.exports = {
             await this.closeChainResponse(request, data, requestId, providerId, responseStatus, verifiedSigs);
 
         await this.mapper.createMappings(data);
-    },
-
-    // The v1 wire: the fixed-position fields, their structural rules, and the id
-    // normalization the rest of the path keys on. Returns the fields plus the verdict,
-    // which is the caller's own `error` untouched when nothing new is wrong.
-    readResponseWire(params, error){
-        // Extract fixed-position fields. RESPONSE_PAYLOAD travels as base64
-        // (binary-safe, no embedded `|` chars). We decode to bytes for
-        // signature verification (must hash the same bytes the hub signed)
-        // and to UTF-8 text for storage + callback delivery.
-        let requestId          = params[1];
-        let providerId         = params[2];
-        let responsePayloadB64 = String(params[3] || '');
-        let responseBodyBytes;
-        try { responseBodyBytes = Buffer.from(responsePayloadB64, 'base64'); }
-        catch(_)            { responseBodyBytes = Buffer.alloc(0); }
-        let responsePayload    = responseBodyBytes.toString('utf8');
-        let responseStatus     = params[4];
-        let meta               = params[5];
-
-        if(!error && (!requestId || !/^[0-9a-fA-F]{64}$/.test(String(requestId))))
-            error = 'invalid: REQUEST_ID (format)';
-        if(!error && this.util.isNull(providerId))
-            error = 'invalid: PROVIDER_ID (required)';
-        let allowedStatuses = ['ok', 'timeout', 'no_quorum', 'provider_error', 'expired'];
-        if(!error && allowedStatuses.indexOf(String(responseStatus)) === -1)
-            error = 'invalid: STATUS (unknown)';
-
-        // Normalize the id for every non-consensus use (request lookup, responsible-set
-        // hash, the stored row): the hub signs the LOWERCASE rid
-        // (AttestationConsensus.buildCanonical) and the only live producer lowercases
-        // before broadcast. The CANONICAL signing bytes themselves are the exception:
-        // whether they use the raw wire case or the lowercased id is CONSENSUS
-        // BEHAVIOUR. Legacy nodes build the canonical from the RAW wire id,
-        // so a case-mutated replay of a pending v1 fails signature verification there;
-        // lowercasing ungated would make the same wire bytes verify on an upgraded
-        // node and fork the fleet. The raw id is therefore kept for the canonical
-        // below the ATTEST_CANONICAL_LOWERCASE_ID flag-day and the lowercased id used
-        // at/after it (making the byte-identity with the hub self-contained instead of
-        // resting on the producer invariant).
-        let requestIdRaw = (requestId == null) ? requestId : String(requestId);
-        if(requestId != null) requestId = String(requestId).toLowerCase();
-
-        return { requestId, requestIdRaw, providerId, responsePayload, responseBodyBytes,
-                 responseStatus, meta, error };
-    },
-
-    parseResponseSigs(params, error){
-        // Parse variable-length sig list
-        let sigCount, sigs = [];
-        if(!error){
-            try {
-                sigCount = parseInt(params[6]);
-                if(!Number.isFinite(sigCount) || sigCount < 1)
-                    throw new Error('invalid SIG_COUNT');
-                for(let i = 0; i < sigCount; i++){
-                    let pubkey = params[7 + 2 * i];
-                    let sig    = params[7 + 2 * i + 1];
-                    if(!pubkey || !sig) throw new Error('missing sig data at index ' + i);
-                    if(!/^[0-9a-fA-F]{64}$/.test(pubkey))  throw new Error('invalid pubkey format at index ' + i);
-                    if(!/^[0-9a-fA-F]{128}$/.test(sig))    throw new Error('invalid sig format at index ' + i);
-                    sigs.push({ pubkey: pubkey.toLowerCase(), sig: sig.toLowerCase() });
-                }
-            } catch(e){
-                if(!error) error = 'invalid: ' + e.message;
-            }
-        }
-
-        return { sigs, error };
     },
 
     // The original request this response answers, and every reason a stored one cannot

@@ -44,4 +44,4 @@ async function assertMigrationSqlMode(conn, onRefuse){
         'the mode on every new connection, so something between the indexer and MariaDB (a proxy or a server-side override) changed it.');
 }
 
-module.exports = { assertMigrationSqlMode, sqlModeIsStrict };
+module.exports = { assertMigrationSqlMode };

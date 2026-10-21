@@ -39,7 +39,7 @@
     },
     "attestation/providerMinStakeHistory": {
       "path": "src/attestation/providerMinStakeHistory.js",
-      "hash": "3fc6d69a4cf987736229dbe9abd5acadbfb2405d4984b0f25dee32ae6df736dd",
+      "hash": "27b79b3621e2a402e3faac78013526d68d09f48301caaf4a80a89c88bdd748e2",
       "twins": []
     },
     "capability_min_stake_history": {
@@ -2233,6 +2233,13 @@
       "to": "4acc7ba7dcea03d214a1a8cf8da9fcf469f71a9cd5b37302fdeb0b3314d4fb1b",
       "reason": "Split the indexer-only registry rows into a sixth part file",
       "date": "2026-10-18"
+    },
+    {
+      "id": "attestation/providerMinStakeHistory",
+      "from": "3fc6d69a4cf987736229dbe9abd5acadbfb2405d4984b0f25dee32ae6df736dd",
+      "to": "27b79b3621e2a402e3faac78013526d68d09f48301caaf4a80a89c88bdd748e2",
+      "reason": "drop the unused normalizeFloor export; no logic change",
+      "date": "2026-10-21"
     }
   ]
 }
