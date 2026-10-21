@@ -42,8 +42,14 @@ function exactU64(value){
     return exact <= MAX_SAFE_INTEGER ? Number(exact) : exact.toString();
 }
 
+// Column flag bit for UNSIGNED in the MariaDB wire protocol.
+const UNSIGNED_FLAG = 32;
+
 function exactU64TypeCast(field, next){
     if(field.type !== 'BIGINT') return next();
+    // A signed BIGINT (a negative id, a MIN(id) probe) is not a u64 wire field; the
+    // connector reads it as it always has. A field with no flags is taken as unsigned.
+    if(typeof field.flags === 'number' && (field.flags & UNSIGNED_FLAG) === 0) return next();
     return exactU64(field.string());
 }
 
