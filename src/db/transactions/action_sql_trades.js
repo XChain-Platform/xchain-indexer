@@ -24,11 +24,9 @@
 
 module.exports = {
 
-    // DISPENSER action
-    // TODO
+    // DISPENSER action (no summary statement defined)
     DISPENSER: null,
-    // DISPENSE action
-    // TODO
+    // DISPENSE action (no summary statement defined)
     DISPENSE: null,
     // ORDER action
     ORDER: `SELECT

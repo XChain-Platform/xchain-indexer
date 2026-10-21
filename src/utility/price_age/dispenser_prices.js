@@ -31,6 +31,24 @@ const FIAT_PRICING_KEY = 'dispenser_fiat_pricing_activation.DISPENSER_FIAT_PRICI
 // fewer, so a product of two holds under 120 significant digits and is exact at 160.
 const ExactDecimal = mathjs.BigNumber.clone({ precision: 160 });
 
+// db.getOraclePricesInTimeRange, with the source_chain tiebreak when bound.
+function fiatWindowOraclePrices(priceDb, oracleAddress, coin, tick, fiat, startTime, endTime, bound){
+    return bound ? priceDb.getOraclePricesInTimeRange(oracleAddress, coin, tick, fiat, startTime, endTime, true)
+                 : priceDb.getOraclePricesInTimeRange(oracleAddress, coin, tick, fiat, startTime, endTime);
+}
+
+// Mode A fill count, the documented floor(COIN_AMOUNT x price / FIAT_AMOUNT), computed
+// as an exact product and an exact integer division, so no intermediate rounds and the
+// floor is never off by one. Saturates like bcfloorSaturating; a FIAT_AMOUNT that is
+// not positive buys nothing, as the pre-gate division by a zero unit price did.
+function fiatFillsExact(coinAmount, price, fiatAmount){
+    let fiat = new ExactDecimal(this.bcstr(fiatAmount));
+    if(!fiat.gt(0)) return 0;
+    let fills = new ExactDecimal(this.bcstr(coinAmount)).times(this.bcstr(price)).divToInt(fiat);
+    if(fills.gt(Number.MAX_SAFE_INTEGER)) return Number.MAX_SAFE_INTEGER;
+    return fills.lt(0) ? 0 : fills.toNumber();
+}
+
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
 module.exports = {
@@ -53,24 +71,6 @@ module.exports = {
     fiatWindowPrices(priceDb, coinPair, startTime, endTime, bound){
         return bound ? priceDb.getPricesInTimeRange(coinPair, startTime, endTime, bound)
                      : priceDb.getPricesInTimeRange(coinPair, startTime, endTime);
-    },
-
-    // db.getOraclePricesInTimeRange, with the source_chain tiebreak when bound.
-    fiatWindowOraclePrices(priceDb, oracleAddress, coin, tick, fiat, startTime, endTime, bound){
-        return bound ? priceDb.getOraclePricesInTimeRange(oracleAddress, coin, tick, fiat, startTime, endTime, true)
-                     : priceDb.getOraclePricesInTimeRange(oracleAddress, coin, tick, fiat, startTime, endTime);
-    },
-
-    // Mode A fill count, the documented floor(COIN_AMOUNT x price / FIAT_AMOUNT), computed
-    // as an exact product and an exact integer division, so no intermediate rounds and the
-    // floor is never off by one. Saturates like bcfloorSaturating; a FIAT_AMOUNT that is
-    // not positive buys nothing, as the pre-gate division by a zero unit price did.
-    fiatFillsExact(coinAmount, price, fiatAmount){
-        let fiat = new ExactDecimal(this.bcstr(fiatAmount));
-        if(!fiat.gt(0)) return 0;
-        let fills = new ExactDecimal(this.bcstr(coinAmount)).times(this.bcstr(price)).divToInt(fiat);
-        if(fills.gt(Number.MAX_SAFE_INTEGER)) return Number.MAX_SAFE_INTEGER;
-        return fills.lt(0) ? 0 : fills.toNumber();
     },
 
     // Coin cost of `multiplier` Mode A fills, multiplier x FIAT_AMOUNT / price, rounded UP
@@ -146,7 +146,7 @@ module.exports = {
         let bound = this.fiatPricingBound(blockIndex, blockTime);
 
         // Walk historical user oracle prices newest-first within the window
-        let oraclePrices = await this.fiatWindowOraclePrices(priceDb, oracleAddress, coin, tick, fiat, startTime, blockTime, bound);
+        let oraclePrices = await fiatWindowOraclePrices.call(this, priceDb, oracleAddress, coin, tick, fiat, startTime, blockTime, bound);
         if(!oraclePrices || oraclePrices.length === 0) return null;
 
         // Fetch the validator's COIN/FIAT prices ONCE, then pair each oracle row in memory.
@@ -220,7 +220,7 @@ module.exports = {
             // raw_multiplier = coin_amount / btc_per_token
             let rawMultiplier = this.bcdiv(coinAmount, btcPerToken, 64);
             // Saturating, not throwing: a throw here wedges the block loop.
-            let units = bound ? this.fiatFillsExact(coinAmount, snapshot.price, fiatAmount)
+            let units = bound ? fiatFillsExact.call(this, coinAmount, snapshot.price, fiatAmount)
                               : this.bcfloorSaturating(rawMultiplier);
             if(units >= 1){
                 return {

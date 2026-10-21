@@ -54,47 +54,16 @@ module.exports = {
         }
         let tick     = this.config['GAS']; // 'XCHAIN'
         let snapshot = this.config['GENESIS_AIRDROP_SNAPSHOT_BLOCK'] || 'unpinned';
-        this.verifyAirdropSetHash(buckets, pin);
+        verifyAirdropSetHash.call(this, buckets, pin);
         for(let b of buckets)
             await this.creditAirdropBucket(gas, tick, b, snapshot, blockToParse, blockTime);
-    },
-
-    // Compute the airdrop set-hash, log it, and hold it to the pin before the first
-    // credit is derived; mainnet refuses an unpinned set outright.
-    verifyAirdropSetHash(buckets, pin){
-        // Combined set-hash over the canonical bucket order (name:hash:amount per line):
-        // operators on different nodes compare this one line to prove they armed the
-        // identical airdrop set before any consensus action is derived.
-        let setHash = this.airdropSetHash(buckets);
-        getLogger().info('GENESIS: airdrop set-hash ' + setHash + ' (' + buckets.length + ' buckets, canonical order '
-            + buckets.map(b => b.name).join(',') + ')');
-        // ENFORCE it. Until this check the set-hash was a log line and
-        // nothing else: the per-bucket GENESIS_AIRDROP_HASHES pin each snapshot FILE, so two
-        // nodes with byte-identical CSVs still passed every check while minting different
-        // XCHAIN amounts (the amounts were pinned nowhere) or deriving different synthetic tx
-        // hashes (the bucket NAMES, hence the set membership, were pinned nowhere). This pins
-        // the set itself, and it runs before the first credit so a mismatch halts a node
-        // instead of forking it.
-        if(pin){
-            if(setHash !== String(pin).toLowerCase()){
-                getLogger().error('GENESIS FATAL: airdrop set-hash mismatch (expected ' + pin + ', got ' + setHash + '). Halting.');
-                throw new Error('Genesis airdrop set-hash mismatch (expected ' + pin + ', got ' + setHash + ')');
-            }
-        } else if(this.config['NETWORK'] === 'mainnet'){
-            // Mainnet fails closed on an UNPINNED set for the same reason it already fails
-            // closed on an unpinned bucket file: the CSV fallback is the derivation path of
-            // record only when every consensus input it consumes is pinned in the bundle.
-            throw new Error('GENESIS FATAL: mainnet airdrop set is not pinned (genesis.airdropSetHash / '
-                + 'GENESIS_AIRDROP_SET_HASH). The computed set-hash is ' + setHash + '; pin it in the coin bundle '
-                + 'and re-vendor before a mainnet node derives the airdrop from CSVs.');
-        }
     },
 
     // Verify one airdrop bucket's snapshot and credit each holder its pro-rata share, in
     // the hash-pinned file order loadAirdropRows returns.
     async creditAirdropBucket(gas, tick, b, snapshot, blockToParse, blockTime){
-        this.verifyAirdropFile(b);
-        let rows  = this.loadAirdropRows(b.file);
+        verifyAirdropFile.call(this, b);
+        let rows  = loadAirdropRows.call(this, b.file);
         let total = '0';
         for(let r of rows)
             total = this.util.bcadd(total, r.quantity, 8);
@@ -104,7 +73,7 @@ module.exports = {
             + b.amount + ' ' + tick + ' (snapshot block ' + snapshot + ')');
         let credited = 0;
         for(let r of rows){
-            let credit = this.prorate(b.amount, r.quantity, total);
+            let credit = prorate.call(this, b.amount, r.quantity, total);
             if(!this.util.bcgt(credit, 0))
                 continue; // holder's share floors to zero at 8 decimals
             await this.creditIssue(gas, tick, r.address, credit, b.name, blockToParse, blockTime);
@@ -167,64 +136,6 @@ module.exports = {
         return buckets;
     },
 
-    // sha256-pin check for one airdrop snapshot, mirroring verifyManifest: a null pin skips
-    // (pre-pin dev/regtest), a mismatch halts the node, and a missing file always halts (an
-    // armed bucket without its snapshot must never silently skip the whole allocation).
-    verifyAirdropFile(bucket){
-        if(!fs.existsSync(bucket.file))
-            throw new Error('GENESIS FATAL: airdrop snapshot missing: ' + bucket.file);
-        if(this.util.isNull(bucket.hash))
-            return;
-        let actual = crypto.createHash('sha256').update(fs.readFileSync(bucket.file)).digest('hex');
-        if(actual !== String(bucket.hash).toLowerCase()){
-            getLogger().error('GENESIS FATAL: airdrop snapshot hash mismatch for ' + bucket.file + ' (expected ' + bucket.hash + ', got ' + actual + '). Halting.');
-            throw new Error('Genesis airdrop snapshot hash mismatch');
-        }
-    },
-
-    // Read one snapshot CSV (address,quantity). Addresses never contain a comma, so the
-    // LAST comma splits the fields (symmetric with loadRows). Duplicate addresses sum
-    // (first-seen position wins for ordering, keeping the injection order pinned to the
-    // hash-pinned file order); non-numeric or non-positive quantities are skipped + logged.
-    // CP/DP quantities carry at most 8 decimals, matching the bcadd precision here.
-    loadAirdropRows(file){
-        let lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
-        let rows  = [];
-        let index = new Map(); // address -> position in rows (dedupe)
-        for(let line of lines){
-            if(line === '' || line === 'address,quantity')
-                continue;
-            let comma = line.lastIndexOf(',');
-            if(comma < 0)
-                continue;
-            let address  = line.slice(0, comma).trim();
-            let quantity = line.slice(comma + 1).trim();
-            if(address === '' || quantity === '')
-                continue;
-            if(!this.util.isNumeric(quantity) || !this.util.bcgt(quantity, 0)){
-                getLogger().warn('GENESIS skip (bad airdrop quantity): ' + address + ',' + quantity);
-                continue;
-            }
-            if(index.has(address)){
-                let r = rows[index.get(address)];
-                r.quantity = this.util.bcadd(r.quantity, quantity, 8);
-            } else {
-                index.set(address, rows.length);
-                rows.push({ address: address, quantity: quantity });
-            }
-        }
-        return rows;
-    },
-
-    // Pro-rata share: floor(amount * quantity / total) at the gas token's 8-decimal grid,
-    // computed entirely in bignumber space (util.bcnum is decimal.js-backed). Flooring is
-    // consensus-critical the same way bcmulfloor is: every node must derive the identical
-    // credit, and rounding down keeps the bucket's minted sum <= its configured amount.
-    prorate(amount, quantity, total){
-        let share = this.util.bcnum(amount).times(this.util.bcnum(quantity)).div(this.util.bcnum(total));
-        return share.times('100000000').floor().div('100000000').toFixed(8);
-    },
-
     // Synthesize one airdrop credit: ISSUE format 2 from GAS carrying only MINT_SUPPLY and
     // TRANSFER_SUPPLY (VERSION|TICK|MAX_MINT|MINT_SUPPLY|TRANSFER_SUPPLY|...), so the token's
     // existing params are untouched (empty ISSUE fields inherit the current settings) and the
@@ -256,3 +167,92 @@ module.exports = {
     },
 
 };
+
+// Compute the airdrop set-hash, log it, and hold it to the pin before the first
+// credit is derived; mainnet refuses an unpinned set outright.
+function verifyAirdropSetHash(buckets, pin){
+    // Combined set-hash over the canonical bucket order (name:hash:amount per line):
+    // operators on different nodes compare this one line to prove they armed the
+    // identical airdrop set before any consensus action is derived.
+    let setHash = this.airdropSetHash(buckets);
+    getLogger().info('GENESIS: airdrop set-hash ' + setHash + ' (' + buckets.length + ' buckets, canonical order '
+        + buckets.map(b => b.name).join(',') + ')');
+    // ENFORCE it. Until this check the set-hash was a log line and
+    // nothing else: the per-bucket GENESIS_AIRDROP_HASHES pin each snapshot FILE, so two
+    // nodes with byte-identical CSVs still passed every check while minting different
+    // XCHAIN amounts (the amounts were pinned nowhere) or deriving different synthetic tx
+    // hashes (the bucket NAMES, hence the set membership, were pinned nowhere). This pins
+    // the set itself, and it runs before the first credit so a mismatch halts a node
+    // instead of forking it.
+    if(pin){
+        if(setHash !== String(pin).toLowerCase()){
+            getLogger().error('GENESIS FATAL: airdrop set-hash mismatch (expected ' + pin + ', got ' + setHash + '). Halting.');
+            throw new Error('Genesis airdrop set-hash mismatch (expected ' + pin + ', got ' + setHash + ')');
+        }
+    } else if(this.config['NETWORK'] === 'mainnet'){
+        // Mainnet fails closed on an UNPINNED set for the same reason it already fails
+        // closed on an unpinned bucket file: the CSV fallback is the derivation path of
+        // record only when every consensus input it consumes is pinned in the bundle.
+        throw new Error('GENESIS FATAL: mainnet airdrop set is not pinned (genesis.airdropSetHash / '
+            + 'GENESIS_AIRDROP_SET_HASH). The computed set-hash is ' + setHash + '; pin it in the coin bundle '
+            + 'and re-vendor before a mainnet node derives the airdrop from CSVs.');
+    }
+}
+
+// sha256-pin check for one airdrop snapshot, mirroring verifyManifest: a null pin skips
+// (pre-pin dev/regtest), a mismatch halts the node, and a missing file always halts (an
+// armed bucket without its snapshot must never silently skip the whole allocation).
+function verifyAirdropFile(bucket){
+    if(!fs.existsSync(bucket.file))
+        throw new Error('GENESIS FATAL: airdrop snapshot missing: ' + bucket.file);
+    if(this.util.isNull(bucket.hash))
+        return;
+    let actual = crypto.createHash('sha256').update(fs.readFileSync(bucket.file)).digest('hex');
+    if(actual !== String(bucket.hash).toLowerCase()){
+        getLogger().error('GENESIS FATAL: airdrop snapshot hash mismatch for ' + bucket.file + ' (expected ' + bucket.hash + ', got ' + actual + '). Halting.');
+        throw new Error('Genesis airdrop snapshot hash mismatch');
+    }
+}
+
+// Read one snapshot CSV (address,quantity). Addresses never contain a comma, so the
+// LAST comma splits the fields (symmetric with loadRows). Duplicate addresses sum
+// (first-seen position wins for ordering, keeping the injection order pinned to the
+// hash-pinned file order); non-numeric or non-positive quantities are skipped + logged.
+// CP/DP quantities carry at most 8 decimals, matching the bcadd precision here.
+function loadAirdropRows(file){
+    let lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    let rows  = [];
+    let index = new Map(); // address -> position in rows (dedupe)
+    for(let line of lines){
+        if(line === '' || line === 'address,quantity')
+            continue;
+        let comma = line.lastIndexOf(',');
+        if(comma < 0)
+            continue;
+        let address  = line.slice(0, comma).trim();
+        let quantity = line.slice(comma + 1).trim();
+        if(address === '' || quantity === '')
+            continue;
+        if(!this.util.isNumeric(quantity) || !this.util.bcgt(quantity, 0)){
+            getLogger().warn('GENESIS skip (bad airdrop quantity): ' + address + ',' + quantity);
+            continue;
+        }
+        if(index.has(address)){
+            let r = rows[index.get(address)];
+            r.quantity = this.util.bcadd(r.quantity, quantity, 8);
+        } else {
+            index.set(address, rows.length);
+            rows.push({ address: address, quantity: quantity });
+        }
+    }
+    return rows;
+}
+
+// Pro-rata share: floor(amount * quantity / total) at the gas token's 8-decimal grid,
+// computed entirely in bignumber space (util.bcnum is decimal.js-backed). Flooring is
+// consensus-critical the same way bcmulfloor is: every node must derive the identical
+// credit, and rounding down keeps the bucket's minted sum <= its configured amount.
+function prorate(amount, quantity, total){
+    let share = this.util.bcnum(amount).times(this.util.bcnum(quantity)).div(this.util.bcnum(total));
+    return share.times('100000000').floor().div('100000000').toFixed(8);
+}
