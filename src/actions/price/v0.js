@@ -313,4 +313,4 @@ function buildRoundsWire(rounds, bodyParsed){
 }
 
 module.exports = { inflateBatchFields, parseBatchBody, checkBatchStraddle, buildRoundsWire,
-    readWindowHeader, checkWindowHeader, parseRoundList, parseSigList, resolveRoundBounds };
+    parseRoundList, parseSigList };
