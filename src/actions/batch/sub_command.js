@@ -21,6 +21,11 @@
  *
  ********************************************************************/
 
+const gateRegistry = require('../../consensus/gate_registry');
+const { readAirdropLegs } = require('../airdrop/legs');
+
+const AIRDROP_LEG_WEIGHT_GATE = 'batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION';
+
 // Normalize a sub-action the same way the top-level dispatcher (actions/index.js)
 // does: rewrite ACTION aliases, then (when params are given) inject the
 // implied legacy VERSION 0 for BTNS-style ISSUE/MINT/SEND params so FORMAT
@@ -121,16 +126,21 @@ function subCommandTick(action, command, normalize){
 // that action for free, which is the exact failure the budget exists to prevent.
 //
 // `action` arrives already alias-normalized by the caller, matching the dispatch loop.
-// The fan-out classes (AIRDROP, DIVIDEND) take the FLAT table weight that
-// installFanOutWeights sets in limits.js (see its header for why it is not 1 + recipients),
-// so no path here reads the database and `data` and `normalize` are unused today.
+// The fan-out classes (AIRDROP, DIVIDEND) take the table weight that installFanOutWeights
+// sets in limits.js (see its header for why it is not 1 + recipients), so no path here reads
+// the database.
 //
-// The flat weight is per sub-command: a multi-leg AIRDROP (FORMATs 1 to 3) weighs the same
-// as a single-leg one. A per-leg weight would need no database read, since the leg count
-// comes from the param count and FORMAT the way readAirdropLegs (airdrop/legs.js) reads it.
+// After BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION, AIRDROP is weighed PER LEG: the table weight
+// times the number of legs, because every leg of a multi-leg AIRDROP (FORMATs 1 to 3)
+// expands and pays out its own list. The leg count needs no database read: it is the length
+// of what readAirdropLegs (airdrop/legs.js) returns for the sub-command's params and FORMAT,
+// and that function is called here rather than re-derived so the two can never disagree. A
+// single-leg AIRDROP (FORMAT 0, or any unparseable one) weighs exactly the table value.
+// Below the activation AIRDROP keeps its historical flat weight. DIVIDEND stays flat at
+// every height: it carries one TICK and so has one leg.
 //
-// `data`, `normalize` and the async signature are kept for a possible later per-recipient
-// weight. The recipient count is NOT on the wire (AIRDROP carries only LIST_ACTION_INDEXes, one
+// `normalize` and the async signature are kept for a possible later per-recipient weight.
+// The recipient count is NOT on the wire (AIRDROP carries only LIST_ACTION_INDEXes, one
 // shared by every leg in FORMAT 1, and DIVIDEND carries only a TICK), so such a weight would need
 // a database read. That read must be as-of (BLOCK_INDEX, ACTION_INDEX) and resolve-only,
 // the discipline probeTokenInfo and
@@ -154,10 +164,30 @@ async function subCommandWeight(action, command, data, normalize){
         // full weight, which is the safe (over-charging) direction.
         if(action === 'DEPLOY' && this.util.getFormatVersion(String(command).split('|')[1]) === 4)
             return 1;
-        return (Number.isInteger(weight) && weight >= 1) ? weight : 1;
+        if(!Number.isInteger(weight) || weight < 1)
+            return 1;
+        if(action === 'AIRDROP' && airdropLegWeightActive.call(this, data))
+            weight *= airdropLegCount.call(this, String(command).split('|').slice(1));
+        return weight;
     } catch(e) {
         return 1;
     }
+}
+
+function airdropLegWeightActive(data){
+    data = data || {};
+    return gateRegistry.activeAt(AIRDROP_LEG_WEIGHT_GATE, this.config['NETWORK'], data['COIN'],
+        data['BLOCK_INDEX'], null);
+}
+
+// Number of legs in an AIRDROP sub-command's params (VERSION first), at least 1. Reads the
+// legs with the handler's own readAirdropLegs so the count is the one the handler will
+// execute. Anything unparseable counts as one leg, the single-leg weight and safe fallback.
+function airdropLegCount(params){
+    let format = this.util.getFormatVersion(params[0]);
+    if(!Number.isInteger(format) || format < 0 || format > 3)
+        return 1;
+    return Math.max(1, readAirdropLegs.call(null, params, format).length);
 }
 
 // Total cost weight of a BATCH (BATCH_COST_WEIGHTING).

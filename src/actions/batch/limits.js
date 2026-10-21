@@ -141,12 +141,15 @@ function installCostWeights(){
 // it back to a future instant); mainnet admits general traffic only from
 // MAINNET_LAUNCH_ACTIVATION (gates_5.js).
 //
-// The weight is charged per SUB-COMMAND, not per leg or recipient. AIRDROP FORMATs 1 to 3
-// carry many legs, and each leg expands and pays out its list on its own (FORMAT 1 reuses
-// one list for every leg, FORMATs 2 and 3 name a list per leg), so 10 sub-commands can mean
-// far more than 10 list expansions. The leg count IS on the wire (readAirdropLegs,
-// airdrop/legs.js) even though the recipient count is not, and an AIRDROP sent outside a
-// BATCH is not weighed by this budget at all.
+// The table value is charged PER LEG for AIRDROP after
+// BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION, and flat per sub-command before it and for DIVIDEND.
+// AIRDROP FORMATs 1 to 3 carry many legs, and each leg expands and pays out its list on its
+// own (FORMAT 1 reuses one list for every leg, FORMATs 2 and 3 name a list per leg), so a
+// flat weight let 10 sub-commands mean far more than 10 list expansions. The leg count IS
+// on the wire (readAirdropLegs, airdrop/legs.js) even though the recipient count is not, so
+// subCommandWeight (sub_command.js) multiplies the 25 by the leg count with no database
+// read. A single-leg AIRDROP still weighs 25. An AIRDROP sent outside a BATCH is not weighed
+// by this budget at all.
 function installFanOutWeights(){
     this.commandWeights['AIRDROP']  = 25;
     this.commandWeights['DIVIDEND'] = 25;
