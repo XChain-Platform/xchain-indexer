@@ -25,6 +25,7 @@
 
 const { CONFIG_ENV } = require('../../config.js');
 const { withPinnedSqlMode } = require('../shared.js');
+const { exactU64TypeCast } = require('./exact_u64.js');
 
 // The direct-connection parameters (verifyDatabase and createDatabase build their own,
 // without the database name, because the database may not exist yet).
@@ -57,17 +58,7 @@ function connectionPoolParams(self){
         acquireTimeout:       parseInt(CONFIG_ENV.DB_ACQUIRE_TIMEOUT) || 10000,
         idleTimeout:          60000,
         insertIdAsNumber:     true,
-        // Return BIGINT columns as JS Numbers rather than BigInts. Without
-        // this, any JSON-RPC handler returning a DB row crashes the process
-        // on res.json() with `TypeError: Do not know how to serialize a
-        // BigInt` (xchain-hub polls getlatestblock/getactivevalidators/
-        // getownstake on a loop, so the crash window is always open).
-        // Matches xchain-hub and xchain-sync. Chain-bounded BIGINT columns
-        // (heights, indexes, times) stay within Number.MAX_SAFE_INTEGER, but
-        // the user-chosen u64 wire fields (EXPIRATION, DEADLINE, ALLOW_LIST
-        // and the rest bounded at U64_MAX in config/wire_fields.js) are not:
-        // a stored value above 2^53 reads back rounded here, and is
-        // replicated rounded, until those reads move to an exact form.
+        typeCast:             exactU64TypeCast,
         bigIntAsNumber:       true,
         minDelayValidation:   3000,
         queryTimeout:         parseInt(CONFIG_ENV.DB_QUERY_TIMEOUT) || 30000
