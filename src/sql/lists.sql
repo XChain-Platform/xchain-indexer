@@ -13,7 +13,7 @@
 --********************************************************************
 
 DROP TABLE IF EXISTS lists;
--- TODO : Convert type and edit fields to INTEGER UNSIGNED and force value to 0-9 (0=null)
+-- TODO (XC-6005): type and edit stay VARCHAR(1) for now; converting to INTEGER UNSIGNED (0-9, 0=null) needs the writers and readers changed in the same release.
 CREATE TABLE lists (
     action_index        BIGINT UNSIGNED NOT NULL, -- Unique action index
     type                VARCHAR(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                -- List type (1=TICK, 2=ASSET, 3=ADDRESS)
