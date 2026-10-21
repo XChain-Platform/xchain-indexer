@@ -87,3 +87,36 @@ describe('Controller-bound token: Phase-1 single-column model retired @regressio
         });
     });
 });
+
+describe('ISSUE v6 COOLDOWN_BLOCKS range @regression', function () {
+    const controllerBinding = require('../../../src/actions/issue/controller_binding.js');
+
+    function run(fn, cooldown, unbind) {
+        const sinon = require('sinon');
+        const self = {
+            util: { isNull: (v) => v === null || v === undefined || v === '' },
+            config: { CONTROLLER_BINDABLE_CLASSES: ['transfer'] },
+            indexerDb: {
+                getTickerId: sinon.stub().resolves(1),
+                getEffectiveTokenController: sinon.stub().resolves(null),
+                createAddress: sinon.stub().resolves(7),
+                recordTokenControllerEvent: sinon.stub().resolves(),
+            },
+        };
+        const data  = { TICK: 'TEST', CONTROLLER: '1500', ACTION_CLASS: 'transfer', UNBIND: unbind || '', SOURCE: 'src', BLOCK_INDEX: 100, ACTION_INDEX: 5 };
+        const issue = { CONTROLLER: '1500', COOLDOWN_BLOCKS: cooldown };
+        const ctx   = { data, issue, tokenInfo: { tick: 'TEST' }, format: 6, error: null };
+        return fn.call(self, ctx).then(() => ({ ctx, self }));
+    }
+
+    it('4294967296 is invalid: COOLDOWN_BLOCKS (format) and records no event', async function () {
+        const { ctx, self } = await run(controllerBinding.validateControllerBinding, '4294967296');
+        assert.strictEqual(ctx.error, 'invalid: COOLDOWN_BLOCKS (format)');
+        assert.strictEqual(self.indexerDb.recordTokenControllerEvent.called, false);
+    });
+
+    it('4294967295 stays valid', async function () {
+        const { ctx } = await run(controllerBinding.validateControllerBinding, '4294967295');
+        assert.strictEqual(ctx.error, null);
+    });
+});

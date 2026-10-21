@@ -214,12 +214,13 @@ class Address {
                         error = 'invalid: ACTION_CLASS (already unbinding)';
                 } else {
                     // BIND: CONTROLLER required, no controller may already gate this class (no stacking;
-                    // replace = unbind-then-bind), and any COOLDOWN_BLOCKS given is a non-negative integer.
+                    // replace = unbind-then-bind), and any COOLDOWN_BLOCKS given is a non-negative integer
+                    // that fits the INT UNSIGNED column (<= 4294967295).
                     if(this.util.isNull(data['CONTROLLER']))
                         error = 'invalid: CONTROLLER (null)';
                     else if(effective)
                         error = 'invalid: ACTION_CLASS (already bound)';
-                    else if(!this.util.isNull(data['COOLDOWN_BLOCKS']) && !/^\d+$/.test(String(data['COOLDOWN_BLOCKS'])))
+                    else if(!this.util.isNull(data['COOLDOWN_BLOCKS']) && (!/^\d+$/.test(String(data['COOLDOWN_BLOCKS'])) || Number(data['COOLDOWN_BLOCKS']) > 4294967295))
                         error = 'invalid: COOLDOWN_BLOCKS (format)';
                 }
             }
