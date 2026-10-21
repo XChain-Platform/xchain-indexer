@@ -69,4 +69,4 @@ function laterBurnsArgs(blockIndex, armed){
     return armed ? [blockIndex] : [];
 }
 
-module.exports = { SLASH_HISTORICAL_SET_KEY, slashHistoricalSetActive, stakeAmountAt, laterBurnsJoin, laterBurnsArgs };
+module.exports = { slashHistoricalSetActive, stakeAmountAt, laterBurnsJoin, laterBurnsArgs };
