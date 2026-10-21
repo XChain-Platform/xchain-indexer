@@ -3350,6 +3350,24 @@
       "Deploy (DEPLOY) @regression @tier2 native coin fee payment valid native coin fee sets feePaymentMode=1 and STATUS valid",
       "Deploy (DEPLOY) @regression @tier2 native coin fee payment xchain balance insufficient for GAS returns invalid (lines 200-202)"
     ],
+    "2f0c3a39981a1446": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
+      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the VM harness-activation twins in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the airdrop native-fee tally rollback row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the archive v1 reissue refusal row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the batch-airdrop leg-weight row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the bridge-checkpoint v3 section row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the gas-ceiling exhaustion row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the guard emitted-host discriminator row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the null-prototype TICK cache row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
+    ],
     "2f13529a5c36e37e": [
       "HubDbSync capability snapshot mirror repoint @regression @tier2 clears the mirror when the hub serves an empty table (a rebuilt hub)",
       "HubDbSync capability snapshot mirror repoint @regression @tier2 clears the retired hub validator sets a repoint leaves behind",
@@ -4953,6 +4971,13 @@
       "static fee quote <-> handler acceptance fee parity @regression @tier1 util.vmGasCost() is the one arithmetic prices each VM gas family off the schedule",
       "static fee quote <-> handler acceptance fee parity @regression @tier1 util.vmGasCost() is the one arithmetic returns null for an unknown family rather than a free action"
     ],
+    "45970d1fc868c9cc": [
+      "ANCHOR v1 archive head same-author re-issue refusal @regression @tier3 indexes the conflicting head valid below the gate without reading the stored heads",
+      "ANCHOR v1 archive head same-author re-issue refusal @regression @tier3 keeps a fresh seq valid at the gate",
+      "ANCHOR v1 archive head same-author re-issue refusal @regression @tier3 keeps an exact re-broadcast valid at the gate",
+      "ANCHOR v1 archive head same-author re-issue refusal @regression @tier3 keeps an exact re-broadcast valid below the gate",
+      "ANCHOR v1 archive head same-author re-issue refusal @regression @tier3 refuses a v1 head re-using its seq on different content at the gate"
+    ],
     "45acd3764dc7d108": [
       "capability_snapshots re-derivation on testnet @regression @tier2 a BTC-testnet node refuses a forged row",
       "capability_snapshots re-derivation on testnet @regression @tier2 a BTC-testnet node refuses an inflated weight and mirrors an honest row",
@@ -5204,23 +5229,6 @@
       "guard emitted host request id below gate @regression @tier1 offsets the call path by emissions already stored for the host action",
       "guard emitted host request id below gate @regression @tier1 passes a composite guard root discriminator through unchanged"
     ],
-    "4952c9f2ec3e3c55": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
-      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
-      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the VM harness-activation twins in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the airdrop native-fee tally rollback row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the batch-airdrop leg-weight row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the bridge-checkpoint v3 section row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the gas-ceiling exhaustion row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the guard emitted-host discriminator row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the null-prototype TICK cache row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings"
-    ],
     "4952d3db984cc3ce": [
       "AnchorRecovery list snapshots @regression @tier2 fails when the natural list sequence already has another snapshot id",
       "AnchorRecovery list snapshots @regression @tier2 refuses a list row from a network other than the archive head",
@@ -5389,6 +5397,13 @@
       "validator wire actions @regression @tier1 reads the name and format like the dispatcher",
       "validator wire actions @regression @tier1 rejects non-string and empty data",
       "validator wire actions @regression @tier1 rejects user actions"
+    ],
+    "4b0dce3d31f20943": [
+      "selectCheckpoint reads ANCHOR v3 checkpoint sections from their flag day @regression @tier1 returns null on the anchor-match path with the gate inactive, reading v0 only",
+      "selectCheckpoint reads ANCHOR v3 checkpoint sections from their flag day @regression @tier1 returns null on the block_index path with the gate inactive, reading v0 only",
+      "selectCheckpoint reads ANCHOR v3 checkpoint sections from their flag day @regression @tier1 returns the v3 section from anchor_actions on the anchor-match path with the gate active",
+      "selectCheckpoint reads ANCHOR v3 checkpoint sections from their flag day @regression @tier1 returns the v3 section from anchor_actions on the block_index path with the gate active",
+      "selectCheckpoint reads ANCHOR v3 checkpoint sections from their flag day @regression @tier1 ships the gate unarmed on testnet and mainnet and active from genesis on regtest"
     ],
     "4b19ce0a35e2bbd5": [
       "protocol_changes GAS_CEILING_EXHAUSTED_ACTIVATION row @regression @tier1 is a registry-only stem",
@@ -11936,6 +11951,11 @@
       "capability proof stall class @regression @tier1 never refines a wedge away",
       "capability proof stall class @regression @tier1 publishes a proof wait and escalates it after the hold ceiling"
     ],
+    "a0d748730ca77c3b": [
+      "exact u64 order reads @regression @tier1 keeps creation expiration and list ids exact",
+      "exact u64 order reads @regression @tier1 keeps cross-chain offer expiration and list ids exact",
+      "exact u64 order reads @regression @tier1 keeps edited expiration and list ids exact"
+    ],
     "a125d6a51b477187": [
       "GET /status wedge window starts at the barrier hold answers 200 for a 60 s barrier wait after a 21 minute commit gap",
       "GET /status wedge window starts at the barrier hold answers 503 for a block held 5 minutes with no commit",
@@ -12099,32 +12119,6 @@
       "Supply & amount boundary tests @regression @tier1 AMT-02: Issue token with maximum supply MAX_SUPPLY = MAX_TOKEN_SUPPLY (10^21) with DECIMALS=0 \u2192 valid",
       "Supply & amount boundary tests @regression @tier1 AMT-03: Issue token exceeding maximum supply MAX_SUPPLY = 10^21 + 1 exceeds MAX_TOKEN_SUPPLY \u2192 invalid",
       "Supply & amount boundary tests @regression @tier1 AMT-04: Issue token with zero supply MAX_SUPPLY = 0 bypasses MIN_TOKEN_SUPPLY check (bcgt guard short-circuits) \u2192 valid"
-    ],
-    "a4072f9ca80387e8": [
-      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
-      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
-      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
-      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
-      "armed_map/manifest: collectRows carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights",
-      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
-      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
-      "armed_map/manifest: collectRows carries the three row families the design names",
-      "armed_map/manifest: collectRows carries the unarmed airdrop native-fee tally rollback gate",
-      "armed_map/manifest: collectRows carries the unarmed batch-airdrop leg-weight gate",
-      "armed_map/manifest: collectRows carries the unarmed bridge-checkpoint v3 section gate",
-      "armed_map/manifest: collectRows carries the unarmed guard emitted-host discriminator gate",
-      "armed_map/manifest: collectRows carries the unarmed null-prototype TICK cache gate",
-      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
-      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
-      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
-      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
-      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
-      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
-      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
-      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
-      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
-      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
-      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "a43841db7e6fd6b9": [
       "Database.slashContractStake() mid-cooldown double-count guard @regression @tier1 routes a mid-cooldown slash to contract_unstakes only (never the deactivated phantom)",
@@ -16458,6 +16452,33 @@
       "reward writers resolve source strictly (recovery byte-identity) createValidatorReward skips the insert when no active source resolves",
       "reward writers resolve source strictly (recovery byte-identity) createValidatorReward stores the strict-resolved source and inserts"
     ],
+    "de1944e0da000104": [
+      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
+      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
+      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
+      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
+      "armed_map/manifest: collectRows carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights",
+      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
+      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
+      "armed_map/manifest: collectRows carries the three row families the design names",
+      "armed_map/manifest: collectRows carries the unarmed airdrop native-fee tally rollback gate",
+      "armed_map/manifest: collectRows carries the unarmed archive v1 reissue refusal gate",
+      "armed_map/manifest: collectRows carries the unarmed batch-airdrop leg-weight gate",
+      "armed_map/manifest: collectRows carries the unarmed bridge-checkpoint v3 section gate",
+      "armed_map/manifest: collectRows carries the unarmed guard emitted-host discriminator gate",
+      "armed_map/manifest: collectRows carries the unarmed null-prototype TICK cache gate",
+      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
+      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
+      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
+      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
+      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
+      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
+      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
+      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
+      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
+      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
+      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
+    ],
     "de2588208d06b802": [
       "state_hash token-supply class (F-1 closure, armed) @regression active: an IDENTICAL supply set hashes the same (no false halt)",
       "state_hash token-supply class (F-1 closure, armed) @regression active: supply is folded in, and a stale/dropped supply HALTS (different hash)",
@@ -17359,6 +17380,11 @@
       "archive invalid_archive reset: publisher scoping @regression against a real SQL engine unscoped, one publisher's orphaned chunk resets the other publisher's surviving head",
       "archive invalid_archive reset: publisher scoping @regression the flag day is armed on mainnet and testnet (2026-09-09 ruling) carries the ruled heights, and splices the author term exactly at each one",
       "archive invalid_archive reset: publisher scoping @regression the flag day is armed on mainnet and testnet (2026-09-09 ruling) reads inactive for an unknown or omitted network and an unparseable height"
+    ],
+    "e9ee1883647156f8": [
+      "getAddressCreditDebit SQL sum with JS fold fallback @regression @tier1 keeps the JS fold when any row is non-canonical",
+      "getAddressCreditDebit SQL sum with JS fold fallback @regression @tier1 returns an empty array from the sum path when no row matches",
+      "getAddressCreditDebit SQL sum with JS fold fallback @regression @tier1 returns the SQL sum, equal to the fold, when every row is canonical"
     ],
     "e9f1f22d99694ca4": [
       "ATTEST batch chunk read: the publisher partition and its row limit (row 59) @regression carries no author term and no limit when nothing is scoped, the legacy shape",
@@ -18759,8 +18785,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1493,
-      "titleCount": 14532,
+      "fileCount": 1497,
+      "titleCount": 14550,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19249,6 +19275,7 @@
         "test/unit/anchor/anchor_v3_same_publisher_reissue.test.js": "8d8bd01b3feabe43",
         "test/unit/anchor/anchor_v3_wire_split.test.js": "711d1b13de89ba49",
         "test/unit/anchor/archive_anchor_content_query.test.js": "383eb974c61ae810",
+        "test/unit/anchor/archive_head_v1_reissue.test.js": "45970d1fc868c9cc",
         "test/unit/anchor/archive_head_v1_reissue_below_gate.test.js": "47fe733ee948f0cb",
         "test/unit/anchor/archive_heads_by_author_seq.test.js": "a82395728a43dff5",
         "test/unit/anchor/archive_reissue_classify.test.js": "2031d812648e76ea",
@@ -19457,7 +19484,7 @@
         "test/unit/consensus/anchor_reward_legacy_pins.test.js": "7f09f1cb1e4cefbf",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
-        "test/unit/consensus/armed_map/manifest.test.js": "a4072f9ca80387e8",
+        "test/unit/consensus/armed_map/manifest.test.js": "de1944e0da000104",
         "test/unit/consensus/armed_map/vm_gate_coverage.test.js": "fe8f001bb389e37d",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
@@ -19467,6 +19494,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "4b0dce3d31f20943",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
@@ -19701,10 +19729,12 @@
         "test/unit/db/mirror_admission_schema.test.js": "f774309cdb5aef1f",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
         "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
+        "test/unit/db/misc/address_credit_debit_sql_sum.test.js": "e9ee1883647156f8",
         "test/unit/db/misc/credit_debit_sum_rows.test.js": "13d650f354d6841c",
         "test/unit/db/misc/credit_debit_sum_sql.test.js": "b765d11dc9d66fd9",
         "test/unit/db/orders/cross_chain_offer_lists.test.js": "87976ddf94e91add",
         "test/unit/db/orders/cross_chain_offer_lists_fold.test.js": "e411489fced259a6",
+        "test/unit/db/orders/order_u64_exact_read.test.js": "a0d748730ca77c3b",
         "test/unit/db/prices/landed_bound_clause.test.js": "d5f3085637164b79",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/remote_token_snapshots.test.js": "7d2fbf0d10540698",
@@ -20109,7 +20139,7 @@
         "test/unit/remote_token/admitted_pin_read.test.js": "88660f9c2c7ccd2b",
         "test/unit/remote_token/remote_token_barrier.test.js": "558ccc867a20fa77",
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
-        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "4952c9f2ec3e3c55",
+        "test/unit/repo_guards/consensus_identity_gates_field.test.js": "2f0c3a39981a1446",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
@@ -20633,8 +20663,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1130,
-      "titleCount": 11455,
+      "fileCount": 1134,
+      "titleCount": 11471,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21092,6 +21122,7 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "71bf81156e7d6e58",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
         "test/unit/anchor/archive_anchor_content_query.test.js": "383eb974c61ae810",
+        "test/unit/anchor/archive_head_v1_reissue.test.js": "45970d1fc868c9cc",
         "test/unit/anchor/archive_head_v1_reissue_below_gate.test.js": "47fe733ee948f0cb",
         "test/unit/anchor/db_get_anchor_v1_by_batch_seq_tieorder.test.js": "44cb0b8ed3723f66",
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
@@ -21202,6 +21233,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "4b0dce3d31f20943",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -21365,6 +21397,8 @@
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
         "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
+        "test/unit/db/misc/address_credit_debit_sql_sum.test.js": "e9ee1883647156f8",
+        "test/unit/db/orders/order_u64_exact_read.test.js": "a0d748730ca77c3b",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
@@ -21769,8 +21803,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 561,
-      "titleCount": 6024,
+      "fileCount": 564,
+      "titleCount": 6035,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21950,6 +21984,7 @@
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
         "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "4b0dce3d31f20943",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -22073,6 +22108,8 @@
         "test/unit/db/markets/order_info_batch.test.js": "32d28eacf6d12ab7",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
+        "test/unit/db/misc/address_credit_debit_sql_sum.test.js": "e9ee1883647156f8",
+        "test/unit/db/orders/order_u64_exact_read.test.js": "a0d748730ca77c3b",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
         "test/unit/db/sql_quote_backslash_escapes.test.js": "c8655466e49bee5a",
@@ -22336,8 +22373,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1130,
-      "titleCount": 11455,
+      "fileCount": 1134,
+      "titleCount": 11471,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22795,6 +22832,7 @@
         "test/unit/anchor/anchor_reward_derive.test/derive_loop_pin.test.js": "71bf81156e7d6e58",
         "test/unit/anchor/anchor_reward_derive.test/late_derive_wiring.test.js": "45d79d13b22cbe2a",
         "test/unit/anchor/archive_anchor_content_query.test.js": "383eb974c61ae810",
+        "test/unit/anchor/archive_head_v1_reissue.test.js": "45970d1fc868c9cc",
         "test/unit/anchor/archive_head_v1_reissue_below_gate.test.js": "47fe733ee948f0cb",
         "test/unit/anchor/db_get_anchor_v1_by_batch_seq_tieorder.test.js": "44cb0b8ed3723f66",
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
@@ -22905,6 +22943,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
+        "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "4b0dce3d31f20943",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -23068,6 +23107,8 @@
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
         "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
+        "test/unit/db/misc/address_credit_debit_sql_sum.test.js": "e9ee1883647156f8",
+        "test/unit/db/orders/order_u64_exact_read.test.js": "a0d748730ca77c3b",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
