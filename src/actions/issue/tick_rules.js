@@ -63,14 +63,25 @@ async function validateTickName(ctx){
         if(!error && !parentInfo)
             error = 'invalid: TICK (parent unknown)';
 
+        // CHILD_TOKEN_INDEPENDENT_EDITS: once a child token exists, its own owner edits,
+        // transfers and unbinds it without the parent owner, and a parent offer no longer
+        // freezes it. The parent owner is still required to create a NEW child, and the
+        // child's own ownership and escrow rules run later in tokenState.validateOwnership.
+        // The lookup is resolve-only so it never interns an unseen name. Unregistered or
+        // below the flag, the historical checks below apply unchanged.
+        let existingChild = false;
+        if(!error && parentInfo && str.substring(0,1)!='^' &&
+           await this.actions.protocolChanges.isEnabled('CHILD_TOKEN_INDEPENDENT_EDITS', data['BLOCK_INDEX']))
+            existingChild = !!(await this.resolveOnlyGetTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']));
+
         // Verify ISSUE is coming from PARENT TICK owner
-        if(!error && parentInfo && parentInfo['OWNER']!=data['SOURCE'])
+        if(!error && parentInfo && !existingChild && parentInfo['OWNER']!=data['SOURCE'])
             error = 'invalid: TICK (parent issued by another address)';
 
         // Reject child issuance while the parent's ownership is escrowed in an open offer.
         // Genesis has no escrows (the escrows table is empty during bootstrap), so the
         // check is a guaranteed false; skip the read.
-        if(!error && parentInfo && !data['IS_GENESIS'] && await this.indexerDb.isOwnershipEscrowed(parent))
+        if(!error && parentInfo && !existingChild && !data['IS_GENESIS'] && await this.indexerDb.isOwnershipEscrowed(parent))
             error = 'invalid: TICK (parent ownership escrowed)';
     }
 
