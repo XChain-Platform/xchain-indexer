@@ -200,7 +200,7 @@ function deriveXchainRate(util, fills, refRate, opts = {}) {
         refRate:      util.bcformat(refRate, PRICE_PRECISION),
         lower:        util.bcformat(lower, PRICE_PRECISION),
         upper:        util.bcformat(upper, PRICE_PRECISION),
-    };
+};
 }
 
 /**
@@ -242,7 +242,4 @@ module.exports = {
     deriveXchainRate,
     referenceRateFromUsd,
     toUsd,
-    WINSOR_BAND_FACTOR,
-    RATE_PRECISION,
-    PRICE_PRECISION,
 };

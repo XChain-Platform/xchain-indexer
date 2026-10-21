@@ -328,7 +328,7 @@ module.exports = {
     STAKE_TOTAL_PUBKEY, stakeMemberLeaf, stakeTotalLeaf, sumCanonicalAmounts,
     // SMT
     SparseMerkleTree, verifySmtProof,
-    compressSmtProof, decompressSmtProof, verifyCompressedSmtProof,
+    compressSmtProof, verifyCompressedSmtProof,
     // fixed Merkle + state root
     fixedMerkleRoot, fixedMerkleProof, verifyFixedMerkleProof,
     stateRoot, stateRootProof,

@@ -245,7 +245,6 @@ async function resolveContractStateRoot(db, smt, chain, network, blockIndex, sha
 module.exports = {
     EMPTY_ROOT_HEX,
     contractStateLeaf,
-    touchedContractStateKeys,
     latestStateValue,
     buildFullContractStateRoot,
     resolveContractStateRoot

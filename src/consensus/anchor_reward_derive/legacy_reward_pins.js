@@ -63,4 +63,4 @@ function isLegacyRewardPinned(tuple, pins){
     return loadLegacyRewardPins(pins).isPinned(tuple);
 }
 
-module.exports = { DEFAULT_PINS_PATH, loadDefaultPins, loadLegacyRewardPins, isLegacyRewardPinned, tupleKey };
+module.exports = { loadDefaultPins, loadLegacyRewardPins, isLegacyRewardPinned, tupleKey };

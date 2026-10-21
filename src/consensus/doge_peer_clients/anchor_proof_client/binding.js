@@ -306,6 +306,5 @@ function judgeAnchors(anchors, e){
 
 module.exports = {
     ATTESTED_VERSIONS, REWARD_FAMILY_VERSIONS, NODE_CLASS_DEPENDENT_STATUS,
-    rewardFamily, rewardFamilyVersions, isRewardCandidateRow, isBundleSectionRow, bundleHeaderBlocks, bindsToTuple,
-    judgeAnchors
+    rewardFamily, rewardFamilyVersions, isRewardCandidateRow, isBundleSectionRow, judgeAnchors
 };
