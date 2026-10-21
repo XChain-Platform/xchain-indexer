@@ -50,7 +50,9 @@ const GATE   = 'BATCH_ISSUANCE_LIMITS';
 // needs no GAS balance (mirrors test/unit/actions/token/issue.test.js's LOW_BLOCK).
 const LOW_BLOCK = 100;
 
-function makeActionsCtx(indexer, { batchLimitsActive = true } = {}) {
+const CARET_GATE = 'ISSUE_CARET_TICK_NO_CREATE';
+
+function makeActionsCtx(indexer, { batchLimitsActive = true, caretNoCreate = false } = {}) {
     return {
         config:          indexer.config,
         util:            indexer.util,
@@ -64,6 +66,8 @@ function makeActionsCtx(indexer, { batchLimitsActive = true } = {}) {
                     return Number(block) >= 862633;
                 if(name === GATE)
                     return batchLimitsActive;
+                if(name === CARET_GATE)
+                    return caretNoCreate;
                 return true;
             }),
         },
@@ -290,5 +294,52 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @
             assert.notStrictEqual(tickCall.suppress, true, 'below the flag the intern must NOT be suppressed (pre-flag behavior)');
             assert.notStrictEqual(parentCall.suppress, true, 'below the flag the parent intern must NOT be suppressed either');
         });
+    });
+});
+
+describe('Issue: caret TICK may not create a token (ISSUE_CARET_TICK_NO_CREATE) @regression @tier1', function(){
+    issueHooks();
+
+    // 'ISSUE PARENT.X' by a non-owner is rejected but interns PARENT.X as ticker id N, so
+    // 'ISSUE ^N' resolves a name that has no token row.
+    async function rejectedChildThenCaret(caretNoCreate){
+        const created = sinon.spy();
+        indexer.indexerDb.createToken = created;
+        indexer.indexerDb.getTokenInfo = sinon.stub().callsFake(async (tick) => {
+            if(tick === 'PARENT')
+                return createTokenInfo({ TICK: 'PARENT', OWNER: 'mnotTheOwnerxxxxxxxxxxxxxxxxxxxxxx' });
+            return null;
+        });
+        const handler = new Issue(makeActionsCtx(indexer, { caretNoCreate }));
+
+        const first = makeData();
+        await handler.parse(makeFormat0Params({ TICK: 'PARENT.X' }), first, null);
+        assert.strictEqual(first.STATUS, 'invalid: TICK (parent issued by another address)');
+
+        const second = makeData();
+        await handler.parse(makeFormat0Params({ TICK: '^7' }), second, null);
+        return { second, created };
+    }
+
+    it('is invalid: TICK (unknown) and never calls createToken when the flag is on', async function(){
+        const { second, created } = await rejectedChildThenCaret(true);
+        assert.strictEqual(second.STATUS, 'invalid: TICK (unknown)');
+        assert.strictEqual(created.callCount, 0);
+    });
+
+    it('stays valid when the flag is off', async function(){
+        const { second } = await rejectedChildThenCaret(false);
+        assert.strictEqual(second.STATUS, 'valid');
+    });
+
+    it('an owner caret v1 edit of an existing token stays valid with the flag on', async function(){
+        indexer.indexerDb.getTokenInfo = sinon.stub().callsFake(async (tick) =>
+            tick === '^7' ? createTokenInfo({ TICK: 'EXISTING', OWNER: SOURCE }) : null);
+        const handler = new Issue(makeActionsCtx(indexer, { caretNoCreate: true }));
+        const data = makeData({ FORMAT: 1 });
+
+        await handler.parse(['1', '^7', 'new description', ''], data, null);
+
+        assert.strictEqual(data.STATUS, 'valid');
     });
 });
