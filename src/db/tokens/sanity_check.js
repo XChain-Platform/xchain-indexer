@@ -67,6 +67,8 @@ module.exports = {
         }
     },
 
+    // The 5 SUMs here plus the 3 in refreshTokenSuppliesForBlock are the 8 per-block supply
+    // scans. Ruling: kept unreduced, see finalizeBlock in block_passes.js.
     // Validate that token supplys match credits/debits/balances information
     async sanityCheck(block_index){
         // Ignore any calls without a block index
