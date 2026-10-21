@@ -11530,18 +11530,6 @@
       "Compacted ^<id> address resolves and validates through the handler (fix regression guard) @adversarial @tier1 a MALFORMED caret id (^1.5 float) is rejected as invalid format (never reaches the FK)",
       "Compacted ^<id> address resolves and validates through the handler (fix regression guard) @adversarial @tier1 control: a full real destination address MINTs valid"
     ],
-    "9baf07e782eeda2c": [
-      "capability snapshot proof hold barrier @regression @tier1 applies and releases a held row when a retry can no longer judge it",
-      "capability snapshot proof hold barrier @regression @tier1 bounds the hold map, notes a full map once, and leaves overflow for a re-page",
-      "capability snapshot proof hold barrier @regression @tier1 deduplicates proof fetches by snapshot block and capability during one retry pass",
-      "capability snapshot proof hold barrier @regression @tier1 encodes every proof endpoint parameter",
-      "capability snapshot proof hold barrier @regression @tier1 keeps a held row absent, blocks, then applies and releases it after proof arrives",
-      "capability snapshot proof hold barrier @regression @tier1 keeps refused rows absent and applies unknown rows without creating a hold",
-      "capability snapshot proof hold barrier @regression @tier1 keeps the barrier closed for overflow until the required re-page drains",
-      "capability snapshot proof hold barrier @regression @tier1 keeps the wire position before a held row during bootstrap",
-      "capability snapshot proof hold barrier @regression @tier1 re-serves and later applies a held row after a restart with persisted local rows",
-      "capability snapshot proof hold barrier @regression @tier1 releases an existing waiter when ordinary redelivery verifies the held row"
-    ],
     "9bc7d8a011e583d1": [
       "consensus_rules_digest: the coin-keyed bridge gate as shipped carries the cut's testnet heights as shipped, mainnet and both bare fallbacks on the sentinel, regtest at genesis",
       "consensus_rules_digest: the coin-keyed bridge gate is a shared gate the ROLLCALL GATES field carries, and resolves to a value",
@@ -18172,6 +18160,19 @@
       "policy membership references refuses malformed transport and non-reference JSON strings",
       "policy membership references separates member arrays, refs and null transport values"
     ],
+    "f73cff8c98578089": [
+      "capability snapshot proof hold barrier @regression @tier1 a frontier hold ends the drain and leaves the heartbeat gate open",
+      "capability snapshot proof hold barrier @regression @tier1 a retained bootstrap hold preserves a re-page reason the drain opened under",
+      "capability snapshot proof hold barrier @regression @tier1 applies and releases a held row when a retry can no longer judge it",
+      "capability snapshot proof hold barrier @regression @tier1 bounds the hold map, notes a full map once, and leaves overflow for a re-page",
+      "capability snapshot proof hold barrier @regression @tier1 deduplicates proof fetches by snapshot block and capability during one retry pass",
+      "capability snapshot proof hold barrier @regression @tier1 encodes every proof endpoint parameter",
+      "capability snapshot proof hold barrier @regression @tier1 keeps a held row absent, blocks, then applies and releases it after proof arrives",
+      "capability snapshot proof hold barrier @regression @tier1 keeps refused rows absent and applies unknown rows without creating a hold",
+      "capability snapshot proof hold barrier @regression @tier1 keeps the barrier closed for overflow until the required re-page drains",
+      "capability snapshot proof hold barrier @regression @tier1 re-serves and later applies a held row after a restart with persisted local rows",
+      "capability snapshot proof hold barrier @regression @tier1 releases an existing waiter when ordinary redelivery verifies the held row"
+    ],
     "f742ecb1d380895a": [
       "health advertises committed height only @regression @tier1 committedView() falls back to the raw handle for a stub without apiView",
       "health advertises committed height only @regression @tier1 committedView() is the same committed height once the block commits",
@@ -18824,7 +18825,7 @@
   "scripts": {
     "test": {
       "fileCount": 1499,
-      "titleCount": 14584,
+      "titleCount": 14585,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19887,7 +19888,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "9baf07e782eeda2c",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "f73cff8c98578089",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
@@ -20704,7 +20705,7 @@
     },
     "test:regression": {
       "fileCount": 1136,
-      "titleCount": 11481,
+      "titleCount": 11482,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21523,7 +21524,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "9baf07e782eeda2c",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "f73cff8c98578089",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
@@ -21846,7 +21847,7 @@
     },
     "test:regression:fast": {
       "fileCount": 566,
-      "titleCount": 6044,
+      "titleCount": 6045,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22217,7 +22218,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "9baf07e782eeda2c",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "f73cff8c98578089",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/buffer_and_scoping.test.js": "6237347ccdee450c",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/cross_chain_upgrades.test.js": "a90785fe5a2760e2",
@@ -22418,7 +22419,7 @@
     },
     "test:regression:full": {
       "fileCount": 1136,
-      "titleCount": 11481,
+      "titleCount": 11482,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23237,7 +23238,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "9baf07e782eeda2c",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "f73cff8c98578089",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
