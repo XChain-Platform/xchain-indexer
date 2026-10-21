@@ -17,8 +17,11 @@
 const MAX_SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
 const U64_MAX = 18446744073709551615n;
 
+// Normalize a BIGINT UNSIGNED column read for a u64 wire field: a safe integer
+// comes back as a Number, anything above 2^53 as its exact decimal string (the
+// same split xchain-sync reads with), and a missing value as null either way.
 function exactU64(value){
-    if(value === null || value === undefined) return value;
+    if(value === null || value === undefined) return null;
     if(typeof value === 'number'){
         if(!Number.isSafeInteger(value) || value < 0)
             throw new RangeError('u64 value is not an exact non-negative integer');
