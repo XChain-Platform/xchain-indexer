@@ -17,16 +17,18 @@
  * Read-only. Builds the uncached cross-chain VM snapshot for recent
  * contract-execution blocks and reports its serialized size, build time and
  * serialization time. The serialization time is the sending half of the
- * worker IPC send: one JSON.stringify of the snapshot per send.
+ * worker IPC send: one JSON.stringify of the snapshot per send. With --polls
+ * it also measures the per-execution poll snapshot (tick-visible shape) the
+ * same way.
  *
  * Usage: node bin/measure_vm_snapshot_bytes.js
- *        [--from N] [--to N] [--limit N] [--db NAME] [--cached] [--json]
+ *        [--from N] [--to N] [--limit N] [--db NAME] [--cached] [--polls] [--json]
  *
  ********************************************************************/
 
 'use strict';
 
-const DEFAULTS = { from: null, to: null, limit: 50, db: null, cached: false, json: false };
+const DEFAULTS = { from: null, to: null, limit: 50, db: null, cached: false, polls: false, json: false };
 
 function integerArg(flag, value, positive){
     if(value === undefined || !/^\d+$/.test(value))
@@ -49,6 +51,7 @@ function parseArgs(argv){
             if(!opts.db) throw new Error('--db needs a database name');
         }
         else if(arg === '--cached') opts.cached = true;
+        else if(arg === '--polls') opts.polls = true;
         else if(arg === '--json') opts.json = true;
         else throw new Error('unknown argument ' + arg);
     }
@@ -116,6 +119,27 @@ async function measure(db, opts, now = Date.now){
         sentBeforeBytes: blocks.reduce((sum, block) => sum + block.sentBefore, 0),
         sentAfterBytes: blocks.reduce((sum, block) => sum + block.sentAfter, 0),
     };
+    if(opts.polls){
+        for(const block of blocks){
+            const started = now();
+            const pollSnapshot = await db.buildPollResultsForVM(block.blockIndex, true);
+            const built = now();
+            const serializeStarted = now();
+            const serialized = JSON.stringify(pollSnapshot);
+            const serializeMs = now() - serializeStarted;
+            block.pollBytes = Buffer.byteLength(serialized);
+            block.pollBuildMs = built - started;
+            block.pollSerializeMs = serializeMs;
+            block.pollSent = block.pollBytes * block.executions;
+        }
+        result.polls = {
+            blocks: blocks.length,
+            maxBytes: blocks.reduce((max, block) => Math.max(max, block.pollBytes), 0),
+            maxBuildMs: blocks.reduce((max, block) => Math.max(max, block.pollBuildMs), 0),
+            maxSerializeMs: blocks.reduce((max, block) => Math.max(max, block.pollSerializeMs), 0),
+            sentBytes: blocks.reduce((sum, block) => sum + block.pollSent, 0),
+        };
+    }
     if(!opts.cached) return result;
 
     const originalBuilder = db.buildCrossChainDataForVM;
@@ -173,6 +197,11 @@ function render(result, json){
         ' max-serialize=' + result.maxSerializeMs + 'ms' +
         ' sent-before-ms=' + result.sentBeforeMs +
         ' sent-after-ms=' + result.sentAfterMs);
+    if(result.polls) lines.push('# polls blocks=' + result.polls.blocks +
+        ' max-bytes=' + result.polls.maxBytes +
+        ' sent=' + result.polls.sentBytes +
+        ' max-build=' + result.polls.maxBuildMs + 'ms' +
+        ' max-serialize=' + result.polls.maxSerializeMs + 'ms');
     if(result.cache) lines.push('# cache blocks=' + result.cache.blocks.length +
         ' hits=' + result.cache.hits +
         ' misses=' + result.cache.misses +

@@ -10,6 +10,8 @@
 const assert = require('assert');
 
 const blocksMixin = require('../../../src/db/blocks/index.js');
+const pollSnapshotMixin = require('../../../src/db/polls/vm_snapshot.js');
+const valueChecks = require('../../../src/utility/validation/value_checks.js');
 const {
     parseArgs, vmBlocksQuery, measure, render,
 } = require('../../../bin/measure_vm_snapshot_bytes.js');
@@ -45,11 +47,16 @@ function makeDb(executionRows){
 describe('bin/measure_vm_snapshot_bytes', function () {
     it('parses bounds, limit, database, cached and JSON modes', function () {
         assert.deepStrictEqual(parseArgs([]), {
-            from: null, to: null, limit: 50, db: null, cached: false, json: false,
+            from: null, to: null, limit: 50, db: null, cached: false, polls: false, json: false,
         });
         assert.deepStrictEqual(parseArgs([
             '--from', '0', '--to', '12', '--limit', '5', '--db', 'indexer', '--cached', '--json',
-        ]), { from: 0, to: 12, limit: 5, db: 'indexer', cached: true, json: true });
+        ]), { from: 0, to: 12, limit: 5, db: 'indexer', cached: true, polls: false, json: true });
+    });
+
+    it('parses --polls to true and its absence to false', function () {
+        assert.strictEqual(parseArgs(['--polls']).polls, true);
+        assert.strictEqual(parseArgs([]).polls, false);
     });
 
     it('rejects unknown flags and invalid numeric arguments', function () {
@@ -260,5 +267,103 @@ describe('bin/measure_vm_snapshot_bytes', function () {
 
         assert.strictEqual(queries.length, 3);
         for(const query of queries) assert.match(query.sql.trim(), /^SELECT/);
+    });
+
+    describe('--polls', function () {
+        const POLLS = { polls: { 5: { status: 'finalized', options: [] } } };
+
+        function pollDb(){
+            const calls = [];
+            return {
+                calls,
+                doQueryStrict: async () => [{ block_index: '12', executions: 2 }, { block_index: '11', executions: 1 }],
+                buildCrossChainDataForVM: async () => ({ attestations: {}, settled: {}, calls: {} }),
+                buildPollResultsForVM: async (...args) => { calls.push(args); return POLLS; },
+            };
+        }
+
+        it('calls buildPollResultsForVM with each block and true in walked order, and not without the flag', async function () {
+            const off = pollDb();
+            const plain = await measure(off, { from: null, to: null, limit: 5, polls: false }, () => 0);
+            assert.deepStrictEqual(off.calls, []);
+            assert.strictEqual(plain.polls, undefined);
+            assert.ok(!('pollBytes' in plain.blocks[0]));
+
+            const on = pollDb();
+            await measure(on, { from: null, to: null, limit: 5, polls: true }, () => 0);
+            assert.deepStrictEqual(on.calls, [[12, true], [11, true]]);
+        });
+
+        it('reports per-block poll bytes, sends and the summary under a counter clock', async function () {
+            const db = pollDb();
+            let tick = 0;
+            const result = await measure(db, { from: null, to: null, limit: 5, polls: true }, () => tick++);
+            const n = Buffer.byteLength(JSON.stringify(POLLS));
+
+            assert.deepStrictEqual(result.blocks.map(b => b.pollBytes), [n, n]);
+            assert.deepStrictEqual(result.blocks.map(b => b.pollSent), [2 * n, n]);
+            assert.deepStrictEqual(result.blocks.map(b => b.pollBuildMs), [1, 1]);
+            assert.deepStrictEqual(result.blocks.map(b => b.pollSerializeMs), [1, 1]);
+            assert.deepStrictEqual(result.polls, {
+                blocks: 2, maxBytes: n, maxBuildMs: 1, maxSerializeMs: 1, sentBytes: 3 * n,
+            });
+            assert.deepStrictEqual(JSON.parse(render(result, true)).polls, result.polls);
+        });
+
+        it('renders the polls line after the blocks line and before the cache line, and leaves no-flag output unchanged', function () {
+            const result = {
+                blocks: [{
+                    blockIndex: 12, executions: 3, bytes: 80, buildMs: 4,
+                    serializeMs: 1, sentBeforeMs: 3, sentAfterMs: 1,
+                    sentBefore: 240, sentAfter: 80,
+                }],
+                scanned: 1, maxBytes: 80, maxBuildMs: 4,
+                maxSerializeMs: 1, sentBeforeMs: 3, sentAfterMs: 1,
+                sentBeforeBytes: 240, sentAfterBytes: 80,
+            };
+            const base = render(result, false);
+            assert.ok(!base.includes('# polls'));
+            const withPolls = Object.assign({}, result, {
+                polls: { blocks: 1, maxBytes: 7, maxBuildMs: 2, maxSerializeMs: 3, sentBytes: 21 },
+                cache: { hits: 0, misses: 1, maxHitMs: 0, maxMissMs: 1, blocks: [] },
+            });
+            const lines = render(withPolls, false).split('\n');
+            assert.strictEqual(lines[1], base.split('\n')[1]);
+            assert.strictEqual(lines[2], '# polls blocks=1 max-bytes=7 sent=21 max-build=2ms max-serialize=3ms');
+            assert.match(lines[3], /^# cache /);
+        });
+
+        it('matches the bytes of buildPollResultsForVM from src/db/polls/vm_snapshot over fixture polls and poll_results rows', async function () {
+            const polls = [
+                { action_index: 1, poll_status: 'finalized', winning_option: 0, total_weight: '10', total_voters: 2, decided_early: 0, tick: 'XCP', resolved_block: 5 },
+                { action_index: 2, poll_status: 'failed_quorum', winning_option: null, total_weight: null, total_voters: null, decided_early: null, tick: null, resolved_block: 9 },
+                { action_index: 3, poll_status: 'finalized', winning_option: 1, total_weight: '4', total_voters: 1, decided_early: 1, tick: 'PEPE', resolved_block: 12 },
+            ];
+            const results = [
+                { poll_index: 1, option_index: 0, total_weight: '10', voter_count: 2 },
+                { poll_index: 3, option_index: 1, total_weight: '4', voter_count: 1 },
+            ];
+            const doQuery = async (sql, args) => {
+                assert.match(sql.trim(), /^SELECT/);
+                const bound = args[0];
+                if(/FROM poll_results/.test(sql)){
+                    const ok = new Set(polls.filter(p => p.resolved_block < bound).map(p => p.action_index));
+                    return results.filter(r => ok.has(r.poll_index));
+                }
+                return polls.filter(p => p.resolved_block < bound);
+            };
+            const db = Object.assign({}, pollSnapshotMixin, {
+                doQuery,
+                util: { isNull: valueChecks.isNull },
+                doQueryStrict: async () => [{ block_index: '10', executions: 3 }],
+                buildCrossChainDataForVM: async () => ({ attestations: {}, settled: {}, calls: {} }),
+            });
+
+            const result = await measure(db, { from: null, to: null, limit: 1, polls: true }, () => 0);
+            const expected = Buffer.byteLength(JSON.stringify(await pollSnapshotMixin.buildPollResultsForVM.call(db, 10, true)));
+            assert.ok(expected > 40);
+            assert.strictEqual(result.blocks[0].pollBytes, expected);
+            assert.strictEqual(result.blocks[0].pollSent, expected * 3);
+        });
     });
 });
