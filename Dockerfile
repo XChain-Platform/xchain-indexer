@@ -17,6 +17,11 @@ COPY ./src /XChainIndexer/src
 # The committed carrier logic pin is what health publishes as carrier_logic_digest
 # (src/api/health/carrier_logic.js reads it; without it the field is UNREADABLE).
 COPY ./bin/pins/carrier-logic.json /XChainIndexer/bin/pins/carrier-logic.json
+# Read-only operator readings run by docker exec from the WORKDIR; they need
+# only src/ and the installed dependencies.
+COPY ./bin/archive_heads_by_author.js /XChainIndexer/bin/archive_heads_by_author.js
+COPY ./bin/bench_net_balance.js /XChainIndexer/bin/bench_net_balance.js
+COPY ./bin/measure_vm_snapshot_bytes.js /XChainIndexer/bin/measure_vm_snapshot_bytes.js
 # Genesis-ledger bootstrap artifacts (Counterparty/Dogeparty name-ownership
 # manifests + precomputed mainnet state dumps). config.js resolves
 # GENESIS_LEDGER_PATH / GENESIS_DUMP_PATH under /XChainIndexer/data/genesis, so

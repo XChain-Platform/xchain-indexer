@@ -85,11 +85,11 @@ function validatePrice(row){
     let key = priceKey(row);
     if(!row || typeof row !== 'object' || Array.isArray(row)) fail('price', key, 'has malformed shape');
     for(let name of ['id', 'round_number', 'reference_block', 'block_timestamp', 'validator_count',
-                     'consensus_round', 'batch_block_time'])
+                     'consensus_round'])
         if(!integer(row[name])) fail('price', key, 'has malformed ' + name);
-    for(let name of ['source_action_index', 'admit_block_btc', 'admit_block_ltc', 'admit_block_doge'])
+    for(let name of ['admit_block_btc', 'admit_block_ltc', 'admit_block_doge'])
         if(!nullableInteger(row[name])) fail('price', key, 'has malformed ' + name);
-    for(let name of ['coin_pair', 'reference_chain', 'source_chain'])
+    for(let name of ['coin_pair', 'reference_chain'])
         if(!text(row[name])) fail('price', key, 'has malformed ' + name);
     if(row.price !== null && typeof row.price !== 'string') fail('price', key, 'has malformed price');
     if(!PRICE_STATUSES.has(row.status)) fail('price', key, 'has malformed status');
@@ -245,11 +245,17 @@ async function writeCheckpoint(db, row){
          row.block_merkle_version == null ? null : Number(row.block_merkle_version), row.validator_signatures]);
 }
 
+// source_chain, source_action_index and batch_block_time are not covered by the price
+// signatures, so an archive row cannot prove them. Recovery never copies them: it writes the
+// column defaults (no known carrier action, no landed batch), which keeps a forged value out of
+// the reorg-retraction key and out of the landed-bound clause. The hub mirror restamps them.
+const UNSIGNED_PRICE_DEFAULTS = { source_chain: 'DOGE', source_action_index: null, batch_block_time: 0 };
+
 function priceValues(row){
     return [row.price, Number(row.reference_block), row.reference_chain, Number(row.block_timestamp),
         Number(row.validator_count), Number(row.consensus_round), row.consensus_proof, row.status,
-        row.source_chain, row.source_action_index == null ? null : Number(row.source_action_index),
-        Number(row.batch_block_time), row.admit_block_btc == null ? null : Number(row.admit_block_btc),
+        UNSIGNED_PRICE_DEFAULTS.source_chain, UNSIGNED_PRICE_DEFAULTS.source_action_index,
+        UNSIGNED_PRICE_DEFAULTS.batch_block_time, row.admit_block_btc == null ? null : Number(row.admit_block_btc),
         row.admit_block_ltc == null ? null : Number(row.admit_block_ltc),
         row.admit_block_doge == null ? null : Number(row.admit_block_doge)];
 }
@@ -294,4 +300,4 @@ async function writeArchive(db, archive, report){
     }
 }
 
-module.exports = { verifyArchive, writeArchive };
+module.exports = { verifyArchive, writeArchive, UNSIGNED_PRICE_DEFAULTS };

@@ -111,3 +111,61 @@ addGate('bridge_escrow_anchor_match_activation.BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVA
     testnet: UNARMED,
     regtest: 0,
 });
+
+// batch_airdrop_leg_weight_activation
+// Height on the processing chain's own block_index. From it a BATCH airdrop leg is weighted by its own amount when the action is split. Below it legs are weighted as before. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// Height on the archive head's DOGE block_index. From it author-scoped chunk
+// reads ignore orphan rows whose declared total_chunks differs from that head.
+addGate('archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 157073,
+    'LTC:testnet': 4928460,
+    'DOGE:testnet': 68009330,
+    testnet: 68009330,
+    regtest: 0,
+});
+
+// Height on the processing chain's own block_index. Registers the BRIDGE_CHECKPOINT_V3 section activation. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('bridge_checkpoint_v3_section_activation.BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// tick_cache_null_prototype_activation
+// Height on the processing chain's own block_index. From it AIRDROP, SEND and DESTROY keep their per-action TICK cache on a null-prototype object, so a TICK spelled like an Object.prototype member (constructor, __proto__) reads as unknown. Below it the cache is a plain object as before. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// airdrop_native_fee_tally_rollback_activation
+// Height on the processing chain's own block_index. From it a multi-leg AIRDROP leg that fails its native coin fee check takes its fee and gas back out of the action tally, so the tally covers only the valid legs. Below it a failed leg's fee and gas stay in the tally. Kept apart from airdrop_native_fee_tally_activation, which is armed on testnet, so testnet fee replay stays identical. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// guard_emitted_host_discriminator_activation
+// Height on the processing chain's own block_index. From it a controller guard roots each guarded emitted host's emission subtree at its own request_id discriminator, so two guarded emitted hosts under one root derive distinct request_ids. Below it those ids are derived as before. Unarmed on mainnet and testnet with no testnet instant, active from genesis on regtest.
+addGate('guard_emitted_host_discriminator_activation.GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// archive_v1_reissue_refusal_activation
+// Height on the processing chain's own block_index. From it a FORMAT 1 archive head that re-uses its author's MATCH_BATCH_SEQ with a different BATCH_CRC32 or MATCH_COUNT is refused with the re-issue retry reason, as the v3 fold already is. Below it a v1 head has no same-author re-issue refusal. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});

@@ -31,12 +31,8 @@ function buildGuardEmissionContext(ctx){
     let hostData = ctx.hostData;
     return {
         ACTION_INDEX:          hostData['ACTION_INDEX'],
-        // Root discriminator for this guard's emission subtree = the guarded native action's
-        // on-chain output index TX_VOUT, under the ROOT_ACTION_INDEX key actions/attest and actions/xcall
-        // read (propagated unchanged by processEmission). MUST be the identical value the
-        // guard's own vm.execute above was given, BATCH_POSITION suffix included, or the
-        // guard's emissions re-derive against a different root than the VM hashed.
         ROOT_ACTION_INDEX:     ctx.guardRootDiscrim,
+        CALL_PATH:             ctx.guardCallPath,
         CONTRACT_ACTION_INDEX: ctx.contractIndex,
         SOURCE:                ctx.derived,
         BLOCK_INDEX:           hostData['BLOCK_INDEX'],

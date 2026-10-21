@@ -40,6 +40,7 @@ const { applyWireFields }      = require('./config/wire_fields.js');
 const { applyTokenSupplyLimits } = require('./config/token_limits.js');
 const { assertFeeDestination } = require('./config/fee_destination.js');
 const { applyFileAndBroadcastLimits, applyMessageMethods, applyMessageAndPollLimits } = require('./config/message_limits.js');
+const { resolveBalanceDeltaMode } = require('./config/balance_delta_mode.js');
 
 // TICK of the protocol gas token (config['GAS']). This value is consensus: it
 // names the token debited for capability STAKE, VOTE deposits/escrows, and
@@ -140,8 +141,7 @@ function readEnvNow(key){
 }
 
 function applyBalanceDeltaMode(config){
-    let mode = String(CONFIG_ENV.BALANCE_DELTA_MODE || 'off').toLowerCase();
-    config['BALANCE_DELTA_MODE'] = ['off', 'verify', 'on'].includes(mode) ? mode : 'off';
+    config['BALANCE_DELTA_MODE'] = resolveBalanceDeltaMode(CONFIG_ENV.BALANCE_DELTA_MODE);
 }
 
 // Tick, token, memo and BET limits. TICK_CHARACTERS, MIN/MAX_BET_REFUND_WINDOW

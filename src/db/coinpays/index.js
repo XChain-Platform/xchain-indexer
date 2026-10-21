@@ -19,6 +19,8 @@
  *
  ********************************************************************/
 
+const { exactU64 } = require('../database/exact_u64.js');
+
 module.exports = {
 
     //////////////////////////////////////////////////////////////////////////
@@ -180,8 +182,10 @@ module.exports = {
             for(let key in results[0]){
                 let name  = String(key).toUpperCase();
                 let value = results[0][key];
-                if(['ACTION_INDEX', 'BLOCK_INDEX', 'EXPIRATION'].includes(name))
+                if(['ACTION_INDEX', 'BLOCK_INDEX'].includes(name))
                     value = Number(value);
+                else if(name === 'EXPIRATION')
+                    value = exactU64(value === null ? 0 : value); // NULL reads as 0, as Number(null) did
                 obligation[name] = value;
             }
         }
@@ -200,7 +204,7 @@ module.exports = {
         for(let row of results){
             expired.push({
                 action_index: Number(row.action_index),
-                expiration:   Number(row.expiration)
+                expiration:   exactU64(row.expiration === null ? 0 : row.expiration)
             });
         }
         return expired;

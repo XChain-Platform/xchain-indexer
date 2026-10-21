@@ -30,6 +30,8 @@ const { getLogger } = require('../../../observability/index.js');
 
 const CHECKPOINT_SEQ_BIND_GATE =
     'anchor_checkpoint_seq_bind_activation.ANCHOR_CHECKPOINT_SEQ_BIND_ACTIVATION';
+const V1_REISSUE_REFUSAL_GATE =
+    'archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION';
 
 async function checkReplayGuards(handler, data, error, validOnly){
     // Replay guards: never accept a seq BELOW the recorded max. Equal is allowed: a v0
@@ -63,9 +65,10 @@ async function checkReplayGuards(handler, data, error, validOnly){
     // is signature-bound to identical content and can only produce a duplicate row, which
     // the archive-head pick is already required to handle deterministically.
     //
-    // So a v1 head has no same-author re-issue refusal: one that reuses a seq its author
-    // already spent, on different content, indexes valid, and only the hub's own seq floor
-    // keeps it from doing so. The refusal (checkFoldArchiveReissue) covers v3 folds only.
+    // So this guard alone does not stop a v1 head that reuses a seq its author already
+    // spent on different content: below ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION such a head
+    // indexes valid and only the hub's own seq floor keeps it from doing so. From that gate
+    // checkHeadArchiveReissue refuses it, as checkFoldArchiveReissue does for v3 folds.
     if(!error){
         let wrapperRows = await handler.actions.protocolChanges.isEnabled(
             'ARCHIVE_REPLAY_WRAPPER_WATERMARK', Number(data['BLOCK_INDEX']));
@@ -92,6 +95,25 @@ async function checkFoldArchiveReissue(handler, data, archive, error){
         batchSeq: Number(archive['MATCH_BATCH_SEQ']),
         batchCrc32: archive['BATCH_CRC32'],
         matchCount: Number(archive['MATCH_COUNT'])
+    });
+}
+
+// From the v1 re-issue gate, a v1 head whose author already holds an archive under its
+// MATCH_BATCH_SEQ with a different BATCH_CRC32 or MATCH_COUNT takes the retry reason, the
+// refusal a v3 fold already carries. The author is the transaction source, the address
+// getArchiveHeadsByAuthorAndSeq joins on. An exact re-broadcast (same CRC and count) is a
+// duplicate and stays valid. Below the gate the verdict is unchanged and nothing is read.
+async function checkHeadArchiveReissue(handler, data, error){
+    if(error) return error;
+    let active = gateRegistry.activeAt(V1_REISSUE_REFUSAL_GATE,
+        handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
+    if(!active || typeof handler.indexerDb.getArchiveHeadsByAuthorAndSeq !== 'function')
+        return error;
+    return await archiveReissueRefusal(handler.indexerDb, {
+        author: String(data['SOURCE'] || ''),
+        batchSeq: Number(data['MATCH_BATCH_SEQ']),
+        batchCrc32: data['BATCH_CRC32'],
+        matchCount: Number(data['MATCH_COUNT'])
     });
 }
 
@@ -163,6 +185,7 @@ async function parseArchiveHead(handler, params, data, error, format){
                 handler.archiveMatchCount(data['ARCHIVE_B64']) !== Number(data['MATCH_COUNT']))
             error = 'invalid: MATCH_COUNT (archive mismatch)';
     }
+    error = await checkHeadArchiveReissue(handler, data, error);
 
     let q = await quorum.verifyHeadQuorum(handler, data, sigs, error);
     error = q.error;

@@ -122,4 +122,4 @@ async function verifyBatchSignatures(indexerDb, config, batch){
         tally.validSigs, tally.qualifiedSigners);
 }
 
-module.exports = { verifyBatchSignatures, resolveCapableSet, tallyQualifiedSigners, checkBatchQuorum };
+module.exports = { verifyBatchSignatures };

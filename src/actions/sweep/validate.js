@@ -109,8 +109,7 @@ module.exports = {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // TODO: Verify sweep is allowed to new address (ALLOW_LIST & BLOCK_LIST)
-        // TODO: Verify sweep is allowed on each TICK (SLEEP)
+        // Not checked here: ALLOW_LIST & BLOCK_LIST for the new address, and SLEEP per TICK
         return error;
     }
 };

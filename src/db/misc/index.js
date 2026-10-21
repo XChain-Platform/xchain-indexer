@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const ledgerPrecision = require('../../consensus/ledger_amount_precision_gate');
+const { creditDebitSumQuery, ledgerArrayFromSumRows } = require('./credit_debit_sum_sql.js');
 
 // The misc mixin is cut into parts by behaviour under misc/; this entry merges them
 // back into the one method set db/index.js installs, at the position those methods held here.
@@ -104,6 +105,14 @@ module.exports = {
         // Narrow to one token when given its tick_id
         sql += tickIdFilter(tick_id, args);
         if(['credits','debits'].indexOf(table) != -1){
+            // Sum in SQL when every matching row holds a canonical ledger decimal: the
+            // server's exact SUM(CAST(m.amount AS DECIMAL(60,18))) per tick then equals the
+            // fold below, without shipping every row. One non-canonical row and the fold
+            // runs as before, so no stored text the fold would read differently can move a
+            // balance.
+            let summed = ledgerArrayFromSumRows(
+                await this.doQuery(creditDebitSumQuery(table, sql), args), this.util);
+            if(summed !== null) return summed;
             let query = `SELECT 
                     m.tick_id,
                     m.amount,

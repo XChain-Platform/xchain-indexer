@@ -27,6 +27,7 @@ let indexer, actionsCtx, handler;
 const bind = (h) => { ({ indexer, actionsCtx, handler } = h); };
 
 const ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
+const BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION = 0;
 
 // Every site that reads the BATCH_COST_WEIGHTING verdict in batch.js sits inside an
 // `if(limitsActive)`, so the weighting gate is a strict refinement of
@@ -54,8 +55,10 @@ function sends(n) {
     return out;
 }
 
-async function run(limitsOn, weightsOn, commands, weights) {
+async function run(limitsOn, weightsOn, commands, weights, activation) {
     stubGates(limitsOn, weightsOn);
+    if(activation && activation.network)
+        handler.config.NETWORK = activation.network;
     // Weights are assigned by later rows, one class at a time. Injecting them here is
     // how this suite exercises the ARITHMETIC without depending on which classes have
     // been ratified yet, so it keeps testing the same property as the table fills in.
@@ -65,6 +68,7 @@ async function run(limitsOn, weightsOn, commands, weights) {
         FORMAT:  0,
         SOURCE,
         TX_DATA: 'BATCH|0|' + commands.join(';'),
+        ...(activation && activation.blockIndex !== undefined ? { BLOCK_INDEX: activation.blockIndex } : {}),
     });
     indexer.indexerDb.isActionAllowed.resolves(true);
     await handler.parse(['0'], data, null);
@@ -81,6 +85,10 @@ function airdrops(n, name) {
     const out = [];
     for (let i = 0; i < n; i++) out.push((name || 'AIRDROP') + '|0|TEST|10|' + (i + 1) + '|memo');
     return out;
+}
+
+function twoLegAirdrop(name) {
+    return (name || 'AIRDROP') + '|1|10|TEST|1|TEST|2|memo';
 }
 
 describe('Batch @regression @tier3', function () {
@@ -176,7 +184,7 @@ describe('Batch @regression @tier3', function () {
             });
         });
 
-        describe('fan-out actions carry a flat weight (operator decision 2026-08-14)', function () {
+        describe('fan-out actions carry a base weight of 25 (operator decision 2026-08-14)', function () {
             it('10 AIRDROPs exactly fill the budget at weight 25', async function () {
                 const data = await run(true, true, airdrops(10));
 
@@ -191,6 +199,28 @@ describe('Batch @regression @tier3', function () {
                 assert.strictEqual(actionsCtx.processAction.callCount, 0);
                 assert.strictEqual(indexer.indexerDb.createBatch.callCount, 1);
             });
+
+            it('a two-leg AIRDROP spends two weight units at the dedicated activation', async function () {
+                const commands = [twoLegAirdrop()].concat(sends(225));
+                const below = await run(true, true, commands, null, {
+                    network: 'regtest', blockIndex: BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION - 1,
+                });
+                assert.strictEqual(below['STATUS'], 'valid', 'the historical flat 25 + 225 must fit');
+
+                actionsCtx.processAction.resetHistory();
+                const active = await run(true, true, commands, null, {
+                    network: 'regtest', blockIndex: BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION,
+                });
+                assert.strictEqual(active['STATUS'], 'invalid: COMMAND (limit)', 'two legs weigh 50, making 275');
+                assert.strictEqual(actionsCtx.processAction.callCount, 0);
+            });
+
+            it('the DROP alias keeps the per-leg multiplier', async function () {
+                const data = await run(true, true, [twoLegAirdrop('DROP')].concat(sends(201)));
+
+                assert.strictEqual(data['STATUS'], 'invalid: COMMAND (limit)');
+                assert.strictEqual(actionsCtx.processAction.callCount, 0);
+            });
         });
     });
 });
@@ -199,7 +229,7 @@ describe('Batch @regression @tier3', function () {
     useBatchHarness(bind);
 
     describe('R7 weighted cost budget (BATCH_COST_WEIGHTING)', function () {
-        describe('fan-out actions carry a flat weight (operator decision 2026-08-14)', function () {
+        describe('fan-out actions carry a base weight of 25 (operator decision 2026-08-14)', function () {
             it('DIVIDEND is weighed the same', async function () {
                 const commands = [];
                 for (let i = 0; i < 11; i++) commands.push('DIVIDEND|0|TEST|PAYT|1|memo');
@@ -232,7 +262,7 @@ describe('Batch @regression @tier3', function () {
             });
         });
 
-        describe('fan-out actions carry a flat weight (operator decision 2026-08-14)', function () {
+        describe('fan-out actions carry a base weight of 25 (operator decision 2026-08-14)', function () {
             it('below the weighting flag the same fan-out batch is unaffected', async function () {
                 // The pre-flag verdict has to be reproducible byte for byte by a replay, and 11
                 // AIRDROPs were never anywhere near the flat 250-command cap.

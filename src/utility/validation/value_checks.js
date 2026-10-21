@@ -100,7 +100,7 @@ module.exports = {
     },
 
     // Determine if a tx hash is valid or not
-    // TODO: clean this up to verify it is an actual tx hash
+    // Length check only (64 characters); a stricter hex check would change which rows are accepted
     isValidTransactionHash(hash){
         if(String(hash).length==64)
             return 1;
