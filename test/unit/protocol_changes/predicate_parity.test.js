@@ -23,6 +23,7 @@ const { SRC, REPLACED_STEMS, REGISTRY_ONLY_STEMS, modulePathFor } = require('../
 
 const ANCHOR_ARCHIVE_FOLD_TERM = 'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
 const BATCH_AIRDROP_LEG_WEIGHT = 'batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION';
+const BRIDGE_CHECKPOINT_V3_SECTION = 'bridge_checkpoint_v3_section_activation.BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION';
 
 // The rows whose predicate W4 (row 18) and W5 (row 21) replaced with activeAt()
 // itself: the callers spell the key at the call site, so there is no predicate
@@ -82,8 +83,9 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
         assert.strictEqual(REPLACED.size, 30, 'the W4 census of 20 predicate-only shims plus the 11 predicate-only twins of W5');
-        assert.strictEqual(REGISTRY_ONLY.size, 87, 'the registry-only gate census moved');
+        assert.strictEqual(REGISTRY_ONLY.size, 88, 'the registry-only gate census moved');
         assert.ok(REGISTRY_ONLY.has(BATCH_AIRDROP_LEG_WEIGHT), 'the batch-airdrop leg-weight gate is registry-only');
+        assert.ok(REGISTRY_ONLY.has(BRIDGE_CHECKPOINT_V3_SECTION), 'the bridge-checkpoint v3 section gate is registry-only');
         assert.ok(REGISTRY_ONLY.has('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'),
             'the cross-chain remote-token gate is registry-only');
         assert.ok(REGISTRY_ONLY.has('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION'),
