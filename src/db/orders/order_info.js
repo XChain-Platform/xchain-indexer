@@ -20,6 +20,7 @@
  *
  ********************************************************************/
 
+const { u64Value } = require('../database/instance_state.js');
 // findOrderMatches' candidate query: every open order from another address that takes the
 // other side of the order being matched. The text is unchanged; the reverse-leg notes ride
 // inside it as SQL comments.
@@ -149,8 +150,10 @@ function orderFromRow(db, row){
     for(let key in row){
         let name  = String(key).toUpperCase();
         let value = row[key];
-        if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
+        if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
             value = Number(value);
+        else if(['EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
+            value = u64Value(value);
         order[name] = value;
     }
     return order;
@@ -183,9 +186,9 @@ function emptyOrderEdit(){
 }
 
 function applyEditRow(db, edit, row){
-    if(!db.util.isNull(row.expiration) && db.util.isNumeric(row.expiration)) edit.expiration = Number(row.expiration);
-    if(!db.util.isNull(row.allow_list) && db.util.isNumeric(row.allow_list)) edit.allow_list = Number(row.allow_list);
-    if(!db.util.isNull(row.block_list) && db.util.isNumeric(row.block_list)) edit.block_list = Number(row.block_list);
+    if(!db.util.isNull(row.expiration) && db.util.isNumeric(row.expiration)) edit.expiration = u64Value(row.expiration);
+    if(!db.util.isNull(row.allow_list) && db.util.isNumeric(row.allow_list)) edit.allow_list = u64Value(row.allow_list);
+    if(!db.util.isNull(row.block_list) && db.util.isNumeric(row.block_list)) edit.block_list = u64Value(row.block_list);
 }
 
 function openingAmounts(row){

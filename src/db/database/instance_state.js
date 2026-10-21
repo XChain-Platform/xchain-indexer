@@ -39,6 +39,26 @@ function connectionParams(self){
     });
 }
 
+// The user-chosen u64 wire columns (config/wire_fields.js bounds them at U64_MAX). A read
+// above 2^53 comes back as the exact decimal string; at or below it stays a Number, so every
+// value that was ever read exactly is read identically and only the previously rounded
+// values change.
+const U64_WIRE_COLUMNS = new Set(['expiration', 'deadline', 'allow_list', 'block_list']);
+
+function u64WireTypeCast(column, next){
+    if(column.type === 'BIGINT' && U64_WIRE_COLUMNS.has(String(column.name()).toLowerCase())){
+        const text = column.string();
+        if(text === null) return null;
+        return (text.length > 15 && !Number.isSafeInteger(Number(text))) ? text : Number(text);
+    }
+    return next();
+}
+
+// Reader helper: keep an exact decimal string as is, coerce anything else as Number() always did.
+function u64Value(value){
+    return (typeof value === 'string' && /^\d+$/.test(value) && !Number.isSafeInteger(Number(value))) ? value : Number(value);
+}
+
 // The pool parameters: the same credentials plus the pool's own connection options.
 function connectionPoolParams(self){
     return withPinnedSqlMode({
@@ -66,9 +86,10 @@ function connectionPoolParams(self){
         // (heights, indexes, times) stay within Number.MAX_SAFE_INTEGER, but
         // the user-chosen u64 wire fields (EXPIRATION, DEADLINE, ALLOW_LIST
         // and the rest bounded at U64_MAX in config/wire_fields.js) are not:
-        // a stored value above 2^53 reads back rounded here, and is
-        // replicated rounded, until those reads move to an exact form.
+        // a stored value above 2^53 would read back rounded, so typeCast
+        // returns those four columns as exact strings above 2^53.
         bigIntAsNumber:       true,
+        typeCast:             u64WireTypeCast,
         minDelayValidation:   3000,
         queryTimeout:         parseInt(CONFIG_ENV.DB_QUERY_TIMEOUT) || 30000
     });
@@ -189,6 +210,8 @@ function initTransactionState(self){
 module.exports = {
     connectionParams,
     connectionPoolParams,
+    u64WireTypeCast,
+    u64Value,
     initIndexIdState,
     initReadMemos,
     initTransactionState,

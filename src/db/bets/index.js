@@ -21,6 +21,7 @@
 
 // The bets mixin is cut into parts by behaviour under bets/; this entry merges them
 // back into the one method set db/index.js installs, at the position those methods held here.
+const { u64Value } = require('../database/instance_state.js');
 const records       = require('./records.js');
 const listings      = require('./listings.js');
 const terminalBatch = require('./terminal_batch.js');
@@ -91,9 +92,11 @@ const BET_FEED_INFO_QUERY = `SELECT
 function formatBetFeedInfo(row, util){
     const feed = {};
     const numericFields = [
-        'ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'DEADLINE', 'REFUND_WINDOW',
-        'EXPIRE_AT', 'ALLOW_LIST', 'BLOCK_LIST', 'CLOSED_BLOCK', 'TERMINAL_BLOCK'
+        'ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'REFUND_WINDOW',
+        'EXPIRE_AT', 'CLOSED_BLOCK', 'TERMINAL_BLOCK'
     ];
+    // The user-chosen u64 wire fields keep an exact string above 2^53.
+    const u64Fields = ['DEADLINE', 'ALLOW_LIST', 'BLOCK_LIST'];
     for(let key in row){
         let name  = String(key).toUpperCase();
         let value = row[key];
@@ -102,7 +105,9 @@ function formatBetFeedInfo(row, util){
         // read as gated by the (nonexistent) list at action_index 0,
         // rejecting all bets. Amount-ish fields (fee/min_amount) stay
         // strings for bignumber math
-        if(!util.isNull(value) && numericFields.includes(name))
+        if(!util.isNull(value) && u64Fields.includes(name))
+            value = u64Value(value);
+        else if(!util.isNull(value) && numericFields.includes(name))
             value = Number(value);
         feed[name] = value;
     }

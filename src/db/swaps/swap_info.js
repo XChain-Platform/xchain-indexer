@@ -21,6 +21,7 @@
  *
  ********************************************************************/
 
+const { u64Value } = require('../database/instance_state.js');
 module.exports = {
 
     // Return swap info for given action_index
@@ -40,8 +41,10 @@ module.exports = {
             for(let key in results[0]){
                 let name  = String(key).toUpperCase()
                 let value = results[0][key];
-                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
+                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
                     value = Number(value);
+                else if(['EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
+                    value = u64Value(value);
                 swap[name] = value;
             }
             // Ownership swaps expose virtual '1' for the ownership side's GIVE_AMOUNT /
@@ -90,9 +93,9 @@ module.exports = {
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){
-                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = Number(row.expiration);
-                if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = Number(row.allow_list);
-                if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = Number(row.block_list);
+                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = u64Value(row.expiration);
+                if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = u64Value(row.allow_list);
+                if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = u64Value(row.block_list);
             }
         }
         return edit;
