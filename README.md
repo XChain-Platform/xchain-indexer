@@ -166,6 +166,7 @@ neither source sets one, so these defaults hold on an unconfigured box:
 | `npm run test:full` | Complete test suite (10,500 tests) |
 
 Run these readings from the indexer working directory against the database named by the indexer's own `INDEXER_DB_*` environment, and use `--json` to print JSON.
+In a deployed indexer container, prefix the same commands and flags with `docker exec <indexer-container>`; they run from the image WORKDIR `/XChainIndexer` against the database named by the container's own `INDEXER_DB_*` environment.
 
 ### Running the DB-backed tiers
 
