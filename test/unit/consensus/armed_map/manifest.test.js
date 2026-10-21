@@ -223,6 +223,18 @@ describe('armed_map/manifest: collectRows', function () {
         assertArmedHeightRow(row);
     });
 
+    it('carries the unarmed batch-airdrop leg-weight gate', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        const key = 'batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION';
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.deepStrictEqual(row, {
+            mainnet: ProtocolChanges.UNARMED,
+            testnet: ProtocolChanges.UNARMED,
+            regtest: 0,
+        });
+    });
+
     it('carries the three row families the design names', function () {
         const keys = rowKeys();
         assert.ok(keys.has('state_commitment_activation.STATE_COMMITMENT_ACTIVATION'), 'an activation map');
