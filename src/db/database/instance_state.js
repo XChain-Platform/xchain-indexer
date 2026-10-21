@@ -39,6 +39,27 @@ function connectionParams(self){
     });
 }
 
+// Exact read of a BIGINT: a Number while it is a safe integer (every chain-bounded height,
+// index and time, so those reads are unchanged), the exact decimal string once it is not
+// (the user-chosen u64 wire fields up to 18446744073709551615).
+function exactBigInt(column, next){
+    if(column.type !== 'BIGINT' && column.type !== 'LONGLONG')
+        return next();
+    let text = column.string();
+    if(text === null || text === undefined)
+        return null;
+    let num = Number(text);
+    return Number.isSafeInteger(num) ? num : text;
+}
+
+// Reader helper for a BIGINT-backed field: keep the exact string the pool hands back for a
+// value above 2^53, otherwise the Number the callers have always had. NULL and false pass.
+function exactU64(value){
+    if(typeof value === 'string' && /^-?\d+$/.test(value))
+        return value;
+    return Number(value);
+}
+
 // The pool parameters: the same credentials plus the pool's own connection options.
 function connectionPoolParams(self){
     return withPinnedSqlMode({
@@ -66,9 +87,10 @@ function connectionPoolParams(self){
         // (heights, indexes, times) stay within Number.MAX_SAFE_INTEGER, but
         // the user-chosen u64 wire fields (EXPIRATION, DEADLINE, ALLOW_LIST
         // and the rest bounded at U64_MAX in config/wire_fields.js) are not:
-        // a stored value above 2^53 reads back rounded here, and is
-        // replicated rounded, until those reads move to an exact form.
+        // a stored value above 2^53 would read back rounded here, so typeCast
+        // below returns those exactly as decimal strings (see exactBigInt).
         bigIntAsNumber:       true,
+        typeCast:             exactBigInt,
         minDelayValidation:   3000,
         queryTimeout:         parseInt(CONFIG_ENV.DB_QUERY_TIMEOUT) || 30000
     });
@@ -189,6 +211,8 @@ function initTransactionState(self){
 module.exports = {
     connectionParams,
     connectionPoolParams,
+    exactBigInt,
+    exactU64,
     initIndexIdState,
     initReadMemos,
     initTransactionState,

@@ -19,6 +19,7 @@
  *
  ********************************************************************/
 
+const { exactU64 } = require('../database/instance_state.js');
 module.exports = {
 
     //////////////////////////////////////////////////////////////////////////
@@ -181,7 +182,7 @@ module.exports = {
                 let name  = String(key).toUpperCase();
                 let value = results[0][key];
                 if(['ACTION_INDEX', 'BLOCK_INDEX', 'EXPIRATION'].includes(name))
-                    value = Number(value);
+                    value = exactU64(value);
                 obligation[name] = value;
             }
         }
@@ -200,7 +201,7 @@ module.exports = {
         for(let row of results){
             expired.push({
                 action_index: Number(row.action_index),
-                expiration:   Number(row.expiration)
+                expiration:   exactU64(row.expiration)
             });
         }
         return expired;

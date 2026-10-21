@@ -20,6 +20,7 @@
  *
  ********************************************************************/
 
+const { exactU64 } = require('../database/instance_state.js');
 const { effectiveOfferLists } = require('./cross_chain_offer_lists.js');
 
 // The per-kind WHERE terms and their bound values, one list per UNION ALL branch, in the
@@ -142,7 +143,7 @@ function offerFromRow(db, row){
         get_ownership:  Number(row.get_ownership),
         get_address:    row.get_address,
         source:         row.source,
-        expiration:     Number(row.expiration),
+        expiration:     exactU64(row.expiration),
         allow_list:     row.allow_list,
         block_list:     row.block_list,
         // Controller-guard royalty split (JSON [{to,bps}] or null). The hub copies it
