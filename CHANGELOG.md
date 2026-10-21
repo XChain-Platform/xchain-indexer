@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-10-21
+
+### Added
+- Stored one row per valid ROLLCALL action in the new rollcall_actions table.
+- Registered seven new consensus gates, all unarmed on testnet and mainnet in this release.
+- Shipped the operator reading scripts in the indexer image, with net balance and VM snapshot measurement tools.
+
+### Changed
+- Cached the VM cross-chain snapshot across blocks with rollback invalidation.
+- Read touched keys' net balances in one batched query per block.
+- Let an existing child token be edited without the parent owner.
+
+### Fixed
+- Read u64 order, swap, dispenser, coinpay and bet values without precision loss.
+- Rejected COOLDOWN_BLOCKS above 4294967295 at ISSUE v6 and ADDRESS v1 binds.
+- Stopped price recovery trusting unsigned price columns.
+
+### Removed
+- Stopped exporting helpers no other module reads.
+
 ## [0.26.0] - 2026-10-20
 
 ### Added
