@@ -148,8 +148,6 @@ async function rowAgedOut(db, decoderDb, row, blockIndex, coin){
 }
 
 module.exports = {
-    PASS_RETIREMENT_KEY,
-    RETIREMENT_GRACE_BLOCKS,
     isPassRetirementActive,
     retirementGraceBlocks,
     heightAgedOut,
