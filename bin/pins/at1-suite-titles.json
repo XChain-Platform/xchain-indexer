@@ -12945,16 +12945,6 @@
       "migration live-schema guard against a real MariaDB @tier3 through the production runner keeps a not-converged manual migration pending on a passive start",
       "migration live-schema guard against a real MariaDB @tier3 through the production runner refuses a lossy auto MODIFY before DDL or ledger insertion"
     ],
-    "afd595adc550c449": [
-      "Anchor (ANCHOR) @regression @tier3 determinism: two independent parses of identical v1 bytes agree and write no reward",
-      "Anchor (ANCHOR) @regression @tier3 replay guard: a checkpoint_seq below the recorded max is stale; equal is allowed (a v0 section and its v1 archive share a seq)",
-      "Anchor (ANCHOR) @regression @tier3 replay guard: a v1 match_batch_seq below the recorded max is stale",
-      "Anchor (ANCHOR) @regression @tier3 v1 replay guard: a match_batch_seq below the recorded max is stale",
-      "Anchor (ANCHOR) @regression @tier3 v1 replay guard: a restarted batch seq is ACCEPTED when its wrapper checkpoint advances",
-      "Anchor (ANCHOR) @regression @tier3 v1 replay guard: a restarted batch stays valid without a DOGE-side reward write",
-      "Anchor (ANCHOR) @regression @tier3 v1 replay guard: a second batch riding the SAME checkpoint is not treated as stale",
-      "Anchor (ANCHOR) @regression @tier3 v1 replay guard: a stale batch seq with a stale checkpoint is still rejected"
-    ],
     "afe91c9de44e3786": [
       "AnchorRecovery.run() driver replay determinism @regression @tier1 negative control: a match_batch_seq-only ORDER BY leaves the equal-seq tie unspecified",
       "AnchorRecovery.run() driver replay determinism @regression @tier1 orders the archive-head driver query by match_batch_seq ASC, action_index ASC",
@@ -18000,6 +17990,17 @@
       "attest_responsible_widening: the V2 ladder (zero-conf armed, D27, D28) is monotone non-decreasing in atBlock",
       "attest_responsible_widening: the V2 ladder (zero-conf armed, D27, D28) reaches headroom+1 and headroom+2 before the deadline on the measured 10-block window"
     ],
+    "f41342eb8bc39b13": [
+      "Anchor (ANCHOR) @regression @tier3 accepts a fresh regtest head below unverified watermarks left by a chain reset",
+      "Anchor (ANCHOR) @regression @tier3 determinism: two independent parses of identical v1 bytes agree and write no reward",
+      "Anchor (ANCHOR) @regression @tier3 replay guard: a checkpoint_seq below the recorded max is stale; equal is allowed (a v0 section and its v1 archive share a seq)",
+      "Anchor (ANCHOR) @regression @tier3 replay guard: a v1 match_batch_seq below the recorded max is stale",
+      "Anchor (ANCHOR) @regression @tier3 v1 replay guard: a match_batch_seq below the recorded max is stale",
+      "Anchor (ANCHOR) @regression @tier3 v1 replay guard: a restarted batch seq is ACCEPTED when its wrapper checkpoint advances",
+      "Anchor (ANCHOR) @regression @tier3 v1 replay guard: a restarted batch stays valid without a DOGE-side reward write",
+      "Anchor (ANCHOR) @regression @tier3 v1 replay guard: a second batch riding the SAME checkpoint is not treated as stale",
+      "Anchor (ANCHOR) @regression @tier3 v1 replay guard: a stale batch seq with a stale checkpoint is still rejected"
+    ],
     "f4198ee64b459e23": [
       "Utility.computeOracleFee() - PRICE v1 oracle usage fee @regression carries 18-decimal intermediates so a small fee is not truncated to zero",
       "Utility.computeOracleFee() - PRICE v1 oracle usage fee @regression computes FEE percent of the escrow's projected coin proceeds",
@@ -18808,7 +18809,7 @@
   "scripts": {
     "test": {
       "fileCount": 1498,
-      "titleCount": 14570,
+      "titleCount": 14571,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18842,7 +18843,7 @@
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
-        "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "afd595adc550c449",
+        "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
@@ -20687,7 +20688,7 @@
     },
     "test:regression": {
       "fileCount": 1135,
-      "titleCount": 11477,
+      "titleCount": 11478,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20762,7 +20763,7 @@
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
-        "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "afd595adc550c449",
+        "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
@@ -22399,7 +22400,7 @@
     },
     "test:regression:full": {
       "fileCount": 1135,
-      "titleCount": 11477,
+      "titleCount": 11478,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22474,7 +22475,7 @@
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
-        "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "afd595adc550c449",
+        "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
