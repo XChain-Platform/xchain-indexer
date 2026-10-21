@@ -230,6 +230,14 @@ module.exports = {
         // supply and fork the state hash. Every ledger-writing pass has run by this point.
         // It runs ahead of endBlock so the blocks row stays the first write after the
         // cache closes; the refresh is plain SQL and reaches no contract code.
+        //
+        // Ruling: the supply scans stay as they are. A block runs 8 batched GROUP BY SUMs
+        // over its touched ticks, 3 here and 5 in sanityCheck. Both read the ledger tables
+        // directly, and sanityCheck is the independent check that the refresh, balances and
+        // escrows agree. Deriving one from the other, or caching a running total, would make
+        // the check compare a value with itself and hide a consensus divergence. No scan is
+        // reduced until the grown-database perf scenario (supplyScan) shows the cost tracking
+        // history, and any reduction needs a new ruling recorded here first.
         await this.indexerDb.refreshTokenSuppliesForBlock(blockToParse);
 
         // Clear VM compilation cache for this block
