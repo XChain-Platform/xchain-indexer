@@ -4288,19 +4288,6 @@
       "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: the v0 bundle leg verifies a bundle carrying a lagging section, and only at the header block",
       "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: the v0 bundle leg verifies a buried v0 bundle against its one anchor_bundle reward"
     ],
-    "3bcc0e3b23759751": [
-      "Airdrop @regression @tier2 format 0: single airdrop LIST_ACTION_INDEX invalid (type===false) \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop MEMO with pipe character \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop TICK not found \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop insufficient balance for total airdrop amount \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop pre-existing error passed through \u2192 createAirdrop still called",
-      "Airdrop @regression @tier2 format 0: single airdrop unknown format version \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to address list creates airdrop record",
-      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to tick list gets holders and credits each",
-      "Airdrop @regression @tier2 format 1: multi-airdrop brief valid multi-airdrop brief processes all ticks",
-      "Airdrop @regression @tier2 format 2: multi-airdrop full valid multi-airdrop full processes multiple TICK/LIST pairs",
-      "Airdrop @regression @tier2 format 3: multi-airdrop full with multiple memos valid format-3 multi-airdrop processes TICK/LIST/MEMO triples"
-    ],
     "3bceaacef99f4221": [
       "Whole-ledger state invariants @regression @tier3 a real ISSUE\u2192MINT\u2192SEND lifecycle satisfies every ledger invariant",
       "Whole-ledger state invariants @regression @tier3 the checker DETECTS a conservation break (inflated balance)",
@@ -6761,6 +6748,13 @@
       "getAddressBalances tick_id filter against MariaDB @integration omits the GAS entry when filtered to another token, and still honours the action bound",
       "getAddressBalances tick_id filter against MariaDB @integration returns every token below the bound when no tick_id is given",
       "getAddressBalances tick_id filter against MariaDB @integration returns only the GAS entry, valued as in the full map, for a numeric or digit-string tick_id"
+    ],
+    "5e4d509cb10b1b62": [
+      "TICK cache null-prototype activation @regression @tier1 keeps live networks unarmed and enables regtest from genesis",
+      "TICK cache null-prototype activation @regression @tier1 switches AIRDROP from the inherited cache immediately below the boundary",
+      "TICK cache null-prototype activation @regression @tier1 uses a null-prototype TICK cache in AIRDROP at the gate",
+      "TICK cache null-prototype activation @regression @tier1 uses a null-prototype TICK cache in DESTROY at the gate",
+      "TICK cache null-prototype activation @regression @tier1 uses a null-prototype TICK cache in SEND at the gate"
     ],
     "5e848392b2703195": [
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) admits a relay identity this chain has not materialized",
@@ -15404,6 +15398,21 @@
       "migration reorder and live-schema guard quoted comment markers @regression @tier1 keeps a rename target between quoted markers in the reorder table set",
       "migration reorder and live-schema guard quoted comment markers @regression @tier1 strips block comments with the splitter quote model"
     ],
+    "d12e2661f8a847b4": [
+      "Airdrop @regression @tier2 format 0: single airdrop LIST_ACTION_INDEX invalid (type===false) \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop MEMO with pipe character \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop TICK not found \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop insufficient balance for total airdrop amount \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop pre-existing error passed through \u2192 createAirdrop still called",
+      "Airdrop @regression @tier2 format 0: single airdrop regtest treats Object.prototype TICK __proto__ as unknown",
+      "Airdrop @regression @tier2 format 0: single airdrop regtest treats Object.prototype TICK constructor as unknown",
+      "Airdrop @regression @tier2 format 0: single airdrop unknown format version \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to address list creates airdrop record",
+      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to tick list gets holders and credits each",
+      "Airdrop @regression @tier2 format 1: multi-airdrop brief valid multi-airdrop brief processes all ticks",
+      "Airdrop @regression @tier2 format 2: multi-airdrop full valid multi-airdrop full processes multiple TICK/LIST pairs",
+      "Airdrop @regression @tier2 format 3: multi-airdrop full with multiple memos valid format-3 multi-airdrop processes TICK/LIST/MEMO triples"
+    ],
     "d17e30f1f575956a": [
       "PRICE v1 refusal case fixtures builds the four cases in order for caps { value: 19, fee: 20 }",
       "PRICE v1 refusal case fixtures fails the leading-zero texts against canonical yet passes them against legacy",
@@ -18630,8 +18639,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1478,
-      "titleCount": 14433,
+      "fileCount": 1479,
+      "titleCount": 14440,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18966,9 +18975,10 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
+        "test/unit/actions/tick_cache_null_prototype_gate.test.js": "5e4d509cb10b1b62",
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
-        "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
+        "test/unit/actions/token/airdrop.test.js": "d12e2661f8a847b4",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
@@ -20489,8 +20499,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1122,
-      "titleCount": 11406,
+      "fileCount": 1123,
+      "titleCount": 11413,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20823,9 +20833,10 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
+        "test/unit/actions/tick_cache_null_prototype_gate.test.js": "5e4d509cb10b1b62",
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
-        "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
+        "test/unit/actions/token/airdrop.test.js": "d12e2661f8a847b4",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
@@ -21617,8 +21628,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 555,
-      "titleCount": 5995,
+      "fileCount": 556,
+      "titleCount": 6000,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21694,6 +21705,7 @@
         "test/unit/actions/stake/vote_sleep_gate.test.js": "aa7188891f17a98e",
         "test/unit/actions/stake/withdraw.test/custody_bypass_witness.test.js": "7e5ad9b78be748e3",
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
+        "test/unit/actions/tick_cache_null_prototype_gate.test.js": "5e4d509cb10b1b62",
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
@@ -22178,8 +22190,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1122,
-      "titleCount": 11406,
+      "fileCount": 1123,
+      "titleCount": 11413,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22512,9 +22524,10 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
+        "test/unit/actions/tick_cache_null_prototype_gate.test.js": "5e4d509cb10b1b62",
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
-        "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
+        "test/unit/actions/token/airdrop.test.js": "d12e2661f8a847b4",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
