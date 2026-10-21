@@ -105,6 +105,9 @@ addGate('capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATI
 // network at or before TOKEN_BRIDGE_ACTIVATION there, or no DOGE- or LTC-origin lock settles.
 addGate('bridge_escrow_anchor_match_activation.BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 157235,
+    'LTC:testnet': 4930600,
+    'DOGE:testnet': 68012800,
     testnet: UNARMED,
     regtest: 0,
 });
