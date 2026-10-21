@@ -26,6 +26,36 @@
 const { CONFIG_ENV } = require('../../config.js');
 const { withPinnedSqlMode } = require('../shared.js');
 
+// u64 wire columns (config/wire_fields.js, bounded at U64_MAX) whose stored value can sit
+// above Number.MAX_SAFE_INTEGER. bigIntAsNumber rounds those on read, so the pool typeCast
+// below hands back the exact decimal string for them, and only when the value is unsafe:
+// every value at or below 2^53 still reads as the same Number as before.
+const U64_WIRE_COLUMNS = new Set([
+    'expiration', 'allow_list', 'block_list', 'deadline', 'refund_window',
+    'mint_start_block', 'mint_stop_block', 'callback_block'
+]);
+
+function isUnsafeIntegerString(text){
+    if(typeof text !== 'string' || !/^\d+$/.test(text)) return false;
+    return text.length > 16 || (text.length === 16 && text > '9007199254740991');
+}
+
+function u64TypeCast(column, next){
+    if(column.type === 'BIGINT' && U64_WIRE_COLUMNS.has(String(column.name()).toLowerCase())){
+        const text = column.string();
+        if(isUnsafeIntegerString(text)) return text;
+    }
+    return next();
+}
+
+// Reader helper: a u64 value from a row or an edit as a Number when it is exactly
+// representable and as its exact decimal string when it is not.
+function exactU64(value){
+    if(typeof value === 'bigint') value = value.toString();
+    if(typeof value === 'string' && isUnsafeIntegerString(value.trim())) return value.trim();
+    return Number(value);
+}
+
 // The direct-connection parameters (verifyDatabase and createDatabase build their own,
 // without the database name, because the database may not exist yet).
 function connectionParams(self){
@@ -67,8 +97,9 @@ function connectionPoolParams(self){
         // the user-chosen u64 wire fields (EXPIRATION, DEADLINE, ALLOW_LIST
         // and the rest bounded at U64_MAX in config/wire_fields.js) are not:
         // a stored value above 2^53 reads back rounded here, and is
-        // replicated rounded, until those reads move to an exact form.
+        // replicated rounded, until those reads move to an exact form (typeCast below, exactU64 in the readers).
         bigIntAsNumber:       true,
+        typeCast:             u64TypeCast,
         minDelayValidation:   3000,
         queryTimeout:         parseInt(CONFIG_ENV.DB_QUERY_TIMEOUT) || 30000
     });
@@ -189,6 +220,8 @@ function initTransactionState(self){
 module.exports = {
     connectionParams,
     connectionPoolParams,
+    exactU64,
+    u64TypeCast,
     initIndexIdState,
     initReadMemos,
     initTransactionState,

@@ -24,6 +24,7 @@
 const records       = require('./records.js');
 const listings      = require('./listings.js');
 const terminalBatch = require('./terminal_batch.js');
+const { exactU64 } = require('../database/instance_state.js');
 
 const BET_FEED_INFO_QUERY = `SELECT
                                 f.action_index,
@@ -103,7 +104,7 @@ function formatBetFeedInfo(row, util){
         // rejecting all bets. Amount-ish fields (fee/min_amount) stay
         // strings for bignumber math
         if(!util.isNull(value) && numericFields.includes(name))
-            value = Number(value);
+            value = ['DEADLINE', 'REFUND_WINDOW', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name) ? exactU64(value) : Number(value);
         feed[name] = value;
     }
     return feed;
