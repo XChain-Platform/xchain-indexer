@@ -13011,6 +13011,10 @@
       "HubDbSync chain-id purge retry @regression @tier2 stays pending while the retry keeps failing",
       "HubDbSync chain-id purge retry @regression @tier2 still owes the legacy-table purge on retry after a chain change"
     ],
+    "b9742e252f175ed5": [
+      "cross-chain VM snapshot cross-block cache wiring @regression @tier1 rebuilds getCrossChainDataForVM after rollback resets in-place flips",
+      "cross-chain VM snapshot cross-block cache wiring @regression @tier1 serves getCrossChainDataForVM from the cross-block cache in a later pass"
+    ],
     "b97d2027d5c02535": [
       "JSON-RPC fee family @regression @tier1 feequote, preflight, feeschedule and feequotedryrun delegate to the actions engine",
       "JSON-RPC fee family @regression @tier1 reports engine throws generically, except the dry-run which surfaces the message",
@@ -18566,8 +18570,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1472,
-      "titleCount": 14391,
+      "fileCount": 1473,
+      "titleCount": 14393,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19531,6 +19535,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/cross_chain_snapshot_golden.test.js": "0cb9a34b3a919984",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
@@ -20415,8 +20420,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1116,
-      "titleCount": 11372,
+      "fileCount": 1117,
+      "titleCount": 11374,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21167,6 +21172,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
@@ -21537,8 +21543,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 550,
-      "titleCount": 5963,
+      "fileCount": 551,
+      "titleCount": 5965,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21857,6 +21863,7 @@
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
         "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
+        "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
@@ -22093,8 +22100,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1116,
-      "titleCount": 11372,
+      "fileCount": 1117,
+      "titleCount": 11374,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22845,6 +22852,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",

@@ -270,14 +270,14 @@ module.exports = {
         return Number.isFinite(hcut) ? hcut : null;
     },
 
-    // Cross-chain snapshot for the VM, built once per block pass (see vm_snapshot_memo.js).
+    // Cross-chain snapshot for the VM, cached across blocks and within each block pass.
     async getCrossChainDataForVM(block_index){
         let bound = Number(block_index) || 0;
         return memoizedVmSnapshot(this, 'crossChain:' + bound, bound,
             () => this.buildCrossChainDataForVM(bound));
     },
 
-    // Build the cross-chain snapshot uncached; getCrossChainDataForVM memoizes it per block pass.
+    // Build the cross-chain snapshot uncached.
     async buildCrossChainDataForVM(bound){
         // Serializable snapshot (plain data) - the VM worker rebuilds the
         // getAttestation/isSettled accessors (keys are "CHAIN:action_index").
