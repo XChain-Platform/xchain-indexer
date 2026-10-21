@@ -28,6 +28,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const gateRegistry = require('../../consensus/gate_registry');
 
 // Per-root discriminator for the ATTEST request_id / XCALL call_id preimages. One
 // helper for all three root-bearing sites here (top-level EXECUTE, controller guard,
@@ -44,6 +45,22 @@ const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_a
 // DENY. Canonical: xchain-documentation/protocol/controller-bound-tokens.md.
 const GUARD_METHOD = 'guard';
 const LEG_SAVEPOINT_ACTIVATION = 'CONTROLLER_GUARD_LEG_SAVEPOINTS';
+const GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION =
+    'guard_emitted_host_discriminator_activation.GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION';
+
+function emittedHostDiscriminatorActive(config, hostData){
+    return !!hostData['IS_EMISSION'] && gateRegistry.activeAt(
+        GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION,
+        config['NETWORK'], config['COIN'], Number(hostData['BLOCK_INDEX']), null);
+}
+
+function guardCallPath(hostData, active){
+    if(!active) return '';
+    let path = hostData['CALL_PATH'];
+    if(typeof path !== 'string' || path === '')
+        throw new Error('controller guard emitted host missing CALL_PATH');
+    return path;
+}
 
 // Returns a DENY verdict when the controller cannot run, null when it can.
 async function loadGuardContract(ctx){
@@ -136,13 +153,7 @@ async function runGuardVm(ctx, snapshot){
             gasCeiling:        ctx.guardCeiling,
             callDepth:         ctx.callDepth,
             actionIndex:       hostData['ACTION_INDEX'],
-            callPath:          '',     // a guard is a root execution for its own subtree
-            // Root discriminator = the guarded native action's on-chain output index (TX_VOUT),
-            // carried under the VM opt name `rootActionIndex` the gateway preimage reads.
-            // Distinguishes this guard subtree from a co-tx top-level EXECUTE that also seeds ''.
-            // A guarded action inside a BATCH shares its TX_VOUT with every sibling subcommand,
-            // so the subcommand position is appended there (flag-day gated); without it two
-            // guarded sends of one controlled token in a BATCH seed identical subtrees.
+            callPath:          ctx.guardCallPath,
             rootActionIndex:   ctx.guardRootDiscrim,
             isGuard:           true,   // disables ATTEST/XCALL in the gateway
             network:           this.config['NETWORK'],
@@ -221,11 +232,12 @@ async function evaluateGuard(ctx){
 
     let snapshot = await loadGuardSnapshot.call(this, ctx);
 
-    // Per-root discriminator for this guard subtree (see src/consensus/batch_root_discriminator.js).
-    // Resolved ONCE and used by both the guard's vm.execute and its emission context,
-    // which must hand the VM and the host re-derivation the identical value.
-    ctx.guardRootDiscrim = await resolveRootDiscriminator(this.actions.protocolChanges,
-        ctx.hostData['BLOCK_INDEX'], ctx.hostData['TX_VOUT'], ctx.hostData['BATCH_POSITION']);
+    ctx.guardHostDiscriminatorActive = emittedHostDiscriminatorActive(this.config, ctx.hostData);
+    ctx.guardCallPath = guardCallPath(ctx.hostData, ctx.guardHostDiscriminatorActive);
+    ctx.guardRootDiscrim = (ctx.guardHostDiscriminatorActive && ctx.hostData['ROOT_ACTION_INDEX'] != null)
+        ? ctx.hostData['ROOT_ACTION_INDEX']
+        : await resolveRootDiscriminator(this.actions.protocolChanges,
+            ctx.hostData['BLOCK_INDEX'], ctx.hostData['TX_VOUT'], ctx.hostData['BATCH_POSITION']);
 
     ctx.guardParams = buildGuardParams.call(this, ctx.opts);
     ctx.vmResult = await runGuardVm.call(this, ctx, snapshot);
