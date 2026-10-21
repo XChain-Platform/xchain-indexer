@@ -1886,6 +1886,14 @@
       "Rollback contract slash-restore order @regression @tier3 restores the pre-slash amount when the orphaned slashes arrive in ascending execution order",
       "Rollback contract slash-restore order @regression @tier3 touches nothing when every debit survives the rollback"
     ],
+    "1ef5df479a5d3d5d": [
+      "bin/compare_credit_debit_sum folds credits and debits per key without exponential notation",
+      "bin/compare_credit_debit_sum issues SELECT statements only",
+      "bin/compare_credit_debit_sum parseArgs reads --db and --json and rejects anything else",
+      "bin/compare_credit_debit_sum reports a key whose SQL sum drifted, with both values",
+      "bin/compare_credit_debit_sum reports no difference when the fold and the SQL sum agree",
+      "bin/compare_credit_debit_sum treats a key present on one side only as a difference against zero"
+    ],
     "1f0e549847cee838": [
       "HubDbSync stream-watermark stall recovery @regression @tier1 _checkWatermarkStall wiring a PARTIAL advance re-arms stage 1 rather than falling through to the exit",
       "HubDbSync stream-watermark stall recovery @regression @tier1 _checkWatermarkStall wiring a stopped or disabled mirror never fires",
@@ -18481,8 +18489,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1461,
-      "titleCount": 14328,
+      "fileCount": 1462,
+      "titleCount": 14334,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19049,6 +19057,7 @@
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
+        "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
