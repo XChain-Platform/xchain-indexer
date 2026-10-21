@@ -1613,14 +1613,6 @@
       "contract_state_root: strict reads @regression a faulting full build THROWS rather than committing EMPTY over a populated table",
       "contract_state_root: strict reads @regression a faulting latest-value read THROWS rather than DELETING the key from the tree"
     ],
-    "15664d8749435175": [
-      "coinpay and bet u64 reads keep exact values above 2^53 keeps a coinpay obligation EXPIRATION exact at u64 max",
-      "coinpay and bet u64 reads keep exact values above 2^53 keeps an expired coinpay expiration exact and a safe one a Number",
-      "coinpay and bet u64 reads keep exact values above 2^53 keeps bet feed DEADLINE, REFUND_WINDOW, EXPIRE_AT, ALLOW_LIST and BLOCK_LIST exact",
-      "coinpay and bet u64 reads keep exact values above 2^53 reads a NULL coinpay EXPIRATION as 0, as before",
-      "coinpay and bet u64 reads keep exact values above 2^53 reads a safe coinpay EXPIRATION as a Number",
-      "coinpay and bet u64 reads keep exact values above 2^53 reads safe bet feed u64 values as Numbers and keeps NULL lists NULL"
-    ],
     "15756f486e83ac3e": [
       "Issue handler @regression @tier1 TICK validations 1-char TICK at/above the namespace flag -> invalid: TICK (length)",
       "Issue handler @regression @tier1 TICK validations 1-char TICK below the namespace flag (mainnet sentinel) -> valid",
@@ -5002,6 +4994,18 @@
       "compat gate: startup-required tables every required table has a src/sql definition the product createTable can build",
       "compat gate: startup-required tables exports the startup table reader and builder"
     ],
+    "464e44254a160d66": [
+      "bin/archive_heads_by_author adds the from-seq filter and argument before the limit",
+      "bin/archive_heads_by_author builds an all-status query without a from-seq filter",
+      "bin/archive_heads_by_author does not count another invalid status as refused",
+      "bin/archive_heads_by_author parses the required author and optional filters",
+      "bin/archive_heads_by_author reads through doQueryStrict and returns rows with their summary",
+      "bin/archive_heads_by_author rejects missing and invalid arguments",
+      "bin/archive_heads_by_author renders every head followed by the summary",
+      "bin/archive_heads_by_author renders the complete result as JSON",
+      "bin/archive_heads_by_author requires a valid head above every refused sequence for redrawn-above",
+      "bin/archive_heads_by_author summarizes no rows"
+    ],
     "46583f298dcec09f": [
       "protocol_changes active-stake collation gate @regression @tier1 is inert when height is null or non-finite",
       "protocol_changes active-stake collation gate @regression @tier1 registers a height gate unarmed on mainnet, armed on testnet at its v0.25.0 heights, and active from regtest genesis"
@@ -5156,13 +5160,6 @@
     "47fe733ee948f0cb": [
       "ANCHOR archive head same-author re-issue below the fold gate @regression @tier3 indexes a v1 head valid over a stored row with a different CRC and match count, without reading it",
       "ANCHOR archive head same-author re-issue below the fold gate @regression @tier3 refuses a v3 fold in the same stored-row case with one read once the fold gate is active"
-    ],
-    "48062911c2f01161": [
-      "swap and dispenser u64 reads keep exact values above 2^53 dispenser info folds an active edit overlay carrying u64 max as the exact string",
-      "swap and dispenser u64 reads keep exact values above 2^53 dispenser info keeps the base EXPIRATION, ALLOW_LIST and BLOCK_LIST exact and a safe value a Number",
-      "swap and dispenser u64 reads keep exact values above 2^53 reads a NULL swap or dispenser list as 0, as before",
-      "swap and dispenser u64 reads keep exact values above 2^53 swap info folds an edit overlay carrying u64 max as the exact string",
-      "swap and dispenser u64 reads keep exact values above 2^53 swap info keeps the base EXPIRATION, ALLOW_LIST and BLOCK_LIST exact and a safe value a Number"
     ],
     "482e2d76b66b5661": [
       "protocol_changes/APPLY_LENGTH_METER row @regression @tier1 is present in the class table and registry in the same shape",
@@ -8713,13 +8710,6 @@
       "ANCHOR v3 action rows puts three chain rows before one archive row",
       "ANCHOR v3 action rows records one data-only row for a malformed action",
       "ANCHOR v3 action rows restores the action format after merging each section"
-    ],
-    "78d02846d4627582": [
-      "selectCheckpoint section-pick baseline on testnet @regression @tier1 keeps ANCHOR_SECTION_VERSION at version 0",
-      "selectCheckpoint section-pick baseline on testnet @regression @tier1 picks a returned version 0 anchor row with source anchor_actions",
-      "selectCheckpoint section-pick baseline on testnet @regression @tier1 uses anchor reads for a DOGE-origin row above the anchor-match activation",
-      "selectCheckpoint section-pick baseline on testnet @regression @tier1 uses block_index reads for a BTC-origin row above the anchor-match activation",
-      "selectCheckpoint section-pick baseline on testnet @regression @tier1 uses block_index reads for a DOGE-origin row below the anchor-match activation"
     ],
     "78f4d92179b7b8ca": [
       "ISSUE token-bridge opt-in and policy exclusion @regression @consensus format 7 admission accepts a raise-only MIN_DEPTH",
@@ -18747,8 +18737,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1492,
-      "titleCount": 14522,
+      "fileCount": 1490,
+      "titleCount": 14516,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19324,6 +19314,7 @@
         "test/unit/attestation/relayed_attestation_requests.test.js": "3904e3eba82ab03f",
         "test/unit/attestation/repair_validator_stats_drift.test.js": "b2c12d6af08b6d99",
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
+        "test/unit/bin/archive_heads_by_author.test.js": "464e44254a160d66",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/bench_net_balance.test.js": "0ec8a8b3eee6cb90",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
@@ -19453,7 +19444,6 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
-        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
@@ -19577,7 +19567,6 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
-        "test/unit/db/coinpays/coinpay_bet_u64_exact_read.test.js": "15664d8749435175",
         "test/unit/db/database/exact_u64.test.js": "c171a686246e7883",
         "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
@@ -19725,7 +19714,6 @@
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
         "test/unit/db/subtree/node_store_rows.test.js": "e0826acdcf60989c",
         "test/unit/db/subtree/orphan_stats_reads.test.js": "84a5bb8715a5c817",
-        "test/unit/db/swaps/swap_dispenser_u64_exact_read.test.js": "48062911c2f01161",
         "test/unit/db/tickers/ticker_lookup_order.test.js": "c0917406521a91c5",
         "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
@@ -20620,8 +20608,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1130,
-      "titleCount": 11455,
+      "fileCount": 1129,
+      "titleCount": 11450,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21188,7 +21176,6 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
-        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -21756,8 +21743,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 561,
-      "titleCount": 6024,
+      "fileCount": 560,
+      "titleCount": 6019,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21936,7 +21923,6 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
-        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -22323,8 +22309,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1130,
-      "titleCount": 11455,
+      "fileCount": 1129,
+      "titleCount": 11450,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22891,7 +22877,6 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
-        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
