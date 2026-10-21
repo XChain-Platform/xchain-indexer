@@ -27,6 +27,7 @@
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
+const gateRegistry = require('../gate_registry');
 const { anchorMatched } = require('../bridge_checkpoint_check/anchor_match.js');
 
 // The ANCHOR wire version that carries a checkpoint SECTION in its own right. Version 1 is the
@@ -37,6 +38,21 @@ const { anchorMatched } = require('../bridge_checkpoint_check/anchor_match.js');
 // (see sql/anchor_actions.sql), so admitting it here would select a rootless "checkpoint" that
 // fails CHECKPOINT_ROOTLESS and turn a provable transfer into a refusal.
 const ANCHOR_SECTION_VERSION = 0;
+
+// From BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION, read at the settling chain's own block, the pick
+// also reads the chain-bearing sections of a post-fold v3 action, which carry their own
+// checkpoint identity and state_root exactly as a v0 section does. Below it only v0 is read, as
+// before. Defined here and not by CHECKPOINT_SECTION_VERSIONS in db/anchor_sql.js, which also
+// feeds getanchoraction and so must not move with this gate.
+const V3_SECTION_KEY      = 'bridge_checkpoint_v3_section_activation.BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION';
+const ANCHOR_SECTION_VERSION_V3 = 3;
+
+// The section version (a number) or versions (a list) the anchor read binds for this block.
+function sectionVersions(ctx){
+    const on = !!ctx && typeof ctx === 'object' &&
+               gateRegistry.activeAt(V3_SECTION_KEY, ctx.network, ctx.coin, ctx.blockIndex, null);
+    return on ? [ANCHOR_SECTION_VERSION, ANCHOR_SECTION_VERSION_V3] : ANCHOR_SECTION_VERSION;
+}
 
 // A finite non-negative integer, or null. Heights arrive from a MariaDB driver that may hand
 // back a number, a string or a BigInt depending on its bigint options.
@@ -183,9 +199,10 @@ async function selectCheckpoint(row, ctx){
     // Only a SUCCESSFUL empty read is an absence, which stalls. A read fault propagates, the
     // block is not committed and is retried, so a fault on one source never shrinks the
     // candidate set into a pick a healthy peer holding the same rows would not make.
+    const versions = sectionVersions(ctx);
     const anchors = onAnchor
-        ? await db.getEarliestValidAnchorCheckpointAfterAnchor(ANCHOR_SECTION_VERSION, chain, network, atOrAfter)
-        : await db.getEarliestValidAnchorCheckpoint(ANCHOR_SECTION_VERSION, chain, network, atOrAfter);
+        ? await db.getEarliestValidAnchorCheckpointAfterAnchor(versions, chain, network, atOrAfter)
+        : await db.getEarliestValidAnchorCheckpoint(versions, chain, network, atOrAfter);
     for(const a of anchors)
         candidates.push({ chain: a.chain, network: a.network, block_index: height(a.block_index),
                           checkpoint_seq: height(a.checkpoint_seq), snapshot_block: height(a.snapshot_block),
@@ -221,4 +238,4 @@ async function selectCheckpoint(row, ctx){
     return usable[0];
 }
 
-module.exports = { ANCHOR_SECTION_VERSION, height, checkpointCanonical, verifyCheckpointQuorum, selectCheckpoint };
+module.exports = { ANCHOR_SECTION_VERSION, V3_SECTION_KEY, sectionVersions, height, checkpointCanonical, verifyCheckpointQuorum, selectCheckpoint };
