@@ -13,7 +13,7 @@
 --********************************************************************
 
 DROP TABLE IF EXISTS lists;
--- TODO (XC-6005): type and edit stay VARCHAR(1) for now; converting to INTEGER UNSIGNED (0-9, 0=null) needs the writers and readers changed in the same release.
+-- Note: type and edit stay VARCHAR(1) for now; converting to INTEGER UNSIGNED (0-9, 0=null) needs the writers and readers changed in the same release.
 CREATE TABLE lists (
     action_index        BIGINT UNSIGNED NOT NULL, -- Unique action index
     type                VARCHAR(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                -- List type (1=TICK, 2=ASSET, 3=ADDRESS)
