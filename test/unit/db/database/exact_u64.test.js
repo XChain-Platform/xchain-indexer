@@ -65,4 +65,10 @@ describe('exactU64', function () {
         assert.strictEqual(value, 42);
         assert.strictEqual(calls, 1);
     });
+
+    it('passes a negative signed BIGINT through exact instead of throwing', function () {
+        assert.strictEqual(exactU64TypeCast({ type: 'BIGINT', string: () => '-5' }, () => null), -5);
+        assert.strictEqual(exactU64TypeCast({ type: 'BIGINT', string: () => '-9223372036854775808' }, () => null),
+            '-9223372036854775808');
+    });
 });
