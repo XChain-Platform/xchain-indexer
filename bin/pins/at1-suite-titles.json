@@ -5190,6 +5190,12 @@
     "48ec89675a1f39f8": [
       "consensus block-hash conformance twins (static drift-lock) @regression state_key collation gate and splice match across xchain-indexer and xchain-sync"
     ],
+    "494348d00a38395f": [
+      "guard emitted host request id below gate @regression @tier1 assigns consecutive call paths to two emissions from one guard",
+      "guard emitted host request id below gate @regression @tier1 collides with the ordinary root host request id under the legacy discriminator",
+      "guard emitted host request id below gate @regression @tier1 offsets the call path by emissions already stored for the host action",
+      "guard emitted host request id below gate @regression @tier1 passes a composite guard root discriminator through unchanged"
+    ],
     "4952d3db984cc3ce": [
       "AnchorRecovery list snapshots @regression @tier2 fails when the natural list sequence already has another snapshot id",
       "AnchorRecovery list snapshots @regression @tier2 refuses a list row from a network other than the archive head",
@@ -18585,8 +18591,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1474,
-      "titleCount": 14406,
+      "fileCount": 1475,
+      "titleCount": 14410,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18774,6 +18780,7 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
@@ -20436,8 +20443,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1118,
-      "titleCount": 11387,
+      "fileCount": 1119,
+      "titleCount": 11391,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20641,6 +20648,7 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
@@ -21560,8 +21568,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 552,
-      "titleCount": 5978,
+      "fileCount": 553,
+      "titleCount": 5982,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21611,6 +21619,7 @@
         "test/unit/actions/contract/execute_host_fault.test.js": "044af0ce102bf587",
         "test/unit/actions/contract/execute_slash_ledger_consolidation.test.js": "5cc340e05ad6f3cf",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
@@ -22118,8 +22127,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1118,
-      "titleCount": 11387,
+      "fileCount": 1119,
+      "titleCount": 11391,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22323,6 +22332,7 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
