@@ -20358,8 +20358,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1113,
-      "titleCount": 11352,
+      "fileCount": 1114,
+      "titleCount": 11359,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21109,6 +21109,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
@@ -21359,7 +21360,6 @@
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
         "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
-        "test/unit/recovery/recovery.test/checkpoint_price_unsigned_columns.test.js": "047d84192e26ff62",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
@@ -21478,8 +21478,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 547,
-      "titleCount": 5947,
+      "fileCount": 548,
+      "titleCount": 5954,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21797,6 +21797,7 @@
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
         "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
+        "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
         "test/unit/fees/dry_run_batch_fee_withheld.test.js": "9620969f56b951f5",
@@ -22031,8 +22032,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1113,
-      "titleCount": 11352,
+      "fileCount": 1114,
+      "titleCount": 11359,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22782,6 +22783,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
@@ -23032,7 +23034,6 @@
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
         "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
-        "test/unit/recovery/recovery.test/checkpoint_price_unsigned_columns.test.js": "047d84192e26ff62",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
