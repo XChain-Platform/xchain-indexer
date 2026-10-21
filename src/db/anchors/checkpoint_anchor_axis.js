@@ -33,16 +33,18 @@ module.exports = {
     // primary key ends the order so the pick is total where two valid rows tie on
     // (snapshot_block, checkpoint_seq).
     async getEarliestValidAnchorCheckpointAfterAnchor(version, chain, network, afterSnapshotBlock){
+        // version is one section version or a list of them, bound as one placeholder each.
+        const versions = [].concat(version);
         return await this.doQueryStrict(
             `SELECT a.chain, a.network, a.block_index, a.checkpoint_seq, a.snapshot_block,
                     a.state_root, a.state_root_version
              FROM anchor_actions a
              JOIN index_statuses s ON s.id = a.status_id
-             WHERE a.version = ? AND a.chain = ? AND a.network = ? AND a.snapshot_block > ?
+             WHERE a.version IN (${versions.map(() => '?').join(', ')}) AND a.chain = ? AND a.network = ? AND a.snapshot_block > ?
                AND a.state_root IS NOT NULL AND s.status = 'valid'
              ORDER BY a.snapshot_block ASC, a.checkpoint_seq DESC, a.action_index ASC, a.section_index ASC
              LIMIT 1`,
-            [version, chain, network, afterSnapshotBlock]);
+            [...versions, chain, network, afterSnapshotBlock]);
     },
 
     // Several rows, lowest first, for the same reason as its block_index sibling: a row at the

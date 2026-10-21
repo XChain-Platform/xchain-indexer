@@ -22,6 +22,8 @@
 
 'use strict';
 
+const { invalidate } = require('../vm_snapshot_memo.js');
+
 module.exports = {
 
     // contract_emissions references contract_executions, so it goes first.
@@ -48,6 +50,7 @@ module.exports = {
     // XCALL v0 requests whose terminal flip is orphaned go back to pending.
     async resetOrphanedXcallRequests(db, block_index){
         let query, args;
+        invalidate(db, block_index);
         query = `UPDATE xcalls
                     SET request_status = 'pending', result_status = NULL,
                         result_payload = NULL, resolved_block = NULL,
