@@ -25,38 +25,60 @@
 
 'use strict';
 
+const gateRegistry = require('../../../consensus/gate_registry.js');
+
+const ARCHIVE_ORPHAN_GEOMETRY_GATE =
+    'archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION';
+
 // A batch CRC as the publisher formats it and anchor.js stores it: 8 lowercase
 // hex digits (anchor.js normalizes BATCH_CRC32 with .toLowerCase() and rejects
 // anything else at parse time, so the stored column is always this shape).
 const ARCHIVE_CRC_RE = /^[0-9a-f]{8}$/;
 
-// Dedupe an ARCHIVE_CHUNK_SET_SQL result to ONE row per chunk_index, lowest
-// action_index first (the query's ORDER BY guarantees that arrival). Shared so the
-// live path and recovery cannot drift on the tie-break either.
-function dedupeArchiveChunks(rows) {
+// Before a head's geometry is available, preserve the earliest row for each
+// (chunk_index, total_chunks) pair. This keeps a later correct-geometry row visible
+// to recovery even when an earlier orphan occupied the same index. Once callers
+// supply the head total, collapse to one row per index after optionally removing
+// rows whose declared geometry differs. Query order keeps every tie-break on the
+// lowest action_index.
+function dedupeArchiveChunks(rows, totalChunks, ignoreMismatchedTotal) {
+    let headTotalKnown = totalChunks !== undefined && totalChunks !== null;
     let byIndex = new Map();
-    for (let r of (rows || []))
-        if (!byIndex.has(Number(r.chunk_index))) byIndex.set(Number(r.chunk_index), r);
+    for (let r of (rows || [])) {
+        if(headTotalKnown && ignoreMismatchedTotal && r.total_chunks != null &&
+           Number(r.total_chunks) !== Number(totalChunks)) continue;
+        let index = Number(r.chunk_index);
+        let key = headTotalKnown ? index : index + ':' + String(r.total_chunks);
+        if (!byIndex.has(key)) byIndex.set(key, r);
+    }
     return Array.from(byIndex.values());
 }
 
+function archiveOrphanGeometryActive(config, blockIndexDoge) {
+    return gateRegistry.activeAt(ARCHIVE_ORPHAN_GEOMETRY_GATE,
+        config && config['NETWORK'], 'DOGE', Number(blockIndexDoge), null);
+}
+
 // Exact index-coverage completeness for a reassembled archive batch. Given the
-// continuation-chunk rows (already deduped to one per index by dedupeArchiveChunks /
-// getAnchorChunks) and the head's TOTAL_CHUNKS, returns the rows for indices
+// continuation-chunk rows and the head's TOTAL_CHUNKS, returns the rows for indices
 // 1..totalChunks-1 in ascending index order when the set covers that range EXACTLY,
 // else null. Out-of-range indices (< 1 or >= totalChunks) are DROPPED rather than
 // counted: a bare length test (chunks.length === totalChunks-1) both accepted a set
 // missing a real in-range index but padded to length by a stray out-of-range orphan
 // chunk (which then corrupts the reassembled byte order and the CRC verdict) and
 // blocked a genuinely complete set that an extra stray chunk pushed over the count.
-// With one row per in-range index and size === need, coverage of {1..need} is exact
-// by pigeonhole. Shared verbatim by the head-side gate, the chunk-side gate, and
-// recovery so the three reassembly paths cannot drift on completeness or byte order.
-function archiveChunkCoverage(chunks, totalChunks) {
+// When recovery supplies geometry variants for one index, mismatches are removed
+// before the lowest-action-index tie-break. Shared by the head-side gate, the
+// chunk-side gate, and recovery so the three paths cannot drift on completeness or
+// byte order. Recovery defaults this filter on because it re-verifies stored data;
+// live callers pass the activation verdict explicitly.
+function archiveChunkCoverage(chunks, totalChunks, ignoreMismatchedTotal = true) {
     let need = Number(totalChunks) - 1;
     if (!(need >= 1)) return null;
     let byIndex = new Map();
     for (let c of (chunks || [])) {
+        if(ignoreMismatchedTotal && c.total_chunks != null &&
+           Number(c.total_chunks) !== Number(totalChunks)) continue;
         let i = Number(c.chunk_index);
         if (i >= 1 && i <= need && !byIndex.has(i)) byIndex.set(i, c);
     }
@@ -218,7 +240,8 @@ function buildArchiveAnchorResponse(config, latest, head, chunkRows) {
 }
 
 module.exports = {
-    ARCHIVE_CRC_RE, dedupeArchiveChunks, archiveChunkCoverage,
+    ARCHIVE_CRC_RE, ARCHIVE_ORPHAN_GEOMETRY_GATE,
+    dedupeArchiveChunks, archiveOrphanGeometryActive, archiveChunkCoverage,
     validateArchiveAnchorParams, deriveFoldWrapper, selectArchiveHeadRow, presentChunkIndexes,
     buildArchiveAnchorResponse
 };
