@@ -217,6 +217,11 @@
       "EXECUTE host-fault propagation: halt, not fabricate @regression @tier1 propagates a HostFaultError from the VM (does not commit/fabricate)",
       "EXECUTE host-fault propagation: halt, not fabricate @regression @tier1 still COMMITS for a normal VM failure result (fabricate path unchanged)"
     ],
+    "047d84192e26ff62": [
+      "recovery: unsigned price columns are not proven by the archive does not let a forged row overwrite an existing row with its unsigned columns",
+      "recovery: unsigned price columns are not proven by the archive ignores malformed unsigned columns instead of treating them as proof or rejecting the batch",
+      "recovery: unsigned price columns are not proven by the archive re-derives forged source_chain, source_action_index and batch_block_time to the defaults"
+    ],
     "049843dad5d3e7f1": [
       "XCALL/VM protocol constants agree across vm/indexer/sdk runs inside one of the three participating repos",
       "XCALL/VM protocol constants agree across vm/indexer/sdk sibling xchain-indexer carries this guard, byte-identical",
@@ -8960,16 +8965,6 @@
       "native coin fee quote @regression @tier1 getFeeOraclePrices() single chain-time anchor refTime before the gate => INACTIVE, and selection/staleness use that same refTime",
       "native coin fee quote @regression @tier1 getFeeOraclePrices() single chain-time anchor takes no wall-clock override: a 6th argument cannot split the anchor"
     ],
-    "80c898a220b34027": [
-      "AnchorRecovery checkpoint and price tables @regression @tier2 applies a tombstone and lets a later batch restore the republished round",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 fails a checkpoint sequence collision with different content",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 lets later batches overwrite a disputed flip and a late batch_block_time",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged checkpoint signature and writes none of the batch",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged disputed price proof and writes none of the batch",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged signature-proofed price round and writes none of the batch",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects an object-form batch proof that lacks price quorum",
-      "AnchorRecovery checkpoint and price tables @regression @tier2 uses the ABP archive key orders and only the full writer restores both tables"
-    ],
     "816161175d723844": [
       "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 is live from genesis on regtest and dark on an unknown network, on both sides",
       "protocol_changes/vm_twin/host_fault_halt_matches_vm: activation parity @regression @tier1 matches every VM mainnet and testnet activation",
@@ -9677,6 +9672,16 @@
       "ANCHOR v3 same-publisher archive re-issue does not query a fold without an archive section",
       "ANCHOR v3 same-publisher archive re-issue does not query before fold activation",
       "ANCHOR v3 same-publisher archive re-issue rejects different content under the publisher sequence with a retry reason"
+    ],
+    "8db754e1337df6d1": [
+      "AnchorRecovery checkpoint and price tables @regression @tier2 applies a tombstone and lets a later batch restore the republished round",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 fails a checkpoint sequence collision with different content",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 lets later batches overwrite a disputed flip but never a forged batch_block_time",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged checkpoint signature and writes none of the batch",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged disputed price proof and writes none of the batch",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects a forged signature-proofed price round and writes none of the batch",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 rejects an object-form batch proof that lacks price quorum",
+      "AnchorRecovery checkpoint and price tables @regression @tier2 uses the ABP archive key orders and only the full writer restores both tables"
     ],
     "8e2845a99501f6fb": [
       "DELEGATE v1 rotation reaches all three lookup surfaces @regression @tier1 getActiveContractStakeByPubkey resolves the stake under the rotated key",
@@ -18481,8 +18486,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1461,
-      "titleCount": 14328,
+      "fileCount": 1462,
+      "titleCount": 14331,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19785,7 +19790,8 @@
         "test/unit/recovery/recovery.test/admit_block_columns.test.js": "33d276ce0f8066c0",
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
-        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "80c898a220b34027",
+        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
+        "test/unit/recovery/recovery.test/checkpoint_price_unsigned_columns.test.js": "047d84192e26ff62",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
@@ -20319,8 +20325,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1112,
-      "titleCount": 11349,
+      "fileCount": 1113,
+      "titleCount": 11352,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21319,7 +21325,8 @@
         "test/unit/recovery/recovery.test/admit_block_columns.test.js": "33d276ce0f8066c0",
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
-        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "80c898a220b34027",
+        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
+        "test/unit/recovery/recovery.test/checkpoint_price_unsigned_columns.test.js": "047d84192e26ff62",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
@@ -21989,8 +21996,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1112,
-      "titleCount": 11349,
+      "fileCount": 1113,
+      "titleCount": 11352,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22989,7 +22996,8 @@
         "test/unit/recovery/recovery.test/admit_block_columns.test.js": "33d276ce0f8066c0",
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
-        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "80c898a220b34027",
+        "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
+        "test/unit/recovery/recovery.test/checkpoint_price_unsigned_columns.test.js": "047d84192e26ff62",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
