@@ -21,7 +21,16 @@
 
 const gateRegistry = require('../../consensus/gate_registry');
 
+const TICK_CACHE_GATE = 'tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATION';
 const NATIVE_FEE_TALLY_GATE = 'airdrop_native_fee_tally_activation.AIRDROP_NATIVE_FEE_TALLY_ACTIVATION';
+
+function createTickCache(handler, data){
+    let config = handler.config;
+    let active = config && typeof config['NETWORK'] === 'string' && typeof config['COIN'] === 'string' &&
+        gateRegistry.activeAt(TICK_CACHE_GATE, config['NETWORK'], config['COIN'],
+            Number(data['BLOCK_INDEX']), null);
+    return active ? Object.create(null) : {};
+}
 
 // Installed onto Airdrop.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
@@ -78,7 +87,7 @@ module.exports = {
 
     // Fetch token info for each distinct TICK once, up front, instead of per airdrop leg.
     async fetchAirdropTicks(airdrops, data){
-        let ticks = {};
+        let ticks = createTickCache(this, data);
         for(let airdrop of airdrops){
             let tick = airdrop[0];
             if(ticks[tick] === undefined)

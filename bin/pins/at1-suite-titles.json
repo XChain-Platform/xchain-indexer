@@ -4288,19 +4288,6 @@
       "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: the v0 bundle leg verifies a bundle carrying a lagging section, and only at the header block",
       "AnchorProofClient (DOGE anchor visibility) @regression @tier2 _judge: the v0 bundle leg verifies a buried v0 bundle against its one anchor_bundle reward"
     ],
-    "3bcc0e3b23759751": [
-      "Airdrop @regression @tier2 format 0: single airdrop LIST_ACTION_INDEX invalid (type===false) \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop MEMO with pipe character \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop TICK not found \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop insufficient balance for total airdrop amount \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop pre-existing error passed through \u2192 createAirdrop still called",
-      "Airdrop @regression @tier2 format 0: single airdrop unknown format version \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to address list creates airdrop record",
-      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to tick list gets holders and credits each",
-      "Airdrop @regression @tier2 format 1: multi-airdrop brief valid multi-airdrop brief processes all ticks",
-      "Airdrop @regression @tier2 format 2: multi-airdrop full valid multi-airdrop full processes multiple TICK/LIST pairs",
-      "Airdrop @regression @tier2 format 3: multi-airdrop full with multiple memos valid format-3 multi-airdrop processes TICK/LIST/MEMO triples"
-    ],
     "3bceaacef99f4221": [
       "Whole-ledger state invariants @regression @tier3 a real ISSUE\u2192MINT\u2192SEND lifecycle satisfies every ledger invariant",
       "Whole-ledger state invariants @regression @tier3 the checker DETECTS a conservation break (inflated balance)",
@@ -4564,13 +4551,6 @@
     "3fcd109353e0dc95": [
       "getanchorconfirmations anchor-by-txid pagination against a real MariaDB @tier3 never ends a page inside a bundle: a multi-section action at the boundary moves whole to the next page",
       "getanchorconfirmations anchor-by-txid pagination against a real MariaDB @tier3 partitions a set of ANCHOR_ROW_LIMIT * 2 + 3 rows across pages with no gap and no overlap"
-    ],
-    "40339b152537b61d": [
-      "BATCH AIRDROP per-leg weight @regression @tier3 charges format 0 once and formats 1 to 3 once per decoded leg",
-      "BATCH AIRDROP per-leg weight @regression @tier3 counts eleven format 1 legs without resolving a list",
-      "BATCH AIRDROP per-leg weight @regression @tier3 keeps DIVIDEND and malformed AIRDROP at one table-weight unit",
-      "BATCH AIRDROP per-leg weight @regression @tier3 keeps the historical flat weight immediately below activation",
-      "BATCH AIRDROP per-leg weight @regression @tier3 uses the registered height gate at the exact regtest boundary"
     ],
     "4056956385f780ce": [
       "repeated finalizeBlock exception status emits the exact wedged status fixture consumed by xchain-watch",
@@ -4858,6 +4838,28 @@
       "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms reads an epoch reset as the time left until it",
       "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms still prefers Retry-After over any reset header",
       "hub rate-limit handling on the price-push rails readRateLimitHeaders reset forms treats an epoch reset already in the past as no advertised wait"
+    ],
+    "4467a7e672e83aee": [
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 10 sub-commands at weight 25 exactly fill the budget",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 11 sub-commands at weight 25 exceed it, as one record",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster the same batch is fine when the weight is not in force",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster weights are summed across mixed classes, not taken per class",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) 10 AIRDROPs exactly fill the budget at weight 25",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) 11 AIRDROPs exceed it, as one record rather than eleven",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) DIVIDEND is weighed the same",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) below the weighting flag the same fan-out batch is unaffected",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) one fan-out plus 225 ordinary commands still fits",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) one fan-out plus ordinary commands is bounded by the SUM, not by either alone",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a flat weight (operator decision 2026-08-14) the DROP alias cannot dodge the weight",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces 251 commands: one invalid record, no sub-command runs",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces below BATCH_ISSUANCE_LIMITS nothing bounds the batch, budget or not",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces empty elements still count, so a trailing \";\" tips 250 over",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces exactly 250 commands: valid, every command dispatched",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces the verdict AND the error string are identical with the budget on and off",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on a batch inside the count is weighed exactly once",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on a nonsense table entry falls back to 1 rather than admitting free work",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on an action absent from the table weighs the default 1",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on an oversized batch is refused WITHOUT weighing anything"
     ],
     "44760e88af686de8": [
       "bridge_settle: the XBRIDGE settle pass SLASH: the bridge engines are a slashable family maps XBRIDGE and XPOLICY to a capability, where an unmapped tag is refused",
@@ -5407,30 +5409,6 @@
       "getlatestblock hub_push_delivered @regression @tier1 an undelivered push at 100 holds delivery at 99 even with delivered pushes at 101",
       "getlatestblock hub_push_delivered @regression @tier1 an undelivered push whose action is gone reports null",
       "getlatestblock hub_push_delivered @regression @tier1 an unresolvable block time reports null"
-    ],
-    "4bff0fee163d2611": [
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 10 sub-commands at weight 25 exactly fill the budget",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster 11 sub-commands at weight 25 exceed it, as one record",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster the same batch is fine when the weight is not in force",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) a weighted action spends the budget faster weights are summed across mixed classes, not taken per class",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) 10 AIRDROPs exactly fill the budget at weight 25",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) 11 AIRDROPs exceed it, as one record rather than eleven",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) DIVIDEND is weighed the same",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) a two-leg AIRDROP spends two weight units at the dedicated activation",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) below the weighting flag the same fan-out batch is unaffected",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) one fan-out plus 225 ordinary commands still fits",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) one fan-out plus ordinary commands is bounded by the SUM, not by either alone",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) the DROP alias cannot dodge the weight",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) fan-out actions carry a base weight of 25 (operator decision 2026-08-14) the DROP alias keeps the per-leg multiplier",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces 251 commands: one invalid record, no sub-command runs",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces below BATCH_ISSUANCE_LIMITS nothing bounds the batch, budget or not",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces empty elements still count, so a trailing \";\" tips 250 over",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces exactly 250 commands: valid, every command dispatched",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the empty table is arithmetically the count cap it replaces the verdict AND the error string are identical with the budget on and off",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on a batch inside the count is weighed exactly once",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on a nonsense table entry falls back to 1 rather than admitting free work",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on an action absent from the table weighs the default 1",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) the weight >= 1 invariant, which the count pre-filter depends on an oversized batch is refused WITHOUT weighing anything"
     ],
     "4c1dae4cf2168305": [
       "Unstake handler @regression @tier2 v0: partial unstake AMOUNT equal to the full balance is state-identical to the absent form",
@@ -6771,6 +6749,13 @@
       "getAddressBalances tick_id filter against MariaDB @integration returns every token below the bound when no tick_id is given",
       "getAddressBalances tick_id filter against MariaDB @integration returns only the GAS entry, valued as in the full map, for a numeric or digit-string tick_id"
     ],
+    "5e4d509cb10b1b62": [
+      "TICK cache null-prototype activation @regression @tier1 keeps live networks unarmed and enables regtest from genesis",
+      "TICK cache null-prototype activation @regression @tier1 switches AIRDROP from the inherited cache immediately below the boundary",
+      "TICK cache null-prototype activation @regression @tier1 uses a null-prototype TICK cache in AIRDROP at the gate",
+      "TICK cache null-prototype activation @regression @tier1 uses a null-prototype TICK cache in DESTROY at the gate",
+      "TICK cache null-prototype activation @regression @tier1 uses a null-prototype TICK cache in SEND at the gate"
+    ],
     "5e848392b2703195": [
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) admits a relay identity this chain has not materialized",
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) admits the federation relay after a malformed v3 front-ran its request_id",
@@ -7771,6 +7756,21 @@
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 filters ONLY the attestation capability",
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 keeps the echo fields and the response shape",
       "api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1 reconstructs the raw request height as block_index + CANONICAL_REORG_BUFFER"
+    ],
+    "6bdb8d1115c4bce2": [
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs fit the budget exactly and all of them dispatch",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs from a paying source are admitted, so the WEIGHT is what rejects 9",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 9 DEPLOYs report the budget, not the cap, and that string move is deliberate",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 9 EXECUTEs exceed it, as ONE record rather than nine",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) A3: two DEPLOYs still reject as \"invalid: DEPLOY (limit)\", weights and all",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) XEXEC cannot dodge the bound by being the other spelling",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) a chunk-carrier DEPLOY (format 4) weighs 1; every constructor format keeps 30",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) below the weighting flag every one of these batches keeps its old verdict",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) one DEPLOY may still carry companions, up to 220 of them",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) one DEPLOY plus 221 companions is one over",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the discount decides companions: 249 fit beside a chunk carrier, 221 overflow a constructor DEPLOY",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the table pins 30 for DEPLOY, EXECUTE and XEXEC",
+      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the two VM spellings are summed together, not bounded per action"
     ],
     "6c0d603662abddb2": [
       "List @regression @tier3 unarmed list change rematch keeps a valid format 0 create on the storage-only path",
@@ -15414,6 +15414,21 @@
       "migration reorder and live-schema guard quoted comment markers @regression @tier1 keeps a rename target between quoted markers in the reorder table set",
       "migration reorder and live-schema guard quoted comment markers @regression @tier1 strips block comments with the splitter quote model"
     ],
+    "d12e2661f8a847b4": [
+      "Airdrop @regression @tier2 format 0: single airdrop LIST_ACTION_INDEX invalid (type===false) \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop MEMO with pipe character \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop TICK not found \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop insufficient balance for total airdrop amount \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop pre-existing error passed through \u2192 createAirdrop still called",
+      "Airdrop @regression @tier2 format 0: single airdrop regtest treats Object.prototype TICK __proto__ as unknown",
+      "Airdrop @regression @tier2 format 0: single airdrop regtest treats Object.prototype TICK constructor as unknown",
+      "Airdrop @regression @tier2 format 0: single airdrop unknown format version \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to address list creates airdrop record",
+      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to tick list gets holders and credits each",
+      "Airdrop @regression @tier2 format 1: multi-airdrop brief valid multi-airdrop brief processes all ticks",
+      "Airdrop @regression @tier2 format 2: multi-airdrop full valid multi-airdrop full processes multiple TICK/LIST pairs",
+      "Airdrop @regression @tier2 format 3: multi-airdrop full with multiple memos valid format-3 multi-airdrop processes TICK/LIST/MEMO triples"
+    ],
     "d17e30f1f575956a": [
       "PRICE v1 refusal case fixtures builds the four cases in order for caps { value: 19, fee: 20 }",
       "PRICE v1 refusal case fixtures fails the leading-zero texts against canonical yet passes them against legacy",
@@ -18367,22 +18382,6 @@
       "Swap_Match payout token policies @regression @tier2 checks the active GIVE-token policy only against the matching payout",
       "Swap_Match payout token policies @regression @tier2 keeps the below-gate rule that checks the GET-token policy against both payouts"
     ],
-    "fc1e7722226a1a43": [
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs fit the budget exactly and all of them dispatch",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 8 EXECUTEs from a paying source are admitted, so the WEIGHT is what rejects 9",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 9 DEPLOYs report the budget, not the cap, and that string move is deliberate",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) 9 EXECUTEs exceed it, as ONE record rather than nine",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) A3: two DEPLOYs still reject as \"invalid: DEPLOY (limit)\", weights and all",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) XEXEC cannot dodge the bound by being the other spelling",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) a chunk-carrier DEPLOY (format 4) weighs 1; every constructor format keeps 30",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) below the weighting flag every one of these batches keeps its old verdict",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) one DEPLOY may still carry companions, up to 220 of them",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) one DEPLOY plus 221 companions is one over",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) sums VM weight with every AIRDROP leg after the leg-weight activation",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the discount decides companions: 249 fit beside a chunk carrier, 221 overflow a constructor DEPLOY",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the table pins 30 for DEPLOY, EXECUTE and XEXEC",
-      "Batch @regression @tier3 R7 weighted cost budget (BATCH_COST_WEIGHTING) VM actions carry the ratified weight of 30 (D8, operator 2026-08-15) the two VM spellings are summed together, not bounded per action"
-    ],
     "fc2fa5a97f93cf1b": [
       "Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM) @phaseE a SENDER's own transfer address-controller ALLOW commits its OUTBOUND send (sanity passes)",
       "Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM) @phaseE a SENDER's own transfer address-controller DENY reverts its OUTBOUND send",
@@ -18657,7 +18656,7 @@
   "scripts": {
     "test": {
       "fileCount": 1481,
-      "titleCount": 14453,
+      "titleCount": 14452,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18992,9 +18991,10 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
+        "test/unit/actions/tick_cache_null_prototype_gate.test.js": "5e4d509cb10b1b62",
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
-        "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
+        "test/unit/actions/token/airdrop.test.js": "d12e2661f8a847b4",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
@@ -19010,9 +19010,8 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
-        "test/unit/actions/token/batch.test/airdrop_leg_weight.test.js": "40339b152537b61d",
         "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
-        "test/unit/actions/token/batch.test/cost_budget.test.js": "4bff0fee163d2611",
+        "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
         "test/unit/actions/token/batch.test/limit_composition.test.js": "58140c764617368e",
@@ -19020,7 +19019,7 @@
         "test/unit/actions/token/batch.test/spam_collapse_creates.test.js": "9931e18386ea70e0",
         "test/unit/actions/token/batch.test/spam_collapse_execute.test.js": "bee640ffa66ca578",
         "test/unit/actions/token/batch.test/subaction_normalization.test.js": "b5503fa91f2c7c06",
-        "test/unit/actions/token/batch.test/vm_weight.test.js": "fc1e7722226a1a43",
+        "test/unit/actions/token/batch.test/vm_weight.test.js": "6bdb8d1115c4bce2",
         "test/unit/actions/token/broadcast.test.js": "36a22636a9d2b901",
         "test/unit/actions/token/broadcast.test/fee_length_gate.test.js": "51b3468275b1d232",
         "test/unit/actions/token/destroy.test.js": "85f55ffbe5c712da",
@@ -20519,7 +20518,7 @@
     },
     "test:regression": {
       "fileCount": 1125,
-      "titleCount": 11426,
+      "titleCount": 11425,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20852,9 +20851,10 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
+        "test/unit/actions/tick_cache_null_prototype_gate.test.js": "5e4d509cb10b1b62",
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
-        "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
+        "test/unit/actions/token/airdrop.test.js": "d12e2661f8a847b4",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
@@ -20870,9 +20870,8 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
-        "test/unit/actions/token/batch.test/airdrop_leg_weight.test.js": "40339b152537b61d",
         "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
-        "test/unit/actions/token/batch.test/cost_budget.test.js": "4bff0fee163d2611",
+        "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
         "test/unit/actions/token/batch.test/limit_composition.test.js": "58140c764617368e",
@@ -20880,7 +20879,7 @@
         "test/unit/actions/token/batch.test/spam_collapse_creates.test.js": "9931e18386ea70e0",
         "test/unit/actions/token/batch.test/spam_collapse_execute.test.js": "bee640ffa66ca578",
         "test/unit/actions/token/batch.test/subaction_normalization.test.js": "b5503fa91f2c7c06",
-        "test/unit/actions/token/batch.test/vm_weight.test.js": "fc1e7722226a1a43",
+        "test/unit/actions/token/batch.test/vm_weight.test.js": "6bdb8d1115c4bce2",
         "test/unit/actions/token/broadcast.test.js": "36a22636a9d2b901",
         "test/unit/actions/token/broadcast.test/fee_length_gate.test.js": "51b3468275b1d232",
         "test/unit/actions/token/destroy.test.js": "85f55ffbe5c712da",
@@ -21649,8 +21648,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 556,
-      "titleCount": 5997,
+      "fileCount": 557,
+      "titleCount": 6002,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21726,6 +21725,7 @@
         "test/unit/actions/stake/vote_sleep_gate.test.js": "aa7188891f17a98e",
         "test/unit/actions/stake/withdraw.test/custody_bypass_witness.test.js": "7e5ad9b78be748e3",
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
+        "test/unit/actions/tick_cache_null_prototype_gate.test.js": "5e4d509cb10b1b62",
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
@@ -22212,7 +22212,7 @@
     },
     "test:regression:full": {
       "fileCount": 1125,
-      "titleCount": 11426,
+      "titleCount": 11425,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22545,9 +22545,10 @@
         "test/unit/actions/stake/withdraw.test/custody_guard.test.js": "83b989ef36239686",
         "test/unit/actions/stake/withdraw.test/owner_withdraw_opt_in.test.js": "17b67c1fec163c38",
         "test/unit/actions/stake/withdraw.test/settle_guard_fee.test.js": "3362f8f211dba5c4",
+        "test/unit/actions/tick_cache_null_prototype_gate.test.js": "5e4d509cb10b1b62",
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
-        "test/unit/actions/token/airdrop.test.js": "3bcc0e3b23759751",
+        "test/unit/actions/token/airdrop.test.js": "d12e2661f8a847b4",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
@@ -22563,9 +22564,8 @@
         "test/unit/actions/token/amounts/legacy_db_hits_fee.test.js": "83e6fe3bdfc789e7",
         "test/unit/actions/token/batch.test.js": "2303bc661e7cd61b",
         "test/unit/actions/token/batch.test/aggregate_gas.test.js": "ce826d5586b396b5",
-        "test/unit/actions/token/batch.test/airdrop_leg_weight.test.js": "40339b152537b61d",
         "test/unit/actions/token/batch.test/airdrop_leg_weight_below_gate.test.js": "7f1d1631109c4278",
-        "test/unit/actions/token/batch.test/cost_budget.test.js": "4bff0fee163d2611",
+        "test/unit/actions/token/batch.test/cost_budget.test.js": "4467a7e672e83aee",
         "test/unit/actions/token/batch.test/deploy_mint_caps.test.js": "abd77958f2e4b61e",
         "test/unit/actions/token/batch.test/issuance_limits.test.js": "d73f1514348d69e0",
         "test/unit/actions/token/batch.test/limit_composition.test.js": "58140c764617368e",
@@ -22573,7 +22573,7 @@
         "test/unit/actions/token/batch.test/spam_collapse_creates.test.js": "9931e18386ea70e0",
         "test/unit/actions/token/batch.test/spam_collapse_execute.test.js": "bee640ffa66ca578",
         "test/unit/actions/token/batch.test/subaction_normalization.test.js": "b5503fa91f2c7c06",
-        "test/unit/actions/token/batch.test/vm_weight.test.js": "fc1e7722226a1a43",
+        "test/unit/actions/token/batch.test/vm_weight.test.js": "6bdb8d1115c4bce2",
         "test/unit/actions/token/broadcast.test.js": "36a22636a9d2b901",
         "test/unit/actions/token/broadcast.test/fee_length_gate.test.js": "51b3468275b1d232",
         "test/unit/actions/token/destroy.test.js": "85f55ffbe5c712da",
