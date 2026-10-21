@@ -46,7 +46,23 @@ function creditDebitSumQuery(table, filterSql){
                 GROUP BY m.tick_id`;
 }
 
+// Shape the grouped rows of creditDebitSumQuery into the sparse array the JS fold
+// returns: only the ticks present are own keys, each holding the 18 dp sum. Any
+// row with a non-canonical stored amount, or a non_canonical count that is not a
+// plain zero, returns null so the caller keeps the JS fold. No rows is an empty
+// array, not null.
+function ledgerArrayFromSumRows(rows, util){
+    const data = [];
+    for(const row of rows){
+        if(row.non_canonical === null || row.non_canonical === undefined || Number(row.non_canonical) !== 0)
+            return null;
+        data[row.tick_id] = util.bcadd(0, row.amount, ledgerPrecision.LEDGER_AMOUNT_PRECISION);
+    }
+    return data;
+}
+
 module.exports = {
     CANONICAL_LEDGER_AMOUNT_RE,
-    creditDebitSumQuery
+    creditDebitSumQuery,
+    ledgerArrayFromSumRows
 };
