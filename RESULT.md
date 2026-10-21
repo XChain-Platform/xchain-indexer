@@ -24,3 +24,5 @@ connector. Fields with no flags are still treated as unsigned, keeping existing 
   ("MISSING SIBLING") before any test. The unit and integration suites were not run here
   (0 pass / 0 fail counted). The orchestrator should run the command in a full lane checkout.
 - Note: the failing job is the integration tier, which CI_TIER=fast defers.
+
+RUN-COMPLETE 9fd9eaa31c71ffe6d3e9331f914f10d3
