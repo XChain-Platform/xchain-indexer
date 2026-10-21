@@ -56,6 +56,16 @@ describe('exactU64', function () {
         assert.strictEqual(exactU64TypeCast(field, () => 'fallback'), '9007199254740993');
     });
 
+    it('delegates signed BIGINT fields to the connector', function () {
+        const field = { type: 'BIGINT', signed: () => true, string: () => '-5' };
+        assert.strictEqual(exactU64TypeCast(field, () => -5n), -5n);
+    });
+
+    it('type-casts unsigned BIGINT fields through the exact u64 boundary', function () {
+        const field = { type: 'BIGINT', signed: () => false, string: () => '7' };
+        assert.strictEqual(exactU64TypeCast(field, () => 'fallback'), 7);
+    });
+
     it('delegates non-BIGINT fields to the connector', function () {
         let calls = 0;
         const value = exactU64TypeCast({ type: 'INT' }, () => {

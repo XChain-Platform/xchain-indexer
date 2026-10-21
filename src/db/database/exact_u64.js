@@ -44,6 +44,9 @@ function exactU64(value){
 
 function exactU64TypeCast(field, next){
     if(field.type !== 'BIGINT') return next();
+    // A signed BIGINT column (a pre-alignment id that can hold a negative) is
+    // not a u64 wire field; leave it to the connector.
+    if(typeof field.signed === 'function' && field.signed()) return next();
     return exactU64(field.string());
 }
 
