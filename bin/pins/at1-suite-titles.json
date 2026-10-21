@@ -1478,6 +1478,11 @@
       "Dispenser action handler @regression @tier2 Format 0 - oracle usage fee rejects the create when the oracle has no effective price",
       "Dispenser action handler @regression @tier2 Format 0 - separate hub-copy oracle prices validates Mode 2 from the hub copy when the local database has no price rows"
     ],
+    "13d650f354d6841c": [
+      "ledgerArrayFromSumRows returns an empty array for no rows",
+      "ledgerArrayFromSumRows returns null when any row is non canonical, as number, string or BigInt",
+      "ledgerArrayFromSumRows shapes grouped rows into the array the fold returns"
+    ],
     "13dfdbaefb6250f2": [
       "Security: bundled sibling lockfile snapshots @regression @tier4 SNAP-1: package.json still declares the bundled siblings as local paths",
       "Security: bundled sibling lockfile snapshots @regression @tier4 SNAP-2: the lockfile snapshot of xchain-vm records the version the sibling carries",
@@ -19628,6 +19633,7 @@
         "test/unit/db/mirror_admission_schema.test.js": "f774309cdb5aef1f",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
         "test/unit/db/misc/address_credit_debit_fold_baseline.test.js": "58c95497712f6e76",
+        "test/unit/db/misc/credit_debit_sum_rows.test.js": "13d650f354d6841c",
         "test/unit/db/misc/credit_debit_sum_sql.test.js": "b765d11dc9d66fd9",
         "test/unit/db/orders/cross_chain_offer_lists.test.js": "87976ddf94e91add",
         "test/unit/db/orders/cross_chain_offer_lists_fold.test.js": "e411489fced259a6",
