@@ -110,7 +110,7 @@ module.exports = {
 
         await writeBalances(this, address_id, balances);
         // If this is a rollback, then handle detecting records in balances table which should not exist and delete them
-        // TODO: Test this code a bit better with various random rollbacks and verify all is working without any sanity check issues
+        // Rollback coverage should include varied inputs and confirm sanity checks remain stable.
         if(rollback){
             for(let tick_id in old_balances){
                 let old_balance = old_balances[tick_id];

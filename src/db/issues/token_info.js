@@ -190,7 +190,7 @@ const issueReplay = {
 
     foldRow(db, data, arr){
         // build out token state
-        // TODO: will need to massage the data a bit more to build out accurate token state... this is quick and dirty
+        // Token state currently uses row values directly and may require additional normalization.
         for(let key in arr){
             let value = arr[key];
             // Only set the ACTION_INDEX on the first valid issuance

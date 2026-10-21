@@ -167,8 +167,8 @@ module.exports = {
     // @param {tick}            string  Ticker name
     // @param {block_index}     integer Block Index 
     // @param {action_index}    integer action_index of action
-    // TODO: Add support for 'escrowed' tokens (dispensers, orders, bets)
-    // TODO(j-dog): Can optimize this function to allow getting list of holders from balances table instead of credits/debits
+    // Escrowed tokens from dispensers, orders, and bets are not included.
+    // Holder lookup currently aggregates credits and debits; the balances table could provide the holder list.
     // Per-holder credits and debits are summed EXACTLY (18 dp) and netted at
     // that scale, matching getAddressBalances / getNetBalance. The
     // former per-row cast to the tick's scale made sum-of-rounded-holdings
