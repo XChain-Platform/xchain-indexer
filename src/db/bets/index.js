@@ -24,6 +24,7 @@
 const records       = require('./records.js');
 const listings      = require('./listings.js');
 const terminalBatch = require('./terminal_batch.js');
+const { u64Column } = require('../database/instance_state.js');
 
 const BET_FEED_INFO_QUERY = `SELECT
                                 f.action_index,
@@ -31,18 +32,26 @@ const BET_FEED_INFO_QUERY = `SELECT
                                 f.outcomes,
                                 t1.tick,
                                 f.fee,
-                                f.deadline,
-                                f.refund_window,
-                                f.expire_at,
+                                CAST(f.deadline AS CHAR) as deadline,
+                                CAST(f.refund_window AS CHAR) as refund_window,
+                                CAST(f.expire_at AS CHAR) as expire_at,
                                 f.min_amount,
                                 CASE
                                     WHEN ae.action_index IS NULL THEN f.allow_list
                                     ELSE NULLIF(ae.allow_list, 0)
                                 END as allow_list,
+                                CAST(CASE
+                                    WHEN ae.action_index IS NULL THEN f.allow_list
+                                    ELSE NULLIF(ae.allow_list, 0)
+                                END AS CHAR) as allow_list_exact,
                                 CASE
                                     WHEN be.action_index IS NULL THEN f.block_list
                                     ELSE NULLIF(be.block_list, 0)
                                 END as block_list,
+                                CAST(CASE
+                                    WHEN be.action_index IS NULL THEN f.block_list
+                                    ELSE NULLIF(be.block_list, 0)
+                                END AS CHAR) as block_list_exact,
                                 f.details,
                                 m1.memo,
                                 s1.status,
@@ -94,16 +103,24 @@ function formatBetFeedInfo(row, util){
         'ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'DEADLINE', 'REFUND_WINDOW',
         'EXPIRE_AT', 'ALLOW_LIST', 'BLOCK_LIST', 'CLOSED_BLOCK', 'TERMINAL_BLOCK'
     ];
+    // The user-chosen u64 columns arrive as CAST text and decode exactly (u64Column).
+    const u64Fields = ['DEADLINE', 'REFUND_WINDOW', 'EXPIRE_AT', 'ALLOW_LIST', 'BLOCK_LIST'];
     for(let key in row){
         let name  = String(key).toUpperCase();
         let value = row[key];
+        // The *_exact twin carries the effective list as CAST text: it replaces the
+        // pool-decoded column and is not itself exposed.
+        if(name === 'ALLOW_LIST_EXACT' || name === 'BLOCK_LIST_EXACT')
+            continue;
+        if((name === 'ALLOW_LIST' || name === 'BLOCK_LIST') && (name + '_EXACT').toLowerCase() in row)
+            value = row[(name + '_EXACT').toLowerCase()];
         // Convert numerics but PRESERVE NULL: Number(null) is 0, and a
         // NULL allow_list collapsing to 0 would make every ungated feed
         // read as gated by the (nonexistent) list at action_index 0,
         // rejecting all bets. Amount-ish fields (fee/min_amount) stay
         // strings for bignumber math
         if(!util.isNull(value) && numericFields.includes(name))
-            value = Number(value);
+            value = u64Fields.includes(name) ? u64Column(value) : Number(value);
         feed[name] = value;
     }
     return feed;

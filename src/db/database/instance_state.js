@@ -66,12 +66,29 @@ function connectionPoolParams(self){
         // (heights, indexes, times) stay within Number.MAX_SAFE_INTEGER, but
         // the user-chosen u64 wire fields (EXPIRATION, DEADLINE, ALLOW_LIST
         // and the rest bounded at U64_MAX in config/wire_fields.js) are not:
-        // a stored value above 2^53 reads back rounded here, and is
-        // replicated rounded, until those reads move to an exact form.
+        // a stored value above 2^53 reads back rounded here. The readers of
+        // those columns select them CAST(col AS CHAR) and decode through u64Column,
+        // so the pool stays as it was and only those reads change.
         bigIntAsNumber:       true,
         minDelayValidation:   3000,
         queryTimeout:         parseInt(CONFIG_ENV.DB_QUERY_TIMEOUT) || 30000
     });
+}
+
+// A u64 wire column read back exactly. The pool decodes BIGINT as a Number (bigIntAsNumber), so
+// a user-chosen u64 above 2^53 would come back rounded. A reader that needs the exact value
+// selects the column as CAST(col AS CHAR) and passes it here: a value a Number holds exactly
+// stays the Number it always was (so every downstream compare, key and hash is unchanged), and
+// only a value above 2^53 comes back as its exact decimal string. Null reads as 0, as Number(null)
+// did at every call site this replaces. The pool itself is left as it was.
+function u64Column(value){
+    if(typeof value === 'bigint')
+        value = value.toString();
+    if(typeof value === 'string' && /^[0-9]+$/.test(value)){
+        let n = Number(value);
+        return Number.isSafeInteger(n) ? n : value;
+    }
+    return Number(value);
 }
 
 // The block context and the dense index-id guards that ride on it.
@@ -187,6 +204,7 @@ function initTransactionState(self){
 }
 
 module.exports = {
+    u64Column,
     connectionParams,
     connectionPoolParams,
     initIndexIdState,

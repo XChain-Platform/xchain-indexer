@@ -34,8 +34,8 @@ function candidateSql(kind, referenceCount){
     let marketKey = kind + '_action_index';
     return `SELECT DISTINCT
                     ${marketAlias}.action_index,
-                    ${marketAlias}.allow_list,
-                    ${marketAlias}.block_list
+                    CAST(${marketAlias}.allow_list AS CHAR) as allow_list,
+                    CAST(${marketAlias}.block_list AS CHAR) as block_list
                 FROM
                     ${table} ${marketAlias}
                     INNER JOIN ${statuses} ${statusAlias} ON (${statusAlias}.${marketKey}=${marketAlias}.action_index)

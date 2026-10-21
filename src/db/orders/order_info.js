@@ -20,6 +20,8 @@
  *
  ********************************************************************/
 
+const { u64Column } = require('../database/instance_state.js');
+
 // findOrderMatches' candidate query: every open order from another address that takes the
 // other side of the order being matched. The text is unchanged; the reverse-leg notes ride
 // inside it as SQL comments.
@@ -97,9 +99,9 @@ function orderInfoSql(coin){
                         o1.get_ownership,
                         a2.address as source,
                         a3.address as get_address,
-                        o1.expiration,
-                        o1.allow_list,
-                        o1.block_list,
+                        CAST(o1.expiration AS CHAR) as expiration,
+                        CAST(o1.allow_list AS CHAR) as allow_list,
+                        CAST(o1.block_list AS CHAR) as block_list,
                         m1.memo,
                         s2.status,
                         s3.status as order_status,
@@ -149,7 +151,9 @@ function orderFromRow(db, row){
     for(let key in row){
         let name  = String(key).toUpperCase();
         let value = row[key];
-        if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
+        if(['EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
+            value = u64Column(value);
+        else if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
             value = Number(value);
         order[name] = value;
     }
@@ -183,9 +187,9 @@ function emptyOrderEdit(){
 }
 
 function applyEditRow(db, edit, row){
-    if(!db.util.isNull(row.expiration) && db.util.isNumeric(row.expiration)) edit.expiration = Number(row.expiration);
-    if(!db.util.isNull(row.allow_list) && db.util.isNumeric(row.allow_list)) edit.allow_list = Number(row.allow_list);
-    if(!db.util.isNull(row.block_list) && db.util.isNumeric(row.block_list)) edit.block_list = Number(row.block_list);
+    if(!db.util.isNull(row.expiration) && db.util.isNumeric(row.expiration)) edit.expiration = u64Column(row.expiration);
+    if(!db.util.isNull(row.allow_list) && db.util.isNumeric(row.allow_list)) edit.allow_list = u64Column(row.allow_list);
+    if(!db.util.isNull(row.block_list) && db.util.isNumeric(row.block_list)) edit.block_list = u64Column(row.block_list);
 }
 
 function openingAmounts(row){
@@ -253,9 +257,9 @@ module.exports = {
 
         let edit_query = `SELECT
                             o.order_action_index,
-                            o.expiration,
-                            o.allow_list,
-                            o.block_list
+                            CAST(o.expiration AS CHAR) as expiration,
+                            CAST(o.allow_list AS CHAR) as allow_list,
+                            CAST(o.block_list AS CHAR) as block_list
                         FROM
                             order_edits o
                             INNER JOIN index_statuses s ON (s.id=o.status_id)
@@ -331,9 +335,9 @@ module.exports = {
         // Define empty edit object
         let edit = emptyOrderEdit();
         let query  = `SELECT 
-                        o.expiration,
-                        o.allow_list,
-                        o.block_list
+                        CAST(o.expiration AS CHAR) as expiration,
+                        CAST(o.allow_list AS CHAR) as allow_list,
+                        CAST(o.block_list AS CHAR) as block_list
                     FROM 
                         order_edits o
                         INNER JOIN index_statuses s ON (s.id=o.status_id)

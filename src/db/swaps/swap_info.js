@@ -21,6 +21,8 @@
  *
  ********************************************************************/
 
+const { u64Column } = require('../database/instance_state.js');
+
 module.exports = {
 
     // Return swap info for given action_index
@@ -40,7 +42,9 @@ module.exports = {
             for(let key in results[0]){
                 let name  = String(key).toUpperCase()
                 let value = results[0][key];
-                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
+                if(['EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
+                    value = u64Column(value);
+                else if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
                     value = Number(value);
                 swap[name] = value;
             }
@@ -75,9 +79,9 @@ module.exports = {
             block_list: false
         };
         let query  = `SELECT 
-                        s1.expiration,
-                        s1.allow_list,
-                        s1.block_list
+                        CAST(s1.expiration AS CHAR) as expiration,
+                        CAST(s1.allow_list AS CHAR) as allow_list,
+                        CAST(s1.block_list AS CHAR) as block_list
                     FROM 
                         swap_edits s1
                         INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
@@ -90,9 +94,9 @@ module.exports = {
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){
-                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = Number(row.expiration);
-                if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = Number(row.allow_list);
-                if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = Number(row.block_list);
+                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = u64Column(row.expiration);
+                if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = u64Column(row.allow_list);
+                if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = u64Column(row.block_list);
             }
         }
         return edit;
@@ -165,9 +169,9 @@ function swapInfoSql(coin){
                         s1.get_ownership,
                         a2.address as source,
                         a3.address as get_address,
-                        s1.expiration,
-                        s1.allow_list,
-                        s1.block_list,
+                        CAST(s1.expiration AS CHAR) as expiration,
+                        CAST(s1.allow_list AS CHAR) as allow_list,
+                        CAST(s1.block_list AS CHAR) as block_list,
                         m1.memo,
                         s3.status,
                         s4.status as swap_status,

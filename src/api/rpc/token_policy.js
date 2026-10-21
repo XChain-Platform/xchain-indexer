@@ -25,6 +25,7 @@ const { getLogger } = require('../../observability/index.js');
 const gateRegistry = require('../../consensus/gate_registry');
 const { policyHash } = require('../../consensus/bridge_settle/policy_membership.js');
 const { resolvePolicyRefs } = require('./token_policy/resolve_refs.js');
+const { u64Column } = require('../../db/database/instance_state.js');
 
 const LIST_SHARE_PRODUCER_GATE = 'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION';
 
@@ -146,8 +147,8 @@ function appliedPolicyRpc({ indexer }){
                 return {
                     tick:         t,
                     bridged:      Number(info.BRIDGED) === 1,
-                    allow_list:   (info.ALLOW_LIST != null) ? Number(info.ALLOW_LIST) : null,
-                    block_list:   (info.BLOCK_LIST != null) ? Number(info.BLOCK_LIST) : null,
+                    allow_list:   (info.ALLOW_LIST != null) ? u64Column(info.ALLOW_LIST) : null,
+                    block_list:   (info.BLOCK_LIST != null) ? u64Column(info.BLOCK_LIST) : null,
                     sleeping:     !!sleeping,
                     policy_seq:   applied ? Number(applied.policy_seq)   : null,
                     origin_block: applied ? Number(applied.origin_block) : null,

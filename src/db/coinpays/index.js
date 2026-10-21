@@ -19,6 +19,8 @@
  *
  ********************************************************************/
 
+const { u64Column } = require('../database/instance_state.js');
+
 module.exports = {
 
     //////////////////////////////////////////////////////////////////////////
@@ -152,7 +154,7 @@ module.exports = {
                         a2.address as payee_address,
                         c1.coin,
                         co.coin_amount,
-                        co.expiration,
+                        CAST(co.expiration AS CHAR) as expiration,
                         co.block_index,
                         s2.status as coinpay_status
                     FROM
@@ -180,7 +182,9 @@ module.exports = {
             for(let key in results[0]){
                 let name  = String(key).toUpperCase();
                 let value = results[0][key];
-                if(['ACTION_INDEX', 'BLOCK_INDEX', 'EXPIRATION'].includes(name))
+                if(name === 'EXPIRATION')
+                    value = u64Column(value);
+                else if(['ACTION_INDEX', 'BLOCK_INDEX'].includes(name))
                     value = Number(value);
                 obligation[name] = value;
             }
@@ -200,7 +204,7 @@ module.exports = {
         for(let row of results){
             expired.push({
                 action_index: Number(row.action_index),
-                expiration:   Number(row.expiration)
+                expiration:   u64Column(row.expiration)
             });
         }
         return expired;
@@ -290,7 +294,7 @@ function expiredCoinpaysSql(atExpiration){
     if(atExpiration)
         return `SELECT
                         co.action_index,
-                        co.expiration
+                        CAST(co.expiration AS CHAR) as expiration
                     FROM
                         coinpay_obligations co
                         INNER JOIN coinpay_statuses s1 ON (s1.coinpay_action_index=co.action_index)
@@ -309,7 +313,7 @@ function expiredCoinpaysSql(atExpiration){
                     ORDER BY co.action_index ASC`;
     return `SELECT
                         co.action_index,
-                        co.expiration
+                        CAST(co.expiration AS CHAR) as expiration
                     FROM
                         coinpay_obligations co
                         INNER JOIN coinpay_statuses s1 ON (s1.coinpay_action_index=co.action_index)

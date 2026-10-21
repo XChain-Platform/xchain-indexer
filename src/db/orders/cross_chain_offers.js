@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const { effectiveOfferLists } = require('./cross_chain_offer_lists.js');
+const { u64Column }          = require('../database/instance_state.js');
 
 // The per-kind WHERE terms and their bound values, one list per UNION ALL branch, in the
 // order the branches bind them.
@@ -66,9 +67,9 @@ function swapBranchSql(swapWhere){
                         s1.get_ownership,
                         ga.address as get_address,
                         sa.address as source,
-                        s1.expiration,
-                        s1.allow_list,
-                        s1.block_list,
+                        CAST(s1.expiration AS CHAR) as expiration,
+                        CAST(s1.allow_list AS CHAR) as allow_list,
+                        CAST(s1.block_list AS CHAR) as block_list,
                         s1.payout_legs,
                         t1.block_index,
                         COALESCE((SELECT se.expiration FROM swap_edits se INNER JOIN index_statuses ses ON (ses.id=se.status_id) WHERE se.swap_action_index=s1.action_index AND ses.status='valid' AND se.expiration IS NOT NULL ORDER BY se.action_index DESC LIMIT 1), s1.expiration) as effective_expiration
@@ -102,9 +103,9 @@ function orderBranchSql(orderWhere){
                         o1.get_ownership,
                         ga.address as get_address,
                         sa.address as source,
-                        o1.expiration,
-                        o1.allow_list,
-                        o1.block_list,
+                        CAST(o1.expiration AS CHAR) as expiration,
+                        CAST(o1.allow_list AS CHAR) as allow_list,
+                        CAST(o1.block_list AS CHAR) as block_list,
                         o1.payout_legs,
                         t1.block_index,
                         COALESCE((SELECT oe.expiration FROM order_edits oe INNER JOIN index_statuses oes ON (oes.id=oe.status_id) WHERE oe.order_action_index=o1.action_index AND oes.status='valid' AND oe.expiration IS NOT NULL ORDER BY oe.action_index DESC LIMIT 1), o1.expiration) as effective_expiration
@@ -142,9 +143,9 @@ function offerFromRow(db, row){
         get_ownership:  Number(row.get_ownership),
         get_address:    row.get_address,
         source:         row.source,
-        expiration:     Number(row.expiration),
-        allow_list:     row.allow_list,
-        block_list:     row.block_list,
+        expiration:     u64Column(row.expiration),
+        allow_list:     db.util.isNull(row.allow_list) ? row.allow_list : u64Column(row.allow_list),
+        block_list:     db.util.isNull(row.block_list) ? row.block_list : u64Column(row.block_list),
         // Controller-guard royalty split (JSON [{to,bps}] or null). The hub copies it
         // into the match row so settlement can apply it on the proceeds chain.
         payout_legs:    row.payout_legs || null,
