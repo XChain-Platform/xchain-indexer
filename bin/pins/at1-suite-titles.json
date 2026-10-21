@@ -17800,6 +17800,13 @@
       "Database._destructiveAutoStatement() DROP target @regression @tier1 flags a DROP whose target only starts with a keyword or cannot be read",
       "Database._destructiveAutoStatement() DROP target @regression @tier1 keeps bare metadata-only DROP forms auto-eligible"
     ],
+    "f31269ed8be4e9b2": [
+      "controller guard emitted-host discriminator @regression @tier1 keeps a native guarded host on the legacy discriminator at activation",
+      "controller guard emitted-host discriminator @regression @tier1 rejects an active emitted host without a deterministic call path",
+      "controller guard emitted-host discriminator @regression @tier1 reproduces the guarded emitted-host collision below the activation",
+      "controller guard emitted-host discriminator @regression @tier1 separates guarded emitted hosts and byte-matches VM and host routing at activation",
+      "controller guard emitted-host discriminator @regression @tier1 uses an unarmed public-ledger rule and a regtest genesis boundary"
+    ],
     "f371a9f41529fe7a": [
       "Contract State Reorg: rollback of contract tables @regression @tier3 reorg below a DEPLOY clears contracts / stakes / deposits and restores balances"
     ],
@@ -18639,8 +18646,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1479,
-      "titleCount": 14440,
+      "fileCount": 1480,
+      "titleCount": 14445,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18828,6 +18835,7 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_discriminator.test.js": "f31269ed8be4e9b2",
         "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
@@ -20499,8 +20507,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1123,
-      "titleCount": 11413,
+      "fileCount": 1124,
+      "titleCount": 11418,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20704,6 +20712,7 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_discriminator.test.js": "f31269ed8be4e9b2",
         "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
@@ -21628,8 +21637,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 555,
-      "titleCount": 5992,
+      "fileCount": 556,
+      "titleCount": 5997,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21679,6 +21688,7 @@
         "test/unit/actions/contract/execute_host_fault.test.js": "044af0ce102bf587",
         "test/unit/actions/contract/execute_slash_ledger_consolidation.test.js": "5cc340e05ad6f3cf",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_discriminator.test.js": "f31269ed8be4e9b2",
         "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
@@ -22189,8 +22199,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1123,
-      "titleCount": 11413,
+      "fileCount": 1124,
+      "titleCount": 11418,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22394,6 +22404,7 @@
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
         "test/unit/actions/execute.test/emission_routing.test.js": "281c89bed990ea31",
         "test/unit/actions/execute.test/guard_async_emission_deny.test.js": "3b9f1cee5508f432",
+        "test/unit/actions/execute.test/guard_emitted_host_discriminator.test.js": "f31269ed8be4e9b2",
         "test/unit/actions/execute.test/guard_emitted_host_request_id_below_gate.test.js": "494348d00a38395f",
         "test/unit/actions/execute.test/slash_emission.test.js": "5ec5de0135d41cfb",
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
