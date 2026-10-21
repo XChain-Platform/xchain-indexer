@@ -16,7 +16,10 @@
 // exactU64 keeps a u64 above 2^53 exact as a decimal string and hands a safe
 // integer back as a Number, so readers can stop rounding user-chosen u64 fields.
 const assert = require('assert');
-const { exactU64 } = require('../../../../src/db/database/exact_u64.js');
+const {
+    exactU64,
+    exactU64TypeCast,
+} = require('../../../../src/db/database/exact_u64.js');
 
 describe('exactU64', function () {
     it('keeps the u64 maximum exact from a string and from a bigint', function () {
@@ -46,5 +49,20 @@ describe('exactU64', function () {
         assert.throws(() => exactU64(-1), RangeError);
         assert.throws(() => exactU64(1.5), RangeError);
         assert.throws(() => exactU64('12abc'), TypeError);
+    });
+
+    it('type-casts BIGINT fields through the exact u64 boundary', function () {
+        const field = { type: 'BIGINT', string: () => '9007199254740993' };
+        assert.strictEqual(exactU64TypeCast(field, () => 'fallback'), '9007199254740993');
+    });
+
+    it('delegates non-BIGINT fields to the connector', function () {
+        let calls = 0;
+        const value = exactU64TypeCast({ type: 'INT' }, () => {
+            calls += 1;
+            return 42;
+        });
+        assert.strictEqual(value, 42);
+        assert.strictEqual(calls, 1);
     });
 });

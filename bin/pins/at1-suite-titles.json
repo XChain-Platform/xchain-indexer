@@ -10935,6 +10935,17 @@
       "policy apply: detach gate boundaries injects nothing when null lists have no pointers to detach",
       "policy apply: detach gate boundaries keeps pointed lists attached below the detach gate"
     ],
+    "954c7a168f6a266b": [
+      "bin/count_u64_above_2p53 columnCountSql throws on a name holding a back-quote or a space",
+      "bin/count_u64_above_2p53 counts above 2^53 and reads the maximum as CAST(MAX(col) AS CHAR)",
+      "bin/count_u64_above_2p53 lists the BIGINT columns from information_schema.COLUMNS",
+      "bin/count_u64_above_2p53 parseArgs reads --db and --json and rejects anything else",
+      "bin/count_u64_above_2p53 render omits a non-wire column with count zero",
+      "bin/count_u64_above_2p53 render prints one line per wire or non-zero column and a summary, or JSON",
+      "bin/count_u64_above_2p53 scan issues SELECT statements only",
+      "bin/count_u64_above_2p53 scan keeps a wire column at zero and a non-wire column at two with the exact maximum",
+      "bin/count_u64_above_2p53 the exit verdict is 1 only when a count is non-zero"
+    ],
     "95778e56f402428b": [
       "stateCommitment: DbNodeStore.putMany SQL shape @regression an empty batch issues no statement at all",
       "stateCommitment: DbNodeStore.putMany SQL shape @regression chunks a full-depth path so no single statement grows unbounded",
@@ -12345,13 +12356,6 @@
       "action-scoped price barrier every price-mirror read is guarded getPricesInTimeRange fails the block closed instead of reading an uncovered mirror",
       "action-scoped price barrier skip-flag lifecycle in the block loop a committed block clears the skip flag and retires its own escalation",
       "action-scoped price barrier skip-flag lifecycle in the block loop a rolled-back block clears the skip flag but KEEPS its escalation"
-    ],
-    "a9439878e8612289": [
-      "exactU64 keeps 2^53 + 1 as a string instead of rounding it",
-      "exactU64 keeps the u64 maximum exact from a string and from a bigint",
-      "exactU64 refuses values outside the unsigned 64-bit integer range",
-      "exactU64 returns a Number for a safe integer from a string, bigint or number",
-      "exactU64 returns null for null and for undefined"
     ],
     "a95e9ad2b91123c7": [
       "Price v2 (PRICE batch) @regression @tier3 structural checks (step 2) accepts exactly PRICE_BATCH_MAX_ROUND_COUNT and refuses one more",
@@ -14064,6 +14068,15 @@
     "c126f106c7f18f5a": [
       "integration harness VM block rhythm through production's passes leaves the cache open when a pass throws inside the window, and the next attempt opens a fresh one",
       "integration harness VM block rhythm through production's passes opens the cache first inside the block and closes it after every pass group, just before createBlock"
+    ],
+    "c171a686246e7883": [
+      "exactU64 delegates non-BIGINT fields to the connector",
+      "exactU64 keeps 2^53 + 1 as a string instead of rounding it",
+      "exactU64 keeps the u64 maximum exact from a string and from a bigint",
+      "exactU64 refuses values outside the unsigned 64-bit integer range",
+      "exactU64 returns a Number for a safe integer from a string, bigint or number",
+      "exactU64 returns null for null and for undefined",
+      "exactU64 type-casts BIGINT fields through the exact u64 boundary"
     ],
     "c18d29a26d5a4f54": [
       "slashContractStake active-first gate @regression @tier1 armed: debits visible active stake before a newer pending-activation row",
@@ -17292,6 +17305,12 @@
       "HubDbSync anchor reward copies never hold the drain @regression @tier1 probes a missing copies table once and still applies every main row",
       "HubDbSync anchor reward copies never hold the drain @regression @tier1 records the copy beside the main row when the table is present"
     ],
+    "e9669b80ec394de7": [
+      "database pool exact u64 typeCast @regression @tier1 delegates every non-BIGINT field to the connector",
+      "database pool exact u64 typeCast @regression @tier1 keeps the unsigned 64-bit maximum as an exact decimal string",
+      "database pool exact u64 typeCast @regression @tier1 preserves SQL null without invoking the connector fallback",
+      "database pool exact u64 typeCast @regression @tier1 returns safe BIGINT values as Numbers"
+    ],
     "e9c3f47b50704d38": [
       "HubDbSync failover when no candidate is caught up a caught-up ready frame clears the record",
       "HubDbSync failover when no candidate is caught up serves from the current hub after the grace when no candidate is caught up",
@@ -18706,8 +18725,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1487,
-      "titleCount": 14491,
+      "fileCount": 1489,
+      "titleCount": 14506,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19286,6 +19305,7 @@
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
+        "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
         "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
@@ -19534,7 +19554,8 @@
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
         "test/unit/db/coinpays/coinpay_bet_u64_exact_read.test.js": "15664d8749435175",
-        "test/unit/db/database/exact_u64.test.js": "a9439878e8612289",
+        "test/unit/db/database/exact_u64.test.js": "c171a686246e7883",
+        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
@@ -20574,8 +20595,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1129,
-      "titleCount": 11451,
+      "fileCount": 1130,
+      "titleCount": 11455,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21215,6 +21236,7 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
+        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
@@ -21709,8 +21731,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 560,
-      "titleCount": 6020,
+      "fileCount": 561,
+      "titleCount": 6024,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21933,6 +21955,7 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
+        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
@@ -22275,8 +22298,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1129,
-      "titleCount": 11451,
+      "fileCount": 1130,
+      "titleCount": 11455,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22916,6 +22939,7 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
+        "test/unit/db/database/u64_pool_typecast.test.js": "e9669b80ec394de7",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",

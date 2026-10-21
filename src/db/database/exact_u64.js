@@ -42,4 +42,9 @@ function exactU64(value){
     return exact <= MAX_SAFE_INTEGER ? Number(exact) : exact.toString();
 }
 
-module.exports = { exactU64 };
+function exactU64TypeCast(field, next){
+    if(field.type !== 'BIGINT') return next();
+    return exactU64(field.string());
+}
+
+module.exports = { exactU64, exactU64TypeCast };
