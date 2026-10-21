@@ -109,7 +109,10 @@ describe('selectCheckpoint reads ANCHOR v3 checkpoint sections from their flag d
     it('ships the gate unarmed on testnet and mainnet and active from genesis on regtest', function(){
         const gateRegistry = require('../../../../src/consensus/gate_registry');
         assert.strictEqual(gateRegistry.activeAt(V3_SECTION_KEY, 'mainnet', 'BTC', 99999999, null), false);
-        assert.strictEqual(gateRegistry.activeAt(V3_SECTION_KEY, 'testnet', 'BTC', 99999999, null), false);
+        // Armed on testnet by the arming patch at BTC 157295, LTC 4931000 and DOGE 68015000.
+        assert.strictEqual(gateRegistry.activeAt(V3_SECTION_KEY, 'testnet', 'BTC', 157294, null), false);
+        assert.strictEqual(gateRegistry.activeAt(V3_SECTION_KEY, 'testnet', 'BTC', 157295, null), true);
+        assert.strictEqual(gateRegistry.activeAt(V3_SECTION_KEY, 'testnet', 'DOGE', 68014999, null), false);
         assert.strictEqual(gateRegistry.activeAt(V3_SECTION_KEY, 'regtest', 'BTC', 0, null), true);
     });
 });

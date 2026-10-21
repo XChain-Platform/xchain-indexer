@@ -70,6 +70,8 @@ function assertAnchorReads(ctx, chain) {
     assert.strictEqual(db.getMirroredStateCheckpointCandidates.callCount, 0);
 }
 
+// The "above" rows read at BTC 157250: above the anchor-match activation (157235) and below the
+// BRIDGE_CHECKPOINT_V3_SECTION testnet arm (157295), so the version 0 baseline is what they pin.
 describe('selectCheckpoint section-pick baseline on testnet @regression @tier1', function () {
     afterEach(() => sinon.restore());
 
@@ -78,7 +80,7 @@ describe('selectCheckpoint section-pick baseline on testnet @regression @tier1',
     });
 
     it('uses block_index reads for a BTC-origin row above the anchor-match activation', async function () {
-        const ctx = selectionContext(157500);
+        const ctx = selectionContext(157250);
         assert.strictEqual(await selectCheckpoint(transfer('BTC'), ctx), null);
         assertBlockIndexReads(ctx, 'BTC');
     });
@@ -90,13 +92,13 @@ describe('selectCheckpoint section-pick baseline on testnet @regression @tier1',
     });
 
     it('uses anchor reads for a DOGE-origin row above the anchor-match activation', async function () {
-        const ctx = selectionContext(157500);
+        const ctx = selectionContext(157250);
         assert.strictEqual(await selectCheckpoint(transfer('DOGE'), ctx), null);
         assertAnchorReads(ctx, 'DOGE');
     });
 
     it('picks a returned version 0 anchor row with source anchor_actions', async function () {
-        const ctx = selectionContext(157500);
+        const ctx = selectionContext(157250);
         const anchor = {
             version: 0,
             chain: 'DOGE',
