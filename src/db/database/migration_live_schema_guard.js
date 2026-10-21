@@ -295,9 +295,10 @@ function unsignedRetypeCandidate(live, definition){
 
 // Read the live minimum, since a mirrored id may be copied in rather than generated here.
 // An AUTO_INCREMENT column is always indexed, so MIN is one index read; NULL is an empty table.
+// Cast to CHAR so the pool's u64 BIGINT typeCast, which rejects a negative, never sees the value.
 async function unsignedRetypeProbe(conn, table, column){
     const quote = (id) => '`' + String(id).replace(/`/g, '``') + '`';
-    const rows = await conn.query('SELECT MIN(' + quote(column) + ') AS m FROM ' + quote(table));
+    const rows = await conn.query('SELECT CAST(MIN(' + quote(column) + ') AS CHAR) AS m FROM ' + quote(table));
     const min = Array.isArray(rows) && rows[0] ? rows[0].m : null;
     if(min == null) return { unsignedRetypeSafe: true };
     return /^\s*-/.test(String(min)) ? { liveMin: String(min), column } : { unsignedRetypeSafe: true };
