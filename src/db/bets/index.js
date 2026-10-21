@@ -24,6 +24,7 @@
 const records       = require('./records.js');
 const listings      = require('./listings.js');
 const terminalBatch = require('./terminal_batch.js');
+const { exactU64 }  = require('../database/exact_u64.js');
 
 const BET_FEED_INFO_QUERY = `SELECT
                                 f.action_index,
@@ -91,9 +92,10 @@ const BET_FEED_INFO_QUERY = `SELECT
 function formatBetFeedInfo(row, util){
     const feed = {};
     const numericFields = [
-        'ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'DEADLINE', 'REFUND_WINDOW',
-        'EXPIRE_AT', 'ALLOW_LIST', 'BLOCK_LIST', 'CLOSED_BLOCK', 'TERMINAL_BLOCK'
+        'ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'CLOSED_BLOCK', 'TERMINAL_BLOCK'
     ];
+    // User-chosen u64 fields: exact above 2^53, never rounded through Number
+    const u64Fields = ['DEADLINE', 'REFUND_WINDOW', 'EXPIRE_AT', 'ALLOW_LIST', 'BLOCK_LIST'];
     for(let key in row){
         let name  = String(key).toUpperCase();
         let value = row[key];
@@ -104,6 +106,8 @@ function formatBetFeedInfo(row, util){
         // strings for bignumber math
         if(!util.isNull(value) && numericFields.includes(name))
             value = Number(value);
+        else if(!util.isNull(value) && u64Fields.includes(name))
+            value = exactU64(value);
         feed[name] = value;
     }
     return feed;
