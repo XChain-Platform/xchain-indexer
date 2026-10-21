@@ -2,7 +2,7 @@
 # image whose V8/ICU build matches xchain-vm's consensus runtime pin: a
 # floating tag can advance to a Node patch that fails that check (same
 # Node-version pin as xchain-utxo-tracker).
-FROM node:22.23.4-bookworm@sha256:2bd396628eceb5c999a6e43731fab69d5fb98b94ba9d9d90b5f64575c5178765
+FROM node:22.23.2-bookworm@sha256:dd5847a04b0deee391fa145f1f4c6d214196668b6bcc7988ebed67249f226844
 
 RUN mkdir /XChainIndexer/
 # xchain-vm is staged into the build context by xchain-node's install path

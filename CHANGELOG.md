@@ -32,7 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Armed ISSUE_CARET_TICK_NO_CREATE on BTC:testnet at 1792674000.
 - Armed ISSUE_CARET_TICK_NO_CREATE on LTC:testnet at 1792674000.
 - Armed ISSUE_CARET_TICK_NO_CREATE on DOGE:testnet at 1792674000.
-- Updated the Node base image to 22.23.4, which fixes ten Node security issues.
 
 ## [0.26.1] - 2026-10-21
 
