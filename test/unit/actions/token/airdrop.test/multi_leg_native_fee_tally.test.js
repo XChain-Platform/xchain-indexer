@@ -14,9 +14,14 @@ process.env.INDEXER_NETWORK = 'mainnet';
 const assert = require('assert');
 const sinon = require('sinon');
 const Utility = require('../../../../../src/utility.js');
+const { stubGate } = require('../../../../helpers/gate_modules.js');
 const { nativeFeeAirdrop } = require('./helpers/native_fee_legs.js');
 
 const PARAMS = ['2', 'TEST', '10', '1', 'TEST', '10', '1', null];
+// Three legs whose middle LIST holds two recipients, so it costs twice a single leg.
+const THREE_LEG_PARAMS = ['2', 'TEST', '10', '1', 'TEST', '10', '2', 'TEST', '10', '3', null];
+const ROLLBACK_GATE =
+    'airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION';
 
 async function outcomeFor(nativeFeeValue, opts = {}) {
     const { indexer, handler, data } = nativeFeeAirdrop({ nativeFeeValue });
@@ -32,6 +37,12 @@ async function outcomeFor(nativeFeeValue, opts = {}) {
         };
     if(opts.probe)
         data['FEE_PROBE'] = true;
+    if(opts.middleCostsTwoLegs)
+        indexer.indexerDb.getList.callsFake(async list => Number(list) === 2
+            ? ['middle-recipient-a', 'middle-recipient-b']
+            : ['single-recipient']);
+    if(Object.prototype.hasOwnProperty.call(opts, 'rollback'))
+        stubGate(sinon, ROLLBACK_GATE, opts.rollback);
 
     const statuses = [];
     const feeRecords = [];
@@ -44,7 +55,7 @@ async function outcomeFor(nativeFeeValue, opts = {}) {
     }));
 
     assert.strictEqual(indexer.util.validateNativeCoinFee, Utility.prototype.validateNativeCoinFee);
-    await handler.parse(PARAMS, data, null);
+    await handler.parse(opts.params || PARAMS, data, null);
     return { statuses, feeRecords, batchLedger: data['BATCH_VALUE_LEDGER'] };
 }
 
@@ -66,6 +77,26 @@ describe('Airdrop multi-leg native fee action tally @regression @tier1', functio
         const outcome = await outcomeFor('0.01000000');
         assert.deepStrictEqual(outcome.statuses, ['valid', 'invalid: fee output has zero value']);
         assert.deepStrictEqual(outcome.feeRecords.map(row => row.amount), ['0.00100000']);
+    });
+
+    it('drops a failed middle leg\'s fee and gas from the AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION tally', async function () {
+        const options = { params: THREE_LEG_PARAMS, middleCostsTwoLegs: true };
+        const above = await outcomeFor('0.02000000', Object.assign({ rollback: true }, options));
+        assert.strictEqual(above.statuses[0], 'valid');
+        assert.match(above.statuses[1], /^invalid: insufficient native coin fee /);
+        assert.strictEqual(above.statuses[2], 'valid');
+        assert.deepStrictEqual(above.feeRecords.map(row => row.amount), ['0.00100000', '0.00200000']);
+        assert.deepStrictEqual(above.feeRecords.map(row => row.gasCost), ['100', '200']);
+    });
+
+    it('keeps a failed middle leg\'s fee and gas in the tally below the rollback gate', async function () {
+        const options = { params: THREE_LEG_PARAMS, middleCostsTwoLegs: true };
+        const below = await outcomeFor('0.02000000', Object.assign({ rollback: false }, options));
+        assert.strictEqual(below.statuses[0], 'valid');
+        assert.match(below.statuses[1], /^invalid: insufficient native coin fee /);
+        assert.strictEqual(below.statuses[2], 'valid');
+        assert.deepStrictEqual(below.feeRecords.map(row => row.amount), ['0.00100000', '0.00400000']);
+        assert.deepStrictEqual(below.feeRecords.map(row => row.gasCost), ['100', '400']);
     });
 
     it('makes a FEE_PROBE quote the summed fee without drawing the action tally', async function () {

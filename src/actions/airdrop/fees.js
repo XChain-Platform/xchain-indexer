@@ -19,6 +19,19 @@
  *
  ********************************************************************/
 
+const gateRegistry = require('../../consensus/gate_registry');
+
+const NATIVE_FEE_TALLY_ROLLBACK_GATE =
+    'airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION';
+
+// Put the action tally back to the copy taken before a leg added to it, in place, so every
+// holder of the shared object sees the rollback and a failed leg's draw is discarded too.
+function restoreTally(tally, checkpoint){
+    for(let key of Object.keys(tally))
+        if(!Object.prototype.hasOwnProperty.call(checkpoint, key)) delete tally[key];
+    Object.assign(tally, checkpoint);
+}
+
 // Installed onto Airdrop.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
@@ -56,7 +69,9 @@ module.exports = {
     // Validate fee payment (native coin or XCHAIN balance)
     async validateAirdropFeePayment(data, fees, legBalances, error){
         let tally = fees['NATIVE_FEE_LEDGER'];
+        let checkpoint = null;
         if(!error && tally){
+            checkpoint = Object.assign({}, tally);
             tally.xchainFee = this.util.bcadd(tally.xchainFee, fees['NATIVE_FEE_AMOUNT'], 8);
             tally.gasCost = this.util.bcadd(tally.gasCost, fees['NATIVE_FEE_GAS_COST'], 0);
             fees['AMOUNT'] = tally.xchainFee;
@@ -68,6 +83,14 @@ module.exports = {
                 let validation = await this.util.validateNativeCoinFee(data, fees, this.indexerDb, data['TX_OUTPUTS']);
                 if(!validation.valid){
                     error = 'invalid: ' + (validation.error || 'native coin fee validation failed');
+                    // At the rollback gate a leg that fails its native fee leaves no fee or gas
+                    // in the tally, so later legs record only what the valid legs owe.
+                    if(checkpoint && gateRegistry.activeAt(NATIVE_FEE_TALLY_ROLLBACK_GATE,
+                        this.config['NETWORK'], this.config['COIN'], Number(data['BLOCK_INDEX']), null)){
+                        restoreTally(tally, checkpoint);
+                        fees['AMOUNT'] = tally.xchainFee;
+                        fees['GAS_COST'] = tally.gasCost;
+                    }
                 } else {
                     fees['PAYMENT_MODE']       = 1;
                     fees['NATIVE_COIN_AMOUNT'] = (!data['FEE_PROBE'] && tally)
