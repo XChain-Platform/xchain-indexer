@@ -140,9 +140,8 @@ function buildGrownDatabaseMetric(youngStats, grownStats) {
     const blockRatio  = youngMedian > 0 ? +(grownMedian / youngMedian).toFixed(3) : null;
     const expiryRatio = youngExpiry > 0 ? +(grownExpiry / youngExpiry).toFixed(3) : null;
 
-    // XC-5092 / XC-5965 reading: the 8 per-block supply scans (3 in
-    // refreshTokenSuppliesForBlock, 5 in sanityCheck) are timed by the supplyRefresh and
-    // sanityCheck phases. Reported young vs grown so a scan reduction is decided on data.
+    // The 8 per-block supply scans (3 in refreshTokenSuppliesForBlock, 5 in sanityCheck)
+    // are timed by the supplyRefresh and sanityCheck phases, reported young vs grown.
     const supplyScan = {};
     for (const phase of ['supplyRefresh', 'sanityCheck']) {
         const y = youngStats.phaseTiming[phase].p50;
@@ -243,9 +242,8 @@ it('block time does not regress beyond MAX_RATIO as the standing set grows', asy
                     `fallback ceiling ${MAX_GROWN_MS}ms`);
             }
 
-            // XC-5092 supply-scan reading: recorded in the JSON report, deliberately not
-            // ratio-gated. The scans are a consensus safety net (see the ruling in
-            // block_passes.js finalizeBlock); this only guards a catastrophic hang.
+            // Supply-scan reading: recorded in the JSON report, not ratio-gated. The scans
+            // are a consensus safety net (ruling in finalizeBlock); this guards only a hang.
             for (const [phase, r] of Object.entries(metric.supplyScan)) {
                 assert.ok(r.grownMedianMs <= MAX_GROWN_MS,
                     `${phase} grown median ${r.grownMedianMs}ms exceeded absolute ceiling ${MAX_GROWN_MS}ms`);

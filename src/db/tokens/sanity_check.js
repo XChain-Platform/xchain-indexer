@@ -67,8 +67,8 @@ module.exports = {
         }
     },
 
-    // The 5 full-history SUMs here plus the 3 in refreshTokenSuppliesForBlock are the 8 per-block
-    // scans of XC-5092 / XC-5965. Ruling: kept unreduced, see block_passes.js finalizeBlock.
+    // The 5 SUMs here plus the 3 in refreshTokenSuppliesForBlock are the 8 per-block supply
+    // scans. Ruling: kept unreduced, see finalizeBlock in block_passes.js.
     // Validate that token supplys match credits/debits/balances information
     async sanityCheck(block_index){
         // Ignore any calls without a block index
