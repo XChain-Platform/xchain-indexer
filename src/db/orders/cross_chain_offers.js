@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const { effectiveOfferLists } = require('./cross_chain_offer_lists.js');
+const { exactU64 } = require('../database/exact_u64.js');
 
 // The per-kind WHERE terms and their bound values, one list per UNION ALL branch, in the
 // order the branches bind them.
@@ -142,9 +143,9 @@ function offerFromRow(db, row){
         get_ownership:  Number(row.get_ownership),
         get_address:    row.get_address,
         source:         row.source,
-        expiration:     Number(row.expiration),
-        allow_list:     row.allow_list,
-        block_list:     row.block_list,
+        expiration:     exactU64(row.expiration),
+        allow_list:     exactU64(row.allow_list),
+        block_list:     exactU64(row.block_list),
         // Controller-guard royalty split (JSON [{to,bps}] or null). The hub copies it
         // into the match row so settlement can apply it on the proceeds chain.
         payout_legs:    row.payout_legs || null,
