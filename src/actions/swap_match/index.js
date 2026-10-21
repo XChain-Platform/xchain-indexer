@@ -82,7 +82,7 @@ class Swap_Match {
             let matchInfo = await this.findSwapMatch(data, swap, swapInfo, matches);
 
             // Process the swap match
-            // TODO : Revisit this code once multi-chain swap support is added to xchain-hub component
+            // Swap matching is single-chain only; multi-chain swaps depend on xchain-hub support
             if(matchInfo)
                 await this.settleSwapMatch(data, swapInfo, matchInfo);   // swap_match/settle.js
         }
