@@ -138,3 +138,11 @@ addGate('tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATI
     testnet: UNARMED,
     regtest: 0,
 });
+
+// airdrop_native_fee_tally_rollback_activation
+// Height on the processing chain's own block_index. From it a multi-leg AIRDROP leg that fails its native coin fee check takes its fee and gas back out of the action tally, so the tally covers only the valid legs. Below it a failed leg's fee and gas stay in the tally. Kept apart from airdrop_native_fee_tally_activation, which is armed on testnet, so testnet fee replay stays identical. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
