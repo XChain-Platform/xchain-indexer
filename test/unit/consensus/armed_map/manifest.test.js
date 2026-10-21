@@ -283,6 +283,18 @@ describe('armed_map/manifest: collectRows', function () {
         });
     });
 
+    it('carries the unarmed archive v1 reissue refusal gate', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        const key = 'archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION';
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.deepStrictEqual(row, {
+            mainnet: ProtocolChanges.UNARMED,
+            testnet: ProtocolChanges.UNARMED,
+            regtest: 0,
+        });
+    });
+
     it('carries the three row families the design names', function () {
         const keys = rowKeys();
         assert.ok(keys.has('state_commitment_activation.STATE_COMMITMENT_ACTIVATION'), 'an activation map');

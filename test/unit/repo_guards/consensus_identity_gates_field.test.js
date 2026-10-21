@@ -168,6 +168,14 @@ describe('consensus identity GATES field and pin comparison', function () {
         }
     });
 
+    it('pins the archive v1 reissue refusal row in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION';
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
     it('pins the VM harness-activation twins in both checkout readings', function () {
         const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
         const keys = [

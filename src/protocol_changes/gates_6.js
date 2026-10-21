@@ -161,3 +161,11 @@ addGate('guard_emitted_host_discriminator_activation.GUARD_EMITTED_HOST_DISCRIMI
     testnet: UNARMED,
     regtest: 0,
 });
+
+// archive_v1_reissue_refusal_activation
+// Height on the processing chain's own block_index. From it a FORMAT 1 archive head that re-uses its author's MATCH_BATCH_SEQ with a different BATCH_CRC32 or MATCH_COUNT is refused with the re-issue retry reason, as the v3 fold already is. Below it a v1 head has no same-author re-issue refusal. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});

@@ -27,6 +27,7 @@ const BRIDGE_CHECKPOINT_V3_SECTION = 'bridge_checkpoint_v3_section_activation.BR
 const TICK_CACHE_NULL_PROTOTYPE = 'tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATION';
 const AIRDROP_NATIVE_FEE_TALLY_ROLLBACK = 'airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION';
 const GUARD_EMITTED_HOST_DISCRIMINATOR = 'guard_emitted_host_discriminator_activation.GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION';
+const ARCHIVE_V1_REISSUE_REFUSAL = 'archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION';
 
 // The rows whose predicate W4 (row 18) and W5 (row 21) replaced with activeAt()
 // itself: the callers spell the key at the call site, so there is no predicate
@@ -86,12 +87,13 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
         assert.strictEqual(REPLACED.size, 30, 'the W4 census of 20 predicate-only shims plus the 11 predicate-only twins of W5');
-        assert.strictEqual(REGISTRY_ONLY.size, 91, 'the registry-only gate census moved');
+        assert.strictEqual(REGISTRY_ONLY.size, 92, 'the registry-only gate census moved');
         assert.ok(REGISTRY_ONLY.has(BATCH_AIRDROP_LEG_WEIGHT), 'the batch-airdrop leg-weight gate is registry-only');
         assert.ok(REGISTRY_ONLY.has(BRIDGE_CHECKPOINT_V3_SECTION), 'the bridge-checkpoint v3 section gate is registry-only');
         assert.ok(REGISTRY_ONLY.has(TICK_CACHE_NULL_PROTOTYPE), 'the null-prototype TICK cache gate is registry-only');
         assert.ok(REGISTRY_ONLY.has(AIRDROP_NATIVE_FEE_TALLY_ROLLBACK), 'the airdrop native-fee tally rollback gate is registry-only');
         assert.ok(REGISTRY_ONLY.has(GUARD_EMITTED_HOST_DISCRIMINATOR), 'the guard emitted-host discriminator gate is registry-only');
+        assert.ok(REGISTRY_ONLY.has(ARCHIVE_V1_REISSUE_REFUSAL), 'the archive v1 reissue refusal gate is registry-only');
         assert.ok(REGISTRY_ONLY.has('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION'),
             'the cross-chain remote-token gate is registry-only');
         assert.ok(REGISTRY_ONLY.has('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION'),

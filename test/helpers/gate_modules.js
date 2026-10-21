@@ -201,6 +201,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'tick_cache_null_prototype_activation',
     'airdrop_native_fee_tally_rollback_activation',
     'guard_emitted_host_discriminator_activation',
+    'archive_v1_reissue_refusal_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
