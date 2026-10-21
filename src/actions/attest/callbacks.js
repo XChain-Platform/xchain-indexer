@@ -28,6 +28,24 @@ const { getLogger } = require('../../observability/index.js');
 const CALLBACK_BATCH_POSITION_GATE =
     'attest_callback_batch_position_activation.ATTEST_CALLBACK_BATCH_POSITION_ACTIVATION';
 
+// The callback params the request carries, or none when the stored JSON cannot be
+// read as an array.
+function callbackParamsOf(request){
+    let callbackParams = [];
+    if(request.callback_params_json){
+        try {
+            let parsed = JSON.parse(request.callback_params_json);
+            if(Array.isArray(parsed)) callbackParams = parsed;
+        } catch(e){
+            getLogger().warn('_injectCallbackExecute: malformed callback_params_json for request ' +
+                         String(request.request_id).substring(0,16) + '..., using empty params:', e.message);
+            callbackParams = [];
+        }
+    }
+
+    return callbackParams;
+}
+
 module.exports = {
     // Inject the contract callback for a relayed response. The 'ok' path is the v1
     // callback verbatim; a relayed 'expired' delivers the same empty-payload shape
@@ -44,7 +62,7 @@ module.exports = {
     async injectCallbackExecute(request, responseData){
         if(!this.actions.actionExecute) return null;
 
-        let callbackParams = this.callbackParamsOf(request);
+        let callbackParams = callbackParamsOf(request);
         let actionParams   = this.callbackActionParams(request, responseData['RESPONSE_STATUS'],
                                                        responseData['RESPONSE_PAYLOAD'] || '', callbackParams);
 
@@ -139,24 +157,6 @@ module.exports = {
         return await this.runCallbackSavepoint('attestation_expire_callback_', actionParams, emissionData,
                                               emissionActionIndex,
                                               'Attestation expiry callback returned non-valid status: ');
-    },
-
-    // The callback params the request carries, or none when the stored JSON cannot be
-    // read as an array.
-    callbackParamsOf(request){
-        let callbackParams = [];
-        if(request.callback_params_json){
-            try {
-                let parsed = JSON.parse(request.callback_params_json);
-                if(Array.isArray(parsed)) callbackParams = parsed;
-            } catch(e){
-                getLogger().warn('_injectCallbackExecute: malformed callback_params_json for request ' +
-                             String(request.request_id).substring(0,16) + '..., using empty params:', e.message);
-                callbackParams = [];
-            }
-        }
-
-        return callbackParams;
     },
 
     // Positional EXECUTE format: VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...
