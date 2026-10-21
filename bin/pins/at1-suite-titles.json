@@ -177,6 +177,24 @@
       "state_hash source: ACTIVATION_DELAY_BLOCKS resolution LTC: the source resolves a NON-NULL delay matching the follower constant",
       "state_hash source: ACTIVATION_DELAY_BLOCKS resolution LTC: the top-level ACTIVATION_DELAY_BLOCKS key is unset (the bug precondition)"
     ],
+    "03a05246418ce8ac": [
+      "bin/archive_heads_by_author accepts an earlier unverified head as conflict evidence",
+      "bin/archive_heads_by_author adds conflict evidence to read results only when requested",
+      "bin/archive_heads_by_author adds the from-seq filter and argument before the limit",
+      "bin/archive_heads_by_author appends conflict evidence only when present",
+      "bin/archive_heads_by_author builds an all-status query without a from-seq filter",
+      "bin/archive_heads_by_author confirms refused heads only from earlier conflicting content at the same seq",
+      "bin/archive_heads_by_author does not count another invalid status as refused",
+      "bin/archive_heads_by_author maps the conflict expectation and evidence to an exit code",
+      "bin/archive_heads_by_author maps the redraw expectation and summary to an exit code",
+      "bin/archive_heads_by_author parses the required author and optional filters",
+      "bin/archive_heads_by_author reads through doQueryStrict and returns rows with their summary",
+      "bin/archive_heads_by_author rejects missing and invalid arguments",
+      "bin/archive_heads_by_author renders every head followed by the summary",
+      "bin/archive_heads_by_author renders the complete result as JSON",
+      "bin/archive_heads_by_author requires a valid head above every refused sequence for redrawn-above",
+      "bin/archive_heads_by_author summarizes no rows"
+    ],
     "03bd4db7b3716430": [
       "mainnet launch skip in the opening passes admits every transaction at the launch instant",
       "mainnet launch skip in the opening passes admits every transaction on open networks before launch",
@@ -10964,26 +10982,6 @@
       "ROLLCALL epoch close (\u00a73.4) the publish reward pays the ELECTED leader, at the earn/materialisation heights the rollback keys on",
       "ROLLCALL epoch close (\u00a73.4) the publish reward throws rather than silently skipping a refused reward write"
     ],
-    "d6fa40e537d3f44b": [
-      "bin/measure_vm_snapshot_bytes --polls calls buildPollResultsForVM with each block and true in walked order, and not without the flag",
-      "bin/measure_vm_snapshot_bytes --polls matches the bytes of buildPollResultsForVM from src/db/polls/vm_snapshot over fixture polls and poll_results rows",
-      "bin/measure_vm_snapshot_bytes --polls renders the polls line after the blocks line and before the cache line, and leaves no-flag output unchanged",
-      "bin/measure_vm_snapshot_bytes --polls reports per-block poll bytes, sends and the summary under a counter clock",
-      "bin/measure_vm_snapshot_bytes builds newest-first grouped SQL with optional bounds and a final limit argument",
-      "bin/measure_vm_snapshot_bytes issues SELECT statements only",
-      "bin/measure_vm_snapshot_bytes measures cached mode with getCrossChainDataForVM from src/db/blocks",
-      "bin/measure_vm_snapshot_bytes measures real builder bytes and transfer totals for each execution block",
-      "bin/measure_vm_snapshot_bytes parses --polls to true and its absence to false",
-      "bin/measure_vm_snapshot_bytes parses bounds, limit, database, cached, expect-hits and JSON modes",
-      "bin/measure_vm_snapshot_bytes rejects unknown flags and invalid numeric arguments",
-      "bin/measure_vm_snapshot_bytes renders block lines, the summary line and JSON",
-      "bin/measure_vm_snapshot_bytes reports one miss then hits in oldest-first cached mode and restores database state",
-      "bin/measure_vm_snapshot_bytes restores the original builder and database state when cached measurement throws",
-      "bin/measure_vm_snapshot_bytes returns a zero summary when no execution blocks match",
-      "bin/measure_vm_snapshot_bytes returns cache-hit expectation exit codes for cached measurement results",
-      "bin/measure_vm_snapshot_bytes returns zero without expect-hits and requires a positive hit with it",
-      "bin/measure_vm_snapshot_bytes times one serialization per block with a counter clock and prices both send shapes"
-    ],
     "94ee2fc5a1183871": [
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 the capability read: which query, at which height a TRUNCATED unweighted read falls back per signer to hasCapability",
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 the capability read: which query, at which height a TRUNCATED weighted read is taken as it stands, never re-probed per signer",
@@ -13062,24 +13060,6 @@
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 offsets emission position by emissions already recorded for the action (multiple guards on one action_index stay collision-free)",
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 rolls back the parent row with the emissions when a guard emission fails (denied guard leaves no record)",
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 writes a contract_executions parent row keyed to the native action_index (so the contract_hash INNER JOIN resolves the emissions)"
-    ],
-    "03a05246418ce8ac": [
-      "bin/archive_heads_by_author accepts an earlier unverified head as conflict evidence",
-      "bin/archive_heads_by_author adds conflict evidence to read results only when requested",
-      "bin/archive_heads_by_author adds the from-seq filter and argument before the limit",
-      "bin/archive_heads_by_author appends conflict evidence only when present",
-      "bin/archive_heads_by_author builds an all-status query without a from-seq filter",
-      "bin/archive_heads_by_author confirms refused heads only from earlier conflicting content at the same seq",
-      "bin/archive_heads_by_author does not count another invalid status as refused",
-      "bin/archive_heads_by_author maps the conflict expectation and evidence to an exit code",
-      "bin/archive_heads_by_author maps the redraw expectation and summary to an exit code",
-      "bin/archive_heads_by_author parses the required author and optional filters",
-      "bin/archive_heads_by_author reads through doQueryStrict and returns rows with their summary",
-      "bin/archive_heads_by_author rejects missing and invalid arguments",
-      "bin/archive_heads_by_author renders every head followed by the summary",
-      "bin/archive_heads_by_author renders the complete result as JSON",
-      "bin/archive_heads_by_author requires a valid head above every refused sequence for redrawn-above",
-      "bin/archive_heads_by_author summarizes no rows"
     ],
     "b119a047da6992c8": [
       "XChainIndexer prototype composition @tier1 no composed method shadows a class-body method",
@@ -16001,6 +15981,26 @@
       "Security: negative amounts rejected by action handlers @regression @tier4 SEC-10: ORDER with negative GIVE_AMOUNT \u2192 invalid status",
       "Security: negative amounts rejected by action handlers @regression @tier4 SEC-11: SEND with '-0' AMOUNT \u2192 invalid status"
     ],
+    "d6fa40e537d3f44b": [
+      "bin/measure_vm_snapshot_bytes --polls calls buildPollResultsForVM with each block and true in walked order, and not without the flag",
+      "bin/measure_vm_snapshot_bytes --polls matches the bytes of buildPollResultsForVM from src/db/polls/vm_snapshot over fixture polls and poll_results rows",
+      "bin/measure_vm_snapshot_bytes --polls renders the polls line after the blocks line and before the cache line, and leaves no-flag output unchanged",
+      "bin/measure_vm_snapshot_bytes --polls reports per-block poll bytes, sends and the summary under a counter clock",
+      "bin/measure_vm_snapshot_bytes builds newest-first grouped SQL with optional bounds and a final limit argument",
+      "bin/measure_vm_snapshot_bytes issues SELECT statements only",
+      "bin/measure_vm_snapshot_bytes measures cached mode with getCrossChainDataForVM from src/db/blocks",
+      "bin/measure_vm_snapshot_bytes measures real builder bytes and transfer totals for each execution block",
+      "bin/measure_vm_snapshot_bytes parses --polls to true and its absence to false",
+      "bin/measure_vm_snapshot_bytes parses bounds, limit, database, cached, expect-hits and JSON modes",
+      "bin/measure_vm_snapshot_bytes rejects unknown flags and invalid numeric arguments",
+      "bin/measure_vm_snapshot_bytes renders block lines, the summary line and JSON",
+      "bin/measure_vm_snapshot_bytes reports one miss then hits in oldest-first cached mode and restores database state",
+      "bin/measure_vm_snapshot_bytes restores the original builder and database state when cached measurement throws",
+      "bin/measure_vm_snapshot_bytes returns a zero summary when no execution blocks match",
+      "bin/measure_vm_snapshot_bytes returns cache-hit expectation exit codes for cached measurement results",
+      "bin/measure_vm_snapshot_bytes returns zero without expect-hits and requires a positive hit with it",
+      "bin/measure_vm_snapshot_bytes times one serialization per block with a counter clock and prices both send shapes"
+    ],
     "d6fbe54f53abe482": [
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 SEND debits source and credits destination with correct amounts",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 SEND to an invalid destination address is marked invalid",
@@ -18819,7 +18819,7 @@
   "scripts": {
     "test": {
       "fileCount": 1498,
-      "titleCount": 14571,
+      "titleCount": 14581,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
