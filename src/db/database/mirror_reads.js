@@ -29,7 +29,10 @@
 // The mirror-admission flag day, CONSUMER side (the time-keyed mirror barrier family): above
 // it the mirrored selects bind rows by their signed admission height instead of by the clock.
 const { isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirror_admission_gate.js');
-const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow, dedupeArchiveChunks } = require('../../actions/anchor/anchor_action_query');
+const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, ARCHIVE_ANCHOR_BY_CONTENT_SQL,
+        selectArchiveHeadRow, dedupeArchiveChunks } = require('../../actions/anchor/anchor_action_query');
+const { archiveOrphanGeometryActive } =
+    require('../../actions/anchor/anchor_action_query/archive_query.js');
 const { archiveHeadPickPredicate, foldArchiveHeadFloor } = require('../anchors/archive_head_pick.js');
 
 module.exports = {
@@ -89,8 +92,10 @@ module.exports = {
     },
 
     // The usable v2 continuation chunks stored for an archive batch: rejected
-    // rows (status 'invalid: ...') are excluded and the result is deduped to
-    // ONE row per chunk_index (lowest action_index wins, deterministically).
+    // rows (status 'invalid: ...') are excluded and, once a head total is supplied,
+    // the result is deduped to ONE row per chunk_index (lowest action_index wins,
+    // deterministically). Recovery omits the total here so geometry variants survive
+    // until its shared coverage check can select against the head.
     // anchor_actions stores a row for EVERY parsed ANCHOR (the verdict lives
     // in STATUS) and idx_anchor_batch is NON-unique, so a permissionless junk
     // v2 tx adds a countable row for an existing (batch, index): unfiltered,
@@ -115,12 +120,12 @@ module.exports = {
     // publisher, not to whoever happened to broadcast the earliest row for the seq.
     // Omitted / null binds the set to the canonical head's author; the ANCHOR handler
     // omits it only when the batch has no canonical head, which leaves the set empty.
-    async getAnchorChunks(batchSeq, author){
+    async getAnchorChunks(batchSeq, author, totalChunks, ignoreMismatchedTotal){
         let rows = (author !== undefined && author !== null)
             ? await this.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [batchSeq, String(author)])
             : await this.doQuery(ARCHIVE_CHUNK_SET_SQL,
                 [batchSeq, foldArchiveHeadFloor(this.config['NETWORK'], 'DOGE'), batchSeq]);
-        return dedupeArchiveChunks(rows);
+        return dedupeArchiveChunks(rows, totalChunks, ignoreMismatchedTotal);
     },
 
     // CONTENT-ADDRESSED archive-head lookup: the archive-anchor head for one batch
@@ -156,7 +161,9 @@ module.exports = {
         // process that is gone. A head with an unresolvable author has no chunk set
         // that can be attributed, so report none rather than the whole seq's rows.
         let chunks = head.source != null
-            ? await this.getAnchorChunks(Number(head.match_batch_seq), String(head.source))
+            ? await this.getAnchorChunks(
+                Number(head.match_batch_seq), String(head.source), Number(head.total_chunks),
+                archiveOrphanGeometryActive(this.config, head.block_index_doge))
             : [];
         return { head, chunks };
     },
