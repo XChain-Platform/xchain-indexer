@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-20
+
+### Added
+- Proved a DOGE- or LTC-origin bridge escrow at the checkpoint after the hub's BTC anchor.
+- Added the attestation response batch lookup index.
+
+### Changed
+- Armed exact-integer wire fields on regtest from genesis by default.
+- Wired the legacy anchor reward pins into derivation.
+- Bounded capability proof waits to observed holds and released quiet call barriers on stream progress.
+- Disclosed batch preflight payment totals.
+- Armed BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION on BTC:testnet at 157235.
+- Armed BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION on LTC:testnet at 4930600.
+- Armed BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION on DOGE:testnet at 68012800.
+
+### Fixed
+- Released a diverged escrow proof once the checkpoint stream has stopped.
+- Failed closed on an incomplete checkpoint twin.
+- Guarded archive head re-issue and fixed barrier, dry-run and fee paths.
+
 ## [0.25.0] - 2026-10-18
 
 ### Added
