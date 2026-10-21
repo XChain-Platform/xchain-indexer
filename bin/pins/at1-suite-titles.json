@@ -5878,6 +5878,21 @@
       "price_landing_clear @regression @tier1 isPriceRow matches the PRICE action name trimmed and case-insensitively",
       "price_landing_clear @regression @tier1 isPriceRow treats an unclassifiable row as a PRICE row"
     ],
+    "5067c65bdfb4419a": [
+      "bin/bench_net_balance exits 2 with its error line on a usage error",
+      "bin/bench_net_balance issues no optional queries and returns no optional results without their flags",
+      "bin/bench_net_balance maps only batched mismatches to exit status 1",
+      "bin/bench_net_balance parses --batched to true and its absence to false",
+      "bin/bench_net_balance parses --blocks through the positive integer check and defaults it off",
+      "bin/bench_net_balance render prints per-block detail and summary lines only when present",
+      "bin/bench_net_balance render prints the batch line only when a batch is present",
+      "bin/bench_net_balance reports a mismatch when the batched net differs for a key",
+      "bin/bench_net_balance returns a zero per-block summary when the recent-block query is empty",
+      "bin/bench_net_balance returns the mismatch exit status for batched bench results",
+      "bin/bench_net_balance returns zeros for no keys",
+      "bin/bench_net_balance times each recent block over its touched keys",
+      "bin/bench_net_balance times getNetBalances over the same keys under --batched"
+    ],
     "506d1f0fcaa7767f": [
       "SLEEP RESUME_BLOCK boundary tests @regression @tier2 SLEEP with RESUME_BLOCK = BLOCK_INDEX (exactly current block): documents boundary behavior",
       "SLEEP RESUME_BLOCK boundary tests @regression @tier2 SLEEP with RESUME_BLOCK = BLOCK_INDEX + 1 (one block in the future) is valid",
@@ -9644,18 +9659,6 @@
       "Legacy db-hits fee accumulation @regression @tier3 DIVIDEND legacy path: db_hits = 3 + recipients*2 as a Number (not \"3\" concat)",
       "Legacy db-hits fee accumulation @regression @tier3 SWEEP below flag-day: db_hits reproduces the \"1400\" string-concat",
       "Legacy db-hits fee accumulation @regression @tier3 SWEEP: db_hits stays an integer Number across all three += terms"
-    ],
-    "84150d96eb17417e": [
-      "bin/bench_net_balance issues no optional queries and returns no optional results without their flags",
-      "bin/bench_net_balance parses --batched to true and its absence to false",
-      "bin/bench_net_balance parses --blocks through the positive integer check and defaults it off",
-      "bin/bench_net_balance render prints per-block detail and summary lines only when present",
-      "bin/bench_net_balance render prints the batch line only when a batch is present",
-      "bin/bench_net_balance reports a mismatch when the batched net differs for a key",
-      "bin/bench_net_balance returns a zero per-block summary when the recent-block query is empty",
-      "bin/bench_net_balance returns zeros for no keys",
-      "bin/bench_net_balance times each recent block over its touched keys",
-      "bin/bench_net_balance times getNetBalances over the same keys under --batched"
     ],
     "847077f2b2d82a7e": [
       "protocol_changes SEND_GATED_TOTAL_TICK_ID row is active on regtest at genesis, inactive on every mainnet chain and armed on each testnet chain",
@@ -19390,7 +19393,7 @@
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/archive_heads_by_author.test.js": "b111170e06e231ab",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
-        "test/unit/bin/bench_net_balance.test.js": "84150d96eb17417e",
+        "test/unit/bin/bench_net_balance.test.js": "5067c65bdfb4419a",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
