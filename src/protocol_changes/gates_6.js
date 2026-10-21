@@ -111,3 +111,11 @@ addGate('bridge_escrow_anchor_match_activation.BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVA
     testnet: UNARMED,
     regtest: 0,
 });
+
+// batch_airdrop_leg_weight_activation
+// Height on the processing chain's own block_index. From it a BATCH airdrop leg is weighted by its own amount when the action is split. Below it legs are weighted as before. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
