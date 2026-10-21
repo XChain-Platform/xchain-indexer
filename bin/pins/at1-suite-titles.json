@@ -7442,6 +7442,16 @@
       "Attest (ATTEST) @regression @tier3 E1: request fees v2: fee refund on expiry expiry of a fee-bearing request refunds the escrow to FEE_PAYER",
       "Attest (ATTEST) @regression @tier3 E1: request fees v2: fee refund on expiry expiry of a feeless request writes no ledger rows (baseline preserved)"
     ],
+    "67d2969be8f20060": [
+      "selectCheckpoint section reads on testnet ANCHOR_SECTION_VERSION is 0",
+      "selectCheckpoint section reads on testnet a BTC-origin row at blockIndex 157500 reads the block_index axis for BTC testnet at its snapshot_block",
+      "selectCheckpoint section reads on testnet a DOGE-origin row at blockIndex 157000, below the anchor-match activation, reads the block_index axis",
+      "selectCheckpoint section reads on testnet a DOGE-origin row at blockIndex 157500 reads the anchor axis and never the block_index read",
+      "selectCheckpoint section reads on testnet a returned version 0 anchor row is picked with source anchor_actions",
+      "selectCheckpoint section reads on testnet every empty read returns null for a BTC origin",
+      "selectCheckpoint section reads on testnet every empty read returns null for a DOGE origin above the activation",
+      "selectCheckpoint section reads on testnet every empty read returns null for a DOGE origin below the activation"
+    ],
     "67e9ad621c10ee25": [
       "isTrainActivationHalt() recognizes train activation halt reasons",
       "isTrainActivationHalt() rejects absent, non-string and unrelated stall reasons"
@@ -19304,6 +19314,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
+        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "67d2969be8f20060",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
@@ -21023,6 +21034,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
+        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "67d2969be8f20060",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -21764,6 +21776,7 @@
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
+        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "67d2969be8f20060",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
@@ -22710,6 +22723,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js": "48ec89675a1f39f8",
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
+        "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "67d2969be8f20060",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "e4d6b37db2e1966e",
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
