@@ -12826,6 +12826,13 @@
       "ATTEST broadcast-fee activation (spec \u00a711) @regression broadcastFeeCapNative renders at fixed 8dp so the string a node compares is byte-stable",
       "ATTEST broadcast-fee activation (spec \u00a711) @regression broadcastFeeCapNative returns the shipped per-provider allowance for a known provider"
     ],
+    "b765d11dc9d66fd9": [
+      "creditDebitSumQuery @tier1 accepts canonical amounts in the shared pattern",
+      "creditDebitSumQuery @tier1 builds the exact SQL for credits and debits with a filter",
+      "creditDebitSumQuery @tier1 builds the exact SQL for credits and debits without a filter",
+      "creditDebitSumQuery @tier1 refuses non-canonical amounts in the shared pattern",
+      "creditDebitSumQuery @tier1 throws for any table but credits and debits"
+    ],
     "b784b2ff10c1589f": [
       "dispenser_fiat_pricing_activation: shared coin-payment tally @regression @tier1 armed, every recorded charge covers the fiat value of the fills it bought",
       "dispenser_fiat_pricing_activation: shared coin-payment tally @regression @tier1 armed, the recorded costs are the fills bought and never sum past the payment",
@@ -18481,8 +18488,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1461,
-      "titleCount": 14328,
+      "fileCount": 1462,
+      "titleCount": 14333,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19401,6 +19408,7 @@
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_admission_schema.test.js": "f774309cdb5aef1f",
         "test/unit/db/mirror_twin_bigint_signedness.test.js": "eecbdb20cb4ef592",
+        "test/unit/db/misc/credit_debit_sum_sql.test.js": "b765d11dc9d66fd9",
         "test/unit/db/orders/cross_chain_offer_lists.test.js": "87976ddf94e91add",
         "test/unit/db/orders/cross_chain_offer_lists_fold.test.js": "e411489fced259a6",
         "test/unit/db/prices/landed_bound_clause.test.js": "d5f3085637164b79",
