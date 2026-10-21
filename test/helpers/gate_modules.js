@@ -194,6 +194,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'active_stake_collation_activation',
     'attest_callback_batch_position_activation',
     'airdrop_native_fee_tally_activation',
+    'batch_airdrop_leg_weight_activation',
     'bridge_escrow_anchor_match_activation',
     'archive_orphan_geometry_activation',
     'bridge_checkpoint_v3_section_activation',
