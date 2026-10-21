@@ -13996,6 +13996,10 @@
       "Coinpay (COINPAY) @regression @tier2 valid settlement valid coinpay \u2192 mapper.createMappings called",
       "Coinpay (COINPAY) @regression @tier2 valid settlement valid coinpay \u2192 updateBalances and updateTokens called"
     ],
+    "c08ee7609951ba59": [
+      "getappliedpolicy exact u64 list ids @regression @tier1 keeps an unsafe allow-list id exact while returning a safe block-list id as a number",
+      "getappliedpolicy exact u64 list ids @regression @tier1 keeps an unsafe block-list id exact while returning a safe allow-list id as a number"
+    ],
     "c0917406521a91c5": [
       "Database getTickerId lookup order @unit @regression keeps canonical caret lookups on the id query",
       "Database getTickerId lookup order @unit @regression orders a case-insensitive name lookup by ascending id and returns the first row",
@@ -18655,8 +18659,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1481,
-      "titleCount": 14452,
+      "fileCount": 1482,
+      "titleCount": 14454,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19207,6 +19211,7 @@
         "test/unit/api/rpc/token_policy_detach.test.js": "2645da1d4f547d2f",
         "test/unit/api/rpc/token_policy_list_ref.test.js": "0d061e71ba86eff6",
         "test/unit/api/rpc/token_policy_resolve_refs.test.js": "64c039d7b0a6d648",
+        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "bed4c39786728d9f",
         "test/unit/api/status_ready_route.test.js": "756ac889a13b142f",
         "test/unit/api/status_schema_ready.test.js": "e624e2e0e1e9bd13",
@@ -20517,8 +20522,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1125,
-      "titleCount": 11425,
+      "fileCount": 1126,
+      "titleCount": 11427,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21006,6 +21011,7 @@
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
+        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "5301b4afc6223e03",
         "test/unit/attestation/attest_broadcast_fee_activation.test.js": "b65ffc6b93616abf",
         "test/unit/attestation/attest_mirror_fallthrough.test.js": "9868adc1e4c7f3d1",
@@ -21648,8 +21654,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 557,
-      "titleCount": 6002,
+      "fileCount": 558,
+      "titleCount": 6004,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21806,6 +21812,7 @@
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
+        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "5301b4afc6223e03",
         "test/unit/attestation/attest_response_barrier.test.js": "da75b77071f55521",
         "test/unit/attestation/provider_min_stake_history.test.js": "88979a43d8107259",
@@ -22211,8 +22218,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1125,
-      "titleCount": 11425,
+      "fileCount": 1126,
+      "titleCount": 11427,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22700,6 +22707,7 @@
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
+        "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "5301b4afc6223e03",
         "test/unit/attestation/attest_broadcast_fee_activation.test.js": "b65ffc6b93616abf",
         "test/unit/attestation/attest_mirror_fallthrough.test.js": "9868adc1e4c7f3d1",
