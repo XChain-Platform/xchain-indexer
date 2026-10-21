@@ -143,7 +143,7 @@ function offerFromRow(db, row){
         get_ownership:  Number(row.get_ownership),
         get_address:    row.get_address,
         source:         row.source,
-        expiration:     exactU64(row.expiration),
+        expiration:     exactU64(row.expiration) ?? 0,
         allow_list:     exactU64(row.allow_list),
         block_list:     exactU64(row.block_list),
         // Controller-guard royalty split (JSON [{to,bps}] or null). The hub copies it

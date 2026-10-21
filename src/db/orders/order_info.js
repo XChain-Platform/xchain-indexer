@@ -152,7 +152,7 @@ function orderFromRow(db, row){
         let name  = String(key).toUpperCase();
         let value = row[key];
         if(['EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
-            value = exactU64(value);
+            value = exactU64(value) ?? 0;
         else if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
             value = Number(value);
         order[name] = value;
