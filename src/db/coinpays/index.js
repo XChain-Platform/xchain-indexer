@@ -185,7 +185,7 @@ module.exports = {
                 if(['ACTION_INDEX', 'BLOCK_INDEX'].includes(name))
                     value = Number(value);
                 else if(name === 'EXPIRATION')
-                    value = exactU64(value);
+                    value = exactU64(value === null ? 0 : value); // NULL reads as 0, as Number(null) did
                 obligation[name] = value;
             }
         }
@@ -204,7 +204,7 @@ module.exports = {
         for(let row of results){
             expired.push({
                 action_index: Number(row.action_index),
-                expiration:   exactU64(row.expiration)
+                expiration:   exactU64(row.expiration === null ? 0 : row.expiration)
             });
         }
         return expired;

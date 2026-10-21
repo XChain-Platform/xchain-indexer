@@ -43,7 +43,7 @@ module.exports = {
                 let name  = String(key).toUpperCase()
                 let value = results[0][key];
                 if(['EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
-                    value = exactU64(value);
+                    value = exactU64(value === null ? 0 : value); // NULL reads as 0, as Number(null) did
                 else if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
                     value = Number(value);
                 swap[name] = value;

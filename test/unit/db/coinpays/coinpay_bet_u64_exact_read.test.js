@@ -46,6 +46,12 @@ describe('coinpay and bet u64 reads keep exact values above 2^53', function(){
         assert.strictEqual(obligation.EXPIRATION, 1700000000);
     });
 
+    it('reads a NULL coinpay EXPIRATION as 0, as before', async function(){
+        const ctx = db([{ action_index: '11', block_index: '200', expiration: null }], coinpays);
+        const obligation = await ctx.getCoinpayObligationInfo(11);
+        assert.strictEqual(obligation.EXPIRATION, 0);
+    });
+
     it('keeps an expired coinpay expiration exact and a safe one a Number', async function(){
         const ctx = db([
             { action_index: '11', expiration: U64_MAX },

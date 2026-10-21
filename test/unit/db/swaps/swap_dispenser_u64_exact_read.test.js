@@ -72,6 +72,18 @@ describe('swap and dispenser u64 reads keep exact values above 2^53', function()
         });
     });
 
+    it('reads a NULL swap or dispenser list as 0, as before', async function(){
+        const swapDb = bind(ctx([{ action_index: '7', expiration: '100', allow_list: null, block_list: null }], [], 'swap_edits'), swapInfo);
+        const swap = await swapDb.getSwapInfo(null, 7);
+        assert.strictEqual(swap.ALLOW_LIST, 0);
+        assert.strictEqual(swap.BLOCK_LIST, 0);
+        assert.strictEqual(swap.EXPIRATION, 100);
+        const dispDb = bind(ctx([{ action_index: '9', expiration: '100', allow_list: null, block_list: null, give_ownership: '0' }], [], 'dispenser_edits'), dispensers);
+        const dispenser = await dispDb.getDispenserInfo('BTC', 9, 1000);
+        assert.strictEqual(dispenser.ALLOW_LIST, 0);
+        assert.strictEqual(dispenser.BLOCK_LIST, 0);
+    });
+
     describe('dispenser info', function(){
         it('keeps the base EXPIRATION, ALLOW_LIST and BLOCK_LIST exact and a safe value a Number', async function(){
             const db = bind(ctx([{ action_index: '9', expiration: U64_MAX, allow_list: '3', block_list: ABOVE_53, give_ownership: '0' }], [], 'dispenser_edits'), dispensers);
