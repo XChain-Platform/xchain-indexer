@@ -353,7 +353,7 @@ async function runCallbackExecute(poll, actionParams, emissionData, emissionActi
 }
 
 module.exports = {
-    validateCreateCallback, validateCallbackTarget, validateCallbackPolicy, validateCallbackEscrow,
+    validateCreateCallback, validateCallbackTarget,
     fireBindingCallback, buildCallbackParams, buildCallbackContext, runCallbackExecute,
     POLL_CALLBACK_FIXED_SLOTS, POLL_CALLBACK_TICK_SLOT, USABLE_CALLBACK_GATE
 };
