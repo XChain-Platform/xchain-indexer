@@ -1098,18 +1098,6 @@
       "Dispenser refill controller guard @regression @tier2 active: an edit that adds no escrow is not guarded",
       "Dispenser refill controller guard @regression @tier2 inactive: the same denied refill is unguarded and settles"
     ],
-    "84150d96eb17417e": [
-      "bin/bench_net_balance issues no optional queries and returns no optional results without their flags",
-      "bin/bench_net_balance parses --batched to true and its absence to false",
-      "bin/bench_net_balance parses --blocks through the positive integer check and defaults it off",
-      "bin/bench_net_balance render prints per-block detail and summary lines only when present",
-      "bin/bench_net_balance render prints the batch line only when a batch is present",
-      "bin/bench_net_balance reports a mismatch when the batched net differs for a key",
-      "bin/bench_net_balance returns a zero per-block summary when the recent-block query is empty",
-      "bin/bench_net_balance returns zeros for no keys",
-      "bin/bench_net_balance times each recent block over its touched keys",
-      "bin/bench_net_balance times getNetBalances over the same keys under --batched"
-    ],
     "0ef5583765eab080": [
       "repair-validator-stats missed_count @regression a legacy row re-derives through the same routine the reorg recompute uses",
       "repair-validator-stats missed_count @regression an empty pin charges nobody",
@@ -9668,6 +9656,18 @@
       "Legacy db-hits fee accumulation @regression @tier3 DIVIDEND legacy path: db_hits = 3 + recipients*2 as a Number (not \"3\" concat)",
       "Legacy db-hits fee accumulation @regression @tier3 SWEEP below flag-day: db_hits reproduces the \"1400\" string-concat",
       "Legacy db-hits fee accumulation @regression @tier3 SWEEP: db_hits stays an integer Number across all three += terms"
+    ],
+    "84150d96eb17417e": [
+      "bin/bench_net_balance issues no optional queries and returns no optional results without their flags",
+      "bin/bench_net_balance parses --batched to true and its absence to false",
+      "bin/bench_net_balance parses --blocks through the positive integer check and defaults it off",
+      "bin/bench_net_balance render prints per-block detail and summary lines only when present",
+      "bin/bench_net_balance render prints the batch line only when a batch is present",
+      "bin/bench_net_balance reports a mismatch when the batched net differs for a key",
+      "bin/bench_net_balance returns a zero per-block summary when the recent-block query is empty",
+      "bin/bench_net_balance returns zeros for no keys",
+      "bin/bench_net_balance times each recent block over its touched keys",
+      "bin/bench_net_balance times getNetBalances over the same keys under --batched"
     ],
     "847077f2b2d82a7e": [
       "protocol_changes SEND_GATED_TOTAL_TICK_ID row is active on regtest at genesis, inactive on every mainnet chain and armed on each testnet chain",
@@ -18794,7 +18794,7 @@
   "scripts": {
     "test": {
       "fileCount": 1497,
-      "titleCount": 14554,
+      "titleCount": 14558,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
