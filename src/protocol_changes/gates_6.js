@@ -122,3 +122,10 @@ addGate('archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION',
     testnet: 68009330,
     regtest: 0,
 });
+
+// Height on the processing chain's own block_index. Registers the BRIDGE_CHECKPOINT_V3 section activation. Unarmed on mainnet and testnet, active from genesis on regtest.
+addGate('bridge_checkpoint_v3_section_activation.BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
