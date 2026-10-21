@@ -44,7 +44,12 @@ function exactU64(value){
 
 function exactU64TypeCast(field, next){
     if(field.type !== 'BIGINT') return next();
-    return exactU64(field.string());
+    const text = field.string();
+    // A signed BIGINT column (a pre-alignment mirror id, a MIN(id) guard probe)
+    // can hold a negative value; that is not a u64 wire field, so the connector
+    // reads it as it would without this cast.
+    if(typeof text === 'string' && /^-\d+$/.test(text)) return next();
+    return exactU64(text);
 }
 
 module.exports = { exactU64, exactU64TypeCast };
