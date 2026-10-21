@@ -12,7 +12,7 @@ const assert = require('assert');
 const { ARCHIVE_REISSUE_RETRY_REASON } =
     require('../../../src/actions/anchor/archive/archive_reissue.js');
 const {
-    parseArgs, archiveHeadsQuery, summarize, readHeads, render,
+    parseArgs, archiveHeadsQuery, summarize, exitCodeFor, readHeads, render,
 } = require('../../../bin/archive_heads_by_author.js');
 
 const heads = [
@@ -36,11 +36,15 @@ const heads = [
 describe('bin/archive_heads_by_author', function () {
     it('parses the required author and optional filters', function () {
         assert.deepStrictEqual(parseArgs(['--author', 'A']), {
-            author: 'A', fromSeq: null, limit: 50, db: null, json: false
+            author: 'A', fromSeq: null, limit: 50, db: null, json: false,
+            expectRedrawn: false
         });
         assert.deepStrictEqual(
-            parseArgs(['--author', 'A', '--from-seq', '0', '--limit', '7', '--db', 'x', '--json']),
-            { author: 'A', fromSeq: 0, limit: 7, db: 'x', json: true });
+            parseArgs([
+                '--author', 'A', '--from-seq', '0', '--limit', '7', '--db', 'x', '--json',
+                '--expect-redrawn'
+            ]),
+            { author: 'A', fromSeq: 0, limit: 7, db: 'x', json: true, expectRedrawn: true });
     });
 
     it('rejects missing and invalid arguments', function () {
@@ -103,6 +107,21 @@ describe('bin/archive_heads_by_author', function () {
             match_batch_seq: 6, status: ARCHIVE_REISSUE_RETRY_REASON
         }]);
         assert.strictEqual(summarize(multiple).redrawnAbove, false);
+    });
+
+    it('maps the redraw expectation and summary to an exit code', function () {
+        const redrawn = summarize(heads);
+        const notRedrawn = summarize(heads.slice(0, 2));
+        const noRefusal = summarize(heads.slice(0, 1));
+        const off = { expectRedrawn: false };
+        const on = { expectRedrawn: true };
+
+        assert.strictEqual(exitCodeFor(redrawn, off), 0);
+        assert.strictEqual(exitCodeFor(notRedrawn, off), 0);
+        assert.strictEqual(exitCodeFor(noRefusal, off), 0);
+        assert.strictEqual(exitCodeFor(noRefusal, on), 1);
+        assert.strictEqual(exitCodeFor(notRedrawn, on), 1);
+        assert.strictEqual(exitCodeFor(redrawn, on), 0);
     });
 
     it('does not count another invalid status as refused', function () {

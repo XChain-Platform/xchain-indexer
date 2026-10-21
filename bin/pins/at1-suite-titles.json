@@ -5010,10 +5010,11 @@
       "compat gate: startup-required tables every required table has a src/sql definition the product createTable can build",
       "compat gate: startup-required tables exports the startup table reader and builder"
     ],
-    "464e44254a160d66": [
+    "b111170e06e231ab": [
       "bin/archive_heads_by_author adds the from-seq filter and argument before the limit",
       "bin/archive_heads_by_author builds an all-status query without a from-seq filter",
       "bin/archive_heads_by_author does not count another invalid status as refused",
+      "bin/archive_heads_by_author maps the redraw expectation and summary to an exit code",
       "bin/archive_heads_by_author parses the required author and optional filters",
       "bin/archive_heads_by_author reads through doQueryStrict and returns rows with their summary",
       "bin/archive_heads_by_author rejects missing and invalid arguments",
@@ -19371,7 +19372,7 @@
         "test/unit/attestation/relayed_attestation_requests.test.js": "3904e3eba82ab03f",
         "test/unit/attestation/repair_validator_stats_drift.test.js": "b2c12d6af08b6d99",
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
-        "test/unit/bin/archive_heads_by_author.test.js": "464e44254a160d66",
+        "test/unit/bin/archive_heads_by_author.test.js": "b111170e06e231ab",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/bench_net_balance.test.js": "84150d96eb17417e",
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
