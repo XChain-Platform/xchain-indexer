@@ -19,6 +19,8 @@
  *
  ********************************************************************/
 
+const { exactU64 } = require('../database/instance_state.js');
+
 // The writers and the dispense-trigger reads are the parts of this family kept in
 // dispensers/writes.js and dispensers/dispense_matching.js; they are merged into the
 // export below, so db/index.js installs one dispensers mixin and every method keeps its
@@ -110,7 +112,7 @@ module.exports = {
                 let name  = String(key).toUpperCase()
                 let value = results[0][key];
                 if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'GIVE_OWNERSHIP'].includes(name))
-                    value = Number(value);
+                    value = exactU64(value);
                 dispenser[name] = value;
             }
         }
@@ -211,15 +213,15 @@ module.exports = {
             for(let row of results){
                 // updating expiration is immediately active
                 if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration))
-                    edit.expiration  = Number(row.expiration);
+                    edit.expiration  = exactU64(row.expiration);
                 // Determine if the list edits are active or not
                 let delayStart = await dispenserDelayStart(this, row, useProtocolTime);
                 let active = delayStart !== false && this.util.bcgt(block_time, this.util.bcadd(delayStart, this.config['DISPENSER_LIST_DELAY']));
                 if(active){
                     if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list))   
-                        edit.allow_list  = Number(row.allow_list);
+                        edit.allow_list  = exactU64(row.allow_list);
                     if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list))   
-                        edit.block_list  = Number(row.block_list);
+                        edit.block_list  = exactU64(row.block_list);
                 }
             }
         }

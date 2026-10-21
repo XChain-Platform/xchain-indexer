@@ -66,12 +66,29 @@ function connectionPoolParams(self){
         // (heights, indexes, times) stay within Number.MAX_SAFE_INTEGER, but
         // the user-chosen u64 wire fields (EXPIRATION, DEADLINE, ALLOW_LIST
         // and the rest bounded at U64_MAX in config/wire_fields.js) are not:
-        // a stored value above 2^53 reads back rounded here, and is
-        // replicated rounded, until those reads move to an exact form.
+        // a stored value above 2^53 would read back rounded, so
+        // supportBigNumbers (with bigNumberStrings left off) makes the driver
+        // return exactly those values as decimal strings and every safe value
+        // as the same Number as before. Readers fold the two forms with exactU64.
         bigIntAsNumber:       true,
+        supportBigNumbers:    true,
         minDelayValidation:   3000,
         queryTimeout:         parseInt(CONFIG_ENV.DB_QUERY_TIMEOUT) || 30000
     });
+}
+
+// Read a u64 wire BIGINT exactly: null stays null, a value within Number.MAX_SAFE_INTEGER
+// is the Number every reader produced before, and a larger one stays the exact decimal
+// string the pool returns for it, never a rounded Number.
+function exactU64(value){
+    if(value === null || value === undefined) return value;
+    if(typeof value === 'bigint')
+        return Number.isSafeInteger(Number(value)) ? Number(value) : value.toString();
+    if(typeof value === 'string' && /^\d+$/.test(value)){
+        let n = Number(value);
+        return Number.isSafeInteger(n) ? n : value.replace(/^0+(?=\d)/, '');
+    }
+    return Number(value);
 }
 
 // The block context and the dense index-id guards that ride on it.
@@ -189,6 +206,7 @@ function initTransactionState(self){
 module.exports = {
     connectionParams,
     connectionPoolParams,
+    exactU64,
     initIndexIdState,
     initReadMemos,
     initTransactionState,
