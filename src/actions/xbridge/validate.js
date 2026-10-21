@@ -277,9 +277,7 @@ function isBridgeableTo(info, destCoin){
 }
 
 module.exports = {
-    USER_VERSIONS,
     INJECTED_VERSIONS,
-    TOKEN_VERSIONS,
     validateFormat,
     validateTickShape,
     validateSourceAllowed,
