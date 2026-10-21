@@ -766,6 +766,14 @@
       "list share apply harness shares no state between two contexts",
       "list share apply harness signs rows as sign does over the passed canonical"
     ],
+    "0cb9a34b3a919984": [
+      "cross-chain VM snapshot golden bytes builds both CHAIN:action_index keys from one settlement and keys numeric ids as strings",
+      "cross-chain VM snapshot golden bytes getCrossChainDataForVM returns the empty bytes when both reads are empty",
+      "cross-chain VM snapshot golden bytes getCrossChainDataForVM returns the same bytes as the builder",
+      "cross-chain VM snapshot golden bytes passes [bound] to both reads, coercing a string block_index to a Number",
+      "cross-chain VM snapshot golden bytes serializes the empty case as empty attestations, settled and calls maps",
+      "cross-chain VM snapshot golden bytes turns a null result_payload on a completed xcall into the empty string and keeps an expired payload"
+    ],
     "0d061e71ba86eff6": [
       "token policy list references keeps a mirror created after the origin block as a full copy",
       "token policy list references keeps a root shared after the origin block as a full copy",
@@ -3391,6 +3399,11 @@
       "ANCHOR v3 archive equivocation canonical keeps the plain section round id free of a batch sequence",
       "ANCHOR v3 archive equivocation canonical matches the hub canonical exactly for an archive wrapper section"
     ],
+    "321baaba9c5cb966": [
+      "DEPLOY and execute nesting-depth parity at BTC:testnet 156230 accepts a 64-deep source on deploy and on getLintVerdict",
+      "DEPLOY and execute nesting-depth parity at BTC:testnet 156230 arms the deploy nesting gate at 156230 and not one block below",
+      "DEPLOY and execute nesting-depth parity at BTC:testnet 156230 refuses a 65-deep source on deploy and on getLintVerdict with the same reason"
+    ],
     "3223b1235b72dcb9": [
       "List @regression @tier3 SOURCE sleeping SOURCE sleeping \u2192 invalid",
       "List @regression @tier3 format 0: create LIST create address list: createList, createListItem called for each address",
@@ -5471,6 +5484,17 @@
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 batch.js dispatch-loop guard (the load-bearing one) never dispatches a VM sub-command on the probe path",
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 batch.js dispatch-loop guard (the load-bearing one) reports null for a sub-command whose handler recorded no verdict",
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 batch.js dispatch-loop guard (the load-bearing one) reports the refusal in place rather than dropping the sub-command"
+    ],
+    "4ef434f00929b790": [
+      "poll VM snapshot golden bytes a failed_quorum poll keeps null winning_option, total_weight and total_voters",
+      "poll VM snapshot golden bytes a finalized poll with no option rows yields options []",
+      "poll VM snapshot golden bytes an empty finalized set returns an empty polls map without the options read",
+      "poll VM snapshot golden bytes both reads receive [bound]",
+      "poll VM snapshot golden bytes decided_early maps 0 to false and 1 to true",
+      "poll VM snapshot golden bytes getPollResultsForVM returns the same bytes as the builder",
+      "poll VM snapshot golden bytes includeTick false carries no tick key",
+      "poll VM snapshot golden bytes includeTick true appends a tick key, null when the joined tick is null",
+      "poll VM snapshot golden bytes numeric poll and option indexes key and group as strings"
     ],
     "4f07be4570193dec": [
       "LIST tick-coin exact-case storage @unit @regression assigns and reuses an exact case variant with its block stamp when armed",
@@ -11871,6 +11895,13 @@
       "action-scoped price barrier every price-mirror read is guarded getPricesInTimeRange fails the block closed instead of reading an uncovered mirror",
       "action-scoped price barrier skip-flag lifecycle in the block loop a committed block clears the skip flag and retires its own escalation",
       "action-scoped price barrier skip-flag lifecycle in the block loop a rolled-back block clears the skip flag but KEEPS its escalation"
+    ],
+    "a9439878e8612289": [
+      "exactU64 keeps 2^53 + 1 as a string instead of rounding it",
+      "exactU64 keeps the u64 maximum exact from a string and from a bigint",
+      "exactU64 refuses values outside the unsigned 64-bit integer range",
+      "exactU64 returns a Number for a safe integer from a string, bigint or number",
+      "exactU64 returns null for null and for undefined"
     ],
     "a95e9ad2b91123c7": [
       "Price v2 (PRICE batch) @regression @tier3 structural checks (step 2) accepts exactly PRICE_BATCH_MAX_ROUND_COUNT and refuses one more",
@@ -18522,8 +18553,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1466,
-      "titleCount": 14359,
+      "fileCount": 1470,
+      "titleCount": 14382,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18704,6 +18735,7 @@
         "test/unit/actions/contract/xexec.test.js": "59b7b8fc88f1b6e2",
         "test/unit/actions/cross_chain_remote_token_accept.test.js": "cd1e44eb5d10c034",
         "test/unit/actions/cross_chain_remote_token_signatures.test.js": "387988e713715415",
+        "test/unit/actions/deploy/nesting_depth_parity.test.js": "321baaba9c5cb966",
         "test/unit/actions/deploy/wire_params.test.js": "0276c82b670c2f09",
         "test/unit/actions/execute.test.js": "7a6b77bff3698035",
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
@@ -19336,6 +19368,7 @@
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
         "test/unit/db/bets/settle_bets_batch.test.js": "f49315b74046c268",
+        "test/unit/db/database/exact_u64.test.js": "a9439878e8612289",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
@@ -19485,7 +19518,9 @@
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
+        "test/unit/db/vm_snapshot/cross_chain_snapshot_golden.test.js": "0cb9a34b3a919984",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
+        "test/unit/db/vm_snapshot/poll_snapshot_golden.test.js": "4ef434f00929b790",
         "test/unit/db/vm_snapshot/vm_snapshot_memo.test.js": "b0be5e75e30decd3",
         "test/unit/e2e/explorer_launcher.test.js": "eae128db10b21f39",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
