@@ -24,6 +24,25 @@
 
 'use strict';
 
+const { createRegistry, UNARMED } = require('../../protocol_changes/core.js');
+
+const CHILD_TOKEN_INDEPENDENT_EDITS_KEY =
+    'child_token_independent_edits_activation.CHILD_TOKEN_INDEPENDENT_EDITS_ACTIVATION';
+const childTokenIndependentEditsGate = createRegistry();
+childTokenIndependentEditsGate.addGate(CHILD_TOKEN_INDEPENDENT_EDITS_KEY, 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 157235,
+    'LTC:testnet': 4930600,
+    'DOGE:testnet': 68012800,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+function childTokenIndependentEditsActiveAt(network, coin, blockIndex){
+    return childTokenIndependentEditsGate.activeAt(
+        CHILD_TOKEN_INDEPENDENT_EDITS_KEY, network, coin, blockIndex, null);
+}
+
 // The BATCH_ISSUANCE_LIMITS flag, then the null, period, parent/child and character
 // rules. Leaves ctx.str, ctx.parent and ctx.parentInfo for the rules after it.
 async function validateTickName(ctx){
@@ -63,15 +82,9 @@ async function validateTickName(ctx){
         if(!error && !parentInfo)
             error = 'invalid: TICK (parent unknown)';
 
-        // CHILD_TOKEN_INDEPENDENT_EDITS: once a child token exists, its own owner edits,
-        // transfers and unbinds it without the parent owner, and a parent offer no longer
-        // freezes it. The parent owner is still required to create a NEW child, and the
-        // child's own ownership and escrow rules run later in tokenState.validateOwnership.
-        // The lookup is resolve-only so it never interns an unseen name. Unregistered or
-        // below the flag, the historical checks below apply unchanged.
         let existingChild = false;
         if(!error && parentInfo && str.substring(0,1)!='^' &&
-           await this.actions.protocolChanges.isEnabled('CHILD_TOKEN_INDEPENDENT_EDITS', data['BLOCK_INDEX']))
+           childTokenIndependentEditsActiveAt(this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX']))
             existingChild = !!(await this.resolveOnlyGetTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']));
 
         // Verify ISSUE is coming from PARENT TICK owner
@@ -207,4 +220,11 @@ function validateGasTick(ctx){
     ctx.error = error;
 }
 
-module.exports = { validateTickName, validateTickForm, validateReservedTick, validateGasTick };
+module.exports = {
+    CHILD_TOKEN_INDEPENDENT_EDITS_KEY,
+    childTokenIndependentEditsActiveAt,
+    validateTickName,
+    validateTickForm,
+    validateReservedTick,
+    validateGasTick,
+};
