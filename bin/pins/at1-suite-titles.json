@@ -17893,6 +17893,11 @@
       "Address validation boundary tests via SEND handler @regression @tier3 ADR-06b: checksum-flipped DESTINATION \u2192 invalid",
       "Address validation boundary tests via SEND handler @regression @tier3 ADR-07: wrong-network DESTINATION (mainnet P2PKH on regtest) \u2192 invalid"
     ],
+    "f1f9cb19436edd02": [
+      "api refuses compressed request bodies through installMiddleware answers a Brotli-encoded body with 415 and never decompresses it",
+      "api refuses compressed request bodies through installMiddleware answers a gzip-encoded body with 415 and never decompresses it",
+      "api refuses compressed request bodies through installMiddleware still serves a plain JSON-RPC POST"
+    ],
     "f24123d1170e4aea": [
       "Tier 2 - Token lifecycle (ISSUE + MINT) @tier2 Issue.parse() crash safety handles all 6 format versions without crash",
       "Tier 2 - Token lifecycle (ISSUE + MINT) @tier2 Issue.parse() crash safety never throws for any format version (0-255 and outside range)",
@@ -18824,8 +18829,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1499,
-      "titleCount": 14585,
+      "fileCount": 1500,
+      "titleCount": 14588,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19363,6 +19368,7 @@
         "test/unit/api/rpc/bets_effective_lists.test.js": "fe110782cd628d08",
         "test/unit/api/rpc/body_parse_rejection.test.js": "2dfd0abb78786c1e",
         "test/unit/api/rpc/capability_stake_proof.test.js": "afa2681aba28452a",
+        "test/unit/api/rpc/compressed_body_refusal.test.js": "f1f9cb19436edd02",
         "test/unit/api/rpc/controller.test.js": "7f911e818403fce9",
         "test/unit/api/rpc/getsharedlist.test.js": "9b17e07ece10663a",
         "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
