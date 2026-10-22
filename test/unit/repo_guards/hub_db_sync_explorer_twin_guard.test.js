@@ -113,4 +113,24 @@ describe('hub DB sync explorer twin guard', () => {
       fs.rmSync(fixture.root, { recursive: true, force: true });
     }
   });
+
+  it('rejects a pushed canonical file when its explorer twin is missing', () => {
+    const fixture = twinFixture();
+    try {
+      const relative = 'src/hub/hub_db_sync/live_events.js';
+      fs.appendFileSync(path.join(fixture.indexer, relative), 'canonical change\n');
+      fs.rmSync(path.join(fixture.explorer, relative));
+      runGit(fixture.indexer, ['add', relative]);
+      runGit(fixture.indexer, ['commit', '--quiet', '-m', 'change canonical part']);
+
+      const drift = runGuard(fixture);
+      assert.equal(drift.status, 1, drift.stdout + drift.stderr);
+      assert.match(
+        drift.stdout,
+        /DRIFT: xchain-explorer\/src\/hub\/hub_db_sync\/live_events\.js differs from canonical xchain-indexer\/src\/hub\/hub_db_sync\/live_events\.js/,
+      );
+    } finally {
+      fs.rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
 });
