@@ -59,8 +59,10 @@ function installSecurityLayers(app, { CONFIG_ENV }){
     // Use Helmet to increase security
     app.use(helmet());
 
-    // Allow JSON requests
-    app.use(bodyParser.json());
+    // Allow JSON requests. inflate: false makes body-parser answer 415 to any
+    // Content-Encoding body without running a decompressor, so the Brotli and gzip
+    // decoders of the Node runtime are never reachable from a request body.
+    app.use(bodyParser.json({ inflate: false }));
     app.use(jsonBodyErrorHandler);
 
     // Allow CORS (restricted to the configured allowlist, defaults to localhost).

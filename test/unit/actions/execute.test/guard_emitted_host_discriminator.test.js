@@ -127,6 +127,9 @@ describe('controller guard emitted-host discriminator @regression @tier1', funct
     it('uses an unarmed public-ledger rule and a regtest genesis boundary', function () {
         assert.deepStrictEqual(ProtocolChanges.get(GATE_KEY), {
             mainnet: ProtocolChanges.UNARMED,
+            'BTC:testnet': 157295,
+            'LTC:testnet': 4931000,
+            'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
         });

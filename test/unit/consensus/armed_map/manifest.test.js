@@ -230,6 +230,9 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
+            'BTC:testnet': 157295,
+            'LTC:testnet': 4931000,
+            'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
         });
@@ -242,6 +245,9 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
+            'BTC:testnet': 157295,
+            'LTC:testnet': 4931000,
+            'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
         });
@@ -254,6 +260,9 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
+            'BTC:testnet': 157295,
+            'LTC:testnet': 4931000,
+            'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
         });
@@ -266,6 +275,9 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
+            'BTC:testnet': 157295,
+            'LTC:testnet': 4931000,
+            'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
         });
@@ -278,6 +290,9 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
+            'BTC:testnet': 157295,
+            'LTC:testnet': 4931000,
+            'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
         });
@@ -290,6 +305,9 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
+            'BTC:testnet': 157295,
+            'LTC:testnet': 4931000,
+            'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
         });

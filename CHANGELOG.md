@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.2] - 2026-10-21
+
+### Changed
+- Armed on testnet the seven gates the previous release shipped unarmed, at the heights below; no code path changes.
+- Armed BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION on BTC:testnet at 157295.
+- Armed BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION on LTC:testnet at 4931000.
+- Armed BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION on DOGE:testnet at 68015000.
+- Armed BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION on BTC:testnet at 157295.
+- Armed BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION on LTC:testnet at 4931000.
+- Armed BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION on DOGE:testnet at 68015000.
+- Armed TICK_CACHE_NULL_PROTOTYPE_ACTIVATION on BTC:testnet at 157295.
+- Armed TICK_CACHE_NULL_PROTOTYPE_ACTIVATION on LTC:testnet at 4931000.
+- Armed TICK_CACHE_NULL_PROTOTYPE_ACTIVATION on DOGE:testnet at 68015000.
+- Armed AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION on BTC:testnet at 157295.
+- Armed AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION on LTC:testnet at 4931000.
+- Armed AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION on DOGE:testnet at 68015000.
+- Armed GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION on BTC:testnet at 157295.
+- Armed GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION on LTC:testnet at 4931000.
+- Armed GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION on DOGE:testnet at 68015000.
+- Armed ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION on BTC:testnet at 157295.
+- Armed ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION on LTC:testnet at 4931000.
+- Armed ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION on DOGE:testnet at 68015000.
+- Armed ISSUE_CARET_TICK_NO_CREATE on BTC:testnet at 1792674000.
+- Armed ISSUE_CARET_TICK_NO_CREATE on LTC:testnet at 1792674000.
+- Armed ISSUE_CARET_TICK_NO_CREATE on DOGE:testnet at 1792674000.
+- Refused compressed request bodies on the API with 415, since the indexer stays on its pinned Node 22.23.2 runtime until a coordinated fleet-engine change moves it.
+
 ## [0.26.1] - 2026-10-21
 
 ### Added
