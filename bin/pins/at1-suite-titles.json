@@ -14580,6 +14580,15 @@
       "BATCH native fee disclosure @regression @tier1 lazily sums two ORDER native fees without changing BATCH_VALUE_LEDGER",
       "BATCH native fee disclosure @regression @tier1 reports zero for a batch with no native fee and never invents it for a non-batch"
     ],
+    "c7baf6817660d043": [
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 confirms the refused head as a conflict with the earlier valid head",
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 counts a refused head that the consensus read excludes",
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 cuts the rows at limit",
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 exits 0 when the redraw is expected and present, and 1 once the later head is gone",
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 narrows to seq 5 with fromSeq",
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 returns the author heads at every status in seq then action order, without the v2 row or the other author",
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 summarizes the refused seq and the later valid head"
+    ],
     "c8071ebba1ac2646": [
       "Anchor (ANCHOR) @regression @tier3 a v0 mined BELOW ANCHOR_ACTIVATION is invalid whatever it decodes to",
       "Anchor (ANCHOR) @regression @tier3 keeps v4 through v7 retired while v3 is fold-gated",
@@ -20460,12 +20469,13 @@
       }
     },
     "test:integration": {
-      "fileCount": 72,
-      "titleCount": 440,
+      "fileCount": 73,
+      "titleCount": 447,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
+        "test/integration/archive_heads_by_author_db.test.js": "c7baf6817660d043",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
         "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
         "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
@@ -20538,12 +20548,13 @@
       }
     },
     "test:integration:ci": {
-      "fileCount": 72,
-      "titleCount": 440,
+      "fileCount": 73,
+      "titleCount": 447,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
+        "test/integration/archive_heads_by_author_db.test.js": "c7baf6817660d043",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
         "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
         "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
