@@ -263,6 +263,29 @@ describe('capability snapshot proof hold barrier @regression @tier1', function (
         assert.strictEqual(sync.streamWatermark, 91);
     });
 
+    it('a held frontier retry does not reopen the bootstrap drain', async function () {
+        const made = makeSync(async () => ({
+            verdict: 'held',
+            reason: 'SNAPSHOT_NOT_YET_CHECKPOINTED'
+        }));
+        const { sync } = made;
+        syncs.push(sync);
+
+        sync._bootstrapping = true;
+        assert.strictEqual(await sync.refuseUnprovenCapabilitySnapshot(ROW), true);
+        sync._bootstrapping = false;
+        sync._bootstrapDrained = true;
+        assert.strictEqual(sync.repageOwedSeq('capability_snapshots'), undefined);
+
+        await sync.retryHeldCapabilityRows();
+
+        assert.strictEqual(sync._capabilityProofHolds.size, 1, 'the proof barrier retains the row');
+        assert.strictEqual(sync.capabilityProofSatisfied(), false);
+        assert.strictEqual(sync.repageOwedSeq('capability_snapshots'), undefined,
+            'the retained retry is not a new source gap');
+        assert.strictEqual(sync._bootstrapDrained, true, 'the completed bootstrap stays complete');
+    });
+
     it('re-serves and later applies a held row after a restart with persisted local rows', async function () {
         let verdict = 'held';
         const persistent = persistentMirror(7);
