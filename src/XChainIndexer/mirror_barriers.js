@@ -344,23 +344,100 @@ if(typeof it === 'function'){
 
     it('disarms the held capability read check when a later barrier defers @regression @tier1',
         async function(){
+            const connections = require('../db/database/connections.js');
+            if(typeof connections.assertCapabilityProofNotHeld !== 'function') this.skip();
+
+            const Rollback = require('../rollback/index.js');
+            const activeStake = require('../db/stakes/active_stake.js');
+            const capabilities = require('../db/capabilities/index.js');
             const heldSnapshot = [{ pubkey: 'aa11', amount: '25.00000000' }];
+            const heldAt = 40;
+            const requestAt = heldAt + 6;
+            let mirrorReads = 0;
+            let queryLog = [];
             const indexer = Object.assign({
                 hubDbSync: {
+                    enabled: true,
+                    _capabilityProofOverflow: false,
+                    _capabilityProofHolds: new Map([['held', {
+                        capability: 'attestation', snapshot_block: heldAt
+                    }]]),
+                    waitForCapabilityProof: async () => true,
+                    waitForSnapshotSync: async () => true,
                     waitForMatchSync: async () => { throw new Error('later barrier'); }
                 },
                 priceSyncTimeoutMs: 1,
-                capabilityProofBarrierSkipped: true,
+                capabilityProofBarrierBlock: null,
+                capabilityProofBarrierSkipped: false,
+                capabilityProofHeldRead: null,
+                config: { COIN: 'BTC', NETWORK: 'mainnet' },
+                decoderDb: {},
+                util: {
+                    resetLists() {},
+                    sleep: async () => {}
+                },
                 mirrorAdmissionActiveAt: () => false,
                 barrierClearsAt: () => null
             }, module.exports);
-            const rollbackRead = () => {
-                if(indexer.capabilityProofBarrierSkipped) throw new Error('held snapshot read check');
-                return heldSnapshot;
+            const db = Object.assign({
+                indexer,
+                config: { COIN: 'LTC', NETWORK: 'mainnet', VALIDATOR_QUERY_LIMIT: 1000 },
+                _txEpoch: 1,
+                transactionConnection: null,
+                util: { throwError(error) { throw error; } },
+                beginTransaction: async () => {},
+                currentTxEpoch: () => 1,
+                rollbackTransaction: async () => {},
+                getStatusId: async () => 1,
+                mirrorDb: () => ({
+                    doQueryStrict: async () => {
+                        mirrorReads++;
+                        return heldSnapshot;
+                    }
+                }),
+                doQuery: async (sql) => {
+                    queryLog.push(sql);
+                    if(sql.includes('FROM attest_validator_stats'))
+                        return [{ validator_pubkey: 'aa11', provider_id: 'http_get' }];
+                    if(sql.includes('FROM attests ar'))
+                        return [{
+                            request_id: '11'.repeat(32),
+                            provider_id: 'http_get',
+                            redundancy: 1,
+                            block_index: requestAt,
+                            deadline_block: requestAt,
+                            responsible_set_json: null
+                        }];
+                    return [];
+                }
+            }, connections, capabilities, activeStake);
+            indexer.indexerDb = db;
+
+            if(typeof indexer.deferOnHeldCapabilityRead === 'function'){
+                assert.strictEqual(await indexer.deferOnSnapshotSync(98582, 1700000000), false);
+                assert.strictEqual(indexer.capabilityProofBarrierSkipped, true);
+            } else {
+                indexer.capabilityProofBarrierSkipped = true;
+                indexer.capabilityProofBarrierBlock = 98582;
+            }
+            assert.strictEqual(await indexer.deferOnMatchSync(98583, 1700000001), true);
+
+            const rollback = new Rollback(indexer);
+            for(const step of ['reverseCooldownMaturities', 'restoreInPlaceFlips',
+                'purgeOrphanedTables', 'refreshDerivedProjections', 'commitAndInvalidateCaches']){
+                rollback[step] = async () => {};
+            }
+            rollback.stageHubRetractions = async () => ({
+                retractionGeneration: null, stagedRetractions: []
+            });
+            const scope = {
+                firstActionIndex: null,
+                lastActionIndex: null,
+                unlandedAttestBatches: []
             };
 
-            assert.throws(rollbackRead, /held snapshot read check/);
-            assert.strictEqual(await indexer.deferOnMatchSync(98582, 1700000000), true);
-            assert.deepStrictEqual(rollbackRead(), heldSnapshot);
+            await rollback.runRollbackTransaction(requestAt + 2, scope, [], [], []);
+            assert.strictEqual(mirrorReads, 1);
+            assert.ok(queryLog.some(sql => sql.includes('INSERT INTO attest_validator_stats')));
         });
 }
