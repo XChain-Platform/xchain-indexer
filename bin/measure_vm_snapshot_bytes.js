@@ -152,6 +152,8 @@ async function measure(db, opts, now = Date.now){
 
     const originalBuilder = db.buildCrossChainDataForVM;
     const priorBlockIndex = db.blockIndex;
+    const priorCache = db._vmSnapshotCache;
+    db._vmSnapshotCache = null;
     const cacheBlocks = [];
     let builds = 0;
     db.buildCrossChainDataForVM = async function(...args){
@@ -172,6 +174,7 @@ async function measure(db, opts, now = Date.now){
         db.buildCrossChainDataForVM = originalBuilder;
         db.blockIndex = priorBlockIndex;
         db._vmSnapshotMemo = null;
+        db._vmSnapshotCache = priorCache;
     }
     const hits = cacheBlocks.filter(block => block.hit);
     const misses = cacheBlocks.filter(block => !block.hit);
