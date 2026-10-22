@@ -317,11 +317,11 @@ module.exports = {
             let repageBeforeHold = this.repageOwedSeq('capability_snapshots');
             this.holdCapabilitySnapshot(row);
             // holdCapabilitySnapshot owes a re-page for live delivery and overflow. During
-            // bootstrap, a row retained in the hold map is already retryable and the page
-            // itself is the complete source view, so only overflow still needs that re-page.
+            // bootstrap, or while re-judging a retained row, the hold map already supplies
+            // the retry source, so only overflow still needs that re-page.
             // Restore an older reason rather than erasing it: only the mark this hold added
             // is redundant, and the drain can settle a mark it opened under in the usual way.
-            if (this._bootstrapping && !(options && options.retainHold) &&
+            if ((this._bootstrapping || (options && options.retainHold)) &&
                 this._capabilityProofHolds.has(rowKey) &&
                 this._repageOwed instanceof Map) {
                 if (repageBeforeHold === undefined) this._repageOwed.delete('capability_snapshots');
