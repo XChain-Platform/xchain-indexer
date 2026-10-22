@@ -141,6 +141,13 @@ function initActionBarrierFlags(indexer){
     indexer.remoteTokenBarrierBlock      = null;
     indexer.remoteTokenBarrierSkipped    = false;
     indexer.remoteTokenBarrierForceBlock = null;
+    // The capability proof barrier: the block its skip flag describes, whether mirrored
+    // capability reads are being policed by db.assertCapabilityProofNotHeld(), and the
+    // held read that failed a block ({ block, capability, snapshotBlock }), which makes
+    // that block's retry wait on the one snapshot it reads. Cleared once the block commits.
+    indexer.capabilityProofBarrierBlock   = null;
+    indexer.capabilityProofBarrierSkipped = false;
+    indexer.capabilityProofHeldRead       = null;
 }
 
 // Barrier timing and hold state: the per-attempt timeout, the hold ceiling and record,

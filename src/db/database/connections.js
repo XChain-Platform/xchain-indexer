@@ -30,6 +30,10 @@ const { getLogger } = require('../../observability/index.js');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { txEpochStore } = require('../shared.js');
+const {
+    CAPABILITY_PROOF_DEFERRED,
+    capabilityReadHeld
+} = require('../../consensus/capability_snapshot_proof/held_read.js');
 
 module.exports = {
 
@@ -278,6 +282,31 @@ module.exports = {
         const err = new Error('remote-token barrier skipped but ' + site + ' read the pin mirror at block ' +
             ix.remoteTokenBarrierBlock + '; deferring the block so it re-runs with the barrier enforced');
         err.code = 'REMOTE_TOKEN_BARRIER_DEFERRED';
+        this.util.throwError(err);
+    },
+
+    // The backstop that enforces the capability proof barrier. The block loop no longer
+    // waits on every proof-held capability row before a block (one unproven frontier
+    // snapshot stalled every block behind it); instead every mirrored capability read
+    // asserts here that the (snapshot_block, capability) it keys on holds no row still
+    // waiting for its proof. A read that does fails the block closed, records the read,
+    // and the retry defers until that snapshot's hold clears (deferOnSnapshotSync).
+    // Scoped to block processing exactly as the price backstop above is.
+    assertCapabilityProofNotHeld(site, capability, snapshotBlock){
+        const ctx = txEpochStore.getStore();
+        if(ctx === undefined || ctx.consensus !== true) return;
+        const ix = this.indexer;
+        if(!ix || !ix.capabilityProofBarrierSkipped) return;
+        if(!capabilityReadHeld(ix.hubDbSync, capability, snapshotBlock)) return;
+        ix.capabilityProofHeldRead = {
+            block: ix.capabilityProofBarrierBlock,
+            capability: String(capability),
+            snapshotBlock: snapshotBlock
+        };
+        const err = new Error(site + ' read capability ' + capability + ' at snapshot_block ' + snapshotBlock +
+            ' while its proof is held, at block ' + ix.capabilityProofBarrierBlock +
+            '; deferring the block until that snapshot is proven');
+        err.code = CAPABILITY_PROOF_DEFERRED;
         this.util.throwError(err);
     },
 

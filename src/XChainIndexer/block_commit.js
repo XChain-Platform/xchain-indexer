@@ -158,6 +158,9 @@ module.exports = {
         this.remoteTokenBarrierSkipped = false;
         if(this.remoteTokenBarrierForceBlock === blockToParse)
             this.remoteTokenBarrierForceBlock = null;
+        this.capabilityProofBarrierSkipped = false;
+        if(this.capabilityProofHeldRead && this.capabilityProofHeldRead.block === blockToParse)
+            this.capabilityProofHeldRead = null;
     },
 
     // Roll back a block that failed after its transaction opened, then record why.
@@ -181,6 +184,7 @@ module.exports = {
         // the retry take the barrier instead of skipping again and looping.
         this.priceBarrierSkipped = false;
         this.remoteTokenBarrierSkipped = false;
+        this.capabilityProofBarrierSkipped = false;
 
         this.noteBlockFault(error, lastIndexerBlock);
         if(rollbackErr) throw rollbackErr;

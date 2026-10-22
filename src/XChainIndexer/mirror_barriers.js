@@ -30,7 +30,9 @@ const {
     remoteTokenAdmissionActive,
     REMOTE_TOKEN_RETRY_STALL_REASON
 } = require('../actions/cross_chain_remote_token.js');
+const { capabilityReadHeld } = require('../consensus/capability_snapshot_proof/held_read.js');
 const CAPABILITY_PROOF_REASON = 'capability_proof_unavailable';
+const CAPABILITY_PROOF_POLL_MS = 250;
 
 module.exports = {
 
@@ -306,16 +308,11 @@ module.exports = {
     // for every effective cross-chain match AND call relay row has mirrored in, so
     // neither is ever skipped (and applied later at a per-operator-variable height)
     // for a missing snapshot. Defers the block on timeout, same as the barriers above.
+    // The capability proof hold is policed per read rather than per block first: see
+    // deferOnHeldCapabilityRead.
     async deferOnSnapshotSync(blockToParse, blockTime){
         if(this.hubDbSync){
-            try {
-                await this.hubDbSync.waitForCapabilityProof(this.priceSyncTimeoutMs);
-            } catch(err){
-                getLogger().warn('Deferring block ' + blockToParse + ' (capability proof): ', err);
-                this.stallReason = CAPABILITY_PROOF_REASON;
-                this.stallClearsAt = null;
-                return true;
-            }
+            if(await this.deferOnHeldCapabilityRead(blockToParse)) return true;
             try {
                 await this.hubDbSync.waitForSnapshotSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
             } catch(err){
@@ -324,6 +321,32 @@ module.exports = {
                 this.stallClearsAt = null;          // snapshot presence, not wall clock
                 return true;
             }
+        }
+        return false;
+    },
+
+    // Capability proof barrier, scoped to the snapshot a block actually reads. Waiting on
+    // every proof-held row stalled every block behind the newest frontier snapshot, which
+    // stays unproven until its checkpoint is cut, and off BTC no block height bounds the
+    // snapshot a block reads: the reads key on BTC heights carried inside its transactions.
+    // So the block runs with db.assertCapabilityProofNotHeld() armed at every mirrored
+    // capability read; a read of a held snapshot fails the block and records itself, and
+    // this retry waits for that one snapshot's proof, deferring on timeout as before.
+    async deferOnHeldCapabilityRead(blockToParse){
+        this.capabilityProofBarrierBlock = blockToParse;
+        this.capabilityProofBarrierSkipped = true;
+        let read = this.capabilityProofHeldRead;
+        if(!read || read.block !== blockToParse) return false;
+        let deadline = Date.now() + this.priceSyncTimeoutMs;
+        while(capabilityReadHeld(this.hubDbSync, read.capability, read.snapshotBlock)){
+            if(Date.now() >= deadline){
+                getLogger().warn('Deferring block ' + blockToParse + ' (capability proof): ' + read.capability +
+                    ' at snapshot_block ' + read.snapshotBlock + ' is still held for its proof');
+                this.stallReason = CAPABILITY_PROOF_REASON;
+                this.stallClearsAt = null;
+                return true;
+            }
+            await this.util.sleep(Math.min(CAPABILITY_PROOF_POLL_MS, Math.max(1, deadline - Date.now())));
         }
         return false;
     }

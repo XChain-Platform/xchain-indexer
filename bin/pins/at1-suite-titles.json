@@ -12946,6 +12946,14 @@
       "AnchorRecovery.run() driver replay determinism @regression @tier1 orders the archive-head driver query by match_batch_seq ASC, action_index ASC",
       "AnchorRecovery.run() driver replay determinism @regression @tier1 replays equal-batch_seq heads in a deterministic total order (earliest action_index first)"
     ],
+    "b0207b20a39966e7": [
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 a block passes an unproven frontier snapshot it does not read",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 a block that reads the held snapshot fails closed and its retry waits for the proof",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 capabilityReadHeld matches the held (snapshot_block, capability) only",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 committing the held block clears its recorded read and the skip flag",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 reads outside block processing are never policed",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 the retry releases as soon as the held snapshot proves inside the wait"
+    ],
     "b06e6a79b9e81a02": [
       "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) a pre-guard (v1.x) node treats it as not-yet-active; guard stays off",
       "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) is registered as a v2.0.0 change keyed on block_time, not block_index",
@@ -18845,8 +18853,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1502,
-      "titleCount": 14600,
+      "fileCount": 1503,
+      "titleCount": 14606,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19911,6 +19919,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
+        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
@@ -20728,8 +20737,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1137,
-      "titleCount": 11491,
+      "fileCount": 1138,
+      "titleCount": 11497,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21549,6 +21558,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
+        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
@@ -21871,8 +21881,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 567,
-      "titleCount": 6054,
+      "fileCount": 568,
+      "titleCount": 6060,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22244,6 +22254,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
+        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/buffer_and_scoping.test.js": "6237347ccdee450c",
@@ -22444,8 +22455,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1137,
-      "titleCount": 11491,
+      "fileCount": 1138,
+      "titleCount": 11497,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23265,6 +23276,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
+        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",

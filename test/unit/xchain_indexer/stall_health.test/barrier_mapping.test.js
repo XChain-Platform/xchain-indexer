@@ -129,8 +129,9 @@ const EXPECTED = [
     ['call_presence_barrier',           'directCallGraceS',            'height-aware'],
     ['anchor_attest_barrier',           'anchorAttestWatermarkGraceS', 'bound-aware'],
     ['attest_response_sync_barrier',    'attestResponseWatermarkGraceS', 'height-aware'],
-    ['capability_proof_unavailable',    null,                          'null'],          // proof verification, not wall clock
     ['snapshot_sync_barrier',           null,                          'null'],          // presence, not wall clock
+    // Read-scoped: deferOnHeldCapabilityRead sits after deferOnSnapshotSync in the source.
+    ['capability_proof_unavailable',    null,                          'null'],          // proof verification, not wall clock
     // Host faults, not mirror barriers: none of them has a clock instant to name, and a
     // grace field appearing on one would be a category error rather than a drift.
     ['vm_executor_unavailable',         null,                          'null'],

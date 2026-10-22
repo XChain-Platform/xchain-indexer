@@ -145,6 +145,7 @@ module.exports = {
     // requested order and makes MariaDB filesort the whole matching snapshot before
     // applying LIMIT. uq_cap_snap can stop after the bounded ordered prefix.
     async getCapabilitySnapshotWeights(capability, snapshotBlock){
+        this.assertCapabilityProofNotHeld('getCapabilitySnapshotWeights', capability, snapshotBlock);
         let limit = validatorQueryLimit(this.config);
         let query = `SELECT signing_pubkey AS pubkey, source, amount AS weight
                      FROM capability_snapshots FORCE INDEX (uq_cap_snap)
@@ -184,6 +185,7 @@ module.exports = {
     // even though it is not selected: a pubkey delegated by two sources produces two
     // rows here, so pubkey alone is not a total order.
     async getCapabilitySnapshotValidators(capability, snapshotBlock){
+        this.assertCapabilityProofNotHeld('getCapabilitySnapshotValidators', capability, snapshotBlock);
         let limit = validatorQueryLimit(this.config);
         let query = `SELECT signing_pubkey AS pubkey, amount
                      FROM capability_snapshots FORCE INDEX (uq_cap_snap)
@@ -210,6 +212,7 @@ module.exports = {
     // (see getCapabilitySnapshotValidators): the PBFT denominator counts capable SIGNERS, so
     // counting rows would inflate N above the set the tally is drawn from.
     async getCapabilitySnapshotCount(capability, snapshotBlock){
+        this.assertCapabilityProofNotHeld('getCapabilitySnapshotCount', capability, snapshotBlock);
         let query = `SELECT COUNT(DISTINCT signing_pubkey) AS cnt
                      FROM capability_snapshots
                      WHERE capability = ? AND snapshot_block = ?`;
@@ -222,6 +225,7 @@ module.exports = {
 
     // Whether a pubkey is in the mirrored capability snapshot at a block (qualified).
     async isPubkeyInCapabilitySnapshot(pubkey, capability, snapshotBlock){
+        this.assertCapabilityProofNotHeld('isPubkeyInCapabilitySnapshot', capability, snapshotBlock);
         let query = `SELECT 1 FROM capability_snapshots
                      WHERE capability = ? AND snapshot_block = ? AND signing_pubkey = ? LIMIT 1`;
         // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
