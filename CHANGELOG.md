@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.3] - 2026-10-21
+
+### Security
+- Refused request bodies with a Brotli Content-Encoding with HTTP 415 before any body parser runs.
+
+### Changed
+- Built from v0.23.0, so the v0.23.1 and v0.23.2 fixes are not included.
+
 ## [0.23.0] - 2026-10-11
 
 ### Added

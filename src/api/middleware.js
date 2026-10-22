@@ -14,10 +14,10 @@
  *
  * XChain Indexer - the HTTP middleware stack.
  *
- * Mounts, in this order: Helmet, the JSON body parser, CORS, the per-IP rate
- * limit, the default-off observability layer with the poll-freshness gauge, and
- * the API-key gate. Everything read from the environment arrives through the
- * apiContext() object src/api.js builds at boot.
+ * Mounts, in this order: the Brotli body refusal, Helmet, the JSON body parser,
+ * CORS, the per-IP rate limit, the default-off observability layer with the
+ * poll-freshness gauge, and the API-key gate. Everything read from the
+ * environment arrives through the apiContext() object src/api.js builds at boot.
  *
  ********************************************************************/
 
@@ -37,9 +37,19 @@ const { installIndexerMetrics } = require('./indexer_metrics');  // poll-freshne
 const { parseCorsOrigin } = require('./cors_origin.js');
 const { apiKeyGate } = require('./auth_gate');
 
+// Refuse a Brotli-encoded request body with 415 before any parser can decode it.
+// (The Node 22.23.2 runtime this image keeps carries the CVE-2026-111497 Brotli decoder.)
+function refuseBrotliBody(req, res, next){
+    const encodings = String(req.headers['content-encoding'] || '').split(',');
+    if(!encodings.some(e => e.trim().toLowerCase() === 'br')) return next();
+    res.set('Accept-Encoding', 'identity, gzip, deflate');
+    res.status(415).json({ error: 'Unsupported Content-Encoding' });
+}
+
 // The whole stack, in mount order. The gate goes last so a gated call is refused
 // only after the security headers, the body parse and the rate limit have run.
 function installMiddleware(app, ctx){
+    app.use(refuseBrotliBody);
     installSecurityLayers(app, ctx);
     installObservabilityLayers(app, ctx);
     app.use(apiKeyGate(ctx));
@@ -107,4 +117,4 @@ function installObservabilityLayers(app, { indexer, CONFIG_ENV, INDEXER_NETWORK 
     installIndexerMetrics(observability, indexer);
 }
 
-module.exports = { installMiddleware, jsonBodyErrorHandler };
+module.exports = { installMiddleware, jsonBodyErrorHandler, refuseBrotliBody };
