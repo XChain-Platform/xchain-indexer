@@ -323,7 +323,6 @@ module.exports = {
                 getLogger().warn('Deferring block ' + blockToParse + ' (capability proof): ', err);
                 this.stallReason = CAPABILITY_PROOF_REASON;
                 this.stallClearsAt = null;
-                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
             try {
