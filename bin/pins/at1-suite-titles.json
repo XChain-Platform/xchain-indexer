@@ -15748,6 +15748,11 @@
       "Airdrop @regression @tier2 recipient allow/block list membership duplicate recipients are credited once, in first-seen order",
       "Airdrop @regression @tier2 recipient allow/block list membership each list is fetched once for the whole recipient loop"
     ],
+    "d4b583cc13c0b3d4": [
+      "hub DB sync explorer twin guard checks only pushed canonical changes and names both drifted twin files",
+      "hub DB sync explorer twin guard is an indexer CI drift tier with the explorer checkout required",
+      "hub DB sync explorer twin guard rejects a pushed canonical file when its explorer twin is missing"
+    ],
     "d4c7f1b0a6ee82ef": [
       "bridge_settle: the XBRIDGE settle pass one settlement per SOURCE LEG (the ledger of record refusal) applies nothing more when a later block re-evaluates a mirror it already settled",
       "bridge_settle: the XBRIDGE settle pass one settlement per SOURCE LEG (the ledger of record refusal) drops a settled leg from the due set, so a duplicate cannot hold a cap slot forever",
@@ -17170,10 +17175,6 @@
       "Xcall (XCALL) @regression @tier3 v0: request rejects a missing METHOD",
       "Xcall (XCALL) @regression @tier3 v0: request rejects a non-positive TARGET_CONTRACT_INDEX",
       "Xcall (XCALL) @regression @tier3 v0: request rejects an unknown emitter contract"
-    ],
-    "e6248db57de892ed": [
-      "hub DB sync explorer twin guard checks only pushed canonical changes and names both drifted twin files",
-      "hub DB sync explorer twin guard is an indexer CI drift tier with the explorer checkout required"
     ],
     "e624e2e0e1e9bd13": [
       "/status schemaReady always emits a boolean and reports true only for completed startup",
@@ -18845,7 +18846,7 @@
   "scripts": {
     "test": {
       "fileCount": 1502,
-      "titleCount": 14599,
+      "titleCount": 14600,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20202,7 +20203,7 @@
         "test/unit/repo_guards/carrier_logic_pin.test.js": "0c13b5d1d073adc0",
         "test/unit/repo_guards/consensus_identity_gates_field.test.js": "2f0c3a39981a1446",
         "test/unit/repo_guards/coverage_thresholds_sync.test.js": "1ee272a3d0a523fd",
-        "test/unit/repo_guards/hub_db_sync_explorer_twin_guard.test.js": "e6248db57de892ed",
+        "test/unit/repo_guards/hub_db_sync_explorer_twin_guard.test.js": "d4b583cc13c0b3d4",
         "test/unit/repo_guards/hub_push_outbox_tx_only.test.js": "ddae2554907c33d6",
         "test/unit/repo_guards/indexer_prototype_composition.test.js": "b119a047da6992c8",
         "test/unit/repo_guards/protocol_changes_unarmed_literal.test.js": "d573bb85ee824d7f",
