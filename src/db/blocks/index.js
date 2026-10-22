@@ -274,7 +274,39 @@ module.exports = {
     async getCrossChainDataForVM(block_index){
         let bound = Number(block_index) || 0;
         return memoizedVmSnapshot(this, 'crossChain:' + bound, bound,
-            () => this.buildCrossChainDataForVM(bound));
+            async () => (await this.reuseCrossChainSnapshot(bound)) || this.buildCrossChainDataForVM(bound));
+    },
+
+    // The snapshot key embeds its bound, so the next forward block never hits by key. The
+    // snapshot for an older bound is still exact for this one when no settlement or resolved
+    // call landed in [older bound, bound), because the builder reads only rows below its bound.
+    // Returns the cached older snapshot in that case, or null to build fresh.
+    async reuseCrossChainSnapshot(bound){
+        let memo = this._vmSnapshotMemo;
+        let cache = this._vmSnapshotCache;
+        if(!(memo instanceof Map) || !cache || !(bound <= Number(this.blockIndex)))
+            return null;
+        let best = null;
+        for(let [key, entry] of cache.entries){
+            if(key.startsWith('crossChain:') && entry.bound < bound && (!best || entry.bound > best.bound))
+                best = entry;
+        }
+        if(!best)
+            return null;
+        let settled = await this.doQuery(
+            `SELECT 1 FROM cross_chain_settlements
+             WHERE block_index >= ? AND block_index < ? AND a_chain IS NOT NULL LIMIT 1`,
+            [best.bound, bound]);
+        if(settled && settled.length)
+            return null;
+        let resolved = await this.doQuery(
+            `SELECT 1 FROM xcalls
+             WHERE version = 0 AND request_status IN ('completed', 'expired')
+               AND resolved_block IS NOT NULL AND resolved_block >= ? AND resolved_block < ? LIMIT 1`,
+            [best.bound, bound]);
+        if(resolved && resolved.length)
+            return null;
+        return best.snapshot;
     },
 
     // Build the cross-chain snapshot uncached.
