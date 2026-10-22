@@ -80,4 +80,35 @@ describe('cross-chain VM snapshot forward block reuse @regression @tier1', funct
         await db.getCrossChainDataForVM(11);
         assert.strictEqual(db.builds, 2);
     });
+
+    it('does not reuse a pre-rollback snapshot when the tip went back without invalidate()', async function () {
+        const db = makeDb({});
+        beginPass(db, 10);
+        const stale = await db.getCrossChainDataForVM(10);
+        beginPass(db, 12);
+        await db.getCrossChainDataForVM(12);
+        assert.strictEqual(db.builds, 1);
+        // rollback to 8, then re-apply 9 and 10 with different rows; nobody called invalidate()
+        beginPass(db, 9);
+        const afterRollback = await db.getCrossChainDataForVM(9);
+        assert.strictEqual(db.builds, 2);
+        assert.notStrictEqual(afterRollback, stale);
+        beginPass(db, 10);
+        const replayed = await db.getCrossChainDataForVM(10);
+        assert.notStrictEqual(replayed, stale);
+        assert.strictEqual(replayed, afterRollback);
+        assert.strictEqual(db.builds, 2);
+    });
+
+    it('does not reuse a snapshot invalidated by an explicit rollback', async function () {
+        const { invalidate } = require('../../../../src/db/vm_snapshot_memo.js');
+        const db = makeDb({});
+        beginPass(db, 10);
+        const stale = await db.getCrossChainDataForVM(10);
+        invalidate(db, 9);
+        beginPass(db, 10);
+        const fresh = await db.getCrossChainDataForVM(10);
+        assert.notStrictEqual(fresh, stale);
+        assert.strictEqual(db.builds, 2);
+    });
 });
