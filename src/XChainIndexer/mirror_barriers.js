@@ -344,9 +344,8 @@ if(typeof it === 'function'){
 
     it('disarms the held capability read check when a later barrier defers @regression @tier1',
         async function(){
+            const HubDbSync = require('../hub/hub_db_sync.js');
             const connections = require('../db/database/connections.js');
-            if(typeof connections.assertCapabilityProofNotHeld !== 'function') this.skip();
-
             const Rollback = require('../rollback/index.js');
             const activeStake = require('../db/stakes/active_stake.js');
             const capabilities = require('../db/capabilities/index.js');
@@ -355,17 +354,24 @@ if(typeof it === 'function'){
             const requestAt = heldAt + 6;
             let mirrorReads = 0;
             let queryLog = [];
+            const hubDbSync = new HubDbSync(
+                { doQuery: async () => [] },
+                { hubUrl: 'http://hub.test', network: 'mainnet' }
+            );
+            hubDbSync.holdCapabilitySnapshot({
+                capability: 'attestation',
+                snapshot_block: heldAt,
+                signing_pubkey: 'aa11',
+                amount: '25.00000000',
+                source: 'validator/aa11'
+            });
+            if(hubDbSync._capabilityProofRetryTimer !== null)
+                clearTimeout(hubDbSync._capabilityProofRetryTimer);
+            hubDbSync._capabilityProofRetryTimer = null;
+            hubDbSync.waitForSnapshotSync = async () => true;
+            hubDbSync.waitForMatchSync = async () => { throw new Error('later barrier'); };
             const indexer = Object.assign({
-                hubDbSync: {
-                    enabled: true,
-                    _capabilityProofOverflow: false,
-                    _capabilityProofHolds: new Map([['held', {
-                        capability: 'attestation', snapshot_block: heldAt
-                    }]]),
-                    waitForCapabilityProof: async () => true,
-                    waitForSnapshotSync: async () => true,
-                    waitForMatchSync: async () => { throw new Error('later barrier'); }
-                },
+                hubDbSync,
                 priceSyncTimeoutMs: 1,
                 capabilityProofBarrierBlock: null,
                 capabilityProofBarrierSkipped: false,
@@ -413,13 +419,10 @@ if(typeof it === 'function'){
             }, connections, capabilities, activeStake);
             indexer.indexerDb = db;
 
-            if(typeof indexer.deferOnHeldCapabilityRead === 'function'){
-                assert.strictEqual(await indexer.deferOnSnapshotSync(98582, 1700000000), false);
-                assert.strictEqual(indexer.capabilityProofBarrierSkipped, true);
-            } else {
-                indexer.capabilityProofBarrierSkipped = true;
-                indexer.capabilityProofBarrierBlock = 98582;
-            }
+            assert.strictEqual(typeof connections.assertCapabilityProofNotHeld, 'function');
+            assert.strictEqual(typeof indexer.deferOnHeldCapabilityRead, 'function');
+            assert.strictEqual(await indexer.deferOnSnapshotSync(98582, 1700000000), false);
+            assert.strictEqual(indexer.capabilityProofBarrierSkipped, true);
             assert.strictEqual(await indexer.deferOnMatchSync(98583, 1700000001), true);
 
             const rollback = new Rollback(indexer);
@@ -437,6 +440,7 @@ if(typeof it === 'function'){
             };
 
             await rollback.runRollbackTransaction(requestAt + 2, scope, [], [], []);
+            assert.strictEqual(indexer.capabilityProofBarrierSkipped, false);
             assert.strictEqual(mirrorReads, 1);
             assert.ok(queryLog.some(sql => sql.includes('INSERT INTO attest_validator_stats')));
         });
