@@ -226,7 +226,7 @@ const CHANGES = [
     // (unknown)'; an owner's caret edit of an existing token is untouched. UNARMED on
     // every network until the operator sizes the instant from the read-only per-chain
     // count of tokens created through a caret TICK; regtest arms at genesis.
-    ['ISSUE_CARET_TICK_NO_CREATE', '0.2.0', UNARMED, UNARMED, 0, 0, 0, 0],
+    ['ISSUE_CARET_TICK_NO_CREATE', '0.2.0', UNARMED, 1792674000, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;

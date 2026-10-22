@@ -112,6 +112,6 @@
 // this ordinal; the pin advances only because it must track the package version.
 // 0.23.1 -> 0.23.2 is an indexer-only patch train that registers nothing new on
 // this ordinal; the pin advances only because it must track the package version.
-const CONSENSUS_VERSION = '0.26.1';
+const CONSENSUS_VERSION = '0.26.2';
 
 module.exports = { CONSENSUS_VERSION };
