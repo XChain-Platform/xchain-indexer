@@ -14008,6 +14008,15 @@
       "Coinpay (COINPAY) @regression @tier2 seller vs coin order role determination giveOrderInfo GIVE_TICK is a real token (not null/COIN) \u2192 giveOrder is seller, getOrder is coin",
       "Coinpay (COINPAY) @regression @tier2 seller vs coin order role determination refuses to settle when neither order gives native coin (ambiguous roles, flag ON)"
     ],
+    "bf8511ddb1fa04d3": [
+      "cross-chain VM snapshot forward block reuse @regression @tier1 builds fresh outside a block pass",
+      "cross-chain VM snapshot forward block reuse @regression @tier1 does not reuse a pre-rollback snapshot when the tip went back without invalidate()",
+      "cross-chain VM snapshot forward block reuse @regression @tier1 does not reuse a snapshot invalidated by an explicit rollback",
+      "cross-chain VM snapshot forward block reuse @regression @tier1 rebuilds when a call resolved between the bounds",
+      "cross-chain VM snapshot forward block reuse @regression @tier1 rebuilds when a settlement landed between the bounds",
+      "cross-chain VM snapshot forward block reuse @regression @tier1 reuseCrossChainSnapshot refuses cached bounds below a tip that went back without invalidate()",
+      "cross-chain VM snapshot forward block reuse @regression @tier1 serves the next block from the cached snapshot without a build"
+    ],
     "bfb10fe9f39c4a4e": [
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 pre-verification error strings pass through untouched an error set before the verify block skips verification entirely",
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 pre-verification error strings pass through untouched no matching request",
@@ -18829,8 +18838,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1500,
-      "titleCount": 14588,
+      "fileCount": 1501,
+      "titleCount": 14595,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19822,6 +19831,7 @@
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/cross_chain_snapshot_golden.test.js": "0cb9a34b3a919984",
+        "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/vm_snapshot/poll_snapshot_golden.test.js": "4ef434f00929b790",
         "test/unit/db/vm_snapshot/vm_snapshot_memo.test.js": "b0be5e75e30decd3",
@@ -20710,8 +20720,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1136,
-      "titleCount": 11482,
+      "fileCount": 1137,
+      "titleCount": 11489,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21481,6 +21491,7 @@
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
+        "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
@@ -21852,8 +21863,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 566,
-      "titleCount": 6045,
+      "fileCount": 567,
+      "titleCount": 6052,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22187,6 +22198,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
+        "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
@@ -22424,8 +22436,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1136,
-      "titleCount": 11482,
+      "fileCount": 1137,
+      "titleCount": 11489,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23195,6 +23207,7 @@
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
+        "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
         "test/unit/db/vm_snapshot/memo.test.js": "e92d27f468c51efb",
         "test/unit/db/xcalls/terminal_flip_resolved_block.test.js": "d448ca271f35d379",
         "test/unit/escrow_leaf_subtree.test.js": "07fa9a8166b63715",
