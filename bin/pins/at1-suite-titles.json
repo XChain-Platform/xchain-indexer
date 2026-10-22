@@ -5785,6 +5785,20 @@
       "getEffectiveUnprocessedCallResults separate hub mirror: empty mirror short-circuits with no callbacks lookup",
       "getEffectiveUnprocessedCallResults separate hub mirror: keeps the two-query JS filter, excluding processed then slicing"
     ],
+    "4eb8fd3ed1f68737": [
+      "capability snapshot proof hold barrier @regression @tier1 a frontier hold ends the drain and leaves the heartbeat gate open",
+      "capability snapshot proof hold barrier @regression @tier1 a held frontier retry does not reopen the bootstrap drain",
+      "capability snapshot proof hold barrier @regression @tier1 a retained bootstrap hold preserves a re-page reason the drain opened under",
+      "capability snapshot proof hold barrier @regression @tier1 applies and releases a held row when a retry can no longer judge it",
+      "capability snapshot proof hold barrier @regression @tier1 bounds the hold map, notes a full map once, and leaves overflow for a re-page",
+      "capability snapshot proof hold barrier @regression @tier1 deduplicates proof fetches by snapshot block and capability during one retry pass",
+      "capability snapshot proof hold barrier @regression @tier1 encodes every proof endpoint parameter",
+      "capability snapshot proof hold barrier @regression @tier1 keeps a held row absent, blocks, then applies and releases it after proof arrives",
+      "capability snapshot proof hold barrier @regression @tier1 keeps refused rows absent and applies unknown rows without creating a hold",
+      "capability snapshot proof hold barrier @regression @tier1 keeps the barrier closed for overflow until the required re-page drains",
+      "capability snapshot proof hold barrier @regression @tier1 re-serves and later applies a held row after a restart with persisted local rows",
+      "capability snapshot proof hold barrier @regression @tier1 releases an existing waiter when ordinary redelivery verifies the held row"
+    ],
     "4ee376dc5f1c5cb0": [
       "mirror admission compatibility: a mirrored admission map never stops the block loop ARMED consumer, the measured {BTC:280} row from cursor 277 commits 278, 279 and 280 with zero exceptions reaching the block applier",
       "mirror admission compatibility: a mirrored admission map never stops the block loop ARMED consumer, the measured {BTC:280} row from cursor 277 excludes the row through block 279 and admits and settles it at block 280",
@@ -18174,19 +18188,6 @@
       "policy membership references refuses malformed transport and non-reference JSON strings",
       "policy membership references separates member arrays, refs and null transport values"
     ],
-    "f73cff8c98578089": [
-      "capability snapshot proof hold barrier @regression @tier1 a frontier hold ends the drain and leaves the heartbeat gate open",
-      "capability snapshot proof hold barrier @regression @tier1 a retained bootstrap hold preserves a re-page reason the drain opened under",
-      "capability snapshot proof hold barrier @regression @tier1 applies and releases a held row when a retry can no longer judge it",
-      "capability snapshot proof hold barrier @regression @tier1 bounds the hold map, notes a full map once, and leaves overflow for a re-page",
-      "capability snapshot proof hold barrier @regression @tier1 deduplicates proof fetches by snapshot block and capability during one retry pass",
-      "capability snapshot proof hold barrier @regression @tier1 encodes every proof endpoint parameter",
-      "capability snapshot proof hold barrier @regression @tier1 keeps a held row absent, blocks, then applies and releases it after proof arrives",
-      "capability snapshot proof hold barrier @regression @tier1 keeps refused rows absent and applies unknown rows without creating a hold",
-      "capability snapshot proof hold barrier @regression @tier1 keeps the barrier closed for overflow until the required re-page drains",
-      "capability snapshot proof hold barrier @regression @tier1 re-serves and later applies a held row after a restart with persisted local rows",
-      "capability snapshot proof hold barrier @regression @tier1 releases an existing waiter when ordinary redelivery verifies the held row"
-    ],
     "f742ecb1d380895a": [
       "health advertises committed height only @regression @tier1 committedView() falls back to the raw handle for a stub without apiView",
       "health advertises committed height only @regression @tier1 committedView() is the same committed height once the block commits",
@@ -18839,7 +18840,7 @@
   "scripts": {
     "test": {
       "fileCount": 1501,
-      "titleCount": 14595,
+      "titleCount": 14596,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19904,7 +19905,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "f73cff8c98578089",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "4eb8fd3ed1f68737",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
@@ -20721,7 +20722,7 @@
     },
     "test:regression": {
       "fileCount": 1137,
-      "titleCount": 11489,
+      "titleCount": 11490,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21541,7 +21542,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "f73cff8c98578089",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "4eb8fd3ed1f68737",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
@@ -21864,7 +21865,7 @@
     },
     "test:regression:fast": {
       "fileCount": 567,
-      "titleCount": 6052,
+      "titleCount": 6053,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22236,7 +22237,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "f73cff8c98578089",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "4eb8fd3ed1f68737",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/buffer_and_scoping.test.js": "6237347ccdee450c",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/cross_chain_upgrades.test.js": "a90785fe5a2760e2",
@@ -22437,7 +22438,7 @@
     },
     "test:regression:full": {
       "fileCount": 1137,
-      "titleCount": 11489,
+      "titleCount": 11490,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23257,7 +23258,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "f73cff8c98578089",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "4eb8fd3ed1f68737",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
