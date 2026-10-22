@@ -243,7 +243,7 @@ run_tier "perf: load regimes (test:perf:regimes)" \
 # way the workflow lays them out (hub checkout beside this repo's checkout).
 sync_coins_check() { (cd "$SIB" && "xchain-hub/bin/sync-coins.sh" --check --only "$(basename "$SELF")"); }
 run_tier "drift: coin-registry byte-identity" sync_coins_check
-run_tier "drift: hub mirror explorer twins" bash bin/sync-hub-mirror-client.sh --check
+run_tier "drift: changed hub_db_sync explorer twins" node bin/check-hub-db-sync-explorer-twins.js
 run_tier "drift: coin consensus-pin conformance" node -e '
   const coins = require("./src/coins");
   for (const net of ["testnet", "regtest"]) {
