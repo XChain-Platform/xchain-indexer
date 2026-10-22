@@ -8722,6 +8722,15 @@
       "Fee boundary tests @regression @tier1 FEE-06: Sub-token issuance charges ISSUANCE_FEE_SUBTOKEN (0.5 XCHAIN) : valid with exact balance",
       "Fee boundary tests @regression @tier1 FEE-07: Sub-token issuance with 1 sat below ISSUANCE_FEE_SUBTOKEN (0.49999999) is invalid"
     ],
+    "8f8cd3c117019e8d": [
+      "api refuses Brotli-encoded request bodies before the body parser answers 415 to an undecodable br body, so no parser saw it first",
+      "api refuses Brotli-encoded request bodies before the body parser answers Content-Encoding \"BR\" with 415 and never decodes the body",
+      "api refuses Brotli-encoded request bodies before the body parser answers Content-Encoding \"br\" with 415 and never decodes the body",
+      "api refuses Brotli-encoded request bodies before the body parser answers Content-Encoding \"gzip, br\" with 415 and never decodes the body",
+      "api refuses Brotli-encoded request bodies before the body parser still serves a JSON-RPC POST with Content-Encoding identity",
+      "api refuses Brotli-encoded request bodies before the body parser still serves a JSON-RPC POST with no Content-Encoding header",
+      "the Brotli refusal mounts ahead of every body parser is the first layer installMiddleware adds, before the JSON parser"
+    ],
     "8fa159824bb3391d": [
       "SLASH action handler: XANCPUB publisher-only pair @regression keeps legacy handling below the gate: the snapshot block alone decides the slot",
       "SLASH action handler: XANCPUB publisher-only pair @regression reads inactive on mainnet, active on testnet from the armed time, and active on regtest through isEnabled",
@@ -15450,8 +15459,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1258,
-      "titleCount": 12931,
+      "fileCount": 1259,
+      "titleCount": 12938,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -15895,6 +15904,7 @@
         "test/unit/api/api_pushgeneration_stamping.test.js": "b7b23e989bc73b5e",
         "test/unit/api/api_state_root_version_boundary.test.js": "7f4ec2e0d819f047",
         "test/unit/api/apiview_fallback_affordance.test.js": "158fe8328bb55251",
+        "test/unit/api/brotli_body_refusal.test.js": "8f8cd3c117019e8d",
         "test/unit/api/capability_validators.test.js": "7cc32f516c45e8ff",
         "test/unit/api/chain_block_hash.test.js": "ab136a4db60a67eb",
         "test/unit/api/cors_origin.test.js": "60d0376b16ab7901",
