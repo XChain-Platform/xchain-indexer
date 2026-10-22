@@ -57,6 +57,15 @@
       "activation ladder fork-avoiding constraints (the bridge train cut) C4: wall-clock inequality proven directly in hours (the form raw heights cannot express across chains) goes red, naming both hour figures, at the measured breaking band (destination slowed past 3x)",
       "activation ladder fork-avoiding constraints (the bridge train cut) C4: wall-clock inequality proven directly in hours (the form raw heights cannot express across chains) holds on a worked ladder (LTC 3.1h and DOGE 3.0h, both at or before BTC 9.0h)"
     ],
+    "01907e4704cbe06c": [
+      "archive_heads_by_author readHeads() against a real MariaDB @tier3 applies fromSeq and limit as bound parameters",
+      "archive_heads_by_author readHeads() against a real MariaDB @tier3 exitCodeFor passes the redraw expectation until the later head is gone",
+      "archive_heads_by_author readHeads() against a real MariaDB @tier3 explains the refused head as a confirmed conflict against the earlier valid head",
+      "archive_heads_by_author readHeads() against a real MariaDB @tier3 lists the author heads in seq then action order with the full status text",
+      "archive_heads_by_author readHeads() against a real MariaDB @tier3 scopes to the author, so author B sees only its own head",
+      "archive_heads_by_author readHeads() against a real MariaDB @tier3 summarizes the refused seq and the later valid head",
+      "archive_heads_by_author readHeads() against a real MariaDB @tier3 the refused head the reading counts is the one the consensus read excludes"
+    ],
     "01ae3367d87ac656": [
       "Database._destructiveAutoStatement() lock-wait head and unplaced MODIFY @regression @tier1 flags a MODIFY keyword that does not open its alter_spec",
       "Database._destructiveAutoStatement() lock-wait head and unplaced MODIFY @regression @tier1 flags a MODIFY of id that drops AUTO_INCREMENT behind WAIT n, NOWAIT or IF EXISTS",
@@ -20460,12 +20469,13 @@
       }
     },
     "test:integration": {
-      "fileCount": 72,
-      "titleCount": 440,
+      "fileCount": 73,
+      "titleCount": 447,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
+        "test/integration/archive_heads_by_author_db.test.js": "01907e4704cbe06c",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
         "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
         "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
@@ -20538,12 +20548,13 @@
       }
     },
     "test:integration:ci": {
-      "fileCount": 72,
-      "titleCount": 440,
+      "fileCount": 73,
+      "titleCount": 447,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
+        "test/integration/archive_heads_by_author_db.test.js": "01907e4704cbe06c",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
         "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
         "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
