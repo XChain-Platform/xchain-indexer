@@ -12711,6 +12711,13 @@
       "fee-quote transaction-lock budget computePreflight() gives up on the same terms passes the acquire budget down to the dry-run",
       "fee-quote transaction-lock budget computePreflight() gives up on the same terms returns busy/retryable with valid null, and memoizes nothing"
     ],
+    "ad8fa78fbfff344a": [
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 binds fromSeq and limit",
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 counts the refused head that getArchiveHeadsByAuthorAndSeq excludes from the consensus read",
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 exits 0 for an expected redraw, and 1 once the later head is gone",
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 returns the author heads in seq order with the full status text, leaving out v2 and other authors",
+      "bin/archive_heads_by_author.js readHeads() against a real MariaDB @tier3 summarizes the refused seq and the later valid head, and explains the refusal as a conflict"
+    ],
     "ad9b4cab9e7d3566": [
       "Database._migrationPreconditionSkip() @regression @tier1 queries information_schema with the database name and returns the skip reason",
       "Database._migrationPreconditionSkip() @regression @tier1 returns null (do not baseline) when the live column is still narrow",
@@ -20460,12 +20467,13 @@
       }
     },
     "test:integration": {
-      "fileCount": 72,
-      "titleCount": 440,
+      "fileCount": 73,
+      "titleCount": 445,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
+        "test/integration/archive_heads_by_author_db.test.js": "ad8fa78fbfff344a",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
         "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
         "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
@@ -20538,12 +20546,13 @@
       }
     },
     "test:integration:ci": {
-      "fileCount": 72,
-      "titleCount": 440,
+      "fileCount": 73,
+      "titleCount": 445,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
+        "test/integration/archive_heads_by_author_db.test.js": "ad8fa78fbfff344a",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
         "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
         "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
