@@ -286,6 +286,14 @@ module.exports = {
         let cache = this._vmSnapshotCache;
         if(!(memo instanceof Map) || !cache || !(bound <= Number(this.blockIndex)))
             return null;
+        // Same backwards-tip flush crossBlockCache runs: a tip below the last block the cache
+        // served means a rollback nobody invalidated, so no cached snapshot can be reused.
+        let tip = Number(this.blockIndex);
+        if(cache.lastBlock !== null && tip < cache.lastBlock){
+            cache.entries.clear();
+            cache.lastBlock = tip;
+            return null;
+        }
         let best = null;
         for(let [key, entry] of cache.entries){
             if(key.startsWith('crossChain:') && entry.bound < bound && (!best || entry.bound > best.bound))

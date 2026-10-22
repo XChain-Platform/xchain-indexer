@@ -100,6 +100,18 @@ describe('cross-chain VM snapshot forward block reuse @regression @tier1', funct
         assert.strictEqual(db.builds, 2);
     });
 
+    it('reuseCrossChainSnapshot refuses cached bounds below a tip that went back without invalidate()', async function () {
+        const db = makeDb({});
+        beginPass(db, 10);
+        await db.getCrossChainDataForVM(10);
+        beginPass(db, 12);
+        await db.getCrossChainDataForVM(12);
+        // rollback to tip 11: bound 10 is older than the request and would otherwise be reused
+        beginPass(db, 11);
+        assert.strictEqual(await db.reuseCrossChainSnapshot(11), null);
+        assert.strictEqual(db._vmSnapshotCache.entries.size, 0);
+    });
+
     it('does not reuse a snapshot invalidated by an explicit rollback', async function () {
         const { invalidate } = require('../../../../src/db/vm_snapshot_memo.js');
         const db = makeDb({});
