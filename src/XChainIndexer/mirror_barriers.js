@@ -86,6 +86,7 @@ module.exports = {
                 getLogger().warn('Deferring block ' + blockToParse + ' (cross-chain match sync): ', err);
                 this.stallReason = 'match_sync_barrier';
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'matchWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -110,6 +111,7 @@ module.exports = {
                 // discriminator the moment the two constants diverge or a regtest override
                 // moves one.
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'callWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -134,6 +136,7 @@ module.exports = {
                 // and sharing another table's grace couples two producers' timing, the
                 // documented mistake the call barrier was split out to end.
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'bridgeWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -154,6 +157,7 @@ module.exports = {
                 getLogger().warn('Deferring block ' + blockToParse + ' (policy snapshot sync): ', err);
                 this.stallReason = 'policy_sync_barrier';
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'policyWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -178,6 +182,7 @@ module.exports = {
             getLogger().warn('Deferring block ' + blockToParse + ' (list share sync)', err);
             this.stallReason = 'list_share_sync_barrier';
             this.stallClearsAt = null;
+            this.capabilityProofBarrierSkipped = false;
             return true;
         }
         return false;
@@ -208,6 +213,7 @@ module.exports = {
             getLogger().warn('Deferring block ' + blockToParse + ' (remote token sync)', err);
             this.stallReason = REMOTE_TOKEN_RETRY_STALL_REASON;
             this.stallClearsAt = null;
+            this.capabilityProofBarrierSkipped = false;
             return true;
         }
         return false;
@@ -246,6 +252,7 @@ module.exports = {
                 // wait, no read and no write (health verdict only, see barrierClearsAt).
                 // Null above the admission activation, where no clock instant opens it.
                 this.stallClearsAt = this.directCallBarrierClearsAt(blockTime, blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -270,6 +277,7 @@ module.exports = {
                 this.stallReason = 'anchor_attest_barrier';
                 this.stallClearsAt = this.anchorBarrierClearsAt(
                     blockTime, anchorHorizonBound, blockToParse, 'anchorAttestWatermarkGraceS');
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -296,6 +304,7 @@ module.exports = {
                 getLogger().warn('Deferring block ' + blockToParse + ' (attestation response mirror): ', err);
                 this.stallReason = 'attest_response_sync_barrier';
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'attestResponseWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -314,6 +323,7 @@ module.exports = {
                 getLogger().warn('Deferring block ' + blockToParse + ' (capability proof): ', err);
                 this.stallReason = CAPABILITY_PROOF_REASON;
                 this.stallClearsAt = null;
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
             try {
@@ -322,9 +332,36 @@ module.exports = {
                 getLogger().warn('Deferring block ' + blockToParse + ' (cross-chain snapshot sync): ', err);
                 this.stallReason = 'snapshot_sync_barrier';
                 this.stallClearsAt = null;          // snapshot presence, not wall clock
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
         return false;
     }
 };
+
+if(typeof it === 'function'){
+    const assert = require('assert');
+
+    it('disarms the held capability read check when a later barrier defers @regression @tier1',
+        async function(){
+            const heldSnapshot = [{ pubkey: 'aa11', amount: '25.00000000' }];
+            const indexer = Object.assign({
+                hubDbSync: {
+                    waitForMatchSync: async () => { throw new Error('later barrier'); }
+                },
+                priceSyncTimeoutMs: 1,
+                capabilityProofBarrierSkipped: true,
+                mirrorAdmissionActiveAt: () => false,
+                barrierClearsAt: () => null
+            }, module.exports);
+            const rollbackRead = () => {
+                if(indexer.capabilityProofBarrierSkipped) throw new Error('held snapshot read check');
+                return heldSnapshot;
+            };
+
+            assert.throws(rollbackRead, /held snapshot read check/);
+            assert.strictEqual(await indexer.deferOnMatchSync(98582, 1700000000), true);
+            assert.deepStrictEqual(rollbackRead(), heldSnapshot);
+        });
+}
