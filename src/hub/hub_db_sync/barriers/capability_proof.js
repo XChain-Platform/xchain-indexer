@@ -28,8 +28,21 @@ const { getLogger } = require('../../../observability/index.js');
 const { CAPABILITY_SNAPSHOT_KEY_CAP, capabilitySnapshotKey } = require('../mirror_bounds.js');
 
 const CAPABILITY_PROOF_RETRY_MS = 15000;
+const CAPABILITY_PROOF_REQUEST_INTERVAL_MS = 110;
 
 module.exports = {
+
+    async paceCapabilityProofRequest() {
+        let previous = this._capabilityProofPaceChain || Promise.resolve();
+        let turn = previous.then(async () => {
+            let earliest = Number(this._capabilityProofNextRequestAt) || 0;
+            let delay = Math.max(0, earliest - Date.now());
+            if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
+            this._capabilityProofNextRequestAt = Date.now() + CAPABILITY_PROOF_REQUEST_INTERVAL_MS;
+        });
+        this._capabilityProofPaceChain = turn.catch(() => {});
+        return turn;
+    },
 
     capabilityProofSatisfied() {
         return !this.enabled || (this._capabilityProofHolds.size === 0 && !this._capabilityProofOverflow);

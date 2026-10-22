@@ -340,7 +340,8 @@ module.exports = {
         return true;
     },
 
-    fetchCapabilitySnapshotProof(snapshotBlock, capability, pubkeys) {
+    async fetchCapabilitySnapshotProof(snapshotBlock, capability, pubkeys) {
+        await this.paceCapabilityProofRequest();
         return this.httpGet('/hub-db/snapshot/capability_snapshot_proof?snapshot_block=' +
             encodeURIComponent(String(snapshotBlock)) + '&capability=' +
             encodeURIComponent(String(capability)) + '&pubkeys=' +

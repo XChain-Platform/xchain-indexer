@@ -181,6 +181,34 @@ describe('capability snapshot proof hold barrier @regression @tier1', function (
             'pubkeys=aa%2F11%2Cbb%3F22');
     });
 
+    it('paces proof request starts below the indexer rate limit', async function () {
+        const clock = sinon.useFakeTimers({ now: 1000 });
+        const made = makeSync(async () => ({ verdict: 'verified' }));
+        const { sync } = made;
+        syncs.push(sync);
+        const startedAt = [];
+        sync.httpGet.callsFake(async () => {
+            startedAt.push(Date.now());
+            return { proof: 'ok' };
+        });
+
+        const requests = [
+            sync.fetchCapabilitySnapshotProof(12, 'cross_chain', ['aa11']),
+            sync.fetchCapabilitySnapshotProof(13, 'cross_chain', ['bb22']),
+            sync.fetchCapabilitySnapshotProof(14, 'cross_chain', ['cc33'])
+        ];
+        await clock.tickAsync(0);
+        assert.deepStrictEqual(startedAt, [1000]);
+        await clock.tickAsync(109);
+        assert.deepStrictEqual(startedAt, [1000]);
+        await clock.tickAsync(1);
+        assert.deepStrictEqual(startedAt, [1000, 1110]);
+        await clock.tickAsync(110);
+        await Promise.all(requests);
+
+        assert.deepStrictEqual(startedAt, [1000, 1110, 1220]);
+    });
+
     it('bounds the hold map, notes a full map once, and leaves overflow for a re-page', function () {
         const made = makeSync(async () => ({ verdict: 'held' }));
         const { sync } = made;
