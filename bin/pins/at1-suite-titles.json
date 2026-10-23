@@ -5768,6 +5768,15 @@
       "getEffectiveUnprocessedCallResults separate hub mirror: empty mirror short-circuits with no callbacks lookup",
       "getEffectiveUnprocessedCallResults separate hub mirror: keeps the two-query JS filter, excluding processed then slicing"
     ],
+    "4eb42f144694d194": [
+      "ANCHOR v0 replay watermark after a regtest chain reset @regression @tier3 accepts a fresh regtest bundle below unverified rows of an abandoned chain",
+      "ANCHOR v0 replay watermark after a regtest chain reset @regression @tier3 accepts a fresh regtest bundle that advances past the verified rows",
+      "ANCHOR v0 replay watermark after a regtest chain reset @regression @tier3 still refuses a regtest replay below a verified row",
+      "ANCHOR v0 replay watermark on mainnet and testnet is unchanged @regression @tier3 keeps the mainnet acceptance at the all-status watermark",
+      "ANCHOR v0 replay watermark on mainnet and testnet is unchanged @regression @tier3 keeps the mainnet stale refusal on the same rows",
+      "ANCHOR v0 replay watermark on mainnet and testnet is unchanged @regression @tier3 keeps the testnet acceptance at the all-status watermark",
+      "ANCHOR v0 replay watermark on mainnet and testnet is unchanged @regression @tier3 keeps the testnet stale refusal on the same rows"
+    ],
     "4ee376dc5f1c5cb0": [
       "mirror admission compatibility: a mirrored admission map never stops the block loop ARMED consumer, the measured {BTC:280} row from cursor 277 commits 278, 279 and 280 with zero exceptions reaching the block applier",
       "mirror admission compatibility: a mirrored admission map never stops the block loop ARMED consumer, the measured {BTC:280} row from cursor 277 excludes the row through block 279 and admits and settles it at block 280",
@@ -7901,12 +7910,6 @@
       "policy apply by shared-list reference creates a fresh full-copy list instead of editing a shared pointer",
       "policy apply by shared-list reference keeps legacy rows byte-identical above and below the consumer gate",
       "policy apply by shared-list reference points a copy at a foreign mirror with one ISSUE 5 leg and no LIST leg"
-    ],
-    "6d32e4c3df3140f6": [
-      "ANCHOR v0 checkpoint sequence binding @regression @tier1 keeps the all-status watermark immediately before activation",
-      "ANCHOR v0 checkpoint sequence binding @regression @tier1 reads only valid checkpoint rows for a bound section at activation",
-      "ANCHOR v0 checkpoint sequence binding @regression @tier1 refuses a noncanonical bound sequence at activation",
-      "ANCHOR v0 checkpoint sequence binding @regression @tier1 refuses a section whose sequence differs from its snapshot at activation"
     ],
     "6d4320fffe6e67ab": [
       "protocol_changes consensus-bound indexer rows @regression @tier1 keeps gates_1.js at or under 400 lines",
@@ -12180,6 +12183,12 @@
       "ANCHOR v3 wrapper section canonical embeds an upper-case batch CRC as lower-case",
       "ANCHOR v3 wrapper section canonical extends only the named wrapper section",
       "ANCHOR v3 wrapper section canonical leaves every section unchanged when the fixture has no archive"
+    ],
+    "a64681e4300f78cf": [
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 reads only valid checkpoint rows for a bound section at activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 reads only verified rows on regtest immediately before activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 refuses a noncanonical bound sequence at activation",
+      "ANCHOR v0 checkpoint sequence binding @regression @tier1 refuses a section whose sequence differs from its snapshot at activation"
     ],
     "a66d4c2b5fe6ac86": [
       "_smtTickName: an absence is never cached @regression a fault leaves NO cache entry, so a retried block can still resolve the tick",
@@ -18900,8 +18909,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1506,
-      "titleCount": 14625,
+      "fileCount": 1507,
+      "titleCount": 14632,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -18942,7 +18951,7 @@
         "test/unit/actions/anchor/anchor.test/v3_fixture_builder.test.js": "f541fc4fc907fec6",
         "test/unit/actions/anchor/anchor.test/v3_record.test.js": "b1514ce4e84d8fe0",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "c262ebb8f7e7ced1",
-        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "a64681e4300f78cf",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
@@ -18954,6 +18963,7 @@
         "test/unit/actions/anchor/anchor_orphan_geometry_gate.test.js": "57db721baf7e9f80",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
         "test/unit/actions/anchor/anchor_reward_family.test.js": "45cd36a015e28085",
+        "test/unit/actions/anchor/anchor_v0_regtest_abandoned_watermark.test.js": "4eb42f144694d194",
         "test/unit/actions/anchor/archive/anchor_archive_failure_report.test.js": "7875766421d5118b",
         "test/unit/actions/anchor/archive/anchor_archive_verdict_prefold.test.js": "0c41aab445ad49d3",
         "test/unit/actions/anchor/archive/anchor_archive_verdict_scoped.test.js": "2e3850c1f7da931d",
@@ -20787,8 +20797,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1140,
-      "titleCount": 11509,
+      "fileCount": 1141,
+      "titleCount": 11516,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -20868,7 +20878,7 @@
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "c262ebb8f7e7ced1",
-        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "a64681e4300f78cf",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
@@ -20879,6 +20889,7 @@
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
         "test/unit/actions/anchor/anchor_orphan_geometry_gate.test.js": "57db721baf7e9f80",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
+        "test/unit/actions/anchor/anchor_v0_regtest_abandoned_watermark.test.js": "4eb42f144694d194",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "d0251082e34791fc",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "11a6bfdbba48cf64",
         "test/unit/actions/anchor_golden_vectors.test.js": "0249295e69b670ed",
@@ -21950,7 +21961,7 @@
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "c262ebb8f7e7ced1",
-        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "a64681e4300f78cf",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v3.test.js": "a91a550211543e4a",
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
@@ -22509,8 +22520,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1140,
-      "titleCount": 11509,
+      "fileCount": 1141,
+      "titleCount": 11516,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22590,7 +22601,7 @@
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "c262ebb8f7e7ced1",
-        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "6d32e4c3df3140f6",
+        "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "a64681e4300f78cf",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0_below_gate.test.js": "73bf19393156da6f",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1_below_gate.test.js": "0c10b3d383a4d374",
@@ -22601,6 +22612,7 @@
         "test/unit/actions/anchor/anchor_junk_head_capture.test.js": "c8859268348d65b0",
         "test/unit/actions/anchor/anchor_orphan_geometry_gate.test.js": "57db721baf7e9f80",
         "test/unit/actions/anchor/anchor_retired_wire_replay.test.js": "9e5ec637e227025f",
+        "test/unit/actions/anchor/anchor_v0_regtest_abandoned_watermark.test.js": "4eb42f144694d194",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "d0251082e34791fc",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "11a6bfdbba48cf64",
         "test/unit/actions/anchor_golden_vectors.test.js": "0249295e69b670ed",
