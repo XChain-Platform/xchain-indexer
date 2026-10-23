@@ -292,6 +292,8 @@ module.exports = {
     //     on the hold (barriers/capability_proof.js) rather than read a partial snapshot.
     //     A retained hold is not a bootstrap hole: its retry state survives after the
     //     page cursor advances, so the heartbeat gate may certify the rest of the mirror.
+    //   - A row whose key the mirror already holds is not judged again (verdict 'mirrored',
+    //     see judgeUnmirroredCapabilityRow): INSERT IGNORE would not write it.
     //   - Every other non-refusal (unreached block, unconfigured capability, truncated
     //     set, a judge that threw, no authoritative db wired) applies the row. An
     //     unjudgeable row must never become a permanent mirror hole.
@@ -305,7 +307,7 @@ module.exports = {
         try {
             let fetchProof = options && typeof options.fetchProof === 'function'
                 ? options.fetchProof : this.fetchCapabilitySnapshotProof.bind(this);
-            verdict = await db.verifyCapabilitySnapshotRow(row, { fetchProof: fetchProof });
+            verdict = await this.judgeUnmirroredCapabilityRow(db, row, fetchProof);
         } catch (e) {
             // A failed re-derivation is not evidence of a forgery.
             getLogger().warn('HubDbSync: capability_snapshots re-derivation failed, applying row unchecked: ' +

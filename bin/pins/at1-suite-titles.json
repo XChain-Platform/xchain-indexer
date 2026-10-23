@@ -16400,6 +16400,14 @@
       "Anchor (ANCHOR) @regression @tier3 v0 rejects a rootless section: the bundle is root-bearing by construction",
       "Anchor (ANCHOR) @regression @tier3 v0 with a quorum of valid oracle_publish sigs is valid and stores one row per section"
     ],
+    "dc3cc58dd0e12f6d": [
+      "capability snapshot judge skips a key the mirror already holds @regression @tier1 a retained-hold retry settles a now-mirrored key without a proof fetch",
+      "capability snapshot judge skips a key the mirror already holds @regression @tier1 clears a hold without a proof fetch once the held key is mirrored",
+      "capability snapshot judge skips a key the mirror already holds @regression @tier1 judges a row when the presence read answers with a different key",
+      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 judges every row a rolled-back local mirror no longer holds",
+      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 pages from id 0 over an intact mirror and proves only the row it lacks",
+      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 still holds and later applies an unmirrored frontier row re-served after the restart"
+    ],
     "dc4a83d1ac938fa7": [
       "proof wait grace wiring @regression /status verdict passes proofWaitGraceMs",
       "proof wait grace wiring @regression advanceFields passes proofWaitGraceMs",
@@ -18876,8 +18884,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1503,
-      "titleCount": 14607,
+      "fileCount": 1504,
+      "titleCount": 14613,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19944,6 +19952,7 @@
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
+        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "dc3cc58dd0e12f6d",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
@@ -20760,8 +20769,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1138,
-      "titleCount": 11498,
+      "fileCount": 1139,
+      "titleCount": 11504,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21583,6 +21592,7 @@
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
+        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "dc3cc58dd0e12f6d",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
@@ -21904,8 +21914,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 569,
-      "titleCount": 6061,
+      "fileCount": 570,
+      "titleCount": 6067,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22280,6 +22290,7 @@
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
+        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "dc3cc58dd0e12f6d",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/buffer_and_scoping.test.js": "6237347ccdee450c",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/cross_chain_upgrades.test.js": "a90785fe5a2760e2",
@@ -22479,8 +22490,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1138,
-      "titleCount": 11498,
+      "fileCount": 1139,
+      "titleCount": 11504,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23302,6 +23313,7 @@
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
+        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "dc3cc58dd0e12f6d",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",

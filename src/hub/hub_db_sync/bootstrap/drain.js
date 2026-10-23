@@ -118,7 +118,13 @@ module.exports = {
     },
 
     // Where the page loop starts reading. The position is the highest wire id read from
-    // this connection, never a local mirror id.
+    // this connection, never a local mirror id. It lives in process memory only, so a
+    // restarted indexer (or a failover, see resetForMove) pages every table from id 0 even
+    // over an intact mirror DB. That is kept on purpose for capability_snapshots: a held
+    // row is stepped over by the cursor and lives only in the in-memory hold map, so only a
+    // page from 0 re-serves it after a restart; and the page from 0 is what lets the
+    // reconciliation pass judge the mirror. The page itself is cheap; re-proving rows
+    // already mirrored was the cost, and judgeUnmirroredCapabilityRow skips them.
     async resolveDrainCursor(table, scope) {
         let lastId = Number(this._drainPositions[table]);
         if (!Number.isFinite(lastId) || lastId < 0) lastId = 0;
