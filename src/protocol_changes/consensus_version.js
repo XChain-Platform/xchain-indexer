@@ -110,6 +110,8 @@
 // identical on both sides of the bump; the pin advances only to track the package.
 // 0.23.0 -> 0.23.3 is an indexer API patch train (the Brotli body refusal) that registers
 // nothing new on this ordinal; the pin advances only because it must track the package version.
-const CONSENSUS_VERSION = '0.23.3';
+// 0.23.3 -> 0.23.4 is a dependency-only maintenance train that registers nothing new on this
+// ordinal; the pin advances only because it must track the package version.
+const CONSENSUS_VERSION = '0.23.4';
 
 module.exports = { CONSENSUS_VERSION };

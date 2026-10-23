@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.4] - 2026-10-23
+
+### Security
+- Updated npm dependencies to clear the high-severity audit advisories on the v0.23.3 line.
+
 ## [0.23.3] - 2026-10-21
 
 ### Security
