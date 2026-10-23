@@ -32,10 +32,13 @@ const { getLogger } = require('../../observability/index.js');
 // Selector wiring, hub URL and keys, the enabled flag, and the address capture hook.
 function configureSelectorConnection(sync, hubDb, options) {
     sync.hubDb     = hubDb;                            // Database instance pointing at the local hub DB
-    sync.selector  = options.selector || null;
+    let selector = options.selector || null;
+    let mirrorSource = selector && typeof selector.mirrorSource === 'function'
+        ? selector.mirrorSource() : null;
+    sync.selector  = mirrorSource ? null : selector;
     let selectedAddress = sync.selector && typeof sync.selector.current === 'function'
         ? sync.selector.current() : null;
-    sync.hubUrl    = sync.selector ? '' : (options.hubUrl || readEnvNow('HUB_API_URL') || '');
+    sync.hubUrl    = mirrorSource || (sync.selector ? '' : (options.hubUrl || readEnvNow('HUB_API_URL') || ''));
     sync.apiKey    = options.apiKey   || readEnvNow('HUB_API_KEY') || '';
     sync.feedApiKey = options.feedApiKey || readEnvNow('HUB_FEED_API_KEY') || '';
     sync.enabled   = !!(selectedAddress || sync.hubUrl) && !!sync.hubDb;
