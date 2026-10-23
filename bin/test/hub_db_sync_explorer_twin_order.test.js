@@ -104,25 +104,21 @@ function makeFixture() {
   git(explorer, ['switch', '--quiet', '-c', 'mirror-client-twin']);
   fs.copyFileSync(path.join(indexer, relative), path.join(explorer, relative));
   commit(explorer, 'vendored twin change');
+  git(explorer, ['switch', '--quiet', 'develop']);
 
   installHook(indexer, `#!/usr/bin/env bash
 set -eu
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-if [ "\${CI_COMPANIONS:-}" = "xchain-explorer=mirror-client-twin" ]; then
-  EXPLORER_REF=mirror-client-twin
-else
-  EXPLORER_REF=origin/develop
-fi
-git -C "$ROOT/xchain-explorer" switch --quiet --detach "$EXPLORER_REF"
+PROM_CI_BASE_SHA="${base}" \
+XCHAIN_INDEXER_PATH="$ROOT/xchain-indexer" \
+XCHAIN_EXPLORER_PATH="$ROOT/xchain-explorer" \
 "${process.execPath}" "$ROOT/xchain-indexer/bin/check-hub-db-sync-explorer-twins.js"
 `);
   installHook(explorer, `#!/usr/bin/env bash
 set -eu
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-git -C "$ROOT/xchain-indexer" fetch --quiet origin develop
-git -C "$ROOT/xchain-indexer" switch --quiet --detach origin/develop
 bash "$ROOT/xchain-indexer/bin/sync-hub-mirror-client.sh" --check
 `);
 
@@ -147,7 +143,11 @@ describe('hub DB sync explorer twin landing order', function () {
   it('lands indexer with the named companion before a normal explorer push', () => {
     const fixture = makeFixture();
     try {
-      const stale = run('git', ['-C', fixture.indexer, 'push', 'origin', 'HEAD:develop']);
+      const stale = run(
+        'git',
+        ['-C', fixture.indexer, 'push', 'origin', 'HEAD:develop'],
+        { env: { ...process.env, CI_COMPANIONS: '' } },
+      );
       assert.equal(stale.status, 1, stale.stdout + stale.stderr);
       assert.match(stale.stdout + stale.stderr, /DRIFT: .*live_events\.js differs/);
       assert.equal(git(fixture.indexer, ['rev-parse', 'origin/develop']), fixture.base);
@@ -165,13 +165,14 @@ describe('hub DB sync explorer twin landing order', function () {
       assert.equal(companion.status, 0, companion.stdout + companion.stderr);
       assert.match(
         companion.stdout + companion.stderr,
-        /1 changed canonical hub_db_sync explorer twin/,
+        /1 changed canonical hub_db_sync explorer twin.*companion ref mirror-client-twin/,
       );
       assert.equal(
         git(fixture.indexer, ['rev-parse', 'origin/develop']),
         git(fixture.indexer, ['rev-parse', 'HEAD']),
       );
 
+      git(fixture.explorer, ['switch', '--quiet', 'mirror-client-twin']);
       const explorerPush = run(
         'git',
         ['-C', fixture.explorer, 'push', 'origin', 'mirror-client-twin:develop'],

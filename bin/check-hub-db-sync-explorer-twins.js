@@ -57,6 +57,35 @@ function sameFile(left, right) {
   return fs.readFileSync(left).equals(fs.readFileSync(right));
 }
 
+function companionRef(spec, sibling) {
+  let fallback = null;
+  const explicit = [];
+  for (const token of String(spec || '').split(/[\s,;]+/)) {
+    if (!token || token.startsWith('#')) continue;
+    const separator = token.indexOf('=');
+    const name = separator === -1 ? token : token.slice(0, separator);
+    const revision = separator === -1 ? 'HEAD' : token.slice(separator + 1) || 'HEAD';
+    if (name === '*' || name.toLowerCase() === 'all') fallback = revision;
+    else explicit.push([name, revision]);
+  }
+  const match = explicit.find(([name]) => name === sibling);
+  return match ? match[1] : fallback;
+}
+
+function fileAtRevision(root, revision, relative) {
+  try {
+    return execFileSync('git', ['-C', root, 'show', `${revision}:${relative}`]);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function sameFileAtRevision(left, rightRoot, revision, relative) {
+  if (!fs.existsSync(left)) return fileAtRevision(rightRoot, revision, relative) === null;
+  const right = fileAtRevision(rightRoot, revision, relative);
+  return right !== null && fs.readFileSync(left).equals(right);
+}
+
 function parseArgs(args) {
   const options = {};
   for (let index = 0; index < args.length; index += 1) {
@@ -82,6 +111,16 @@ function main(args = process.argv.slice(2), env = process.env) {
   const explorer = path.resolve(
     env.XCHAIN_EXPLORER_PATH || path.join(indexer, '..', 'xchain-explorer'),
   );
+  const explorerRef =
+    companionRef(env.CI_SIBLING_PINS, path.basename(explorer)) ||
+    companionRef(env.CI_COMPANIONS, path.basename(explorer));
+  if (explorerRef && !isCommit(explorer, explorerRef)) {
+    console.error(
+      `hub_db_sync twin guard: companion ref ${explorerRef} does not resolve in ` +
+        path.basename(explorer),
+    );
+    return 2;
+  }
   const requestedBase = options.base || env.PROM_CI_BASE_SHA;
   const base = resolveBase(indexer, requestedBase);
   if (!base) {
@@ -99,7 +138,10 @@ function main(args = process.argv.slice(2), env = process.env) {
 
   let drift = false;
   for (const file of changed) {
-    if (!sameFile(path.join(indexer, file), path.join(explorer, file))) {
+    const matches = explorerRef
+      ? sameFileAtRevision(path.join(indexer, file), explorer, explorerRef, file)
+      : sameFile(path.join(indexer, file), path.join(explorer, file));
+    if (!matches) {
       console.log(
         `DRIFT: ${path.basename(explorer)}/${file} differs from canonical ` +
           `${path.basename(indexer)}/${file}`,
@@ -111,7 +153,8 @@ function main(args = process.argv.slice(2), env = process.env) {
 
   console.log(
     changed.length
-      ? `OK: ${changed.length} changed canonical hub_db_sync explorer twin(s) are byte-identical.`
+      ? `OK: ${changed.length} changed canonical hub_db_sync explorer twin(s) are byte-identical` +
+        `${explorerRef ? ` at companion ref ${explorerRef}` : ''}.`
       : 'OK: no canonical hub_db_sync files changed in the pushed range.',
   );
   return 0;
@@ -119,4 +162,12 @@ function main(args = process.argv.slice(2), env = process.env) {
 
 if (require.main === module) process.exitCode = main();
 
-module.exports = { changedHubDbSyncFiles, main, resolveBase, sameFile };
+module.exports = {
+  changedHubDbSyncFiles,
+  companionRef,
+  fileAtRevision,
+  main,
+  resolveBase,
+  sameFile,
+  sameFileAtRevision,
+};
