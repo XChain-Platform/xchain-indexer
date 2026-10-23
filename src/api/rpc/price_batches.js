@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const priceBatchQuery = require('../price_batch_query');
+const { committedView } = require('../health');
 const { getLogger } = require('../../observability/index.js');
 
 // Which oracle rounds in [first_round, last_round] already ride a VALID PRICE
@@ -34,11 +35,14 @@ const { getLogger } = require('../../observability/index.js');
 // latest indexed block in the same round-trip, and `truncated` when the page
 // filled, so the caller pages past its last batch rather than reading the
 // remainder as empty. Body: { first_round, last_round, limit? }
-// Protocol time of each distinct landing block in rows, read through the view's
-// protocolTimeForStoredBlock: the clock data['BLOCK_TIME'] carried into the batch's
-// pushpricebatch. An unresolvable block is left out, so its batch answers null.
-async function landingBlockTimes(db, rows){
+// Protocol time of each distinct landing block in rows, read from the DECODER database
+// the way block_parse.js takes data['BLOCK_TIME'] for the batch's pushpricebatch, through
+// its committed view (protocolTimeForStoredBlock leaves the hot-path memo alone). An
+// unresolvable block, or no decoder database, is left out, so its batch answers null.
+async function landingBlockTimes(decoderDb, rows){
     let times = new Map();
+    if(!decoderDb) return times;
+    let db = committedView(decoderDb);
     for(let row of (Array.isArray(rows) ? rows : [])){
         if(row.block_index === null || row.block_index === undefined) continue;
         let blockIndex = Number(row.block_index);
@@ -62,7 +66,7 @@ function priceBatchesRpc({ indexer }){
                 let latest = await db.getLatestBlockIndex();
                 let rows   = await db.getPriceBatchesOverlappingRange(
                     'valid', v.last_round, v.first_round, v.limit);
-                let times  = await landingBlockTimes(db, rows);
+                let times  = await landingBlockTimes(indexer.decoderDb, rows);
                 return priceBatchQuery.buildPriceBatchesResponse(latest, rows, v, times);
             } catch (err) {
                 getLogger().error('getpricebatches error:', err);
