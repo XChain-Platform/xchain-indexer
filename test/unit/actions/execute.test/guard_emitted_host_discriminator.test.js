@@ -128,7 +128,7 @@ describe('controller guard emitted-host discriminator @regression @tier1', funct
         assert.deepStrictEqual(ProtocolChanges.get(GATE_KEY), {
             mainnet: ProtocolChanges.UNARMED,
             'BTC:testnet': 157295,
-            'LTC:testnet': 4931000,
+            'LTC:testnet': 4930117,
             'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,

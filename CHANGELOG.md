@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.3] - 2026-10-23
+
+### Changed
+- Re-pinned BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION on LTC:testnet to 4930117.
+- Re-pinned BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION on LTC:testnet to 4930117.
+- Re-pinned TICK_CACHE_NULL_PROTOTYPE_ACTIVATION on LTC:testnet to 4930117.
+- Re-pinned AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION on LTC:testnet to 4930117.
+- Re-pinned GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION on LTC:testnet to 4930117.
+- Re-pinned ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION on LTC:testnet to 4930117.
+
 ## [0.26.2] - 2026-10-21
 
 ### Changed
