@@ -41,7 +41,8 @@ describe('JSON-RPC price batch family @regression @tier1', function () {
 
     it('getpricebatches validates the window, reads valid batches over it and pages by truncation', async function () {
         const rows = [{ first_round: 3, last_round: 5, block_index: 9, action_index: 40 }];
-        const view = recordingView({ getLatestBlockIndex: 20, getPriceBatchesOverlappingRange: rows });
+        const view = recordingView({ getLatestBlockIndex: 20, getPriceBatchesOverlappingRange: rows,
+            protocolTimeForStoredBlock: 1700000900 });
         const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view }) });
         const res = await rpc.getpricebatches({ first_round: 1, last_round: 10, limit: 1 });
         assert.strictEqual(res.block_index, 20);
@@ -52,6 +53,27 @@ describe('JSON-RPC price batch family @regression @tier1', function () {
         assert.deepStrictEqual(await buildPriceBatchesRpc({ indexer: fakeIndexer({ indexerDb: null }) }).getpricebatches({}), NOT_READY);
         sinon.stub(observability.getLogger(), 'error');
         view.getPriceBatchesOverlappingRange = async () => { throw new Error('x'); };
+        assert.deepStrictEqual(await rpc.getpricebatches({ first_round: 1, last_round: 2 }), { error: 'failed to look up price batches' });
+    });
+
+    it('getpricebatches answers each batch landing block with its protocol time, the clock pushpricebatch carried', async function () {
+        const rows = [
+            { batch_first_round: 3, batch_last_round: 5, block_index: 9, action_index: 40 },
+            { batch_first_round: 4, batch_last_round: 6, block_index: 9, action_index: 41 },
+            { batch_first_round: 7, batch_last_round: 8, block_index: 12, action_index: 42 }
+        ];
+        const times = { 9: 1700000900, 12: false };
+        const view = recordingView({ getLatestBlockIndex: 20, getPriceBatchesOverlappingRange: rows,
+            protocolTimeForStoredBlock: (block) => times[block] });
+        const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view }) });
+        const res = await rpc.getpricebatches({ first_round: 1, last_round: 10 });
+        assert.deepStrictEqual(res.batches.map(b => [b.first_round, b.block_index, b.block_time]),
+            [[3, 9, 1700000900], [4, 9, 1700000900], [7, 12, null]]);
+        // One protocol-time read per distinct landing block.
+        assert.deepStrictEqual(view.calls.filter(c => c[0] === 'protocolTimeForStoredBlock'),
+            [['protocolTimeForStoredBlock', 9], ['protocolTimeForStoredBlock', 12]]);
+        sinon.stub(observability.getLogger(), 'error');
+        view.protocolTimeForStoredBlock = async () => { throw new Error('x'); };
         assert.deepStrictEqual(await rpc.getpricebatches({ first_round: 1, last_round: 2 }), { error: 'failed to look up price batches' });
     });
 });

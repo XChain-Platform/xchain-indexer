@@ -69,6 +69,13 @@ function validatedLimit(body) {
  * @param {{first_round:*, last_round:*, limit?:*}} body
  * @returns {{ok:true, first_round:number, last_round:number, limit:number}|{ok:false, error:string}}
  */
+// A driver number, BigInt or digit string as a number; null, undefined and false as null.
+function nullableNumber(v) {
+    if (v === null || v === undefined || v === false) return null;
+    let n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
 function validatePriceBatchParams(body) {
     body = body || {};
     let bounds = validateInclusiveBounds(body, 'first_round', 'last_round');
@@ -98,18 +105,31 @@ function validateAttestBatchParams(body) {
  * unanswered rather than empty. Rows come from the driver as BigInt-or-string
  * BIGINTs, so every number is normalized through Number() for the wire.
  *
+ * Each batch also carries its landing block_index and that block's PROTOCOL
+ * block_time, the same clock the pushpricebatch for it carried, so a hub the push
+ * never reached can stamp the landing from this read. Either is null when it
+ * cannot be resolved, never a guess.
+ *
  * @param {number|null} latestBlockIndex the indexer's committed tip
  * @param {Array<object>} rows
  * @param {{first_round:number, last_round:number, limit:number}} v
+ * @param {Map<number, number>} [blockTimes] protocol time by landing block_index
  */
-function buildPriceBatchesResponse(latestBlockIndex, rows, v) {
+function buildPriceBatchesResponse(latestBlockIndex, rows, v, blockTimes) {
     let list = Array.isArray(rows) ? rows : [];
-    let batches = list.map(r => ({
-        action_index: Number(r.action_index),
-        first_round:  Number(r.batch_first_round),
-        last_round:   Number(r.batch_last_round),
-        round_count:  r.round_count === null || r.round_count === undefined ? null : Number(r.round_count)
-    }));
+    let times = blockTimes instanceof Map ? blockTimes : new Map();
+    let batches = list.map(r => {
+        let blockIndex = nullableNumber(r.block_index);
+        let blockTime  = blockIndex === null ? null : nullableNumber(times.get(blockIndex));
+        return {
+            action_index: Number(r.action_index),
+            first_round:  Number(r.batch_first_round),
+            last_round:   Number(r.batch_last_round),
+            round_count:  nullableNumber(r.round_count),
+            block_index:  blockIndex,
+            block_time:   blockTime
+        };
+    });
     return {
         block_index: latestBlockIndex === null || latestBlockIndex === undefined ? null : Number(latestBlockIndex),
         first_round: v.first_round,

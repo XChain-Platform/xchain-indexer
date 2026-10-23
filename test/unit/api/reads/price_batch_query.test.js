@@ -78,6 +78,12 @@ describe('price-batch-query (getpricebatches)', function () {
             assert.strictEqual((seen.sql.match(/\?/g) || []).length, 4);
         });
 
+        it('reads the landing block_index off the batch actions row', async function () {
+            let { seen } = await capture(['valid', 60, 40, 3]);
+            assert.ok(/a\.block_index/.test(seen.sql));
+            assert.ok(/LEFT JOIN actions a ON a\.action_index = p\.action_index/.test(seen.sql));
+        });
+
         it('binds status, last_round, first_round, limit in that order', async function () {
             // The range reads backwards on purpose: a batch overlaps [first,last] when it
             // STARTS at or before last and ENDS at or after first. Swapping these two binds
@@ -104,11 +110,22 @@ describe('price-batch-query (getpricebatches)', function () {
             assert.deepStrictEqual(out, {
                 block_index: 67875698, first_round: 40, last_round: 60,
                 batches: [
-                    { action_index: 10,  first_round: 49, last_round: 53, round_count: 5 },
-                    { action_index: 250, first_round: 40, last_round: 41, round_count: null }
+                    { action_index: 10,  first_round: 49, last_round: 53, round_count: 5, block_index: null, block_time: null },
+                    { action_index: 250, first_round: 40, last_round: 41, round_count: null, block_index: null, block_time: null }
                 ],
                 truncated: false
             });
+        });
+
+        it('carries each batch landing block and its protocol time, null when unresolved', function () {
+            let rows = [
+                { action_index: 10, batch_first_round: 49, batch_last_round: 53, round_count: 5, block_index: 900n },
+                { action_index: 11, batch_first_round: 54, batch_last_round: 55, round_count: 2, block_index: '901' },
+                { action_index: 12, batch_first_round: 56, batch_last_round: 57, round_count: 2, block_index: null }
+            ];
+            let out = buildPriceBatchesResponse(905, rows, V, new Map([[900, 1700009000]]));
+            assert.deepStrictEqual(out.batches.map(b => [b.block_index, b.block_time]),
+                [[900, 1700009000], [901, null], [null, null]]);
         });
 
         it('flags a full page as truncated so the caller pages instead of reading it as complete', function () {

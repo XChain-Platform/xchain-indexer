@@ -34,6 +34,21 @@ const { getLogger } = require('../../observability/index.js');
 // latest indexed block in the same round-trip, and `truncated` when the page
 // filled, so the caller pages past its last batch rather than reading the
 // remainder as empty. Body: { first_round, last_round, limit? }
+// Protocol time of each distinct landing block in rows, read through the view's
+// protocolTimeForStoredBlock: the clock data['BLOCK_TIME'] carried into the batch's
+// pushpricebatch. An unresolvable block is left out, so its batch answers null.
+async function landingBlockTimes(db, rows){
+    let times = new Map();
+    for(let row of (Array.isArray(rows) ? rows : [])){
+        if(row.block_index === null || row.block_index === undefined) continue;
+        let blockIndex = Number(row.block_index);
+        if(!Number.isSafeInteger(blockIndex) || times.has(blockIndex)) continue;
+        let time = await db.protocolTimeForStoredBlock(blockIndex);
+        if(time !== false && time !== null && time !== undefined) times.set(blockIndex, Number(time));
+    }
+    return times;
+}
+
 function priceBatchesRpc({ indexer }){
     return {
         async getpricebatches({first_round, last_round, limit}){
@@ -47,7 +62,8 @@ function priceBatchesRpc({ indexer }){
                 let latest = await db.getLatestBlockIndex();
                 let rows   = await db.getPriceBatchesOverlappingRange(
                     'valid', v.last_round, v.first_round, v.limit);
-                return priceBatchQuery.buildPriceBatchesResponse(latest, rows, v);
+                let times  = await landingBlockTimes(db, rows);
+                return priceBatchQuery.buildPriceBatchesResponse(latest, rows, v, times);
             } catch (err) {
                 getLogger().error('getpricebatches error:', err);
                 return { error: 'failed to look up price batches' };

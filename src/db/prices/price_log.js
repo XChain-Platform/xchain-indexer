@@ -90,14 +90,16 @@ module.exports = {
     // round_number carries the batch's FIRST_ROUND on a batch row (prices.sql), so the
     // indexed column drives the scan while batch_first_round stays the authoritative field
     // and is what comes back. The caller pages by advancing first_round past the last batch
-    // it received.
+    // it received. block_index is the landing block from the batch's actions row, so the
+    // caller can resolve the landing clock a pushpricebatch carried for it.
     async getPriceBatchesOverlappingRange(validationStatus, lastRound, firstRound, limit){
-        let query = 'SELECT action_index, batch_first_round, batch_last_round, round_count ' +
-                    'FROM prices ' +
-                    'WHERE version = 0 AND validation_status = ? ' +
-                    'AND batch_first_round IS NOT NULL AND batch_last_round IS NOT NULL ' +
-                    'AND batch_first_round <= ? AND batch_last_round >= ? ' +
-                    'ORDER BY batch_first_round ASC, action_index ASC ' +
+        let query = 'SELECT p.action_index, p.batch_first_round, p.batch_last_round, p.round_count, ' +
+                    'a.block_index ' +
+                    'FROM prices p LEFT JOIN actions a ON a.action_index = p.action_index ' +
+                    'WHERE p.version = 0 AND p.validation_status = ? ' +
+                    'AND p.batch_first_round IS NOT NULL AND p.batch_last_round IS NOT NULL ' +
+                    'AND p.batch_first_round <= ? AND p.batch_last_round >= ? ' +
+                    'ORDER BY p.batch_first_round ASC, p.action_index ASC ' +
                     'LIMIT ?';
         return await this.doQuery(query, [validationStatus, lastRound, firstRound, limit]);
     },
