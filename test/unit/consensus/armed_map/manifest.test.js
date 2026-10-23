@@ -231,7 +231,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
             'BTC:testnet': 157295,
-            'LTC:testnet': 4931000,
+            'LTC:testnet': 4930117,
             'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
@@ -246,7 +246,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
             'BTC:testnet': 157295,
-            'LTC:testnet': 4931000,
+            'LTC:testnet': 4930117,
             'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
@@ -261,7 +261,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
             'BTC:testnet': 157295,
-            'LTC:testnet': 4931000,
+            'LTC:testnet': 4930117,
             'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
@@ -276,7 +276,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
             'BTC:testnet': 157295,
-            'LTC:testnet': 4931000,
+            'LTC:testnet': 4930117,
             'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
@@ -291,7 +291,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
             'BTC:testnet': 157295,
-            'LTC:testnet': 4931000,
+            'LTC:testnet': 4930117,
             'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
@@ -306,7 +306,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
             'BTC:testnet': 157295,
-            'LTC:testnet': 4931000,
+            'LTC:testnet': 4930117,
             'DOGE:testnet': 68015000,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
