@@ -56,6 +56,11 @@ const CI_HELPERS = new Set([
   'bin/ci_fast_select.js',
   'bin/vendor-vm.sh'
 ]);
+const HUB_TWIN_HELPERS = new Set([
+  'bin/check-hub-db-sync-explorer-twins.js',
+  'bin/sync-hub-mirror-client.sh'
+]);
+const HUB_TWIN_TEST = 'bin/test/hub_db_sync_explorer_twin_order.test.js';
 const GROUPS = [
   {
     group: 'main',
@@ -249,6 +254,7 @@ function selectFastTests(
   ) || supportWidens;
   for (const file of changed) {
     if (CI_HELPERS.has(file) && existing.has(CI_HELPER_TEST)) selected.add(CI_HELPER_TEST);
+    if (HUB_TWIN_HELPERS.has(file) && existing.has(HUB_TWIN_TEST)) selected.add(HUB_TWIN_TEST);
     if (existing.has(file)) selected.add(file);
     else if (file.startsWith('test/') && isTestFile(file) && !matchingGroup(file)) {
       reasons.add(`deferred: ${file}`);

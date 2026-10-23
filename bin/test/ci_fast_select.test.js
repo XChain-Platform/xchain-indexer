@@ -120,6 +120,20 @@ describe('ci fast selector', function () {
     }
   });
 
+  it('maps hub mirror twin helpers to the landing-order test without widening', function () {
+    for (const file of [
+      'bin/check-hub-db-sync-explorer-twins.js',
+      'bin/sync-hub-mirror-client.sh'
+    ]) {
+      const plan = select([file]);
+      assert.strictEqual(plan.consensus, false, file);
+      assert.deepStrictEqual(plan.tests, [{
+        group: 'main',
+        file: 'bin/test/hub_db_sync_explorer_twin_order.test.js'
+      }], file);
+    }
+  });
+
   it('widens package manifest changes', function () {
     const plan = select(['package.json']);
     assert.strictEqual(plan.consensus, true);
