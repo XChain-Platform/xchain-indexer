@@ -117,7 +117,7 @@ addGate('bridge_escrow_anchor_match_activation.BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVA
 addGate('batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 157295,
-    'LTC:testnet': 4931000,
+    'LTC:testnet': 4930117,
     'DOGE:testnet': 68015000,
     testnet: UNARMED,
     regtest: 0,
@@ -138,7 +138,7 @@ addGate('archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION',
 addGate('bridge_checkpoint_v3_section_activation.BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 157295,
-    'LTC:testnet': 4931000,
+    'LTC:testnet': 4930117,
     'DOGE:testnet': 68015000,
     testnet: UNARMED,
     regtest: 0,
@@ -149,7 +149,7 @@ addGate('bridge_checkpoint_v3_section_activation.BRIDGE_CHECKPOINT_V3_SECTION_AC
 addGate('tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 157295,
-    'LTC:testnet': 4931000,
+    'LTC:testnet': 4930117,
     'DOGE:testnet': 68015000,
     testnet: UNARMED,
     regtest: 0,
@@ -160,7 +160,7 @@ addGate('tick_cache_null_prototype_activation.TICK_CACHE_NULL_PROTOTYPE_ACTIVATI
 addGate('airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_ROLLBACK_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 157295,
-    'LTC:testnet': 4931000,
+    'LTC:testnet': 4930117,
     'DOGE:testnet': 68015000,
     testnet: UNARMED,
     regtest: 0,
@@ -171,7 +171,7 @@ addGate('airdrop_native_fee_tally_rollback_activation.AIRDROP_NATIVE_FEE_TALLY_R
 addGate('guard_emitted_host_discriminator_activation.GUARD_EMITTED_HOST_DISCRIMINATOR_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 157295,
-    'LTC:testnet': 4931000,
+    'LTC:testnet': 4930117,
     'DOGE:testnet': 68015000,
     testnet: UNARMED,
     regtest: 0,
@@ -182,7 +182,7 @@ addGate('guard_emitted_host_discriminator_activation.GUARD_EMITTED_HOST_DISCRIMI
 addGate('archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': 157295,
-    'LTC:testnet': 4931000,
+    'LTC:testnet': 4930117,
     'DOGE:testnet': 68015000,
     testnet: UNARMED,
     regtest: 0,
