@@ -20,6 +20,16 @@ const { spawnSync } = require('node:child_process');
 
 const repoRoot = path.join(__dirname, '..', '..', '..');
 const guardScript = path.join(repoRoot, 'bin', 'check-hub-db-sync-explorer-twins.js');
+const HERMETIC_ENV = (() => {
+  const env = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (/^(CI_|PROM_CI_|XCHAIN_|GIT_)/.test(key)) continue;
+    env[key] = value;
+  }
+  env.GIT_CONFIG_GLOBAL = '/dev/null';
+  env.GIT_CONFIG_NOSYSTEM = '1';
+  return env;
+})();
 
 function write(root, relative, contents = `${relative}\n`) {
   const target = path.join(root, relative);
@@ -48,7 +58,10 @@ function twinFixture() {
 }
 
 function runGit(root, args) {
-  const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+  const result = spawnSync('git', ['-C', root, ...args], {
+    encoding: 'utf8',
+    env: HERMETIC_ENV,
+  });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   return result;
 }
@@ -58,7 +71,7 @@ function runGuard(fixture) {
     cwd: fixture.indexer,
     encoding: 'utf8',
     env: {
-      ...process.env,
+      ...HERMETIC_ENV,
       PROM_CI_BASE_SHA: fixture.base,
       XCHAIN_INDEXER_PATH: fixture.indexer,
       XCHAIN_EXPLORER_PATH: fixture.explorer,
