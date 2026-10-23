@@ -32,16 +32,34 @@ const CAPABILITY_PROOF_REQUEST_INTERVAL_MS = 110;
 
 module.exports = {
 
+    // Spaces this client's proof GETs. The hub's shared budget bounds what all of its
+    // clients together send the BTC indexer; this keeps one client from queueing a
+    // burst at the hub. The wait is re-read after each sleep because a 429 that lands
+    // meanwhile (deferCapabilityProofRequests) moves it later.
     async paceCapabilityProofRequest() {
         let previous = this._capabilityProofPaceChain || Promise.resolve();
         let turn = previous.then(async () => {
-            let earliest = Number(this._capabilityProofNextRequestAt) || 0;
-            let delay = Math.max(0, earliest - Date.now());
-            if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
+            for (;;) {
+                let earliest = Number(this._capabilityProofNextRequestAt) || 0;
+                let delay = Math.max(0, earliest - Date.now());
+                if (delay <= 0) break;
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
             this._capabilityProofNextRequestAt = Date.now() + CAPABILITY_PROOF_REQUEST_INTERVAL_MS;
         });
         this._capabilityProofPaceChain = turn.catch(() => {});
         return turn;
+    },
+
+    // A hub 429 carries the Retry-After its budget, or the BTC indexer behind it, asked
+    // for: hold every later proof GET from this client until then instead of retrying
+    // into the refusal. Any other failure leaves the pacing as it was.
+    deferCapabilityProofRequests(error) {
+        if (!error || Number(error.statusCode) !== 429) return;
+        let retryAfterMs = Number(error.retryAfterMs);
+        if (!Number.isFinite(retryAfterMs) || retryAfterMs <= 0) return;
+        this._capabilityProofNextRequestAt = Math.max(
+            Number(this._capabilityProofNextRequestAt) || 0, Date.now() + retryAfterMs);
     },
 
     // The judge for one served row, skipped when the local mirror already holds the row's

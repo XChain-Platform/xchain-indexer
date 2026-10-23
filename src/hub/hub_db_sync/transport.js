@@ -38,6 +38,16 @@ try {
     // ws is optional; if not installed, live updates are disabled but bootstrap still works
 }
 
+// A 429's Retry-After in ms: delta-seconds or an HTTP-date, null when absent or unreadable.
+function retryAfterHeaderMs(header) {
+    let value = Array.isArray(header) ? header[0] : header;
+    if (typeof value !== 'string' || value.trim() === '') return null;
+    let seconds = Number(value);
+    if (Number.isFinite(seconds)) return seconds >= 0 ? seconds * 1000 : null;
+    let at = Date.parse(value);
+    return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
+}
+
 const transportMethods = {
 
     fetchHubList() {
@@ -291,7 +301,13 @@ const transportMethods = {
                 res.on('data', (chunk) => { body += chunk; });
                 res.on('end', () => {
                     if (res.statusCode !== 200) {
-                        return reject(new Error('HTTP ' + res.statusCode));
+                        let error = new Error('HTTP ' + res.statusCode);
+                        error.statusCode = res.statusCode;
+                        if (res.statusCode === 429) {
+                            let retryAfterMs = retryAfterHeaderMs(res.headers['retry-after']);
+                            if (retryAfterMs !== null) error.retryAfterMs = retryAfterMs;
+                        }
+                        return reject(error);
                     }
                     try {
                         resolve(JSON.parse(body));

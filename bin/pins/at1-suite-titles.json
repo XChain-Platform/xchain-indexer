@@ -15693,6 +15693,13 @@
       "DEPOSIT custody guard gas reservation @regression @tier2 refuses when the token fee leaves too little for the address guard ceiling",
       "DEPOSIT custody guard gas reservation @regression @tier2 reserves guard gas from the amount-debited snapshot when TICK is GAS"
     ],
+    "d37decb95f3187b2": [
+      "HubDbSync capability proof Retry-After carries the status but no wait for a 503 or a 429 without a usable header",
+      "HubDbSync capability proof Retry-After holds the next proof GET until the Retry-After of a 429 has passed",
+      "HubDbSync capability proof Retry-After keeps the ordinary spacing after a failure that is not a rate limit",
+      "HubDbSync capability proof Retry-After re-reads the wait when a 429 lands while a later GET is already sleeping",
+      "HubDbSync capability proof Retry-After reads the status and Retry-After of a hub 429 onto the rejection"
+    ],
     "d3800aa7829a739c": [
       "Attest (ATTEST) @regression @tier3 v1: response bumps fulfilled_count for each signer only when STATUS is ok",
       "Attest (ATTEST) @regression @tier3 v1: response flips request to errored (no fulfilled_count) for a valid terminal non-ok response",
@@ -18884,8 +18891,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1504,
-      "titleCount": 14613,
+      "fileCount": 1505,
+      "titleCount": 14618,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19953,6 +19960,7 @@
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "dc3cc58dd0e12f6d",
+        "test/unit/hub/hub_db_sync/capability_proof/retry_after.test.js": "d37decb95f3187b2",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",

@@ -344,10 +344,15 @@ module.exports = {
 
     async fetchCapabilitySnapshotProof(snapshotBlock, capability, pubkeys) {
         await this.paceCapabilityProofRequest();
-        return this.httpGet('/hub-db/snapshot/capability_snapshot_proof?snapshot_block=' +
-            encodeURIComponent(String(snapshotBlock)) + '&capability=' +
-            encodeURIComponent(String(capability)) + '&pubkeys=' +
-            encodeURIComponent((Array.isArray(pubkeys) ? pubkeys : []).map(String).join(',')));
+        try {
+            return await this.httpGet('/hub-db/snapshot/capability_snapshot_proof?snapshot_block=' +
+                encodeURIComponent(String(snapshotBlock)) + '&capability=' +
+                encodeURIComponent(String(capability)) + '&pubkeys=' +
+                encodeURIComponent((Array.isArray(pubkeys) ? pubkeys : []).map(String).join(',')));
+        } catch (error) {
+            this.deferCapabilityProofRequests(error);
+            throw error;
+        }
     },
 
     // Report the refusals counted for `table` since the last report, one line per foreign
