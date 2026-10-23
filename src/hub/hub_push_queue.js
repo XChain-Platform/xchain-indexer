@@ -269,7 +269,11 @@ class HubPushQueue {
             // at A' inside the original open-ended range is not wiped. Old queued rows (no
             // last_action_index) fall back to open-ended via undefined. retraction_generation
             // fences the delete to push_generation <= it; absent on old queued rows.
-            await client.retractPriceRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+            // batches names the retracted PRICE batch round windows; rows staged before it
+            // existed carry none and keep the four-argument call.
+            let args = [payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation];
+            if(Array.isArray(payload.batches)) args.push(payload.batches);
+            await client.retractPriceRange(...args);
         } else if(row.push_type === 'xcall_retraction'){
             // Reorg XCALL relay retraction parked by rollback.js when the live RPC
             // failed. retractXcallRange is idempotent over a replayed range; closed-range bounded + gen-fenced.

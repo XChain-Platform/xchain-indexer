@@ -207,7 +207,7 @@ class Rollback {
     // The writes of the reorg transaction, in order, ending with the commit. Returns the
     // staged hub retractions for the post-commit delivery.
     async applyRollbackWrites(block_index, scope, markets, addresses, tickers){
-        let { firstActionIndex, lastActionIndex, unlandedAttestBatches } = scope;
+        let { firstActionIndex, lastActionIndex, unlandedAttestBatches, retractedPriceBatches } = scope;
         // Reverse any cooldown maturities orphaned by this reorg. Runs UNCONDITIONALLY (outside
         // the firstActionIndex guard) and BEFORE the generic deletes: the legacy (pre-flag-day)
         // maturity path writes the refund credit + 'completed' flip against a SURVIVING unstake
@@ -239,7 +239,8 @@ class Rollback {
 
         await this.refreshDerivedProjections(block_index, addresses, tickers, markets);
 
-        let staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches);
+        let staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches,
+            retractedPriceBatches);
 
         await this.commitAndInvalidateCaches();
 

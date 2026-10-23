@@ -96,7 +96,7 @@ module.exports = {
     // Both the bump and the write-ahead commit atomically with the rollback's deletes, and
     // bumpPushGeneration routes through the open transaction connection (doQuery), so a failure
     // throws into runRollbackTransaction's catch and rolls every delete back.
-    async stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches){
+    async stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches, retractedPriceBatches){
         let retractionGeneration = null;
         let stagedRetractions = [];
         let bumpedGeneration = await this.indexerDb.bumpPushGeneration(this.config['COIN']);
@@ -119,10 +119,16 @@ module.exports = {
         // replay may have re-published rows above lastActionIndex, which must be preserved.
         if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled){
             for(let pushType of ['price_retraction', 'xcall_retraction', 'match_retraction', 'bridge_retraction']){
-                let id = await this.indexerDb.enqueueHubPushTx(pushType, {
+                let payload = {
                     coin: this.config['COIN'], action_index: firstActionIndex,
-                    last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
-                stagedRetractions.push({ pushType, id });
+                    last_action_index: lastActionIndex, retraction_generation: retractionGeneration };
+                // The price retraction also names the round window of each PRICE batch it
+                // rolls back, so the hub can clear the landing clock that batch stamped on
+                // rounds it holds from any other path.
+                if(pushType === 'price_retraction' && Array.isArray(retractedPriceBatches) && retractedPriceBatches.length > 0)
+                    payload.batches = retractedPriceBatches;
+                let id = await this.indexerDb.enqueueHubPushTx(pushType, payload);
+                stagedRetractions.push({ pushType, id, payload });
             }
 
             // One durable row per ATTEST batch this reorg un-landed, on the same
@@ -243,7 +249,8 @@ module.exports = {
             try {
                 let coin       = this.config['COIN'];
                 let liveByType = {
-                    price_retraction: (client, last) => client.retractPriceRange(coin, firstActionIndex, last, retractionGeneration),
+                    price_retraction: (client, last, payload) => client.retractPriceRange(coin, firstActionIndex, last,
+                        retractionGeneration, payload && payload.batches),
                     xcall_retraction: (client, last) => client.retractXcallRange(coin, firstActionIndex, last, retractionGeneration),
                     match_retraction: (client, last) => client.retractMatchRange(coin, firstActionIndex, last, retractionGeneration),
                     bridge_retraction: (client, last) => client.retractBridgeRange(coin, firstActionIndex, last, retractionGeneration),

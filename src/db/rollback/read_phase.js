@@ -256,6 +256,21 @@ module.exports = {
         return query;
     },
 
+    // The round window of every valid PRICE batch in the rolled-back action range, read
+    // strict for the same reason as the ATTEST read below: an empty answer from a fault
+    // would silently drop the hub's landing-clock reset.
+    async readRetractedPriceBatchRows(view, firstActionIndex){
+        let query = `SELECT action_index, batch_first_round, batch_last_round
+                     FROM prices
+                     WHERE version = 0
+                       AND validation_status = 'valid'
+                       AND batch_first_round IS NOT NULL
+                       AND batch_last_round IS NOT NULL
+                       AND action_index >= ?
+                     ORDER BY action_index ASC`;
+        return await view.doQueryStrict(query, [firstActionIndex]);
+    },
+
     // The valid ATTEST batch heads a rolled-back chunk row belongs to, read strict.
     async readUnlandedAttestBatchRows(view, firstActionIndex){
         let query = `SELECT DISTINCT
