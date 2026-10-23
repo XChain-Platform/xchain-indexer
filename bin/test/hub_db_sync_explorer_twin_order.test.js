@@ -20,8 +20,29 @@ const { spawnSync } = require('node:child_process');
 const repoRoot = path.join(__dirname, '..', '..');
 const syncSource = path.join(repoRoot, 'bin', 'sync-hub-mirror-client.sh');
 
+// Every child process gets this scrubbed environment so the fixture sees only
+// its own temp repos. A CI venue exports CI_SIBLING_PINS naming the real
+// explorer SHA it shipped; inherited, it pinned the fixture's explorer to a
+// commit that exists only on the venue and the hook failed before comparing.
+// Global and system git config are dropped for the same reason (a venue's
+// core.hooksPath or url rewrites would bypass or redirect the fixture hooks).
+const HERMETIC_ENV = (() => {
+  const env = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (/^(CI_|PROM_CI_|XCHAIN_|GIT_)/.test(key)) continue;
+    env[key] = value;
+  }
+  env.GIT_CONFIG_GLOBAL = '/dev/null';
+  env.GIT_CONFIG_NOSYSTEM = '1';
+  return env;
+})();
+
 function run(command, args, options = {}) {
-  return spawnSync(command, args, { encoding: 'utf8', ...options });
+  return spawnSync(command, args, { encoding: 'utf8', env: HERMETIC_ENV, ...options });
+}
+
+function withEnv(extra) {
+  return { env: { ...HERMETIC_ENV, ...extra } };
 }
 
 function git(root, args) {
@@ -146,7 +167,7 @@ describe('hub DB sync explorer twin landing order', function () {
       const stale = run(
         'git',
         ['-C', fixture.indexer, 'push', 'origin', 'HEAD:develop'],
-        { env: { ...process.env, CI_COMPANIONS: '' } },
+        withEnv({ CI_COMPANIONS: '' }),
       );
       assert.equal(stale.status, 1, stale.stdout + stale.stderr);
       assert.match(stale.stdout + stale.stderr, /DRIFT: .*live_events\.js differs/);
@@ -155,12 +176,7 @@ describe('hub DB sync explorer twin landing order', function () {
       const companion = run(
         'git',
         ['-C', fixture.indexer, 'push', 'origin', 'HEAD:develop'],
-        {
-          env: {
-            ...process.env,
-            CI_COMPANIONS: 'xchain-explorer=mirror-client-twin',
-          },
-        },
+        withEnv({ CI_COMPANIONS: 'xchain-explorer=mirror-client-twin' }),
       );
       assert.equal(companion.status, 0, companion.stdout + companion.stderr);
       assert.match(
@@ -185,6 +201,35 @@ describe('hub DB sync explorer twin landing order', function () {
       assert.equal(
         git(fixture.explorer, ['rev-parse', 'origin/develop']),
         git(fixture.explorer, ['rev-parse', 'mirror-client-twin']),
+      );
+    } finally {
+      fs.rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts the venue form, where the dispatcher pins the companion SHA', () => {
+    const fixture = makeFixture();
+    try {
+      const companionSha = git(fixture.explorer, ['rev-parse', 'mirror-client-twin']);
+      const foreign = run(
+        'git',
+        ['-C', fixture.indexer, 'push', 'origin', 'HEAD:develop'],
+        withEnv({ CI_SIBLING_PINS: `xchain-explorer=${'0'.repeat(40)}` }),
+      );
+      assert.equal(foreign.status, 1, foreign.stdout + foreign.stderr);
+      assert.match(foreign.stdout + foreign.stderr, /companion ref 0{40} does not resolve/);
+      assert.equal(git(fixture.indexer, ['rev-parse', 'origin/develop']), fixture.base);
+
+      const pinned = run(
+        'git',
+        ['-C', fixture.indexer, 'push', 'origin', 'HEAD:develop'],
+        withEnv({ CI_SIBLING_PINS: `xchain-sdk=${fixture.base} xchain-explorer=${companionSha}` }),
+      );
+      assert.equal(pinned.status, 0, pinned.stdout + pinned.stderr);
+      assert.match(pinned.stdout + pinned.stderr, new RegExp(`companion ref ${companionSha}`));
+      assert.equal(
+        git(fixture.indexer, ['rev-parse', 'origin/develop']),
+        git(fixture.indexer, ['rev-parse', 'HEAD']),
       );
     } finally {
       fs.rmSync(fixture.root, { recursive: true, force: true });
