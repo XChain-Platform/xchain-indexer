@@ -110,13 +110,19 @@ class HubSelector {
         let rawSeeds = ownOption(options, ['hubSeedUrls', 'seedUrls'], envReader, 'HUB_SEED_URLS');
         let hubApiUrl = ownOption(options, ['hubApiUrl', 'hubUrl'], envReader, 'HUB_API_URL');
         let seeds = parseSeeds(rawSeeds, resolved.network);
+        let mirrorSource = hubApiUrl !== undefined && hubApiUrl !== null && String(hubApiUrl).trim() !== ''
+            ? normalizeUrl(String(hubApiUrl)) : null;
 
         this._randomInt = randomInt;
         this._listeners = new Set();
-        this._pinned = seeds.length === 0 && hubApiUrl !== undefined && hubApiUrl !== null &&
-            String(hubApiUrl).trim() !== '';
-        this._candidates = this._pinned ? [normalizeUrl(String(hubApiUrl))] : shuffle(seeds, randomInt);
+        this._mirrorSource = mirrorSource;
+        this._pinned = seeds.length === 0 && mirrorSource !== null;
+        this._candidates = this._pinned ? [mirrorSource] : shuffle(seeds, randomInt);
         this._index = this._candidates.length ? 0 : -1;
+    }
+
+    mirrorSource() {
+        return this._mirrorSource;
     }
 
     current() {
