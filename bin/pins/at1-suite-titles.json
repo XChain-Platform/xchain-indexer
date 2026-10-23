@@ -2295,6 +2295,12 @@
       "hub mirror drain that keeps applying rows @regression @tier1 a multi-page drain that keeps applying rows keeps its connection epoch and certifies",
       "hub mirror drain that stops applying rows @regression @tier1 a drain whose page never returns is replaced once a ceiling window passes with no progress"
     ],
+    "208cc8951dcbe728": [
+      "Rollback price retraction batch windows @regression @tier3 HubClient puts the windows on pushpricereorg, and omits an empty list",
+      "Rollback price retraction batch windows @regression @tier3 keeps the windows on the durable row when the live delivery fails, and the queue drain forwards them",
+      "Rollback price retraction batch windows @regression @tier3 reads the rolled-back PRICE batch windows before the purge and stages them on the price retraction only",
+      "Rollback price retraction batch windows @regression @tier3 stages no batches key when the rolled-back range holds no PRICE batch"
+    ],
     "20bbbe770a4ba79f": [
       "isMirrorBarrierReason @regression @tier1 classifies every mirror barrier as resync-able and every host fault as not",
       "isMirrorBarrierReason @regression @tier1 finds every stall reason the block loop actually sets",
@@ -6682,6 +6688,21 @@
       "_smtTouched: the touched key is canonical on BOTH axes @regression an ordinary canonical address is unchanged (no regression on the common path)",
       "_smtTouched: the touched key is canonical on BOTH axes @regression an unresolvable address records NOTHING rather than a raw fallback"
     ],
+    "5c3aa0ac2691aa8f": [
+      "JSON-RPC anchor family @regression @tier1 every anchor read refuses without a database and reports a throw",
+      "JSON-RPC anchor family @regression @tier1 getanchoraction runs the owned SQL through doQuery and answers checkpoint_anchored",
+      "JSON-RPC anchor family @regression @tier1 getanchorconfirmations picks the paged SQL only when a cursor is given",
+      "JSON-RPC anchor family @regression @tier1 getarchiveanchor reads by content commitment and author",
+      "JSON-RPC price batch family @regression @tier1 getpricebatches answers each batch landing block with its protocol time, the clock pushpricebatch carried",
+      "JSON-RPC price batch family @regression @tier1 getpricebatches validates the window, reads valid batches over it and pages by truncation",
+      "JSON-RPC reorg history family @regression @tier1 falls back to the indexer's last-known halt flag when the probe faults",
+      "JSON-RPC reorg history family @regression @tier1 reads the decoder view, probes the live halt flag and matches an orphaned hash",
+      "JSON-RPC reorg history family @regression @tier1 validates, refuses without the decoder database and reports a throw",
+      "JSON-RPC roll-call family @regression @tier1 getrollcalls and getrollcallabsences clamp to 20 by default and 100 at most",
+      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners answers the cut, tip, manifest hash and activation heights",
+      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners refuses off DOGE, without a database, and reports a throw",
+      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners reports null for an inert activation rail"
+    ],
     "5c48505a05ac58d9": [
       "SLASH content parsers nulls only invalid batch fields",
       "SLASH content parsers nulls only invalid oracle fields",
@@ -8928,6 +8949,19 @@
       "HubClient hub-rejection classification throws on {error} aggregator still booting so the durable row is retried, not deleted",
       "HubClient hub-rejection classification throws on {error} handler exception so the durable row is retried, not deleted"
     ],
+    "7c370414380ce8a0": [
+      "price-batch-query (getpricebatches) buildPriceBatchesResponse answers an empty range with an empty list, never null",
+      "price-batch-query (getpricebatches) buildPriceBatchesResponse carries each batch landing block and its protocol time, null when unresolved",
+      "price-batch-query (getpricebatches) buildPriceBatchesResponse flags a full page as truncated so the caller pages instead of reading it as complete",
+      "price-batch-query (getpricebatches) buildPriceBatchesResponse maps rows to plain numbers and echoes the asked range",
+      "price-batch-query (getpricebatches) db.getPriceBatchesOverlappingRange asks only for valid version-0 batch rows overlapping the range",
+      "price-batch-query (getpricebatches) db.getPriceBatchesOverlappingRange binds status, last_round, first_round, limit in that order",
+      "price-batch-query (getpricebatches) db.getPriceBatchesOverlappingRange reads the landing block_index off the batch actions row",
+      "price-batch-query (getpricebatches) validatePriceBatchParams accepts a closed round range and defaults the limit",
+      "price-batch-query (getpricebatches) validatePriceBatchParams accepts a single-round range and numeric strings",
+      "price-batch-query (getpricebatches) validatePriceBatchParams clamps an oversized limit to the ceiling and refuses a non-positive one",
+      "price-batch-query (getpricebatches) validatePriceBatchParams refuses a negative, fractional, missing or inverted range"
+    ],
     "7c6586e0777e9c99": [
       "BET bounded latch+expire pass @regression @tier2 a max-size feed always fits a full budget (no wedge), and zero-bet feeds are row-bounded",
       "BET bounded latch+expire pass @regression @tier2 expiry step: whole feeds in order, STOPS at the first feed past the credit budget",
@@ -9636,20 +9670,6 @@
       "getNetBalances batched read @regression @tier1 dedupes keys, chunks large sets, and reads nothing for an empty set",
       "getNetBalances batched read @regression @tier1 is the read threadBalancesRoot uses instead of a per-key loop"
     ],
-    "83da8fca88416040": [
-      "JSON-RPC anchor family @regression @tier1 every anchor read refuses without a database and reports a throw",
-      "JSON-RPC anchor family @regression @tier1 getanchoraction runs the owned SQL through doQuery and answers checkpoint_anchored",
-      "JSON-RPC anchor family @regression @tier1 getanchorconfirmations picks the paged SQL only when a cursor is given",
-      "JSON-RPC anchor family @regression @tier1 getarchiveanchor reads by content commitment and author",
-      "JSON-RPC price batch family @regression @tier1 getpricebatches validates the window, reads valid batches over it and pages by truncation",
-      "JSON-RPC reorg history family @regression @tier1 falls back to the indexer's last-known halt flag when the probe faults",
-      "JSON-RPC reorg history family @regression @tier1 reads the decoder view, probes the live halt flag and matches an orphaned hash",
-      "JSON-RPC reorg history family @regression @tier1 validates, refuses without the decoder database and reports a throw",
-      "JSON-RPC roll-call family @regression @tier1 getrollcalls and getrollcallabsences clamp to 20 by default and 100 at most",
-      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners answers the cut, tip, manifest hash and activation heights",
-      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners refuses off DOGE, without a database, and reports a throw",
-      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners reports null for an inert activation rail"
-    ],
     "83e6fe3bdfc789e7": [
       "Legacy db-hits fee accumulation @regression @tier3 CALLBACK below flag-day: db_hits reproduces \"46\" string-concat",
       "Legacy db-hits fee accumulation @regression @tier3 CALLBACK: db_hits = 4 + recipients*3 as a Number (not \"4\" concat)",
@@ -10121,17 +10141,6 @@
       "Send handler: caret-id pack keying @regression @tier1 ACTIVE: a named SEND of the same token is refused the same way",
       "Send handler: caret-id pack keying @regression @tier1 INERT: the legacy lookup by the caret spelling finds no pack and the SEND passes",
       "Send handler: caret-id pack keying @regression @tier1 the new row is unarmed on mainnet and armed on testnet and regtest"
-    ],
-    "8c6b69def3f9000c": [
-      "price-batch-query (getpricebatches) buildPriceBatchesResponse answers an empty range with an empty list, never null",
-      "price-batch-query (getpricebatches) buildPriceBatchesResponse flags a full page as truncated so the caller pages instead of reading it as complete",
-      "price-batch-query (getpricebatches) buildPriceBatchesResponse maps rows to plain numbers and echoes the asked range",
-      "price-batch-query (getpricebatches) db.getPriceBatchesOverlappingRange asks only for valid version-0 batch rows overlapping the range",
-      "price-batch-query (getpricebatches) db.getPriceBatchesOverlappingRange binds status, last_round, first_round, limit in that order",
-      "price-batch-query (getpricebatches) validatePriceBatchParams accepts a closed round range and defaults the limit",
-      "price-batch-query (getpricebatches) validatePriceBatchParams accepts a single-round range and numeric strings",
-      "price-batch-query (getpricebatches) validatePriceBatchParams clamps an oversized limit to the ceiling and refuses a non-positive one",
-      "price-batch-query (getpricebatches) validatePriceBatchParams refuses a negative, fractional, missing or inverted range"
     ],
     "8c7275b3c5e5693d": [
       "policy apply: token-policy inheritance onto a bridged copy terminal versus carried CARRIES a snapshot for a tick this chain holds no copy of",
@@ -18891,8 +18900,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1505,
-      "titleCount": 14618,
+      "fileCount": 1506,
+      "titleCount": 14625,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19421,7 +19430,7 @@
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
         "test/unit/api/reads/bridge_escrow_proof_divergence.test.js": "677146c005a44b90",
         "test/unit/api/reads/bridge_escrow_proof_stream_stop.test.js": "104f4cec83f40a5f",
-        "test/unit/api/reads/price_batch_query.test.js": "8c6b69def3f9000c",
+        "test/unit/api/reads/price_batch_query.test.js": "7c370414380ce8a0",
         "test/unit/api/reads/reorg_history_query.test.js": "7ee0eb2668992ec0",
         "test/unit/api/rollcall_signers.test.js": "46fc3a8b9e5949d9",
         "test/unit/api/rpc/api_time_memo_isolation.test.js": "0ff526efc3f322da",
@@ -19437,7 +19446,7 @@
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
         "test/unit/api/rpc/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/api/rpc/open_reads.test.js": "90801739df637585",
-        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "83da8fca88416040",
+        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "5c3aa0ac2691aa8f",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/shared_list_params.test.js": "2add00a3c2a3b74f",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
@@ -20276,6 +20285,7 @@
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
         "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "eda08e76aa5d910e",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
+        "test/unit/rollback/rollback.test/hub_price_batch_retraction.test.js": "208cc8951dcbe728",
         "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
         "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "a7b9a30696b4da72",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
@@ -20777,8 +20787,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1139,
-      "titleCount": 11504,
+      "fileCount": 1140,
+      "titleCount": 11509,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21264,7 +21274,7 @@
         "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
         "test/unit/api/rpc/open_reads.test.js": "90801739df637585",
-        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "83da8fca88416040",
+        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "5c3aa0ac2691aa8f",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
@@ -21828,6 +21838,7 @@
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
         "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "eda08e76aa5d910e",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
+        "test/unit/rollback/rollback.test/hub_price_batch_retraction.test.js": "208cc8951dcbe728",
         "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
         "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "a7b9a30696b4da72",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
@@ -21923,7 +21934,7 @@
     },
     "test:regression:fast": {
       "fileCount": 570,
-      "titleCount": 6067,
+      "titleCount": 6068,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22077,7 +22088,7 @@
         "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
         "test/unit/api/rpc/open_reads.test.js": "90801739df637585",
-        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "83da8fca88416040",
+        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "5c3aa0ac2691aa8f",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
@@ -22498,8 +22509,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1139,
-      "titleCount": 11504,
+      "fileCount": 1140,
+      "titleCount": 11509,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22985,7 +22996,7 @@
         "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
         "test/unit/api/rpc/open_reads.test.js": "90801739df637585",
-        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "83da8fca88416040",
+        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "5c3aa0ac2691aa8f",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "28b255231dff14dd",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
@@ -23549,6 +23560,7 @@
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
         "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "eda08e76aa5d910e",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
+        "test/unit/rollback/rollback.test/hub_price_batch_retraction.test.js": "208cc8951dcbe728",
         "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
         "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "a7b9a30696b4da72",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
