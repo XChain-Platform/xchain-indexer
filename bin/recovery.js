@@ -27,8 +27,8 @@
  *
  * Verification per batch (all self-contained in the archive):
  *   1. CRC32 of the decompressed JSON must equal the v1's signed BATCH_CRC32.
- *   2. The v1 wrapper signatures must reach 2f+1 of the ARCHIVED
- *      oracle_publish set at the anchor's snapshot_block.
+ *   2. The v1 wrapper signatures must reach 2f+1 of the ARCHIVED publisher
+ *      set selected at the anchor's snapshot_block.
  *   3. Every match's validator_signatures must reach 2f+1 of the ARCHIVED
  *      cross_chain set at the match's snapshot_block.
  *   4. (stake cross-check, ON by default) every archived snapshot pubkey must
@@ -73,6 +73,7 @@ const swq     = require('../src/consensus/stake_weighted_quorum.js');
 const eq      = require('../src/consensus/equivocation_header.js');
 const ar      = require('../src/consensus/gates/anchor_reward_gate.js');
 const rca     = require('../src/consensus/gates/rollcall_gate.js');
+const archivePublish = require('../src/consensus/archive_publish_set.js');
 const gateRegistry = require('../src/consensus/gate_registry');
 // The royalty flag day is a registry row read by literal key (W5).
 const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
@@ -128,7 +129,9 @@ function recoveryTableLogFromArchive(archive){
 // Both cross-checks gate on this one set (_verifyStakes for its delegated-key admission,
 // verifyCompleteness for the whole check), so a future snapshot kind cannot silently reach
 // one and skip the other.
-const QUORUM_CAPABILITIES = new Set(['cross_chain', 'oracle_publish', 'price', 'attestation']);
+const QUORUM_CAPABILITIES = new Set([
+    'cross_chain', 'oracle_publish', 'archive_publish', 'price', 'attestation'
+]);
 
 class AnchorRecovery {
 
@@ -344,14 +347,16 @@ class AnchorRecovery {
         if(this.verifyStakes && this.btcDb && typeof this.btcDb.getStakeWeightsByCapability === 'function')
             await this.verifyCompleteness(snaps, v1.network);
 
-        // 1. Wrapper signatures vs the ARCHIVED oracle_publish set.
+        // 1. Wrapper signatures vs the archived publisher set selected at the wrapper block.
         let foldWrapper = Number(v1.version) === 3 ? await this.foldWrapperSection(v1) : null;
         let wrapperBlock = foldWrapper ? foldWrapper.snapshot_block : v1.snapshot_block;
-        let wrapperSet = setFor('oracle_publish', wrapperBlock);
+        let wrapperCapability = archivePublish.isArchivePublishSetActive(wrapperBlock, v1.network)
+            ? 'archive_publish' : 'oracle_publish';
+        let wrapperSet = setFor(wrapperCapability, wrapperBlock);
         let wrapperCanonical = foldWrapper ? this.foldWrapperCanonical(v1, foldWrapper) : this.wrapperCanonical(v1);
         let wrapperSigs = this.parseSigs(v1.validator_signatures);
         if(!this.quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet, swq.isStakeWeightedQuorumActive(wrapperBlock, v1.network)))
-            throw new Error('wrapper signatures fail quorum against the archived oracle_publish set');
+            throw new Error('wrapper signatures fail quorum against the archived ' + wrapperCapability + ' set');
 
         // 2. Every match's signatures vs the ARCHIVED cross_chain set.
         for(let m of archive.matches){
@@ -495,7 +500,9 @@ class AnchorRecovery {
             if(!canResolve || !QUORUM_CAPABILITIES.has(g.capability))
                 throw new Error('archived snapshot pubkey ' + String(undirected[0].signing_pubkey).substring(0, 16) +
                                 '... has no on-chain stake at block ' + undirected[0].snapshot_block + ' (fabricated set?)');
-            let resolved = (await this.btcDb.getValidatorsByCapability(g.capability, resolveBlock, '0')) || [];
+            let stakeCapability = g.capability === 'archive_publish'
+                ? 'oracle_publish' : g.capability;
+            let resolved = (await this.btcDb.getValidatorsByCapability(stakeCapability, resolveBlock, '0')) || [];
             let effective = new Set(resolved.map(v => String(v.pubkey).toLowerCase()));
             for(let s of undirected){
                 if(effective.has(String(s.signing_pubkey).toLowerCase())) continue;
@@ -670,11 +677,22 @@ class AnchorRecovery {
             // The bar the ARCHIVE was built at, reconstructed as of that block.
             // null = nothing resolvable (no coin config on this handle), in which case no
             // override is passed and db/stakes.js applies its own local floor unchanged.
-            let minStake = this.minStakeAt(g.capability, resolveBlock, network);
+            let stakeCapability = g.capability === 'archive_publish'
+                ? 'oracle_publish' : g.capability;
+            let minStake = this.minStakeAt(stakeCapability, resolveBlock, network);
             let weighted = swq.isStakeWeightedQuorumActive(g.block, network);
-            let resolved = weighted
-                ? await this.btcDb.getStakeWeightsByCapability(g.capability, resolveBlock, minStake)
-                : await this.btcDb.getValidatorsByCapability(g.capability, resolveBlock, minStake);
+            let resolved;
+            if(g.capability === 'archive_publish'){
+                let resolver = Object.create(this.btcDb);
+                resolver.getStakeWeightsByCapability = () =>
+                    this.btcDb.getStakeWeightsByCapability('oracle_publish', resolveBlock, minStake);
+                resolved = await archivePublish.getArchivePublishSet(
+                    resolver, g.block, network);
+            } else {
+                resolved = weighted
+                    ? await this.btcDb.getStakeWeightsByCapability(g.capability, resolveBlock, minStake)
+                    : await this.btcDb.getValidatorsByCapability(g.capability, resolveBlock, minStake);
+            }
             resolved = resolved || [];
             // A resolution that overflowed its cap cannot be trusted complete -> fail closed.
             if(resolved.truncated === true)
