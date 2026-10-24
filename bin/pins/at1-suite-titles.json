@@ -4716,6 +4716,12 @@
       "Controller custody guard end-to-end reorg replay covers DENY, ALLOW, gas refusal, and unbound custody routing",
       "Controller custody guard end-to-end reorg replay rolls back and reprocesses every post-activation custody row exactly"
     ],
+    "435e05d4e59b2c04": [
+      "ANCHOR archive_publish quorum routing @regression @tier1 counts the absent member in v1 N and S below the gate",
+      "ANCHOR archive_publish quorum routing @regression @tier1 excludes an absent member from v1 N and S above the gate",
+      "ANCHOR archive_publish quorum routing @regression @tier1 judges only the v3 wrapper on archive_publish at the same block",
+      "ANCHOR archive_publish quorum routing @regression @tier1 stores a post-gate v3 fold as unverified with zero archive_publish rows"
+    ],
     "4365faef2b0a9c54": [
       "E2E: Token Lifecycle @regression @tier3 ISSUE format variants re-ISSUE by non-owner is invalid",
       "E2E: Token Lifecycle @regression @tier3 ISSUE format variants re-ISSUE by owner updates description (format 1)",
@@ -19149,8 +19155,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1521,
-      "titleCount": 14844,
+      "fileCount": 1522,
+      "titleCount": 14848,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19184,6 +19190,7 @@
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
+        "test/unit/actions/anchor/anchor.test/archive_publish_quorum.test.js": "435e05d4e59b2c04",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
         "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
@@ -21051,8 +21058,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1155,
-      "titleCount": 11722,
+      "fileCount": 1156,
+      "titleCount": 11726,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21127,6 +21134,7 @@
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
+        "test/unit/actions/anchor/anchor.test/archive_publish_quorum.test.js": "435e05d4e59b2c04",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
         "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
@@ -22212,8 +22220,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 581,
-      "titleCount": 6175,
+      "fileCount": 582,
+      "titleCount": 6179,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22228,6 +22236,7 @@
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
+        "test/unit/actions/anchor/anchor.test/archive_publish_quorum.test.js": "435e05d4e59b2c04",
         "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "c262ebb8f7e7ced1",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "a64681e4300f78cf",
@@ -22799,8 +22808,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1155,
-      "titleCount": 11722,
+      "fileCount": 1156,
+      "titleCount": 11726,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22875,6 +22884,7 @@
         "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
+        "test/unit/actions/anchor/anchor.test/archive_publish_quorum.test.js": "435e05d4e59b2c04",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
         "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
