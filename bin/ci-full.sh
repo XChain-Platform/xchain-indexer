@@ -253,19 +253,17 @@ run_tier "drift: coin consensus-pin conformance" node -e '
   console.log("consensus pin conformance OK (testnet, regtest)");
 '
 sdk_preflight_drift_check() {
-  local sdk_head sdk_develop sdk_snapshot status
-  sdk_head="$(git -C "$XCHAIN_SDK_PATH" rev-parse HEAD 2>/dev/null || true)"
-  sdk_develop="$(git -C "$XCHAIN_SDK_PATH" rev-parse origin/develop 2>/dev/null || true)"
-  if [ -z "$sdk_develop" ] || [ "$sdk_head" = "$sdk_develop" ] || \
-      ! git -C "$XCHAIN_SDK_PATH" merge-base --is-ancestor "$sdk_head" "$sdk_develop"; then
-    env XCHAIN_INDEXER_PATH="$SELF" node "$XCHAIN_SDK_PATH/bin/check-preflight-drift.js"
-    return
+  local sdk_ref sdk_snapshot status
+  sdk_ref="$(sed -nE "s/.*\|\| '([0-9a-f]{40})'\) \}\}/\1/p" "$SELF/.github/workflows/ci.yml")"
+  if ! printf '%s\n' "$sdk_ref" | grep -Eq '^[0-9a-f]{40}$'; then
+    echo "ci:full: expected one pinned xchain-sdk drift ref in .github/workflows/ci.yml" >&2
+    return 1
   fi
 
   mkdir -p "$SELF/tmp" || return 1
   sdk_snapshot="$(mktemp -d "$SELF/tmp/sdk-drift.XXXXXX")" || return 1
-  if git -C "$XCHAIN_SDK_PATH" archive "$sdk_develop" | tar -x -C "$sdk_snapshot"; then
-    echo "ci:full: drift gate uses xchain-sdk origin/develop $sdk_develop (adjacent HEAD is $sdk_head)"
+  if git -C "$XCHAIN_SDK_PATH" archive "$sdk_ref" | tar -x -C "$sdk_snapshot"; then
+    echo "ci:full: drift gate uses workflow-pinned xchain-sdk $sdk_ref"
     NODE_PATH="$XCHAIN_SDK_PATH/node_modules" XCHAIN_INDEXER_PATH="$SELF" \
       node "$sdk_snapshot/bin/check-preflight-drift.js"
     status=$?
