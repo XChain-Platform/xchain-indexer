@@ -12,22 +12,39 @@
  *
  **********************************************************************
  *
- * ANCHOR quorum verification: the 2f+1 oracle_publish quorum over each
- * checkpoint canonical (the archive head's root signatures and every bundle
- * section's). Canonicals come from the handler (index.js).
+ * ANCHOR quorum verification: the 2f+1 capability quorum over each checkpoint
+ * canonical (the archive head's root signatures and every bundle section's).
+ * Canonicals come from the handler (index.js).
  *
  ********************************************************************/
 
 const ed25519 = require('../../consensus/ed25519.js');
 const swq     = require('../../consensus/stake_weighted_quorum.js');
+const archivePublish = require('../../consensus/archive_publish_set.js');
 
-// Verify 2f+1 oracle_publish signatures over the canonical.
+function archiveCapability(snapshotBlock, network){
+    return archivePublish.isArchivePublishSetActive(snapshotBlock, network)
+        ? archivePublish.ARCHIVE_PUBLISH_CAPABILITY : 'oracle_publish';
+}
+
+function sectionCapability(section){
+    let archive = section.FOLD_ARCHIVE;
+    let wrapsArchive = archive !== null && archive !== undefined &&
+        Number(archive.WRAPPER_SECTION_INDEX) === Number(section.SECTION_INDEX);
+    return wrapsArchive
+        ? archiveCapability(section.SNAPSHOT_BLOCK, section.NETWORK)
+        : 'oracle_publish';
+}
+
+// Verify 2f+1 signatures over the v1 archive canonical.
 // SNAPSHOT_BLOCK comes from the wire payload (a BTC height), NOT from
 // the DOGE block this ANCHOR landed in.
-async function verifyHeadQuorum(handler, data, sigs, error, capability = 'oracle_publish'){
+async function verifyHeadQuorum(handler, data, sigs, error, capability = null){
     let weighted = false, validators = null, snapPubkeys = null, oracleN = 0;
     if(!error){
         let snapshotBlock = Number(data['SNAPSHOT_BLOCK']);
+        if(capability === null)
+            capability = archiveCapability(snapshotBlock, data['NETWORK']);
         // Stake-weighted (source-deduped) at/above STAKE_WEIGHTED_QUORUM (keyed on
         // the BTC snapshot_block + the checkpoint's network), else legacy 2f+1 count.
         weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, data['NETWORK']);
@@ -36,7 +53,7 @@ async function verifyHeadQuorum(handler, data, sigs, error, capability = 'oracle
             : await handler.indexerDb.getValidatorsByCapability(capability, snapshotBlock);
         oracleN = (validators && validators.length) ? validators.length : 0;
         if(oracleN === 0){
-            // No oracle_publish snapshot mirrored locally (offline resync / no hub).
+            // No selected capability snapshot mirrored locally (offline resync / no hub).
             // Store as 'unverified'; recovery re-verifies from archived snapshots.
             data['STATUS'] = 'unverified';
         } else {
@@ -67,9 +84,9 @@ async function verifyHeadQuorum(handler, data, sigs, error, capability = 'oracle
     return { error };
 }
 
-// Verify each section's 2f+1 oracle_publish quorum over its OWN canonical, against
-// the set at its OWN snapshot block. Sets are memoized per capability, network and
-// block so the common case (every section sharing all three) costs one query.
+// Verify each section's 2f+1 publish quorum over its OWN canonical, against the
+// selected set at its OWN snapshot block. Sets are memoized per capability, network
+// and block so the common case (every section sharing all three) costs one query.
 function makeOracleSetResolver(handler){
     let sets = new Map();
     const oracleSetFor = async (snapshotBlock, network, capability = 'oracle_publish') => {
@@ -98,13 +115,15 @@ async function verifySections(handler, data, sections, oracleSetFor, error){
         // 'unverified', never a mix: the verdict is one column on N rows, and recovery
         // re-verifies from the archived snapshots either way.
         for(let s of sections){
-            let set = await oracleSetFor(s.SNAPSHOT_BLOCK, s.NETWORK);
+            let set = await oracleSetFor(
+                s.SNAPSHOT_BLOCK, s.NETWORK, sectionCapability(s));
             if(set.oracleN === 0){ data['STATUS'] = 'unverified'; break; }
         }
     }
     if(!error && !data['STATUS']){
         for(let s of sections){
-            let set = await oracleSetFor(s.SNAPSHOT_BLOCK, s.NETWORK);
+            let set = await oracleSetFor(
+                s.SNAPSHOT_BLOCK, s.NETWORK, sectionCapability(s));
             let canonical = handler.canonical(s);
             let validSigners = [], seen = new Set();
             for(let sig of s.SIGS){
