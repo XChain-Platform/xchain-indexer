@@ -148,6 +148,8 @@ const REGTEST_ARMING = {
         { env: 'XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION', label: 'DIVIDEND EMPTY ALLOW LIST DENIES', armedHeight: 0, keys: ['regtest'] },
     'airdrop_zero_legs_omitted_activation.AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION':
         { env: 'XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION', label: 'AIRDROP ZERO LEGS OMITTED', armedHeight: 0, keys: ['regtest'] },
+    'tick_normalize_activation.TICK_NORMALIZE_ACTIVATION':
+        { env: 'XC_TICK_NORMALIZE_REGTEST_ACTIVATION', label: 'TICK NORMALIZE', armedHeight: 0, keys: ['regtest'] },
 };
 
 // env name -> its reader. Each variable is read BY NAME, once, here: the
@@ -184,6 +186,7 @@ const ENV_READERS = {
     XC_ANCHOR_CHECKPOINT_SEQ_BIND_REGTEST_ACTIVATION: (env) => env.XC_ANCHOR_CHECKPOINT_SEQ_BIND_REGTEST_ACTIVATION,
     XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION: (env) => env.XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION,
     XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION: (env) => env.XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION,
+    XC_TICK_NORMALIZE_REGTEST_ACTIVATION: (env) => env.XC_TICK_NORMALIZE_REGTEST_ACTIVATION,
 };
 
 // The raw value of the rule's env variable, through its named reader.

@@ -30,10 +30,10 @@ const { makeFormat0Params, makeData, LOW_BLOCK, buildIssue } = require('./issue.
 // Rebuilt by setUp before every test. Module-level so the same-title sibling
 // suites below, split only to fit the function-length limit with every full
 // test title unchanged, share one fixture.
-let indexer, handler;
+let indexer, actionsCtx, handler;
 
 function setUp() {
-    ({ indexer, handler } = buildIssue());
+    ({ indexer, actionsCtx, handler } = buildIssue());
 }
 
 function tearDown() {
@@ -208,6 +208,51 @@ describe('Issue handler @regression @tier1', function () {
     afterEach(tearDown);
 
     describe('TICK validations', function () {
+        it('non-canonical caret references retain the old verdict below activation and are rejected after it', async function () {
+            const spellings = ['^007', '^0', '^+7', '^-7', '^0x10', '^1e3'];
+            const saved = process.env.XC_TICK_NORMALIZE_REGTEST_ACTIVATION;
+            try {
+                delete process.env.XC_TICK_NORMALIZE_REGTEST_ACTIVATION;
+                actionsCtx.protocolChanges.isEnabled
+                    .withArgs('ISSUE_CARET_TICK_NO_CREATE', LOW_BLOCK).resolves(false);
+                const below = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });
+                await handler.parse(makeFormat0Params({ TICK: '^007' }), below, null);
+                assert.strictEqual(below.STATUS, 'valid');
+
+                process.env.XC_TICK_NORMALIZE_REGTEST_ACTIVATION = '0';
+                const statuses = [];
+                for(const tick of spellings){
+                    const params = makeFormat0Params({ TICK: tick });
+                    const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });
+
+                    await handler.parse(params, data, null);
+                    statuses.push([tick, data.STATUS]);
+                }
+                assert.deepStrictEqual(statuses, spellings.map(tick => [tick, 'invalid: TICK (id)']));
+            } finally {
+                if(saved === undefined) delete process.env.XC_TICK_NORMALIZE_REGTEST_ACTIVATION;
+                else process.env.XC_TICK_NORMALIZE_REGTEST_ACTIVATION = saved;
+            }
+        });
+
+        it('NFC, NFD, zero-width and non-ASCII confusable names follow the ASCII-only rule', async function () {
+            const spellings = [
+                'CAF\u00c9',
+                'CAFE\u0301',
+                'ZERO\u200bWIDTH',
+                '\u0391LPHA',
+                'STRA\u00dfE',
+            ];
+
+            for(const tick of spellings){
+                const params = makeFormat0Params({ TICK: tick });
+                const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });
+
+                await handler.parse(params, data, null);
+                assert.strictEqual(data.STATUS, 'invalid: TICK (character)', tick);
+            }
+        });
+
         it('TICK with invalid characters (pipe) → invalid', async function () {
             const params = makeFormat0Params({ TICK: 'TO|KEN' });
             const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });

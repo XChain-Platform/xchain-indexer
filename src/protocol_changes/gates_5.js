@@ -372,3 +372,15 @@ addGate('airdrop_zero_legs_omitted_activation.AIRDROP_ZERO_LEGS_OMITTED_ACTIVATI
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION at read
 });
+
+// tick_normalize_activation
+// Height on the processing chain's own block_index. From it distinct accepted TICK names
+// may differ after character 200, and ISSUE accepts caret references only as ^<positive
+// decimal id> without leading zeroes. Below it both behaviors replay as before. Unarmed on
+// mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with
+// XC_TICK_NORMALIZE_REGTEST_ACTIVATION (shared_rows.js).
+addGate('tick_normalize_activation.TICK_NORMALIZE_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_TICK_NORMALIZE_REGTEST_ACTIVATION at read
+});

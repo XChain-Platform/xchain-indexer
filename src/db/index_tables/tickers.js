@@ -24,8 +24,35 @@
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { CANONICAL_CARET_ID } = require('../shared.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 const { getLogger } = require('../../observability/index.js');
+
+const TICK_NORMALIZE_KEY = 'tick_normalize_activation.TICK_NORMALIZE_ACTIVATION';
+const LEGACY_UNIQUE_TICK_PREFIX = 200;
+
+function tickNormalizeActiveAt(db, blockIndex){
+    let height = (blockIndex !== undefined && blockIndex !== null) ? blockIndex : db.blockIndex;
+    return gateRegistry.activeAt(TICK_NORMALIZE_KEY, db.config && db.config.NETWORK,
+        db.config && db.config.COIN, height, null);
+}
+
+// Preserve the former tick(200) unique key below the activation after the physical key
+// is widened. utf8mb4_bin is a PAD SPACE collation, so that key also matched a shorter
+// name against a stored name whose first 200 characters are the shorter name followed by
+// spaces; the check therefore runs for names of every length. Every match starts with the
+// name's first 200 characters minus trailing spaces, so that LIKE prefix lets the widened
+// tick index bound the scan and the FOR UPDATE lock.
+async function hasLegacyTickPrefixCollision(db, tick, blockIndex){
+    if(tickNormalizeActiveAt(db, blockIndex))
+        return false;
+    let prefix  = Array.from(String(tick)).slice(0, LEGACY_UNIQUE_TICK_PREFIX).join('').replace(/ +$/, '');
+    let pattern = prefix.replace(/[!%_]/g, '!$&') + '%';
+    let query   = "SELECT id FROM index_tickers WHERE LEFT(tick, 200)=LEFT(?, 200) AND tick LIKE ? ESCAPE '!' LIMIT 1" +
+        (db.transactionConnection != null ? " FOR UPDATE" : "");
+    let rows = await db.doQuery(query, [tick, pattern]);
+    return rows.length > 0;
+}
 
 module.exports = {
 
@@ -182,10 +209,16 @@ module.exports = {
                 // refetching through getTickerId keeps that case-folding behaviour.
                 let bi = (blockIndex !== undefined && blockIndex !== null) ? blockIndex : this.blockIndex;
                 id = await this.getNextTickerId();
+                // Serialize the legacy prefix check behind the dense-id lock.
+                if(await hasLegacyTickPrefixCollision(this, tick, blockIndex))
+                    return null;
                 let query = "INSERT IGNORE INTO index_tickers (`id`, `tick`, `block_index`) values (?, ?, ?)";
                 await this.doQuery(query, [id, tick, (this.util.isNull(bi) ? null : bi)]);
                 id = await this.getTickerId(tick);
             } else {
+                // Keep the old prefix collision outcome until the widened ticker key activates.
+                if(await hasLegacyTickPrefixCollision(this, tick, blockIndex))
+                    return null;
                 // Outside block processing: keep the legacy AUTO_INCREMENT path (NULL block_index).
                 // As with createAddress, an out-of-band insert after deterministic indexing began
                 // offsets the dense id counter and must never happen during indexing (#5052).
@@ -232,9 +265,15 @@ module.exports = {
             if(this.transactionConnection != null){
                 let bi = (blockIndex !== undefined && blockIndex !== null) ? blockIndex : this.blockIndex;
                 id = await this.getNextTickerId();
+                // Serialize the legacy prefix check behind the dense-id lock.
+                if(await hasLegacyTickPrefixCollision(this, tick, blockIndex))
+                    return null;
                 let query = "INSERT IGNORE INTO index_tickers (`id`, `tick`, `block_index`) values (?, ?, ?)";
                 await this.doQuery(query, [id, tick, (this.util.isNull(bi) ? null : bi)]);
             } else {
+                // Keep the old prefix collision outcome until the widened ticker key activates.
+                if(await hasLegacyTickPrefixCollision(this, tick, blockIndex))
+                    return null;
                 if(this.deterministicIndexingStarted)
                     getLogger().warn('Index id invariant: out-of-band index_tickers insert ("' + tick +
                         '") after deterministic indexing began; this offsets the id counter.');

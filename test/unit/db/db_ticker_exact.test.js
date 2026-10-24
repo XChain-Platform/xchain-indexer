@@ -49,6 +49,9 @@ function harness(overrides = {}){
                 const row = rows.find(item => String(item.id) === String(args[0]));
                 return row ? [{ id: row.id }] : [];
             }
+            // The legacy tick(200) collision probe finds no row in this fixture.
+            if(/LEFT\(tick, 200\)=LEFT\(\?, 200\)/.test(sql))
+                return [];
             throw new Error('Unexpected query: ' + sql);
         },
         ...overrides,

@@ -205,6 +205,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'archive_v1_reissue_refusal_activation',
     'dividend_empty_allow_list_denies_activation',
     'airdrop_zero_legs_omitted_activation',
+    'tick_normalize_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

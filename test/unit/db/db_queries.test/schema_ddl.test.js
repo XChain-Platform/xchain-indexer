@@ -52,7 +52,7 @@ describe('Database.reconcileTableIndexes() prefix/direction-preserving DDL @regr
         const alters = dbc.query.getCalls().map(c => c.args[0]).filter(s => /^ALTER TABLE/i.test(s));
         const tick   = alters.find(s => /ADD UNIQUE INDEX `tick`/.test(s));
         assert.ok(tick, 'the declared UNIQUE tick index must be added: ' + alters.join(' | '));
-        assert.match(tick, /\(`tick`\(200\)\)/,
+        assert.match(tick, /\(`tick`\(250\)\)/,
             'a TEXT column must be indexed at its declared prefix width, not full-column: ' + tick);
     });
 

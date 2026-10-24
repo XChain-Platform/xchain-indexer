@@ -240,7 +240,7 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
         // distinguished them in the signed XANCPUB tuple. The case above resolves this entry
         // through that dated migration, which DROPs and recreates the index in the new shape -
         // the one thing the boot reconciler will not do for an aged database.
-        assert.deepStrictEqual(moved, ['destroys.action_index', 'validator_rewards.reward_unique'],
+        assert.deepStrictEqual(moved, ['destroys.action_index', 'index_tickers.tick', 'validator_rewards.reward_unique'],
             'The set of index baseline entries that differ from test/fixtures/schema-index-baseline-origin.json ' +
             'changed. An EMPTY set means the anchor was re-seeded from the current baseline and the re-freeze ' +
             'guard above now proves nothing. A LARGER set means a new re-freeze landed: confirm the case above ' +
