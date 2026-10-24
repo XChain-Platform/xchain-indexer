@@ -7650,6 +7650,16 @@
       "Price (PRICE) @regression @tier3 v1 - user oracle price uses the exact bcmath comparator for VALUE positivity, matching the FEE sibling (2396)",
       "Price (PRICE) @regression @tier3 v1 - user oracle price valid oracle price \u2192 valid and recorded"
     ],
+    "6afc76b1b2470aaa": [
+      "rollback price_snapshots purge @regression does not retry an error that is not a statement timeout",
+      "rollback price_snapshots purge @regression gives up once consecutive timeouts exceed the retry budget",
+      "rollback price_snapshots purge @regression purges a table larger than one chunk in bounded statements",
+      "rollback price_snapshots purge @regression resets the timeout budget after a chunk succeeds",
+      "rollback price_snapshots purge @regression retries a statement timeout at a smaller chunk and completes the purge",
+      "rollback price_snapshots purge @regression runs off idx_refchain_block, which the schema and its migration both declare",
+      "rollback price_snapshots purge @regression stops after one statement when the first chunk is short",
+      "rollback price_snapshots purge @regression treats MySQL ER_QUERY_TIMEOUT as a statement timeout too"
+    ],
     "6aff270db2df60a7": [
       "XCHAIN_ESC locked leaf: the \u00a77 shadow thread @regression the shadow value never reaches a committed column (source pin, both twins)",
       "XCHAIN_ESC locked leaf: the \u00a77 shadow thread @regression threading equals a fresh build of the same leaf set (spendable + locked)"
@@ -19064,8 +19074,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1511,
-      "titleCount": 14779,
+      "fileCount": 1512,
+      "titleCount": 14787,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20024,6 +20034,7 @@
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
         "test/unit/db/remote_token_snapshots.test.js": "7d2fbf0d10540698",
         "test/unit/db/rollback/in_place_flips_contract_stakes_reset.test.js": "c1dd57bac53e1487",
+        "test/unit/db/rollback/price_snapshots_purge_chunked.test.js": "6afc76b1b2470aaa",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
         "test/unit/db/sql_datetime_hub_mirrors.test.js": "5b7db85e6d2fb689",
@@ -20956,8 +20967,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1145,
-      "titleCount": 11663,
+      "fileCount": 1146,
+      "titleCount": 11671,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21698,6 +21709,7 @@
         "test/unit/db/misc/address_credit_debit_sql_sum.test.js": "e9ee1883647156f8",
         "test/unit/db/orders/order_u64_exact_read.test.js": "a0d748730ca77c3b",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
+        "test/unit/db/rollback/price_snapshots_purge_chunked.test.js": "6afc76b1b2470aaa",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
         "test/unit/db/sql_datetime_hub_mirrors.test.js": "5b7db85e6d2fb689",
@@ -22687,8 +22699,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1145,
-      "titleCount": 11663,
+      "fileCount": 1146,
+      "titleCount": 11671,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23429,6 +23441,7 @@
         "test/unit/db/misc/address_credit_debit_sql_sum.test.js": "e9ee1883647156f8",
         "test/unit/db/orders/order_u64_exact_read.test.js": "a0d748730ca77c3b",
         "test/unit/db/prices/landed_strict_same_chain.test.js": "06f9bcdda9c7ef64",
+        "test/unit/db/rollback/price_snapshots_purge_chunked.test.js": "6afc76b1b2470aaa",
         "test/unit/db/sql_datetime_anchor_reward.test.js": "82feb1c0ac0026e0",
         "test/unit/db/sql_datetime_bridge_policy.test.js": "36a9ac63e8e4ebc7",
         "test/unit/db/sql_datetime_hub_mirrors.test.js": "5b7db85e6d2fb689",

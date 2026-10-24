@@ -24,6 +24,18 @@
 
 'use strict';
 
+const PRICE_SNAPSHOT_PURGE_CHUNK = 1000;
+// Consecutive statement timeouts tolerated before the rollback gives up.
+const PRICE_SNAPSHOT_PURGE_TIMEOUT_RETRIES = 3;
+
+// MariaDB max_statement_time (1969) and MySQL max_execution_time (3024): the statement
+// was interrupted and rolled back on its own, so the same work can be asked for again.
+function isStatementTimeout(error){
+    if(!error) return false;
+    return error.errno === 1969 || error.errno === 3024 ||
+        error.code === 'ER_STATEMENT_TIMEOUT' || error.code === 'ER_QUERY_TIMEOUT';
+}
+
 // Run one sweep DELETE and report { table, ms, rows } for the rollback summary.
 async function timedSweep(db, table, query, args){
     let startedAt = Date.now();
@@ -46,6 +58,8 @@ module.exports = {
 
     timedSweep,
     readDanglingIndexReferenceBounds,
+    PRICE_SNAPSHOT_PURGE_CHUNK,
+    PRICE_SNAPSHOT_PURGE_TIMEOUT_RETRIES,
 
     // balances, markets and pubkeys rows whose index id no longer resolves, timed per table.
     async sweepDanglingIndexReferences(db, nativeTickId, bounds){
@@ -121,12 +135,33 @@ module.exports = {
         }
     },
 
-    // BTC-published price snapshots anchored at or above the reorg block.
+    // BTC-published price snapshots anchored at or above the reorg block, deleted in
+    // bounded chunks off idx_refchain_block. One unbounded DELETE over a large mirror
+    // outlasts the per-query timeout and failed the whole rollback; each chunk here is a
+    // short range scan, and a chunk that still times out is retried at half the size,
+    // which is safe because a timed-out statement rolls back alone, not the transaction.
     async purgeOrphanedPriceSnapshots(db, block_index){
-        let query, args;
-        query = `DELETE FROM price_snapshots WHERE reference_chain = 'BTC' AND reference_block >= ?`;
-        args  = [block_index];
-        await db.doQuery(query, args);
+        let chunk = PRICE_SNAPSHOT_PURGE_CHUNK;
+        let timeouts = 0;
+        for(;;){
+            let res;
+            try {
+                res = await db.doQuery(
+                    `DELETE FROM price_snapshots
+                     WHERE reference_chain = 'BTC' AND reference_block >= ?
+                     ORDER BY reference_block
+                     LIMIT ?`,
+                    [block_index, chunk]);
+            } catch(error){
+                if(!isStatementTimeout(error) || ++timeouts > PRICE_SNAPSHOT_PURGE_TIMEOUT_RETRIES)
+                    throw error;
+                chunk = Math.max(1, Math.floor(chunk / 2));
+                continue;
+            }
+            timeouts = 0;
+            let rows = (res && res.affectedRows != null) ? Number(res.affectedRows) : 0;
+            if(rows < chunk) return;
+        }
     },
 
     // This chain's oracle_prices mirror rows from the first orphaned action.
