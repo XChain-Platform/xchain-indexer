@@ -5053,6 +5053,11 @@
     "47b5ee89067e58ec": [
       "committed automatic migration key-dependent writes @regression @tier1 matches the reviewed file-to-table map"
     ],
+    "47b6eaec35bd109c": [
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 keeps a pre-gate wrapper on setFor oracle_publish",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers a post-gate wrapper against setFor archive_publish",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 verifyCompleteness refuses archive_publish when a present source was dropped"
+    ],
     "47d45f1d606adbef": [
       "controller completeness custody routing DEPOSIT accepts armed SOURCE and custody debits when the tick was guarded",
       "controller completeness custody routing DEPOSIT rejects an armed unguarded controlled SOURCE debit",
@@ -20470,6 +20475,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -22049,6 +22055,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -22702,6 +22709,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
@@ -23789,6 +23797,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
