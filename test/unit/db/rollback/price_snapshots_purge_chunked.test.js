@@ -12,7 +12,7 @@
  * The reorg purge of price_snapshots runs in bounded chunks and survives a statement
  * timeout. A single unbounded DELETE over a large mirror outlasted the per-query timeout,
  * and inside the rollback transaction that error failed the whole rollback. The stub db
- * below plays the table: it honours the statement's predicate, ORDER BY and LIMIT, so the
+ * below plays the table: it honours the statement's predicate and LIMIT, so the
  * assertions are on the statements the shipped function issues and the rows they leave.
  */
 
@@ -62,7 +62,6 @@ function makeDb(table, failOn) {
             const hits = table
                 .map((row, at) => ({ row, at }))
                 .filter(({ row }) => row.reference_chain === 'BTC' && row.reference_block >= block)
-                .sort((a, b) => a.row.reference_block - b.row.reference_block)
                 .slice(0, limit);
             const drop = new Set(hits.map(h => h.at));
             for (let at = table.length - 1; at >= 0; at--) if (drop.has(at)) table.splice(at, 1);
@@ -82,8 +81,7 @@ function registerChunkTests() {
         assert.deepStrictEqual(statements.map(s => s.args), [[500, CHUNK], [500, CHUNK], [500, CHUNK]]);
         for (const { sql } of statements) {
             assert.strictEqual(sql,
-                "DELETE FROM price_snapshots WHERE reference_chain = 'BTC' AND reference_block >= ? " +
-                'ORDER BY reference_block LIMIT ?');
+                "DELETE FROM price_snapshots WHERE reference_chain = 'BTC' AND reference_block >= ? LIMIT ?");
         }
         assert.ok(table.every(row => row.keep), 'only the rows the purge must keep remain');
         assert.strictEqual(table.length, 2);
@@ -159,12 +157,12 @@ function registerIndexTests() {
         assert.match(migration,
             /^CREATE INDEX IF NOT EXISTS idx_refchain_block ON price_snapshots \(reference_chain, reference_block\);$/m);
 
-        // The chunk statement pins the index's first column by equality and ranges and
-        // orders on its second, so each chunk is a range read of that index.
+        // The chunk statement pins the index's first column by equality and ranges on its
+        // second, so each chunk is a range read of that index.
         const { db, statements } = makeDb(makeTable(500, 1));
         await sweeps.purgeOrphanedPriceSnapshots(db, 500);
         assert.match(statements[0].sql,
-            /WHERE reference_chain = 'BTC' AND reference_block >= \? ORDER BY reference_block LIMIT \?$/);
+            /WHERE reference_chain = 'BTC' AND reference_block >= \? LIMIT \?$/);
     });
 }
 

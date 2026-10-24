@@ -140,6 +140,7 @@ module.exports = {
     // outlasts the per-query timeout and failed the whole rollback; each chunk here is a
     // short range scan, and a chunk that still times out is retried at half the size,
     // which is safe because a timed-out statement rolls back alone, not the transaction.
+    // No ORDER BY: every matching row goes, so which rows a chunk takes does not matter.
     async purgeOrphanedPriceSnapshots(db, block_index){
         let chunk = PRICE_SNAPSHOT_PURGE_CHUNK;
         let timeouts = 0;
@@ -149,7 +150,6 @@ module.exports = {
                 res = await db.doQuery(
                     `DELETE FROM price_snapshots
                      WHERE reference_chain = 'BTC' AND reference_block >= ?
-                     ORDER BY reference_block
                      LIMIT ?`,
                     [block_index, chunk]);
             } catch(error){
