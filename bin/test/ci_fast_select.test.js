@@ -231,8 +231,11 @@ describe('ci fast selector', function () {
     }), mergeBase);
   });
 
-  it('keeps the full-tier integration command and fast-plan guard', function () {
+  it('keeps the full-tier integration command, fast-plan guard and reviewed SDK pin', function () {
     const script = fs.readFileSync('bin/ci-full.sh', 'utf8');
+    const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+    const sdkRefs = Array.from(workflow.matchAll(/\|\| '([0-9a-f]{40})'\) \}\}/g), (match) => match[1]);
+    assert.deepStrictEqual(sdkRefs, ['b4d87bbdd7e280894090f724ebdabbad85fa5418']);
     assert(script.includes('ci_fast_select.js --plan'));
     assert(script.includes('CI_TIER'));
     assert(script.includes('run_tier "integration (test:integration:ci)"'));
