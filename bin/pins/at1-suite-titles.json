@@ -19129,8 +19129,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1517,
-      "titleCount": 14827,
+      "fileCount": 1518,
+      "titleCount": 14830,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21028,8 +21028,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1151,
-      "titleCount": 11705,
+      "fileCount": 1152,
+      "titleCount": 11708,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22186,8 +22186,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 577,
-      "titleCount": 6158,
+      "fileCount": 578,
+      "titleCount": 6161,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22770,8 +22770,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1151,
-      "titleCount": 11705,
+      "fileCount": 1152,
+      "titleCount": 11708,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
