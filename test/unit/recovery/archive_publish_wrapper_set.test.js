@@ -22,7 +22,9 @@ const archivePublish = require('../../../src/consensus/archive_publish_set.js');
 const {
     makeKeypair, signHex, crc32Hex, buildBatch, rawMatch
 } = require('../../fixtures/anchor-archive.js');
-const { util, memDb, capSetFromKeys } = require('../../helpers/recovery_stubs.js');
+const {
+    util, memDb, btcDbStub, capSetFromKeys
+} = require('../../helpers/recovery_stubs.js');
 
 const quiet = { log: () => {}, util };
 
@@ -46,6 +48,49 @@ function repack(batch, mutate, signingKeys){
 afterEach(function(){ sinon.restore(); });
 
 describe('AnchorRecovery archive_publish wrapper set @regression @tier1', function(){
+    it('recovers an active wrapper whose archive predates archive_publish snapshots', async function(){
+        let oracleKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        let crossKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        let batch = buildBatch(0, [rawMatch('legacy-active')], oracleKeys, crossKeys);
+
+        let archive = await new AnchorRecovery(memDb([], []), quiet).verifyBatch(batch.v1);
+        assert.strictEqual(archive.matches.length, 1);
+        assert.strictEqual(archive.capability_snapshots
+            .filter(row => row.capability === 'oracle_publish').length, 4);
+        assert.strictEqual(archive.capability_snapshots
+            .filter(row => row.capability === 'archive_publish').length, 0);
+    });
+
+    it('filters the legacy wrapper set through rolled absences in verified recovery', async function(){
+        let oracleKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        let crossKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        let batch = repack(buildBatch(0, [rawMatch('legacy-filtered')], oracleKeys, crossKeys),
+            () => {}, oracleKeys.slice(1).concat(oracleKeys[0]));
+        let capSets = {
+            oracle_publish: capSetFromKeys(oracleKeys),
+            cross_chain: capSetFromKeys(crossKeys)
+        };
+        let btcDb = btcDbStub(oracleKeys.concat(crossKeys).map(key => key.pubkey), { capSets });
+        let absenceReads = [];
+        btcDb.getLatestRolledRollcallAbsentSources = async block => {
+            absenceReads.push(block);
+            return ['src_' + oracleKeys[0].pubkey.slice(0, 16)];
+        };
+
+        let archive = await new AnchorRecovery(memDb([], []), {
+            ...quiet, btcDb, verifyStakes: true
+        }).verifyBatch(batch.v1);
+        assert.strictEqual(archive.matches.length, 1);
+        assert.deepStrictEqual(absenceReads, [100]);
+
+        let weak = buildBatch(1, [rawMatch('legacy-absent-signer')], oracleKeys, crossKeys);
+        await assert.rejects(
+            () => new AnchorRecovery(memDb([], []), {
+                ...quiet, btcDb, verifyStakes: true
+            }).verifyBatch(weak.v1),
+            error => error.message.includes('wrapper signatures fail quorum'));
+    });
+
     it('recovers a post-gate wrapper against setFor archive_publish', async function(){
         let gate = sinon.spy(archivePublish, 'isArchivePublishSetActive');
         let oracleKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
