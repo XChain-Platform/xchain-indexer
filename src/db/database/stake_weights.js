@@ -30,6 +30,7 @@ const swqCap = require('../../consensus/gates/swq_source_cap_gate');
 const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 const srb = require('../../consensus/snapshot_reorg_buffer.js');
 const gateRegistry = require('../../consensus/gate_registry.js');
+const archivePublish = require('../../consensus/archive_publish_set.js');
 const mirrorJudgement = require('../../consensus/capability_snapshot_proof/mirror_judgement.js');
 const capabilityProof = require('../../consensus/capability_snapshot_proof/verify.js');
 const { getLogger } = require('../../observability/index.js');
@@ -89,6 +90,14 @@ module.exports = {
     // aggregate `weight`. Σ weight over DISTINCT sources = S. CONSENSUS-CRITICAL:
     // must resolve identically on the hub and every indexer or validation forks.
     async getStakeWeightsByCapability(capability, blockIndex, minStakeOverride){
+        if(capability === 'archive_publish' && this.config['COIN'] === 'BTC'){
+            let weights = await this.getStakeWeightsByCapability(
+                'oracle_publish', blockIndex, minStakeOverride);
+            if(!archivePublish.isArchivePublishSetActive(blockIndex, this.config['NETWORK']))
+                return weights;
+            let absent = await this.getLatestRolledRollcallAbsentSources(blockIndex);
+            return archivePublish.subtractAbsentSources(weights, absent);
+        }
         // Off-BTC chains have no local capability stakes - read the source-keyed
         // weights from the hub-mirrored capability_snapshots. Routed through the SAME
         // predicate as getValidatorsByCapability so the count set and the weight set can
@@ -287,6 +296,7 @@ module.exports = {
     // rather than an empty set that looks identical to "no qualified validators".
     isCapabilityConfigured(capability){
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
+        if(capability === 'archive_publish') capability = 'oracle_publish';
         return !!caps[capability];
     },
 

@@ -73,6 +73,14 @@ module.exports = {
     // Check whether a pubkey's active stake qualifies for a capability.
     // Returns true if SUM(active stake amount for pubkey) >= governance.min_stake[capability].
     async hasCapability(pubkey, capability, blockIndex, minStakeOverride){
+        if(capability === 'archive_publish' && this.config['COIN'] === 'BTC'){
+            if(blockIndex === undefined || blockIndex === null)
+                blockIndex = await this.getLatestBlockIndex();
+            let weights = await this.getStakeWeightsByCapability(
+                capability, blockIndex, minStakeOverride);
+            let key = String(pubkey).toLowerCase();
+            return weights.some(row => String(row.pubkey).toLowerCase() === key);
+        }
         // Off-BTC chains verify the mirrored capabilities against the hub-mirrored capability
         // snapshot (presence = qualified) since capability stakes live only on BTC. Routed
         // through the SAME predicate as the three set/weight/count resolvers, so the
