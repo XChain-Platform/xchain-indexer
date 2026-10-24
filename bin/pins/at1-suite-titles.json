@@ -4823,6 +4823,15 @@
       "bridge_settle: the XBRIDGE settle pass the pass position and ordering clears ctx.proof when the pass ends, so no row inherits another row proof",
       "bridge_settle: the XBRIDGE settle pass the pass position and ordering runs policy snapshots at the HEAD, before any transfer leg"
     ],
+    "44791ae00989c1cd": [
+      "HubDbSync attest barriers open on their own table certificate during a price re-page @regression @tier1 a full drain still opens the heartbeat gate and advances the global watermark",
+      "HubDbSync attest barriers open on their own table certificate during a price re-page @regression @tier1 both attest barriers open once their tables drain, while the global gate stays shut",
+      "HubDbSync attest barriers open on their own table certificate during a price re-page @regression @tier1 the drained snapshot watermark alone covers a block it reaches",
+      "HubDbSync attest table certificate stays fail-closed @regression @tier1 a certificate from the previous socket never opens either barrier",
+      "HubDbSync attest table certificate stays fail-closed @regression @tier1 a poll-mode drain certifies no coverage",
+      "HubDbSync attest table certificate stays fail-closed @regression @tier1 a queued heartbeat from the prior socket cannot advance the replacement certificate",
+      "HubDbSync attest table certificate stays fail-closed @regression @tier1 an apply failure or a schema refusal keeps both barriers shut"
+    ],
     "44ca5a03f9220589": [
       "UtxoTracker.getSyncStatus() asks get_sync_status with a bounded request and returns the sync view",
       "UtxoTracker.getSyncStatus() leaves consensus calls unbounded: no signal unless one is asked for",
@@ -19155,8 +19164,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1522,
-      "titleCount": 14848,
+      "fileCount": 1523,
+      "titleCount": 14855,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20296,6 +20305,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "235ff56a0118b523",
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
+        "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/retraction_fence_columns.test.js": "521ffb32e51656bb",
@@ -21058,8 +21068,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1156,
-      "titleCount": 11726,
+      "fileCount": 1157,
+      "titleCount": 11733,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21938,6 +21948,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "235ff56a0118b523",
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
+        "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
@@ -22220,8 +22231,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 582,
-      "titleCount": 6179,
+      "fileCount": 583,
+      "titleCount": 6186,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22630,6 +22641,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
+        "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
@@ -22808,8 +22820,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1156,
-      "titleCount": 11726,
+      "fileCount": 1157,
+      "titleCount": 11733,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23688,6 +23700,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "235ff56a0118b523",
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
+        "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
