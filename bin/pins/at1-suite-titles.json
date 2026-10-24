@@ -17636,6 +17636,11 @@
       "VM snapshot memo: poll snapshot @regression @tier1 builds once per block pass and per tick variant",
       "VM snapshot memo: poll snapshot @regression @tier1 serves exactly what an uncached build returns"
     ],
+    "e92dea21a2bdb62b": [
+      "archive_publish BTC capability reads @regression @tier1 derives weights, validators, distinct count and membership from the filtered set",
+      "archive_publish BTC capability reads @regression @tier1 serves archive_publish through getstakeweightsbycapability without rewriting the key",
+      "archive_publish BTC capability reads @regression @tier1 treats archive_publish as configured exactly when oracle_publish is configured"
+    ],
     "e9616084430205ad": [
       "HubDbSync anchor reward copies never hold the drain @regression @tier1 applies the main row when the copy write throws, counts it, and warns once per distinct error",
       "HubDbSync anchor reward copies never hold the drain @regression @tier1 probes a missing copies table once and still applies every main row",
@@ -19119,8 +19124,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1516,
-      "titleCount": 14824,
+      "fileCount": 1517,
+      "titleCount": 14827,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19956,6 +19961,7 @@
         "test/unit/db/anchors/archive_status_journal.test.js": "858aaae550bece4b",
         "test/unit/db/anchors/max_archive_batch_seq_by_author_predicate.test.js": "7f93503626a6b339",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "35f830c11211072f",
+        "test/unit/db/archive_publish_btc_reads.test.js": "e92dea21a2bdb62b",
         "test/unit/db/balance_delta_apply.test.js": "a047f1b5c097c4d9",
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
@@ -21016,8 +21022,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1150,
-      "titleCount": 11702,
+      "fileCount": 1151,
+      "titleCount": 11705,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21662,6 +21668,7 @@
         "test/unit/cross_chain/xcall_cap_default.test.js": "40c3932d64cf581c",
         "test/unit/cross_chain/xcall_result_retirement.test.js": "470963c99e4be416",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "35f830c11211072f",
+        "test/unit/db/archive_publish_btc_reads.test.js": "e92dea21a2bdb62b",
         "test/unit/db/balance_delta_apply.test.js": "a047f1b5c097c4d9",
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
@@ -22172,8 +22179,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 576,
-      "titleCount": 6155,
+      "fileCount": 577,
+      "titleCount": 6158,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22399,6 +22406,7 @@
         "test/unit/cross_chain/cross_chain_settlement_cap_gate.test.js": "85a592dc86f8b36a",
         "test/unit/cross_chain/xcall_cap_default.test.js": "40c3932d64cf581c",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "35f830c11211072f",
+        "test/unit/db/archive_publish_btc_reads.test.js": "e92dea21a2bdb62b",
         "test/unit/db/balance_delta_apply.test.js": "a047f1b5c097c4d9",
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
@@ -22754,8 +22762,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1150,
-      "titleCount": 11702,
+      "fileCount": 1151,
+      "titleCount": 11705,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23400,6 +23408,7 @@
         "test/unit/cross_chain/xcall_cap_default.test.js": "40c3932d64cf581c",
         "test/unit/cross_chain/xcall_result_retirement.test.js": "470963c99e4be416",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "35f830c11211072f",
+        "test/unit/db/archive_publish_btc_reads.test.js": "e92dea21a2bdb62b",
         "test/unit/db/balance_delta_apply.test.js": "a047f1b5c097c4d9",
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
