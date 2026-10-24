@@ -84,6 +84,12 @@
  *                 'mirror'      same generic list as the source
  *                 'recomputed' | 'special' | 'exempt' | 'lookup'  as above
  *                 'local'       indexer-local; table never exists on replicas
+ *   replicaRepair  replica-side repair of a count gap that persists across
+ *               completeness sweeps (xchain-sync/src/client/sync.js):
+ *                 'replace'     re-fetch the table from the source and replace
+ *                               the replica's rows wholesale; only for a mirror
+ *                               table safe to rebuild whole from the source
+ *               absent: no self-repair, the gap is reported only
  *   alsoRecomputed  true when a generically-deleted table is ADDITIONALLY
  *               refreshed by the recompute pass (coverage is a union)
  *   hashed      { classes: [...], note }. classes from:

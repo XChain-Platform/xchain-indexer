@@ -77,6 +77,22 @@
       "markets: refresh on every order-state change @regression @tier1 collects the pairs of the orders a SWEEP cancelled",
       "markets: refresh on every order-state change @regression @tier1 keeps the ORDER-family pairs first so new-pair id assignment order is unchanged"
     ],
+    "0238926421cce290": [
+      "mirror-admission chain margin gate @regression @tier1 falls back to the legacy margin when the override or height is unusable",
+      "mirror-admission chain margin gate @regression @tier1 keeps every LTC margin inert below its testnet activation and unpinned on mainnet",
+      "mirror-admission chain margin gate @regression @tier1 keeps the DOGE testnet margin inert below its sentinel",
+      "mirror-admission chain margin gate @regression @tier1 moves the consumer target at the activation boundary",
+      "mirror-admission chain margin gate @regression @tier1 never returns a target above the legacy-margin target",
+      "mirror-admission chain margin gate @regression @tier1 preserves table and chain legacy margins without an override",
+      "mirror-admission chain margin gate @regression @tier1 resolves chain and network names canonically",
+      "mirror-admission chain margin gate @regression @tier1 selects DOGE table margins on active regtest",
+      "mirror-admission chain margin gate @regression @tier1 selects LTC table margins on active regtest",
+      "mirror-admission chain margin gate @regression @tier1 uses the chain margin early enough to stamp across the activation boundary",
+      "mirror-admission chain margin gate @regression @tier1 uses the row margin only for rows admitted in the new era",
+      "mirror-admission chain margin gate at a stubbed LTC testnet boundary @regression @tier1 keeps the legacy rule for every table below the boundary",
+      "mirror-admission chain margin gate at a stubbed LTC testnet boundary @regression @tier1 leaves DOGE, BTC and LTC mainnet where they were",
+      "mirror-admission chain margin gate at a stubbed LTC testnet boundary @regression @tier1 selects the LTC margins at and above the boundary"
+    ],
     "0249295e69b670ed": [
       "Anchor canonical vectors byte-identity to xchain-documentation @regression fixture is byte-identical to xchain-documentation/protocol/test-vectors/anchor_canonical.json",
       "Anchor canonical vectors byte-identity to xchain-documentation @regression the pre-restart vectors are gone (v4..v7 deleted; v3 is re-used by the archive fold)",
@@ -780,10 +796,6 @@
       "price landing barrier @regression @tier1 releases once landed.DOGE passes T(B), including a waiter already parked",
       "price landing barrier @regression @tier1 requires a strictly greater landed time",
       "price landing barrier @regression @tier1 the member defers a price-reading block, passes a non-reading one, and sets the stall reason"
-    ],
-    "0c5504ff31a9de9c": [
-      "bridge barrier timeout message above the activation names the admission height and drops the mirror time",
-      "bridge barrier timeout message below the activation keeps the mirror time text"
     ],
     "0c6acb7244ce57e5": [
       "Order_Expire action handler @regression @tier2 GIVE_OWNERSHIP=1 still creates expired status",
@@ -4136,6 +4148,15 @@
       "capability snapshot proof held-reason diagnostic @regression @tier1 logs a held row once a minute per row with its reason",
       "capability snapshot proof held-reason diagnostic @regression @tier1 names the reason when the hub proof fetch fails on a mirror-resolved row",
       "capability snapshot proof held-reason diagnostic @regression @tier1 never throws when the logger does"
+    ],
+    "3a62e4b9d42d3dc4": [
+      "mirror-admission margin cross-repo parity hub admitBlocks stamps the indexer row margin and the consumer target certifies the opening tip on regtest",
+      "mirror-admission margin cross-repo parity hub and indexer agree on both sides of a stubbed DOGE testnet boundary",
+      "mirror-admission margin cross-repo parity hub and indexer agree on both sides of a stubbed LTC testnet boundary",
+      "mirror-admission margin cross-repo parity hub and indexer copies of the margin gate and shared_rows_5 are byte-identical",
+      "mirror-admission margin cross-repo parity hub and indexer keep the legacy LTC stamp on testnet below its activation",
+      "mirror-admission margin cross-repo parity the LTC margins clear the burst watermark trail on both round windows that the legacy margin cannot",
+      "mirror-admission margin cross-repo parity the activated DOGE margin clears the 8-minute xdex watermark trail that the legacy margin cannot"
     ],
     "3a74a7a67892c521": [
       "hub config poll helpers becomes stale only after the exclusive limit",
@@ -8898,17 +8919,6 @@
       "remote_token_snapshots mirror contract round trips a finalized fixture and keeps it through a fenced source-chain retraction",
       "remote_token_snapshots never-retracted mirror skips an unfenced deletion"
     ],
-    "7d62cbabc6cf594b": [
-      "mirror-admission chain margin gate @regression @tier1 falls back to the legacy margin when the override or height is unusable",
-      "mirror-admission chain margin gate @regression @tier1 keeps the DOGE testnet margin inert below its sentinel",
-      "mirror-admission chain margin gate @regression @tier1 moves the consumer target at the activation boundary",
-      "mirror-admission chain margin gate @regression @tier1 never returns a target above the legacy-margin target",
-      "mirror-admission chain margin gate @regression @tier1 preserves table and chain legacy margins without an override",
-      "mirror-admission chain margin gate @regression @tier1 resolves chain and network names canonically",
-      "mirror-admission chain margin gate @regression @tier1 selects DOGE table margins on active regtest",
-      "mirror-admission chain margin gate @regression @tier1 uses the chain margin early enough to stamp across the activation boundary",
-      "mirror-admission chain margin gate @regression @tier1 uses the row margin only for rows admitted in the new era"
-    ],
     "7d72f5dfb71d569a": [
       "SQL literal scanner does not treat a bare id as mirrored when a non-passed table participates",
       "SQL literal scanner extracts property-held, array-held, call argument and concatenation operands",
@@ -11919,18 +11929,6 @@
     "9fccb58e5d806628": [
       "snapshot checkpoint canonical twin indexer copy is byte-identical to the hub copy"
     ],
-    "9ff7ac9dfd9b5bb5": [
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) appends the family at the END, leaving the pre-existing gate order untouched",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet (and again at the 16:33Z ladder re-cut, and again when LTC:testnet mirror admission shipped null under dq4 (a))",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a far-future sentinel height, however high the chain climbs",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a null (unratified) entry at any height",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes non-map exports (frozen ladder constants), never active in this sense",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes a gate exactly at its own activation height (<=, not <)",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes the gates this wave armed at genesis on mainnet, from block 0",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) is sorted, has 47 entries, and contains the gates the last trains append",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) resolves both admission maps by coin while a sibling slot stays on the sentinel",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) returns [] for a non-finite height"
-    ],
     "9ffcaf3eab04af81": [
       "protocol_changes VM lint nesting-depth row is active on regtest at genesis, unarmed on mainnet and armed on each testnet chain",
       "protocol_changes VM lint nesting-depth row registers the per-chain height map"
@@ -11973,6 +11971,13 @@
       "GET /status wedge window starts at the barrier hold answers 503 with no recorded hold, measuring from the last commit as before",
       "advanceFields() wedge window starts at the barrier hold reads a 5 minute hold as wedged",
       "advanceFields() wedge window starts at the barrier hold reads a fresh hold as degraded, not wedged"
+    ],
+    "a13a3eb9fe3202cb": [
+      "mirror admission barriers use chain-specific consumer targets clears DOGE and LTC at B minus 14 while BTC keeps the legacy margin",
+      "mirror admission barriers use chain-specific consumer targets records, reports, and reconciles the selected target",
+      "mirror admission barriers use chain-specific consumer targets uses the DOGE price-snapshot margin of 16",
+      "mirror admission barriers use chain-specific consumer targets uses the LTC price-snapshot margin of 17",
+      "mirror admission barriers use chain-specific consumer targets uses the same DOGE target in the direct-hub call-presence barrier"
     ],
     "a147574d481bc948": [
       "native coin fee quote @regression @tier1 _priceFeeQuote() chain-time anchoring BTC block drought: a round stamped at the tip block is not called stale",
@@ -12813,6 +12818,18 @@
       "list share snapshot screen returns parsed fields for a full snapshot",
       "list share snapshot screen turns an admission-column parser throw into a halt"
     ],
+    "ae2edec2b166bb6e": [
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) appends the family at the END, leaving the pre-existing gate order untouched",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet (and again at the 16:33Z ladder re-cut, and again when LTC:testnet mirror admission shipped null under dq4 (a))",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a far-future sentinel height, however high the chain climbs",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a null (unratified) entry at any height",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes non-map exports (frozen ladder constants), never active in this sense",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes a gate exactly at its own activation height (<=, not <)",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes the gates this wave armed at genesis on mainnet, from block 0",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) is sorted, has 48 entries, and contains the gates the last trains append",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) resolves both admission maps by coin while a sibling slot stays on the sentinel",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) returns [] for a non-finite height"
+    ],
     "ae8c9d39d6d00e45": [
       "27 Expiry-sweep push-down characterization @regression @tier2 a NULL edit expiration does not erase the effective expiration",
       "27 Expiry-sweep push-down characterization @regression @tier2 expires items whose effective expiration is NULL",
@@ -13532,6 +13549,12 @@
       "Deferred chunked DEPLOY assembly @regression @tier2 R2: the assembler lands pays the base fee via a native output at the assembler, recording mode 1",
       "Deferred chunked DEPLOY assembly @regression @tier2 R2: the assembler lands rejects a second assembler while one is pending, and charges it nothing"
     ],
+    "b8dd38b3bcc8085a": [
+      "bridge barrier timeout message above the activation names the admission height and drops the mirror time",
+      "bridge barrier timeout message below the activation keeps the mirror time text",
+      "policy barrier timeout message above the activation names the admission height and drops the mirror time",
+      "policy barrier timeout message below the activation keeps the mirror time text"
+    ],
     "b94434c87d719100": [
       "capability_snapshots stake set memo @regression @tier2 does not pin a failed read",
       "capability_snapshots stake set memo @regression @tier2 re-derives for a different snapshot block",
@@ -14017,6 +14040,13 @@
       "GenesisDump.read @regression verify-then-import: a pinned-hash mismatch is rejected BEFORE any INSERT",
       "GenesisDump.write @regression leaves a non-empty schema_migrations table out of tableOrder",
       "GenesisDump.write @regression refuses a BIGINT the pool has already rounded past 2^53-1 instead of writing it"
+    ],
+    "be9c80fb8a595c9d": [
+      "archive_rollcall_presence_activation registry row @regression @tier1 is a height row: mainnet unpinned, BTC:testnet and testnet on the sentinel, regtest 0",
+      "archive_rollcall_presence_activation registry row @regression @tier1 is active on regtest from snapshot block 0",
+      "archive_rollcall_presence_activation registry row @regression @tier1 is inactive on mainnet at every snapshot block",
+      "archive_rollcall_presence_activation registry row @regression @tier1 is inactive on testnet below the sentinel until a cut arms it",
+      "archive_rollcall_presence_activation registry row @regression @tier1 resolves the BTC:testnet slot before the bare testnet fallback"
     ],
     "bec27ec877526eee": [
       "bridge_transfers reorg pre-delete @regression @tier1 deletes the orphaned bridge_transfers range on its own source leg",
@@ -16552,33 +16582,6 @@
       "reward writers resolve source strictly (recovery byte-identity) createValidatorReward skips the insert when no active source resolves",
       "reward writers resolve source strictly (recovery byte-identity) createValidatorReward stores the strict-resolved source and inserts"
     ],
-    "de1944e0da000104": [
-      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
-      "armed_map/manifest: collectRows carries the DOGE mirror-admission chain margins and activation",
-      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
-      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
-      "armed_map/manifest: collectRows carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights",
-      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
-      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
-      "armed_map/manifest: collectRows carries the three row families the design names",
-      "armed_map/manifest: collectRows carries the unarmed airdrop native-fee tally rollback gate",
-      "armed_map/manifest: collectRows carries the unarmed archive v1 reissue refusal gate",
-      "armed_map/manifest: collectRows carries the unarmed batch-airdrop leg-weight gate",
-      "armed_map/manifest: collectRows carries the unarmed bridge-checkpoint v3 section gate",
-      "armed_map/manifest: collectRows carries the unarmed guard emitted-host discriminator gate",
-      "armed_map/manifest: collectRows carries the unarmed null-prototype TICK cache gate",
-      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
-      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
-      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
-      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
-      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
-      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
-      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
-      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
-      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
-      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
-      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
-    ],
     "de2588208d06b802": [
       "state_hash token-supply class (F-1 closure, armed) @regression active: an IDENTICAL supply set hashes the same (no false halt)",
       "state_hash token-supply class (F-1 closure, armed) @regression active: supply is folded in, and a stale/dropped supply HALTS (different hash)",
@@ -17859,12 +17862,6 @@
       "Chaos: Exponential Backoff & Retry BR-07: returns transactionConnection if one exists (bypasses pool)",
       "Chaos: Exponential Backoff & Retry BR-08: backoff state resets between calls"
     ],
-    "ed6f0e05cd4ccaef": [
-      "mirror-admission margin cross-repo parity hub admitBlocks stamps the indexer row margin and the consumer target certifies the opening tip on regtest",
-      "mirror-admission margin cross-repo parity hub and indexer agree on both sides of a stubbed DOGE testnet boundary",
-      "mirror-admission margin cross-repo parity hub and indexer copies of the margin gate and shared_rows_5 are byte-identical",
-      "mirror-admission margin cross-repo parity the activated DOGE margin clears the 8-minute xdex watermark trail that the legacy margin cannot"
-    ],
     "ed8c2bd1cc10406b": [
       "HubDbSync own-chain generation hook as startup wires it @regression @tier1 reads the committed generation, not the open rollback transaction's bump",
       "HubDbSync own-chain generation hook as startup wires it @regression @tier1 refuses an own-chain retraction fenced at the uncommitted generation minus one",
@@ -18432,6 +18429,33 @@
       "Send isActionAllowed memoization @regression sleeping SOURCE still rejects every leg (hoist did not drop the gate)",
       "Send isActionAllowed memoization @regression sleeping TICK still rejects (memo returns the same false for every leg)"
     ],
+    "f6853b67d73d705e": [
+      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
+      "armed_map/manifest: collectRows carries the DOGE and LTC mirror-admission chain margins and activation",
+      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
+      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
+      "armed_map/manifest: collectRows carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights",
+      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
+      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
+      "armed_map/manifest: collectRows carries the three row families the design names",
+      "armed_map/manifest: collectRows carries the unarmed airdrop native-fee tally rollback gate",
+      "armed_map/manifest: collectRows carries the unarmed archive v1 reissue refusal gate",
+      "armed_map/manifest: collectRows carries the unarmed batch-airdrop leg-weight gate",
+      "armed_map/manifest: collectRows carries the unarmed bridge-checkpoint v3 section gate",
+      "armed_map/manifest: collectRows carries the unarmed guard emitted-host discriminator gate",
+      "armed_map/manifest: collectRows carries the unarmed null-prototype TICK cache gate",
+      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
+      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
+      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
+      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
+      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
+      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
+      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
+      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
+      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
+      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
+      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
+    ],
     "f6c1cdcc5ab66603": [
       "policy membership references hashes a ref in place of the section count and members",
       "policy membership references keeps the legacy policy hash vectors byte-identical",
@@ -18843,12 +18867,6 @@
       "Database.hasCapability() threshold source @regression @tier1 treats a 0 override as a real threshold (not a falsy fallback)",
       "Database.hasCapability() threshold source @regression @tier1 uses the caller-supplied override over local config"
     ],
-    "fc76044bcfd5ebd5": [
-      "mirror admission barriers use chain-specific consumer targets clears DOGE at B minus 14 while LTC keeps the legacy margin",
-      "mirror admission barriers use chain-specific consumer targets records, reports, and reconciles the selected target",
-      "mirror admission barriers use chain-specific consumer targets uses the DOGE price-snapshot margin of 16",
-      "mirror admission barriers use chain-specific consumer targets uses the same DOGE target in the direct-hub call-presence barrier"
-    ],
     "fcceb01127354bd9": [
       "PreflightMemo @regression a get() touches recency so it survives eviction",
       "PreflightMemo @regression clear empties the memo",
@@ -19091,8 +19109,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1514,
-      "titleCount": 14800,
+      "fileCount": 1515,
+      "titleCount": 14816,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19797,7 +19815,7 @@
         "test/unit/consensus/anchor_reward_legacy_pins.test.js": "7f09f1cb1e4cefbf",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "9bf929008cd88b66",
-        "test/unit/consensus/armed_map/manifest.test.js": "de1944e0da000104",
+        "test/unit/consensus/armed_map/manifest.test.js": "f6853b67d73d705e",
         "test/unit/consensus/armed_map/vm_gate_coverage.test.js": "fe8f001bb389e37d",
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
@@ -19835,11 +19853,12 @@
         "test/unit/consensus/equivocation/equiv_xcall_canonical.test.js": "93b9e527a571fc32",
         "test/unit/consensus/equivocation/equivocation_header.test.js": "3ad67665f530b06c",
         "test/unit/consensus/escrow_journal_release_before_lock.test.js": "fb66a40be5e24b51",
+        "test/unit/consensus/gates/archive_rollcall_presence_gate.test.js": "be9c80fb8a595c9d",
         "test/unit/consensus/gates/mainnet_launch_gate.test.js": "1332bcf8f7981634",
         "test/unit/consensus/gates/mainnet_launch_rows.test.js": "4764414e4e169b31",
         "test/unit/consensus/gates/mirror_admission_margin_boundary.test.js": "5ad6c4b0c28cb058",
-        "test/unit/consensus/gates/mirror_admission_margin_cross_repo.test.js": "ed6f0e05cd4ccaef",
-        "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
+        "test/unit/consensus/gates/mirror_admission_margin_cross_repo.test.js": "3a62e4b9d42d3dc4",
+        "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
         "test/unit/consensus/gates/prelaunch_seed_sources.test.js": "11766bc999308929",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/list_rematch/plan.test.js": "15d8cc2e94c0564c",
@@ -19857,7 +19876,7 @@
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
         "test/unit/consensus/rollcall_close/signer_verify.test.js": "7e33c00ff3453bbd",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test.js": "7f39aa26f210b97a",
-        "test/unit/consensus/rules_digest/consensus_rules_digest.test/active_gates.test.js": "9ff7ac9dfd9b5bb5",
+        "test/unit/consensus/rules_digest/consensus_rules_digest.test/active_gates.test.js": "ae2edec2b166bb6e",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_registry_parity.test.js": "56e2effa6675b4fa",
@@ -20153,11 +20172,11 @@
         "test/unit/hub/hub_client.test/push_methods.test.js": "df1fca920021bbe3",
         "test/unit/hub/hub_client.test/retractions.test.js": "e8f3158d242019f6",
         "test/unit/hub/hub_config_staleness.test.js": "e114e1b97d1caeb4",
-        "test/unit/hub/hub_db_sync/barriers/admission_chain_margin.test.js": "fc76044bcfd5ebd5",
+        "test/unit/hub/hub_db_sync/barriers/admission_chain_margin.test.js": "a13a3eb9fe3202cb",
         "test/unit/hub/hub_db_sync/barriers/attest_waiter_self_heal.test.js": "cc91537bca695659",
         "test/unit/hub/hub_db_sync/barriers/attestation_copies_nonfatal.test.js": "e9616084430205ad",
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
-        "test/unit/hub/hub_db_sync/barriers/bridge_policy_timeout_message.test.js": "0c5504ff31a9de9c",
+        "test/unit/hub/hub_db_sync/barriers/bridge_policy_timeout_message.test.js": "b8dd38b3bcc8085a",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "0723d9f6d06d7f50",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
         "test/unit/hub/hub_db_sync/barriers/price_barrier_every_block.test.js": "c42a4364058c3b39",
@@ -20986,8 +21005,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1148,
-      "titleCount": 11684,
+      "fileCount": 1149,
+      "titleCount": 11694,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21577,7 +21596,8 @@
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
         "test/unit/consensus/escrow_journal_release_before_lock.test.js": "fb66a40be5e24b51",
-        "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
+        "test/unit/consensus/gates/archive_rollcall_presence_gate.test.js": "be9c80fb8a595c9d",
+        "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
@@ -22140,8 +22160,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 574,
-      "titleCount": 6137,
+      "fileCount": 575,
+      "titleCount": 6147,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22336,7 +22356,8 @@
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "b9d611837b350922",
         "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "357df19ce32905f9",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
-        "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
+        "test/unit/consensus/gates/archive_rollcall_presence_gate.test.js": "be9c80fb8a595c9d",
+        "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
@@ -22720,8 +22741,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1148,
-      "titleCount": 11684,
+      "fileCount": 1149,
+      "titleCount": 11694,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23311,7 +23332,8 @@
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
         "test/unit/consensus/escrow_journal_release_before_lock.test.js": "fb66a40be5e24b51",
-        "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "7d62cbabc6cf594b",
+        "test/unit/consensus/gates/archive_rollcall_presence_gate.test.js": "be9c80fb8a595c9d",
+        "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",

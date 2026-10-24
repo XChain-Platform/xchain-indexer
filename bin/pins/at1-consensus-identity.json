@@ -15,7 +15,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "0136b3c0599359e24e1f159d4c0fc03336d242e07540046170f0d21db9a1e26a",
+    "armed_map_fingerprint": "42c1e96e8a5dfbb8e628144393ebc385fcd9c8f2568ffff5ac06d39f3db5dfdb",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY": "813f95010af2ab02a8d76a1ab03feb8fe4c0542e6251f34a2530737c312234b9",
@@ -47,6 +47,7 @@
       "archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION": "73cfd3b3e86d40fb0393bae122fd2f8818f12125f9460c05b3ae49d4205d1d7f",
       "archive_rollback_author_scope_activation.ARCHIVE_AUTHOR_SCOPE_JOIN_SQL": "c8b6c1753f86fb65689fbc5d72f001e9467d5553a91895a21c9cf48d643e8895",
       "archive_rollback_author_scope_activation.ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION": "836a49c98ea3f001fac17d3a831f71792f76aaa9f6853f06da929bcdc70aa69e",
+      "archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION": "761fec51661f92869757d28388e8cd9f529c8afe8d5d3ee74cf4d5447c9e7c1a",
       "archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION": "b3473cbb47ae3dad5e9b6eb7003b0346bcfe27916b2aaf666e877cfa22aba929",
       "archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION": "d22946f31114b792ce27f4331871f615c50307b82e33b8be447b66e3d20a73ec",
       "attest_admission_activation.ATTEST_ADMISSION_ACTIVATION": "b64d8f1cbe12e895958c6fb75ae01b793a75112ed7789d8d483ce2affd49ea35",
@@ -136,8 +137,8 @@
       "mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION": "93a6bc0478ccd8348969698edce8f0755e3510c51fefcd0a53ffb6b07f2a71ae",
       "mirror_admission_activation.MIRROR_ADMISSION_REGTEST_ARMED_HEIGHT": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "mirror_admission_activation.MIRROR_ADMISSION_REGTEST_ENV": "93d711306bc2fe8e36db9e270863fac9c83bda7fde5084b22176f73f01e5331a",
-      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION": "671bf023a30a6b71408ca85ffe54fb8b61fc311e2fe87b36bf076d18b33f2daa",
-      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS": "16a14897a8f08745804f274248c5538d46e20d7b6f84cf4e48741448d90a7a29",
+      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION": "a72f8a30899589ebb463f26fb6013ab4385c11388db5f52b844a3653fd043f73",
+      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS": "00141178d050440374503aaba519baf4d1d356297cc4897ea1dd1889b8f179d9",
       "native_stack_terminal_heights.NATIVE_STACK_TERMINAL_ACTIVATION": "09a682558b7299c9ea2c880860d8f17fb35d507d898b850c53c31ba1134c289b",
       "nested_execute_gas_sum_activation.NESTED_EXECUTE_GAS_SUM_ACTIVATION": "09a682558b7299c9ea2c880860d8f17fb35d507d898b850c53c31ba1134c289b",
       "oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND": "f4fe45f6e1887018d36fba70c45ebab8b1048057d4cf47d417dda6c293949c30",
@@ -495,11 +496,11 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 476,
-    "gates_field_hash": "3d31976181db95861cd0a92ecb1c01ada526278c421a199bbe15f3136c71b9dd",
-    "carrier_logic_digest": "d19385c1b4b3e17bd7bcc4f2173f554ff672a5751386469763a0476bb2a9876e",
-    "consensus_rules_digest": "cac4806586d5e35020f85dd9f0a6b8106f9838a259c9a4b94a6c6cecb2678c06",
-    "gate_key_count": 47,
+    "armed_map_row_count": 477,
+    "gates_field_hash": "9cba94b3a4cb49673833d7a7284090d63293b3cb8d1680e99e97fd78e81e3be1",
+    "carrier_logic_digest": "ce1d346f32140b2e97b275ac2f4f7537cc8b3c7bbb1bdbf3ca75a0d1ec086b74",
+    "consensus_rules_digest": "47d1b7366858bdc358dabc34d36ecbf05d921864ab8a0e543db0e1360a22e3c4",
+    "gate_key_count": 48,
     "consensus_rules_gates": {
       "anchor_reward_activation.ANCHOR_REWARD_ACTIVATION": "{\"mainnet\":961000,\"regtest\":0,\"testnet\":0}",
       "anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION": "{\"mainnet\":963000,\"regtest\":0,\"testnet\":0}",
@@ -544,10 +545,11 @@
       "price_scale_activation.PRICE_V1_FEE_MAX_LENGTH": "20",
       "list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION": "{\"mainnet\":9999999999,\"regtest\":0,\"testnet\":154777}",
       "list_meta_activation.LIST_META_ACTIVATION": "{\"BTC:testnet\":155001,\"DOGE:testnet\":67962387,\"LTC:testnet\":4906040,\"mainnet\":9999999999,\"regtest\":0,\"testnet\":9999999999}",
-      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION": "{\"DOGE:mainnet\":null,\"DOGE:testnet\":67989993,\"mainnet\":null,\"regtest\":0}",
-      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS": "{\"DOGE\":{\"bridge_transfers\":14,\"cross_chain_calls\":14,\"cross_chain_matches\":14,\"list_snapshots\":14,\"policy_snapshots\":14,\"price_snapshots\":16,\"remote_token_snapshots\":14}}",
+      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION": "{\"DOGE:mainnet\":null,\"DOGE:testnet\":67989993,\"LTC:mainnet\":null,\"LTC:testnet\":9999999999,\"mainnet\":null,\"regtest\":0}",
+      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS": "{\"DOGE\":{\"bridge_transfers\":14,\"cross_chain_calls\":14,\"cross_chain_matches\":14,\"list_snapshots\":14,\"policy_snapshots\":14,\"price_snapshots\":16,\"remote_token_snapshots\":14},\"LTC\":{\"bridge_transfers\":14,\"cross_chain_calls\":14,\"cross_chain_matches\":14,\"list_snapshots\":14,\"policy_snapshots\":14,\"price_snapshots\":17,\"remote_token_snapshots\":14}}",
       "order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION": "{\"BTC:testnet\":156908,\"DOGE:testnet\":68005165,\"LTC:testnet\":4927400,\"mainnet\":9999999999,\"regtest\":0,\"testnet\":156908}",
-      "remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION": "{\"BTC:testnet\":156908,\"DOGE:testnet\":68005165,\"LTC:testnet\":4927400,\"mainnet\":9999999999,\"regtest\":null,\"testnet\":156908}"
+      "remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION": "{\"BTC:testnet\":156908,\"DOGE:testnet\":68005165,\"LTC:testnet\":4927400,\"mainnet\":9999999999,\"regtest\":null,\"testnet\":156908}",
+      "archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION": "{\"BTC:testnet\":9999999999,\"mainnet\":null,\"regtest\":0,\"testnet\":9999999999}"
     }
   },
   "armed_regtest_venue": {
@@ -562,7 +564,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "91e277d117d63778c532850f889052e1700e3b7a55a2bbb66416d7b5ec1180b2",
+    "armed_map_fingerprint": "c73e0074a19e14f93ca1aaf5fe54bc5116ab9ef4bbc6e6fae32d8dd21c43c901",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY": "813f95010af2ab02a8d76a1ab03feb8fe4c0542e6251f34a2530737c312234b9",
@@ -594,6 +596,7 @@
       "archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION": "73cfd3b3e86d40fb0393bae122fd2f8818f12125f9460c05b3ae49d4205d1d7f",
       "archive_rollback_author_scope_activation.ARCHIVE_AUTHOR_SCOPE_JOIN_SQL": "c8b6c1753f86fb65689fbc5d72f001e9467d5553a91895a21c9cf48d643e8895",
       "archive_rollback_author_scope_activation.ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION": "836a49c98ea3f001fac17d3a831f71792f76aaa9f6853f06da929bcdc70aa69e",
+      "archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION": "761fec51661f92869757d28388e8cd9f529c8afe8d5d3ee74cf4d5447c9e7c1a",
       "archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION": "b3473cbb47ae3dad5e9b6eb7003b0346bcfe27916b2aaf666e877cfa22aba929",
       "archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION": "d22946f31114b792ce27f4331871f615c50307b82e33b8be447b66e3d20a73ec",
       "attest_admission_activation.ATTEST_ADMISSION_ACTIVATION": "b64d8f1cbe12e895958c6fb75ae01b793a75112ed7789d8d483ce2affd49ea35",
@@ -683,8 +686,8 @@
       "mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION": "93a6bc0478ccd8348969698edce8f0755e3510c51fefcd0a53ffb6b07f2a71ae",
       "mirror_admission_activation.MIRROR_ADMISSION_REGTEST_ARMED_HEIGHT": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "mirror_admission_activation.MIRROR_ADMISSION_REGTEST_ENV": "93d711306bc2fe8e36db9e270863fac9c83bda7fde5084b22176f73f01e5331a",
-      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION": "671bf023a30a6b71408ca85ffe54fb8b61fc311e2fe87b36bf076d18b33f2daa",
-      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS": "16a14897a8f08745804f274248c5538d46e20d7b6f84cf4e48741448d90a7a29",
+      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION": "a72f8a30899589ebb463f26fb6013ab4385c11388db5f52b844a3653fd043f73",
+      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS": "00141178d050440374503aaba519baf4d1d356297cc4897ea1dd1889b8f179d9",
       "native_stack_terminal_heights.NATIVE_STACK_TERMINAL_ACTIVATION": "09a682558b7299c9ea2c880860d8f17fb35d507d898b850c53c31ba1134c289b",
       "nested_execute_gas_sum_activation.NESTED_EXECUTE_GAS_SUM_ACTIVATION": "09a682558b7299c9ea2c880860d8f17fb35d507d898b850c53c31ba1134c289b",
       "oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND": "f4fe45f6e1887018d36fba70c45ebab8b1048057d4cf47d417dda6c293949c30",
@@ -1042,11 +1045,11 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 476,
-    "gates_field_hash": "3d31976181db95861cd0a92ecb1c01ada526278c421a199bbe15f3136c71b9dd",
-    "carrier_logic_digest": "d19385c1b4b3e17bd7bcc4f2173f554ff672a5751386469763a0476bb2a9876e",
-    "consensus_rules_digest": "d13f3a42fe657441fc3b66f0589703593789b3304165f78a6f26dc1e71764472",
-    "gate_key_count": 47,
+    "armed_map_row_count": 477,
+    "gates_field_hash": "9cba94b3a4cb49673833d7a7284090d63293b3cb8d1680e99e97fd78e81e3be1",
+    "carrier_logic_digest": "ce1d346f32140b2e97b275ac2f4f7537cc8b3c7bbb1bdbf3ca75a0d1ec086b74",
+    "consensus_rules_digest": "8d74c28e5e27692df3bb05394834f553e8df76958ac8cefa2f2883ec73f9c68c",
+    "gate_key_count": 48,
     "consensus_rules_gates": {
       "anchor_reward_activation.ANCHOR_REWARD_ACTIVATION": "{\"mainnet\":961000,\"regtest\":0,\"testnet\":0}",
       "anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION": "{\"mainnet\":963000,\"regtest\":0,\"testnet\":0}",
@@ -1091,10 +1094,11 @@
       "price_scale_activation.PRICE_V1_FEE_MAX_LENGTH": "20",
       "list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION": "{\"mainnet\":9999999999,\"regtest\":0,\"testnet\":154777}",
       "list_meta_activation.LIST_META_ACTIVATION": "{\"BTC:testnet\":155001,\"DOGE:testnet\":67962387,\"LTC:testnet\":4906040,\"mainnet\":9999999999,\"regtest\":0,\"testnet\":9999999999}",
-      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION": "{\"DOGE:mainnet\":null,\"DOGE:testnet\":67989993,\"mainnet\":null,\"regtest\":0}",
-      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS": "{\"DOGE\":{\"bridge_transfers\":14,\"cross_chain_calls\":14,\"cross_chain_matches\":14,\"list_snapshots\":14,\"policy_snapshots\":14,\"price_snapshots\":16,\"remote_token_snapshots\":14}}",
+      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION": "{\"DOGE:mainnet\":null,\"DOGE:testnet\":67989993,\"LTC:mainnet\":null,\"LTC:testnet\":9999999999,\"mainnet\":null,\"regtest\":0}",
+      "mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS": "{\"DOGE\":{\"bridge_transfers\":14,\"cross_chain_calls\":14,\"cross_chain_matches\":14,\"list_snapshots\":14,\"policy_snapshots\":14,\"price_snapshots\":16,\"remote_token_snapshots\":14},\"LTC\":{\"bridge_transfers\":14,\"cross_chain_calls\":14,\"cross_chain_matches\":14,\"list_snapshots\":14,\"policy_snapshots\":14,\"price_snapshots\":17,\"remote_token_snapshots\":14}}",
       "order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION": "{\"BTC:testnet\":156908,\"DOGE:testnet\":68005165,\"LTC:testnet\":4927400,\"mainnet\":9999999999,\"regtest\":0,\"testnet\":156908}",
-      "remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION": "{\"BTC:testnet\":156908,\"DOGE:testnet\":68005165,\"LTC:testnet\":4927400,\"mainnet\":9999999999,\"regtest\":null,\"testnet\":156908}"
+      "remote_token_admission_activation.REMOTE_TOKEN_ADMISSION_ACTIVATION": "{\"BTC:testnet\":156908,\"DOGE:testnet\":68005165,\"LTC:testnet\":4927400,\"mainnet\":9999999999,\"regtest\":null,\"testnet\":156908}",
+      "archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION": "{\"BTC:testnet\":9999999999,\"mainnet\":null,\"regtest\":0,\"testnet\":9999999999}"
     }
   },
   "v0190_level_note": "Re-pinned when develop was levelled with master after the v0.19.0 cut (kit step 5h), on the merged tree by the same two invocations (bare, and with the armed env above). Both blocks read master's re-cut values for every consensus field (armed-map fingerprint, rules digest, gates map, GATES field, coin registry) and develop's W5 values for the rest: the armed_map_fingerprint_v2 alias stays retired (row 22, D103) and carrier_logic_digest reads the W5 carrier logic pin (row 21b, D102), whose per-id hashes did not move. Nothing else changed.",

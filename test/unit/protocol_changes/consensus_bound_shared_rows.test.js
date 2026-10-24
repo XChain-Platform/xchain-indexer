@@ -38,7 +38,7 @@ describe('protocol_changes consensus-bound shared rows', function () {
     });
 
     it('keeps the oracle and chain-margin entries at the shared digest tail', function () {
-        assert.deepStrictEqual(SHARED_GATES.slice(-9), [
+        assert.deepStrictEqual(SHARED_GATES.slice(-10), [
             ['oracle_price_age_hourly_activation', ['ORACLE_PRICE_AGE_HOURLY_ACTIVATION']],
             ['oracle_hourly_window_activation', ['ORACLE_HOURLY_WINDOW_FIRST_ROUND']],
             ['oracle_round_time_activation', ['ORACLE_ROUND_TIME_ACTIVATION']],
@@ -54,6 +54,7 @@ describe('protocol_changes consensus-bound shared rows', function () {
             ],
             ['order_match_price_cross_activation', ['ORDER_MATCH_PRICE_CROSS_ACTIVATION']],
             ['remote_token_admission_activation', ['REMOTE_TOKEN_ADMISSION_ACTIVATION']],
+            ['archive_rollcall_presence_activation', ['ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION']],
         ]);
     });
 
@@ -64,22 +65,29 @@ describe('protocol_changes consensus-bound shared rows', function () {
         const dogeTestnet = margin['DOGE:testnet'];
         assert.ok(Number.isInteger(dogeTestnet) && dogeTestnet > 1 && dogeTestnet < 9999999999,
             'DOGE:testnet is not a sized height: ' + dogeTestnet);
+        // LTC:testnet ships on the UNARMED sentinel until a cut sizes it.
+        const ltcTestnet = margin['LTC:testnet'];
+        assert.ok(ltcTestnet === 9999999999 || (Number.isInteger(ltcTestnet) && ltcTestnet > 1 && ltcTestnet < 9999999999),
+            'LTC:testnet is neither the sentinel nor a sized height: ' + ltcTestnet);
         assert.deepStrictEqual(margin, {
             mainnet: null,
             'DOGE:mainnet': null,
             'DOGE:testnet': dogeTestnet,
+            'LTC:mainnet': null,
+            'LTC:testnet': ltcTestnet,
             regtest: 0,
         });
+        const rounds = {
+            bridge_transfers: 14,
+            cross_chain_calls: 14,
+            cross_chain_matches: 14,
+            list_snapshots: 14,
+            policy_snapshots: 14,
+            remote_token_snapshots: 14,
+        };
         assert.deepStrictEqual(gateRegistry.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS'), {
-            DOGE: {
-                bridge_transfers: 14,
-                cross_chain_calls: 14,
-                cross_chain_matches: 14,
-                list_snapshots: 14,
-                policy_snapshots: 14,
-                price_snapshots: 16,
-                remote_token_snapshots: 14,
-            },
+            DOGE: { ...rounds, price_snapshots: 16 },
+            LTC: { ...rounds, price_snapshots: 17 },
         });
     });
 

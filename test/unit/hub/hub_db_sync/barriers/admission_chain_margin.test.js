@@ -27,14 +27,24 @@ function makeSync(coin, heights){
 }
 
 describe('mirror admission barriers use chain-specific consumer targets', function(){
-    it('clears DOGE at B minus 14 while LTC keeps the legacy margin', function(){
-        const heights = { bridge_transfers: { DOGE: 986, LTC: 986 } };
+    it('clears DOGE and LTC at B minus 14 while BTC keeps the legacy margin', function(){
+        const heights = { bridge_transfers: { DOGE: 986, LTC: 986, BTC: 986 } };
         const doge = makeSync('DOGE', heights);
         const ltc = makeSync('LTC', heights);
+        const btc = makeSync('BTC', heights);
 
         assert.strictEqual(doge.heightSatisfied('bridge_transfers', 1000), true);
         assert.strictEqual(doge.heightSatisfied('bridge_transfers', 1001), false);
-        assert.strictEqual(ltc.heightSatisfied('bridge_transfers', 1000), false);
+        assert.strictEqual(ltc.heightSatisfied('bridge_transfers', 1000), true);
+        assert.strictEqual(ltc.heightSatisfied('bridge_transfers', 1001), false);
+        assert.strictEqual(btc.heightSatisfied('bridge_transfers', 1000), false);
+        assert.strictEqual(btc.heightSatisfied('bridge_transfers', 990), true);
+    });
+
+    it('uses the LTC price-snapshot margin of 17', function(){
+        const sync = makeSync('LTC', { price_snapshots: { LTC: 983 } });
+        assert.strictEqual(sync.heightSatisfied('price_snapshots', 1000), true);
+        assert.strictEqual(sync.heightSatisfied('price_snapshots', 1001), false);
     });
 
     it('uses the DOGE price-snapshot margin of 16', function(){
