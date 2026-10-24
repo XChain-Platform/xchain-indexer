@@ -307,10 +307,13 @@ module.exports = {
                 try { await this.refreshPolicySyncTimestamp(); } catch (e) { /* fall through to reject */ }
                 if (this.policySyncSatisfied(blockTime, blockHeight)) return;  // already resolved by the refresh
                 this._policyWaiters = this._policyWaiters.filter(w => w !== waiter);
-                reject(new Error('policy sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
-                                 blockTime + ' (policy mirror at ' + this.policySyncTimestamp + ')' +
-                                 (this.admissionActiveAt(blockHeight)
-                                     ? this.heightTail('policy_snapshots', blockHeight) : '')));
+                // Above the activation only the admission height gates the barrier, so the
+                // clock watermark would read as a frozen mirror and is left out.
+                const waiting = 'policy sync barrier timed out after ' + ms + 'ms';
+                reject(new Error(this.admissionActiveAt(blockHeight)
+                    ? waiting + this.heightTail('policy_snapshots', blockHeight)
+                    : waiting + ' waiting for block_time ' + blockTime +
+                      ' (policy mirror at ' + this.policySyncTimestamp + ')'));
             }, ms);
             this._policyWaiters.push(waiter);
         });

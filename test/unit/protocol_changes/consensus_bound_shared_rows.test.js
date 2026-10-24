@@ -64,22 +64,29 @@ describe('protocol_changes consensus-bound shared rows', function () {
         const dogeTestnet = margin['DOGE:testnet'];
         assert.ok(Number.isInteger(dogeTestnet) && dogeTestnet > 1 && dogeTestnet < 9999999999,
             'DOGE:testnet is not a sized height: ' + dogeTestnet);
+        // LTC:testnet ships on the UNARMED sentinel until a cut sizes it.
+        const ltcTestnet = margin['LTC:testnet'];
+        assert.ok(ltcTestnet === 9999999999 || (Number.isInteger(ltcTestnet) && ltcTestnet > 1 && ltcTestnet < 9999999999),
+            'LTC:testnet is neither the sentinel nor a sized height: ' + ltcTestnet);
         assert.deepStrictEqual(margin, {
             mainnet: null,
             'DOGE:mainnet': null,
             'DOGE:testnet': dogeTestnet,
+            'LTC:mainnet': null,
+            'LTC:testnet': ltcTestnet,
             regtest: 0,
         });
+        const rounds = {
+            bridge_transfers: 14,
+            cross_chain_calls: 14,
+            cross_chain_matches: 14,
+            list_snapshots: 14,
+            policy_snapshots: 14,
+            remote_token_snapshots: 14,
+        };
         assert.deepStrictEqual(gateRegistry.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS'), {
-            DOGE: {
-                bridge_transfers: 14,
-                cross_chain_calls: 14,
-                cross_chain_matches: 14,
-                list_snapshots: 14,
-                policy_snapshots: 14,
-                price_snapshots: 16,
-                remote_token_snapshots: 14,
-            },
+            DOGE: { ...rounds, price_snapshots: 16 },
+            LTC: { ...rounds, price_snapshots: 17 },
         });
     });
 

@@ -270,11 +270,26 @@ addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS', 'constan
         price_snapshots:        16,
         remote_token_snapshots: 14,
     },
+    // LTC testnet bursts leave the hub watermark 5 to 12 blocks behind the tip on the
+    // 8-minute round tables, so 12 plus 2 blocks of headroom. price_snapshots waits a
+    // 10-minute window: at the burst cadence that trails 12 blocks in 8 minutes it trails
+    // 15, plus the same 2, so 17. Both stay inside ADMIT_MAX_FUTURE_BLOCKS.LTC (24).
+    LTC: {
+        bridge_transfers:       14,
+        cross_chain_calls:      14,
+        cross_chain_matches:    14,
+        list_snapshots:         14,
+        policy_snapshots:       14,
+        price_snapshots:        17,
+        remote_token_snapshots: 14,
+    },
 });
 addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION', 'height', {
     mainnet:        UNPINNED,
     'DOGE:mainnet': UNPINNED,
     'DOGE:testnet': 67989993,
+    'LTC:mainnet':  UNPINNED,
+    'LTC:testnet':  UNARMED,
     regtest:        0,
 });
 // oracle_price_age_hourly_activation: gates the hourly price-snapshot age limit
