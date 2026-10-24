@@ -15,8 +15,21 @@
 const gateRegistry = require('./gate_registry.js');
 const swq = require('./stake_weighted_quorum.js');
 
+const ARCHIVE_PUBLISH_CAPABILITY = 'archive_publish';
 const ARCHIVE_ROLLCALL_PRESENCE_KEY =
     'archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION';
+
+// Archive publishing is proven under the oracle_publish base capability key.
+function proofCapabilityFor(capability){
+    return capability === ARCHIVE_PUBLISH_CAPABILITY ? 'oracle_publish' : capability;
+}
+
+// Map only archive rows so proof verification uses the base capability key.
+function proofRowFor(row){
+    const capability = proofCapabilityFor(row.capability);
+    if(capability === row.capability) return row;
+    return { ...row, capability };
+}
 
 function isArchivePublishSetActive(snapshotBlock, network){
     if(!swq.isStakeWeightedQuorumActive(snapshotBlock, network)) return false;
@@ -42,7 +55,10 @@ async function getArchivePublishSet(indexerDb, snapshotBlock, network){
 }
 
 module.exports = {
+    ARCHIVE_PUBLISH_CAPABILITY,
     ARCHIVE_ROLLCALL_PRESENCE_KEY,
+    proofCapabilityFor,
+    proofRowFor,
     isArchivePublishSetActive,
     subtractAbsentSources,
     getArchivePublishSet,
