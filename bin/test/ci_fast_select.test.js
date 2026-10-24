@@ -134,6 +134,15 @@ describe('ci fast selector', function () {
     }
   });
 
+  it('maps the donation projection guard to its regression test without widening', function () {
+    const plan = select(['bin/check-chain-registry-donations.js']);
+    assert.strictEqual(plan.consensus, false);
+    assert.deepStrictEqual(plan.tests, [{
+      group: 'main',
+      file: 'bin/test/check_chain_registry_donations.test.js'
+    }]);
+  });
+
   it('widens package manifest changes', function () {
     const plan = select(['package.json']);
     assert.strictEqual(plan.consensus, true);
