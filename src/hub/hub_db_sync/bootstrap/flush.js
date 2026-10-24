@@ -37,14 +37,18 @@ module.exports = {
     // batching existed, whichever path ran.
     async flushPendingRows(drain) {
         if (drain.pending.length === 0) return true;
-        let batch   = drain.pending.map(p => p.row);
-        // A batch cannot express a per-row hold, so a drain under the mirror
-        // horizon takes the per-row path. Batching is an optimization only, and
-        // this is the same fallback a statement the driver rejects already takes.
-        let batched = (batch.length > 1 && !(drain.priceHorizon > 0)) ? await this.applyRowsBatched(drain.table, batch) : false;
+        // Bound-out rows still pass through applyPendingRow in wire order so all
+        // served-row, predecessor and cursor accounting stays on the original path.
+        // They are excluded only from the SQL values list. Filtering before the
+        // statement preserves the retained rows' relative order, including two
+        // states of the same natural key in one page.
+        let batch = drain.pending.map(p => p.row)
+            .filter(row => !this.priceRowBoundOut(drain, row));
+        let batched = (batch.length > 1) ? await this.applyRowsBatched(drain.table, batch) : false;
         let ok      = true;
         for (let entry of drain.pending) {
-            if (!(await this.applyPendingRow(drain, entry.row, batched))) { ok = false; break; }
+            let rowBatched = batched && !this.priceRowBoundOut(drain, entry.row);
+            if (!(await this.applyPendingRow(drain, entry.row, rowBatched))) { ok = false; break; }
         }
         drain.pending = [];
         this.reportDrainProgress(drain);
@@ -96,13 +100,12 @@ module.exports = {
     // row is bound out; false on every drain that carries no bound.
     decidePriceBound(drain, row) {
         if (!(drain.priceHorizon > 0)) return false;
-        let boundOut = false;
+        let boundOut = this.priceRowBoundOut(drain, row);
         let rowTs = Number(row.block_timestamp);
         if (Number.isFinite(rowTs) && rowTs > 0 && rowTs < drain.priceHorizon) {
             let finalizedRound = (String(row.status) === 'finalized');
             if (finalizedRound) drain.preHorizonServed.add(String(row.round_number));
-            if (rowTs < drain.priceFloor) boundOut = true;
-            else if (finalizedRound) drain.preHorizonRetained.add(String(row.round_number));
+            if (!boundOut && finalizedRound) drain.preHorizonRetained.add(String(row.round_number));
         }
         // Per-pair latest-price coverage, decided on the same pass. A finalized
         // row this drain APPLIES covers its pair whichever side of the horizon it
@@ -120,6 +123,15 @@ module.exports = {
             }
         }
         return boundOut;
+    },
+
+    // Pure apply predicate for building the page statement. decidePriceBound owns
+    // every state change and calls this same predicate later in wire order.
+    priceRowBoundOut(drain, row) {
+        if (!(drain.priceHorizon > 0)) return false;
+        let rowTs = Number(row.block_timestamp);
+        return Number.isFinite(rowTs) && rowTs > 0 && rowTs < drain.priceHorizon &&
+               rowTs < drain.priceFloor;
     },
 
     // What the hub SERVED, for the reconciliation passes: the natural keys and the

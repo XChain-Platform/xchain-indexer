@@ -9439,20 +9439,6 @@
       "recovery._wrapperCanonical: independent byte-parity (ITEM 2729) first 10 base segments match Anchor._canonical FORMAT=1, the other real producer",
       "recovery._wrapperCanonical: independent byte-parity (ITEM 2729) matches the frozen 14-segment expectation, independent of the fixture join"
     ],
-    "84eaa71efc4f6934": [
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 announces a drain the hub says is bigger than one page",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 builds the batched statement from the same source as the per-row statement",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch anything but price_snapshots",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch rows whose mirrored columns differ",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch when the rows carry no status column",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 emits ONE statement per chunk instead of one per row",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 falls back to per-row applies when the batched statement does not land",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 honours the batching off switch",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 mirrors exactly what the per-row path mirrors",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 reports a progress counter while a long drain is running",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 stays silent on a drain that finishes inside the progress interval",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 still stops the page at the first unappliable row"
-    ],
     "850d161466315079": [
       "smoke status stall-health parity keeps atProcessableTip identical across sync, reason, and clear boundaries",
       "smoke status stall-health parity keeps stallClassOf identical across every classification boundary",
@@ -10987,6 +10973,23 @@
       "bin/count_u64_above_2p53 scan issues SELECT statements only",
       "bin/count_u64_above_2p53 scan keeps a wire column at zero and a non-wire column at two with the exact maximum",
       "bin/count_u64_above_2p53 the exit verdict is 1 only when a count is non-zero"
+    ],
+    "955cc0bcd2a6239f": [
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 announces a drain the hub says is bigger than one page",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 batches retained bounded rows without changing ordered upsert results",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 builds the batched statement from the same source as the per-row statement",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch anything but price_snapshots",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch rows whose mirrored columns differ",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch when the rows carry no status column",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 emits ONE statement per chunk instead of one per row",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 emits one statement per default-sized batch of a downloaded page",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 falls back to per-row applies when the batched statement does not land",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 honours the batching off switch",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 mirrors exactly what the per-row path mirrors",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 reports a progress counter while a long drain is running",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 stays silent on a drain that finishes inside the progress interval",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 still stops the page at the first unappliable row",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 uses the fail-loud write seam for the atomic page statement"
     ],
     "95778e56f402428b": [
       "stateCommitment: DbNodeStore.putMany SQL shape @regression an empty batch issues no statement at all",
@@ -19062,7 +19065,7 @@
   "scripts": {
     "test": {
       "fileCount": 1511,
-      "titleCount": 14776,
+      "titleCount": 14779,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20188,7 +20191,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_pollmode_watermark.test.js": "79cbf784dc4c07c4",
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "db44a08889a20bc8",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
-        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "84eaa71efc4f6934",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e2dd68fbffb9df1b",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
         "test/unit/hub/hub_db_sync/hub_db_sync_schema_version_missing.test.js": "73d2a2e5a45a3b49",
@@ -20954,7 +20957,7 @@
     },
     "test:regression": {
       "fileCount": 1145,
-      "titleCount": 11660,
+      "titleCount": 11663,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21820,7 +21823,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_pollmode_watermark.test.js": "79cbf784dc4c07c4",
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "db44a08889a20bc8",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
-        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "84eaa71efc4f6934",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e2dd68fbffb9df1b",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "235ff56a0118b523",
@@ -22685,7 +22688,7 @@
     },
     "test:regression:full": {
       "fileCount": 1145,
-      "titleCount": 11660,
+      "titleCount": 11663,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23551,7 +23554,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_pollmode_watermark.test.js": "79cbf784dc4c07c4",
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "db44a08889a20bc8",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
-        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "84eaa71efc4f6934",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e2dd68fbffb9df1b",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "235ff56a0118b523",
