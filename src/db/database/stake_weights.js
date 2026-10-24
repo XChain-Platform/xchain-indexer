@@ -50,8 +50,11 @@ async function judgeMirrorResolvedRow(db, row, capability, opts){
         db.config['NETWORK'], 'BTC', row.snapshot_block, 0))
         return { verdict: 'unknown', reason: 'this chain resolves ' + capability + ' from the mirror' };
     let proofOpts = Object.assign({}, opts, { network: db.config['NETWORK'] });
+    let proofRow = capability === 'archive_publish'
+        ? Object.assign({}, row, { capability: 'oracle_publish' })
+        : row;
     let result = await mirrorJudgement.judgeMirroredCapabilityRow(
-        row, proofOpts, capabilityProof.verifyCapabilitySnapshotProof);
+        proofRow, proofOpts, capabilityProof.verifyCapabilitySnapshotProof);
     if(result.firstUse)
         getLogger().warn('Capability snapshot proof is using an unpinned regtest checkpoint validator set for first use.');
     if(result.verdict === 'held') logHeldProof(row, result.reason);
@@ -177,7 +180,7 @@ module.exports = {
     // capability_snapshots is the only mirrored table with no authentication on the
     // wire: rows arrive over a bare SELECT and land via INSERT IGNORE, and they are the
     // verification authority every off-BTC resolver reads (cross_chain, oracle_publish,
-    // price, attestation). usesCapabilitySnapshot picks one of two judges:
+    // archive_publish, price, attestation). usesCapabilitySnapshot picks one of two judges:
     //   - A chain that RESOLVES the capability from the mirror has no local stakes to
     //     re-derive from. Once CAPABILITY_SNAPSHOT_PROOF_ACTIVATION is active at the row's
     //     BTC snapshot_block, judgeMirrorResolvedRow checks a hub checkpoint proof against

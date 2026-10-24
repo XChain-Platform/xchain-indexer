@@ -208,7 +208,8 @@ const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 function usesCapabilitySnapshot(config, capability){
     if(!config || config['COIN'] === 'BTC') return false;
     return capability === 'cross_chain' || capability === 'oracle_publish' ||
-           capability === 'price' || capability === 'attestation';
+           capability === 'price' || capability === 'attestation' ||
+           capability === 'archive_publish';
 }
 
 // True when str[i] opens a backslash escape inside the currently open quoted span.
