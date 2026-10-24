@@ -79,19 +79,35 @@ module.exports = {
             return (n < 0n || n > BigInt(max));
         }
         let approx = Number(raw);
-        return (Number.isFinite(approx) && (approx < 0 || approx > Number(max)));
+        if(!Number.isFinite(approx)) return false;
+        // Preserve the existing Number comparisons, including their 32-bit boundary.
+        // Number(max) rounds the u64 ceiling up to 2^64, so the exact half-unit check
+        // catches values that would otherwise compare equal to that rounded ceiling.
+        try {
+            let exact = mathjs.bignumber(raw);
+            let upperRoundingBoundary = mathjs.bignumber(max).plus(0.5);
+            return approx < 0 || approx > Number(max) || exact.gte(upperRoundingBoundary);
+        } catch(e){
+            return false;
+        }
     },
 
-    // Whether db.normalizeDataValues stores a NUMBER_FIELDS value as NULL: empty, not
-    // numeric, or, when the field's INTEGER_FIELDS bound `max` is given, outside the range
-    // its column can hold. It mirrors those two passes exactly and nothing stricter, so a
-    // handler that refuses on it changes the outcome only of values that already reach
-    // the database as NULL. A typed row whose NOT NULL column takes such a NULL throws
-    // inside the block transaction under every sql_mode, and the block never commits.
+    // Whether a numeric wire value needs the target NOT NULL column's zero placeholder:
+    // empty, non-numeric or longer than an amount VARCHAR(250), or, for an integer field,
+    // refused by the existing unsigned normalizer or by the database's base-prefix rules.
     storesAsNull(value, max){
         if(this.isNull(value) || !this.isNumeric(value))
             return true;
-        return !this.isNull(max) && this.exceedsUnsignedColumn(value, max);
+        // Every amount column reached through this predicate is VARCHAR(250). SQLite
+        // ignores that width, while a strict MariaDB session refuses a longer bind.
+        if(this.isNull(max) && Array.from(String(value)).length > 250)
+            return true;
+        if(this.isNull(max)) return false;
+        let raw = String(value).trim();
+        // MariaDB does not accept JavaScript's hexadecimal, binary or octal prefixes
+        // when the driver binds them as strings to an integer column.
+        if(/^[-+]?0[xbo]/i.test(raw)) return true;
+        return this.exceedsUnsignedColumn(value, max);
     },
 
     // Determine if value is null or undefined or empty

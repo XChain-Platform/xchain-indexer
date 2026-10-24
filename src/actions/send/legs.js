@@ -105,7 +105,7 @@ module.exports = {
         for(let idx in sends){
             let [tick, amount, destination, memo] = sends[idx];
             let key = destination + '|' + tick;
-            key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
+            key = (ticks[tick] && !this.util.isValidAmountMergeFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
                 ? 'i|' + idx
                 : 'k|' + key;
             // An unknown TICK maps to false in `ticks`; it merges at 0 decimals, as an unlooked-up
@@ -133,7 +133,7 @@ module.exports = {
             let tokenInfo = ticks && ticks[tick];
             if(!tokenInfo || tokenInfo['TICK_ID'] === null || tokenInfo['TICK_ID'] === undefined)
                 continue;
-            if(!this.util.isValidAmountFormat(tokenInfo['DECIMALS'], amount, data && data['BLOCK_TIME']))
+            if(!this.util.isValidAmountMergeFormat(tokenInfo['DECIMALS'], amount, data && data['BLOCK_TIME']))
                 continue;
 
             let tickId = tokenInfo['TICK_ID'];

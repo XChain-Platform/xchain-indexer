@@ -35,9 +35,15 @@ module.exports = {
         let status_id         = await this.createStatus(data['STATUS']);
         let source_id         = await this.getAddressId(data['SOURCE']);
         let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
+        // An invalid empty key has no index_pubkeys id. Keep its already-refused row
+        // under 0, which names no pubkey, instead of binding NULL to the NOT NULL column.
+        if(signing_pubkey_id === null && data['STATUS'] !== 'valid')
+            signing_pubkey_id = 0;
         let action_index      = data['ACTION_INDEX'];
         let version           = data['VERSION'] || 1;
-        let amount            = data['AMOUNT'] || '0';
+        // Invalid amount text longer than stakes.amount can hold is stored under the
+        // same '0' placeholder as every other missing or non-numeric invalid amount.
+        let amount            = this.util.storesAsNull(data['AMOUNT']) ? '0' : (data['AMOUNT'] || '0');
         let block_index       = data['BLOCK_INDEX'];
         let activation_block  = data['ACTIVATION_BLOCK'] || 0;
         // Check if record already exists

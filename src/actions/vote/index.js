@@ -36,6 +36,9 @@ const gateRegistry = require('../../consensus/gate_registry');
 
 const VOTE_V3_TICK_EXISTENCE_KEY = 'vote_v3_tick_existence_activation.VOTE_V3_TICK_EXISTENCE_ACTIVATION';
 
+// polls.deposit_amount and polls.gas_escrow are VARCHAR(60), counted in characters.
+const POLL_ESCROW_AMOUNT_MAX_CHARS = 60;
+
 // The phases of this handler, in ./vote/. Each part is called with the handler as its
 // receiver (fn.call(this, ...)), so the parts read this.indexerDb / this.util /
 // this.actions unchanged. What the rest of the indexer and the suites reach through the
@@ -109,6 +112,15 @@ class Vote {
             error = 'invalid: GAS_ESCROW (set without CALLBACK_CONTRACT)';
         data['GAS_ESCROW']       = callbackCheck.binding ? callbackCheck.gasEscrow : '0';
         data['IS_BINDING']       = callbackCheck.binding;
+
+        // A create that passed every check above writes DEPOSIT and GAS_ESCROW into the live
+        // poll row, where text longer than the column fails the insert and the block never
+        // commits. Refuse it here, after every other verdict and before any escrow, so an
+        // action refused for another reason keeps that verdict on its inert row.
+        if(!error && Array.from(String(data['DEPOSIT'])).length > POLL_ESCROW_AMOUNT_MAX_CHARS)
+            error = 'invalid: DEPOSIT (format)';
+        if(!error && Array.from(String(data['GAS_ESCROW'])).length > POLL_ESCROW_AMOUNT_MAX_CHARS)
+            error = 'invalid: GAS_ESCROW (format)';
 
         await settle.settleCreatePoll.call(this, data, error, depositCheck.deposit);
     }

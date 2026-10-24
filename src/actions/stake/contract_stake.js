@@ -165,7 +165,7 @@ function validateStakeAmount(data, tickTokenInfo, error){
 
     if(!error){
         let amountStr = String(data['AMOUNT']);
-        if(!/^[0-9]+(\.[0-9]+)?$/.test(amountStr)){
+        if(this.util.storesAsNull(data['AMOUNT']) || !/^[0-9]+(\.[0-9]+)?$/.test(amountStr)){
             error = 'invalid: AMOUNT (format)';
         } else {
             let decimals = (tickTokenInfo && tickTokenInfo['DECIMALS'] !== undefined) ? Number(tickTokenInfo['DECIMALS']) : 8;

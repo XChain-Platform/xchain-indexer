@@ -63,6 +63,17 @@ module.exports = {
     //                          MUST pass it. Non-consensus callers (the SDK's client-side
     //                          pre-checks, genesis distribution replay) deliberately do not.
     isValidAmountFormat(decimals, amount, blockTime){
+        // Amount-bearing action columns are at most VARCHAR(250). The decoder and
+        // encoder payload ceilings both allow a longer individual field, so refuse it
+        // before a strict server can reject the row write.
+        if(Array.from(String(amount)).length > 250)
+            return false;
+        return module.exports.isValidAmountMergeFormat.call(this, decimals, amount, blockTime);
+    },
+
+    // Validate an intermediate leg before consolidation. Its raw text is not written, so
+    // width is checked on the merged amount by the action validator and database writer.
+    isValidAmountMergeFormat(decimals, amount, blockTime){
         //<AMOUNT-REPRESENTABILITY> an amount must denote the number that will be
         // credited, not merely look like an amount. isNumeric() below accepts the whole
         // JavaScript number grammar, so '5e-19' passes at 18 decimals (its "fraction" is
