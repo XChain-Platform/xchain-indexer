@@ -9211,6 +9211,15 @@
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 the REAL ATTEST v0 handler accepts each subcommand request both subcommands are inserted as SEPARATE requests",
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 the REAL ATTEST v0 handler accepts each subcommand request rejects a request whose id was derived from the OTHER subcommand root"
     ],
+    "8019dff4059b7364": [
+      "bin/expiry-scan-probe @regression output EXPLAINs every statement before running it, through the shipped DB methods",
+      "bin/expiry-scan-probe @regression output emits the raw result as JSON with --json",
+      "bin/expiry-scan-probe @regression output prints the plan and wall time of each query, defaulting to the latest block",
+      "bin/expiry-scan-probe @regression output says so when the latest-status probe does not read dispenser_action_action",
+      "bin/expiry-scan-probe @regression safety holds no SQL of its own: every statement comes from the DB layer",
+      "bin/expiry-scan-probe @regression safety refuses a statement that is not a SELECT before it reaches the database",
+      "bin/expiry-scan-probe @regression safety rejects a malformed block argument and an unknown flag"
+    ],
     "8022508cbe8ef5e8": [
       "Airdrop @regression @tier2 additional validation branches MEMO exceeding MAX_MEMO_LENGTH \u2192 STATUS invalid: MEMO (length)",
       "Airdrop @regression @tier2 additional validation branches MEMO with semicolon \u2192 STATUS invalid: MEMO (semicolon)",
@@ -19082,8 +19091,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1513,
-      "titleCount": 14793,
+      "fileCount": 1514,
+      "titleCount": 14800,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19672,6 +19681,7 @@
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
+        "test/unit/bin/expiry_scan_probe.test.js": "8019dff4059b7364",
         "test/unit/bin/measure_vm_snapshot_bytes.test.js": "d6fa40e537d3f44b",
         "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
@@ -20976,8 +20986,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1147,
-      "titleCount": 11677,
+      "fileCount": 1148,
+      "titleCount": 11684,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21488,6 +21498,7 @@
         "test/unit/attestation/repair_validator_stats_drift.test.js": "b2c12d6af08b6d99",
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
+        "test/unit/bin/expiry_scan_probe.test.js": "8019dff4059b7364",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
         "test/unit/boundary/amounts/supply_limits.test.js": "a3ff598f6a613223",
@@ -22709,8 +22720,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1147,
-      "titleCount": 11677,
+      "fileCount": 1148,
+      "titleCount": 11684,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23221,6 +23232,7 @@
         "test/unit/attestation/repair_validator_stats_drift.test.js": "b2c12d6af08b6d99",
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
+        "test/unit/bin/expiry_scan_probe.test.js": "8019dff4059b7364",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
         "test/unit/boundary/amounts/supply_limits.test.js": "a3ff598f6a613223",
