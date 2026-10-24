@@ -955,12 +955,6 @@
       "Anchor v1 checkpoint sequence binding below gate @regression @tier3 keeps a mismatched checkpoint sequence valid on mainnet",
       "Anchor v1 checkpoint sequence binding below gate @regression @tier3 keeps a mismatched checkpoint sequence valid on testnet"
     ],
-    "0c136d013ba41d36": [
-      "ORDER and SWAP matching invariants @regression @tier1 classifies every match-touched row for action-scoped rollback",
-      "ORDER and SWAP matching invariants @regression @tier1 conserves both assets exactly across seeded partial fills and payout splits",
-      "ORDER and SWAP matching invariants @regression @tier1 excludes self-matches and applies explicit deterministic candidate ordering",
-      "ORDER and SWAP matching invariants @regression @tier1 keeps offers matchable at the exact expiration second and expires them afterward"
-    ],
     "0c13b5d1d073adc0": [
       "bin/lib/carrier_logic_pin.js: --retire and --move (h) --retire removes the entry and records a move to nothing",
       "bin/lib/carrier_logic_pin.js: --retire and --move (i) --move keeps the id and hash, repoints the path, and records both paths",
@@ -3649,6 +3643,14 @@
       "getOrderInfoBatch() @regression @tier1 deep-equals per-row getOrderInfo while using four set queries",
       "getOrderInfoBatch() @regression @tier1 does no database work for an empty candidate set",
       "getOrderInfoBatch() @regression @tier1 loads matcher candidates through the batch method once"
+    ],
+    "32d302f7a5e5b3d8": [
+      "ORDER and SWAP matching invariants @regression @tier1 classifies every match-touched row for action-scoped rollback",
+      "ORDER and SWAP matching invariants @regression @tier1 conserves both assets exactly across seeded partial fills and payout splits",
+      "ORDER and SWAP matching invariants @regression @tier1 excludes self-matches and applies explicit deterministic candidate ordering",
+      "ORDER and SWAP matching invariants @regression @tier1 keeps equal-price ORDER makers newest first below the activation height and when unset",
+      "ORDER and SWAP matching invariants @regression @tier1 keeps offers matchable at the exact expiration second and expires them afterward",
+      "ORDER and SWAP matching invariants @regression @tier1 selects equal-price ORDER makers by oldest action index for every seeded permutation when armed"
     ],
     "32ded3574ceb5f61": [
       "bridge_settle: the XBRIDGE settle pass the refusal and deferral paths applies NOTHING for an id already recorded in bridge_settlements",
@@ -18910,7 +18912,7 @@
   "scripts": {
     "test": {
       "fileCount": 1507,
-      "titleCount": 14632,
+      "titleCount": 14634,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19167,7 +19169,7 @@
         "test/unit/actions/market/order_match.test/skips_and_lists.test.js": "499b54ec6a7dfd34",
         "test/unit/actions/market/order_match.test/taker_exhausted_break.test.js": "a2418791374bf31e",
         "test/unit/actions/market/order_match.test/token_lists.test.js": "aa5514abf48428bf",
-        "test/unit/actions/market/order_swap_match_invariants.test.js": "0c136d013ba41d36",
+        "test/unit/actions/market/order_swap_match_invariants.test.js": "32d302f7a5e5b3d8",
         "test/unit/actions/market/swap.test.js": "c99129014d12ebae",
         "test/unit/actions/market/swap.test/maker_policy_admission.test.js": "2b716c727c33a522",
         "test/unit/actions/market/swap_expire.test.js": "bd54b695db5d4f76",
@@ -20798,7 +20800,7 @@
     },
     "test:regression": {
       "fileCount": 1141,
-      "titleCount": 11516,
+      "titleCount": 11518,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21062,7 +21064,7 @@
         "test/unit/actions/market/order_match.test/skips_and_lists.test.js": "499b54ec6a7dfd34",
         "test/unit/actions/market/order_match.test/taker_exhausted_break.test.js": "a2418791374bf31e",
         "test/unit/actions/market/order_match.test/token_lists.test.js": "aa5514abf48428bf",
-        "test/unit/actions/market/order_swap_match_invariants.test.js": "0c136d013ba41d36",
+        "test/unit/actions/market/order_swap_match_invariants.test.js": "32d302f7a5e5b3d8",
         "test/unit/actions/market/swap.test.js": "c99129014d12ebae",
         "test/unit/actions/market/swap.test/maker_policy_admission.test.js": "2b716c727c33a522",
         "test/unit/actions/market/swap_expire.test.js": "bd54b695db5d4f76",
@@ -21945,7 +21947,7 @@
     },
     "test:regression:fast": {
       "fileCount": 570,
-      "titleCount": 6068,
+      "titleCount": 6070,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22008,7 +22010,7 @@
         "test/unit/actions/market/dispenser_settlement_idempotency.test.js": "2f5611f310786b32",
         "test/unit/actions/market/match_origin_open_activation.test.js": "419c8fefe938f2bf",
         "test/unit/actions/market/order_match.test/escrow_precision.test.js": "69b7814a5ee226de",
-        "test/unit/actions/market/order_swap_match_invariants.test.js": "0c136d013ba41d36",
+        "test/unit/actions/market/order_swap_match_invariants.test.js": "32d302f7a5e5b3d8",
         "test/unit/actions/stake/slash.test/xattest_multiround_gate.test.js": "7ae0e3eb59a78a58",
         "test/unit/actions/stake/vote_invariants.test.js": "5b459280dedaa2eb",
         "test/unit/actions/stake/vote_invariants.test/binding_minimums.test.js": "c89b285a9e6a4068",
@@ -22521,7 +22523,7 @@
     },
     "test:regression:full": {
       "fileCount": 1141,
-      "titleCount": 11516,
+      "titleCount": 11518,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22785,7 +22787,7 @@
         "test/unit/actions/market/order_match.test/skips_and_lists.test.js": "499b54ec6a7dfd34",
         "test/unit/actions/market/order_match.test/taker_exhausted_break.test.js": "a2418791374bf31e",
         "test/unit/actions/market/order_match.test/token_lists.test.js": "aa5514abf48428bf",
-        "test/unit/actions/market/order_swap_match_invariants.test.js": "0c136d013ba41d36",
+        "test/unit/actions/market/order_swap_match_invariants.test.js": "32d302f7a5e5b3d8",
         "test/unit/actions/market/swap.test.js": "c99129014d12ebae",
         "test/unit/actions/market/swap.test/maker_policy_admission.test.js": "2b716c727c33a522",
         "test/unit/actions/market/swap_expire.test.js": "bd54b695db5d4f76",

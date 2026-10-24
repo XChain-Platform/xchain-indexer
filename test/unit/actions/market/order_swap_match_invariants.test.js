@@ -10,11 +10,16 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const OrderMatch = require('../../../../src/actions/order_match/index.js');
+const gateRegistry = require('../../../../src/consensus/gate_registry.js');
 const orderInfoMethods = require('../../../../src/db/orders/order_info.js');
 const swapMatchMethods = require('../../../../src/db/swaps/swap_matches.js');
 const expiredItemMethods = require('../../../../src/db/index_tables/expired_items.js');
 const lifecycle = require('../../../../src/hub/table_lifecycle.js');
 const { createMockIndexer } = require('../../../fixtures/mocks');
+
+const EQUAL_PRICE_GATE = 'match_equal_price_oldest_first_activation.MATCH_EQUAL_PRICE_OLDEST_FIRST';
+const EQUAL_PRICE_ENV = 'XC_MATCH_EQUAL_PRICE_OLDEST_FIRST_REGTEST_ACTIVATION';
+const originalEqualPriceEnv = process.env[EQUAL_PRICE_ENV];
 
 function actionsContext(indexer) {
     return {
@@ -79,9 +84,89 @@ function scaledAmount(units, decimals) {
     return digits.slice(0, -decimals) + '.' + digits.slice(-decimals);
 }
 
+function shuffle(values, random) {
+    let out = values.slice();
+    for(let i = out.length - 1; i > 0; i--){
+        let j = integer(random, 0, i);
+        [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+}
+
 describe('ORDER and SWAP matching invariants @regression @tier1', function () {
     afterEach(function () {
         sinon.restore();
+        if(originalEqualPriceEnv === undefined) delete process.env[EQUAL_PRICE_ENV];
+        else process.env[EQUAL_PRICE_ENV] = originalEqualPriceEnv;
+    });
+
+    // Drives four seeded, shuffled equal-price books through the real ORDER handler and
+    // database sorter, and returns the matched and expected maker order for each seed.
+    async function equalPriceBooks(envValue, blockIndex, oldestFirst) {
+        if(envValue === undefined) delete process.env[EQUAL_PRICE_ENV];
+        else process.env[EQUAL_PRICE_ENV] = envValue;
+        const indexer = createMockIndexer();
+        const handler = new OrderMatch(actionsContext(indexer));
+        const seeds = [0x1, 0xC0FFEE, 0x5EED1234, 0xFFFFFFFF];
+        let input = [];
+        const db = {
+            createAddress: sinon.stub().resolves(77),
+            doQuery: sinon.stub().resolves([{ coin: 'BTC', action_index: 1 }]),
+            getOrderInfoBatch: sinon.stub().callsFake(async () => input),
+            util: indexer.util,
+        };
+        indexer.indexerDb.getOrderInfo.resolves(order());
+        indexer.indexerDb.findOrderMatches.callsFake((data, oldestEqual) =>
+            orderInfoMethods.findOrderMatches.call(db, data, oldestEqual));
+        sinon.stub(handler, 'loadOrderLists').resolves({});
+
+        const runs = [];
+        for(const seed of seeds){
+            const random = seeded(seed);
+            const book = [];
+            for(let i = 0; i < 24; i++){
+                book.push({
+                    ACTION_INDEX: 1000 + i,
+                    GET_PRICE: String(integer(random, 1, 4)),
+                });
+            }
+            input = shuffle(book, random);
+            const expected = book.slice().sort((a, b) => {
+                let priceOrder = Number(b.GET_PRICE) - Number(a.GET_PRICE);
+                let indexOrder = oldestFirst ? a.ACTION_INDEX - b.ACTION_INDEX : b.ACTION_INDEX - a.ACTION_INDEX;
+                return priceOrder || indexOrder;
+            });
+            const actual = [];
+            handler.fillMatch = sinon.stub().callsFake(async (data, orderInfo, matchInfo) => {
+                actual.push(matchInfo);
+            });
+            await handler.parse(null, {
+                ACTION: 'ORDER_MATCH', ACTION_INDEX: 5000 + seed,
+                BLOCK_INDEX: blockIndex, BLOCK_TIME: 1700000000,
+            }, null);
+            runs.push({ seed, actual: actual.map(row => row.ACTION_INDEX), expected: expected.map(row => row.ACTION_INDEX) });
+        }
+        return runs;
+    }
+
+    it('selects equal-price ORDER makers by oldest action index for every seeded permutation when armed', async function () {
+        process.env[EQUAL_PRICE_ENV] = 'armed';
+        assert.strictEqual(gateRegistry.activeAt(EQUAL_PRICE_GATE, 'mainnet', 'BTC', 99999999, null), false);
+        assert.strictEqual(gateRegistry.activeAt(EQUAL_PRICE_GATE, 'testnet', 'BTC', 99999999, null), false);
+        assert.strictEqual(gateRegistry.activeAt(EQUAL_PRICE_GATE, 'regtest', 'BTC', 0, null), true);
+
+        for(const run of await equalPriceBooks('armed', 200, true)){
+            assert.deepStrictEqual(run.actual, run.expected, 'seed ' + run.seed + ' must preserve price-time priority');
+        }
+    });
+
+    it('keeps equal-price ORDER makers newest first below the activation height and when unset', async function () {
+        for(const run of await equalPriceBooks('500', 200, false)){
+            assert.deepStrictEqual(run.actual, run.expected, 'seed ' + run.seed + ' keeps the pre-activation order below height 500');
+        }
+        for(const run of await equalPriceBooks(undefined, 200, false)){
+            assert.deepStrictEqual(run.actual, run.expected, 'seed ' + run.seed + ' keeps the pre-activation order with the gate unset');
+        }
     });
 
     it('conserves both assets exactly across seeded partial fills and payout splits', async function () {

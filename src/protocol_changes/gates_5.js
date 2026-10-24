@@ -340,3 +340,11 @@ addGate('match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION', 'height', {
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION at read
 });
+
+// match_equal_price_oldest_first_activation
+// Height on the chain's own block_index. From it equal-price ORDER makers match by lowest action_index first; below it the highest action_index remains first. Mainnet and testnet are unarmed, while regtest is venue-armed through shared_rows.js.
+addGate('match_equal_price_oldest_first_activation.MATCH_EQUAL_PRICE_OLDEST_FIRST', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_MATCH_EQUAL_PRICE_OLDEST_FIRST_REGTEST_ACTIVATION at read
+});

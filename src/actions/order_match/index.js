@@ -26,6 +26,7 @@ const settlePart = require('./settle.js');
 const gateRegistry = require('../../consensus/gate_registry');
 
 const MATCH_ORIGIN_OPEN_KEY = 'match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION';
+const EQUAL_PRICE_OLDEST_FIRST_KEY = 'match_equal_price_oldest_first_activation.MATCH_EQUAL_PRICE_OLDEST_FIRST';
 
 class Order_Match {
 
@@ -66,8 +67,13 @@ class Order_Match {
             this.config['COIN'], data['BLOCK_INDEX'], null) && orderInfo['ORDER_STATUS'] !== 'open')
             return;
 
-        // Get a list of any matching open orders
-        let matches = await this.indexerDb.findOrderMatches(orderInfo);
+        // Apply FIFO only after its height so equal-price historical matches retain their
+        // newest-first candidate order below activation.
+        let oldestEqualPriceFirst = gateRegistry.activeAt(EQUAL_PRICE_OLDEST_FIRST_KEY,
+            this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+        let matches = oldestEqualPriceFirst
+            ? await this.indexerDb.findOrderMatches(orderInfo, true)
+            : await this.indexerDb.findOrderMatches(orderInfo);
 
         // Filter for ownership compatibility: an ownership-side and a balance-side
         // never match; both sides' GIVE_OWNERSHIP / GET_OWNERSHIP must mirror.

@@ -124,13 +124,21 @@ module.exports = {
     },
 
     // Handle sorting an array of objects by price, then by action_index
-    sortPriceActionIndex(data){
+    sortPriceActionIndex(data, oldestEqualPriceFirst=false){
         data.sort((a, b) => {
             // First, sort by 'GET_PRICE' in descending order (best price first)
             if(this.bcgt(a['GET_PRICE'], b['GET_PRICE']))
                 return -1;
             if(this.bclt(a['GET_PRICE'], b['GET_PRICE']))
                 return 1;
+            // Give the older action priority at activation when prices are equal.
+            if(oldestEqualPriceFirst){
+                if(a['ACTION_INDEX'] < b['ACTION_INDEX'])
+                    return -1;
+                if(a['ACTION_INDEX'] > b['ACTION_INDEX'])
+                    return 1;
+                return 0;
+            }
             // Second, break GET_PRICE ties by 'ACTION_INDEX' in descending order
             if(a['ACTION_INDEX'] > b['ACTION_INDEX'])
                 return -1;

@@ -189,6 +189,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'execute_fee_cap_activation',
     'vote_v3_tick_existence_activation',
     'match_origin_open_activation',
+    'match_equal_price_oldest_first_activation',
     'reassemble_chunk_parent_status_activation',
     'unstake_delegated_row_journal_activation',
     'active_stake_collation_activation',
