@@ -59,7 +59,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "83981d2b10525aa4e771e386486a8ebd91c40db96f5941701529929c45d0207b",
+      "hash": "d710ef88fe15401e96bfdaaf9b26bfc37b49228adffd9411b9671d9666acd1b8",
       "twins": [
         "xchain-hub"
       ]
@@ -2240,6 +2240,13 @@
       "to": "27b79b3621e2a402e3faac78013526d68d09f48301caaf4a80a89c88bdd748e2",
       "reason": "drop the unused normalizeFloor export; no logic change",
       "date": "2026-10-21"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "83981d2b10525aa4e771e386486a8ebd91c40db96f5941701529929c45d0207b",
+      "to": "d710ef88fe15401e96bfdaaf9b26bfc37b49228adffd9411b9671d9666acd1b8",
+      "reason": "archive_rollcall_presence_activation appended to SHARED_GATES",
+      "date": "2026-10-24"
     }
   ]
 }

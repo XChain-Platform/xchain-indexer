@@ -13,8 +13,8 @@
  **********************************************************************
  *
  * The SHARED block, part 5 of 5: token_policy_activation to
- * xchain_bridge_activation, then anchor_fold_activation and
- * archive_section_verdict_activation
+ * xchain_bridge_activation, then anchor_fold_activation,
+ * archive_rollcall_presence_activation and archive_section_verdict_activation
  *
  * This file is a whole-file byte twin copied unchanged into five consumers:
  * xchain-indexer, xchain-sync, xchain-hub, xchain-explorer and xchain-sdk.
@@ -210,6 +210,13 @@ addGate('dispenser_refill_policy_activation.DISPENSER_REFILL_POLICY_ACTIVATION',
 });
 // anchor_fold_activation
 addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
+// archive_rollcall_presence_activation: the height on the BTC snapshot_block at/above
+// which the archive leg is judged against the archive_publish set, the stake-weighted
+// oracle_publish set minus every source the latest rolled roll-call epoch (close_block at
+// or below that block) recorded absent. Read with coin BTC on every side, the DOGE indexer
+// included. Mainnet is unpinned and testnet ships on the sentinel until a cut arms it after
+// the fleet roll. Regtest is 0: with no rolled epoch the set equals oracle_publish.
+addGate('archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION', 'height', { mainnet: UNPINNED, 'BTC:testnet': UNARMED, testnet: UNARMED, regtest: 0 });
 // archive_section_verdict_activation
 addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
 // attest_relay_response_deadline_activation: relay responses landing on an origin
