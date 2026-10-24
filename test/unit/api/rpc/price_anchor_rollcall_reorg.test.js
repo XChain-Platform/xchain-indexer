@@ -191,10 +191,22 @@ describe('JSON-RPC roll-call family @regression @tier1', function () {
         view.getRollcalls = async () => { throw new Error('x'); };
         view.getRollcallAbsencesBySource = async () => { throw new Error('x'); };
         assert.deepStrictEqual(await rpc.getrollcalls({}), { error: 'failed to look up roll calls' });
-        assert.deepStrictEqual(await rpc.getrollcallabsences({}), { error: 'failed to look up roll call absences' });
+        assert.deepStrictEqual(await rpc.getrollcallabsences({ source: 'bc1q' }), { error: 'failed to look up roll call absences' });
         const notReady = buildRollcallRpc({ indexer: fakeIndexer({ indexerDb: null }), rollcallManifestHash: () => null });
         assert.deepStrictEqual(await notReady.getrollcalls({}), NOT_READY);
         assert.deepStrictEqual(await notReady.getrollcallabsences({}), NOT_READY);
+    });
+
+    it('roll-call listings reject malformed limits and absence sources before reading', async function () {
+        const view = recordingView({});
+        const rpc = buildRollcallRpc({ indexer: fakeIndexer({ view }), rollcallManifestHash: () => null });
+        assert.deepStrictEqual(await rpc.getrollcalls({ limit: 0 }),
+            { error: 'limit must be a positive integer' });
+        assert.deepStrictEqual(await rpc.getrollcallabsences({ source: 7 }),
+            { error: 'source must be a string of at most 255 characters' });
+        assert.deepStrictEqual(await rpc.getrollcallabsences({ source: 'x'.repeat(256) }),
+            { error: 'source must be a string of at most 255 characters' });
+        assert.deepStrictEqual(view.calls, []);
     });
 });
 

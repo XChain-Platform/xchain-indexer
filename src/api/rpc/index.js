@@ -66,7 +66,15 @@ function buildRpcController(ctx, entryFamilies = []){
         for(const [name, handler] of Object.entries(build(ctx))){
             if(Object.prototype.hasOwnProperty.call(controller, name))
                 throw new Error('JSON-RPC method ' + name + ' is defined by two route families');
-            controller[name] = handler;
+            controller[name] = async (params = {}) => {
+                // Require named JSON-RPC parameters so handler destructuring cannot throw.
+                // Fields a handler does not read are ignored rather than refused, so a
+                // newer hub that adds an optional field keeps working against an indexer
+                // that has not rolled yet.
+                if(params === null || typeof params !== 'object' || Array.isArray(params))
+                    return { error: 'params must be an object' };
+                return await handler(params);
+            };
         }
     }
     return controller;

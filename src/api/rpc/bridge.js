@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
+const rpcParams = require('./params.js');
 
 /**
  * The row shape getpendingbridgetransfers below returns. This typedef is what the hub's
@@ -73,9 +74,10 @@ function pendingBridgeTransfersRpc({ indexer }){
         async getpendingbridgetransfers({limit}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 100;
-            if(max > 500) max = 500;
+            // Default and cap the page size while refusing malformed explicit values.
+            let page = rpcParams.limit(limit, { defaultValue: 100, max: 500 });
+            if(page.error) return { error: page.error };
+            let max = page.value;
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
@@ -151,11 +153,13 @@ function bridgeTransferReadsRpc({ indexer }){
         async getbridgebalances({tick}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            if(!tick)
-                return { error: 'tick required' };
+            if(!tick) return { error: 'tick required' };
+            // Require a bounded tick string before querying balances.
+            let tickParam = rpcParams.string(tick, { name: 'tick', maxLength: 255, required: true });
+            if(tickParam.error) return { error: tickParam.error };
             let db = indexer.indexerDb.apiView();
             try {
-                return await db.getBridgeBalances(String(tick));
+                return await db.getBridgeBalances(tickParam.value);
             } catch (err) {
                 getLogger().error('getbridgebalances error:', err);
                 return { error: 'failed to look up bridge balances' };
@@ -175,14 +179,18 @@ function escrowProofRpc({ indexer }){
         async getbridgeescrowproof({address, tick, block_index}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            if(!address || !tick)
-                return { error: 'address and tick required' };
-            let height = Number(block_index);
-            if(!Number.isFinite(height) || !Number.isInteger(height) || height < 0)
-                return { error: 'block_index must be a non-negative integer' };
+            if(!address || !tick) return { error: 'address and tick required' };
+            // Require bounded address and tick strings plus an exact proof height.
+            let addressParam = rpcParams.string(address, { name: 'address', maxLength: 255, required: true });
+            let tickParam = rpcParams.string(tick, { name: 'tick', maxLength: 255, required: true });
+            if(addressParam.error || tickParam.error)
+                return { error: addressParam.error || tickParam.error };
+            let parsed = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+            if(parsed.error) return { error: parsed.error };
+            let height = parsed.value;
             let db = indexer.indexerDb.apiView();
             try {
-                let envelope = await db.getBridgeEscrowProof(String(address), String(tick), height);
+                let envelope = await db.getBridgeEscrowProof(addressParam.value, tickParam.value, height);
                 if(!envelope)
                     return { error: 'no provable escrow state at that block_index' };
                 return envelope;

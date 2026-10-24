@@ -72,6 +72,8 @@ describe('getStakeSourceByPubkey()', function () {
         const { indexer } = makeIndexer();
         const r = await getStakeSourceByPubkey(indexer, { pubkey: 'xyz', block_index: 100 });
         assert.deepStrictEqual(r, { error: 'pubkey must be 64 hex chars' });
+        assert.deepStrictEqual(await getStakeSourceByPubkey(indexer, { pubkey: [PUB], block_index: 100 }),
+            { error: 'pubkey must be 64 hex chars' });
     });
 
     it('rejects a missing / non-numeric block_index', async function () {
@@ -82,10 +84,11 @@ describe('getStakeSourceByPubkey()', function () {
             { error: 'block_index is required' });
     });
 
-    it('rejects a negative block_index', async function () {
+    it('rejects negative, fractional, exponent and inexact block indexes', async function () {
         const { indexer } = makeIndexer();
-        const r = await getStakeSourceByPubkey(indexer, { pubkey: PUB, block_index: -1 });
-        assert.deepStrictEqual(r, { error: 'block_index is required' });
+        for(const block_index of [-1, 1.5, '1e2', Number.MAX_SAFE_INTEGER + 1])
+            assert.deepStrictEqual(await getStakeSourceByPubkey(indexer, { pubkey: PUB, block_index }),
+                { error: 'block_index is required' });
     });
 
     it('accepts block_index 0 (genesis is a valid height)', async function () {

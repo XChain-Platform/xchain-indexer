@@ -86,7 +86,9 @@ describe('JSON-RPC stake family @regression @tier1', function () {
                 const view = recordingView({ getLatestBlockIndex: 50, [accessor]: () => { throw new Error('x'); } });
                 const rpc = buildStakesRpc({ indexer: fakeIndexer({ view }) });
                 assert.deepStrictEqual(await rpc[name]({}), { error: 'block_index is required' });
-                assert.deepStrictEqual(await rpc[name]({ block_index: 1.5 }), { error: 'block_index must be a non-negative integer' });
+                for(const block_index of [1.5, -1, '1e2', Number.MAX_SAFE_INTEGER + 1])
+                    assert.deepStrictEqual(await rpc[name]({ block_index }),
+                        { error: 'block_index must be a non-negative integer' });
                 assert.deepStrictEqual(await rpc[name]({ block_index: 51 }), { error: 'block_index 51 not yet indexed (latest: 50)' });
                 assert.ok((await rpc[name]({ block_index: 50 })).error.startsWith('failed to look up'));
                 assert.deepStrictEqual(await buildStakesRpc({ indexer: fakeIndexer({ indexerDb: null }) })[name]({ block_index: 1 }), NOT_READY);
@@ -150,6 +152,16 @@ describe('JSON-RPC capability family: getcapabilityvalidators @regression @tier1
         assert.deepStrictEqual(await rpc.getcapabilityvalidators({ capability: 'price', block_index: 1 }), { error: 'failed to look up capability validators' });
         assert.deepStrictEqual(await rpc.getcapabilityvalidators({ block_index: 1 }), { error: 'capability is required' });
         assert.deepStrictEqual(await buildCapabilitiesRpc({ indexer: fakeIndexer({ indexerDb: null }) }).getcapabilityvalidators({ capability: 'price', block_index: 1 }), NOT_READY);
+    });
+
+    it('getcapabilityvalidators rejects oversized capabilities and malformed thresholds before reading', async function () {
+        const view = capView();
+        const rpc = buildCapabilitiesRpc({ indexer: fakeIndexer({ view }) });
+        assert.deepStrictEqual(await rpc.getcapabilityvalidators({ capability: 'x'.repeat(65), block_index: 1 }),
+            { error: 'capability is required' });
+        assert.deepStrictEqual(await rpc.getcapabilityvalidators({ capability: 'price', block_index: 1, min_stake: '1e3' }),
+            { error: 'min_stake must be a non-negative decimal' });
+        assert.deepStrictEqual(view.calls, []);
     });
 });
 
@@ -221,6 +233,16 @@ describe('JSON-RPC capability family: getstakeweightsbycapability @regression @t
         assert.deepStrictEqual(await rpc.getstakeweightsbycapability({ capability: 'price', block_index: 1 }), { error: 'failed to look up stake weights' });
         assert.deepStrictEqual(await buildCapabilitiesRpc({ indexer: fakeIndexer({ indexerDb: null }) }).getstakeweightsbycapability({ capability: 'price', block_index: 1 }), NOT_READY);
     });
+
+    it('getstakeweightsbycapability rejects oversized capabilities and malformed thresholds before reading', async function () {
+        const view = capView();
+        const rpc = buildCapabilitiesRpc({ indexer: fakeIndexer({ view }) });
+        assert.deepStrictEqual(await rpc.getstakeweightsbycapability({ capability: 'x'.repeat(65), block_index: 1 }),
+            { error: 'capability is required' });
+        assert.deepStrictEqual(await rpc.getstakeweightsbycapability({ capability: 'price', block_index: 1, min_stake: -1 }),
+            { error: 'min_stake must be a non-negative decimal' });
+        assert.deepStrictEqual(view.calls, []);
+    });
 });
 
 describe('JSON-RPC attestation family @regression @tier1', function () {
@@ -232,17 +254,35 @@ describe('JSON-RPC attestation family @regression @tier1', function () {
         assert.deepStrictEqual(await rpc.getpendingattestation_requests({ provider_id: 'p', limit: 9999, after_block_index: 5, after_action_index: 6 }),
             { latest_block_index: 70, count: 1, requests: [{ id: 1 }] });
         assert.deepStrictEqual(view.calls[1], ['getPendingAttestationRequests', 'p', 500, { after_block_index: 5, after_action_index: 6 }]);
-        await rpc.getpendingattestation_requests({ limit: 'x', after_block_index: 5 });
-        assert.deepStrictEqual(view.calls[3], ['getPendingAttestationRequests', undefined, 100, null]);
+        await rpc.getpendingattestation_requests({ limit: 100, after_block_index: 5, after_action_index: 0 });
+        assert.deepStrictEqual(view.calls[3], ['getPendingAttestationRequests', undefined, 100,
+            { after_block_index: 5, after_action_index: 0 }]);
+        assert.deepStrictEqual(await rpc.getpendingattestation_requests({ limit: 'x', after_block_index: 5 }),
+            { error: 'limit must be a positive integer' });
+        assert.strictEqual(view.calls.length, 4, 'invalid pagination performs no database read');
     });
 
     it('getrelayedattestation_requests scopes to this coin, clamps and pages the same way', async function () {
         const view = recordingView({ getLatestBlockIndex: 70, getRelayedAttestationRequests: [] });
         const rpc = buildAttestationRpc({ indexer: fakeIndexer({ view }) });
-        assert.deepStrictEqual(await rpc.getrelayedattestation_requests({ request_id: 'r', limit: 0 }), { latest_block_index: 70, count: 0, requests: [] });
+        assert.deepStrictEqual(await rpc.getrelayedattestation_requests({ request_id: 'r' }), { latest_block_index: 70, count: 0, requests: [] });
         assert.deepStrictEqual(view.calls[1], ['getRelayedAttestationRequests', 'BTC', 'r', 100, null]);
         await rpc.getrelayedattestation_requests({ limit: 3, after_block_index: '1', after_action_index: '2' });
-        assert.deepStrictEqual(view.calls[3], ['getRelayedAttestationRequests', 'BTC', undefined, 3, { after_block_index: '1', after_action_index: '2' }]);
+        assert.deepStrictEqual(view.calls[3], ['getRelayedAttestationRequests', 'BTC', undefined, 3, { after_block_index: 1, after_action_index: 2 }]);
+    });
+
+    it('attestation listings reject malformed filters and cursors before reading', async function () {
+        const view = recordingView({});
+        const rpc = buildAttestationRpc({ indexer: fakeIndexer({ view }) });
+        for(const [name, params, error] of [
+            ['getpendingattestation_requests', { provider_id: 7 }, 'provider_id must be a string of at most 255 characters'],
+            ['getpendingattestation_requests', { provider_id: 'x'.repeat(256) }, 'provider_id must be a string of at most 255 characters'],
+            ['getpendingattestation_requests', { after_block_index: 1, after_action_index: -1 }, 'after_action_index must be a non-negative integer'],
+            ['getrelayedattestation_requests', { request_id: [] }, 'request_id must be a string of at most 255 characters'],
+            ['getrelayedattestation_requests', { after_block_index: '1e2', after_action_index: 1 }, 'after_block_index must be a non-negative integer']
+        ])
+            assert.deepStrictEqual(await rpc[name](params), { error }, name);
+        assert.deepStrictEqual(view.calls, []);
     });
 
     it('getactionconfirmations reports depth from one tip snapshot, or exists:false', async function () {

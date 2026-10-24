@@ -26,6 +26,7 @@ const gateRegistry = require('../../consensus/gate_registry');
 const { policyHash } = require('../../consensus/bridge_settle/policy_membership.js');
 const { exactU64 } = require('../../db/database/exact_u64.js');
 const { resolvePolicyRefs } = require('./token_policy/resolve_refs.js');
+const rpcParams = require('./params.js');
 
 const LIST_SHARE_PRODUCER_GATE = 'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION';
 
@@ -65,12 +66,16 @@ function tokenPolicyRpc({ indexer }){
         async gettokenpolicy({tick, origin_block, snapshot_block}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            if(!tick)
-                return { error: 'tick required' };
-            let block = Number(origin_block);
-            if(!Number.isFinite(block) || !Number.isInteger(block) || block < 0)
-                return { error: 'origin_block must be a non-negative integer' };
-            let t  = String(tick);
+            if(!tick) return { error: 'tick required' };
+            // Require a bounded tick plus exact origin and optional snapshot heights.
+            let tickParam = rpcParams.string(tick, { name: 'tick', maxLength: 255, required: true });
+            if(tickParam.error) return { error: tickParam.error };
+            let origin = rpcParams.integer(origin_block, { name: 'origin_block', min: 0 });
+            if(origin.error) return { error: origin.error };
+            let snapshot = rpcParams.optionalInteger(snapshot_block, { name: 'snapshot_block', min: 0 });
+            if(snapshot.error) return { error: snapshot.error };
+            let block = origin.value;
+            let t  = tickParam.value;
             let db = indexer.indexerDb.apiView();
             try {
                 let info = await db.getTokenInfo(t, block);
@@ -89,9 +94,9 @@ function tokenPolicyRpc({ indexer }){
                     bridged:      Number(info.BRIDGED) === 1,
                     origin_block: block
                 };
-                if(Number.isInteger(snapshot_block) && snapshot_block >= 0 &&
+                if(snapshot.value !== undefined && snapshot.value !== null &&
                    gateRegistry.activeAt(LIST_SHARE_PRODUCER_GATE,
-                       indexer.config['NETWORK'], 'BTC', snapshot_block, null)){
+                       indexer.config['NETWORK'], 'BTC', snapshot.value, null)){
                     // A shared list is labelled with the chain serving this read, so a DOGE or
                     // LTC home list is never mistaken for a BTC-local one.
                     let { allowRef, blockRef } = await resolvePolicyRefs(db, {
@@ -130,9 +135,11 @@ function appliedPolicyRpc({ indexer }){
         async getappliedpolicy({tick}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            if(!tick)
-                return { error: 'tick required' };
-            let t  = String(tick);
+            if(!tick) return { error: 'tick required' };
+            // Require a bounded tick before reading its applied policy.
+            let tickParam = rpcParams.string(tick, { name: 'tick', maxLength: 255, required: true });
+            if(tickParam.error) return { error: tickParam.error };
+            let t  = tickParam.value;
             let db = indexer.indexerDb.apiView();
             try {
                 let info = await db.getTokenInfo(t, null);

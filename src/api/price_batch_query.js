@@ -27,37 +27,36 @@
 
 'use strict';
 
+const rpcParams = require('./rpc/params.js');
+
 // Rows a single answer may carry. A busy hour publishes three 2-round batches,
 // so 500 rows span roughly a week of windows; the caller pages by advancing
 // first_round past the last batch it received when `truncated` is set.
 const PRICE_BATCHES_DEFAULT_LIMIT = 500;
 const PRICE_BATCHES_MAX_LIMIT     = 1000;
 
-function isRound(v) {
-    return Number.isSafeInteger(v) && v >= 0;
-}
-
-// A JSON number or a decimal-digit string as a number, anything else NaN. Typed
-// before it is numbered, because Number() reads null, '', [] and false as 0 and '0x10' as 16.
-function integerParam(v) {
-    if (typeof v === 'number') return v;
-    return (typeof v === 'string' && /^\d+$/.test(v)) ? Number(v) : NaN;
-}
-
 function validateInclusiveBounds(body, firstName, lastName) {
     body = body || {};
-    let first = integerParam(body[firstName]);
-    let last  = integerParam(body[lastName]);
-    if (!isRound(first)) return { ok: false, error: firstName + ' must be a non-negative integer' };
-    if (!isRound(last))  return { ok: false, error: lastName + ' must be a non-negative integer' };
+    // Parse both required round boundaries as exact non-negative integers.
+    let firstParam = rpcParams.integer(body[firstName], { name: firstName, min: 0 });
+    let lastParam = rpcParams.integer(body[lastName], { name: lastName, min: 0 });
+    if (firstParam.error) return { ok: false, error: firstParam.error };
+    if (lastParam.error) return { ok: false, error: lastParam.error };
+    let first = firstParam.value;
+    let last = lastParam.value;
+    // Refuse a reversed closed range rather than turning it into an empty query.
     if (first > last)    return { ok: false, error: firstName + ' must not exceed ' + lastName };
     return { ok: true, first, last };
 }
 
 function validatedLimit(body) {
-    let limit = body.limit === undefined || body.limit === null ? PRICE_BATCHES_DEFAULT_LIMIT : integerParam(body.limit);
-    if (!Number.isInteger(limit) || limit < 1) return { ok: false, error: 'limit must be a positive integer' };
-    return { ok: true, limit: Math.min(limit, PRICE_BATCHES_MAX_LIMIT) };
+    // Default an omitted page size and cap every explicit positive size.
+    let parsed = rpcParams.limit(body.limit, {
+        defaultValue: PRICE_BATCHES_DEFAULT_LIMIT,
+        max: PRICE_BATCHES_MAX_LIMIT
+    });
+    if (parsed.error) return { ok: false, error: parsed.error };
+    return { ok: true, limit: parsed.value };
 }
 
 /**

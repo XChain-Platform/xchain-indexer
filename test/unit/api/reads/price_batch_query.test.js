@@ -41,7 +41,7 @@ describe('price-batch-query (getpricebatches)', function () {
             assert.strictEqual(validatePriceBatchParams({ first_round: 6, last_round: 5 }).ok, false);
             assert.strictEqual(validatePriceBatchParams(null).ok, false);
             // Number() would read each of these as a round
-            for (const bad of [null, true, false, '', ' ', [], [1], '0x10', '1e3']) {
+            for (const bad of [null, true, false, '', ' ', [], [1], '0x10', '1e3', Number.MAX_SAFE_INTEGER + 1]) {
                 assert.strictEqual(validatePriceBatchParams({ first_round: bad, last_round: 5 }).ok, false, JSON.stringify(bad));
                 assert.strictEqual(validatePriceBatchParams({ first_round: 0, last_round: 5, limit: bad === null ? '' : bad }).ok,
                     false, 'limit ' + JSON.stringify(bad));

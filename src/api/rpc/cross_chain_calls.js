@@ -24,6 +24,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
+const rpcParams = require('./params.js');
 
 function buildCrossChainCallsRpc(ctx){
     return Object.assign({}, pendingCrossChainCallsRpc(ctx), crossChainCallResultRpc(ctx));
@@ -39,9 +40,10 @@ function pendingCrossChainCallsRpc({ indexer }){
         async getpendingcrosschaincalls({limit}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 100;
-            if(max > 500) max = 500;
+            // Default and cap the page size while refusing malformed explicit values.
+            let page = rpcParams.limit(limit, { defaultValue: 100, max: 500 });
+            if(page.error) return { error: page.error };
+            let max = page.value;
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {

@@ -113,7 +113,8 @@ module.exports = {
         const { sql, args } = betFeedRowFilters(this, opts);
         const query = BET_FEED_ROWS_QUERY + sql + `
                     ORDER BY f.action_index ASC
-                    LIMIT ${limit}`;
+                    LIMIT ?`;
+        args.push(limit);
         return await this.doQuery(query, args);
     },
 
@@ -180,7 +181,8 @@ module.exports = {
                     WHERE
                         1=1` + sql + `
                     ORDER BY b.action_index ASC
-                    LIMIT ${limit}`;
+                    LIMIT ?`;
+        args.push(limit);
         return await this.doQuery(query, args);
     },
 

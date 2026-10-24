@@ -24,6 +24,7 @@ const capabilityValidators = require('../capability_validators');
 const srb          = require('../../consensus/snapshot_reorg_buffer.js');      // CANONICAL_REORG_BUFFER, to reconstruct the raw request height
 const gatesFilter  = require('../../actions/attest/gates/rollcall_gates_filter.js');      // rules-aware attestation capability filter
 const { getLogger } = require('../../observability/index.js');
+const rpcParams = require('./params.js');
 
 function buildCapabilitiesRpc(ctx){
     return Object.assign({}, capabilityValidatorsRpc(ctx), fullNodeVerifiersRpc(ctx),
@@ -79,6 +80,9 @@ function capabilityValidatorsRpc({ indexer }){
         async getcapabilityvalidators({capability, block_index, min_stake}){
             let parsed = capabilityValidators.parseCapabilityRequest({capability, block_index});
             if(parsed.error) return parsed;
+            // Accept only a bounded unsigned decimal stake threshold.
+            let threshold = rpcParams.decimal(min_stake, { name: 'min_stake' });
+            if(threshold.error) return { error: threshold.error };
             let blk = parsed.blk;
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
@@ -89,7 +93,7 @@ function capabilityValidatorsRpc({ indexer }){
             try {
                 let indexingError = await capabilityValidators.notYetIndexedError(db, blk);
                 if(indexingError) return indexingError;
-                let validators = await db.getValidatorsByCapability(capability, blk, min_stake);
+                let validators = await db.getValidatorsByCapability(capability, blk, threshold.value);
                 // VALIDATOR_QUERY_LIMIT flag rides on the array itself, so read it
                 // BEFORE the rules filter below hands back a fresh array.
                 let truncated  = validators.truncated === true;
@@ -102,7 +106,7 @@ function capabilityValidatorsRpc({ indexer }){
                     capabilityValidators.logGatesFilterStats(gatesStats);
                 }
                 capabilityValidators.logSnapshotThreshold(
-                    capability, blk, min_stake, validators.length);
+                    capability, blk, threshold.value, validators.length);
                 return {
                     capability:  capability,
                     block_index: blk,
@@ -137,9 +141,10 @@ function fullNodeVerifiersRpc({ indexer }){
         async getfullnodeverifiers({block_index}){
             if(block_index === undefined || block_index === null)
                 return { error: 'block_index is required' };
-            let blk = Number(block_index);
-            if(!Number.isInteger(blk) || blk < 0)
-                return { error: 'block_index must be a non-negative integer' };
+            // Require an exact non-negative snapshot height.
+            let parsed = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+            if(parsed.error) return { error: parsed.error };
+            let blk = parsed.value;
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             // Federation READ isolation: committed-only, off the block tx.
@@ -188,13 +193,17 @@ function fullNodeVerifiersRpc({ indexer }){
 function stakeWeightsByCapabilityRpc({ indexer }){
     return {
         async getstakeweightsbycapability({capability, block_index, min_stake}){
-            if(!capability || typeof capability !== 'string')
+            // Require a bounded capability name before querying the configured registry.
+            if(!capability || typeof capability !== 'string' || capability.length > 64)
                 return { error: 'capability is required' };
             if(block_index === undefined || block_index === null)
                 return { error: 'block_index is required' };
-            let blk = Number(block_index);
-            if(!Number.isInteger(blk) || blk < 0)
-                return { error: 'block_index must be a non-negative integer' };
+            // Parse the snapshot height and optional stake threshold without coercion.
+            let parsed = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+            if(parsed.error) return { error: parsed.error };
+            let threshold = rpcParams.decimal(min_stake, { name: 'min_stake' });
+            if(threshold.error) return { error: threshold.error };
+            let blk = parsed.value;
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             // Federation READ isolation: committed-only, off the block tx.
@@ -205,10 +214,10 @@ function stakeWeightsByCapabilityRpc({ indexer }){
                 let latestBlock = await db.getLatestBlockIndex();
                 if(blk > latestBlock)
                     return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
-                let validators = await db.getStakeWeightsByCapability(capability, blk, min_stake);
+                let validators = await db.getStakeWeightsByCapability(capability, blk, threshold.value);
                 let sources = new Set(validators.map(v => v.source));
-                let thresholdSource = (min_stake !== undefined && min_stake !== null)
-                    ? String(min_stake) + ' (caller-supplied)'
+                let thresholdSource = (threshold.value !== undefined && threshold.value !== null)
+                    ? String(threshold.value) + ' (caller-supplied)'
                     : 'local-config';
                 getLogger().info('getstakeweightsbycapability: capability=' + capability +
                     ' block=' + blk + ' min_stake=' + thresholdSource +

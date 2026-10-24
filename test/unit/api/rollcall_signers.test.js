@@ -38,6 +38,9 @@ describe('rollcall signer request validation', function () {
         assert.deepStrictEqual(rollcallSignersRequest(
             CONFIG, { network: 'mainnet' }
         ), { error: 'network mismatch' });
+        assert.deepStrictEqual(rollcallSignersRequest(
+            CONFIG, { network: ['regtest'] }
+        ), { error: 'network mismatch' });
     });
 
     it('rejects invalid epoch and maximum block times', function () {
@@ -49,7 +52,7 @@ describe('rollcall signer request validation', function () {
         ), { error: 'invalid max_block_time' });
         // parseInt would read each of these as a number
         const ask = (epoch, maxT) => rollcallSignersRequest(CONFIG, { epoch_height: epoch, max_block_time: maxT });
-        for (const bad of ['960junk', '1.7e9', '0x10', [5], ' 7', 1.5, '-3', -3]) {
+        for (const bad of ['960junk', '1.7e9', '0x10', [5], ' 7', 1.5, '-3', -3, Number.MAX_SAFE_INTEGER + 1]) {
             assert.deepStrictEqual(ask(bad, 10), { error: 'invalid epoch_height' }, JSON.stringify(bad));
             assert.deepStrictEqual(ask(1, bad), { error: 'invalid max_block_time' }, JSON.stringify(bad));
         }
@@ -62,7 +65,7 @@ describe('rollcall signer request validation', function () {
         ), { error: 'too many keys requested' });
     });
 
-    it('drops malformed keys and lowercases valid keys', function () {
+    it('rejects a list containing any malformed key', function () {
         const request = rollcallSignersRequest(CONFIG, {
             network: 'regtest',
             epoch_height: '12',
@@ -70,21 +73,16 @@ describe('rollcall signer request validation', function () {
             pubkeys: [KEY, 'f'.repeat(63), 'g'.repeat(64)],
             publishers: [PUBLISHER, null, 'not-hex']
         });
-        assert.deepStrictEqual(request, {
-            epoch: 12,
-            maxT: 34,
-            keys: [KEY.toLowerCase()],
-            pubs: [PUBLISHER.toLowerCase()]
-        });
+        assert.deepStrictEqual(request, { error: 'invalid key list' });
     });
 
-    it('treats non-array key inputs as empty', function () {
+    it('rejects non-array key inputs', function () {
         assert.deepStrictEqual(rollcallSignersRequest(CONFIG, {
             epoch_height: 12,
             max_block_time: 34,
             pubkeys: KEY,
             publishers: { publisher: PUBLISHER }
-        }), { epoch: 12, maxT: 34, keys: [], pubs: [] });
+        }), { error: 'invalid key list' });
     });
 });
 

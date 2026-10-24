@@ -24,6 +24,7 @@ const { rollcallSignersRequest, rollcallPresence } = require('../rollcall_signer
 const { getLogger } = require('../../observability/index.js');
 const { ROLLCALL_ACTIVATION } = require('../../consensus/gates/rollcall_gate.js');
 const { ROLLCALL_GATES_ACTIVATION } = require('../../consensus/gates/rollcall_gates_gate.js');
+const rpcParams = require('./params.js');
 
 function buildRollcallRpc(ctx){
     return Object.assign({}, rollcallSignersRpc(ctx), rollcallReadsRpc(ctx));
@@ -116,9 +117,10 @@ function rollcallReadsRpc({ indexer }){
         async getrollcalls({limit}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 20;
-            if(max > 100) max = 100;
+            // Default and cap the page size while refusing malformed explicit values.
+            let page = rpcParams.limit(limit, { defaultValue: 20, max: 100 });
+            if(page.error) return { error: page.error };
+            let max = page.value;
             // Committed-only read off an independent pooled connection
             let db = indexer.indexerDb.apiView();
             try {
@@ -137,13 +139,16 @@ function rollcallReadsRpc({ indexer }){
         async getrollcallabsences({source, limit}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 20;
-            if(max > 100) max = 100;
+            // Bound the page size and require the staking source this read is keyed by.
+            let page = rpcParams.limit(limit, { defaultValue: 20, max: 100 });
+            if(page.error) return { error: page.error };
+            let sourceParam = rpcParams.string(source, { name: 'source', maxLength: 255, required: true });
+            if(sourceParam.error) return { error: sourceParam.error };
+            let max = page.value;
             // Committed-only read off an independent pooled connection
             let db = indexer.indexerDb.apiView();
             try {
-                let rows = await db.getRollcallAbsencesBySource(source, max);
+                let rows = await db.getRollcallAbsencesBySource(sourceParam.value, max);
                 return { absences: rows };
             } catch (err) {
                 getLogger().error('getrollcallabsences error:', err);

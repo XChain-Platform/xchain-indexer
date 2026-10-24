@@ -23,17 +23,19 @@
 
 const gatesFilter = require('../actions/attest/gates/rollcall_gates_filter.js');
 const { getLogger } = require('../observability/index.js');
+const rpcParams = require('./rpc/params.js');
 
 // Validate request fields in API error-precedence order and normalize the block.
 function parseCapabilityRequest({capability, block_index}){
-    if(!capability || typeof capability !== 'string')
+    // Require a bounded capability name before querying the configured registry.
+    if(!capability || typeof capability !== 'string' || capability.length > 64)
         return { error: 'capability is required' };
+    // Preserve the established missing-height error before parsing its exact value.
     if(block_index === undefined || block_index === null)
         return { error: 'block_index is required' };
-    let blk = Number(block_index);
-    if(!Number.isInteger(blk) || blk < 0)
-        return { error: 'block_index must be a non-negative integer' };
-    return { blk };
+    let parsed = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+    if(parsed.error) return { error: parsed.error };
+    return { blk: parsed.value };
 }
 
 // Distinguish local capability config drift from a legitimately empty set.

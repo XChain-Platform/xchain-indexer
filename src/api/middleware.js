@@ -37,6 +37,22 @@ const { installIndexerMetrics } = require('./indexer_metrics');  // poll-freshne
 const { parseCorsOrigin } = require('./cors_origin.js');
 const { apiKeyGate } = require('./auth_gate');
 
+const JSON_RPC_MAX_BATCH = 100;
+
+function jsonRpcBatchGuard(req, res, next){
+    // Bound batch fan-out before the router dispatches any element.
+    if(!Array.isArray(req.body) || req.body.length <= JSON_RPC_MAX_BATCH)
+        return next();
+    return res.status(413).json({
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+            code: -32600,
+            message: 'Invalid Request: batch exceeds ' + JSON_RPC_MAX_BATCH + ' elements'
+        }
+    });
+}
+
 // The whole stack, in mount order. The gate goes last so a gated call is refused
 // only after the security headers, the body parse and the rate limit have run.
 function installMiddleware(app, ctx){
@@ -64,6 +80,7 @@ function installSecurityLayers(app, { CONFIG_ENV }){
     // decoders of the Node runtime are never reachable from a request body.
     app.use(bodyParser.json({ inflate: false }));
     app.use(jsonBodyErrorHandler);
+    app.use(jsonRpcBatchGuard);
 
     // Allow CORS (restricted to the configured allowlist, defaults to localhost).
     // CORS_ORIGIN is comma-separated, not a single origin: handing `cors` the raw
@@ -109,4 +126,4 @@ function installObservabilityLayers(app, { indexer, CONFIG_ENV, INDEXER_NETWORK 
     installIndexerMetrics(observability, indexer);
 }
 
-module.exports = { installMiddleware };
+module.exports = { installMiddleware, jsonBodyErrorHandler, jsonRpcBatchGuard, JSON_RPC_MAX_BATCH };

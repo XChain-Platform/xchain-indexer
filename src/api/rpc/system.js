@@ -26,6 +26,7 @@ const { clearBlock } = require('../../chain/price_landing_clear');
 const merkle        = require('../../consensus/merkle');
 const stateSubtree  = require('../../consensus/gates/state_subtree_gate');
 const { getLogger } = require('../../observability/index.js');
+const rpcParams = require('./params.js');
 
 function buildSystemRpc(ctx){
     return Object.assign({}, systemReads(ctx), latestBlockRpc(ctx), blockHashesRpc(ctx));
@@ -192,14 +193,18 @@ function blockHashesRpc({ indexer }){
         async getblockhashes({block_index}){
             if(!indexer.indexerDb || !indexer.decoderDb)
                 return { error: 'indexer database not ready' };
+            let target = null;
+            // Accept an omitted height as the committed tip and validate every explicit height.
+            if(block_index !== undefined && block_index !== null){
+                let parsed = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+                if(parsed.error) return { error: 'invalid block_index' };
+                target = parsed.value;
+            }
             try {
                 let db        = committedView(indexer.indexerDb);
                 let decoderDb = committedView(indexer.decoderDb);
-                let target = (block_index !== undefined && block_index !== null)
-                    ? Number(block_index)
-                    : await db.getLatestBlockIndex();
-                if(!Number.isFinite(target) || target < 0)
-                    return { error: 'invalid block_index' };
+                if(target === null)
+                    target = await db.getLatestBlockIndex();
                 let stored = await db.getStoredBlockHashes(target);
                 if(!stored)
                     return { error: 'block not indexed: ' + target };

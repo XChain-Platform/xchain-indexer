@@ -73,6 +73,19 @@ describe('JSON-RPC order family @regression @tier1', function () {
         assert.deepStrictEqual(view.calls.find(c => c[0] === 'getOpenCrossChainOffers'), ['getOpenCrossChainOffers', 500, undefined, undefined, null]);
     });
 
+    it('getopencrosschainorders rejects malformed paging and coin filters before reading', async function () {
+        const view = bookView([]);
+        const rpc = buildOrdersRpc({ indexer: fakeIndexer({ view, util }) });
+        for(const [params, error] of [
+            [{ limit: 0 }, 'limit must be a positive integer'],
+            [{ after_action_index: -1 }, 'after_action_index must be a non-negative integer'],
+            [{ to_coin: 7 }, 'to_coin must be a string of at most 16 characters'],
+            [{ to_coin: 'X'.repeat(17) }, 'to_coin must be a string of at most 16 characters']
+        ])
+            assert.deepStrictEqual(await rpc.getopencrosschainorders(params), { error });
+        assert.deepStrictEqual(view.calls, []);
+    });
+
     it('getopencrosschainorders refuses without a database and reports a throw', async function () {
         sinon.stub(observability.getLogger(), 'error');
         assert.deepStrictEqual(await buildOrdersRpc({ indexer: fakeIndexer({ indexerDb: null }) }).getopencrosschainorders({}), NOT_READY);
@@ -101,7 +114,23 @@ describe('JSON-RPC betting family @regression @tier1', function () {
         const rpc = buildBetsRpc({ indexer: fakeIndexer({ view }) });
         assert.deepStrictEqual(await rpc.getbetfeed({ action_index: '3' }), { network: 'regtest', feed: { id: 3 }, pools: [{ outcome: 'A' }] });
         assert.deepStrictEqual(await rpc.getbetfeed({ action_index: 4 }), { error: 'unknown feed' });
-        assert.deepStrictEqual(await rpc.getbetfeed({ action_index: 'x' }), { error: 'action_index must be numeric' });
+        assert.deepStrictEqual(await rpc.getbetfeed({ action_index: 'x' }), { error: 'action_index must be a positive integer' });
+    });
+
+    it('bet listings reject malformed filters and cursors before reading', async function () {
+        const view = recordingView({ getLatestBlockIndex: 30, getBetFeedRows: [], getBetRows: [] });
+        const rpc = buildBetsRpc({ indexer: fakeIndexer({ view }) });
+        for(const [name, params, error] of [
+            ['getbetfeeds', { limit: 0 }, 'limit must be a positive integer'],
+            ['getbetfeeds', { after_action_index: '1e2' }, 'after_action_index must be a non-negative integer'],
+            ['getbetfeeds', { status: 1 }, 'status must be a string of at most 64 characters'],
+            ['getbetfeeds', { source: 'x'.repeat(256) }, 'source must be a string of at most 255 characters'],
+            ['getbetfeeds', { tick: [] }, 'tick must be a string of at most 255 characters'],
+            ['getbets', { feed: 0 }, 'feed must be a positive integer'],
+            ['getbets', { after_action_index: -1 }, 'after_action_index must be a non-negative integer']
+        ])
+            assert.deepStrictEqual(await rpc[name](params), { error }, name);
+        assert.deepStrictEqual(view.calls, []);
     });
 
     it('every betting read refuses without a database and reports a throw', async function () {
@@ -131,7 +160,7 @@ describe('JSON-RPC bridge family @regression @tier1', function () {
         const view = recordingView({ getLatestBlockIndex: 100, getPushGeneration: 9, getPendingBridgeTransfers: rows });
         const util = { parseBridgedTick: (t) => ({ origin: t.split('.')[0], name: t.split('.')[1] }) };
         const rpc = buildBridgeRpc({ indexer: fakeIndexer({ view, util }) });
-        const res = await rpc.getpendingbridgetransfers({ limit: 0 });
+        const res = await rpc.getpendingbridgetransfers({});
         assert.ok(callOrder(view, 'getPushGeneration', 'getPendingBridgeTransfers').ordered, 'HUB-RETRACT-1: generation before rows');
         assert.deepStrictEqual(view.calls[2], ['getPendingBridgeTransfers', 100]);
         assert.strictEqual(res.count, 2);
@@ -161,6 +190,20 @@ describe('JSON-RPC bridge family @regression @tier1', function () {
         assert.deepStrictEqual(await rpc.getbridgeescrowproof({ address: 'other', tick: 'T', block_index: 5 }), { error: 'no provable escrow state at that block_index' });
         assert.deepStrictEqual(await rpc.getbridgeescrowproof({ address: 'esc', tick: 'T', block_index: -1 }), { error: 'block_index must be a non-negative integer' });
         assert.deepStrictEqual(await rpc.getbridgeescrowproof({ tick: 'T' }), { error: 'address and tick required' });
+    });
+
+    it('bridge reads reject malformed bounds and strings before reading', async function () {
+        const view = recordingView({ getLatestBlockIndex: 100 });
+        const rpc = buildBridgeRpc({ indexer: fakeIndexer({ view }) });
+        for(const [name, params, error] of [
+            ['getpendingbridgetransfers', { limit: '1e2' }, 'limit must be a positive integer'],
+            ['getbridgebalances', { tick: 7 }, 'tick must be a string of at most 255 characters'],
+            ['getbridgebalances', { tick: 'x'.repeat(256) }, 'tick must be a string of at most 255 characters'],
+            ['getbridgeescrowproof', { address: 7, tick: 'T', block_index: 1 }, 'address must be a string of at most 255 characters'],
+            ['getbridgeescrowproof', { address: 'a', tick: 'T', block_index: '1e2' }, 'block_index must be a non-negative integer']
+        ])
+            assert.deepStrictEqual(await rpc[name](params), { error }, name);
+        assert.deepStrictEqual(view.calls, []);
     });
 
     it('every bridge read refuses without a database and reports a throw', async function () {
@@ -219,6 +262,19 @@ describe('JSON-RPC token policy family @regression @tier1', function () {
         assert.deepStrictEqual(await rpc.getappliedpolicy({}), { error: 'tick required' });
     });
 
+    it('policy reads reject malformed tick and block values before reading', async function () {
+        const view = recordingView({ getTokenInfo: null });
+        const rpc = buildTokenPolicyRpc({ indexer: fakeIndexer({ view }) });
+        for(const [name, params, error] of [
+            ['gettokenpolicy', { tick: 7, origin_block: 1 }, 'tick must be a string of at most 255 characters'],
+            ['gettokenpolicy', { tick: 'T', origin_block: '1e2' }, 'origin_block must be a non-negative integer'],
+            ['gettokenpolicy', { tick: 'T', origin_block: 1, snapshot_block: -1 }, 'snapshot_block must be a non-negative integer'],
+            ['getappliedpolicy', { tick: 'x'.repeat(256) }, 'tick must be a string of at most 255 characters']
+        ])
+            assert.deepStrictEqual(await rpc[name](params), { error }, name);
+        assert.deepStrictEqual(view.calls, []);
+    });
+
     it('bridgePolicyHash tells an absent list from an empty one and never re-sorts', function () {
         const absent = bridgePolicyHash(null, null, false);
         assert.strictEqual(absent, crypto.createHash('sha256').update('ALLOW|-|BLOCK|-|SLEEP|0').digest('hex'));
@@ -248,6 +304,14 @@ describe('JSON-RPC cross-chain call family @regression @tier1', function () {
         assert.ok(callOrder(view, 'getPushGeneration', 'getPendingCrossChainCallRequests').ordered, 'HUB-RETRACT-1: generation before rows');
         assert.deepStrictEqual(view.calls[2], ['getPendingCrossChainCallRequests', 7]);
         assert.deepStrictEqual(res, { latest_block_index: 100, network: 'regtest', count: 1, calls: [{ call_id: ID, push_generation: 4 }] });
+    });
+
+    it('getpendingcrosschaincalls rejects a malformed explicit limit before reading', async function () {
+        const view = recordingView({});
+        const rpc = buildCrossChainCallsRpc({ indexer: fakeIndexer({ view }) });
+        assert.deepStrictEqual(await rpc.getpendingcrosschaincalls({ limit: 0 }),
+            { error: 'limit must be a positive integer' });
+        assert.deepStrictEqual(view.calls, []);
     });
 
     it('getcrosschaincallresult answers the execution row, or the refusal diagnostics when there is none', async function () {

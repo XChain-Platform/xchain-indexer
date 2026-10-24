@@ -24,42 +24,48 @@
 
 'use strict';
 
+const rpcParams = require('./rpc/params.js');
+
 // Upper bound on the key lists getrollcallsigners will answer over. The BTC
 // close asks for |R(E)| + 1 keys, so this is a sanity ceiling on a malformed or
 // hostile caller, not a paging limit: the method never enumerates, so a caller
 // that needs more keys than this is not doing what the method is for.
 const ROLLCALL_READ_MAX_KEYS = 2048;
 
-// A JSON number or a decimal-digit string as a number, anything else NaN. Typed
-// before it is numbered, because parseInt reads '960junk' as 960 and '1.7e9' as 1.
-function integerParam(v){
-    if(typeof v === 'number') return v;
-    return (typeof v === 'string' && /^\d+$/.test(v)) ? Number(v) : NaN;
-}
-
 // The caller's request checked in the order the handler has always checked it
 // (DOGE only, this network, numeric epoch and window, bounded hex key lists).
 // Returns { error } on the first refusal, else the parsed request.
 function rollcallSignersRequest(config, {network, epoch_height, max_block_time, pubkeys, publishers}){
+    // Serve the signer-presence read only from its DOGE data plane.
     if(String(config['COIN']) !== 'DOGE')
         return { error: 'getrollcallsigners is DOGE-only' };
-    if(network !== undefined && String(network) !== String(config['NETWORK']))
+    // Keep a caller from mixing results from a different configured network.
+    if(network !== undefined && (typeof network !== 'string' || network !== String(config['NETWORK'])))
         return { error: 'network mismatch' };
 
-    let epoch = integerParam(epoch_height);
-    let maxT  = integerParam(max_block_time);
-    if(!Number.isSafeInteger(epoch) || epoch < 0) return { error: 'invalid epoch_height' };
-    if(!Number.isSafeInteger(maxT) || maxT < 0)   return { error: 'invalid max_block_time' };
+    // Parse the epoch and time cut as exact non-negative integers.
+    let epochParam = rpcParams.integer(epoch_height, { name: 'epoch_height', min: 0 });
+    let maxTimeParam = rpcParams.integer(max_block_time, { name: 'max_block_time', min: 0 });
+    if(epochParam.error) return { error: 'invalid epoch_height' };
+    if(maxTimeParam.error) return { error: 'invalid max_block_time' };
+    let epoch = epochParam.value;
+    let maxT = maxTimeParam.value;
 
+    // Require each supplied key collection to retain its JSON array shape.
+    if(pubkeys !== undefined && !Array.isArray(pubkeys)) return { error: 'invalid key list' };
+    if(publishers !== undefined && !Array.isArray(publishers)) return { error: 'invalid key list' };
     let keys = Array.isArray(pubkeys)    ? pubkeys    : [];
     let pubs = Array.isArray(publishers) ? publishers : [];
     // Hex-shaped and bounded. A caller asking about a key it cannot name is
     // asking to enumerate, which this method does not do.
     const HEX64 = /^[0-9a-fA-F]{64}$/;
-    keys = keys.filter((k) => HEX64.test(String(k))).map((k) => String(k).toLowerCase());
-    pubs = pubs.filter((k) => HEX64.test(String(k))).map((k) => String(k).toLowerCase());
     if(keys.length > ROLLCALL_READ_MAX_KEYS || pubs.length > ROLLCALL_READ_MAX_KEYS)
         return { error: 'too many keys requested' };
+    if(keys.some(k => typeof k !== 'string' || !HEX64.test(k)) ||
+       pubs.some(k => typeof k !== 'string' || !HEX64.test(k)))
+        return { error: 'invalid key list' };
+    keys = keys.map((k) => k.toLowerCase());
+    pubs = pubs.map((k) => k.toLowerCase());
     return { epoch, maxT, keys, pubs };
 }
 
