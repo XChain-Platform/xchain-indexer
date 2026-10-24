@@ -10993,6 +10993,16 @@
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 the capability read: which query, at which height unweighted branch resolves at the ONCE-buried height",
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 the capability read: which query, at which height weighted branch reads the stake-weight query and never the pubkey-aggregate one"
     ],
+    "95206869451ac773": [
+      "archive_publish roll-call presence set @regression @tier1 carries truncated through when absent sources are subtracted",
+      "archive_publish roll-call presence set @regression @tier1 does not read roll-call absences while the archive_publish rule is inactive",
+      "archive_publish roll-call presence set @regression @tier1 needs both its registry gate and stake-weighted quorum active",
+      "archive_publish roll-call presence set @regression @tier1 returns oracle_publish weights minus every key of an absent source",
+      "archive_publish roll-call presence set @regression @tier1 returns the full oracle_publish set when no rolled epoch has closed",
+      "archive_publish roll-call presence set @regression @tier1 returns the full oracle_publish set when the rolled epoch subtraction is empty",
+      "latest rolled roll-call absent-source read @regression @tier1 selects E* by close_block at or below the requested block and ignores an unrolled later epoch",
+      "latest rolled roll-call absent-source read @regression @tier1 uses doQueryStrict so a read fault throws instead of becoming no closed epoch"
+    ],
     "953a756bdefaf7e1": [
       "policy apply: detach bridged policy lists detaches allow and creates the missing block list before pointing both",
       "policy apply: detach bridged policy lists detaches allow while leaving an unchanged block pointer inherited",
@@ -19109,8 +19119,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1515,
-      "titleCount": 14816,
+      "fileCount": 1516,
+      "titleCount": 14824,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20522,6 +20532,7 @@
         "test/unit/rollback/rollback_slash_restore_order.test.js": "1ef3d061fbdfa9cd",
         "test/unit/rollback/rollback_sweep_stats.test.js": "baff1a5bd4d4dfa1",
         "test/unit/rollback/rollcall_unwind_schema_gap.test.js": "947a8652e2bab804",
+        "test/unit/rollcall/archive_publish_set.test.js": "95206869451ac773",
         "test/unit/rollcall/db_rollcall_gates.test.js": "97eac3517509ca4d",
         "test/unit/rollcall/db_rollcalls_public_reads.test.js": "43e9126efc843a28",
         "test/unit/rollcall/rollcall_activation.test.js": "e4825d70c0c100d7",
@@ -21005,8 +21016,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1149,
-      "titleCount": 11694,
+      "fileCount": 1150,
+      "titleCount": 11702,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22082,6 +22093,7 @@
         "test/unit/rollback/rollback_slash_restore_order.test.js": "1ef3d061fbdfa9cd",
         "test/unit/rollback/rollback_sweep_stats.test.js": "baff1a5bd4d4dfa1",
         "test/unit/rollback/rollcall_unwind_schema_gap.test.js": "947a8652e2bab804",
+        "test/unit/rollcall/archive_publish_set.test.js": "95206869451ac773",
         "test/unit/rollcall/db_rollcall_gates.test.js": "97eac3517509ca4d",
         "test/unit/rollcall/db_rollcalls_public_reads.test.js": "43e9126efc843a28",
         "test/unit/rollcall/rollcall_gates_filter.test.js": "caf86af59c565c3e",
@@ -22160,8 +22172,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 575,
-      "titleCount": 6147,
+      "fileCount": 576,
+      "titleCount": 6155,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22697,6 +22709,7 @@
         "test/unit/rewards/create_validator_reward_callsites.test.js": "42b3ffd148cc346b",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
+        "test/unit/rollcall/archive_publish_set.test.js": "95206869451ac773",
         "test/unit/rollcall/db_rollcall_gates.test.js": "97eac3517509ca4d",
         "test/unit/rollcall/db_rollcalls_public_reads.test.js": "43e9126efc843a28",
         "test/unit/rollcall/rollcall_gates_filter.test.js": "caf86af59c565c3e",
@@ -22741,8 +22754,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1149,
-      "titleCount": 11694,
+      "fileCount": 1150,
+      "titleCount": 11702,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23818,6 +23831,7 @@
         "test/unit/rollback/rollback_slash_restore_order.test.js": "1ef3d061fbdfa9cd",
         "test/unit/rollback/rollback_sweep_stats.test.js": "baff1a5bd4d4dfa1",
         "test/unit/rollback/rollcall_unwind_schema_gap.test.js": "947a8652e2bab804",
+        "test/unit/rollcall/archive_publish_set.test.js": "95206869451ac773",
         "test/unit/rollcall/db_rollcall_gates.test.js": "97eac3517509ca4d",
         "test/unit/rollcall/db_rollcalls_public_reads.test.js": "43e9126efc843a28",
         "test/unit/rollcall/rollcall_gates_filter.test.js": "caf86af59c565c3e",
