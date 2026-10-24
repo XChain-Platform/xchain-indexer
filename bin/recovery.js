@@ -261,6 +261,23 @@ class AnchorRecovery {
         return String(v1.source || '');
     }
 
+    async wrapperSetForRecovery(setFor, wrapperBlock, network){
+        let capability = archivePublish.isArchivePublishSetActive(wrapperBlock, network)
+            ? archivePublish.ARCHIVE_PUBLISH_CAPABILITY : 'oracle_publish';
+        let set = setFor(capability, wrapperBlock);
+        if(capability !== archivePublish.ARCHIVE_PUBLISH_CAPABILITY || set.length > 0)
+            return { capability, set };
+
+        capability = 'oracle_publish';
+        set = setFor(capability, wrapperBlock);
+        if(this.verifyStakes && this.btcDb &&
+           typeof this.btcDb.getLatestRolledRollcallAbsentSources === 'function'){
+            let absent = await this.btcDb.getLatestRolledRollcallAbsentSources(wrapperBlock);
+            set = archivePublish.subtractAbsentSources(set, absent);
+        }
+        return { capability, set };
+    }
+
     async verifyBatch(v1){
         // Reassemble v1 chunk 0 + v2 continuations.
         let totalChunks = Number(v1.total_chunks) || 1;
@@ -350,18 +367,10 @@ class AnchorRecovery {
         // 1. Wrapper signatures vs the archived publisher set selected at the wrapper block.
         let foldWrapper = Number(v1.version) === 3 ? await this.foldWrapperSection(v1) : null;
         let wrapperBlock = foldWrapper ? foldWrapper.snapshot_block : v1.snapshot_block;
-        let wrapperCapability = archivePublish.isArchivePublishSetActive(wrapperBlock, v1.network)
-            ? 'archive_publish' : 'oracle_publish';
-        let wrapperSet = setFor(wrapperCapability, wrapperBlock);
-        if(wrapperCapability === 'archive_publish' && wrapperSet.length === 0){
-            wrapperCapability = 'oracle_publish';
-            wrapperSet = setFor(wrapperCapability, wrapperBlock);
-            if(this.verifyStakes && this.btcDb &&
-               typeof this.btcDb.getLatestRolledRollcallAbsentSources === 'function'){
-                let absent = await this.btcDb.getLatestRolledRollcallAbsentSources(wrapperBlock);
-                wrapperSet = archivePublish.subtractAbsentSources(wrapperSet, absent);
-            }
-        }
+        let wrapperSelection = await this.wrapperSetForRecovery(
+            setFor, wrapperBlock, v1.network);
+        let wrapperCapability = wrapperSelection.capability;
+        let wrapperSet = wrapperSelection.set;
         let wrapperCanonical = foldWrapper ? this.foldWrapperCanonical(v1, foldWrapper) : this.wrapperCanonical(v1);
         let wrapperSigs = this.parseSigs(v1.validator_signatures);
         if(!this.quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet, swq.isStakeWeightedQuorumActive(wrapperBlock, v1.network)))

@@ -111,6 +111,24 @@ describe('AnchorRecovery archive_publish wrapper set @regression @tier1', functi
         assert.strictEqual(gate.returned(true), true);
     });
 
+    it('does not retry a present archive_publish set against oracle_publish', async function(){
+        sinon.stub(archivePublish, 'isArchivePublishSetActive').returns(true);
+        let oracleKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        let crossKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        let batch = repack(buildBatch(0, [rawMatch('present-publish-set')],
+            oracleKeys, crossKeys), archive => {
+            let archiveRows = archive.capability_snapshots
+                .filter(row => row.capability === 'cross_chain')
+                .map(row => Object.assign({}, row, { capability: 'archive_publish' }));
+            archive.capability_snapshots.push(...archiveRows);
+        }, oracleKeys);
+
+        await assert.rejects(
+            () => new AnchorRecovery(memDb([], []), quiet).verifyBatch(batch.v1),
+            error => error.message.includes('wrapper signatures fail quorum') &&
+                error.message.includes('archive_publish'));
+    });
+
     it('keeps a pre-gate wrapper on setFor oracle_publish', async function(){
         sinon.stub(archivePublish, 'isArchivePublishSetActive').returns(false);
         let oracleKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
