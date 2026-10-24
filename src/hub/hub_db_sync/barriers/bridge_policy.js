@@ -119,9 +119,12 @@ module.exports = {
     // below needs no scoping, because a frozen or live watermark only vouches for rows
     // finalized before it.
     bridgeSyncSatisfied(blockTime, blockHeight = null) {
-        if (this.bridgeBootstrapped && this._bootstrapDrained && this.bridgeSyncTimestamp === null) return true;
+        const certified = this.bridgeBootstrapped &&
+            this.tableCertifiedOnCurrentConnection('bridge_transfers');
+        if (!certified) return false;
+        if (this.bridgeSyncTimestamp === null) return true;
         if (this.admissionActiveAt(blockHeight))
-            return this.bridgeBootstrapped && this.heightSatisfied('bridge_transfers', blockHeight);
+            return this.heightSatisfied('bridge_transfers', blockHeight);
         if (this.bridgeDestSyncTimestamp !== null && this.bridgeDestSyncTimestamp !== undefined &&
             this.bridgeDestSyncTimestamp >= blockTime) return true;
         // Stream watermark escape: a transfer is broadcast the moment the hub finalizes it,
@@ -133,7 +136,8 @@ module.exports = {
         // Uses bridgeWatermarkGraceS, never the match or call grace: the bridge engine is a
         // third producer with its own stamping rule, and sharing a grace is the documented
         // mistake the call barrier was split out to end.
-        if (this.bridgeBootstrapped && this.streamWatermark >= blockTime + this.bridgeWatermarkGraceS) return true;
+        if (this.tableWatermark('bridge_transfers') >=
+            blockTime + this.bridgeWatermarkGraceS) return true;
         return false;
     },
 
@@ -253,10 +257,12 @@ module.exports = {
     // would is safe, because a barrier decides only WHEN a block runs and never what it
     // applies, and the stream escape below still opens every block on a live connection.
     policySyncSatisfied(blockTime, blockHeight = null) {
-        if (this.policyBootstrapped && this._bootstrapDrained && this.policySyncTimestamp === null) return true;
+        const certified = this.policyBootstrapped &&
+            this.tableCertifiedOnCurrentConnection('policy_snapshots');
+        if (certified && this.policySyncTimestamp === null) return true;
         if (this.admissionActiveAt(blockHeight))
-            return this.policyBootstrapped && this.heightSatisfied('policy_snapshots', blockHeight);
-        if (this.policyBootstrapped && this._bootstrapDrained &&
+            return certified && this.heightSatisfied('policy_snapshots', blockHeight);
+        if (certified &&
             this.policyCoveredTimestamp !== null && this.policyCoveredTimestamp !== undefined &&
             this.policyCoveredTimestamp >= blockTime) return true;
         // Stream watermark escape: a snapshot is broadcast once the hub writes it and is
@@ -264,7 +270,8 @@ module.exports = {
         // block's time plus the grace means every snapshot effective at or before it is
         // already local. This is what opens a block on a healthy node when no recent stamp
         // covers it, and what keeps a quiet table from freezing the tip.
-        if (this.policyBootstrapped && this.streamWatermark >= blockTime + this.policyWatermarkGraceS) return true;
+        if (certified && this.tableWatermark('policy_snapshots') >=
+            blockTime + this.policyWatermarkGraceS) return true;
         return false;
     },
 
@@ -326,8 +333,10 @@ module.exports = {
     // barriers: listShareBootstrapped survives a socket close, and an empty table proves
     // nothing about a first list version written while the socket was down.
     listShareSyncSatisfied(blockHeight) {
-        if (this.listShareBootstrapped && this._bootstrapDrained && this.listShareMirrorEmpty) return true;
-        return this.listShareBootstrapped && this.heightSatisfied(LIST_SHARE_TABLE, blockHeight);
+        const certified = this.listShareBootstrapped &&
+            this.tableCertifiedOnCurrentConnection(LIST_SHARE_TABLE);
+        if (certified && this.listShareMirrorEmpty) return true;
+        return certified && this.heightSatisfied(LIST_SHARE_TABLE, blockHeight);
     },
 
     releaseListShareWaiters() {

@@ -23,6 +23,7 @@ function makeSync(maxReferenceBlock) {
     doQuery.callsFake(async () => [{ h: maxReferenceBlock }]);
     const hubDb = { doQuery };
     const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test' });
+    sync._bootstrapDrained = true;
     return { sync, hubDb, doQuery };
 }
 
@@ -76,6 +77,7 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
 
     it('waitForPriceSyncHeight resolves immediately when already caught up', async function () {
         const { sync } = makeSync(0);
+        sync.priceBootstrapped = true;
         sync.priceSyncHeight = 200;
         const got = await sync.waitForPriceSyncHeight(150, 1000);
         assert.strictEqual(got, 200);
@@ -215,6 +217,7 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
         assert.strictEqual(sync._oracleWaiters.length, 1);
         // A sync delivers prices effective at/after the target block time.
         doQuery.callsFake(async () => [{ ts: 1600 }]);
+        sync._bootstrapDrained = true;
         await sync.refreshOracleSyncTimestamp();
         const got = await pending;
         assert.strictEqual(got, 1600);
@@ -225,6 +228,7 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
 describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
     it('waitForOracleSyncTimestamp resolves immediately when already caught up', async function () {
         const { sync } = makeOracleSync(0);
+        sync._bootstrapDrained  = true;
         sync.oracleBootstrapped  = true;
         sync.oracleSyncTimestamp = 2000;
         const got = await sync.waitForOracleSyncTimestamp(1500, 1000);
@@ -233,6 +237,7 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
 
     it('waitForOracleSyncTimestamp is a no-op once the mirror is known to be empty (no FIAT oracles)', async function () {
         const { sync } = makeOracleSync(null);
+        sync._bootstrapDrained = true;
         await sync.refreshOracleSyncTimestamp(true);  // full-drain path: empty table → bootstrapped, timestamp null
         // Must resolve immediately for any block time, otherwise non-oracle deployments stall.
         const got = await sync.waitForOracleSyncTimestamp(9999999999, 50);
@@ -270,6 +275,7 @@ function makeWatermarkSync() {
     sync.priceWatermarkGraceS  = 60;
     sync.oracleWatermarkGraceS = 60;
     sync.matchWatermarkGraceS  = 30;
+    sync._bootstrapDrained = true;
     return sync;
 }
 
@@ -360,6 +366,7 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
 
     it('_bootstrapAll keeps the gate closed when any table fails to drain', async function () {
         const sync = makeWatermarkSync();
+        sync._bootstrapDrained = false;
         sinon.stub(sync, 'bootstrapTable').callsFake(async (table) =>
             table === 'oracle_prices' ? null : 900);      // partial page / apply error
         await sync.bootstrapAll();

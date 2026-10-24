@@ -108,6 +108,7 @@ module.exports = {
         if (this._bootstrapping) return;                     // reconnect + retry timer may overlap
         if (failover.uncaughtUpBlocks(this)) return failover.rejectUncaughtUpReadyFrame(this);
         this._bootstrapping = true;
+        this.pauseWatermarkStall('bootstrap');
         this._bootstrapLastProgressAt = Date.now();
         const drainEpoch = this._wsEpoch;
         const selectorRevision = this._selectorRevision;
@@ -125,6 +126,7 @@ module.exports = {
         } finally {
             this._bootstrapping = false;
             this._bootstrapLastProgressAt = null;
+            this.resumeWatermarkStall('bootstrap');
         }
     },
 

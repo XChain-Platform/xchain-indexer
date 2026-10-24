@@ -183,6 +183,7 @@ describe('bridge sync barrier @regression @tier1', function () {
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.bridgeBootstrapped  = true;
         sync.bridgeSyncTimestamp = 500;                     // armed, far behind the tip
+        sync._bootstrapDrained   = true;
         const grace = sync.bridgeWatermarkGraceS;
         sync.streamWatermark = 1000 + grace;
         assert.strictEqual(sync.bridgeSyncSatisfied(1000), true);
@@ -194,6 +195,8 @@ describe('bridge sync barrier @regression @tier1', function () {
 describe('bridge sync barrier @regression @tier1', function () {
     it('waitForBridgeSync resolves at once when the mirror is already past the block time', async function () {
         const { sync } = makeSync({ coin: 'DOGE' });
+        sync.bridgeBootstrapped = true;
+        sync._bootstrapDrained = true;
         sync.bridgeSyncTimestamp = 2000;
         sync.bridgeDestSyncTimestamp = 2000;
         assert.strictEqual(await sync.waitForBridgeSync(1500, 5000), 2000);
@@ -204,6 +207,7 @@ describe('bridge sync barrier @regression @tier1', function () {
         const { sync } = makeSync({ coin: 'DOGE' }, [{ ts: 500 }]);
         sync.bridgeBootstrapped  = true;
         sync.bridgeSyncTimestamp = 500;
+        sync._bootstrapDrained   = true;
         await assert.rejects(
             () => sync.waitForBridgeSync(1000, 30),
             /bridge sync barrier timed out .* block_time 1000 \(bridge mirror at 500\)/);
@@ -217,6 +221,7 @@ describe('bridge sync barrier @regression @tier1', function () {
         // nothing, once per block.
         const { sync } = makeSync({ coin: 'DOGE' }, [{ ts: 4000, dest_ts: 4000 }]);
         sync.bridgeBootstrapped  = true;
+        sync._bootstrapDrained   = true;
         sync.bridgeSyncTimestamp = 500;                     // stale in memory, 4000 in the DB
         assert.strictEqual(await sync.waitForBridgeSync(1000, 30), 4000);
     });
@@ -225,6 +230,7 @@ describe('bridge sync barrier @regression @tier1', function () {
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.bridgeBootstrapped  = true;
         sync.bridgeSyncTimestamp = 500;
+        sync._bootstrapDrained   = true;
         const pending = sync.waitForBridgeSync(1000, 5000);
         assert.strictEqual(sync._bridgeWaiters.length, 1);
         sync.advanceWatermark(1000 + sync.bridgeWatermarkGraceS);
@@ -271,6 +277,8 @@ describe('policy sync barrier @regression @tier1', function () {
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.policyBootstrapped  = true;
         sync.policySyncTimestamp = 500;
+        sync._bootstrapDrained   = true;
+        sync._bootstrapDrained   = true;
         const grace = sync.policyWatermarkGraceS;
         sync.streamWatermark = 1000 + grace;
         assert.strictEqual(sync.policySyncSatisfied(1000), true);
@@ -282,6 +290,7 @@ describe('policy sync barrier @regression @tier1', function () {
         const { sync } = makeSync({ coin: 'DOGE' }, [{ ts: 500 }]);
         sync.policyBootstrapped  = true;
         sync.policySyncTimestamp = 500;
+        sync._bootstrapDrained   = true;
         await assert.rejects(
             () => sync.waitForPolicySync(1000, 30),
             /policy sync barrier timed out .* block_time 1000 \(policy mirror at 500\)/);
@@ -305,6 +314,7 @@ describe('policy sync barrier @regression @tier1', function () {
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.policyBootstrapped  = true;
         sync.policySyncTimestamp = 500;
+        sync._bootstrapDrained   = true;
         const pending = sync.waitForPolicySync(1000, 5000);
         assert.strictEqual(sync._policyWaiters.length, 1);
         sync.advanceWatermark(1000 + sync.policyWatermarkGraceS);

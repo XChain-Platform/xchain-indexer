@@ -297,6 +297,83 @@ function registerWatermarkStallGroup5() { describe('_checkWatermarkStall wiring'
             assert.strictEqual(sync.checkWatermarkStall(), 'ok');
             assert.strictEqual(drive.callCount, 0);
         });
+
+        it('hub downtime longer than both windows is excluded from the fatal clock', function () {
+            const fatal = sinon.spy();
+            const sync = armStalled(makeSync({ onFatalStall: fatal }));
+            const drive = sinon.stub(sync, 'driveResync');
+            sync.resetOnSocketClose();
+            clock.tick(STALL_MS + EXIT_MS + 1);
+            assert.strictEqual(sync.checkWatermarkStall(), 'paused');
+            assert.strictEqual(drive.callCount, 0);
+            assert.strictEqual(fatal.callCount, 0);
+        });
+
+        it('the full stall window remains after a long disconnect ends', function () {
+            const sync = armStalled(makeSync());
+            const drive = sinon.stub(sync, 'driveResync');
+            sync.resetOnSocketClose();
+            clock.tick(STALL_MS + EXIT_MS + 1);
+            sync.adoptReadyFrame({}, { type: 'ready', hub_instance_id: 'hub-a', max_ids: {} });
+            assert.strictEqual(sync.checkWatermarkStall(), 'ok');
+            clock.tick(STALL_MS - 1);
+            assert.strictEqual(sync.checkWatermarkStall(), 'ok');
+            clock.tick(1);
+            assert.strictEqual(sync.checkWatermarkStall(), 'resync');
+            assert.strictEqual(drive.callCount, 1);
+        });
+
+        it('an active download longer than both windows is excluded from the fatal clock', function () {
+            const fatal = sinon.spy();
+            const sync = armStalled(makeSync({ onFatalStall: fatal }));
+            const drive = sinon.stub(sync, 'driveResync');
+            sync._bootstrapping = true;
+            sync.pauseWatermarkStall('bootstrap');
+            for (let elapsed = 0; elapsed <= STALL_MS + EXIT_MS + 1; elapsed += STALL_MS / 4) {
+                sync._bootstrapProgressTicks = (sync._bootstrapProgressTicks || 0) + 1;
+                assert.ok(['ok', 'draining'].includes(sync.checkWatermarkStall()));
+                clock.tick(STALL_MS / 4);
+            }
+            assert.strictEqual(drive.callCount, 0);
+            assert.strictEqual(fatal.callCount, 0);
+            // The drain finishes without certifying: the whole stall window is still ahead.
+            sync._bootstrapping = false;
+            sync.resumeWatermarkStall('bootstrap');
+            clock.tick(STALL_MS - 1);
+            assert.strictEqual(sync.checkWatermarkStall(), 'ok');
+            clock.tick(1);
+            assert.strictEqual(sync.checkWatermarkStall(), 'resync');
+        });
+
+        it('a bootstrap that stops making progress still reaches resync and the fatal exit', function () {
+            // bootstrapAll holds the bootstrap pause until it returns, so one wedged on an
+            // await that never settles would otherwise silence the detector for good.
+            const fatal = sinon.spy();
+            const sync = armStalled(makeSync({ onFatalStall: fatal }));
+            const drive = sinon.stub(sync, 'driveResync');
+            sync._bootstrapping = true;
+            sync.pauseWatermarkStall('bootstrap');
+            const verdicts = [];
+            for (let elapsed = 0; elapsed <= 2 * STALL_MS + EXIT_MS; elapsed += STALL_MS / 4) {
+                verdicts.push(sync.checkWatermarkStall());
+                clock.tick(STALL_MS / 4);
+            }
+            assert.ok(verdicts.includes('resync'), 'no progress for a stall window: resync');
+            assert.ok(verdicts.includes('exit'), 'still frozen an exit window later: exit');
+            assert.ok(drive.callCount >= 2);
+            assert.strictEqual(fatal.callCount, 1);
+        });
+
+        it('a connected frozen mirror still exits after the two windows', function () {
+            const fatal = sinon.spy();
+            const sync = armStalled(makeSync({ onFatalStall: fatal }));
+            sinon.stub(sync, 'driveResync');
+            clock.tick(STALL_MS);
+            assert.strictEqual(sync.checkWatermarkStall(), 'resync');
+            clock.tick(EXIT_MS);
+            assert.strictEqual(sync.checkWatermarkStall(), 'exit');
+            assert.strictEqual(fatal.callCount, 1);
+        });
 }); }
 
 function registerWatermarkStallGroup6() { describe('_checkWatermarkStall wiring', function () {

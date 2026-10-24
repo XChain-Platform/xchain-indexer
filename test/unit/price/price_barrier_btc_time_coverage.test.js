@@ -129,6 +129,7 @@ describe('BTC price barrier covers time as well as height @regression @tier1', f
     it('height satisfaction does not imply time satisfaction', function () {
         const sync = new HubDbSync({ doQuery: async () => [] }, { hubUrl: 'http://hub.invalid' });
         sync.priceBootstrapped = true;
+        sync._bootstrapDrained = true;
 
         // Block H forward-dated 2h ahead of the instant the newest local round
         // was stamped: the legal maximum a miner may claim.
@@ -152,6 +153,7 @@ describe('BTC price barrier covers time as well as height @regression @tier1', f
     it('the time barrier closes once the mirror covers the block time', function () {
         const sync = new HubDbSync({ doQuery: async () => [] }, { hubUrl: 'http://hub.invalid' });
         sync.priceBootstrapped = true;
+        sync._bootstrapDrained = true;
         const blockTime = 1700007200;
 
         sync.priceSyncMaxTimestamp = blockTime - 1;
@@ -166,6 +168,7 @@ describe('BTC price barrier covers time as well as height @regression @tier1', f
     it('the widened BTC barrier still opens on the watermark with no local rounds', function () {
         const sync = new HubDbSync({ doQuery: async () => [] }, { hubUrl: 'http://hub.invalid' });
         sync.priceBootstrapped     = true;
+        sync._bootstrapDrained     = true;
         sync.priceSyncMaxTimestamp = 0;
         const blockTime = 1700000000;
 

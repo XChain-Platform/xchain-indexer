@@ -202,13 +202,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         assert.strictEqual(sync._pendingPriceOverflow, false, 'flag consumed; the retry starts clean');
     });
 
-    it('reconnect self-heal preserved: a COMPLETE mirror still clears a price waiter while the re-drain is pending', async function () {
-        // The distinguishing signal is the mirror's CONTIGUITY, not a flag:
-        // buffering guarantees no out-of-order live row was ever applied, so
-        // at the reconnect edge (_bootstrapDrained false, _priceDrained false)
-        // the local mirror is exactly the pre-disconnect complete prefix and
-        // the proactive refresh may adopt its MAX unguarded (the 5d465fa /
-        // 2026-06-13 self-heal fixes stay intact).
+    it('reconnect self-heal refreshes content but waits for this connection to certify price', async function () {
         const doQuery = sinon.stub().callsFake(async () => [{ h: 150 }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
         sync.priceSyncHeight   = 10;               // in-memory frozen behind the mirror
@@ -216,7 +210,10 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         sync._priceDrained     = false;            // ...and the price re-drain still pending
         const pending = sync.waitForPriceSyncHeight(100, 60000);
         await sync.refreshAllSyncHeights();       // the reconnect-edge proactive refresh
-        assert.strictEqual(await pending, 150, 'barrier opens from the complete local mirror, not the timeout');
+        assert.strictEqual(sync._priceWaiters.length, 1, 'stale content alone cannot certify the replacement connection');
+        sync.certifyTableDrain({ table: 'price_snapshots', connectionEpoch: sync._wsEpoch,
+            selectorRevision: sync._selectorRevision, watermark: 0 });
+        assert.strictEqual(await pending, 150, 'the refreshed content opens once this connection certifies the table');
         assert.strictEqual(sync._priceWaiters.length, 0);
     });
 });

@@ -117,6 +117,7 @@ describe('price barrier decoupled from the fee flag-day @regression @tier1', fun
         // everything through blockTime + grace.
         const sync = new HubDbSync({ doQuery: async () => [{ h: 0, ts: 0 }] }, { hubUrl: 'http://hub.invalid' });
         sync.priceBootstrapped = true;
+        sync._bootstrapDrained = true;
         sync.priceSyncMaxTimestamp = 0;
 
         const blockTime = 1700000000;

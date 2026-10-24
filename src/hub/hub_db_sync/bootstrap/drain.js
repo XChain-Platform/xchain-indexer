@@ -78,6 +78,7 @@ module.exports = {
             drain.selectorRevision !== this._selectorRevision) return null;
 
         if (!fullyDrained) return null;
+        this.certifyTableDrain(drain);
         // A complete page from zero has run this table's reconciliation passes above.
         if (drain.fullTable || drain.floorStart) this.settleRepageOwed(drain);
         this.notePriceRepageFloor(drain);
@@ -336,7 +337,10 @@ module.exports = {
             // carrier here a poll-mode or reconnecting mirror would never establish a
             // baseline at all and would defer every block forever above the activation.
             const pageHeights = sanitizeHeights(result.heights);
-            if (pageHeights !== null) this._pendingBootstrapHeights = pageHeights;
+            if (pageHeights !== null) {
+                drain.heights = pageHeights;
+                this._pendingBootstrapHeights = pageHeights;
+            }
             if (drain.applyErrors > 0) break;                // hole hit: stop paging, retry from it
             if (result.rows.length < PAGE_LIMIT) break;      // short page = drained
         }

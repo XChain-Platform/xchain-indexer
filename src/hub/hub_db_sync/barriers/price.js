@@ -114,11 +114,14 @@ module.exports = {
         // read are absent. Defer until the full re-mirror lands. Never set on an unbounded
         // mirror, so this costs nothing on the default path.
         if (this._priceMirrorRefloor) return false;
+        const certified = this.priceBootstrapped &&
+            this.tableCertifiedOnCurrentConnection('price_snapshots');
+        if (!certified) return false;
         if (this.priceSyncHeight >= blockHeight) return true;
         if (this.admissionActiveAt(blockHeight))
-            return this.priceBootstrapped && this.heightSatisfied('price_snapshots', blockHeight);
-        if (this.priceBootstrapped && Number.isFinite(blockTime) &&
-            this.streamWatermark >= blockTime + this.priceWatermarkGraceS) return true;
+            return this.heightSatisfied('price_snapshots', blockHeight);
+        if (Number.isFinite(blockTime) &&
+            this.tableWatermark('price_snapshots') >= blockTime + this.priceWatermarkGraceS) return true;
         return false;
     },
 
@@ -200,12 +203,15 @@ module.exports = {
     //      B - margin, or a hub that has published admission evidence has streamed through
     //      blockTime plus grace without producing another round.
     priceTimeSyncSatisfied(blockTime, blockHeight = null) {
-        const streamSatisfied = this.priceBootstrapped && Number.isFinite(blockTime) &&
-            this.streamWatermark >= blockTime + this.priceWatermarkGraceS;
+        const certified = this.priceBootstrapped &&
+            this.tableCertifiedOnCurrentConnection('price_snapshots');
+        if (!certified) return false;
+        const streamSatisfied = Number.isFinite(blockTime) &&
+            this.tableWatermark('price_snapshots') >= blockTime + this.priceWatermarkGraceS;
         if (this.admissionActiveAt(blockHeight)) {
             if (!this._priceMirrorRefloor &&
                 this.admissionStreamSatisfied('price_snapshots', streamSatisfied)) return true;
-            return !this._priceMirrorRefloor && this.priceBootstrapped &&
+            return !this._priceMirrorRefloor &&
                    this.heightSatisfied('price_snapshots', blockHeight);
         }
         if (!Number.isFinite(blockTime)) return true;       // nothing to gate on

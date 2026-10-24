@@ -62,12 +62,14 @@ module.exports = {
     //      grace without producing another row. The latter keeps a quiet table from making
     //      its last content timestamp an indefinite barrier.
     oracleSyncSatisfied(blockTime, blockHeight = null) {
-        if (this.oracleBootstrapped && this.oracleSyncTimestamp === null) return true;
-        const streamSatisfied = this.oracleBootstrapped &&
-            this.streamWatermark >= blockTime + this.oracleWatermarkGraceS;
+        const certified = this.oracleBootstrapped &&
+            this.tableCertifiedOnCurrentConnection('oracle_prices');
+        if (!certified) return false;
+        if (this.oracleSyncTimestamp === null) return true;
+        const streamSatisfied = this.tableWatermark('oracle_prices') >= blockTime + this.oracleWatermarkGraceS;
         if (this.admissionActiveAt(blockHeight)) {
             if (this.admissionStreamSatisfied('oracle_prices', streamSatisfied)) return true;
-            return this.oracleBootstrapped && this.heightSatisfied('oracle_prices', blockHeight);
+            return this.heightSatisfied('oracle_prices', blockHeight);
         }
         if (this.oracleSyncTimestamp !== null && this.oracleSyncTimestamp >= blockTime) return true;
         // Stream watermark: the hub has sent us every row it produced through
@@ -196,12 +198,14 @@ module.exports = {
     // except that it needs a drained connection: matchBootstrapped outlives a socket close,
     // and an empty scope proves nothing about a match finalized while the socket was down.
     matchSyncSatisfied(blockTime, blockHeight = null) {
-        if (this.matchBootstrapped && this._bootstrapDrained && this.matchSyncTimestamp === null) return true;
-        const streamSatisfied = this.matchBootstrapped &&
-            this.streamWatermark >= blockTime + this.matchWatermarkGraceS;
+        const certified = this.matchBootstrapped &&
+            this.tableCertifiedOnCurrentConnection('cross_chain_matches');
+        if (!certified) return false;
+        if (this.matchSyncTimestamp === null) return true;
+        const streamSatisfied = this.tableWatermark('cross_chain_matches') >= blockTime + this.matchWatermarkGraceS;
         if (this.admissionActiveAt(blockHeight)) {
             if (this.admissionStreamSatisfied('cross_chain_matches', streamSatisfied)) return true;
-            return this.matchBootstrapped && this.heightSatisfied('cross_chain_matches', blockHeight);
+            return this.heightSatisfied('cross_chain_matches', blockHeight);
         }
         if (this.matchCoveredTimestamp !== null && this.matchCoveredTimestamp !== undefined &&
             this.matchCoveredTimestamp >= blockTime) return true;
@@ -312,12 +316,14 @@ module.exports = {
     // connection and the content shortcut reads the rows this chain applies, both for the
     // reasons given at the match member and refreshCallSyncTimestamp.
     callSyncSatisfied(blockTime, blockHeight = null) {
-        if (this.callBootstrapped && this._bootstrapDrained && this.callSyncTimestamp === null) return true;
-        const streamSatisfied = this.callBootstrapped &&
-            this.streamWatermark >= blockTime + this.callWatermarkGraceS;
+        const certified = this.callBootstrapped &&
+            this.tableCertifiedOnCurrentConnection('cross_chain_calls');
+        if (!certified) return false;
+        if (this.callSyncTimestamp === null) return true;
+        const streamSatisfied = this.tableWatermark('cross_chain_calls') >= blockTime + this.callWatermarkGraceS;
         if (this.admissionActiveAt(blockHeight)) {
             if (this.admissionStreamSatisfied('cross_chain_calls', streamSatisfied)) return true;
-            return this.callBootstrapped && this.heightSatisfied('cross_chain_calls', blockHeight);
+            return this.heightSatisfied('cross_chain_calls', blockHeight);
         }
         if (this.callGatedSyncTimestamp !== null && this.callGatedSyncTimestamp !== undefined &&
             this.callGatedSyncTimestamp >= blockTime) return true;

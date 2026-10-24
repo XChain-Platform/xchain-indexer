@@ -87,6 +87,7 @@ describe('list share sync barrier @regression @tier1', function () {
     it('opens at B minus four and remains open above it', function () {
         const { sync } = makeSync();
         sync.listShareBootstrapped = true;
+        sync._bootstrapDrained = true;
         sync.heightWatermarks = { list_snapshots: { BTC: 96 } };
 
         assert.strictEqual(sync.listShareSyncSatisfied(100), true);
@@ -118,6 +119,7 @@ describe('list share sync barrier @regression @tier1', function () {
     it('releases a waiter when the height watermark advances', async function () {
         const { sync } = makeSync();
         sync.listShareBootstrapped = true;
+        sync._bootstrapDrained = true;
         sync.noteHeights({ list_snapshots: { BTC: 95 } });
         const pending = sync.waitForListShareSync(5000, 100);
         assert.strictEqual(sync._listShareWaiters.length, 1);

@@ -64,6 +64,7 @@ describe('HubDbSync price barrier while the mirror is behind @regression @tier1'
         sync.priceBootstrapped     = true;
         sync.priceSyncHeight       = 500;
         sync.priceSyncMaxTimestamp = BLOCK_TS;
+        sync._bootstrapDrained     = true;
         sync.releasePriceWaiters();
         sync.releasePriceTimeWaiters();
 

@@ -26,6 +26,7 @@ function makeQuietSync() {
     sync.priceSyncMaxTimestamp = LAST_ORACLE_PRICE;
     sync.oracleSyncTimestamp = LAST_ORACLE_PRICE;
     sync.matchSyncTimestamp = LAST_ORACLE_PRICE;
+    sync._bootstrapDrained = true;
     sync.noteHeights({
         price_snapshots: { DOGE: staleHeight('price_snapshots') },
         oracle_prices: { DOGE: staleHeight('oracle_prices') },
