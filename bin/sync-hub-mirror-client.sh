@@ -105,6 +105,22 @@ SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_c
 SERVICES="xchain-explorer"
 
 drift=0
+caller_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ "$CHECK" -eq 1 ] && [ "$(basename "$caller_root")" = "xchain-explorer" ]; then
+    canonical_paths=()
+    for f in $HUB_FILES; do canonical_paths+=("src/hub/$f"); done
+    for d in $HUB_DIRS; do canonical_paths+=("src/hub/$d"); done
+    for f in $DEP_FILES; do canonical_paths+=("src/$f"); done
+    for f in $SQL_FILES; do canonical_paths+=("src/sql/$f"); done
+    if ! git -C "$HERE/.." rev-parse --verify --quiet origin/develop^{commit} >/dev/null; then
+        echo "DRIFT: xchain-indexer origin/develop is unavailable; cannot verify canonical hub-mirror source"
+        drift=1
+    elif ! git -C "$HERE/.." diff --quiet origin/develop -- "${canonical_paths[@]}"; then
+        echo "DRIFT: canonical hub-mirror source differs from xchain-indexer origin/develop; land xchain-indexer first"
+        drift=1
+    fi
+fi
+
 for svc in $SERVICES; do
     dest="$ROOT/$svc/src"
     hubdest="$dest/hub"

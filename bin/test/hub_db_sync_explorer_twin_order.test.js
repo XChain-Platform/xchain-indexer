@@ -119,6 +119,7 @@ function makeFixture() {
   }
 
   const base = git(indexer, ['rev-parse', 'HEAD']);
+  const explorerBase = git(explorer, ['rev-parse', 'HEAD']);
   const relative = 'src/hub/hub_db_sync/live_events.js';
   fs.appendFileSync(path.join(indexer, relative), 'module.exports.twinOrderFixture = true;\n');
   commit(indexer, 'canonical twin change');
@@ -143,7 +144,7 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 bash "$ROOT/xchain-indexer/bin/sync-hub-mirror-client.sh" --check
 `);
 
-  return { root, indexer, explorer, base };
+  return { root, indexer, explorer, base, explorerBase };
 }
 
 describe('hub DB sync explorer twin landing order', function () {
@@ -164,6 +165,20 @@ describe('hub DB sync explorer twin landing order', function () {
   it('lands indexer with the named companion before a normal explorer push', () => {
     const fixture = makeFixture();
     try {
+      const explorerFirst = run(
+        'git',
+        ['-C', fixture.explorer, 'push', 'origin', 'mirror-client-twin:develop'],
+      );
+      assert.equal(explorerFirst.status, 1, explorerFirst.stdout + explorerFirst.stderr);
+      assert.match(
+        explorerFirst.stdout + explorerFirst.stderr,
+        /canonical hub-mirror source differs from xchain-indexer origin\/develop/,
+      );
+      assert.equal(
+        git(fixture.explorer, ['rev-parse', 'origin/develop']),
+        fixture.explorerBase,
+      );
+
       const stale = run(
         'git',
         ['-C', fixture.indexer, 'push', 'origin', 'HEAD:develop'],
