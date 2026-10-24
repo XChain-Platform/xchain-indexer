@@ -65,8 +65,9 @@ module.exports = {
     isValidAmountFormat(decimals, amount, blockTime){
         // Amount-bearing action columns are at most VARCHAR(250). The decoder and
         // encoder payload ceilings both allow a longer individual field, so refuse it
-        // before a strict server can reject the row write.
-        if(Array.from(String(amount)).length > 250)
+        // before a strict server can reject the row write. Only text and numbers carry
+        // a width; any other value keeps the shape check's verdict below.
+        if((typeof amount === 'string' || typeof amount === 'number') && Array.from(String(amount)).length > 250)
             return false;
         return module.exports.isValidAmountMergeFormat.call(this, decimals, amount, blockTime);
     },
