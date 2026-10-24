@@ -46,6 +46,19 @@ const AddressRetry = require('./hub_push_queue/address_retry.js');
  *
  ********************************************************************/
 
+// The text of a drain failure. An AggregateError (a connect that failed on every
+// resolved address) has an empty message, so its inner errors carry the cause.
+function describeDrainError(err){
+    if(err == null) return 'unknown error';
+    if(typeof err !== 'object') return String(err) || 'unknown error';
+    if(err.message) return err.message;
+    if(Array.isArray(err.errors) && err.errors.length){
+        let inner = err.errors.map(e => (e && (e.message || e.code)) || String(e)).filter(Boolean);
+        if(inner.length) return inner.join('; ');
+    }
+    return err.code || err.name || 'unknown error';
+}
+
 class HubPushQueue {
 
     constructor(indexer, opts){
@@ -117,9 +130,7 @@ class HubPushQueue {
             getLogger().info('HubPushQueue: no hub configured, retry queue idle');
             return;
         }
-        this.timer = setInterval(() => {
-            this.drain().catch(err => getLogger().warn('HubPushQueue: drain error:', err.message || err));
-        }, this.intervalMs);
+        this.timer = setInterval(() => this.drainAndLog(), this.intervalMs);
         // Never keep the process alive on the timer alone.
         if(this.timer.unref) this.timer.unref();
         getLogger().info('HubPushQueue: started (interval ' + this.intervalMs + 'ms, max ' + this.maxAttempts + ' attempts)');
@@ -127,6 +138,17 @@ class HubPushQueue {
 
     stop(){
         if(this.timer){ clearInterval(this.timer); this.timer = null; }
+    }
+
+    // One timer tick. The cause goes into the message string itself: the logger's second
+    // argument is a fields object, so a bare err.message passed there was dropped and every
+    // failing tick logged an empty "drain error:" line. A drain that finds nothing logs nothing.
+    async drainAndLog(logger = getLogger()){
+        try {
+            return await this.drain();
+        } catch (err){
+            logger.warn('HubPushQueue: drain error: ' + describeDrainError(err));
+        }
     }
 
     // A pending row is due when enough time has elapsed since its last attempt,

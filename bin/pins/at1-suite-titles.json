@@ -1391,6 +1391,14 @@
       "Dispenser fresh-address proven use @regression @tier2 below the proven-use flag-day a GET_ADDRESS only mentioned in a LIST stays not fresh (legacy verdict)",
       "Dispenser fresh-address proven use @regression @tier2 the registry row is unarmed on mainnet, armed on testnet at the v0.21.3 instant and genesis-active on regtest"
     ],
+    "14ed70853ba6a773": [
+      "HubPushQueue drain logging @regression a failed drain logs the drain error message on a failed drain",
+      "HubPushQueue drain logging @regression a failed drain logs the inner causes of an AggregateError, whose own message is empty",
+      "HubPushQueue drain logging @regression a failed drain never writes an empty cause, even for an error with no message",
+      "HubPushQueue drain logging @regression a failed drain resolves rather than rejecting, so a failed tick never becomes an unhandled rejection",
+      "HubPushQueue drain logging @regression an empty drain logs nothing when the drain finds no rows",
+      "HubPushQueue drain logging @regression the drain timer routes every timer tick through drainAndLog"
+    ],
     "14f04e2027c76c64": [
       "Smoke: utility math and validation SM-13: Core math functions produce correct results"
     ],
@@ -19074,8 +19082,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1512,
-      "titleCount": 14787,
+      "fileCount": 1513,
+      "titleCount": 14793,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20221,6 +20229,7 @@
         "test/unit/hub/hub_push_queue.test/address_retry.test.js": "d95ae38162282a9d",
         "test/unit/hub/hub_push_queue.test/bridge_retraction.test.js": "ce5272c68d71c930",
         "test/unit/hub/hub_push_queue.test/delivery_and_failures.test.js": "747d4bd8a7b5b6ec",
+        "test/unit/hub/hub_push_queue.test/drain_logging.test.js": "14ed70853ba6a773",
         "test/unit/hub/hub_push_queue.test/fanout_delivery.test.js": "42ad51cf8687bdd1",
         "test/unit/hub/hub_push_queue.test/live_delivery_fanout.test.js": "1976f46663d49963",
         "test/unit/hub/hub_push_queue.test/selector_retry.test.js": "194efb88500e20fc",
@@ -20967,8 +20976,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1146,
-      "titleCount": 11671,
+      "fileCount": 1147,
+      "titleCount": 11677,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21847,6 +21856,7 @@
         "test/unit/hub/hub_db_sync/validity_read_tables.test.js": "816d9a465e12ae5b",
         "test/unit/hub/hub_db_sync/watermark_interval_hub_parity.test.js": "4e69a425c6f8c78b",
         "test/unit/hub/hub_mirror_read_max_ids.test.js": "f59780a5cacf7da9",
+        "test/unit/hub/hub_push_queue.test/drain_logging.test.js": "14ed70853ba6a773",
         "test/unit/hub/hub_push_queue.test/live_delivery_fanout.test.js": "1976f46663d49963",
         "test/unit/hub/oracle_sync_barrier_grace.test.js": "bc90c2ca64f06fcb",
         "test/unit/hub/pushvalidatorrewards_retired.test.js": "81e3a88cf8ac262a",
@@ -22699,8 +22709,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1146,
-      "titleCount": 11671,
+      "fileCount": 1147,
+      "titleCount": 11677,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23579,6 +23589,7 @@
         "test/unit/hub/hub_db_sync/validity_read_tables.test.js": "816d9a465e12ae5b",
         "test/unit/hub/hub_db_sync/watermark_interval_hub_parity.test.js": "4e69a425c6f8c78b",
         "test/unit/hub/hub_mirror_read_max_ids.test.js": "f59780a5cacf7da9",
+        "test/unit/hub/hub_push_queue.test/drain_logging.test.js": "14ed70853ba6a773",
         "test/unit/hub/hub_push_queue.test/live_delivery_fanout.test.js": "1976f46663d49963",
         "test/unit/hub/oracle_sync_barrier_grace.test.js": "bc90c2ca64f06fcb",
         "test/unit/hub/pushvalidatorrewards_retired.test.js": "81e3a88cf8ac262a",
