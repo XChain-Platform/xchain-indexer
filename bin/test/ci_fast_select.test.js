@@ -236,8 +236,10 @@ describe('ci fast selector', function () {
     assert(script.includes('git -C "$SIB/xchain-documentation" archive HEAD'));
     assert(script.includes('XCHAIN_DOCS_DIR="$docs_snapshot"'));
     assert(script.includes('sdk_preflight_drift_check'));
-    assert(script.includes('merge-base --is-ancestor "$sdk_head" "$sdk_develop"'));
-    assert(script.includes('archive "$sdk_develop"'));
+    assert(script.includes('sdk_ref="$(sed -nE'));
+    assert(script.includes('"$SELF/.github/workflows/ci.yml"'));
+    assert(script.includes('expected one pinned xchain-sdk drift ref'));
+    assert(script.includes('archive "$sdk_ref"'));
   });
 
   it('runs source-only VM staging in Linux fast mode', function () {
