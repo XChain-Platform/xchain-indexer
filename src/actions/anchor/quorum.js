@@ -24,7 +24,7 @@ const swq     = require('../../consensus/stake_weighted_quorum.js');
 // Verify 2f+1 oracle_publish signatures over the canonical.
 // SNAPSHOT_BLOCK comes from the wire payload (a BTC height), NOT from
 // the DOGE block this ANCHOR landed in.
-async function verifyHeadQuorum(handler, data, sigs, error){
+async function verifyHeadQuorum(handler, data, sigs, error, capability = 'oracle_publish'){
     let weighted = false, validators = null, snapPubkeys = null, oracleN = 0;
     if(!error){
         let snapshotBlock = Number(data['SNAPSHOT_BLOCK']);
@@ -32,8 +32,8 @@ async function verifyHeadQuorum(handler, data, sigs, error){
         // the BTC snapshot_block + the checkpoint's network), else legacy 2f+1 count.
         weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, data['NETWORK']);
         validators = weighted
-            ? await handler.indexerDb.getStakeWeightsByCapability('oracle_publish', snapshotBlock)
-            : await handler.indexerDb.getValidatorsByCapability('oracle_publish', snapshotBlock);
+            ? await handler.indexerDb.getStakeWeightsByCapability(capability, snapshotBlock)
+            : await handler.indexerDb.getValidatorsByCapability(capability, snapshotBlock);
         oracleN = (validators && validators.length) ? validators.length : 0;
         if(oracleN === 0){
             // No oracle_publish snapshot mirrored locally (offline resync / no hub).
@@ -68,18 +68,17 @@ async function verifyHeadQuorum(handler, data, sigs, error){
 }
 
 // Verify each section's 2f+1 oracle_publish quorum over its OWN canonical, against
-// the set at its OWN snapshot block. Sets are memoized per block so the common case
-// (every section sharing the bundle block) costs one query, and so two sections at
-// the same block can never be judged against two different sets.
+// the set at its OWN snapshot block. Sets are memoized per capability, network and
+// block so the common case (every section sharing all three) costs one query.
 function makeOracleSetResolver(handler){
     let sets = new Map();
-    const oracleSetFor = async (snapshotBlock, network) => {
-        let key = String(snapshotBlock);
+    const oracleSetFor = async (snapshotBlock, network, capability = 'oracle_publish') => {
+        let key = JSON.stringify([capability, network, String(snapshotBlock)]);
         if(sets.has(key)) return sets.get(key);
         let weighted   = swq.isStakeWeightedQuorumActive(Number(snapshotBlock), network);
         let validators = weighted
-            ? await handler.indexerDb.getStakeWeightsByCapability('oracle_publish', Number(snapshotBlock))
-            : await handler.indexerDb.getValidatorsByCapability('oracle_publish', Number(snapshotBlock));
+            ? await handler.indexerDb.getStakeWeightsByCapability(capability, Number(snapshotBlock))
+            : await handler.indexerDb.getValidatorsByCapability(capability, Number(snapshotBlock));
         let entry = {
             weighted, validators,
             oracleN:     (validators && validators.length) ? validators.length : 0,
