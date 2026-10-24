@@ -5053,6 +5053,11 @@
     "47b5ee89067e58ec": [
       "committed automatic migration key-dependent writes @regression @tier1 matches the reviewed file-to-table map"
     ],
+    "47b6eaec35bd109c": [
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 keeps a pre-gate wrapper on setFor oracle_publish",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers a post-gate wrapper against setFor archive_publish",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 verifyCompleteness refuses archive_publish when a present source was dropped"
+    ],
     "47d45f1d606adbef": [
       "controller completeness custody routing DEPOSIT accepts armed SOURCE and custody debits when the tick was guarded",
       "controller completeness custody routing DEPOSIT rejects an armed unguarded controlled SOURCE debit",
@@ -15239,6 +15244,16 @@
       "createDestroy() - multi-destroy legs writes ONE ROW PER TICK LEG of a multi-destroy sharing one action_index",
       "createSend() - multi-send legs does not let a re-parse stamp one leg over every other leg of the same send"
     ],
+    "ca27ebf2979e9739": [
+      "ANCHOR oracle set capability routing @regression @tier1 does not count a valid signature from a key outside the selected set",
+      "ANCHOR oracle set capability routing @regression @tier1 keeps network and block in the resolver memo key",
+      "ANCHOR oracle set capability routing @regression @tier1 memoizes by capability while preserving each capability's own rows",
+      "ANCHOR oracle set capability routing @regression @tier1 routes an explicit cross_chain capability to the snapshot read",
+      "ANCHOR oracle set capability routing @regression @tier1 stores unverified without an error when the selected set has zero rows",
+      "ANCHOR oracle set capability routing @regression @tier1 uses oracle_publish stake weights by default at the mainnet activation",
+      "ANCHOR oracle set capability routing @regression @tier1 uses oracle_publish validator counts by default below the mainnet activation",
+      "ANCHOR oracle set capability routing @regression @tier1 verifySections judges two same-block sections on one oracle_publish entry"
+    ],
     "ca901868920fa051": [
       "Config @regression @tier3 getConfig() - BTC should define FIATS dictionary",
       "Config @regression @tier3 getConfig() - BTC should define LIST_FIELDS",
@@ -16897,6 +16912,10 @@
       "ISSUE token-bridge opt-in and policy exclusion @regression @consensus reserved-tick guard is case-folded, so a lower-case coin root is refused",
       "ISSUE token-bridge opt-in and policy exclusion @regression @consensus reserved-tick guard still exempts the GAS tick on regtest, the play-money self-seed"
     ],
+    "e20967980264bf02": [
+      "archive_publish mirror capability reads @regression @tier1 proves an archive row under oracle_publish without mutating or holding it",
+      "archive_publish mirror capability reads @regression @tier1 uses the capability snapshot off BTC but not on BTC"
+    ],
     "e210414f76e3a5c4": [
       "Deploy (DEPLOY) @regression @tier2 constructor emissions a failed constructor emission rolls back and fails the deployment",
       "Deploy (DEPLOY) @regression @tier2 constructor emissions nets a cross-contract callee refund out of the deployment gas",
@@ -17641,6 +17660,11 @@
       "VM snapshot memo: cross-chain snapshot @regression @tier1 serves exactly what an uncached build returns, key order included",
       "VM snapshot memo: poll snapshot @regression @tier1 builds once per block pass and per tick variant",
       "VM snapshot memo: poll snapshot @regression @tier1 serves exactly what an uncached build returns"
+    ],
+    "e92dea21a2bdb62b": [
+      "archive_publish BTC capability reads @regression @tier1 derives weights, validators, distinct count and membership from the filtered set",
+      "archive_publish BTC capability reads @regression @tier1 serves archive_publish through getstakeweightsbycapability without rewriting the key",
+      "archive_publish BTC capability reads @regression @tier1 treats archive_publish as configured exactly when oracle_publish is configured"
     ],
     "e9616084430205ad": [
       "HubDbSync anchor reward copies never hold the drain @regression @tier1 applies the main row when the copy write throws, counts it, and warns once per distinct error",
@@ -19125,8 +19149,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1517,
-      "titleCount": 14828,
+      "fileCount": 1521,
+      "titleCount": 14844,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19161,6 +19185,7 @@
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
+        "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
@@ -19962,6 +19987,8 @@
         "test/unit/db/anchors/archive_status_journal.test.js": "858aaae550bece4b",
         "test/unit/db/anchors/max_archive_batch_seq_by_author_predicate.test.js": "7f93503626a6b339",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "35f830c11211072f",
+        "test/unit/db/archive_publish_btc_reads.test.js": "e92dea21a2bdb62b",
+        "test/unit/db/archive_publish_mirror_read.test.js": "e20967980264bf02",
         "test/unit/db/balance_delta_apply.test.js": "a047f1b5c097c4d9",
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
@@ -20470,6 +20497,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -21023,8 +21051,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1151,
-      "titleCount": 11706,
+      "fileCount": 1155,
+      "titleCount": 11722,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21100,6 +21128,7 @@
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
+        "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
@@ -21669,6 +21698,8 @@
         "test/unit/cross_chain/xcall_cap_default.test.js": "40c3932d64cf581c",
         "test/unit/cross_chain/xcall_result_retirement.test.js": "470963c99e4be416",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "35f830c11211072f",
+        "test/unit/db/archive_publish_btc_reads.test.js": "e92dea21a2bdb62b",
+        "test/unit/db/archive_publish_mirror_read.test.js": "e20967980264bf02",
         "test/unit/db/balance_delta_apply.test.js": "a047f1b5c097c4d9",
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
@@ -22049,6 +22080,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -22180,8 +22212,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 577,
-      "titleCount": 6159,
+      "fileCount": 581,
+      "titleCount": 6175,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22196,6 +22228,7 @@
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
+        "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "c262ebb8f7e7ced1",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "a64681e4300f78cf",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
@@ -22407,6 +22440,8 @@
         "test/unit/cross_chain/cross_chain_settlement_cap_gate.test.js": "85a592dc86f8b36a",
         "test/unit/cross_chain/xcall_cap_default.test.js": "40c3932d64cf581c",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "35f830c11211072f",
+        "test/unit/db/archive_publish_btc_reads.test.js": "e92dea21a2bdb62b",
+        "test/unit/db/archive_publish_mirror_read.test.js": "e20967980264bf02",
         "test/unit/db/balance_delta_apply.test.js": "a047f1b5c097c4d9",
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
@@ -22702,6 +22737,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
@@ -22763,8 +22799,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1151,
-      "titleCount": 11706,
+      "fileCount": 1155,
+      "titleCount": 11722,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22840,6 +22876,7 @@
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
+        "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
@@ -23409,6 +23446,8 @@
         "test/unit/cross_chain/xcall_cap_default.test.js": "40c3932d64cf581c",
         "test/unit/cross_chain/xcall_result_retirement.test.js": "470963c99e4be416",
         "test/unit/db/anchors/per_block_read_index_coverage.test.js": "35f830c11211072f",
+        "test/unit/db/archive_publish_btc_reads.test.js": "e92dea21a2bdb62b",
+        "test/unit/db/archive_publish_mirror_read.test.js": "e20967980264bf02",
         "test/unit/db/balance_delta_apply.test.js": "a047f1b5c097c4d9",
         "test/unit/db/balance_delta_collect.test.js": "049bade57f005021",
         "test/unit/db/bets/bet_edit_apply.test.js": "7acd161f7db2620f",
@@ -23789,6 +23828,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
