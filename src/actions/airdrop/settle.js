@@ -20,6 +20,9 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
+const gateRegistry = require('../../consensus/gate_registry');
+
+const AIRDROP_ZERO_LEGS_OMITTED_KEY = 'airdrop_zero_legs_omitted_activation.AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION';
 
 // Installed onto Airdrop.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
@@ -74,8 +77,11 @@ module.exports = {
 
         // If this was a valid transaction, then add records to the credits and debits array
         if(status=='valid'){
+            let omitZeroLegs = gateRegistry.activeAt(AIRDROP_ZERO_LEGS_OMITTED_KEY,
+                this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
             // Add ticker, amount, and address to debits array
-            ctx.debits.push([airdrop['TICK'], airdrop['DEBIT'], data['SOURCE']]);
+            if(!omitZeroLegs || this.util.bcgt(airdrop['DEBIT'], 0))
+                ctx.debits.push([airdrop['TICK'], airdrop['DEBIT'], data['SOURCE']]);
 
             // Bill the controller-guard gas to SOURCE (a GAS burn with no offsetting credit). The
             // end-of-action updateTokens recomputes GAS supply from the ledger so the per-block
@@ -93,7 +99,8 @@ module.exports = {
                 // Store the recipient ADDRESS and TICK in addresses list
                 this.util.addAddressTicker(address, airdrop['TICK']);
                 // Credit address with TICK AMOUNT
-                ctx.credits.push([airdrop['TICK'], airdrop['AMOUNT'], address]);
+                if(!omitZeroLegs || this.util.bcgt(airdrop['AMOUNT'], 0))
+                    ctx.credits.push([airdrop['TICK'], airdrop['AMOUNT'], address]);
             }
         }
     },

@@ -36,6 +36,9 @@ const validatePart        = require('./validate.js');
 const feesPart            = require('./fees.js');
 const controllerGuardPart = require('./controller_guard.js');
 const settlePart          = require('./settle.js');
+const gateRegistry        = require('../../consensus/gate_registry');
+
+const DIVIDEND_EMPTY_ALLOW_LIST_DENIES_KEY = 'dividend_empty_allow_list_denies_activation.DIVIDEND_EMPTY_ALLOW_LIST_DENIES_ACTIVATION';
 
 class Dividend {
 
@@ -131,10 +134,16 @@ class Dividend {
 
         // List of addresses allowed or blocked from holding DIVIDEND_TICK
         // Held as Sets: the holder loop below probes membership once per holder, so an O(1)
-        // hash probe replaces a scan of the whole list. Emptiness still gates the check, so a
-        // configured-but-empty ALLOW_LIST keeps admitting everyone exactly as before.
-        let allowList = (dividendTokenInfo && dividendTokenInfo['ALLOW_LIST']) ? new Set(await this.indexerDb.getList(dividendTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) || []) : new Set();
+        // hash probe replaces a scan of the whole list. A configured empty ALLOW_LIST remains
+        // fail-open below its activation and denies every holder at and above it. getList
+        // answers null for a reference the list validity gate rejects; that counts as no
+        // attached list, the same reading CALLBACK and ORDER_MATCH give it. The gate is read
+        // only for an attached list with no members, the one case it can change.
+        let allowMembers = (dividendTokenInfo && dividendTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(dividendTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
+        let allowList = new Set(allowMembers || []);
         let blockList = (dividendTokenInfo && dividendTokenInfo['BLOCK_LIST']) ? new Set(await this.indexerDb.getList(dividendTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) || []) : new Set();
+        let denyEmptyAllowList = Array.isArray(allowMembers) && allowMembers.length === 0 && gateRegistry.activeAt(DIVIDEND_EMPTY_ALLOW_LIST_DENIES_KEY,
+            this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
 
         // Loop through list of holders and build out valid recipients list
         dividend['DEBIT'] = 0;
@@ -143,7 +152,7 @@ class Dividend {
             for(let address in holders){
                 let valid = true;
                 // Check if recipient is on the allow or block lists and only add valid addresses to the recipients list
-                if((allowList.size && !allowList.has(address)) || (blockList.size && blockList.has(address)))
+                if(((allowList.size || denyEmptyAllowList) && !allowList.has(address)) || (blockList.size && blockList.has(address)))
                     valid = false;
                 // Ignore the source address so it is not added to recipients list
                 if(address==data['SOURCE'])

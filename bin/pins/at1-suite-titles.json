@@ -2318,6 +2318,14 @@
       "nextBarrierHold / barrierHoldMs @regression @tier1 starts a hold when a block is deferred behind a barrier",
       "nextBarrierHold / barrierHoldMs @regression @tier1 the notified flag survives a retry so a crossing is announced once"
     ],
+    "2100aec35b3f146e": [
+      "AIRDROP zero ledger-leg activation @regression @tier1 keeps positive payer and recipient rows above activation",
+      "AIRDROP zero ledger-leg activation @regression @tier1 keeps zero payer and recipient rows while regtest is unarmed",
+      "AIRDROP zero ledger-leg activation @regression @tier1 omits zero payer and recipient rows when the new regtest gate is armed",
+      "AIRDROP zero ledger-leg activation @regression @tier1 publishes an unarmed public-network table and an opt-in regtest row",
+      "AIRDROP zero ledger-leg activation @regression @tier1 stays byte-compatible on mainnet and testnet when the regtest lever is armed",
+      "AIRDROP zero ledger-leg activation @regression @tier1 switches row creation exactly at the configured height boundary"
+    ],
     "217c172ce31951f5": [
       "armed_map/canonical: fingerprint hashes the preimage and each row value, and counts rows",
       "armed_map/canonical: fingerprint moves when one value moves, including null to a sentinel height",
@@ -18093,6 +18101,14 @@
       "attest_responsible_widening: the V2 ladder (zero-conf armed, D27, D28) is monotone non-decreasing in atBlock",
       "attest_responsible_widening: the V2 ladder (zero-conf armed, D27, D28) reaches headroom+1 and headroom+2 before the deadline on the measured 10-block window"
     ],
+    "f3f45650db38b40f": [
+      "DIVIDEND empty allow-list activation @regression @tier1 denies every holder when the new regtest gate is armed",
+      "DIVIDEND empty allow-list activation @regression @tier1 keeps the legacy fail-open payout while regtest is unarmed",
+      "DIVIDEND empty allow-list activation @regression @tier1 pays every holder when the attached reference is one the list validity gate rejects",
+      "DIVIDEND empty allow-list activation @regression @tier1 publishes an unarmed public-network table and an opt-in regtest row",
+      "DIVIDEND empty allow-list activation @regression @tier1 stays fail-open on mainnet and testnet when the regtest lever is armed",
+      "DIVIDEND empty allow-list activation @regression @tier1 switches payout exactly at the configured height boundary"
+    ],
     "f41342eb8bc39b13": [
       "Anchor (ANCHOR) @regression @tier3 accepts a fresh regtest head below unverified watermarks left by a chain reset",
       "Anchor (ANCHOR) @regression @tier3 determinism: two independent parses of identical v1 bytes agree and write no reward",
@@ -18911,8 +18927,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1507,
-      "titleCount": 14634,
+      "fileCount": 1509,
+      "titleCount": 14646,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19260,6 +19276,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
+        "test/unit/actions/token/airdrop.test/zero_legs_gate.test.js": "2100aec35b3f146e",
         "test/unit/actions/token/amounts/amount_representability.test.js": "d5d2a5097677f9b1",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
         "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
@@ -19284,6 +19301,7 @@
         "test/unit/actions/token/destroy.test/destroy_behaviors.test.js": "93d204b9c442eeda",
         "test/unit/actions/token/distribution_conservation.test.js": "0148f36de0403362",
         "test/unit/actions/token/dividend.test.js": "1e1c9edff4a1606c",
+        "test/unit/actions/token/dividend.test/empty_allow_list_gate.test.js": "f3f45650db38b40f",
         "test/unit/actions/token/dividend.test/fee_handling.test.js": "c2bcef01bd400303",
         "test/unit/actions/token/dividend.test/holder_lists.test.js": "4df0f225c7a91ad2",
         "test/unit/actions/token/issue.test.js": "15756f486e83ac3e",
@@ -20799,8 +20817,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1141,
-      "titleCount": 11518,
+      "fileCount": 1143,
+      "titleCount": 11530,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21146,6 +21164,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
+        "test/unit/actions/token/airdrop.test/zero_legs_gate.test.js": "2100aec35b3f146e",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
         "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
@@ -21170,6 +21189,7 @@
         "test/unit/actions/token/destroy.test/destroy_behaviors.test.js": "93d204b9c442eeda",
         "test/unit/actions/token/distribution_conservation.test.js": "0148f36de0403362",
         "test/unit/actions/token/dividend.test.js": "1e1c9edff4a1606c",
+        "test/unit/actions/token/dividend.test/empty_allow_list_gate.test.js": "f3f45650db38b40f",
         "test/unit/actions/token/dividend.test/fee_handling.test.js": "c2bcef01bd400303",
         "test/unit/actions/token/dividend.test/holder_lists.test.js": "4df0f225c7a91ad2",
         "test/unit/actions/token/issue.test.js": "15756f486e83ac3e",
@@ -21946,8 +21966,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 570,
-      "titleCount": 6070,
+      "fileCount": 572,
+      "titleCount": 6082,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22029,6 +22049,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
+        "test/unit/actions/token/airdrop.test/zero_legs_gate.test.js": "2100aec35b3f146e",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
         "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
@@ -22037,6 +22058,7 @@
         "test/unit/actions/token/destroy.test.js": "85f55ffbe5c712da",
         "test/unit/actions/token/destroy.test/destroy_behaviors.test.js": "93d204b9c442eeda",
         "test/unit/actions/token/distribution_conservation.test.js": "0148f36de0403362",
+        "test/unit/actions/token/dividend.test/empty_allow_list_gate.test.js": "f3f45650db38b40f",
         "test/unit/actions/token/issue.test.js": "15756f486e83ac3e",
         "test/unit/actions/token/issue.test/bridged_copy_detach.test.js": "03ce4f3a725593dd",
         "test/unit/actions/token/issue.test/edit_formats_and_lists.test.js": "c4b143a4fd63fe51",
@@ -22522,8 +22544,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1141,
-      "titleCount": 11518,
+      "fileCount": 1143,
+      "titleCount": 11530,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22869,6 +22891,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
+        "test/unit/actions/token/airdrop.test/zero_legs_gate.test.js": "2100aec35b3f146e",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
         "test/unit/actions/token/amounts/consolidation_leg_amount.test.js": "2f45ed223b43de9e",
@@ -22893,6 +22916,7 @@
         "test/unit/actions/token/destroy.test/destroy_behaviors.test.js": "93d204b9c442eeda",
         "test/unit/actions/token/distribution_conservation.test.js": "0148f36de0403362",
         "test/unit/actions/token/dividend.test.js": "1e1c9edff4a1606c",
+        "test/unit/actions/token/dividend.test/empty_allow_list_gate.test.js": "f3f45650db38b40f",
         "test/unit/actions/token/dividend.test/fee_handling.test.js": "c2bcef01bd400303",
         "test/unit/actions/token/dividend.test/holder_lists.test.js": "4df0f225c7a91ad2",
         "test/unit/actions/token/issue.test.js": "15756f486e83ac3e",
