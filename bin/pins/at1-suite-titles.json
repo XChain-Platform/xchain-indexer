@@ -5970,6 +5970,12 @@
       "03 ORDER / DISPENSER integration @regression @tier2 DISPENSER format 0 \u2013 create dispenser should debit GIVE_ESCROW from ADDR1 balance",
       "03 ORDER / DISPENSER integration @regression @tier2 DISPENSER format 0 \u2013 create dispenser should have an escrow record for ADDR1"
     ],
+    "52f1691ce46c4e89": [
+      "archive_publish proof row mapping @regression @tier1 addresses verification to the mapped oracle_publish snapshot",
+      "archive_publish proof row mapping @regression @tier1 copies an archive_publish row with only its capability mapped",
+      "archive_publish proof row mapping @regression @tier1 maps only archive_publish to the oracle_publish proof capability",
+      "archive_publish proof row mapping @regression @tier1 returns the same object when the row already carries its proof capability"
+    ],
     "5301b4afc6223e03": [
       "getStakeSourceByPubkey() routes off the open block transaction (real Database) @regression @tier1 resolves a stake source without touching the transaction connection"
     ],
@@ -15233,16 +15239,6 @@
       "createDestroy() - multi-destroy legs writes ONE ROW PER TICK LEG of a multi-destroy sharing one action_index",
       "createSend() - multi-send legs does not let a re-parse stamp one leg over every other leg of the same send"
     ],
-    "ca27ebf2979e9739": [
-      "ANCHOR oracle set capability routing @regression @tier1 does not count a valid signature from a key outside the selected set",
-      "ANCHOR oracle set capability routing @regression @tier1 keeps network and block in the resolver memo key",
-      "ANCHOR oracle set capability routing @regression @tier1 memoizes by capability while preserving each capability's own rows",
-      "ANCHOR oracle set capability routing @regression @tier1 routes an explicit cross_chain capability to the snapshot read",
-      "ANCHOR oracle set capability routing @regression @tier1 stores unverified without an error when the selected set has zero rows",
-      "ANCHOR oracle set capability routing @regression @tier1 uses oracle_publish stake weights by default at the mainnet activation",
-      "ANCHOR oracle set capability routing @regression @tier1 uses oracle_publish validator counts by default below the mainnet activation",
-      "ANCHOR oracle set capability routing @regression @tier1 verifySections judges two same-block sections on one oracle_publish entry"
-    ],
     "ca901868920fa051": [
       "Config @regression @tier3 getConfig() - BTC should define FIATS dictionary",
       "Config @regression @tier3 getConfig() - BTC should define LIST_FIELDS",
@@ -19130,7 +19126,7 @@
   "scripts": {
     "test": {
       "fileCount": 1517,
-      "titleCount": 14832,
+      "titleCount": 14828,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19165,7 +19161,6 @@
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
-        "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
@@ -20543,6 +20538,7 @@
         "test/unit/rollback/rollback_slash_restore_order.test.js": "1ef3d061fbdfa9cd",
         "test/unit/rollback/rollback_sweep_stats.test.js": "baff1a5bd4d4dfa1",
         "test/unit/rollback/rollcall_unwind_schema_gap.test.js": "947a8652e2bab804",
+        "test/unit/rollcall/archive_publish_proof_row.test.js": "52f1691ce46c4e89",
         "test/unit/rollcall/archive_publish_set.test.js": "95206869451ac773",
         "test/unit/rollcall/db_rollcall_gates.test.js": "97eac3517509ca4d",
         "test/unit/rollcall/db_rollcalls_public_reads.test.js": "43e9126efc843a28",
@@ -21028,7 +21024,7 @@
     },
     "test:regression": {
       "fileCount": 1151,
-      "titleCount": 11710,
+      "titleCount": 11706,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21104,7 +21100,6 @@
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
-        "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
@@ -22105,6 +22100,7 @@
         "test/unit/rollback/rollback_slash_restore_order.test.js": "1ef3d061fbdfa9cd",
         "test/unit/rollback/rollback_sweep_stats.test.js": "baff1a5bd4d4dfa1",
         "test/unit/rollback/rollcall_unwind_schema_gap.test.js": "947a8652e2bab804",
+        "test/unit/rollcall/archive_publish_proof_row.test.js": "52f1691ce46c4e89",
         "test/unit/rollcall/archive_publish_set.test.js": "95206869451ac773",
         "test/unit/rollcall/db_rollcall_gates.test.js": "97eac3517509ca4d",
         "test/unit/rollcall/db_rollcalls_public_reads.test.js": "43e9126efc843a28",
@@ -22185,7 +22181,7 @@
     },
     "test:regression:fast": {
       "fileCount": 577,
-      "titleCount": 6163,
+      "titleCount": 6159,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22200,7 +22196,6 @@
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
-        "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_gate.test.js": "c262ebb8f7e7ced1",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v0.test.js": "a64681e4300f78cf",
         "test/unit/actions/anchor/anchor_checkpoint_seq_bind_v1.test.js": "4e9f9a967a5f9812",
@@ -22722,6 +22717,7 @@
         "test/unit/rewards/create_validator_reward_callsites.test.js": "42b3ffd148cc346b",
         "test/unit/rollback/bridge_transfers_reorg_delete.test.js": "bec27ec877526eee",
         "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
+        "test/unit/rollcall/archive_publish_proof_row.test.js": "52f1691ce46c4e89",
         "test/unit/rollcall/archive_publish_set.test.js": "95206869451ac773",
         "test/unit/rollcall/db_rollcall_gates.test.js": "97eac3517509ca4d",
         "test/unit/rollcall/db_rollcalls_public_reads.test.js": "43e9126efc843a28",
@@ -22768,7 +22764,7 @@
     },
     "test:regression:full": {
       "fileCount": 1151,
-      "titleCount": 11710,
+      "titleCount": 11706,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22844,7 +22840,6 @@
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js": "f41342eb8bc39b13",
-        "test/unit/actions/anchor/anchor.test/oracle_set_capability.test.js": "ca27ebf2979e9739",
         "test/unit/actions/anchor/anchor.test/preactivation_status.test.js": "88a89e22afc51ea6",
         "test/unit/actions/anchor/anchor.test/v0_bundle.test.js": "dc3c89cde38b6b44",
         "test/unit/actions/anchor/anchor.test/v3_below_fold_verdict.test.js": "dc19add1d12499c9",
@@ -23845,6 +23840,7 @@
         "test/unit/rollback/rollback_slash_restore_order.test.js": "1ef3d061fbdfa9cd",
         "test/unit/rollback/rollback_sweep_stats.test.js": "baff1a5bd4d4dfa1",
         "test/unit/rollback/rollcall_unwind_schema_gap.test.js": "947a8652e2bab804",
+        "test/unit/rollcall/archive_publish_proof_row.test.js": "52f1691ce46c4e89",
         "test/unit/rollcall/archive_publish_set.test.js": "95206869451ac773",
         "test/unit/rollcall/db_rollcall_gates.test.js": "97eac3517509ca4d",
         "test/unit/rollcall/db_rollcalls_public_reads.test.js": "43e9126efc843a28",
