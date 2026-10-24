@@ -353,6 +353,15 @@ class AnchorRecovery {
         let wrapperCapability = archivePublish.isArchivePublishSetActive(wrapperBlock, v1.network)
             ? 'archive_publish' : 'oracle_publish';
         let wrapperSet = setFor(wrapperCapability, wrapperBlock);
+        if(wrapperCapability === 'archive_publish' && wrapperSet.length === 0){
+            wrapperCapability = 'oracle_publish';
+            wrapperSet = setFor(wrapperCapability, wrapperBlock);
+            if(this.verifyStakes && this.btcDb &&
+               typeof this.btcDb.getLatestRolledRollcallAbsentSources === 'function'){
+                let absent = await this.btcDb.getLatestRolledRollcallAbsentSources(wrapperBlock);
+                wrapperSet = archivePublish.subtractAbsentSources(wrapperSet, absent);
+            }
+        }
         let wrapperCanonical = foldWrapper ? this.foldWrapperCanonical(v1, foldWrapper) : this.wrapperCanonical(v1);
         let wrapperSigs = this.parseSigs(v1.validator_signatures);
         if(!this.quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet, swq.isStakeWeightedQuorumActive(wrapperBlock, v1.network)))

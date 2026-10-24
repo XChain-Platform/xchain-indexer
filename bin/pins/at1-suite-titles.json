@@ -5053,11 +5053,6 @@
     "47b5ee89067e58ec": [
       "committed automatic migration key-dependent writes @regression @tier1 matches the reviewed file-to-table map"
     ],
-    "47b6eaec35bd109c": [
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 keeps a pre-gate wrapper on setFor oracle_publish",
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers a post-gate wrapper against setFor archive_publish",
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 verifyCompleteness refuses archive_publish when a present source was dropped"
-    ],
     "47d45f1d606adbef": [
       "controller completeness custody routing DEPOSIT accepts armed SOURCE and custody debits when the tick was guarded",
       "controller completeness custody routing DEPOSIT rejects an armed unguarded controlled SOURCE debit",
@@ -9270,6 +9265,13 @@
       "recovery checkpointCanonical: parity with the gated checkpoint family @regression @tier1 below the flag day, roots present: the rootless hub form, which the mirrored-row rebuild extends",
       "recovery checkpointCanonical: parity with the gated checkpoint family @regression @tier1 post-flag-day, null roots (a legacy archived row): stays on the rootless canonical",
       "recovery checkpointCanonical: parity with the gated checkpoint family @regression @tier1 post-flag-day, roots present: byte-identical to the mirrored-row rebuild the parity suite pins to the hub"
+    ],
+    "809d827dfcbfdd94": [
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 filters the legacy wrapper set through rolled absences in verified recovery",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 keeps a pre-gate wrapper on setFor oracle_publish",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers a post-gate wrapper against setFor archive_publish",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers an active wrapper whose archive predates archive_publish snapshots",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 verifyCompleteness refuses archive_publish when a present source was dropped"
     ],
     "80c8410771963ebc": [
       "native coin fee quote @regression @tier1 _priceFeeQuote() judges a proposed output: accepts at exactly min, rejects just below",
@@ -19130,7 +19132,7 @@
   "scripts": {
     "test": {
       "fileCount": 1518,
-      "titleCount": 14830,
+      "titleCount": 14832,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20475,7 +20477,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "809d827dfcbfdd94",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -21029,7 +21031,7 @@
     },
     "test:regression": {
       "fileCount": 1152,
-      "titleCount": 11708,
+      "titleCount": 11710,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22055,7 +22057,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "809d827dfcbfdd94",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -22187,7 +22189,7 @@
     },
     "test:regression:fast": {
       "fileCount": 578,
-      "titleCount": 6161,
+      "titleCount": 6163,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22709,7 +22711,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "809d827dfcbfdd94",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
@@ -22771,7 +22773,7 @@
     },
     "test:regression:full": {
       "fileCount": 1152,
-      "titleCount": 11708,
+      "titleCount": 11710,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23797,7 +23799,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "47b6eaec35bd109c",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "809d827dfcbfdd94",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
