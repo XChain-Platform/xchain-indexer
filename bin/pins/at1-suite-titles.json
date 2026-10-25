@@ -9507,6 +9507,11 @@
       "db.close (the bin/ harnesses could not exit) is idempotent, so a finally block that runs twice cannot fail the run",
       "db.close (the bin/ harnesses could not exit) releases a held transaction connection before ending the pool"
     ],
+    "803238dea6e943b4": [
+      "ANCHOR v3 replay watermark after a regtest chain reset @regression @tier3 judges a regtest fold against valid rows so an unverified high row cannot poison it",
+      "ANCHOR v3 replay watermark after a regtest chain reset @regression @tier3 keeps the mainnet fold on the all-status watermark",
+      "ANCHOR v3 replay watermark after a regtest chain reset @regression @tier3 keeps the testnet fold on the all-status watermark"
+    ],
     "8070a2ba28b917ea": [
       "ROLLCALL canonical builder against the frozen vectors @regression every vector signature verifies over the expected canonical and every invalid case does not",
       "ROLLCALL canonical builder against the frozen vectors @regression hashes the carried GATES string to the vector gates_hash",
@@ -19324,8 +19329,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1542,
-      "titleCount": 14977,
+      "fileCount": 1543,
+      "titleCount": 14980,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19397,6 +19402,7 @@
         "test/unit/actions/anchor/v3/anchor_v3_fold_rows.test.js": "78c42da2461e2b5b",
         "test/unit/actions/anchor/v3/anchor_v3_sections.test.js": "fae8eeba338baf48",
         "test/unit/actions/anchor/v3/anchor_v3_wrapper_canonical.test.js": "a60df62582b71aa1",
+        "test/unit/actions/anchor/v3/fold_seq_valid_only.test.js": "803238dea6e943b4",
         "test/unit/actions/anchor/v3/v3_archive_equiv_canonical.test.js": "31496e66c6424b9b",
         "test/unit/actions/anchor/v3/v3_archive_wrapper_section_fields.test.js": "7c9c4c6c82104040",
         "test/unit/actions/anchor_golden_vectors.test.js": "0249295e69b670ed",
@@ -21247,8 +21253,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1176,
-      "titleCount": 11855,
+      "fileCount": 1177,
+      "titleCount": 11858,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21344,6 +21350,7 @@
         "test/unit/actions/anchor/anchor_v0_regtest_abandoned_watermark.test.js": "4eb42f144694d194",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "d0251082e34791fc",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "11a6bfdbba48cf64",
+        "test/unit/actions/anchor/v3/fold_seq_valid_only.test.js": "803238dea6e943b4",
         "test/unit/actions/anchor_golden_vectors.test.js": "0249295e69b670ed",
         "test/unit/actions/attest.test.js": "47a7d48351777a8c",
         "test/unit/actions/attest.test/broadcast_fee_reimbursement.test.js": "3fa5267a27e03ef7",
@@ -23036,8 +23043,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1176,
-      "titleCount": 11855,
+      "fileCount": 1177,
+      "titleCount": 11858,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23133,6 +23140,7 @@
         "test/unit/actions/anchor/anchor_v0_regtest_abandoned_watermark.test.js": "4eb42f144694d194",
         "test/unit/actions/anchor/archive_stamp_journal_restore.test.js": "d0251082e34791fc",
         "test/unit/actions/anchor/reassemble_chunk_parent_status_gate.test.js": "11a6bfdbba48cf64",
+        "test/unit/actions/anchor/v3/fold_seq_valid_only.test.js": "803238dea6e943b4",
         "test/unit/actions/anchor_golden_vectors.test.js": "0249295e69b670ed",
         "test/unit/actions/attest.test.js": "47a7d48351777a8c",
         "test/unit/actions/attest.test/broadcast_fee_reimbursement.test.js": "3fa5267a27e03ef7",
