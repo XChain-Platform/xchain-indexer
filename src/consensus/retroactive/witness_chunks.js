@@ -20,6 +20,21 @@
 
 const HEX_DIGEST = /^[0-9a-f]{64}$/i;
 
+function windowRows(phase, windows) {
+    return windows.map(window => {
+        if(!Array.isArray(window) || window.length !== 3)
+            throw new TypeError('witness window must be a three-element array');
+
+        return {
+            target: phase.target,
+            replay_to: phase.replay_to,
+            from: window[0],
+            to: window[1],
+            d: window[2],
+        };
+    });
+}
+
 function chunkClosingAt(windows, height) {
     return windows.find(window => Number(window.to) === height) || null;
 }
@@ -44,4 +59,33 @@ function windowChanged(windows, observed) {
     return windows.some(window => !chunkMatches(window, observed[String(window.to)]));
 }
 
-module.exports = { chunkClosingAt, chunkMatches, windowChanged };
+function planWitnessChunk({ phase, replayTo, rows, height, digest }) {
+    if(phase !== 'witness') return null;
+
+    const chunk = chunkClosingAt(rows, height);
+    if(!chunk) return null;
+
+    if(!chunkMatches(chunk, digest)){
+        return {
+            writePhase: 'diverged',
+            stallReason: 'retroactive_replay_diverged',
+            exit: false,
+            chunk,
+        };
+    }
+
+    return {
+        writePhase: height === replayTo ? 'witnessed' : null,
+        stallReason: null,
+        exit: height === replayTo,
+        chunk,
+    };
+}
+
+module.exports = {
+    chunkClosingAt,
+    chunkMatches,
+    planWitnessChunk,
+    windowChanged,
+    windowRows,
+};
