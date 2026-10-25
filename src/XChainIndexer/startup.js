@@ -41,7 +41,14 @@ const { usesCapabilitySnapshot } = require('../db/shared.js');
 const { startupPinRefusal } = require('../consensus/capability_snapshot_proof/startup_pin_refusal.js');
 const { runBootReplay } = require('../consensus/retroactive/boot_replay.js');
 const { mirrorCoverageGap } = require('../consensus/retroactive/mirror_coverage.js');
+const { witnessReadOverlay } = require('../consensus/retroactive/witness_overlay.js');
 const { recordReplayMarker } = require('../db/events/retroactive_replay_marker.js');
+const {
+    recordReplayWitness,
+    recordReplayWitnessPhase,
+    readLatestReplayWitness,
+    readReplayWitnessBlocks,
+} = require('../db/events/retroactive_replay_witness.js');
 const { readRetroactiveGoRows, findMatchingGo } = require('../db/events/retroactive_go.js');
 
 const ATTEST_RESPONSE_MIRROR_KEY =
@@ -49,6 +56,7 @@ const ATTEST_RESPONSE_MIRROR_KEY =
 const CAPABILITY_SNAPSHOT_PROOF_KEY =
     'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION';
 const MIRRORED_CAPABILITIES = ['cross_chain', 'oracle_publish', 'price', 'attestation'];
+const BASE_GATE_READ_OVERLAY = changes.registry.getReadOverlay();
 
 function assertCapabilitySnapshotPin(){
     const network = this.config['NETWORK'];
@@ -106,6 +114,16 @@ module.exports = {
             readBoot: () => db.readConsensusGateBoot(),
             recordBoot: (map, tip) => db.recordConsensusGateBoot(map, tip),
             recordMarker: (marker) => recordReplayMarker(db, marker),
+            readWitness: () => readLatestReplayWitness(db),
+            readWitnessBlocks: (target, replayTo) =>
+                readReplayWitnessBlocks(db, target, replayTo),
+            recordWitness: (witness) => recordReplayWitness(db, witness),
+            recordWitnessPhase: (batch, phase) =>
+                recordReplayWitnessPhase(db, batch, phase),
+            useRecordedRules: (values) => changes.registry.setReadOverlay(
+                witnessReadOverlay(BASE_GATE_READ_OVERLAY, values,
+                    this.config['NETWORK'], this.config['COIN'])),
+            useCurrentRules: () => changes.registry.setReadOverlay(BASE_GATE_READ_OVERLAY),
             readMirrorGap: async (target) => {
                 const readings = await db.readRetroactiveMirrorCoverage(target, capabilityBlock(target));
                 return mirrorCoverageGap({

@@ -1,0 +1,159 @@
+/*********************************************************************
+ *
+ * Copyright (c) 2025-2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC - https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md.
+ *
+ **********************************************************************
+ *
+ * Boot recovery for the recorded-rules witness pass and final replay.
+ *
+ *********************************************************************/
+
+'use strict';
+
+const assert = require('assert');
+const { GateRegistry } = require('../../../../src/protocol_changes/core.js');
+const {
+    gateMapDigest,
+    runBootReplay,
+} = require('../../../../src/consensus/retroactive/boot_replay.js');
+const {
+    buildReplayMarker,
+    advanceReplayMarker,
+} = require('../../../../src/consensus/retroactive/replay_marker.js');
+const { witnessReadOverlay } = require('../../../../src/consensus/retroactive/witness_overlay.js');
+
+const KEY = 'movable_activation.MOVABLE_ACTIVATION';
+const R = { [KEY]: 120 };
+const C = { [KEY]: 95 };
+const BATCH = 'b'.repeat(64);
+
+function marker(state){
+    const pending = buildReplayMarker({
+        target: 95,
+        replayTo: 100,
+        rulesFrom: gateMapDigest(R),
+        rulesTo: gateMapDigest(C),
+    });
+    if(state === 'pending') return pending;
+    const replaying = advanceReplayMarker(pending, 'replaying');
+    return state === 'replaying' ? replaying : advanceReplayMarker(replaying, 'replayed');
+}
+
+function witness(phase){
+    return {
+        batch: BATCH,
+        gateHeights: R,
+        phase: {
+            phase,
+            target: 95,
+            replay_to: 100,
+            rules_from: gateMapDigest(R),
+            window_count: 1,
+            map_count: 1,
+        },
+    };
+}
+
+function harness(phase, state){
+    const calls = [];
+    let latest = witness(phase);
+    const deps = {
+        readBoot: async () => ({
+            recorded: { gateHeights: C, appliedTip: 94, scope: 'registry' },
+            replayMarker: marker(state),
+        }),
+        readWitness: async () => latest,
+        recordWitnessPhase: async (batch, next) => {
+            calls.push(['phase', next.phase]);
+            latest = Object.assign({}, latest, { phase: next });
+        },
+        useRecordedRules: values => calls.push(['rules', 'recorded', values]),
+        useCurrentRules: () => calls.push(['rules', 'current']),
+        recordBoot: async (map, tip) => calls.push(['boot', map, tip]),
+        recordMarker: async next => calls.push(['marker', next.state]),
+        rollback: async target => calls.push(['rollback', target]),
+        holdReplay: () => calls.push(['hold']),
+        holdNeedsGo: () => {},
+        refuse: message => { throw new Error(message); },
+    };
+    return { calls, deps };
+}
+
+async function run(h, tip){
+    return runBootReplay({
+        tip,
+        current: C,
+        capBlocks: 10,
+        movableGates: [KEY],
+    }, h.deps);
+}
+
+describe('retroactive replay witness boot phases @regression @tier1', function(){
+    it('composes the recorded map over the venue overlay and replaces COIN:network', function(){
+        const registry = new GateRegistry();
+        registry.addGate(KEY, 'height', {
+            'BTC:regtest': 95,
+            regtest: 44,
+            mainnet: 500,
+        });
+        registry.setReadOverlay((key, value) => Object.assign({}, value, { mainnet: 501 }));
+        const venue = registry.getReadOverlay();
+        registry.setReadOverlay(witnessReadOverlay(venue, R, 'regtest', 'BTC'));
+
+        assert.deepStrictEqual(registry.get(KEY), {
+            'BTC:regtest': 120,
+            regtest: 44,
+            mainnet: 501,
+        });
+        registry.setReadOverlay(venue);
+        assert.strictEqual(registry.get(KEY)['BTC:regtest'], 95);
+    });
+
+    for(const phase of ['witness', 'witnessed', 'final']){
+        it('a crash after the ' + phase + ' rollback resumes without rolling back twice', async function(){
+            const first = harness(phase, 'pending');
+            await run(first, 100);
+            assert.strictEqual(first.calls.filter(call => call[0] === 'rollback').length, 1);
+
+            const resumed = harness(phase, 'pending');
+            await run(resumed, 94);
+            assert.strictEqual(resumed.calls.filter(call => call[0] === 'rollback').length, 0);
+        });
+    }
+
+    it('a completed witness pass at or above H rolls back before advancing phases', async function(){
+        const h = harness('witness', 'replayed');
+        const result = await run(h, 100);
+        const rollbackAt = h.calls.findIndex(call => call[0] === 'rollback');
+        const witnessedAt = h.calls.findIndex(call => call[0] === 'phase' && call[1] === 'witnessed');
+        const finalAt = h.calls.findIndex(call => call[0] === 'phase' && call[1] === 'final');
+
+        assert.ok(rollbackAt >= 0 && rollbackAt < witnessedAt, JSON.stringify(h.calls));
+        assert.ok(witnessedAt < finalAt, JSON.stringify(h.calls));
+        assert.strictEqual(h.calls.filter(call => call[0] === 'rollback').length, 1);
+        assert.deepStrictEqual(h.calls.find(call => call[0] === 'boot'), ['boot', C, 94]);
+        assert.strictEqual(result.marker.state, 'replaying');
+    });
+
+    it('keeps the recorded overlay through the witness pass and restores current rules for final', async function(){
+        const active = harness('witness', 'replaying');
+        await run(active, 97);
+        assert.deepStrictEqual(active.calls.filter(call => call[0] === 'rules'), [
+            ['rules', 'recorded', R],
+        ]);
+        assert.strictEqual(active.calls.some(call => call[0] === 'rollback'), false);
+
+        const final = harness('final', 'replaying');
+        await run(final, 97);
+        assert.deepStrictEqual(final.calls.filter(call => call[0] === 'rules'), [
+            ['rules', 'current'],
+        ]);
+        assert.strictEqual(final.calls.some(call => call[0] === 'rollback'), false);
+    });
+});
