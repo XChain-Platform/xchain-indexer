@@ -13716,6 +13716,12 @@
       "Database mapping null-id skip guard @regression @tier1 createActionMapping still inserts a resolved address mapping (id non-null)",
       "Database mapping null-id skip guard @regression @tier1 createFileMapping skips when the tick ref resolves to null"
     ],
+    "b4e7fb949063c739": [
+      "replay witness events database fixture @regression @tier1 records and rejects unsupported statements",
+      "replay witness events database fixture @regression @tier1 returns an inclusive block chunk in ascending height order",
+      "replay witness events database fixture @regression @tier1 round-trips witness rows and a later phase through the real event code",
+      "replay witness events database fixture @regression @tier1 uses three reads for both two-window and eight-window witnesses"
+    ],
     "b503b05170e4a27a": [
       "STAKE v1 signing-key reuse flag day @regression @tier2 a key that ROLLCALL evicted is ADMITTED at the gate, exactly as an unstaked key is",
       "STAKE v1 signing-key reuse flag day @regression @tier2 a key that ROLLCALL evicted is REFUSED below the gate, exactly as an unstaked key is",
@@ -18430,6 +18436,14 @@
       "Utility @regression @tier1 resolveGuardGasCeiling() throws (no silent default) when the key is missing: would otherwise fork a misconfigured node",
       "Utility @regression @tier1 resolveGuardGasCeiling() throws on mistyped / non-positive / non-integer values"
     ],
+    "f1b5c8c0a210b001": [
+      "retroactive witness replay gates @regression @tier1 completes only after a fully decoded final phase at the tip",
+      "retroactive witness replay gates @regression @tier1 does not complete during non-final witness phases",
+      "retroactive witness replay gates @regression @tier1 holds blocks only for a diverged witness phase",
+      "retroactive witness replay gates @regression @tier1 keeps legacy completion behavior when no witness phase exists",
+      "retroactive witness replay gates @regression @tier1 rejects an invalid block-hold phase without changing the tip rule",
+      "retroactive witness replay gates @regression @tier1 rejects an invalid completion phase"
+    ],
     "f1cc18dc206de823": [
       "VM oracle preload binds on the signed admission height @regression @tier1 flag off: legacy before the activation, null on mainnet, BTC carved out BTC never takes the admission clause",
       "VM oracle preload binds on the signed admission height @regression @tier1 flag off: legacy before the activation, null on mainnet, BTC carved out an unusable block time emits no bound at all",
@@ -19436,8 +19450,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1556,
-      "titleCount": 15061,
+      "fileCount": 1558,
+      "titleCount": 15071,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20224,10 +20238,12 @@
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_digest_fields.test.js": "78d4f616384f06b3",
+        "test/unit/consensus/retroactive/witness/witness_events_db.test.js": "b4e7fb949063c739",
         "test/unit/consensus/retroactive/witness/witness_final_compare.test.js": "5d74921827d93084",
         "test/unit/consensus/retroactive/witness/witness_next_phase.test.js": "8ae296f230e539ea",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
         "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
+        "test/unit/consensus/retroactive/witness/witness_replay_complete.test.js": "f1b5c8c0a210b001",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rollcall_close/absence_streak.test.js": "98d8992dfae50cef",
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
@@ -21373,8 +21389,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1190,
-      "titleCount": 11939,
+      "fileCount": 1192,
+      "titleCount": 11949,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21995,10 +22011,12 @@
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_digest_fields.test.js": "78d4f616384f06b3",
+        "test/unit/consensus/retroactive/witness/witness_events_db.test.js": "b4e7fb949063c739",
         "test/unit/consensus/retroactive/witness/witness_final_compare.test.js": "5d74921827d93084",
         "test/unit/consensus/retroactive/witness/witness_next_phase.test.js": "8ae296f230e539ea",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
         "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
+        "test/unit/consensus/retroactive/witness/witness_replay_complete.test.js": "f1b5c8c0a210b001",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
@@ -22569,8 +22587,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 614,
-      "titleCount": 6383,
+      "fileCount": 616,
+      "titleCount": 6393,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22792,10 +22810,12 @@
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_digest_fields.test.js": "78d4f616384f06b3",
+        "test/unit/consensus/retroactive/witness/witness_events_db.test.js": "b4e7fb949063c739",
         "test/unit/consensus/retroactive/witness/witness_final_compare.test.js": "5d74921827d93084",
         "test/unit/consensus/retroactive/witness/witness_next_phase.test.js": "8ae296f230e539ea",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
         "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
+        "test/unit/consensus/retroactive/witness/witness_replay_complete.test.js": "f1b5c8c0a210b001",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
@@ -23189,8 +23209,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1190,
-      "titleCount": 11939,
+      "fileCount": 1192,
+      "titleCount": 11949,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23811,10 +23831,12 @@
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_digest_fields.test.js": "78d4f616384f06b3",
+        "test/unit/consensus/retroactive/witness/witness_events_db.test.js": "b4e7fb949063c739",
         "test/unit/consensus/retroactive/witness/witness_final_compare.test.js": "5d74921827d93084",
         "test/unit/consensus/retroactive/witness/witness_next_phase.test.js": "8ae296f230e539ea",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
         "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
+        "test/unit/consensus/retroactive/witness/witness_replay_complete.test.js": "f1b5c8c0a210b001",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
