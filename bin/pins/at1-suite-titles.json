@@ -18655,6 +18655,10 @@
       "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
       "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
+    "f6b259d36a8cb4f1": [
+      "checkpoint supersede suffix hub parity @regression @tier1 emits the exact suffix bytes for an uppercase rules_digest",
+      "checkpoint supersede suffix hub parity @regression @tier1 returns the same string or throws on both sides without mutating either input"
+    ],
     "f6c1cdcc5ab66603": [
       "policy membership references hashes a ref in place of the section count and members",
       "policy membership references keeps the legacy policy hash vectors byte-identical",
@@ -20085,6 +20089,7 @@
         "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
         "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
+        "test/unit/consensus/retroactive/checkpoint_supersede_hub_parity.test.js": "f6b259d36a8cb4f1",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
@@ -21840,6 +21845,7 @@
         "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
         "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
+        "test/unit/consensus/retroactive/checkpoint_supersede_hub_parity.test.js": "f6b259d36a8cb4f1",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
@@ -22623,6 +22629,7 @@
         "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
         "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
+        "test/unit/consensus/retroactive/checkpoint_supersede_hub_parity.test.js": "f6b259d36a8cb4f1",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
@@ -23625,6 +23632,7 @@
         "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
         "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
+        "test/unit/consensus/retroactive/checkpoint_supersede_hub_parity.test.js": "f6b259d36a8cb4f1",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
