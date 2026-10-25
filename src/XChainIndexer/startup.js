@@ -62,6 +62,10 @@ function gateMapDigest(gateHeights){
         .update(consensusRules.canonical(gateHeights)).digest('hex');
 }
 
+function setRetroactiveReplayStall(indexer, reason = 'retroactive_replay'){
+    indexer.stallReason = reason;
+}
+
 function throwRetroactiveRefusal(indexer, plan, moves, tip, canonicalMap){
     if(plan.reason === 'non_movable'){
         const refused = [...moves.refused].sort((a, b) => a.key.localeCompare(b.key));
@@ -72,7 +76,7 @@ function throwRetroactiveRefusal(indexer, plan, moves, tip, canonicalMap){
         return;
     }
     if(plan.reason === 'needs_go'){
-        indexer.stallReason = plan.stallReason;
+        setRetroactiveReplayStall(indexer, plan.stallReason);
         const rules = goRulesSha(canonicalMap, plan.target);
         indexer.util.throwError('retroactive replay refused: needs_go for target ' + plan.target +
             ' at distance ' + plan.distance + '. Authorize with: ' + goCommand(plan.target, rules));
@@ -113,7 +117,7 @@ module.exports = {
         this.replayMarker = boot ? boot.replayMarker : null;
 
         if(openMarker){
-            this.stallReason = 'retroactive_replay';
+            setRetroactiveReplayStall(this);
             if(openMarker.state === 'pending' &&
                appliedTip !== null && Number(appliedTip) > openMarker.target)
                 await this.rollback.rollback(openMarker.target);
@@ -203,9 +207,9 @@ module.exports = {
             replayMarker: marker,
         });
         this.replayMarker = marker;
-        this.stallReason = plan.stallReason;
+        setRetroactiveReplayStall(this, plan.stallReason);
         await this.rollback.rollback(plan.target);
-        this.stallReason = plan.stallReason;
+        setRetroactiveReplayStall(this, plan.stallReason);
         this.replayMarker = advanceReplayMarker(marker, 'replaying');
         await this.indexerDb.recordConsensusReplayMarker(this.replayMarker);
     },
