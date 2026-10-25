@@ -64,7 +64,7 @@ async function fixture(replayTo, changed){
     await recordReplayWitness(db, recorded);
     const witness = await readLatestReplayWitness(db);
     const deps = {
-        readWitnessBlocks: (from, to) => readReplayWitnessBlocks(db, from, to),
+        readWitnessBlocks: (from, to) => readReplayWitnessBlocks(db, db.decoderDb, from, to),
         recordWitnessPhase: (batch, phase) => recordReplayWitnessPhase(db, batch, phase),
     };
     return { db, deps, recorded, witness };

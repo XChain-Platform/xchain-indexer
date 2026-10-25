@@ -273,7 +273,10 @@ function startupIndexer(maps, { tip }){
                 return events.filter(row => row.code === code && row.witness_hash === batch && row.id < before)
                     .reverse().slice(0, limit);
             }
-            if(/FROM blocks b/.test(text)) return windowBlocks(params[0], params[1]);
+            // The indexer blocks table carries only this node's digests; the chain hash
+            // comes from the decoder double below.
+            if(/FROM blocks b/.test(text))
+                return windowBlocks(params[0], params[1]).map(row => ({ block_index: row.block_index }));
             throw new Error('unexpected query: ' + text);
         },
         getBlockIndex: async () => state.tip,
@@ -292,6 +295,11 @@ function startupIndexer(maps, { tip }){
         stallReason: null,
         stallClearsAt: 999,
         indexerDb: db,
+        decoderDb: {
+            getDecoderBlockHashRow: async (height) => windowBlocks(height, height)
+                .map(row => ({ block_hash: row.block_hash })),
+        },
+        decoderReadView: startup.decoderReadView,
         rollback: { rollback: async (target) => {
             rollbacks.push(target);
             state.tip = target - 1;

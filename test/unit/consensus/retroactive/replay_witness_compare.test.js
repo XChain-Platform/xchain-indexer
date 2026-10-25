@@ -61,9 +61,10 @@ function chainBlocks(){
 
 // Rewrites one committed block's ledger hash in place, as a replay that produced
 // different state at that height would leave it.
-function changeLedgerAt(blocks, height){
-    const row = blocks.find(b => b.block_index === height);
+function changeLedgerAt(f, height){
+    const row = f.blocks.find(b => b.block_index === height);
     row.ledger_hash = 'c'.repeat(64);
+    f.db.rewriteBlockDigests(height, { ledger_hash: row.ledger_hash });
 }
 
 // The durable rows a witness boot leaves (window, map and phase rows, then the
@@ -111,6 +112,7 @@ function loopIndexer(f, phase){
         replayMarker: f.marker,
         replayWitnessPhase: phase,
         replayWitness: null,
+        decoderDb: f.db.decoderDb,
         stallReason: 'retroactive_replay',
         stallClearsAt: 999,
         stallBlock: null,
@@ -146,7 +148,7 @@ describe('retroactive replay witness chunk compare in the block loop @regression
 
     it('a mismatched chunk stops block application with the marker still replaying and final false at or above target', async function(){
         const f = await fixture();
-        changeLedgerAt(f.blocks, 170);
+        changeLedgerAt(f, 170);
         const indexer = f.indexer('witness');
 
         await indexer.pollDecoderOnce(f.db, 50);
@@ -168,7 +170,7 @@ describe('retroactive replay witness chunk compare in the block loop @regression
 
     it('the diverged stall holds every later pass with stallClearsAt null and no barrier hold', async function(){
         const f = await fixture();
-        changeLedgerAt(f.blocks, 170);
+        changeLedgerAt(f, 170);
         const indexer = f.indexer('witness');
 
         await indexer.pollDecoderOnce(f.db, 50);
@@ -236,7 +238,7 @@ describe('retroactive replay witness exit and final compare @regression @tier1',
 
             // The next boot rolls back, writes 'final' and replays under the current rules.
             await recordReplayWitnessPhase(f.db, witnessed.batch, nextWitnessPhase(witnessed.phase, 'final'));
-            if(changed) changeLedgerAt(f.blocks, 170);
+            if(changed) changeLedgerAt(f, 170);
             f.applied.length = 0;
             const indexer = f.indexer('final');
 

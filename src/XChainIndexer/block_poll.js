@@ -165,7 +165,8 @@ module.exports = {
     // markers, so no dry-run transaction can adopt or discard them.
     replayWitnessDeps(indexerReorgView){
         return {
-            readWitnessBlocks: (from, to) => readReplayWitnessBlocks(indexerReorgView, from, to),
+            readWitnessBlocks: (from, to) =>
+                readReplayWitnessBlocks(indexerReorgView, this.decoderReadView(), from, to),
             recordWitnessPhase: (batch, phase) => recordReplayWitnessPhase(indexerReorgView, batch, phase),
         };
     },

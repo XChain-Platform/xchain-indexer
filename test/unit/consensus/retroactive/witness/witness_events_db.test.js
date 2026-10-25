@@ -80,7 +80,7 @@ describe('replay witness events database fixture @regression @tier1', function()
         const seeded = blocks(100, 611).reverse();
         const db = makeWitnessEventsDb({ blocks: seeded });
 
-        const rows = await readReplayWitnessBlocks(db, 164, 227);
+        const rows = await readReplayWitnessBlocks(db, db.decoderDb, 164, 227);
 
         assert.strictEqual(rows.length, 64);
         assert.strictEqual(rows[0].block_index, 164);

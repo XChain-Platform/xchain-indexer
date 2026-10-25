@@ -210,11 +210,14 @@ describe('retroactive replay witness record @regression @tier1', function(){
             async doQueryStrict(sql, values){
                 query = sql;
                 params = values;
-                return blocks(95, 100);
+                return blocks(95, 100).map(row => ({ block_index: row.block_index }));
             },
         };
+        const decoderDb = {
+            getDecoderBlockHashRow: async height => [{ block_hash: block(height).block_hash }],
+        };
 
-        assert.deepStrictEqual(await readReplayWitnessBlocks(db, 95, 100), blocks(95, 100));
+        assert.deepStrictEqual(await readReplayWitnessBlocks(db, decoderDb, 95, 100), blocks(95, 100));
         assert.match(query, /ORDER BY b\.block_index ASC, b\.id ASC/);
         assert.deepStrictEqual(params, [95, 100]);
     });

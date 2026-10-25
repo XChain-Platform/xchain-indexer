@@ -121,18 +121,21 @@ describe('retroactive replay witness digest fields @regression @tier1', function
     it('reads all digest fields with one deterministically ordered query', async function(){
         let query;
         let params;
-        const rows = [row(5)];
+        const { block_hash: chainHash, ...stored } = row(5);
         const db = {
             async doQueryStrict(sql, values){
                 query = sql;
                 params = values;
-                return rows;
+                return [stored];
             },
         };
+        // The chain hash is the decoder's; the indexer blocks table has no column for it.
+        const decoderDb = { getDecoderBlockHashRow: async () => [{ block_hash: chainHash }] };
 
-        assert.strictEqual(await readReplayWitnessBlocks(db, 5, 5), rows);
-        for(const field of ['block_hash', 'ledger_hash', 'actions_hash', 'contract_hash', 'state_root'])
+        assert.deepStrictEqual(await readReplayWitnessBlocks(db, decoderDb, 5, 5), [row(5)]);
+        for(const field of ['ledger_hash', 'actions_hash', 'contract_hash', 'state_root'])
             assert.match(query, new RegExp('\\b' + field + '\\b'));
+        assert.doesNotMatch(query, /block_hash/);
         assert.match(query, /LEFT JOIN index_transactions t1/);
         assert.match(query, /LEFT JOIN index_transactions t2/);
         assert.match(query, /LEFT JOIN index_transactions t3/);

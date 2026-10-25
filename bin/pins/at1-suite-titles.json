@@ -9040,6 +9040,11 @@
       "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) resolves both admission maps by coin while a sibling slot stays on the sentinel",
       "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) returns [] for a non-finite height"
     ],
+    "79871428fd841c73": [
+      "retroactive witness block hash source @regression @tier1 reads each block hash as getblockhashes reports it, over the real indexer and decoder DDL",
+      "retroactive witness block hash source @regression @tier1 records the witness and rolls back when startup boots across a movable gate",
+      "retroactive witness block hash source @regression @tier1 refuses a window whose block hash the decoder cannot supply"
+    ],
     "79b5d66e48d44704": [
       "destroys/sends leg ordinal is a SCHEMA guarantee @regression destroys declares leg_ordinal NOT NULL with a default, so every row has a position",
       "destroys/sends leg ordinal is a SCHEMA guarantee @regression destroys gains the same column and index on the migration path, anchored to the same position",
@@ -19471,8 +19476,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1561,
-      "titleCount": 15086,
+      "fileCount": 1562,
+      "titleCount": 15089,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20258,6 +20263,7 @@
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/retroactive_go_rewitness_args.test.js": "6327e00cd235d36f",
         "test/unit/consensus/retroactive/witness/rewitness_args.test.js": "61b1810eefbfa961",
+        "test/unit/consensus/retroactive/witness/witness_block_hash_source.test.js": "79871428fd841c73",
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_compare_step.test.js": "f286214bc24b5fbe",
@@ -21413,8 +21419,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1195,
-      "titleCount": 11964,
+      "fileCount": 1196,
+      "titleCount": 11967,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22034,6 +22040,7 @@
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/retroactive_go_rewitness_args.test.js": "6327e00cd235d36f",
         "test/unit/consensus/retroactive/witness/rewitness_args.test.js": "61b1810eefbfa961",
+        "test/unit/consensus/retroactive/witness/witness_block_hash_source.test.js": "79871428fd841c73",
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_compare_step.test.js": "f286214bc24b5fbe",
@@ -22614,8 +22621,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 619,
-      "titleCount": 6408,
+      "fileCount": 620,
+      "titleCount": 6411,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22836,6 +22843,7 @@
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/retroactive_go_rewitness_args.test.js": "6327e00cd235d36f",
         "test/unit/consensus/retroactive/witness/rewitness_args.test.js": "61b1810eefbfa961",
+        "test/unit/consensus/retroactive/witness/witness_block_hash_source.test.js": "79871428fd841c73",
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_compare_step.test.js": "f286214bc24b5fbe",
@@ -23239,8 +23247,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1195,
-      "titleCount": 11964,
+      "fileCount": 1196,
+      "titleCount": 11967,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23860,6 +23868,7 @@
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/retroactive_go_rewitness_args.test.js": "6327e00cd235d36f",
         "test/unit/consensus/retroactive/witness/rewitness_args.test.js": "61b1810eefbfa961",
+        "test/unit/consensus/retroactive/witness/witness_block_hash_source.test.js": "79871428fd841c73",
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_compare_step.test.js": "f286214bc24b5fbe",

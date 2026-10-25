@@ -76,11 +76,16 @@ async function recordReplayWitnessPhase(db, batch, phase){
     );
 }
 
-async function readReplayWitnessBlocks(db, target, replayTo){
+// The indexer blocks table holds only this node's own digests; the chain block hash
+// lives in the decoder database. Each hash is read with the same decoder statement the
+// getblockhashes RPC reports (getDecoderBlockHashRow), uncased, so a witness row carries
+// the hash a peer would see for that height. decoderDb is a committed-only view.
+async function readReplayWitnessBlocks(db, decoderDb, target, replayTo){
+    if(!decoderDb || typeof decoderDb.getDecoderBlockHashRow !== 'function')
+        throw new TypeError('replay witness block read needs the decoder database');
     const rows = await db.doQueryStrict(
-        'SELECT b.block_index, t.hash AS block_hash, t1.hash AS ledger_hash, ' +
+        'SELECT b.block_index, t1.hash AS ledger_hash, ' +
         't2.hash AS actions_hash, t3.hash AS contract_hash, str.state_root FROM blocks b ' +
-        'JOIN index_transactions t ON t.id = b.block_hash_id ' +
         'LEFT JOIN index_transactions t1 ON (t1.id = b.ledger_hash_id) ' +
         'LEFT JOIN index_transactions t2 ON (t2.id = b.actions_hash_id) ' +
         'LEFT JOIN index_transactions t3 ON (t3.id = b.contract_hash_id) ' +
@@ -88,7 +93,18 @@ async function readReplayWitnessBlocks(db, target, replayTo){
         'WHERE b.block_index BETWEEN ? AND ? ORDER BY b.block_index ASC, b.id ASC',
         [target, replayTo]
     );
-    return rows || [];
+    const blocks = [];
+    for(const row of rows || []){
+        const hashRows = await decoderDb.getDecoderBlockHashRow(row.block_index);
+        // getDecoderBlockHashRow answers [] on a decoder fault as well as on a missing
+        // row; either way the window cannot be witnessed, so say which height failed
+        // instead of letting the digest step report a malformed hash.
+        if(!hashRows || hashRows.length === 0 || !hashRows[0].block_hash)
+            throw new Error('replay witness block hash not readable from the decoder at block ' +
+                row.block_index);
+        blocks.push(Object.assign({}, row, { block_hash: String(hashRows[0].block_hash) }));
+    }
+    return blocks;
 }
 
 async function readLatestReplayWitness(db){
