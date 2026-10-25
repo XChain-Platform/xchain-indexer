@@ -63,6 +63,14 @@ function assertCapabilitySnapshotPin(){
 
 module.exports = {
 
+    // Compare this build's resolved height gates before startup can become ready.
+    async recordConsensusGateBoot(){
+        const appliedTip = await this.indexerDb.getBlockIndex('indexer', 'last');
+        const gateHeights = this.indexerDb.consensusHeightGateMap(
+            this.config['NETWORK'], this.config['COIN']);
+        await this.indexerDb.recordConsensusGateBoot(gateHeights, appliedTip);
+    },
+
     // The hub, DOGE-anchor and DOGE roll-call clients. Created before the hub config
     // overlay, which fetches through the hub client.
     createHubClients(){
@@ -290,6 +298,9 @@ module.exports = {
             // gated for an explicit operator run (`node src/db/migration/migrate.js`). Recorded in the
             // schema_migrations ledger, so this is a no-op once applied.
             const migrationResult = await this.indexerDb.runMigrations();
+            if(this.indexerDb instanceof database ||
+               typeof this.indexerDb.recordConsensusGateBoot === 'function')
+                await this.recordConsensusGateBoot();
             if(!migrationResult.lockSkipped)
                 this.schemaReady = true;
 

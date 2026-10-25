@@ -111,6 +111,29 @@ describe('AnchorRecovery archive_publish wrapper set @regression @tier1', functi
         assert.strictEqual(gate.returned(true), true);
     });
 
+    it('filters legacy wrapper fallback whenever rolled absences are available', async function(){
+        sinon.stub(archivePublish, 'isArchivePublishSetActive').returns(true);
+        let oracleKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        let crossKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+        let batch = buildBatch(0, [rawMatch('legacy-available-filter')],
+            oracleKeys, crossKeys);
+        let absenceReads = [];
+        let btcDb = {
+            async getLatestRolledRollcallAbsentSources(block){
+                absenceReads.push(block);
+                return oracleKeys.slice(0, 3)
+                    .map(key => 'src_' + key.pubkey.slice(0, 16));
+            }
+        };
+
+        await assert.rejects(
+            () => new AnchorRecovery(memDb([], []), {
+                ...quiet, btcDb
+            }).verifyBatch(batch.v1),
+            error => error.message.includes('wrapper signatures fail quorum'));
+        assert.deepStrictEqual(absenceReads, [100]);
+    });
+
     it('keeps a pre-gate wrapper on setFor oracle_publish', async function(){
         sinon.stub(archivePublish, 'isArchivePublishSetActive').returns(false);
         let oracleKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
