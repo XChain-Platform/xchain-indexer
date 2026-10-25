@@ -19,7 +19,10 @@
 
 'use strict';
 
-const { parseGoArgs } = require('../src/consensus/retroactive/go_binding.js');
+const {
+    parseGoArgs,
+    parseRewitnessArgs,
+} = require('../src/consensus/retroactive/go_binding.js');
 const { recordRetroactiveGo } = require('../src/db/events/retroactive_go.js');
 const {
     readLatestReplayWitness,
@@ -50,7 +53,8 @@ function openIndexerDb(){
 }
 
 async function main(argv, deps = {}){
-    const rewitness = Array.isArray(argv) && argv.length === 1 && argv[0] === '--rewitness';
+    const rewitness = Array.isArray(argv) && argv.includes('--rewitness');
+    const rewitnessRequest = rewitness && argv.length > 1 ? parseRewitnessArgs(argv) : null;
     const request = rewitness ? null : parseGoArgs(argv);
     const ownsDb = !deps.db;
     const db = deps.db || openIndexerDb();
@@ -59,6 +63,9 @@ async function main(argv, deps = {}){
         if(rewitness){
             const witness = await readLatestReplayWitness(db);
             if(!witness) throw new Error('no replay witness to restart');
+            if(rewitnessRequest && rewitnessRequest.target !== witness.phase.target)
+                throw new Error('rewitness target ' + rewitnessRequest.target +
+                    ' does not match open replay target ' + witness.phase.target);
             const phase = {
                 phase: 'witness',
                 target: witness.phase.target,
