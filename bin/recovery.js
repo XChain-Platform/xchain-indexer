@@ -75,6 +75,8 @@ const ar      = require('../src/consensus/gates/anchor_reward_gate.js');
 const rca     = require('../src/consensus/gates/rollcall_gate.js');
 const archivePublish = require('../src/consensus/archive_publish_set.js');
 const gateRegistry = require('../src/consensus/gate_registry');
+const { supersedeSuffix } = require('../src/consensus/retroactive/checkpoint_supersede.js');
+const { assertNotSuperseded } = require('../src/consensus/retroactive/checkpoint_trust_root.js');
 // The royalty flag day is a registry row read by literal key (W5).
 const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
 const srb     = require('../src/consensus/snapshot_reorg_buffer.js');
@@ -94,6 +96,7 @@ const checkpointPrice = require('./recovery/checkpoint_price.js');
 const listShare = require('../src/consensus/list_share_settle.js');
 const lifecycle = require('../src/hub/table_lifecycle.js');
 const CHECKPOINT_COMMITMENT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
+const CHECKPOINT_SUPERSEDE_KEY = 'checkpoint_supersede_activation.CHECKPOINT_SUPERSEDE_ACTIVATION';
 
 const ANCHOR_RECOVERY_TABLES = lifecycle.anchorRecoveryTables();
 const RECOVERY_TABLE_FIELDS = Object.freeze({
@@ -408,6 +411,8 @@ class AnchorRecovery {
             quorumVerified: (canonical, sigs, set, weighted) =>
                 this.quorumVerified(canonical, sigs, set, weighted)
         });
+        let checkpoints = archive.state_checkpoints || [];
+        for(let row of checkpoints) assertNotSuperseded(row, checkpoints);
         checkpointPrice.verifyArchive(archive, {
             network: v1.network,
             setFor,
@@ -1241,7 +1246,7 @@ class AnchorRecovery {
                 String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
     }
 
-    // A copy of the hub's gated canonicalCheckpoint (root suffix on CHECKPOINT_COMMITMENT, then
+    // A copy of the hub's gated canonicalCheckpoint (commitment roots, supersede suffix, then
     // EQUIV); test/unit/recovery/recovery_checkpoint_canonical_parity.test.js pins it.
     checkpointCanonical(cp){
         let raw = this.rawCheckpointCanonical(cp);
@@ -1252,6 +1257,12 @@ class AnchorRecovery {
             raw += '|' + [String(cp.state_root).toLowerCase(), String(cp.state_root_version),
                           String(cp.block_merkle_root).toLowerCase(),
                           String(cp.block_merkle_version)].join('|');
+        let supersedeActive = gateRegistry.activeAt(CHECKPOINT_SUPERSEDE_KEY,
+            cp.network, 'BTC', cp.snapshot_block, null);
+        let hasSupersedeFields = cp.supersedes_from != null || cp.rules_digest != null;
+        if(!supersedeActive && hasSupersedeFields)
+            throw new Error('checkpoint supersede fields are not active below the gate');
+        if(supersedeActive) raw += supersedeSuffix(cp);
         if(eq.isEquivHeaderActive(cp.snapshot_block, cp.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
                 cp.chain + '|' + cp.network + '|' + cp.block_index + '|' + cp.checkpoint_seq, 0, raw);

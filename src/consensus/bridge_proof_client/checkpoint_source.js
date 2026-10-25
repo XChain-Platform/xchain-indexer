@@ -29,6 +29,8 @@ const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const { anchorMatched } = require('../bridge_checkpoint_check/anchor_match.js');
 const gateRegistry = require('../gate_registry');
+const { supersedeSuffix } = require('../retroactive/checkpoint_supersede.js');
+const { assertNotSuperseded } = require('../retroactive/checkpoint_trust_root.js');
 
 // The ANCHOR wire version that carries a checkpoint SECTION in its own right. Version 1 is the
 // archive head, which carries its WRAPPER checkpoint's identity rather than being one, and
@@ -46,6 +48,7 @@ const ANCHOR_SECTION_VERSION = 0;
 // The lists are local to this pick and frozen: ANCHOR_SECTION_VERSION stays 0 for its
 // importers, and the getanchoraction read keeps its own CHECKPOINT_SECTION_VERSIONS.
 const V3_SECTION_KEY = 'bridge_checkpoint_v3_section_activation.BRIDGE_CHECKPOINT_V3_SECTION_ACTIVATION';
+const CHECKPOINT_SUPERSEDE_KEY = 'checkpoint_supersede_activation.CHECKPOINT_SUPERSEDE_ACTIVATION';
 const SECTION_VERSIONS_BELOW = Object.freeze([ANCHOR_SECTION_VERSION]);
 const SECTION_VERSIONS_FROM_V3 = Object.freeze([ANCHOR_SECTION_VERSION, 3]);
 
@@ -77,7 +80,8 @@ function height(v){
  * what selectCheckpoint hands the escrow check. Below the flag day the hub signs the rootless
  * form, so a gated rebuild would pass those signatures and adopt roots no quorum signed; this
  * form fails them instead, and the pick moves to a later root-committing checkpoint. At and
- * above the flag day every root-bearing row rebuilds the gated bytes exactly.
+ * above the flag day every root-bearing row rebuilds the gated bytes exactly. The gated
+ * supersede suffix follows those roots and remains inside the equivocation envelope.
  *
  * @param {Object} cp - a state_checkpoints row
  * @returns {string}
@@ -88,6 +92,12 @@ function checkpointCanonical(cp){
                 String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
     base += '|' + [String(cp.state_root || '').toLowerCase(), String(cp.state_root_version),
                    String(cp.block_merkle_root || '').toLowerCase(), String(cp.block_merkle_version)].join('|');
+    const supersedeActive = gateRegistry.activeAt(CHECKPOINT_SUPERSEDE_KEY,
+        cp.network, 'BTC', cp.snapshot_block, null);
+    const hasSupersedeFields = cp.supersedes_from != null || cp.rules_digest != null;
+    if(!supersedeActive && hasSupersedeFields)
+        throw new Error('checkpoint supersede fields are not active below the gate');
+    if(supersedeActive) base += supersedeSuffix(cp);
     const roundId = cp.chain + '|' + cp.network + '|' + cp.block_index + '|' + cp.checkpoint_seq;
     if(eq.isEquivHeaderActive(cp.snapshot_block, cp.network))
         return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
@@ -143,6 +153,16 @@ async function verifyCheckpointQuorum(cp, indexerDb){
         : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
 }
 
+async function assertCheckpointNotSuperseded(cp, heldRows, indexerDb){
+    let rows = heldRows;
+    if(typeof indexerDb.getMirroredCheckpointSuperseders === 'function'){
+        const superseders = await indexerDb.getMirroredCheckpointSuperseders(
+            cp.chain, cp.network, cp.checkpoint_seq, cp.block_index);
+        rows = heldRows.concat(superseders || []);
+    }
+    assertNotSuperseded(cp, rows);
+}
+
 /**
  * Select the checkpoint this transfer is proven against, deterministically.
  *
@@ -181,7 +201,7 @@ async function verifyCheckpointQuorum(cp, indexerDb){
  * @returns {Promise<Object|null>} the checkpoint envelope member
  *          { chain, network, block_index, checkpoint_seq, snapshot_block, state_root,
  *            state_root_version, source }, or null when none is held locally (STALL)
- * @throws {Error} any source read fault, unchanged, so the block is retried rather than decided
+ * @throws {Error} a source read fault or a superseded mirrored trust root
  */
 async function selectCheckpoint(row, ctx){
     const chain     = String(row.src_chain || '');
@@ -219,6 +239,7 @@ async function selectCheckpoint(row, ctx){
         ? await db.getMirroredStateCheckpointCandidatesAfterAnchor(chain, network, atOrAfter)
         : await db.getMirroredStateCheckpointCandidates(chain, network, atOrAfter);
     for(const m of mirrored){
+        await assertCheckpointNotSuperseded(m, mirrored, db);
         if(!await verifyCheckpointQuorum(m, db)) continue;
         candidates.push({ chain: m.chain, network: m.network, block_index: height(m.block_index),
                           checkpoint_seq: height(m.checkpoint_seq), snapshot_block: height(m.snapshot_block),
@@ -239,4 +260,5 @@ async function selectCheckpoint(row, ctx){
     return usable[0];
 }
 
-module.exports = { ANCHOR_SECTION_VERSION, V3_SECTION_KEY, height, checkpointCanonical, verifyCheckpointQuorum, selectCheckpoint };
+module.exports = { ANCHOR_SECTION_VERSION, V3_SECTION_KEY, CHECKPOINT_SUPERSEDE_KEY,
+                   height, checkpointCanonical, verifyCheckpointQuorum, selectCheckpoint };
