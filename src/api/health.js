@@ -30,6 +30,7 @@ const crypto = require('crypto');
 const { computeArmedMapFingerprintV2 } = require('../consensus/armed_map/fingerprint');
 const { canonical, computeConsensusRulesDigest } = require('../consensus_rules_digest');
 const { rulesStatusBody } = require('../consensus/retroactive/replay_status');
+const { statusRulesDigest } = require('../consensus/retroactive/witness_status');
 const { barrierHoldMs, barrierCeilingExceeded } = require('../XChainIndexer');
 // Field groups assembled in the parts under ./health/; each is placed at the
 // position its fields always held, so the payload keeps its key order.
@@ -73,16 +74,21 @@ function inFlightBlockIndex(db){
 // Public rules identity for this chain. The boot record and replay marker hash the
 // chain-resolved registry map, so derive the status digest from that same map.
 // Minimal API test doubles predate the map reader; their fallback retains the existing
-// all-rules digest, while a marker still carries its exact target-map digest.
+// all-rules digest. The witness pass reports its target digest while its read overlay
+// temporarily presents the recorded map.
 function rulesStatus(indexer){
     const marker = indexer && indexer.replayMarker ? indexer.replayMarker : null;
-    let digest = marker ? marker.rules_to : computeConsensusRulesDigest().digest;
+    const witness = indexer && indexer.replayWitness ? indexer.replayWitness : null;
+    const phase = witness && witness.phase && typeof witness.phase === 'object'
+        ? witness.phase : witness;
+    let digest = computeConsensusRulesDigest().digest;
     const db = indexer && indexer.indexerDb;
     if(db && typeof db.consensusHeightGateMap === 'function' && indexer.config){
         const map = db.consensusHeightGateMap(indexer.config['NETWORK'], indexer.config['COIN']);
         digest = crypto.createHash('sha256').update(canonical(map)).digest('hex');
     }
-    return rulesStatusBody(digest, marker);
+    digest = statusRulesDigest(digest, marker, phase && phase.phase);
+    return rulesStatusBody(digest, marker, phase);
 }
 
 async function buildHealthResponse({ indexer, indexerRunning, indexerError, lastIndexedBlock, inFlightBlock, now, reorgStats }){

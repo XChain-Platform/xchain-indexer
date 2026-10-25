@@ -21,6 +21,10 @@
 
 const { parseGoArgs } = require('../src/consensus/retroactive/go_binding.js');
 const { recordRetroactiveGo } = require('../src/db/events/retroactive_go.js');
+const {
+    readLatestReplayWitness,
+    recordReplayWitnessPhase,
+} = require('../src/db/events/retroactive_replay_witness.js');
 
 async function recordGo(argv, db){
     const request = parseGoArgs(argv);
@@ -46,11 +50,27 @@ function openIndexerDb(){
 }
 
 async function main(argv, deps = {}){
-    const request = parseGoArgs(argv);
+    const rewitness = Array.isArray(argv) && argv.length === 1 && argv[0] === '--rewitness';
+    const request = rewitness ? null : parseGoArgs(argv);
     const ownsDb = !deps.db;
     const db = deps.db || openIndexerDb();
     const write = deps.write || (text => process.stdout.write(text));
     try {
+        if(rewitness){
+            const witness = await readLatestReplayWitness(db);
+            if(!witness) throw new Error('no replay witness to restart');
+            const phase = {
+                phase: 'witness',
+                target: witness.phase.target,
+                replay_to: witness.phase.replay_to,
+                rules_from: witness.phase.rules_from,
+                window_count: witness.phase.window_count,
+                map_count: witness.phase.map_count,
+            };
+            await recordReplayWitnessPhase(db, witness.batch, phase);
+            write('retroactive-go: recorded rewitness for target ' + phase.target + '\n');
+            return phase;
+        }
         await recordRetroactiveGo(db, request);
         write('retroactive-go: recorded target ' + request.target +
             ' with rules ' + request.rules + '\n');
