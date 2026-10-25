@@ -2127,16 +2127,6 @@
       "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 leaves no sub-command's snapshot behind to answer for the batch",
       "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 lists the ORDER as valid, not as its match's pending_coinpay"
     ],
-    "1ce3597834bf96b5": [
-      "retroactive witness chunk comparisons @regression @tier1 compares valid digests case-insensitively",
-      "retroactive witness chunk comparisons @regression @tier1 finds the chunk ending at a numeric height",
-      "retroactive witness chunk comparisons @regression @tier1 rejects digests outside the exact hexadecimal format",
-      "retroactive witness chunk comparisons @regression @tier1 rejects empty windows and absent observed digests",
-      "retroactive witness chunk comparisons @regression @tier1 rejects malformed observed digests",
-      "retroactive witness chunk comparisons @regression @tier1 reports a changed window when any observed digest differs",
-      "retroactive witness chunk comparisons @regression @tier1 reports unchanged windows when every observed digest matches",
-      "retroactive witness chunk comparisons @regression @tier1 returns null when no chunk ends at the height"
-    ],
     "1d393910442d8d2a": [
       "Airdrop @regression @tier2 balance and authorization checks SOURCE sleeping \u2192 invalid",
       "Airdrop @regression @tier2 balance and authorization checks TICK sleeping \u2192 invalid",
@@ -3472,11 +3462,6 @@
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 DESTROY creates a debit record and decrements token supply",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 DESTROY with insufficient balance is marked invalid",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 sanity check passes: supply == credits - debits == balances after ISSUE+MINT+SEND"
-    ],
-    "2f30c7049940e42f": [
-      "retroactive replay witness status @regression @tier1 --rewitness appends a fresh witness phase for the latest recorded batch",
-      "retroactive replay witness status @regression @tier1 pins rules.digest to rules_to only while the witness overlay is active",
-      "retroactive replay witness status @regression @tier1 reports running, passed, diverged, and null for a pre-feature marker"
     ],
     "2f45ed223b43de9e": [
       "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND a single 0.5 leg of a 0-decimals token is rejected (the rule that was being laundered)",
@@ -6547,6 +6532,13 @@
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 binding rule (utility.selectApplicableAttestationResponses) never binds a row whose first satisfying block is past the deadline (AT3, first half)",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 binding rule (utility.selectApplicableAttestationResponses) skips a row whose local request is absent, already terminal, or legacy-era"
     ],
+    "578918e0e180755d": [
+      "recovery checkpoint supersede archive columns @regression @tier1 has the recovery memory database preserve every checkpoint insert column",
+      "recovery checkpoint supersede archive columns @regression @tier1 has verifyArchive accept absent, explicit-null, and valid supersede fields",
+      "recovery checkpoint supersede archive columns @regression @tier1 has verifyArchive reject malformed supersede field pairs",
+      "recovery checkpoint supersede archive columns @regression @tier1 has writeArchive insert both supersede columns in column order and null absent fields",
+      "recovery checkpoint supersede archive columns @regression @tier1 has writeArchive refuse a rules_digest collision and skip an identical stored row"
+    ],
     "57b7aef949668b52": [
       "Controller-bound token: Phase-1 single-column model retired @regression the permanent-lock (LOCK_CONTROLLER) is gone everywhere LOCK_CONTROLLER is not a config LOCK field",
       "Controller-bound token: Phase-1 single-column model retired @regression the permanent-lock (LOCK_CONTROLLER) is gone everywhere LOCK_CONTROLLER is not in the Issue handler LOCK field list",
@@ -7315,13 +7307,6 @@
       "legacy_reward_pins rejects malformed pin lists",
       "legacy_reward_pins supports the one-shot helper and an empty list",
       "legacy_reward_pins treats a missing default file as no pins"
-    ],
-    "61b1810eefbfa961": [
-      "retroactive rewitness arguments @regression @tier1 accepts boundary target values",
-      "retroactive rewitness arguments @regression @tier1 leaves rewitness arguments invalid for the go parser",
-      "retroactive rewitness arguments @regression @tier1 parses --rewitness and --target in either order",
-      "retroactive rewitness arguments @regression @tier1 prints the exact retroactive-go rewitness command",
-      "retroactive rewitness arguments @regression @tier1 refuses missing, repeated, unknown and malformed flags"
     ],
     "61bff9365b5d2df3": [
       "stateCommitment: incremental stakes subtree updates @regression updates a changed leaf, removes a key, and rebuilds after a gap"
@@ -14017,12 +14002,6 @@
       "HubDbSync applyRetraction receive-side guards @regression @tier1 other-chain retractions skip the own-generation check and apply every fence, lower ones included",
       "HubDbSync applyRetraction receive-side guards @regression @tier1 without the hook (explorer vendored mirror) other-chain legacy behavior is unchanged"
     ],
-    "bba785d1cb813925": [
-      "recovery checkpoint supersede archive columns @regression @tier1 has verifyArchive accept absent, explicit-null, and valid supersede fields",
-      "recovery checkpoint supersede archive columns @regression @tier1 has verifyArchive reject malformed supersede field pairs",
-      "recovery checkpoint supersede archive columns @regression @tier1 has writeArchive insert both supersede columns in column order and null absent fields",
-      "recovery checkpoint supersede archive columns @regression @tier1 has writeArchive refuse a rules_digest collision and skip an identical stored row"
-    ],
     "bbc1475cf6fea867": [
       "anchor-action-query: CHECKPOINT_VERSIONS includes folded v3 checkpoints while excluding v2 continuations",
       "anchor-action-query: buildAnchorActionResponse() carries an invalid status through so the hub can reject it (never silently trusts)",
@@ -16201,15 +16180,6 @@
       "Airdrop @regression @tier2 recipient allow/block list membership duplicate recipients are credited once, in first-seen order",
       "Airdrop @regression @tier2 recipient allow/block list membership each list is fetched once for the whole recipient loop"
     ],
-    "d4aeaca3cb118868": [
-      "retroactive witness phase plan @regression @tier1 does no work for final or absent phases",
-      "retroactive witness phase plan @regression @tier1 finalizes a witnessed marker and rolls back only at or beyond the target",
-      "retroactive witness phase plan @regression @tier1 rejects targets that are not non-negative safe integers",
-      "retroactive witness phase plan @regression @tier1 rejects values outside the witness phase vocabulary",
-      "retroactive witness phase plan @regression @tier1 restarts witness work with an overlay and rollback at the target",
-      "retroactive witness phase plan @regression @tier1 stalls a diverged marker without mutating replay state",
-      "retroactive witness phase plan @regression @tier1 starts witness work without rollback before the target or without a tip"
-    ],
     "d4b583cc13c0b3d4": [
       "hub DB sync explorer twin guard checks only pushed canonical changes and names both drifted twin files",
       "hub DB sync explorer twin guard is an indexer CI drift tier with the explorer checkout required",
@@ -18199,15 +18169,6 @@
       "state_root reserved sub-trees: gateSubRoots @regression a bare-network key arms nothing (coin-qualified keys are the only lookup)",
       "state_root reserved sub-trees: gateSubRoots @regression an armed escrow leaf flips the derived version to 2 (leaf-set changes are never version-invisible)"
     ],
-    "ee5aadeee40aed75": [
-      "retroactive replay witness record @regression @tier1 chunks target through replay_to into deterministic 64-block windows",
-      "retroactive replay witness record @regression @tier1 keeps every persisted row within events.data and writes the phase fence last",
-      "retroactive replay witness record @regression @tier1 reads old-chain blocks in deterministic height and row order",
-      "retroactive replay witness record @regression @tier1 reads the latest complete batch and verifies its rebuilt map",
-      "retroactive replay witness record @regression @tier1 rebuilds the recorded map to rules_from and refuses a changed map",
-      "retroactive replay witness record @regression @tier1 refuses missing or non-contiguous block evidence",
-      "retroactive replay witness record @regression @tier1 writes every window, map, and phase row before the boot rollback"
-    ],
     "ee5b23581cb00eff": [
       "LIST share activation @regression @tier2 accepts the owner SHARE and snapshots every current member at the SHARE index",
       "LIST share activation @regression @tier2 declares format 2 behind the LIST share gate",
@@ -19385,8 +19346,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1550,
-      "titleCount": 15022,
+      "fileCount": 1545,
+      "titleCount": 14993,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20164,14 +20125,9 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
-        "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
-        "test/unit/consensus/retroactive/witness/rewitness_args.test.js": "61b1810eefbfa961",
-        "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
-        "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rollcall_close/absence_streak.test.js": "98d8992dfae50cef",
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
@@ -20771,7 +20727,7 @@
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
         "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
         "test/unit/recovery/recovery.test/checkpoint_price_unsigned_columns.test.js": "047d84192e26ff62",
-        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "bba785d1cb813925",
+        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "578918e0e180755d",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
@@ -21316,8 +21272,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1184,
-      "titleCount": 11900,
+      "fileCount": 1179,
+      "titleCount": 11871,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21929,14 +21885,9 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
-        "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
-        "test/unit/consensus/retroactive/witness/rewitness_args.test.js": "61b1810eefbfa961",
-        "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
-        "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
@@ -22382,7 +22333,7 @@
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
         "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
-        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "bba785d1cb813925",
+        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "578918e0e180755d",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
@@ -22506,8 +22457,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 608,
-      "titleCount": 6344,
+      "fileCount": 603,
+      "titleCount": 6315,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22720,14 +22671,9 @@
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
-        "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
-        "test/unit/consensus/retroactive/witness/rewitness_args.test.js": "61b1810eefbfa961",
-        "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
-        "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
@@ -23060,7 +23006,7 @@
         "test/unit/recovery/archive_publish_wrapper_set.test.js": "cc5f62f23b7023c8",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
-        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "bba785d1cb813925",
+        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "578918e0e180755d",
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
         "test/unit/recovery/recovery_driver_tieorder.test.js": "afe91c9de44e3786",
         "test/unit/recovery/recovery_reward_derive_block.test.js": "bd0736b33dc88530",
@@ -23120,8 +23066,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1184,
-      "titleCount": 11900,
+      "fileCount": 1179,
+      "titleCount": 11871,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23733,14 +23679,9 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
-        "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
-        "test/unit/consensus/retroactive/witness/rewitness_args.test.js": "61b1810eefbfa961",
-        "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
-        "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
@@ -24186,7 +24127,7 @@
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
         "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
-        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "bba785d1cb813925",
+        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "578918e0e180755d",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",

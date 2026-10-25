@@ -236,9 +236,10 @@ function checkpointPriceRows(checkpoints, prices, sql, params) {
     if (sql.startsWith('INSERT IGNORE INTO state_checkpoints')) {
         checkpoints.push({ id: params[0], chain: params[1], network: params[2], block_index: params[3],
             block_hash: params[4], ledger_hash: params[5], actions_hash: params[6], contract_hash: params[7],
-            checkpoint_seq: params[8], snapshot_block: params[9], state_root: params[10],
-            state_root_version: params[11], block_merkle_root: params[12], block_merkle_version: params[13],
-            validator_signatures: params[14] });
+            checkpoint_seq: params[8], snapshot_block: params[9], supersedes_from: params[10],
+            rules_digest: params[11], state_root: params[12], state_root_version: params[13],
+            block_merkle_root: params[14], block_merkle_version: params[15],
+            validator_signatures: params[16] });
         return [];
     }
     if (sql.startsWith('SELECT round_number FROM price_snapshots'))

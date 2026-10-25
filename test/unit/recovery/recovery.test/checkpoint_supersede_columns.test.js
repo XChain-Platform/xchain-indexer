@@ -18,6 +18,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 
 const { verifyArchive, writeArchive } = require('../../../../bin/recovery/checkpoint_price.js');
+const { memDb } = require('../../../helpers/recovery_stubs.js');
 
 const hex = (character, length) => character.repeat(length || 64);
 const base = {
@@ -108,6 +109,12 @@ describe('recovery checkpoint supersede archive columns @regression @tier1', fun
             assert.strictEqual(insert[1][columns.indexOf('supersedes_from')], expectedFrom);
             assert.strictEqual(insert[1][columns.indexOf('rules_digest')], expectedDigest);
         }
+    });
+
+    it('has the recovery memory database preserve every checkpoint insert column', async function(){
+        let db = memDb([], []);
+        await writeArchive(db, { state_checkpoints: [superseding] }, report());
+        assert.deepStrictEqual(db.checkpoints, [superseding]);
     });
 
     it('has writeArchive refuse a rules_digest collision and skip an identical stored row', async function(){
