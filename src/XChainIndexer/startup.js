@@ -166,8 +166,9 @@ module.exports = {
         // The overlay switches only here, at boot: the block loop records each phase
         // change and a pass that needs other rules ends the process instead.
         this.replayMarker = result.marker || null;
+        // The witness rows are read here too, so /health reports the phase from the first request.
         this.replayWitnessPhase = result.phase || null;
-        this.replayWitness = null;
+        this.replayWitness = result.phase ? await readLatestReplayWitness(db) : null;
         if(result.phase === 'diverged') this.holdRetroactiveReplayDiverged();
     },
 

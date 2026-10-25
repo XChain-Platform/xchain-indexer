@@ -430,6 +430,7 @@ describe('retroactive replay witness boot phases through startup @regression @ti
         assert.deepStrictEqual(f.rollbacks, []);
         assert.deepStrictEqual(f.boots, []);
         assert.strictEqual(held.stallReason, 'retroactive_replay_diverged');
+        assert.strictEqual(held.replayWitness.phase.phase, 'diverged');
         assert.strictEqual(held.stallClearsAt, null);
         assert.strictEqual(held.replayWitnessPhase, 'diverged');
         assert.strictEqual(changes.registry.getReadOverlay(), base);
