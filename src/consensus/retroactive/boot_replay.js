@@ -29,6 +29,7 @@ const { planRetroactiveBoot } = require('./boot_plan.js');
 const { buildReplayMarker, advanceReplayMarker, isReplayOpen } = require('./replay_marker.js');
 const { goRulesSha, goCommand } = require('./go_binding.js');
 const { buildReplayWitness } = require('./replay_witness.js');
+const { planWitnessPhase } = require('./witness_phase_plan.js');
 
 // Marks a gate boot record written over the full height and time registry. A record
 // without it predates the widening and saw only the height keys it lists, so a key
@@ -184,6 +185,19 @@ async function resumeOpenMarker(marker, tip, current, deps){
     return { action: 'resume', marker: replaying };
 }
 
+// Roll back to the target only while the applied tip still reaches it, so a crash after
+// the rollback commit never rolls back twice. Returns the tip to record below the target.
+async function rollbackWhenReached(plan, marker, tip, deps){
+    if(plan.rollback){
+        await deps.rollback(marker.target);
+        deps.holdReplay();
+        return { rolledBack: true, recordTip: marker.target - 1 };
+    }
+    return { rolledBack: false, recordTip: tip === null ? null : Math.min(tip, marker.target - 1) };
+}
+
+// The second rollback: the window replays again from the target under the current map.
+// A replayed marker is reopened as a fresh pending one with the same target and digests.
 async function startFinalReplay(marker, witness, tip, current, deps){
     deps.useCurrentRules();
     deps.holdReplay();
@@ -199,22 +213,19 @@ async function startFinalReplay(marker, witness, tip, current, deps){
         await deps.recordMarker(pending);
     }
 
-    let recordTip = tip;
-    let rolledBack = false;
-    if(tip !== null && tip >= marker.target){
-        await deps.rollback(marker.target);
-        deps.holdReplay();
-        recordTip = marker.target - 1;
-        rolledBack = true;
-    }
-    if(recordTip !== null) recordTip = Math.min(recordTip, marker.target - 1);
+    const plan = planWitnessPhase({ phase: 'witnessed', tip, target: marker.target });
+    const { rolledBack, recordTip } = await rollbackWhenReached(plan, marker, tip, deps);
     await deps.recordBoot(current, recordTip);
-    await recordWitnessPhase(witness, 'final', deps);
+    await recordWitnessPhase(witness, plan.writePhase, deps);
     const replaying = advanceReplayMarker(pending, 'replaying');
     await deps.recordMarker(replaying);
     return { action: rolledBack ? 'rollback' : 'resume', marker: replaying, phase: 'final' };
 }
 
+// A boot under a witness that matches the marker. 'witness' runs the window under the
+// recorded map, re-running from the target whenever the tip reaches it (a restart mid-pass
+// or a rewitness); a replayed marker in 'witness' means that pass reached replay_to, so it
+// moves on to 'witnessed' and the final replay. 'diverged' holds without a rollback.
 async function resumePhasedReplay(marker, witness, tip, current, deps){
     if(!witnessMatches(witness, marker))
         throw new Error('replay witness does not match the replay marker');
@@ -222,60 +233,51 @@ async function resumePhasedReplay(marker, witness, tip, current, deps){
     const phase = witness.phase.phase;
     if(phase === 'final'){
         deps.useCurrentRules();
-        if(isReplayOpen(marker)){
-            const result = await resumeOpenMarker(marker, tip, current, deps);
-            return Object.assign(result, { phase: 'final' });
-        }
-        await deps.recordBoot(current, tip);
-        return { action: 'serve', marker, phase: 'final' };
+        const result = await resumeOpenMarker(marker, tip, current, deps);
+        return Object.assign(result, { phase: 'final' });
     }
 
+    const plan = planWitnessPhase({ phase, tip, target: marker.target });
+    if(plan.stallReason){
+        deps.useCurrentRules();
+        deps.holdReplay();
+        return { action: 'resume', marker, phase, stallReason: plan.stallReason };
+    }
     if(phase === 'witnessed')
         return startFinalReplay(marker, witness, tip, current, deps);
 
     deps.useRecordedRules(witness.gateHeights);
     deps.holdReplay();
-    if(marker.state === 'replaying') return { action: 'resume', marker, phase: 'witness' };
+    const { rolledBack, recordTip } = await rollbackWhenReached(plan, marker, tip, deps);
 
+    if(marker.state === 'replayed'){
+        const witnessed = await recordWitnessPhase(witness, 'witnessed', deps);
+        const result = await startFinalReplay(marker, witnessed, recordTip, current, deps);
+        return { action: rolledBack ? 'rollback' : result.action,
+            marker: result.marker, phase: result.phase };
+    }
+
+    if(!rolledBack && marker.state === 'replaying')
+        return { action: 'resume', marker, phase: 'witness' };
+    await deps.recordBoot(witness.gateHeights, recordTip);
+    let replaying = marker;
     if(marker.state === 'pending'){
-        let recordTip = tip;
-        let rolledBack = false;
-        if(tip !== null && tip >= marker.target){
-            await deps.rollback(marker.target);
-            deps.holdReplay();
-            recordTip = marker.target - 1;
-            rolledBack = true;
-        }
-        if(recordTip !== null) recordTip = Math.min(recordTip, marker.target - 1);
-        await deps.recordBoot(witness.gateHeights, recordTip);
-        const replaying = advanceReplayMarker(marker, 'replaying');
+        replaying = advanceReplayMarker(marker, 'replaying');
         await deps.recordMarker(replaying);
-        return { action: rolledBack ? 'rollback' : 'resume', marker: replaying,
-            phase: 'witness' };
     }
-
-    let recordTip = tip;
-    let rolledBack = false;
-    if(tip !== null && tip >= marker.target){
-        await deps.rollback(marker.target);
-        deps.holdReplay();
-        recordTip = marker.target - 1;
-        rolledBack = true;
-    }
-    const witnessed = await recordWitnessPhase(witness, 'witnessed', deps);
-    const result = await startFinalReplay(marker, witnessed, recordTip, current, deps);
-    return { action: rolledBack || result.action === 'rollback' ? 'rollback' : result.action,
-        marker: result.marker, phase: result.phase };
+    return { action: rolledBack ? 'rollback' : 'resume', marker: replaying, phase: 'witness' };
 }
 
-// Returns { action: serve | resume | rollback, marker, phase? }. deps.refuse must throw,
-// and movableGates overrides MOVABLE_GATES only in tests.
+// Returns { action: serve | resume | rollback, marker, phase?, stallReason? }. deps.refuse
+// must throw, and movableGates overrides MOVABLE_GATES only in tests. A closed marker
+// whose witness reached 'final' is history, so the boot compares maps as usual.
 async function runBootReplay({ tip, current, capBlocks, movableGates, chain }, deps){
     const boot = await deps.readBoot();
     const marker = boot ? boot.replayMarker : null;
     const phased = hasWitnessPhases(deps);
     const latestWitness = phased ? await deps.readWitness() : null;
-    if(marker && latestWitness && witnessMatches(latestWitness, marker))
+    if(marker && latestWitness && witnessMatches(latestWitness, marker) &&
+       (isReplayOpen(marker) || latestWitness.phase.phase !== 'final'))
         return resumePhasedReplay(marker, latestWitness, tip, current, deps);
     if(isReplayOpen(marker)) return resumeOpenMarker(marker, tip, current, deps);
 

@@ -57,6 +57,7 @@ const CAPABILITY_SNAPSHOT_PROOF_KEY =
     'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION';
 const MIRRORED_CAPABILITIES = ['cross_chain', 'oracle_publish', 'price', 'attestation'];
 const BASE_GATE_READ_OVERLAY = changes.registry.getReadOverlay();
+let witnessOverlay = null;          // the recorded-rules overlay this module installed, if any
 
 function armReplayWitnessCompletion(phase){
     this.replayWitnessPhase = phase || null;
@@ -117,6 +118,10 @@ module.exports = {
     // ready: serve, resume an open replay marker, refuse, or roll back to the target and
     // replay under the new map (src/consensus/retroactive/boot_replay.js).
     async recordConsensusGateBoot(){
+        // The current map is read without the witness pass overlay, so an in-process
+        // handoff after that pass compares the build's own rules, not the recorded ones.
+        if(witnessOverlay && changes.registry.getReadOverlay() === witnessOverlay)
+            changes.registry.setReadOverlay(BASE_GATE_READ_OVERLAY);
         const lastBlock = await this.indexerDb.getBlockIndex('indexer', 'last');
         const appliedTip = lastBlock == null ? null : Number(lastBlock);
         const gateHeights = this.indexerDb.consensusHeightGateMap(
@@ -146,9 +151,11 @@ module.exports = {
             recordWitness: (witness) => recordReplayWitness(db, witness),
             recordWitnessPhase: (batch, phase) =>
                 recordReplayWitnessPhase(db, batch, phase),
-            useRecordedRules: (values) => changes.registry.setReadOverlay(
-                witnessReadOverlay(BASE_GATE_READ_OVERLAY, values,
-                    this.config['NETWORK'], this.config['COIN'])),
+            useRecordedRules: (values) => {
+                witnessOverlay = witnessReadOverlay(BASE_GATE_READ_OVERLAY, values,
+                    this.config['NETWORK'], this.config['COIN']);
+                changes.registry.setReadOverlay(witnessOverlay);
+            },
             useCurrentRules: () => changes.registry.setReadOverlay(BASE_GATE_READ_OVERLAY),
             readMirrorGap: async (target) => {
                 const readings = await db.readRetroactiveMirrorCoverage(target, capabilityBlock(target));
@@ -168,6 +175,10 @@ module.exports = {
             refuse: (message) => this.util.throwError(message),
         });
         this.replayMarker = result.marker || null;
+        if(result.stallReason){
+            this.stallReason = result.stallReason;
+            this.stallClearsAt = null;      // a diverged witness clears only on a rewitness
+        }
         armReplayWitnessCompletion.call(this, result.phase);
     },
 

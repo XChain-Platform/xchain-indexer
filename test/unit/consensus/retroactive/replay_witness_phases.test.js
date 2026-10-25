@@ -231,13 +231,16 @@ describe('retroactive replay witness boot phases @regression @tier1', function()
         assert.strictEqual(indexer.replayWitnessTransitionPending, false);
     });
 
-    it('keeps the recorded overlay through the witness pass and restores current rules for final', async function(){
+    it('re-runs a mid-witness restart from the target under the recorded rules; final keeps current rules', async function(){
         const active = harness('witness', 'replaying', { tip: 97 });
         await run(active, 97);
-        assert.deepStrictEqual(active.calls.filter(call => call[0] === 'rules'), [
+        assert.deepStrictEqual(active.calls, [
             ['rules', 'recorded', R],
+            ['hold'],
+            ['rollback', 95],
+            ['hold'],
+            ['boot', R, 94],
         ]);
-        assert.strictEqual(active.calls.some(call => call[0] === 'rollback'), false);
 
         const final = harness('final', 'replaying', { tip: 97, recorded: C });
         await run(final, 97);
@@ -245,5 +248,258 @@ describe('retroactive replay witness boot phases @regression @tier1', function()
             ['rules', 'current'],
         ]);
         assert.strictEqual(final.calls.some(call => call[0] === 'rollback'), false);
+    });
+});
+
+// The same phases driven through the production boot, startup.recordConsensusGateBoot,
+// against the process gate registry and an in-memory events table, so the overlay
+// assertions fail if startup.js does not install or remove the recorded rules.
+const changes = require('../../../../src/protocol_changes.js');
+const { gateHeightMap } = require('../../../../src/consensus/retroactive/gate_heights.js');
+const { buildReplayWitness } = require('../../../../src/consensus/retroactive/replay_witness.js');
+const {
+    REPLAY_WITNESS_PHASE_CODE,
+    recordReplayWitness,
+    recordReplayWitnessPhase,
+} = require('../../../../src/db/events/retroactive_replay_witness.js');
+const {
+    readLatestReplayMarker,
+    recordReplayMarker,
+} = require('../../../../src/db/events/retroactive_replay_marker.js');
+const blockPoll = require('../../../../src/XChainIndexer/block_poll.js');
+
+// A live registry key whose table holds a BTC:testnet entry beside the testnet one.
+const LIVE_KEY = 'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION';
+const NETWORK = 'testnet';
+const COIN = 'BTC';
+const COIN_NETWORK = COIN + ':' + NETWORK;
+const RECORDED_HEIGHT = 150000;
+
+function windowBlocks(from, to){
+    return Array.from({ length: to - from + 1 }, (_, offset) => ({
+        block_index: from + offset,
+        block_hash: (from + offset).toString(16).padStart(64, '0'),
+    }));
+}
+
+// Durable state that survives a restart: the events table, the applied tip and the
+// recorded gate map. Each boot() is one process start through the real startup method.
+function startupIndexer(maps, { tip }){
+    const events = [];
+    const rollbacks = [];
+    const boots = [];
+    const state = { tip, recorded: { gateHeights: maps.recorded, appliedTip: tip, scope: 'registry' } };
+    const db = {
+        async doQueryStrict(sql, params = []){
+            const text = String(sql);
+            if(/^INSERT INTO events \(time, code, data\) VALUES \(NOW\(\), '([A-Z_]+)', \?\)/.test(text)){
+                const code = /'([A-Z_]+)'/.exec(text)[1];
+                events.push({ id: events.length + 1, code, data: params[0], witness_hash: null });
+                return [];
+            }
+            if(/^INSERT INTO events \(time, code, data, witness_hash\)/.test(text)){
+                events.push({ id: events.length + 1, code: params[0], data: params[1], witness_hash: params[2] });
+                return [];
+            }
+            if(/^SELECT data FROM events WHERE code = '([A-Z_]+)' ORDER BY id DESC LIMIT 1$/.test(text)){
+                const code = /'([A-Z_]+)'/.exec(text)[1];
+                return events.filter(row => row.code === code).slice(-1);
+            }
+            if(/^SELECT id, data, witness_hash FROM events WHERE code = \? ORDER BY id DESC LIMIT 1$/.test(text))
+                return events.filter(row => row.code === params[0]).slice(-1);
+            if(/^SELECT data FROM events WHERE code = \? AND witness_hash = \? AND id < \?/.test(text)){
+                const [code, batch, before, limit] = params;
+                return events.filter(row => row.code === code && row.witness_hash === batch && row.id < before)
+                    .reverse().slice(0, limit);
+            }
+            if(/FROM blocks b/.test(text)) return windowBlocks(params[0], params[1]);
+            throw new Error('unexpected query: ' + text);
+        },
+        getBlockIndex: async () => state.tip,
+        consensusHeightGateMap: (network, coin) => gateHeightMap(changes.registry, network, coin),
+        readConsensusGateBoot: async () => ({
+            recorded: state.recorded,
+            replayMarker: await readLatestReplayMarker(db),
+        }),
+        recordConsensusGateBoot: async (map, at) => {
+            boots.push([map, at]);
+            state.recorded = { gateHeights: map, appliedTip: at, scope: 'registry' };
+        },
+    };
+    const indexer = {
+        config: { NETWORK, COIN, RETROACTIVE_REPLAY_CAP_BLOCKS: 1728 },
+        stallReason: null,
+        stallClearsAt: 999,
+        indexerDb: db,
+        rollback: { rollback: async (target) => {
+            rollbacks.push(target);
+            state.tip = target - 1;
+        } },
+        util: { throwError(message){ throw new Error(message); } },
+        holdRetroactiveReplay: startup.holdRetroactiveReplay,
+        holdRetroactiveReplayNeedsGo: startup.holdRetroactiveReplayNeedsGo,
+        recordConsensusGateBoot: startup.recordConsensusGateBoot,
+        completeRetroactiveReplay: blockPoll.completeRetroactiveReplay,
+    };
+    const phases = () => events.filter(row => row.code === REPLAY_WITNESS_PHASE_CODE)
+        .map(row => JSON.parse(row.data).phase);
+    const markers = () => events.filter(row => row.code === 'CONSENSUS_RETRO_REPLAY')
+        .map(row => JSON.parse(row.data).state);
+    const boot = async () => {
+        const restarted = Object.assign(Object.create(null), indexer, {
+            stallReason: null, stallClearsAt: 999, replayMarker: null,
+        });
+        await indexer.recordConsensusGateBoot.call(restarted);
+        return restarted;
+    };
+    return { db, state, events, rollbacks, boots, phases, markers, boot };
+}
+
+// Writes the witness rows, an optional later phase row and the marker, as the earlier
+// boot and the block loop would have left them.
+async function seedWitness(f, maps, { phase, markerState }){
+    const rulesFrom = gateMapDigest(maps.recorded);
+    const witness = buildReplayWitness({
+        target: 95, replayTo: 100, rulesFrom, gateHeights: maps.recorded,
+        blocks: windowBlocks(95, 100),
+    });
+    await recordReplayWitness(f.db, witness);
+    if(phase !== 'witness')
+        await recordReplayWitnessPhase(f.db, witness.batch, Object.assign({}, witness.phase, { phase }));
+    let next = buildReplayMarker({
+        target: 95, replayTo: 100, rulesFrom, rulesTo: gateMapDigest(maps.current),
+    });
+    if(markerState !== 'pending') next = advanceReplayMarker(next, 'replaying');
+    if(markerState === 'replayed') next = advanceReplayMarker(next, 'replayed');
+    await recordReplayMarker(f.db, next);
+    return witness;
+}
+
+describe('retroactive replay witness boot phases through startup @regression @tier1', function(){
+    let base;
+    let maps;
+    let baseTable;
+
+    before(function(){
+        base = changes.registry.getReadOverlay();
+        baseTable = changes.registry.get(LIVE_KEY);
+        assert.strictEqual(typeof baseTable[COIN_NETWORK], 'number');
+        assert.notStrictEqual(baseTable[COIN_NETWORK], RECORDED_HEIGHT);
+        const current = gateHeightMap(changes.registry, NETWORK, COIN);
+        maps = { current, recorded: Object.assign({}, current, { [LIVE_KEY]: RECORDED_HEIGHT }) };
+    });
+
+    // The registry is shared by every suite in the process.
+    afterEach(function(){
+        changes.registry.setReadOverlay(base);
+    });
+
+    it('a witness boot with tip >= H rolls back first and replaces the COIN:network entry with the recorded value', async function(){
+        const f = startupIndexer(maps, { tip: 100 });
+        await seedWitness(f, maps, { phase: 'witness', markerState: 'pending' });
+        const first = await f.boot();
+
+        assert.deepStrictEqual(f.rollbacks, [95]);
+        assert.deepStrictEqual(f.boots, [[maps.recorded, 94]]);
+        assert.deepStrictEqual(f.markers(), ['pending', 'replaying']);
+        assert.strictEqual(first.stallReason, 'retroactive_replay');
+        assert.notStrictEqual(changes.registry.getReadOverlay(), base);
+        assert.deepStrictEqual(changes.registry.get(LIVE_KEY),
+            Object.assign({}, baseTable, { [COIN_NETWORK]: RECORDED_HEIGHT }));
+        assert.strictEqual(gateHeightMap(changes.registry, NETWORK, COIN)[LIVE_KEY], RECORDED_HEIGHT);
+
+        // A crash after the rollback commit: the tip is below H, so no second rollback.
+        await f.boot();
+        assert.deepStrictEqual(f.rollbacks, [95]);
+        assert.strictEqual(changes.registry.get(LIVE_KEY)[COIN_NETWORK], RECORDED_HEIGHT);
+    });
+
+    it('a restart mid-witness at or above H re-runs the window from the target', async function(){
+        const f = startupIndexer(maps, { tip: 98 });
+        await seedWitness(f, maps, { phase: 'witness', markerState: 'replaying' });
+        await f.boot();
+
+        assert.deepStrictEqual(f.rollbacks, [95]);
+        assert.deepStrictEqual(f.boots, [[maps.recorded, 94]]);
+        assert.deepStrictEqual(f.markers(), ['replaying']);
+        assert.strictEqual(changes.registry.get(LIVE_KEY)[COIN_NETWORK], RECORDED_HEIGHT);
+    });
+
+    it('witnessed rolls back a second time, writes final and removes the overlay for the new-rules pass', async function(){
+        const f = startupIndexer(maps, { tip: 100 });
+        const witness = await seedWitness(f, maps, { phase: 'witness', markerState: 'pending' });
+        await f.boot();
+        assert.strictEqual(changes.registry.get(LIVE_KEY)[COIN_NETWORK], RECORDED_HEIGHT);
+
+        // The witness pass reaches replay_to and the block loop records 'witnessed'.
+        f.state.tip = 100;
+        await recordReplayWitnessPhase(f.db, witness.batch, Object.assign({}, witness.phase, { phase: 'witnessed' }));
+        await f.boot();
+
+        assert.deepStrictEqual(f.rollbacks, [95, 95]);
+        assert.deepStrictEqual(f.boots[f.boots.length - 1], [maps.current, 94]);
+        assert.deepStrictEqual(f.phases(), ['witness', 'witnessed', 'final']);
+        assert.strictEqual(changes.registry.getReadOverlay(), base);
+        assert.deepStrictEqual(changes.registry.get(LIVE_KEY), baseTable);
+
+        // A crash after the final write resumes the open marker with no third rollback.
+        await f.boot();
+        assert.deepStrictEqual(f.rollbacks, [95, 95]);
+        assert.deepStrictEqual(f.phases(), ['witness', 'witnessed', 'final']);
+        assert.strictEqual(changes.registry.getReadOverlay(), base);
+    });
+
+    it('a crash after the second rollback commits writes final without rolling back again', async function(){
+        const f = startupIndexer(maps, { tip: 94 });
+        await seedWitness(f, maps, { phase: 'witnessed', markerState: 'replaying' });
+        await f.boot();
+
+        assert.deepStrictEqual(f.rollbacks, []);
+        assert.deepStrictEqual(f.phases(), ['witness', 'witnessed', 'final']);
+        assert.deepStrictEqual(f.markers(), ['replaying', 'pending', 'replaying']);
+        assert.deepStrictEqual(f.boots, [[maps.current, 94]]);
+        assert.strictEqual(changes.registry.getReadOverlay(), base);
+    });
+
+    it('the in-process handoff at replay_to rolls back once and records the build map, not the recorded one', async function(){
+        const f = startupIndexer(maps, { tip: 100 });
+        await seedWitness(f, maps, { phase: 'witness', markerState: 'pending' });
+        const running = await f.boot();
+        f.state.tip = 100;
+
+        await running.completeRetroactiveReplay(f.db, 100);
+
+        assert.deepStrictEqual(f.rollbacks, [95, 95]);
+        assert.deepStrictEqual(f.phases(), ['witness', 'witnessed', 'final']);
+        assert.deepStrictEqual(f.boots[f.boots.length - 1], [maps.current, 94]);
+        assert.strictEqual(running.replayWitnessPhase, 'final');
+        assert.strictEqual(running.replayMarker.state, 'replaying');
+        assert.strictEqual(changes.registry.getReadOverlay(), base);
+    });
+
+    it('a diverged witness holds with no rollback and no overlay', async function(){
+        const f = startupIndexer(maps, { tip: 98 });
+        await seedWitness(f, maps, { phase: 'diverged', markerState: 'replaying' });
+        const held = await f.boot();
+
+        assert.deepStrictEqual(f.rollbacks, []);
+        assert.deepStrictEqual(f.boots, []);
+        assert.strictEqual(held.stallReason, 'retroactive_replay_diverged');
+        assert.strictEqual(held.stallClearsAt, null);
+        assert.strictEqual(changes.registry.getReadOverlay(), base);
+    });
+
+    it('a closed marker whose witness reached final compares maps again on the next boot', async function(){
+        const f = startupIndexer(maps, { tip: 200000 });
+        await seedWitness(f, maps, { phase: 'final', markerState: 'replayed' });
+
+        // The recorded map still holds the pre-move value, so the boot must see the move.
+        await assert.rejects(f.boot(), /moved at or below applied tip 200000/);
+        assert.deepStrictEqual(f.rollbacks, []);
+
+        f.state.recorded = { gateHeights: maps.current, appliedTip: 200000, scope: 'registry' };
+        await f.boot();
+        assert.deepStrictEqual(f.boots, [[maps.current, 200000]]);
+        assert.deepStrictEqual(f.rollbacks, []);
     });
 });
