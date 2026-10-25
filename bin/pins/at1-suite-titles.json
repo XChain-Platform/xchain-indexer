@@ -8446,6 +8446,13 @@
       "HubPushQueue pause() awaits in-flight drain does not resolve until a drain that is mid-attempt finishes",
       "HubPushQueue pause() awaits in-flight drain resolves immediately when no drain is in flight"
     ],
+    "74966a599042da53": [
+      "retroactive go event rows @regression @tier1 findMatchingGo chooses the first matching row",
+      "retroactive go event rows @regression @tier1 findMatchingGo rejects another map or a deeper target",
+      "retroactive go event rows @regression @tier1 readRetroactiveGoRows reads a bounded newest-first page and skips unsafe rows",
+      "retroactive go event rows @regression @tier1 recordRetroactiveGo inserts the exact ordered JSON payload",
+      "retroactive go event rows @regression @tier1 recordRetroactiveGo refuses a bad target or digest before querying"
+    ],
     "74c09b94fc5293c9": [
       "price age pick falls back for a null config",
       "price age pick falls back when the hourly key is missing",
@@ -19251,8 +19258,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1532,
-      "titleCount": 14924,
+      "fileCount": 1533,
+      "titleCount": 14929,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20159,6 +20166,7 @@
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
         "test/unit/db/events/reorg_cursor_guards.test.js": "d18641680b374c5c",
+        "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/adversarial_compact_id.test.js": "359bcfb442706852",
@@ -21164,8 +21172,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1166,
-      "titleCount": 11802,
+      "fileCount": 1167,
+      "titleCount": 11807,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21872,6 +21880,7 @@
         "test/unit/db/db_table_parameterized_identifiers.test.js": "42f0d570ec801310",
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
+        "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
@@ -22336,8 +22345,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 592,
-      "titleCount": 6255,
+      "fileCount": 593,
+      "titleCount": 6260,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22622,6 +22631,7 @@
         "test/unit/db/db_sanity_check_null_tick.test.js": "12da3a56447a42df",
         "test/unit/db/db_session_sql_mode_pin.test.js": "c91642ba2d913def",
         "test/unit/db/db_session_timezone_utc.test.js": "3a25c746f0ad7a91",
+        "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
         "test/unit/db/ledger/contract_permissions_persist.test.js": "d3332bf4be722dbe",
@@ -22934,8 +22944,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1166,
-      "titleCount": 11802,
+      "fileCount": 1167,
+      "titleCount": 11807,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23642,6 +23652,7 @@
         "test/unit/db/db_table_parameterized_identifiers.test.js": "42f0d570ec801310",
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
+        "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
