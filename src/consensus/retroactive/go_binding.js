@@ -34,6 +34,10 @@ function goCommand(target, rulesSha){
     return 'node bin/retroactive-go.js --target ' + target + ' --rules ' + rulesSha;
 }
 
+function rewitnessCommand(target){
+    return 'node bin/retroactive-go.js --rewitness --target ' + target;
+}
+
 function parseGoArgs(argv){
     if(!Array.isArray(argv) || argv.length !== 4)
         throw new Error('expected exactly --target and --rules');
@@ -60,9 +64,53 @@ function parseGoArgs(argv){
     return { target, rules: parsed['--rules'] };
 }
 
+function parseRewitnessArgs(argv){
+    if(!Array.isArray(argv) || argv.length !== 3)
+        throw new Error('expected exactly --rewitness and --target');
+
+    let rewitness = false;
+    let targetValue;
+    for(let i = 0; i < argv.length;){
+        const flag = argv[i];
+        if(flag === '--rewitness'){
+            if(rewitness)
+                throw new Error('repeated rewitness flag: ' + flag);
+            rewitness = true;
+            i += 1;
+            continue;
+        }
+        if(flag === '--target'){
+            if(targetValue !== undefined)
+                throw new Error('repeated rewitness flag: ' + flag);
+            targetValue = argv[i + 1];
+            i += 2;
+            continue;
+        }
+        throw new Error('unknown rewitness flag: ' + flag);
+    }
+
+    if(!rewitness || targetValue === undefined)
+        throw new Error('expected exactly --rewitness and --target');
+    if(!TARGET.test(targetValue))
+        throw new Error('target must be a non-negative integer');
+    const target = Number(targetValue);
+    if(!Number.isSafeInteger(target))
+        throw new Error('target must be a safe integer');
+
+    return { rewitness: true, target };
+}
+
 function goAuthorizes(goRow, { canonicalMap, target }){
     return Boolean(goRow) && goRow.target === target &&
         goRow.rules === goRulesSha(canonicalMap, target);
 }
 
-module.exports = { RETRO_GO_CODE, goRulesSha, goCommand, parseGoArgs, goAuthorizes };
+module.exports = {
+    RETRO_GO_CODE,
+    goRulesSha,
+    goCommand,
+    rewitnessCommand,
+    parseGoArgs,
+    parseRewitnessArgs,
+    goAuthorizes,
+};
