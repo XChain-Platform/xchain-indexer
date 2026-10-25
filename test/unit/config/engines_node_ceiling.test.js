@@ -25,7 +25,11 @@
 // this guard is what covers THIS package.json in THIS repo's own suite.
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const pkg = require('../../../package.json');
+
+const ROOT = path.join(__dirname, '../../..');
 
 /** The exclusive upper bound a single npm comparator implies, or null. */
 function comparatorCeiling(token) {
@@ -80,8 +84,22 @@ describe('packaging: engines.node ceiling', function () {
 
     it('still admits the pinned canonical runtime (.nvmrc: Node 22)', function () {
         const range = pkg.engines.node;
+        const pinned = fs.readFileSync(path.join(ROOT, '.nvmrc'), 'utf8').trim();
+        const workflowFiles = ['.github/workflows/ci.yml', '.github/workflows/mutation.yml'];
+        const workflowPins = workflowFiles.flatMap((file) =>
+            [...fs.readFileSync(path.join(ROOT, file), 'utf8').matchAll(/^\s+node-version:\s*["']([^"']+)["']/gm)]
+                .map((match) => match[1]));
+        const docker = fs.readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8');
+
+        assert.strictEqual(pinned, '22.23.4',
+            'the runtime epoch requires an exact .nvmrc pin, not a floating Node major');
         assert.ok(/(^|\s)>=\s*22(\.|\s|$)/.test(range),
             `engines.node="${range}" no longer states the Node 22 floor the node:22-bookworm image runs`);
+        assert.ok(workflowPins.length > 0, 'no workflow Node pins were found');
+        assert.deepStrictEqual([...new Set(workflowPins)], [pinned],
+            'every workflow must use the exact .nvmrc consensus runtime');
+        assert.match(docker, new RegExp('^FROM node:' + pinned.replace(/\./g, '\\.') + '-bookworm@', 'm'),
+            'the Docker image must use the exact .nvmrc consensus runtime');
     });
 
     it('keeps a written reason next to the ceiling', function () {
