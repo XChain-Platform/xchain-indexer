@@ -66,6 +66,13 @@ function baseReadOverlay(){
     return baseGateReadOverlay;
 }
 
+function matchingClosedReplayWitness(marker, witness){
+    const phase = witness && witness.phase;
+    return marker && marker.state === 'replayed' && phase && phase.phase === 'final' &&
+        phase.target === marker.target && phase.replay_to === marker.replay_to &&
+        phase.rules_from === marker.rules_from ? witness : null;
+}
+
 function assertCapabilitySnapshotPin(){
     const network = this.config['NETWORK'];
     const coin = this.config['COIN'];
@@ -171,7 +178,10 @@ module.exports = {
         this.replayMarker = result.marker || null;
         // The witness rows are read here too, so /health reports the phase from the first request.
         this.replayWitnessPhase = result.phase || null;
-        this.replayWitness = result.phase ? await readLatestReplayWitness(db) : null;
+        const latestWitness = result.phase || (result.marker && result.marker.state === 'replayed')
+            ? await readLatestReplayWitness(db) : null;
+        this.replayWitness = result.phase
+            ? latestWitness : matchingClosedReplayWitness(result.marker, latestWitness);
         if(result.phase === 'diverged') this.holdRetroactiveReplayDiverged();
     },
 
