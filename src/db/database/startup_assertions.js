@@ -118,7 +118,12 @@ module.exports = {
                     const after = Object.prototype.hasOwnProperty.call(current, key)
                         ? current[key] : consensusRules.ABSENT;
                     if(consensusRules.canonical(before) === consensusRules.canonical(after)) continue;
-                    if(typeof after !== 'number' || !Number.isFinite(after) || tip === null || after > tip) continue;
+                    if(tip === null) continue;
+                    const affectedBefore = typeof before === 'number' && Number.isFinite(before) &&
+                        before < consensusRules.FAR_FUTURE_HEIGHT_SENTINEL && before <= tip;
+                    const affectedAfter = typeof after === 'number' && Number.isFinite(after) &&
+                        after < consensusRules.FAR_FUTURE_HEIGHT_SENTINEL && after <= tip;
+                    if(!affectedBefore && !affectedAfter) continue;
                     moved.push({ key, recorded: before, current: after });
                 }
                 if(moved.length){
