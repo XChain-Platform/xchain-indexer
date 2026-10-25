@@ -18,6 +18,8 @@
 
 'use strict';
 
+const { witnessFromPhase } = require('./witness_status.js');
+
 const RULES_DIGEST = /^[0-9a-f]{64}$/;
 
 function replayReachedTip(marker, committedTip){
@@ -31,15 +33,21 @@ function heightIsFinal(height, replay){
     return height < replay.target;
 }
 
-function rulesStatusBody(digest, marker){
+function rulesStatusBody(digest, marker, witnessPhase){
     if(!RULES_DIGEST.test(digest)) throw new Error('invalid consensus rules digest');
 
+    const includeWitness = arguments.length >= 3;
     return {
         digest,
         replay: marker === null ? null : {
             state: marker.state,
             target: marker.target,
-            replay_to: marker.replay_to
+            replay_to: marker.replay_to,
+            ...(includeWitness ? {
+                witness: witnessFromPhase(witnessPhase && witnessPhase.phase),
+                changed: witnessPhase && typeof witnessPhase.changed === 'boolean'
+                    ? witnessPhase.changed : null,
+            } : {})
         }
     };
 }
