@@ -233,13 +233,13 @@ function checkpointPriceRows(checkpoints, prices, sql, params) {
     if (sql.startsWith('SELECT chain, network, block_index'))
         return checkpoints.filter(r => r.chain === params[0] && r.network === params[1] &&
             Number(r.checkpoint_seq) === Number(params[2])).map(r => Object.assign({}, r));
-    if (sql.startsWith('INSERT IGNORE INTO state_checkpoints')) {
-        checkpoints.push({ id: params[0], chain: params[1], network: params[2], block_index: params[3],
-            block_hash: params[4], ledger_hash: params[5], actions_hash: params[6], contract_hash: params[7],
-            checkpoint_seq: params[8], snapshot_block: params[9], supersedes_from: params[10],
-            rules_digest: params[11], state_root: params[12], state_root_version: params[13],
-            block_merkle_root: params[14], block_merkle_version: params[15],
-            validator_signatures: params[16] });
+    let checkpointInsert = /^\s*INSERT\s+IGNORE\s+INTO\s+state_checkpoints\s*\(([^)]*)\)/i.exec(String(sql));
+    if (checkpointInsert) {
+        let columns = checkpointInsert[1].split(',').map(column => column.trim().replace(/^`|`$/g, ''));
+        assert.strictEqual(columns.length, params.length, 'state_checkpoints column/value count');
+        let checkpoint = {};
+        columns.forEach((column, index) => { checkpoint[column] = params[index]; });
+        checkpoints.push(checkpoint);
         return [];
     }
     if (sql.startsWith('SELECT round_number FROM price_snapshots'))
