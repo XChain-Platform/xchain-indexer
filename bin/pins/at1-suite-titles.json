@@ -3112,14 +3112,6 @@
       "protocol_changes anchor fold rows ships both activation maps inert on mainnet and armed at the v0.21.3 testnet heights",
       "protocol_changes anchor fold rows stays inactive below the sentinel on mainnet and below the v0.21.3 height on testnet"
     ],
-    "2d9c2de552e894d5": [
-      "checkpoint_supersede_activation registry row @regression @tier1 is a height row: mainnet unpinned, BTC:testnet and testnet on the sentinel, regtest 0",
-      "checkpoint_supersede_activation registry row @regression @tier1 is active on regtest from snapshot block 0",
-      "checkpoint_supersede_activation registry row @regression @tier1 is inactive on mainnet at every snapshot block",
-      "checkpoint_supersede_activation registry row @regression @tier1 is inactive on testnet below the sentinel until a cut arms it",
-      "checkpoint_supersede_activation registry row @regression @tier1 is the last SHARED_GATES entry, so every earlier digest preimage row holds",
-      "checkpoint_supersede_activation registry row @regression @tier1 resolves the BTC:testnet slot before the bare testnet fallback"
-    ],
     "2dc2973d1b26b2c4": [
       "Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2 assembles a contract from contiguous chunks (v2)",
       "Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2 assembles a stakeable chunked contract (v3) with staking metadata",
@@ -6054,6 +6046,12 @@
       "bridge_settle: the in-leg policy barrier logs each policy barrier once per transfer or tick",
       "bridge_settle: the in-leg policy barrier refuses a general-token in-leg until its policy snapshot applies"
     ],
+    "544a59345c322407": [
+      "retroactive replay status rules @regression @tier1 heightIsFinal excludes the open replay range starting at target",
+      "retroactive replay status rules @regression @tier1 replayReachedTip changes at replay_to only for a replaying marker",
+      "retroactive replay status rules @regression @tier1 rulesStatusBody rejects a digest outside 64 lowercase hex characters",
+      "retroactive replay status rules @regression @tier1 rulesStatusBody returns only the public marker fields"
+    ],
     "545bf54c62a51ea5": [
       "protocol_changes/STAKE_DELEGATED_SIGNING_KEY row @regression @tier1 is present in the class table and registry in the same shape",
       "protocol_changes/STAKE_DELEGATED_SIGNING_KEY row @regression @tier1 is unarmed on mainnet, armed on testnet at its instant and active from regtest genesis"
@@ -8722,18 +8720,6 @@
       "ISSUE token-bridge opt-in and policy exclusion @regression @consensus subassets are not bridgeable in milestone 1 refuses the opt-in of a dotted native tick",
       "ISSUE token-bridge opt-in and policy exclusion @regression @consensus subassets are not bridgeable in milestone 1 yields to the parent gate when the row does not exist"
     ],
-    "793efa2da735bc54": [
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) appends the family at the END, leaving the pre-existing gate order untouched",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet (and again at the 16:33Z ladder re-cut, and again when LTC:testnet mirror admission shipped null under dq4 (a))",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a far-future sentinel height, however high the chain climbs",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a null (unratified) entry at any height",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes non-map exports (frozen ladder constants), never active in this sense",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes a gate exactly at its own activation height (<=, not <)",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes the gates this wave armed at genesis on mainnet, from block 0",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) is sorted, has 49 entries, and contains the gates the last trains append",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) resolves both admission maps by coin while a sibling slot stays on the sentinel",
-      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) returns [] for a non-finite height"
-    ],
     "79b5d66e48d44704": [
       "destroys/sends leg ordinal is a SCHEMA guarantee @regression destroys declares leg_ordinal NOT NULL with a default, so every row has a position",
       "destroys/sends leg ordinal is a SCHEMA guarantee @regression destroys gains the same column and index on the migration path, anchored to the same position",
@@ -10327,11 +10313,6 @@
       "consensus rules digest activeGatesAt unit filtering keeps coin-qualified height resolution without a named coin",
       "consensus rules digest activeGatesAt unit filtering keeps height, time and epoch activation rows eligible",
       "consensus rules digest activeGatesAt unit filtering returns only activation-unit rows for every supported network and coin lookup"
-    ],
-    "9011773de46fcb3d": [
-      "retroactive consensus gate move at boot @regression @tier1 records the gate height map and null applied tip on an empty database",
-      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when a recorded gate moves to or below the applied tip",
-      "retroactive consensus gate move at boot @regression @tier1 serves and records the new map when the moved gate stays above the applied tip"
     ],
     "90165b8ec993c4e6": [
       "ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1 BTC below the anchor takes the legacy unweighted branch",
@@ -12873,6 +12854,18 @@
       "list share snapshot screen returns parsed fields for a delta snapshot",
       "list share snapshot screen returns parsed fields for a full snapshot",
       "list share snapshot screen turns an admission-column parser throw into a halt"
+    ],
+    "ae2edec2b166bb6e": [
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) appends the family at the END, leaving the pre-existing gate order untouched",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet (and again at the 16:33Z ladder re-cut, and again when LTC:testnet mirror admission shipped null under dq4 (a))",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a far-future sentinel height, however high the chain climbs",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes a null (unratified) entry at any height",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) excludes non-map exports (frozen ladder constants), never active in this sense",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes a gate exactly at its own activation height (<=, not <)",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) includes the gates this wave armed at genesis on mainnet, from block 0",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) is sorted, has 48 entries, and contains the gates the last trains append",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) resolves both admission maps by coin while a sibling slot stays on the sentinel",
+      "consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88) returns [] for a non-finite height"
     ],
     "ae8c9d39d6d00e45": [
       "27 Expiry-sweep push-down characterization @regression @tier2 a NULL edit expiration does not erase the effective expiration",
@@ -19180,8 +19173,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1525,
-      "titleCount": 14867,
+      "fileCount": 1524,
+      "titleCount": 14862,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19945,16 +19938,15 @@
         "test/unit/consensus/protocol_time.test.js": "f5f64f28d68dc118",
         "test/unit/consensus/protocol_time_caller_order.test.js": "7891fe7146b2d1e7",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
-        "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
+        "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/rollcall_close/absence_streak.test.js": "98d8992dfae50cef",
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
         "test/unit/consensus/rollcall_close/signer_verify.test.js": "7e33c00ff3453bbd",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test.js": "7f39aa26f210b97a",
-        "test/unit/consensus/rules_digest/consensus_rules_digest.test/active_gates.test.js": "793efa2da735bc54",
+        "test/unit/consensus/rules_digest/consensus_rules_digest.test/active_gates.test.js": "ae2edec2b166bb6e",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_registry_parity.test.js": "56e2effa6675b4fa",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
         "test/unit/consensus/snapshot_checkpoint/canonical.test.js": "299c4ed3013e8a10",
         "test/unit/consensus/snapshot_checkpoint/canonical_twin.test.js": "9fccb58e5d806628",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
@@ -21086,8 +21078,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1159,
-      "titleCount": 11745,
+      "fileCount": 1158,
+      "titleCount": 11740,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21685,8 +21677,7 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
-        "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
+        "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22251,8 +22242,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 585,
-      "titleCount": 6198,
+      "fileCount": 584,
+      "titleCount": 6193,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22453,8 +22444,7 @@
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
-        "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
+        "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22842,8 +22832,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1159,
-      "titleCount": 11745,
+      "fileCount": 1158,
+      "titleCount": 11740,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23441,8 +23431,7 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
-        "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
+        "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
