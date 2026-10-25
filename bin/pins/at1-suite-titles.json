@@ -1115,6 +1115,9 @@
       "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 keys the new rule on the chunk height",
       "ANCHOR chunk-side reassembly parent-status gate @regression @tier1 rejects an invalid parent before reading chunks when the gate is active"
     ],
+    "11ba414b73ec82b8": [
+      "recovery stub checkpoint columns @regression @tier1 maps state_checkpoints INSERT values by their named columns"
+    ],
     "11f1e52cf591cb04": [
       "protocol_changes: amounts, price, and contracts regtest overlay @regression @tier1 leaves committed values in place when every variable is refused",
       "protocol_changes: amounts, price, and contracts regtest overlay @regression @tier1 leaves the four committed regtest values unchanged when all variables are unset",
@@ -19386,8 +19389,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1550,
-      "titleCount": 15023,
+      "fileCount": 1551,
+      "titleCount": 15024,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20780,6 +20783,7 @@
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
         "test/unit/recovery/recovery_driver_tieorder.test.js": "afe91c9de44e3786",
         "test/unit/recovery/recovery_reward_derive_block.test.js": "bd0736b33dc88530",
+        "test/unit/recovery/recovery_stub_columns.test.js": "11ba414b73ec82b8",
         "test/unit/recovery/recovery_v3_fold_wrapper.test.js": "8eaa90408ac98dc5",
         "test/unit/recovery/recovery_wrapper_canonical_parity.test.js": "84cc127ae8991317",
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
@@ -21317,8 +21321,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1184,
-      "titleCount": 11901,
+      "fileCount": 1185,
+      "titleCount": 11902,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22391,6 +22395,7 @@
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
         "test/unit/recovery/recovery_driver_tieorder.test.js": "afe91c9de44e3786",
         "test/unit/recovery/recovery_reward_derive_block.test.js": "bd0736b33dc88530",
+        "test/unit/recovery/recovery_stub_columns.test.js": "11ba414b73ec82b8",
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/remote_token/admitted_pin_read.test.js": "88660f9c2c7ccd2b",
@@ -22507,8 +22512,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 608,
-      "titleCount": 6345,
+      "fileCount": 609,
+      "titleCount": 6346,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -23065,6 +23070,7 @@
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
         "test/unit/recovery/recovery_driver_tieorder.test.js": "afe91c9de44e3786",
         "test/unit/recovery/recovery_reward_derive_block.test.js": "bd0736b33dc88530",
+        "test/unit/recovery/recovery_stub_columns.test.js": "11ba414b73ec82b8",
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/remote_token/admitted_pin_read.test.js": "76ff5d508163927d",
@@ -23121,8 +23127,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1184,
-      "titleCount": 11901,
+      "fileCount": 1185,
+      "titleCount": 11902,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24195,6 +24201,7 @@
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
         "test/unit/recovery/recovery_driver_tieorder.test.js": "afe91c9de44e3786",
         "test/unit/recovery/recovery_reward_derive_block.test.js": "bd0736b33dc88530",
+        "test/unit/recovery/recovery_stub_columns.test.js": "11ba414b73ec82b8",
         "test/unit/recovery/snapshot_reorg_buffer.test.js": "dcfce5b69fcedd79",
         "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js": "64ee4222a489c2b5",
         "test/unit/remote_token/admitted_pin_read.test.js": "88660f9c2c7ccd2b",
