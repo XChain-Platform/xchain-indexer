@@ -24,7 +24,7 @@ const { canonical } = require('../../consensus_rules_digest.js');
 
 const REPLAY_WITNESS_WINDOW_SIZE = 64;
 const DIGEST_RE = /^[0-9a-f]{64}$/;
-const REPLAY_WITNESS_PHASES = Object.freeze(['witness', 'witnessed', 'final']);
+const REPLAY_WITNESS_PHASES = Object.freeze(['witness', 'witnessed', 'diverged', 'final']);
 
 function height(value, name){
     if(!Number.isSafeInteger(value) || value < 0)
@@ -36,6 +36,14 @@ function digest(value){
     return crypto.createHash('sha256').update(value).digest('hex');
 }
 
+function normalizedOptionalDigest(value){
+    if(value === undefined || value === null) return null;
+    const normalized = String(value).toLowerCase();
+    if(!DIGEST_RE.test(normalized))
+        throw new Error('replay witness block fields must be 64-character hashes or null');
+    return normalized;
+}
+
 function normalizedBlock(row, expectedHeight){
     const blockHeight = row && row.block_index !== undefined
         ? Number(row.block_index) : Number(row && row.height);
@@ -43,7 +51,14 @@ function normalizedBlock(row, expectedHeight){
         .toLowerCase();
     if(blockHeight !== expectedHeight || !DIGEST_RE.test(blockHash))
         throw new Error('replay witness blocks must be contiguous with 64-character hashes');
-    return [blockHeight, blockHash];
+    return [
+        blockHeight,
+        blockHash,
+        normalizedOptionalDigest(row.ledger_hash),
+        normalizedOptionalDigest(row.actions_hash),
+        normalizedOptionalDigest(row.contract_hash),
+        normalizedOptionalDigest(row.state_root),
+    ];
 }
 
 function replayWindowDigest(blocks){
@@ -51,6 +66,15 @@ function replayWindowDigest(blocks){
        blocks.length > REPLAY_WITNESS_WINDOW_SIZE)
         throw new TypeError('replay witness window must contain 1 to 64 blocks');
     return digest(JSON.stringify(blocks));
+}
+
+function observedWindowDigest(rows, from, to){
+    height(from, 'from');
+    height(to, 'to');
+    if(to < from) throw new RangeError('to must be at or above from');
+    if(!Array.isArray(rows) || rows.length !== to - from + 1)
+        throw new Error('replay witness blocks must be contiguous from from through to');
+    return replayWindowDigest(rows.map((row, offset) => normalizedBlock(row, from + offset)));
 }
 
 function replayWitnessBatch(target, replayTo, rulesFrom, windows){
@@ -106,11 +130,12 @@ function buildReplayWitness({ target, replayTo, rulesFrom, gateHeights, blocks }
     if(!Array.isArray(blocks) || blocks.length !== replayTo - target + 1)
         throw new Error('replay witness must cover target through replayTo');
 
-    const normalized = blocks.map((row, offset) => normalizedBlock(row, target + offset));
     const windows = [];
-    for(let offset = 0; offset < normalized.length; offset += REPLAY_WITNESS_WINDOW_SIZE){
-        const window = normalized.slice(offset, offset + REPLAY_WITNESS_WINDOW_SIZE);
-        windows.push([window[0][0], window[window.length - 1][0], replayWindowDigest(window)]);
+    for(let offset = 0; offset < blocks.length; offset += REPLAY_WITNESS_WINDOW_SIZE){
+        const from = target + offset;
+        const to = Math.min(from + REPLAY_WITNESS_WINDOW_SIZE - 1, replayTo);
+        const window = blocks.slice(offset, offset + REPLAY_WITNESS_WINDOW_SIZE);
+        windows.push([from, to, observedWindowDigest(window, from, to)]);
     }
     const map = Object.keys(gateHeights).sort().map(key => [key, gateHeights[key]]);
     const phase = {
@@ -148,6 +173,7 @@ module.exports = {
     REPLAY_WITNESS_WINDOW_SIZE,
     REPLAY_WITNESS_PHASES,
     replayWindowDigest,
+    observedWindowDigest,
     replayWitnessBatch,
     decodeReplayWitnessPhase,
     decodeReplayWitnessWindow,
