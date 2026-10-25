@@ -5663,6 +5663,22 @@
       "05 \u2013 Chain Reorganization @regression @tier3 3. replacement blocks after reorg produce correct final balances",
       "05 \u2013 Chain Reorganization @regression @tier3 4. reorg to first block clears all subsequent state"
     ],
+    "4c4fe0cce8ab867c": [
+      "retroactive replay witness boot phases @regression @tier1 a completed witness pass at or above H rolls back before advancing phases",
+      "retroactive replay witness boot phases @regression @tier1 composes the recorded map over the venue overlay and replaces COIN:network",
+      "retroactive replay witness boot phases @regression @tier1 re-runs a mid-witness restart from the target under the recorded rules; final keeps current rules",
+      "retroactive replay witness boot phases @regression @tier1 resumes a final-phase crash without a second rollback or phase rewrite",
+      "retroactive replay witness boot phases @regression @tier1 resumes a witness-phase crash under recorded rules without a second rollback",
+      "retroactive replay witness boot phases @regression @tier1 resumes a witnessed-phase crash into final rules without a second rollback",
+      "retroactive replay witness boot phases @regression @tier1 retries a failed runtime phase handoff before testing final replay completion",
+      "retroactive replay witness boot phases through startup @regression @tier1 a closed marker whose witness reached final compares maps again on the next boot",
+      "retroactive replay witness boot phases through startup @regression @tier1 a crash after the second rollback commits writes final without rolling back again",
+      "retroactive replay witness boot phases through startup @regression @tier1 a diverged witness holds the replay with no rollback and no overlay",
+      "retroactive replay witness boot phases through startup @regression @tier1 a restart mid-witness at or above H re-runs the window from the target",
+      "retroactive replay witness boot phases through startup @regression @tier1 a witness boot with tip >= H rolls back first and replaces the COIN:network entry with the recorded value",
+      "retroactive replay witness boot phases through startup @regression @tier1 the in-process handoff at replay_to rolls back once and records the build map, not the recorded one",
+      "retroactive replay witness boot phases through startup @regression @tier1 witnessed rolls back a second time, writes final and removes the overlay for the new-rules pass"
+    ],
     "4c6fe17f3b81d78b": [
       "LIST bridge policy rules @regression @consensus any-coin items (TOKEN_POLICY_INHERITANCE_ACTIVATION) admits a foreign-coin item at/above the flag",
       "LIST bridge policy rules @regression @consensus any-coin items (TOKEN_POLICY_INHERITANCE_ACTIVATION) records a foreign-coin item invalid below the flag",
@@ -19405,8 +19421,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1553,
-      "titleCount": 15036,
+      "fileCount": 1554,
+      "titleCount": 15050,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20184,6 +20200,7 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "4c4fe0cce8ab867c",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
@@ -21339,8 +21356,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1187,
-      "titleCount": 11914,
+      "fileCount": 1188,
+      "titleCount": 11928,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21952,6 +21969,7 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "4c4fe0cce8ab867c",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
@@ -22532,8 +22550,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 611,
-      "titleCount": 6358,
+      "fileCount": 612,
+      "titleCount": 6372,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22746,6 +22764,7 @@
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "4c4fe0cce8ab867c",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
@@ -23149,8 +23168,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1187,
-      "titleCount": 11914,
+      "fileCount": 1188,
+      "titleCount": 11928,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23762,6 +23781,7 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "4c4fe0cce8ab867c",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",

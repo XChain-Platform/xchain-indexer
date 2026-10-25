@@ -477,15 +477,16 @@ describe('retroactive replay witness boot phases through startup @regression @ti
         assert.strictEqual(changes.registry.getReadOverlay(), base);
     });
 
-    it('a diverged witness holds with no rollback and no overlay', async function(){
+    it('a diverged witness holds the replay with no rollback and no overlay', async function(){
         const f = startupIndexer(maps, { tip: 98 });
         await seedWitness(f, maps, { phase: 'diverged', markerState: 'replaying' });
         const held = await f.boot();
 
         assert.deepStrictEqual(f.rollbacks, []);
         assert.deepStrictEqual(f.boots, []);
-        assert.strictEqual(held.stallReason, 'retroactive_replay_diverged');
+        assert.strictEqual(held.stallReason, 'retroactive_replay');
         assert.strictEqual(held.stallClearsAt, null);
+        assert.strictEqual(held.replayWitnessPhase, 'diverged');
         assert.strictEqual(changes.registry.getReadOverlay(), base);
     });
 
