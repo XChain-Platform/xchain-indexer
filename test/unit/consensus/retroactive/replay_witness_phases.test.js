@@ -298,8 +298,8 @@ function startupIndexer(maps, { tip }){
         decoderDb: {
             getDecoderBlockHashRow: async (height) => windowBlocks(height, height)
                 .map(row => ({ block_hash: row.block_hash })),
+            apiView(){ return this; },
         },
-        decoderReadView: startup.decoderReadView,
         rollback: { rollback: async (target) => {
             rollbacks.push(target);
             state.tip = target - 1;

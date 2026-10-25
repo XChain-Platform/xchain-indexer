@@ -160,7 +160,6 @@ function movableGateIndexer(startup, db, rollbacks){
         holdRetroactiveReplay: startup.holdRetroactiveReplay,
         holdRetroactiveReplayNeedsGo: startup.holdRetroactiveReplayNeedsGo,
         holdRetroactiveReplayDiverged: startup.holdRetroactiveReplayDiverged,
-        decoderReadView: startup.decoderReadView,
         recordConsensusGateBoot: startup.recordConsensusGateBoot,
     };
 }

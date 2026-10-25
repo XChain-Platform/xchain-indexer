@@ -103,14 +103,6 @@ module.exports = {
         this.stallClearsAt = null;          // clears only after a rewitness passes, not on a clock
     },
 
-    // The decoder handle the witness block read uses: the committed-only view, as the
-    // getblockhashes RPC reads it. The raw-handle fallback serves only test doubles that
-    // lack apiView, as at the indexerReorgView guard in XChainIndexer.js.
-    decoderReadView(){
-        const decoderDb = this.decoderDb;
-        return (decoderDb && typeof decoderDb.apiView === 'function') ? decoderDb.apiView() : decoderDb;
-    },
-
     // Compare this build's resolved gates with the recorded map before startup can become
     // ready: serve, resume an open replay marker, refuse, or roll back to the target and
     // replay under the new map (src/consensus/retroactive/boot_replay.js).
@@ -147,7 +139,7 @@ module.exports = {
             // getblockhashes RPC reads; resolved on use so a boot that never records a
             // witness never touches the decoder.
             readWitnessBlocks: (target, replayTo) =>
-                readReplayWitnessBlocks(db, this.decoderReadView(), target, replayTo),
+                readReplayWitnessBlocks(db, this.decoderDb.apiView(), target, replayTo),
             recordWitness: (witness) => recordReplayWitness(db, witness),
             recordWitnessPhase: (batch, phase) =>
                 recordReplayWitnessPhase(db, batch, phase),

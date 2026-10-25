@@ -165,8 +165,10 @@ module.exports = {
     // markers, so no dry-run transaction can adopt or discard them.
     replayWitnessDeps(indexerReorgView){
         return {
+            // Chain block hashes come from the decoder's committed-only view, the one the
+            // getblockhashes RPC reads.
             readWitnessBlocks: (from, to) =>
-                readReplayWitnessBlocks(indexerReorgView, this.decoderReadView(), from, to),
+                readReplayWitnessBlocks(indexerReorgView, this.decoderDb.apiView(), from, to),
             recordWitnessPhase: (batch, phase) => recordReplayWitnessPhase(indexerReorgView, batch, phase),
         };
     },
