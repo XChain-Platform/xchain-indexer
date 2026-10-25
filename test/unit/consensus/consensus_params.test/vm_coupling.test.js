@@ -80,7 +80,8 @@ const EXPECTED_VM_SAFE_MATH_MEMBERS = [
 // isolated-vm). The boot gates compare an install against the loaded VM's own pins, so only
 // this row stops a re-pin from shipping under an unchanged epoch. A new epoch adds a row.
 const EXPECTED_VM_PIN_DIGEST_BY_EPOCH = {
-    '7': 'e9520c7a8baeefc28ff2d8d1e1ec08917e0150581d1c4bdc676636bdb5280ae4'
+    '7': 'e9520c7a8baeefc28ff2d8d1e1ec08917e0150581d1c4bdc676636bdb5280ae4',
+    '8': 'ebf35088ddfe274a09d3504f536a2eaf5a227fa7175318cdf3f9fc195c20d8fb'
 };
 const FROZEN_STATUS_TOKENS = ['reverted', 'out_of_resource', 'failed'];
 
