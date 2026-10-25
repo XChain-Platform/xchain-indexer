@@ -241,6 +241,15 @@ addGate('bridge_row_fields_terminal_activation.BRIDGE_ROW_FIELDS_TERMINAL_ACTIVA
     testnet: UNARMED,
     regtest: 0,
 });
+// checkpoint_supersede_activation: the height on the BTC snapshot_block at/above which a
+// state checkpoint may carry supersedes_from and rules_digest, the marker a hub sets on the
+// first checkpoint after its indexer replays from a retroactively moved gate height. Under
+// it the canonical gains '|SUPERSEDE|' + supersedes_from + '|' + rules_digest after the root
+// suffix, and readers report every earlier checkpoint at or above supersedes_from as
+// superseded; below it a checkpoint carrying the fields is refused. Read with coin BTC on
+// every side. Mainnet is unpinned and testnet ships on the sentinel until a cut arms it
+// after the fleet roll. Regtest is 0 so the rail drill runs it.
+addGate('checkpoint_supersede_activation.CHECKPOINT_SUPERSEDE_ACTIVATION', 'height', { mainnet: UNPINNED, 'BTC:testnet': UNARMED, testnet: UNARMED, regtest: 0 });
 // list_share_producer_activation: the hub snapshot plane begins producing shared-list versions.
 addGate('list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION', 'height', {
     mainnet: UNARMED,

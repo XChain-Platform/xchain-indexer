@@ -59,7 +59,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "d710ef88fe15401e96bfdaaf9b26bfc37b49228adffd9411b9671d9666acd1b8",
+      "hash": "0e122379d3090a0b70dc6983592f9b4254e36adcaec682305c3390e1b04d7d61",
       "twins": [
         "xchain-hub"
       ]
@@ -2247,6 +2247,13 @@
       "to": "d710ef88fe15401e96bfdaaf9b26bfc37b49228adffd9411b9671d9666acd1b8",
       "reason": "archive_rollcall_presence_activation appended to SHARED_GATES",
       "date": "2026-10-24"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "d710ef88fe15401e96bfdaaf9b26bfc37b49228adffd9411b9671d9666acd1b8",
+      "to": "0e122379d3090a0b70dc6983592f9b4254e36adcaec682305c3390e1b04d7d61",
+      "reason": "checkpoint_supersede_activation appended to SHARED_GATES",
+      "date": "2026-10-25"
     }
   ]
 }

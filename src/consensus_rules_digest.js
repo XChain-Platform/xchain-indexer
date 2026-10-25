@@ -152,7 +152,12 @@ const SHARED_GATES = [
     // The archive_publish set: the hub elects and counts the archive leg on it and the DOGE
     // indexer judges the archive head and wrapper section on it, so a train that sizes it on
     // one side only must report a rules mismatch. Appended at the end for the preimage order.
-    ['archive_rollcall_presence_activation',    ['ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION']]
+    ['archive_rollcall_presence_activation',    ['ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION']],
+    // The superseding checkpoint marker: the hub signs supersedes_from and rules_digest into the
+    // checkpoint canonical under it and every verifier rebuilds that canonical under it, so a
+    // train that sizes it on one side only must report a rules mismatch. Appended at the end
+    // for the preimage order.
+    ['checkpoint_supersede_activation',         ['CHECKPOINT_SUPERSEDE_ACTIVATION']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an

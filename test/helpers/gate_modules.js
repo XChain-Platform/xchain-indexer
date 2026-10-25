@@ -207,6 +207,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'airdrop_zero_legs_omitted_activation',
     'tick_normalize_activation',
     'archive_rollcall_presence_activation',
+    'checkpoint_supersede_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
