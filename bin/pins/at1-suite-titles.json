@@ -5957,6 +5957,18 @@
       "PRICE v0 canonical: the admission field on the indexer verifier refuses a map the encoding cannot spell injectively",
       "PRICE v0 canonical: the admission field on the indexer verifier uses legacy bytes in BOTH directions of the version seam"
     ],
+    "5288272104276873": [
+      "retroactive replay marker codec @regression @tier1 advances pending to replaying and replaying to replayed without mutation",
+      "retroactive replay marker codec @regression @tier1 builds a new pending marker with canonical field names and order",
+      "retroactive replay marker codec @regression @tier1 encodes keys in canonical order regardless of input insertion order",
+      "retroactive replay marker codec @regression @tier1 exports the event code and frozen ordered replay states",
+      "retroactive replay marker codec @regression @tier1 refuses a rules digest that is not exactly 64 lowercase hex characters",
+      "retroactive replay marker codec @regression @tier1 refuses an invalid target or replay end",
+      "retroactive replay marker codec @regression @tier1 refuses malformed JSON, every missing field, and an unknown state",
+      "retroactive replay marker codec @regression @tier1 refuses skipped, reversed, repeated, and post-completion steps",
+      "retroactive replay marker codec @regression @tier1 reports only pending and replaying markers as open",
+      "retroactive replay marker codec @regression @tier1 round trips a marker through JSON into a new canonical object"
+    ],
     "527b1fd7448695ea": [
       "05 \u2013 Chain Reorganization @regression @tier3 7. two successive reorgs converge to correct final state",
       "05 \u2013 Chain Reorganization @regression @tier3 8. actions in blocks before reorg point are preserved",
@@ -6045,12 +6057,6 @@
       "bridge_settle: the in-leg policy barrier applies policy then transfer with no seeded copy",
       "bridge_settle: the in-leg policy barrier logs each policy barrier once per transfer or tick",
       "bridge_settle: the in-leg policy barrier refuses a general-token in-leg until its policy snapshot applies"
-    ],
-    "544a59345c322407": [
-      "retroactive replay status rules @regression @tier1 heightIsFinal excludes the open replay range starting at target",
-      "retroactive replay status rules @regression @tier1 replayReachedTip changes at replay_to only for a replaying marker",
-      "retroactive replay status rules @regression @tier1 rulesStatusBody rejects a digest outside 64 lowercase hex characters",
-      "retroactive replay status rules @regression @tier1 rulesStatusBody returns only the public marker fields"
     ],
     "545bf54c62a51ea5": [
       "protocol_changes/STAKE_DELEGATED_SIGNING_KEY row @regression @tier1 is present in the class table and registry in the same shape",
@@ -19174,7 +19180,7 @@
   "scripts": {
     "test": {
       "fileCount": 1524,
-      "titleCount": 14862,
+      "titleCount": 14868,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19938,7 +19944,7 @@
         "test/unit/consensus/protocol_time.test.js": "f5f64f28d68dc118",
         "test/unit/consensus/protocol_time_caller_order.test.js": "7891fe7146b2d1e7",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
-        "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/rollcall_close/absence_streak.test.js": "98d8992dfae50cef",
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
         "test/unit/consensus/rollcall_close/signer_verify.test.js": "7e33c00ff3453bbd",
@@ -21079,7 +21085,7 @@
     },
     "test:regression": {
       "fileCount": 1158,
-      "titleCount": 11740,
+      "titleCount": 11746,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21677,7 +21683,7 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
-        "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22243,7 +22249,7 @@
     },
     "test:regression:fast": {
       "fileCount": 584,
-      "titleCount": 6193,
+      "titleCount": 6199,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22444,7 +22450,7 @@
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
-        "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22833,7 +22839,7 @@
     },
     "test:regression:full": {
       "fileCount": 1158,
-      "titleCount": 11740,
+      "titleCount": 11746,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23431,7 +23437,7 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
-        "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
