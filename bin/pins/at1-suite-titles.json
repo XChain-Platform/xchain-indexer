@@ -19196,6 +19196,14 @@
       "genesis airdrop pass sums duplicate addresses and skips junk quantities",
       "genesis airdrop pass supports multiple buckets with independent amounts and skips zero-floor credits"
     ],
+    "fedd8c98879ad2e0": [
+      "retroactive replay marker events @regression @tier1 inserts the encoded marker as an append-only event",
+      "retroactive replay marker events @regression @tier1 keeps a maximal replayed marker within REPLAY_MARKER_DATA_MAX",
+      "retroactive replay marker events @regression @tier1 reads the newest marker row first and decodes it",
+      "retroactive replay marker events @regression @tier1 refuses an invalid marker before issuing a query",
+      "retroactive replay marker events @regression @tier1 returns null when there is no CONSENSUS_RETRO_REPLAY row",
+      "retroactive replay marker events @regression @tier1 throws when the newest marker row is malformed"
+    ],
     "fef4c3341aec5110": [
       "Price v2 (PRICE batch) @regression @tier3 straddle rule (step 3) accepts the same batch entirely below the gate, and entirely at or above it",
       "Price v2 (PRICE batch) @regression @tier3 straddle rule (step 3) an UNARMED gate straddles nothing",
@@ -19251,8 +19259,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1532,
-      "titleCount": 14924,
+      "fileCount": 1533,
+      "titleCount": 14930,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20159,6 +20167,7 @@
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
         "test/unit/db/events/reorg_cursor_guards.test.js": "d18641680b374c5c",
+        "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/adversarial_compact_id.test.js": "359bcfb442706852",
@@ -21164,8 +21173,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1166,
-      "titleCount": 11802,
+      "fileCount": 1167,
+      "titleCount": 11808,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21872,6 +21881,7 @@
         "test/unit/db/db_table_parameterized_identifiers.test.js": "42f0d570ec801310",
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
+        "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
@@ -22336,8 +22346,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 592,
-      "titleCount": 6255,
+      "fileCount": 593,
+      "titleCount": 6261,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22622,6 +22632,7 @@
         "test/unit/db/db_sanity_check_null_tick.test.js": "12da3a56447a42df",
         "test/unit/db/db_session_sql_mode_pin.test.js": "c91642ba2d913def",
         "test/unit/db/db_session_timezone_utc.test.js": "3a25c746f0ad7a91",
+        "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
         "test/unit/db/ledger/contract_permissions_persist.test.js": "d3332bf4be722dbe",
@@ -22934,8 +22945,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1166,
-      "titleCount": 11802,
+      "fileCount": 1167,
+      "titleCount": 11808,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23642,6 +23653,7 @@
         "test/unit/db/db_table_parameterized_identifiers.test.js": "42f0d570ec801310",
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
+        "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
