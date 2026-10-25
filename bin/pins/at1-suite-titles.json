@@ -3385,6 +3385,17 @@
       "08 Fast Chain (DOGE cadence, 10 blocks/s) processes the fast chain without errors",
       "08 Fast Chain (DOGE cadence, 10 blocks/s) still holds the 10 blocks/s per-block budget at the end of the run"
     ],
+    "30eea5c9ebd63b22": [
+      "checkpoint supersede rules @regression @tier1 supersedeSuffix emits exact SUPERSEDE bytes and lowercases an uppercase rules_digest",
+      "checkpoint supersede rules @regression @tier1 supersedeSuffix returns an empty suffix when supersedes_from and rules_digest are absent or null",
+      "checkpoint supersede rules @regression @tier1 supersedeSuffix throws when exactly one supersession field is present",
+      "checkpoint supersede rules @regression @tier1 supersedeSuffix throws when rules_digest is not exactly 64 hexadecimal characters",
+      "checkpoint supersede rules @regression @tier1 supersedeSuffix throws when supersedes_from is not a non-negative safe integer",
+      "checkpoint supersede rules @regression @tier1 supersededBySeq ignores a superseder on another network",
+      "checkpoint supersede rules @regression @tier1 supersededBySeq ignores a superseder whose checkpoint_seq is not higher",
+      "checkpoint supersede rules @regression @tier1 supersededBySeq reports the lowest checkpoint_seq of two superseders as a Number",
+      "checkpoint supersede rules @regression @tier1 supersededBySeq supersedes rows at and above the declared block while leaving a lower block live"
+    ],
     "30f105c9afedac86": [
       "snapshot-age caller inventory @regression @tier1 pins every source file that refers to snapshot age",
       "snapshot-age caller inventory @regression @tier1 pins the current snapshot age to a block-count difference"
@@ -19167,8 +19178,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1523,
-      "titleCount": 14858,
+      "fileCount": 1524,
+      "titleCount": 14867,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19932,6 +19943,7 @@
         "test/unit/consensus/protocol_time.test.js": "f5f64f28d68dc118",
         "test/unit/consensus/protocol_time_caller_order.test.js": "7891fe7146b2d1e7",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
+        "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/rollcall_close/absence_streak.test.js": "98d8992dfae50cef",
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
         "test/unit/consensus/rollcall_close/signer_verify.test.js": "7e33c00ff3453bbd",
@@ -21071,8 +21083,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1157,
-      "titleCount": 11736,
+      "fileCount": 1158,
+      "titleCount": 11745,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21670,6 +21682,7 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
+        "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22234,8 +22247,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 583,
-      "titleCount": 6189,
+      "fileCount": 584,
+      "titleCount": 6198,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22436,6 +22449,7 @@
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
+        "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22823,8 +22837,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1157,
-      "titleCount": 11736,
+      "fileCount": 1158,
+      "titleCount": 11745,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23422,6 +23436,7 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
+        "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
