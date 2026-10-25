@@ -9287,13 +9287,6 @@
       "recovery checkpointCanonical: parity with the gated checkpoint family @regression @tier1 post-flag-day, null roots (a legacy archived row): stays on the rootless canonical",
       "recovery checkpointCanonical: parity with the gated checkpoint family @regression @tier1 post-flag-day, roots present: byte-identical to the mirrored-row rebuild the parity suite pins to the hub"
     ],
-    "809d827dfcbfdd94": [
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 filters the legacy wrapper set through rolled absences in verified recovery",
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 keeps a pre-gate wrapper on setFor oracle_publish",
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers a post-gate wrapper against setFor archive_publish",
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers an active wrapper whose archive predates archive_publish snapshots",
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 verifyCompleteness refuses archive_publish when a present source was dropped"
-    ],
     "80c8410771963ebc": [
       "native coin fee quote @regression @tier1 _priceFeeQuote() judges a proposed output: accepts at exactly min, rejects just below",
       "native coin fee quote @regression @tier1 _priceFeeQuote() missing/stale price => valid:false with the price error",
@@ -10314,11 +10307,6 @@
       "consensus rules digest activeGatesAt unit filtering keeps coin-qualified height resolution without a named coin",
       "consensus rules digest activeGatesAt unit filtering keeps height, time and epoch activation rows eligible",
       "consensus rules digest activeGatesAt unit filtering returns only activation-unit rows for every supported network and coin lookup"
-    ],
-    "9011773de46fcb3d": [
-      "retroactive consensus gate move at boot @regression @tier1 records the gate height map and null applied tip on an empty database",
-      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when a recorded gate moves to or below the applied tip",
-      "retroactive consensus gate move at boot @regression @tier1 serves and records the new map when the moved gate stays above the applied tip"
     ],
     "90165b8ec993c4e6": [
       "ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1 BTC below the anchor takes the legacy unweighted branch",
@@ -15380,6 +15368,14 @@
       "status-table composite (status_id, action_index) index @regression swap_statuses declares the composite (status_id, action_index) index in the base schema",
       "status-table composite (status_id, action_index) index @regression swap_statuses no longer declares a standalone single-column status_id index (redundant, dropped)"
     ],
+    "cc5f62f23b7023c8": [
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 filters legacy wrapper fallback whenever rolled absences are available",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 filters the legacy wrapper set through rolled absences in verified recovery",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 keeps a pre-gate wrapper on setFor oracle_publish",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers a post-gate wrapper against setFor archive_publish",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers an active wrapper whose archive predates archive_publish snapshots",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 verifyCompleteness refuses archive_publish when a present source was dropped"
+    ],
     "cc69dc79f84383cb": [
       "UtxoTracker boundary tests @regression @tier1 UTX-B01: height 0 (genesis) height 0 is a valid number and is returned, not treated as absent",
       "UtxoTracker boundary tests @regression @tier1 UTX-B02: negative height a negative height passes the numeric guard and is returned verbatim",
@@ -19171,8 +19167,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1524,
-      "titleCount": 14860,
+      "fileCount": 1523,
+      "titleCount": 14858,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19944,7 +19940,6 @@
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_registry_parity.test.js": "56e2effa6675b4fa",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
         "test/unit/consensus/snapshot_checkpoint/canonical.test.js": "299c4ed3013e8a10",
         "test/unit/consensus/snapshot_checkpoint/canonical_twin.test.js": "9fccb58e5d806628",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
@@ -20522,7 +20517,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "809d827dfcbfdd94",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "cc5f62f23b7023c8",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -21076,8 +21071,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1158,
-      "titleCount": 11738,
+      "fileCount": 1157,
+      "titleCount": 11736,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21675,7 +21670,6 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22108,7 +22102,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "809d827dfcbfdd94",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "cc5f62f23b7023c8",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -22240,8 +22234,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 584,
-      "titleCount": 6191,
+      "fileCount": 583,
+      "titleCount": 6189,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22442,7 +22436,6 @@
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22768,7 +22761,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "809d827dfcbfdd94",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "cc5f62f23b7023c8",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
@@ -22830,8 +22823,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1158,
-      "titleCount": 11738,
+      "fileCount": 1157,
+      "titleCount": 11736,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23429,7 +23422,6 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -23862,7 +23854,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "809d827dfcbfdd94",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "cc5f62f23b7023c8",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
