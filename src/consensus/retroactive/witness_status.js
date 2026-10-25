@@ -30,6 +30,13 @@ function witnessFromPhase(phase) {
     }
 }
 
+function witnessHoldsBlocks(witnessPhase) {
+    if(witnessPhase === null || witnessPhase === undefined) return false;
+
+    witnessFromPhase(witnessPhase.phase);
+    return witnessPhase.phase === 'diverged';
+}
+
 function statusRulesDigest(mapDigest, marker, phase) {
     if(phase === 'witness' && marker &&
         (marker.state === 'pending' || marker.state === 'replaying'))
@@ -37,4 +44,4 @@ function statusRulesDigest(mapDigest, marker, phase) {
     return mapDigest;
 }
 
-module.exports = { witnessFromPhase, statusRulesDigest };
+module.exports = { witnessFromPhase, witnessHoldsBlocks, statusRulesDigest };

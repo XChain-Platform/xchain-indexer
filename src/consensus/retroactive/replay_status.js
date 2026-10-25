@@ -28,6 +28,16 @@ function replayReachedTip(marker, committedTip){
         && committedTip >= marker.replay_to);
 }
 
+function replayMayComplete(marker, committedTip, witnessPhase){
+    const reachedTip = replayReachedTip(marker, committedTip);
+    if(witnessPhase === null || witnessPhase === undefined) return reachedTip;
+
+    witnessFromPhase(witnessPhase.phase);
+    return reachedTip
+        && witnessPhase.phase === 'final'
+        && typeof witnessPhase.changed === 'boolean';
+}
+
 function heightIsFinal(height, replay){
     if(!replay || replay.state === 'replayed') return true;
     return height < replay.target;
@@ -52,4 +62,4 @@ function rulesStatusBody(digest, marker, witnessPhase){
     };
 }
 
-module.exports = { replayReachedTip, heightIsFinal, rulesStatusBody };
+module.exports = { replayReachedTip, replayMayComplete, heightIsFinal, rulesStatusBody };
