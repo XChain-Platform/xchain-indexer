@@ -96,14 +96,16 @@ function foldHeaderReason(config, data, error){
 }
 async function checkFoldSeqs(handler, data, sections, archive, error){
     if(error) return error;
-    let validOnly = gateRegistry.activeAt(CHECKPOINT_SEQ_BIND_GATE,
+    let checkpointSeqBind = gateRegistry.activeAt(CHECKPOINT_SEQ_BIND_GATE,
         handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
+    let replayValidOnly = checkpointSeqBind || data['NETWORK'] === 'regtest';
     for(let section of sections){
-        if(validOnly){
+        if(checkpointSeqBind){
             let reason = validate.checkpointSeqBindReason(section);
             if(reason) return 'invalid: SECTION ' + section.SECTION_INDEX + ' ' + reason;
         }
-        let maximum = await handler.indexerDb.getMaxAnchorCheckpointSeq(section.CHAIN, section.NETWORK, validOnly);
+        let maximum = await handler.indexerDb.getMaxAnchorCheckpointSeq(
+            section.CHAIN, section.NETWORK, replayValidOnly);
         if(maximum !== null && Number(section.CHECKPOINT_SEQ) < maximum)
             return 'invalid: SECTION ' + section.SECTION_INDEX + ' CHECKPOINT_SEQ ' +
                 '(stale; replay of an older checkpoint)';
@@ -112,7 +114,7 @@ async function checkFoldSeqs(handler, data, sections, archive, error){
     let wrapper = sections[Number(archive.WRAPPER_SECTION_INDEX)];
     let wrapperRows = await handler.actions.protocolChanges.isEnabled(
         'ARCHIVE_REPLAY_WRAPPER_WATERMARK', Number(data['BLOCK_INDEX']));
-    let watermark = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows, validOnly);
+    let watermark = await handler.indexerDb.getArchiveReplayWatermarks(wrapperRows, replayValidOnly);
     let batchStale = watermark.batchSeq !== null && Number(archive.MATCH_BATCH_SEQ) < watermark.batchSeq;
     let checkpointStale = watermark.checkpointSeq !== null && Number(wrapper.CHECKPOINT_SEQ) < watermark.checkpointSeq;
     return batchStale && checkpointStale ?
