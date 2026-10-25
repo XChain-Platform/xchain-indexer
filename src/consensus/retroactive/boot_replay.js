@@ -33,6 +33,7 @@ const { goRulesSha, goCommand } = require('./go_binding.js');
 // without it predates the widening and saw only the height keys it lists, so a key
 // it lacks is unrecorded rather than moved.
 const GATE_RECORD_SCOPE = 'registry';
+const MIRROR_CHAINS = new Set(['BTC', 'LTC', 'DOGE']);
 
 // sha256 of the canonical gate map, the applied-rules digest a replay marker carries.
 function gateMapDigest(gateHeights){
@@ -67,6 +68,56 @@ function classifyAgainst(recorded, current, tip, movableGates){
     });
 }
 
+function nonNegativeHeight(value, name){
+    if(value === null || value === undefined || value === '')
+        throw new TypeError(name + ' must be a non-negative safe integer');
+    const height = Number(value);
+    if(!Number.isSafeInteger(height) || height < 0)
+        throw new TypeError(name + ' must be a non-negative safe integer');
+    return height;
+}
+
+function capabilityMirrorTarget(chain, target, coveringCheckpoint){
+    const coin = String(chain || '').toUpperCase();
+    if(!MIRROR_CHAINS.has(coin)) throw new TypeError('chain must be BTC, LTC, or DOGE');
+
+    const localTarget = nonNegativeHeight(target, 'target');
+    if(coin === 'BTC') return localTarget;
+    if(!coveringCheckpoint || typeof coveringCheckpoint !== 'object') return null;
+    if(coveringCheckpoint.chain !== undefined &&
+       String(coveringCheckpoint.chain).toUpperCase() !== coin)
+        throw new RangeError('covering checkpoint must belong to ' + coin);
+
+    const coveredThrough = nonNegativeHeight(
+        coveringCheckpoint.block_index,
+        'covering checkpoint block_index'
+    );
+    if(coveredThrough < localTarget)
+        throw new RangeError('covering checkpoint must cover the replay target');
+    return nonNegativeHeight(
+        coveringCheckpoint.snapshot_block,
+        'covering checkpoint snapshot_block'
+    );
+}
+
+// Off BTC, capability snapshots are keyed by the BTC height carried by the first
+// state checkpoint covering the local replay target.
+async function mirrorGapAtTarget(chain, target, deps){
+    if(chain === undefined || chain === null) return deps.readMirrorGap(target);
+
+    const coin = String(chain).toUpperCase();
+    let checkpoint = null;
+    if(coin !== 'BTC'){
+        if(typeof deps.readCoveringCheckpoint !== 'function')
+            throw new TypeError('readCoveringCheckpoint is required for an off-BTC replay');
+        checkpoint = await deps.readCoveringCheckpoint(coin, target);
+    }
+
+    const mirrorTarget = capabilityMirrorTarget(coin, target, checkpoint);
+    if(mirrorTarget === null)
+        return 'capability_snapshot_target_missing:' + coin + ':' + String(target);
+    return deps.readMirrorGap(target, mirrorTarget);
+}
 // An open marker: roll back only while the applied tip still reaches the target, so
 // a crash after the rollback commit never rolls back twice, then record the current
 // map below the target and advance pending to replaying.
@@ -89,7 +140,7 @@ async function resumeOpenMarker(marker, tip, current, deps){
 
 // Returns { action: serve | resume | rollback, marker }. deps.refuse must throw, and
 // movableGates overrides MOVABLE_GATES only in tests.
-async function runBootReplay({ tip, current, capBlocks, movableGates }, deps){
+async function runBootReplay({ tip, current, capBlocks, movableGates, chain }, deps){
     const boot = await deps.readBoot();
     const marker = boot ? boot.replayMarker : null;
     if(isReplayOpen(marker)) return resumeOpenMarker(marker, tip, current, deps);
@@ -122,7 +173,7 @@ async function runBootReplay({ tip, current, capBlocks, movableGates }, deps){
             ' blocks. Authorize with: ' + goCommand(plan.target, goRulesSha(canonicalMap, plan.target)));
     }
 
-    const mirrorGap = await deps.readMirrorGap(moves.target);
+    const mirrorGap = await mirrorGapAtTarget(chain, moves.target, deps);
     plan = planRetroactiveBoot({ ...base, goMatches, mirrorGap });
     if(plan.action === 'refuse')
         return deps.refuse('retroactive replay refused: mirror_gap: ' + plan.detail);
@@ -151,5 +202,7 @@ module.exports = {
     comparableGateMap,
     movedGateMessage,
     classifyAgainst,
+    capabilityMirrorTarget,
+    mirrorGapAtTarget,
     runBootReplay,
 };
