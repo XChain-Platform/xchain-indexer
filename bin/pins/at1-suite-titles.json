@@ -6532,6 +6532,13 @@
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 binding rule (utility.selectApplicableAttestationResponses) never binds a row whose first satisfying block is past the deadline (AT3, first half)",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 binding rule (utility.selectApplicableAttestationResponses) skips a row whose local request is absent, already terminal, or legacy-era"
     ],
+    "578918e0e180755d": [
+      "recovery checkpoint supersede archive columns @regression @tier1 has the recovery memory database preserve every checkpoint insert column",
+      "recovery checkpoint supersede archive columns @regression @tier1 has verifyArchive accept absent, explicit-null, and valid supersede fields",
+      "recovery checkpoint supersede archive columns @regression @tier1 has verifyArchive reject malformed supersede field pairs",
+      "recovery checkpoint supersede archive columns @regression @tier1 has writeArchive insert both supersede columns in column order and null absent fields",
+      "recovery checkpoint supersede archive columns @regression @tier1 has writeArchive refuse a rules_digest collision and skip an identical stored row"
+    ],
     "57b7aef949668b52": [
       "Controller-bound token: Phase-1 single-column model retired @regression the permanent-lock (LOCK_CONTROLLER) is gone everywhere LOCK_CONTROLLER is not a config LOCK field",
       "Controller-bound token: Phase-1 single-column model retired @regression the permanent-lock (LOCK_CONTROLLER) is gone everywhere LOCK_CONTROLLER is not in the Issue handler LOCK field list",
@@ -13995,12 +14002,6 @@
       "HubDbSync applyRetraction receive-side guards @regression @tier1 other-chain retractions skip the own-generation check and apply every fence, lower ones included",
       "HubDbSync applyRetraction receive-side guards @regression @tier1 without the hook (explorer vendored mirror) other-chain legacy behavior is unchanged"
     ],
-    "bba785d1cb813925": [
-      "recovery checkpoint supersede archive columns @regression @tier1 has verifyArchive accept absent, explicit-null, and valid supersede fields",
-      "recovery checkpoint supersede archive columns @regression @tier1 has verifyArchive reject malformed supersede field pairs",
-      "recovery checkpoint supersede archive columns @regression @tier1 has writeArchive insert both supersede columns in column order and null absent fields",
-      "recovery checkpoint supersede archive columns @regression @tier1 has writeArchive refuse a rules_digest collision and skip an identical stored row"
-    ],
     "bbc1475cf6fea867": [
       "anchor-action-query: CHECKPOINT_VERSIONS includes folded v3 checkpoints while excluding v2 continuations",
       "anchor-action-query: buildAnchorActionResponse() carries an invalid status through so the hub can reject it (never silently trusts)",
@@ -19346,7 +19347,7 @@
   "scripts": {
     "test": {
       "fileCount": 1545,
-      "titleCount": 14992,
+      "titleCount": 14993,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20726,7 +20727,7 @@
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
         "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
         "test/unit/recovery/recovery.test/checkpoint_price_unsigned_columns.test.js": "047d84192e26ff62",
-        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "bba785d1cb813925",
+        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "578918e0e180755d",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
@@ -21272,7 +21273,7 @@
     },
     "test:regression": {
       "fileCount": 1179,
-      "titleCount": 11870,
+      "titleCount": 11871,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22332,7 +22333,7 @@
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
         "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
-        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "bba785d1cb813925",
+        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "578918e0e180755d",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
@@ -22457,7 +22458,7 @@
     },
     "test:regression:fast": {
       "fileCount": 603,
-      "titleCount": 6314,
+      "titleCount": 6315,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -23005,7 +23006,7 @@
         "test/unit/recovery/archive_publish_wrapper_set.test.js": "cc5f62f23b7023c8",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
-        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "bba785d1cb813925",
+        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "578918e0e180755d",
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
         "test/unit/recovery/recovery_driver_tieorder.test.js": "afe91c9de44e3786",
         "test/unit/recovery/recovery_reward_derive_block.test.js": "bd0736b33dc88530",
@@ -23066,7 +23067,7 @@
     },
     "test:regression:full": {
       "fileCount": 1179,
-      "titleCount": 11870,
+      "titleCount": 11871,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24126,7 +24127,7 @@
         "test/unit/recovery/recovery.test/archived_rewards.test.js": "9cefd1c22d5ab863",
         "test/unit/recovery/recovery.test/bridge_policy_tables.test.js": "72c5515b50cc6b62",
         "test/unit/recovery/recovery.test/checkpoint_price_tables.test.js": "8db754e1337df6d1",
-        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "bba785d1cb813925",
+        "test/unit/recovery/recovery.test/checkpoint_supersede_columns.test.js": "578918e0e180755d",
         "test/unit/recovery/recovery.test/completeness.test.js": "13916a8053b30a62",
         "test/unit/recovery/recovery.test/quorum_verified_parity.test.js": "9eeca216e94a042e",
         "test/unit/recovery/recovery.test/stake_cross_checks.test.js": "af9b2b310cf3a087",
