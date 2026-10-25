@@ -17928,6 +17928,12 @@
       "slashContractStake precision @regression @tier1 slashes an 18-dp contract stake without truncating the residual",
       "slashContractStake precision @regression @tier1 widens the positivity filter so sub-1e-8 contract stakes stay slashable"
     ],
+    "ebf22e87e5c41a19": [
+      "boot replay capability mirror target @regression @tier1 maps a DOGE target to its covering BTC snapshot and checks the gap",
+      "boot replay capability mirror target @regression @tier1 maps a LTC target to its covering BTC snapshot and checks the gap",
+      "boot replay capability mirror target @regression @tier1 refuses an absent or non-covering off-BTC checkpoint",
+      "boot replay capability mirror target @regression @tier1 uses the BTC target directly without reading a covering checkpoint"
+    ],
     "ebfbb476ed9bd920": [
       "VOTE settlement exact activation: split tally @regression @tier1 activation height a tally measured at 299 rounds half-up and one measured at 300 floors with a remainder",
       "VOTE settlement exact activation: split tally @regression @tier1 armed (regtest from genesis) gives the remainder of an even split to the lowest option index, whatever the row order",
@@ -19285,8 +19291,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1536,
-      "titleCount": 14950,
+      "fileCount": 1537,
+      "titleCount": 14954,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20052,6 +20058,7 @@
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
+        "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
@@ -21202,8 +21209,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1170,
-      "titleCount": 11828,
+      "fileCount": 1171,
+      "titleCount": 11832,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21803,6 +21810,7 @@
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
+        "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
@@ -22378,8 +22386,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 596,
-      "titleCount": 6281,
+      "fileCount": 597,
+      "titleCount": 6285,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22582,6 +22590,7 @@
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
+        "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
@@ -22980,8 +22989,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1170,
-      "titleCount": 11828,
+      "fileCount": 1171,
+      "titleCount": 11832,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23581,6 +23590,7 @@
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
+        "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
