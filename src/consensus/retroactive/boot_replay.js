@@ -123,7 +123,7 @@ async function mirrorGapAtTarget(chain, target, deps){
 async function recordReplayWitnessBeforeRollback(plan, tip, recorded, rulesFrom, deps){
     const canRead = typeof deps.readWitnessBlocks === 'function';
     const canRecord = typeof deps.recordWitness === 'function';
-    if(!canRead && !canRecord) return;
+    if(!canRead && !canRecord) return null;
     if(!canRead || !canRecord)
         throw new TypeError('readWitnessBlocks and recordWitness must be provided together');
     const blocks = await deps.readWitnessBlocks(plan.target, tip);
@@ -135,6 +135,33 @@ async function recordReplayWitnessBeforeRollback(plan, tip, recorded, rulesFrom,
         blocks,
     });
     await deps.recordWitness(witness);
+    return witness;
+}
+
+function hasWitnessPhases(deps){
+    return ['readWitness', 'recordWitnessPhase', 'useRecordedRules', 'useCurrentRules']
+        .every(name => typeof deps[name] === 'function');
+}
+
+function witnessMatches(witness, marker){
+    const phase = witness && witness.phase;
+    const gateHeights = witness && witness.gateHeights;
+    return !!phase && !!gateHeights && typeof gateHeights === 'object' &&
+        !Array.isArray(gateHeights) && gateMapDigest(gateHeights) === marker.rules_from &&
+        phase.target === marker.target && phase.replay_to === marker.replay_to &&
+        phase.rules_from === marker.rules_from;
+}
+
+function witnessWithPhase(witness, phase){
+    return Object.assign({}, witness, {
+        phase: Object.assign({}, witness.phase, { phase }),
+    });
+}
+
+async function recordWitnessPhase(witness, phase, deps){
+    const next = witnessWithPhase(witness, phase);
+    await deps.recordWitnessPhase(next.batch, next.phase);
+    return next;
 }
 
 // An open marker: roll back only while the applied tip still reaches the target, so
@@ -157,11 +184,99 @@ async function resumeOpenMarker(marker, tip, current, deps){
     return { action: 'resume', marker: replaying };
 }
 
-// Returns { action: serve | resume | rollback, marker }. deps.refuse must throw, and
-// movableGates overrides MOVABLE_GATES only in tests.
+async function startFinalReplay(marker, witness, tip, current, deps){
+    deps.useCurrentRules();
+    deps.holdReplay();
+
+    let pending = marker;
+    if(marker.state !== 'pending'){
+        pending = buildReplayMarker({
+            target: marker.target,
+            replayTo: marker.replay_to,
+            rulesFrom: marker.rules_from,
+            rulesTo: marker.rules_to,
+        });
+        await deps.recordMarker(pending);
+    }
+
+    let recordTip = tip;
+    let rolledBack = false;
+    if(tip !== null && tip >= marker.target){
+        await deps.rollback(marker.target);
+        deps.holdReplay();
+        recordTip = marker.target - 1;
+        rolledBack = true;
+    }
+    if(recordTip !== null) recordTip = Math.min(recordTip, marker.target - 1);
+    await deps.recordBoot(current, recordTip);
+    await recordWitnessPhase(witness, 'final', deps);
+    const replaying = advanceReplayMarker(pending, 'replaying');
+    await deps.recordMarker(replaying);
+    return { action: rolledBack ? 'rollback' : 'resume', marker: replaying, phase: 'final' };
+}
+
+async function resumePhasedReplay(marker, witness, tip, current, deps){
+    if(!witnessMatches(witness, marker))
+        throw new Error('replay witness does not match the replay marker');
+
+    const phase = witness.phase.phase;
+    if(phase === 'final'){
+        deps.useCurrentRules();
+        if(isReplayOpen(marker)){
+            const result = await resumeOpenMarker(marker, tip, current, deps);
+            return Object.assign(result, { phase: 'final' });
+        }
+        await deps.recordBoot(current, tip);
+        return { action: 'serve', marker, phase: 'final' };
+    }
+
+    if(phase === 'witnessed')
+        return startFinalReplay(marker, witness, tip, current, deps);
+
+    deps.useRecordedRules(witness.gateHeights);
+    deps.holdReplay();
+    if(marker.state === 'replaying') return { action: 'resume', marker, phase: 'witness' };
+
+    if(marker.state === 'pending'){
+        let recordTip = tip;
+        let rolledBack = false;
+        if(tip !== null && tip >= marker.target){
+            await deps.rollback(marker.target);
+            deps.holdReplay();
+            recordTip = marker.target - 1;
+            rolledBack = true;
+        }
+        if(recordTip !== null) recordTip = Math.min(recordTip, marker.target - 1);
+        await deps.recordBoot(witness.gateHeights, recordTip);
+        const replaying = advanceReplayMarker(marker, 'replaying');
+        await deps.recordMarker(replaying);
+        return { action: rolledBack ? 'rollback' : 'resume', marker: replaying,
+            phase: 'witness' };
+    }
+
+    let recordTip = tip;
+    let rolledBack = false;
+    if(tip !== null && tip >= marker.target){
+        await deps.rollback(marker.target);
+        deps.holdReplay();
+        recordTip = marker.target - 1;
+        rolledBack = true;
+    }
+    const witnessed = await recordWitnessPhase(witness, 'witnessed', deps);
+    const result = await startFinalReplay(marker, witnessed, recordTip, current, deps);
+    return { action: rolledBack || result.action === 'rollback' ? 'rollback' : result.action,
+        marker: result.marker, phase: result.phase };
+}
+
+// Returns { action: serve | resume | rollback, marker, phase? }. deps.refuse must throw,
+// and movableGates overrides MOVABLE_GATES only in tests.
 async function runBootReplay({ tip, current, capBlocks, movableGates, chain }, deps){
     const boot = await deps.readBoot();
     const marker = boot ? boot.replayMarker : null;
+    const phased = hasWitnessPhases(deps);
+    const latestWitness = phased ? await deps.readWitness() : null;
+    if(marker && latestWitness && witnessMatches(latestWitness, marker))
+        return resumePhasedReplay(marker, latestWitness, tip, current, deps);
     if(isReplayOpen(marker)) return resumeOpenMarker(marker, tip, current, deps);
 
     const recorded = boot ? boot.recorded : null;
@@ -206,8 +321,17 @@ async function runBootReplay({ tip, current, capBlocks, movableGates, chain }, d
         rulesFrom,
         rulesTo: gateMapDigest(current),
     });
-    await recordReplayWitnessBeforeRollback(plan, tip, recorded, rulesFrom, deps);
+    let witness = latestWitness;
+    if(!witness || witness.phase.phase !== 'witness' ||
+       witness.phase.target !== plan.target || witness.phase.replay_to !== tip ||
+       witness.phase.rules_from !== rulesFrom)
+        witness = await recordReplayWitnessBeforeRollback(plan, tip, recorded, rulesFrom, deps);
     await deps.recordMarker(pending);
+    if(phased && witness){
+        if(!witness.gateHeights)
+            witness = Object.assign({}, witness, { gateHeights: recorded.gateHeights });
+        return resumePhasedReplay(pending, witness, tip, current, deps);
+    }
     deps.holdReplay();
     await deps.rollback(plan.target);
     deps.holdReplay();

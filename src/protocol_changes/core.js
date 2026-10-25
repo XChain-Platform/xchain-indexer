@@ -160,6 +160,12 @@ class GateRegistry {
         this.overlay = fn;
     }
 
+    // The witness pass composes a temporary recorded-rules projection over the
+    // venue overlay, then restores this exact function for the final pass.
+    getReadOverlay() {
+        return this.overlay;
+    }
+
     // The one read path: the committed value through the overlay, or as is.
     read(key) {
         const row = this.entries.get(key);
