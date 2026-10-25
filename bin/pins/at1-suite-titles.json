@@ -18168,6 +18168,15 @@
       "state_root reserved sub-trees: gateSubRoots @regression a bare-network key arms nothing (coin-qualified keys are the only lookup)",
       "state_root reserved sub-trees: gateSubRoots @regression an armed escrow leaf flips the derived version to 2 (leaf-set changes are never version-invisible)"
     ],
+    "ee5aadeee40aed75": [
+      "retroactive replay witness record @regression @tier1 chunks target through replay_to into deterministic 64-block windows",
+      "retroactive replay witness record @regression @tier1 keeps every persisted row within events.data and writes the phase fence last",
+      "retroactive replay witness record @regression @tier1 reads old-chain blocks in deterministic height and row order",
+      "retroactive replay witness record @regression @tier1 reads the latest complete batch and verifies its rebuilt map",
+      "retroactive replay witness record @regression @tier1 rebuilds the recorded map to rules_from and refuses a changed map",
+      "retroactive replay witness record @regression @tier1 refuses missing or non-contiguous block evidence",
+      "retroactive replay witness record @regression @tier1 writes every window, map, and phase row before the boot rollback"
+    ],
     "ee5b23581cb00eff": [
       "LIST share activation @regression @tier2 accepts the owner SHARE and snapshots every current member at the SHARE index",
       "LIST share activation @regression @tier2 declares format 2 behind the LIST share gate",
@@ -19345,8 +19354,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1545,
-      "titleCount": 14992,
+      "fileCount": 1546,
+      "titleCount": 14999,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20124,6 +20133,7 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
@@ -21271,8 +21281,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1179,
-      "titleCount": 11870,
+      "fileCount": 1180,
+      "titleCount": 11877,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21884,6 +21894,7 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
@@ -22456,8 +22467,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 603,
-      "titleCount": 6314,
+      "fileCount": 604,
+      "titleCount": 6321,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22670,6 +22681,7 @@
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
@@ -23065,8 +23077,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1179,
-      "titleCount": 11870,
+      "fileCount": 1180,
+      "titleCount": 11877,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23678,6 +23690,7 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
