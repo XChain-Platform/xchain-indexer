@@ -7025,6 +7025,14 @@
       "HubDbSync bootstrap fail-closed on partial drain / holes @regression @tier1 a schema-mismatched catch-up page fails closed (not drained)",
       "HubDbSync bootstrap fail-closed on partial drain / holes @regression @tier1 stops the page at the first apply failure and does not arm the barrier"
     ],
+    "5d74921827d93084": [
+      "final retroactive witness comparison @regression @tier1 derives one observed digest per witness window",
+      "final retroactive witness comparison @regression @tier1 does no work before the final comparison boundary",
+      "final retroactive witness comparison @regression @tier1 rejects empty windows and bulk reads that do not exactly cover the span",
+      "final retroactive witness comparison @regression @tier1 rejects noncontiguous blocks within an exact-length bulk read",
+      "final retroactive witness comparison @regression @tier1 reports a changed window through the recorded digest path",
+      "final retroactive witness comparison @regression @tier1 reports unchanged windows at and beyond the final replay height"
+    ],
     "5d83f9ec7edd7c72": [
       "disarms the held capability read check when a later barrier defers @regression @tier1"
     ],
@@ -19405,8 +19413,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1553,
-      "titleCount": 15036,
+      "fileCount": 1554,
+      "titleCount": 15042,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20192,6 +20200,7 @@
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_digest_fields.test.js": "78d4f616384f06b3",
+        "test/unit/consensus/retroactive/witness/witness_final_compare.test.js": "5d74921827d93084",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
         "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
@@ -21339,8 +21348,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1187,
-      "titleCount": 11914,
+      "fileCount": 1188,
+      "titleCount": 11920,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21960,6 +21969,7 @@
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_digest_fields.test.js": "78d4f616384f06b3",
+        "test/unit/consensus/retroactive/witness/witness_final_compare.test.js": "5d74921827d93084",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
         "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
@@ -22532,8 +22542,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 611,
-      "titleCount": 6358,
+      "fileCount": 612,
+      "titleCount": 6364,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22754,6 +22764,7 @@
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_digest_fields.test.js": "78d4f616384f06b3",
+        "test/unit/consensus/retroactive/witness/witness_final_compare.test.js": "5d74921827d93084",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
         "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
@@ -23149,8 +23160,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1187,
-      "titleCount": 11914,
+      "fileCount": 1188,
+      "titleCount": 11920,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23770,6 +23781,7 @@
         "test/unit/consensus/retroactive/witness/witness_chunk_plan.test.js": "4ea8acbf972fd686",
         "test/unit/consensus/retroactive/witness/witness_chunks.test.js": "1ce3597834bf96b5",
         "test/unit/consensus/retroactive/witness/witness_digest_fields.test.js": "78d4f616384f06b3",
+        "test/unit/consensus/retroactive/witness/witness_final_compare.test.js": "5d74921827d93084",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
         "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
