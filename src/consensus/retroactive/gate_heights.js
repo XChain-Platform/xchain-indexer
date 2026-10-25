@@ -21,6 +21,7 @@ const {
     FAR_FUTURE_HEIGHT_SENTINEL,
     canonical,
 } = require('../../consensus_rules_digest.js');
+const defaultGateRegistry = require('../gate_registry.js');
 const { MOVABLE_GATES } = require('./movable_gates.js');
 
 const RECORDED_UNITS = Object.freeze(['height', 'time']);
@@ -52,7 +53,36 @@ function activeBoundary(value){
         value < FAR_FUTURE_HEIGHT_SENTINEL ? value : null;
 }
 
-function classifyGateMoves({ recorded, current, tip, movableGates = MOVABLE_GATES } = {}){
+function gateUnit(key){
+    try {
+        return defaultGateRegistry.registry.unitOf(key);
+    } catch(error){
+        if(error && error.name === 'RegistryMissError') return 'height';
+        throw error;
+    }
+}
+
+function firstBlockAtOrPast(blockTimes, threshold, tip){
+    if(!Array.isArray(blockTimes))
+        throw new TypeError('blockTimes must be an array for a moved time gate');
+
+    let target = null;
+    const seen = new Set();
+    for(const block of blockTimes){
+        if(!block || typeof block !== 'object' || Array.isArray(block) ||
+           !Number.isSafeInteger(block.height) || block.height < 0 ||
+           typeof block.time !== 'number' || !Number.isFinite(block.time))
+            throw new TypeError('blockTimes entries must have a non-negative safe height and finite time');
+        if(seen.has(block.height))
+            throw new TypeError('blockTimes must not repeat a height');
+        seen.add(block.height);
+        if(block.height > tip || block.time < threshold) continue;
+        target = target === null ? block.height : Math.min(target, block.height);
+    }
+    return target;
+}
+
+function classifyGateMoves({ recorded, current, tip, blockTimes, movableGates = MOVABLE_GATES } = {}){
     if(!Number.isSafeInteger(tip) || tip < 0)
         throw new TypeError('tip must be a non-negative safe integer');
     if(!recorded || typeof recorded !== 'object' || Array.isArray(recorded) ||
@@ -70,8 +100,11 @@ function classifyGateMoves({ recorded, current, tip, movableGates = MOVABLE_GATE
 
         const boundaries = [activeBoundary(from), activeBoundary(to)].filter(value => value !== null);
         if(boundaries.length === 0) continue;
-        const target = Math.min(...boundaries);
-        if(target > tip) continue;
+        const boundary = Math.min(...boundaries);
+        const target = gateUnit(key) === 'time'
+            ? firstBlockAtOrPast(blockTimes, boundary, tip)
+            : (boundary <= tip ? boundary : null);
+        if(target === null) continue;
 
         const move = { key, from, to, target };
         const bucket = movableSet.has(key) ? result.movable : result.refused;
