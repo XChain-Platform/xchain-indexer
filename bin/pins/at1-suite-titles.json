@@ -7299,6 +7299,20 @@
       "Multi-chain action processing @regression @tier1 fee-payment mode with a fee output present: native on every coin",
       "Multi-chain action processing @regression @tier1 fee-payment mode with a real fee destination and NO fee output: BTC=xchain, LTC/DOGE=rejected"
     ],
+    "65adae7ccb7afd63": [
+      "boot retroactive replay @regression @tier1 a crash after the rollback commit resumes from the open marker with no second rollback",
+      "boot retroactive replay @regression @tier1 a crash before the rollback commit rolls back from the open marker without recomputing moves",
+      "boot retroactive replay @regression @tier1 a mirror-gap move refuses with its reason and writes nothing",
+      "boot retroactive replay @regression @tier1 a non-movable move refuses with the gate-move message, naming every moved key",
+      "boot retroactive replay @regression @tier1 a record from before the registry widening compares only the keys it holds",
+      "boot retroactive replay @regression @tier1 a replaying marker holds the replay and writes nothing",
+      "boot retroactive replay @regression @tier1 an over-cap move refuses with needs_go and the go command, and a matching go replays",
+      "boot retroactive replay @regression @tier1 rolls a movable in-cap move back once to the target, marker before and record after",
+      "boot retroactive replay @regression @tier1 serves and records the map when nothing moved at or below the tip",
+      "boot retroactive replay through startup @regression @tier1 carries the marker digests as sha256 of the canonical maps",
+      "boot retroactive replay through startup @regression @tier1 refuses a non-movable production move before any write",
+      "boot retroactive replay through startup @regression @tier1 resumes a pending marker: one rollback under retroactive_replay with no clear instant"
+    ],
     "65fda33d23415561": [
       "Sleep @regression @tier3 MEMO validations MEMO with pipe \u2192 invalid",
       "Sleep @regression @tier3 MEMO validations MEMO with semicolon \u2192 invalid",
@@ -19266,8 +19280,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1534,
-      "titleCount": 14935,
+      "fileCount": 1535,
+      "titleCount": 14947,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20032,6 +20046,7 @@
         "test/unit/consensus/protocol_time_caller_order.test.js": "7891fe7146b2d1e7",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
+        "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
@@ -21181,8 +21196,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1168,
-      "titleCount": 11813,
+      "fileCount": 1169,
+      "titleCount": 11825,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21781,6 +21796,7 @@
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
+        "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
@@ -22355,8 +22371,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 594,
-      "titleCount": 6266,
+      "fileCount": 595,
+      "titleCount": 6278,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22558,6 +22574,7 @@
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
+        "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
@@ -22955,8 +22972,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1168,
-      "titleCount": 11813,
+      "fileCount": 1169,
+      "titleCount": 11825,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23555,6 +23572,7 @@
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
+        "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",

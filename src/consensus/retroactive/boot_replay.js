@@ -118,7 +118,6 @@ async function mirrorGapAtTarget(chain, target, deps){
         return 'capability_snapshot_target_missing:' + coin + ':' + String(target);
     return deps.readMirrorGap(target, mirrorTarget);
 }
-
 // An open marker: roll back only while the applied tip still reaches the target, so
 // a crash after the rollback commit never rolls back twice, then record the current
 // map below the target and advance pending to replaying.
