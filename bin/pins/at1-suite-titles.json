@@ -18703,6 +18703,10 @@
       "Anchor v3 fixture builder changes only WRAPPER_SECTION_INDEX for its raw override",
       "Anchor v3 fixture builder supports an archive-only cycle"
     ],
+    "f55d2c328deda0f0": [
+      "HubDbSync checkpoint mirror lineage reconciliation @regression @tier1 leaves lineage A untouched when the re-page is incomplete",
+      "HubDbSync checkpoint mirror lineage reconciliation @regression @tier1 replaces a longer lineage A with exactly the complete lineage B re-page"
+    ],
     "f59780a5cacf7da9": [
       "hub mirror ready-frame ceilings for bridge_transfers and policy_snapshots @regression @tier1 bridge_transfers accepts a zero ceiling for an empty hub table",
       "hub mirror ready-frame ceilings for bridge_transfers and policy_snapshots @regression @tier1 bridge_transfers adopts the ceiling the ready frame advertises",
@@ -19476,8 +19480,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1562,
-      "titleCount": 15089,
+      "fileCount": 1563,
+      "titleCount": 15091,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20655,6 +20659,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
+        "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/retraction_fence_columns.test.js": "521ffb32e51656bb",
@@ -21419,8 +21424,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1196,
-      "titleCount": 11967,
+      "fileCount": 1197,
+      "titleCount": 11969,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22337,6 +22342,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
+        "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
@@ -22621,8 +22627,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 620,
-      "titleCount": 6411,
+      "fileCount": 621,
+      "titleCount": 6413,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -23067,6 +23073,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
+        "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
@@ -23247,8 +23254,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1196,
-      "titleCount": 11967,
+      "fileCount": 1197,
+      "titleCount": 11969,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24165,6 +24172,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
+        "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
