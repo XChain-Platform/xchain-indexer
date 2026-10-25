@@ -49,7 +49,7 @@ function comparableGateMap(recorded, current){
     return out;
 }
 
-// The XC-6233 refusal text, naming every moved key in key order.
+// The gate-move refusal text the boot record has always used, every moved key in order.
 function movedGateMessage(moves, tip){
     const detail = [...moves].sort((a, b) => a.key.localeCompare(b.key))
         .map(move => move.key + ' (' + String(move.from) + ' -> ' + String(move.to) + ')').join(', ');
@@ -87,15 +87,8 @@ async function resumeOpenMarker(marker, tip, current, deps){
     return { action: 'resume', marker: replaying };
 }
 
-/**
- * Run the boot sequence and return { action, marker }, where action is serve,
- * resume or rollback. A refusal goes through deps.refuse, which must throw.
- *
- * deps: readBoot() -> { recorded, replayMarker }, recordBoot(map, tip),
- * recordMarker(marker), readMirrorGap(target) -> reason or null,
- * goMatches(canonicalMap, target) -> bool, rollback(target), holdReplay(),
- * holdNeedsGo(), refuse(message). movableGates overrides MOVABLE_GATES for tests.
- */
+// Returns { action: serve | resume | rollback, marker }. deps.refuse must throw, and
+// movableGates overrides MOVABLE_GATES only in tests.
 async function runBootReplay({ tip, current, capBlocks, movableGates }, deps){
     const boot = await deps.readBoot();
     const marker = boot ? boot.replayMarker : null;
