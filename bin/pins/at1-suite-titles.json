@@ -2327,11 +2327,6 @@
       "nextBarrierHold / barrierHoldMs @regression @tier1 starts a hold when a block is deferred behind a barrier",
       "nextBarrierHold / barrierHoldMs @regression @tier1 the notified flag survives a retry so a crossing is announced once"
     ],
-    "20e6b91e62b0895d": [
-      "Smoke: indexer lifecycle @regression @tier3 SM-14: stop() causes start() to resolve without rejecting",
-      "Smoke: indexer lifecycle @regression @tier3 SM-15: isSynced() returns true once the indexer has caught up",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
-    ],
     "2100aec35b3f146e": [
       "AIRDROP zero ledger-leg activation @regression @tier1 keeps positive payer and recipient rows above activation",
       "AIRDROP zero ledger-leg activation @regression @tier1 keeps zero payer and recipient rows while regtest is unarmed",
@@ -4588,14 +4583,6 @@
       "rollback drops the SMT resolver caches @regression the clear happens on the indexer db, not some other handle",
       "rollback drops the SMT resolver caches @regression the clear sits immediately after commit, beside the block-time memo"
     ],
-    "3e341c4bc69870de": [
-      "09 Fee Spike (mempool backlog drain) does not increase the per-transaction query fan-out across the drain",
-      "09 Fee Spike (mempool backlog drain) drains the backlog without errors",
-      "09 Fee Spike (mempool backlog drain) indexes the whole backlog as VALID (guards against measuring rejections)",
-      "09 Fee Spike (mempool backlog drain) keeps per-transaction cost growing no faster than the ledger",
-      "09 Fee Spike (mempool backlog drain) leaves quiet blocks no slower than the ledger growth explains",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
-    ],
     "3e5119d767a96b8c": [
       "pass progress retirement: the CROSS_SETTLE pass @regression armed, settles every valid match behind 30 unapplicable ones within the grace",
       "pass progress retirement: the CROSS_SETTLE pass @regression on mainnet, replays the pass unchanged",
@@ -4841,10 +4828,6 @@
       "Database.createPrice() batch columns @regression a v0 row (no batch fields present) writes NULL for all four v2 columns, both arms",
       "Rollback: prices batch columns clear the same way v0 columns do @regression an orphaned batch row is removed by the same wholesale action_index DELETE as a v0 row"
     ],
-    "428252d37fa1eadd": [
-      "03 Sustained Load processes blocks continuously for 60000ms without degradation",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
-    ],
     "428bc07288797dba": [
       "Dispenser amount positivity @regression @tier2 DISPENSER create: native-coin GET_AMOUNT accepts a valid native-coin price",
       "Dispenser amount positivity @regression @tier2 DISPENSER create: native-coin GET_AMOUNT does not fire the positivity rule on a FIAT-priced dispenser",
@@ -4919,6 +4902,24 @@
       "ANCHOR archive_publish quorum routing @regression @tier1 excludes an absent member from v1 N and S above the gate",
       "ANCHOR archive_publish quorum routing @regression @tier1 judges only the v3 wrapper on archive_publish at the same block",
       "ANCHOR archive_publish quorum routing @regression @tier1 stores a post-gate v3 fold as unverified with zero archive_publish rows"
+    ],
+    "4365faef2b0a9c54": [
+      "E2E: Token Lifecycle @regression @tier3 ISSUE format variants re-ISSUE by non-owner is invalid",
+      "E2E: Token Lifecycle @regression @tier3 ISSUE format variants re-ISSUE by owner updates description (format 1)",
+      "E2E: Token Lifecycle @regression @tier3 SEND format variants multi-send (format 2) creates multiple entries",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/balances returns correct amounts for each address",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/block returns block info",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/credits by address shows credit entries",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/debits by address shows debit entries",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/destroys by address returns destroy record",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/history by token shows all actions",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/holders returns all 3 holders",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/issues by block returns the issuance",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/mints by address returns mint records",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/sends by destination returns send record",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/sends by source returns send record",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/status returns explorer config",
+      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/token returns correct token info"
     ],
     "4385266db12e6aae": [
       "MINT query and rollback scope @regression @tier1 purges every mint counter input and recomputes both derived projections",
@@ -7390,13 +7391,6 @@
       "findSettlementPriceGap agrees with the DISPENSE matchers @regression @tier2 Mode B: validator after oracle",
       "findSettlementPriceGap agrees with the DISPENSE matchers @regression @tier2 Mode B: validator too old"
     ],
-    "638f165938c14346": [
-      "02 Action Benchmarks SEND-only blocks",
-      "02 Action Benchmarks heavy-dex (ORDER creates)",
-      "02 Action Benchmarks mixed-heavy (all action types)",
-      "02 Action Benchmarks token-launch (ISSUE + MINT)",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
-    ],
     "63cd3cc2b8b75cb9": [
       "ANCHOR archive section verdict integration keeps consumed checkpoint sections valid after a late folded archive failure",
       "ANCHOR archive section verdict integration preserves the action-wide verdict before the section verdict activation"
@@ -9194,10 +9188,6 @@
       "SQL literal scanner joins template quasis with one placeholder per expression and retains the line",
       "SQL literal scanner throws a parse error that names the source file"
     ],
-    "7d7d0f31c872bd8c": [
-      "07 Grown-Database Regression block time does not regress beyond MAX_RATIO as the standing set grows",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
-    ],
     "7da9f843f0c0949f": [
       "anchor fold row predicates builds archive-head and checkpoint-section predicates for any alias",
       "anchor fold row predicates limits class-6 rows to the configured archive-head versions",
@@ -10922,11 +10912,6 @@
       "unlisted order vs EMPTY_ALLOW_LIST_DENIES unlisted orders (ALLOW_LIST 0, getList(0) -> []) match with gate false",
       "unlisted order vs EMPTY_ALLOW_LIST_DENIES unlisted orders (ALLOW_LIST 0, getList(0) -> []) match with gate true"
     ],
-    "91ae7ee429a2bb76": [
-      "04 Spike Load handles repeated micro-spikes (bursty traffic)",
-      "04 Spike Load handles spike from 1 tx/block to 100 tx/block without errors",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
-    ],
     "91c92f5d28d273aa": [
       "bindPolicyRef binds a foreign reference to its mirror without reading list type",
       "bindPolicyRef binds a shared home list using its own index",
@@ -11307,17 +11292,6 @@
     ],
     "97183ecc8d1ea3cb": [
       "empty allow list denial activation @regression @tier1 parks mainnet at the sentinel, arms testnet at the v0.21.3 heights and activates regtest at genesis"
-    ],
-    "97578958cf25de04": [
-      "29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activation @regression @tier1 a second node replaying the pre-activation corpus from genesis is byte-identical (DB + hash chain)",
-      "29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activation @regression @tier1 after the flag-day block time arrives at/after the flag day a named deploy is valid and carries its meta columns",
-      "29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activation @regression @tier1 after the flag-day block time arrives at/after the flag day the same nameless shape is REJECTED with the meta-required string",
-      "29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activation @regression @tier1 after the flag-day block time arrives every PRE-activation block hash is byte-identical to the pre-activation replay",
-      "29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activation @regression @tier1 after the flag-day block time arrives the gate reads PROTOCOL time: a block stamped past the flag day is still below it while its MTP is",
-      "29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activation @regression @tier1 after the flag-day block time arrives the pre-activation rows keep their historic statuses and columns",
-      "29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activation @regression @tier1 below the flag day a CONFORMING meta is extracted and stored anyway (verdict gated, extraction not)",
-      "29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activation @regression @tier1 below the flag day a NAMELESS deploy is still valid, with four NULL meta columns",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
     ],
     "975fb162b72501a2": [
       "Callback @regression @tier3 CALLBACK_BLOCK validations CALLBACK_BLOCK === current block \u2192 valid",
@@ -12048,13 +12022,6 @@
       "graceful shutdown createShutdown runs the drain and exits zero when it completes",
       "graceful shutdown resolveTimeoutMs prefers an explicit budget, then the env var, then the default",
       "graceful shutdown resolveTimeoutMs stays under Docker's 10s default stop grace"
-    ],
-    "9f28478df26a3eb4": [
-      "08 Fast Chain (DOGE cadence, 10 blocks/s) does not let per-block cost drift upward as the fast chain lengthens",
-      "08 Fast Chain (DOGE cadence, 10 blocks/s) indexes the seeded traffic as VALID (guards against measuring rejections)",
-      "08 Fast Chain (DOGE cadence, 10 blocks/s) processes the fast chain without errors",
-      "08 Fast Chain (DOGE cadence, 10 blocks/s) still holds the 10 blocks/s per-block budget at the end of the run",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
     ],
     "9f55cc89b32cedc0": [
       "ProtocolChanges @regression @tier3 DEPLOY_BASE64_CODE activation gate (consensus) a pre-consensus (v1.x) node treats it as not-yet-active; no premature base64",
@@ -14006,13 +13973,6 @@
       "HubDbSync applyRetraction receive-side guards @regression @tier1 fences on different (table, source_chain) pairs never shadow each other",
       "HubDbSync applyRetraction receive-side guards @regression @tier1 other-chain retractions skip the own-generation check and apply every fence, lower ones included",
       "HubDbSync applyRetraction receive-side guards @regression @tier1 without the hook (explorer vendored mirror) other-chain legacy behavior is unchanged"
-    ],
-    "bb5904eb4d4900bc": [
-      "01 Baseline Throughput empty blocks (0 txs/block)",
-      "01 Baseline Throughput heavy blocks (50 txs/block, mixed-heavy)",
-      "01 Baseline Throughput light blocks (1 tx/block, SEND only)",
-      "01 Baseline Throughput normal blocks (10 txs/block, mixed)",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
     ],
     "bbc1475cf6fea867": [
       "anchor-action-query: CHECKPOINT_VERSIONS includes folded v3 checkpoints while excluding v2 continuations",
@@ -17169,13 +17129,6 @@
       "hubConfigStaleness (#2607) @regression tracks a HUB_CONFIG_POLL_INTERVAL_MS override (boundary = 3 x effective interval)",
       "hubConfigStaleness (#2607) @regression under the limit: not stale, age in whole seconds"
     ],
-    "e11c1daa6309bc86": [
-      "05 Scaling Tests 10 tokens",
-      "05 Scaling Tests 100 tokens",
-      "05 Scaling Tests 200 tokens",
-      "05 Scaling Tests 50 tokens",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
-    ],
     "e14c6c636323351f": [
       "Guard dependency: Tier 2: State Management @tier2 ACR: Array Index Mutations ACR-200: destructuring swap [amount, tick, address] instead of [tick, amount, address]",
       "Guard dependency: Tier 2: State Management @tier2 ACR: Array Index Mutations ACR-201: key components swapped : address\\0tick instead of tick\\0address",
@@ -17254,6 +17207,12 @@
       "Deploy (DEPLOY) @regression @tier2 constructor state changes and rollback constructor state write failure rolls back savepoint and marks deploy failed (lines 341-348)",
       "Deploy (DEPLOY) @regression @tier2 constructor state changes and rollback constructor with stateChanges calls createContractState for each change (lines 322-330)",
       "Deploy (DEPLOY) @regression @tier2 constructor state changes and rollback constructor with stateDeletes calls createContractState with null value (lines 332-339)"
+    ],
+    "e224c1f6ab921a72": [
+      "01 Baseline Throughput empty blocks (0 txs/block)",
+      "01 Baseline Throughput heavy blocks (50 txs/block, mixed-heavy)",
+      "01 Baseline Throughput light blocks (1 tx/block, SEND only)",
+      "01 Baseline Throughput normal blocks (10 txs/block, mixed)"
     ],
     "e238e8b94beedf64": [
       "Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2 early-exit guards returns when one order is missing",
@@ -20933,9 +20892,9 @@
     },
     "test:e2e": {
       "fileCount": 7,
-      "titleCount": 47,
+      "titleCount": 46,
       "files": {
-        "test/e2e/scenarios/01_token_lifecycle.test.js": "ccadc2f09f1936a0",
+        "test/e2e/scenarios/01_token_lifecycle.test.js": "4365faef2b0a9c54",
         "test/e2e/scenarios/02_order_lifecycle.test.js": "0d895f3bfea03346",
         "test/e2e/scenarios/03_dispenser_lifecycle.test.js": "7de1998d17dc11c5",
         "test/e2e/scenarios/04_reorg.test.js": "9d9c8d999b0ace9e",
@@ -21028,7 +20987,7 @@
     },
     "test:integration": {
       "fileCount": 72,
-      "titleCount": 441,
+      "titleCount": 440,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
@@ -21050,7 +21009,7 @@
         "test/integration/recovery_determinism_e2e.test.js": "93feeb5e228978f0",
         "test/integration/recovery_id_determinism.test.js": "fbd3ebb10d8f9886",
         "test/integration/rollback_scoped_orphan_sweeps.test.js": "64df71b9d8671b60",
-        "test/integration/scenarios/29_contract_meta_flag_day_replay.test.js": "97578958cf25de04",
+        "test/integration/scenarios/29_contract_meta_flag_day_replay.test.js": "71cab2563defad19",
         "test/integration/scenarios/contract_unstake_rotation_reorg.test.js": "225195122cf06515",
         "test/integration/scenarios/controller_stake/16_controller_permissions.test.js": "962f6a39837cb4b7",
         "test/integration/scenarios/controller_stake/17_slash_equivocation.test.js": "777803f5fbe4f02a",
@@ -21106,7 +21065,7 @@
     },
     "test:integration:ci": {
       "fileCount": 72,
-      "titleCount": 441,
+      "titleCount": 440,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
@@ -21128,7 +21087,7 @@
         "test/integration/recovery_determinism_e2e.test.js": "93feeb5e228978f0",
         "test/integration/recovery_id_determinism.test.js": "fbd3ebb10d8f9886",
         "test/integration/rollback_scoped_orphan_sweeps.test.js": "64df71b9d8671b60",
-        "test/integration/scenarios/29_contract_meta_flag_day_replay.test.js": "97578958cf25de04",
+        "test/integration/scenarios/29_contract_meta_flag_day_replay.test.js": "71cab2563defad19",
         "test/integration/scenarios/contract_unstake_rotation_reorg.test.js": "225195122cf06515",
         "test/integration/scenarios/controller_stake/16_controller_permissions.test.js": "962f6a39837cb4b7",
         "test/integration/scenarios/controller_stake/17_slash_equivocation.test.js": "777803f5fbe4f02a",
@@ -21193,9 +21152,9 @@
     },
     "test:perf": {
       "fileCount": 9,
-      "titleCount": 27,
+      "titleCount": 26,
       "files": {
-        "test/perf/scenarios/01_baseline_throughput.test.js": "bb5904eb4d4900bc",
+        "test/perf/scenarios/01_baseline_throughput.test.js": "e224c1f6ab921a72",
         "test/perf/scenarios/02_action_benchmarks.test.js": "58fd73daf6487e45",
         "test/perf/scenarios/03_sustained_load.test.js": "8a5cc74cb5fc6df0",
         "test/perf/scenarios/04_spike_load.test.js": "db4cdd7dac8b8bff",
@@ -21208,66 +21167,66 @@
     },
     "test:perf:baseline": {
       "fileCount": 1,
-      "titleCount": 5,
+      "titleCount": 4,
       "files": {
-        "test/perf/scenarios/01_baseline_throughput.test.js": "bb5904eb4d4900bc"
+        "test/perf/scenarios/01_baseline_throughput.test.js": "e224c1f6ab921a72"
       }
     },
     "test:perf:benchmarks": {
       "fileCount": 1,
-      "titleCount": 5,
+      "titleCount": 4,
       "files": {
-        "test/perf/scenarios/02_action_benchmarks.test.js": "638f165938c14346"
+        "test/perf/scenarios/02_action_benchmarks.test.js": "58fd73daf6487e45"
       }
     },
     "test:perf:fastchain": {
       "fileCount": 1,
-      "titleCount": 5,
+      "titleCount": 4,
       "files": {
-        "test/perf/scenarios/08_fast_chain.test.js": "9f28478df26a3eb4"
+        "test/perf/scenarios/08_fast_chain.test.js": "307e7031bdbc09be"
       }
     },
     "test:perf:feespike": {
       "fileCount": 1,
-      "titleCount": 6,
+      "titleCount": 5,
       "files": {
-        "test/perf/scenarios/09_fee_spike.test.js": "3e341c4bc69870de"
+        "test/perf/scenarios/09_fee_spike.test.js": "d00dad3ce91741da"
       }
     },
     "test:perf:grown": {
       "fileCount": 1,
-      "titleCount": 2,
+      "titleCount": 1,
       "files": {
-        "test/perf/scenarios/07_grown_database.test.js": "7d7d0f31c872bd8c"
+        "test/perf/scenarios/07_grown_database.test.js": "157dcfaa3a3b9d23"
       }
     },
     "test:perf:regimes": {
       "fileCount": 2,
-      "titleCount": 10,
+      "titleCount": 9,
       "files": {
-        "test/perf/scenarios/08_fast_chain.test.js": "9f28478df26a3eb4",
+        "test/perf/scenarios/08_fast_chain.test.js": "307e7031bdbc09be",
         "test/perf/scenarios/09_fee_spike.test.js": "d00dad3ce91741da"
       }
     },
     "test:perf:scaling": {
       "fileCount": 1,
-      "titleCount": 5,
+      "titleCount": 4,
       "files": {
-        "test/perf/scenarios/05_scaling.test.js": "e11c1daa6309bc86"
+        "test/perf/scenarios/05_scaling.test.js": "c607fd4205462c32"
       }
     },
     "test:perf:spike": {
       "fileCount": 1,
-      "titleCount": 3,
+      "titleCount": 2,
       "files": {
-        "test/perf/scenarios/04_spike_load.test.js": "91ae7ee429a2bb76"
+        "test/perf/scenarios/04_spike_load.test.js": "db4cdd7dac8b8bff"
       }
     },
     "test:perf:sustained": {
       "fileCount": 1,
-      "titleCount": 2,
+      "titleCount": 1,
       "files": {
-        "test/perf/scenarios/03_sustained_load.test.js": "428252d37fa1eadd"
+        "test/perf/scenarios/03_sustained_load.test.js": "8a5cc74cb5fc6df0"
       }
     },
     "test:regression": {
@@ -24253,13 +24212,13 @@
     },
     "test:smoke": {
       "fileCount": 8,
-      "titleCount": 28,
+      "titleCount": 27,
       "files": {
         "test/smoke/connected/api_liveness.test.js": "f3a2ad12daae92d0",
         "test/smoke/connected/api_status.test.js": "834724c1e6c86c6b",
         "test/smoke/connected/api_status.test/hub_mirror.test.js": "c4bdd6e2b5cc4eb0",
         "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
-        "test/smoke/connected/lifecycle.test.js": "20e6b91e62b0895d",
+        "test/smoke/connected/lifecycle.test.js": "7c6d8b564e036d3e",
         "test/smoke/unit/config.test.js": "8f5afef4db97a893",
         "test/smoke/unit/handlers.test.js": "817446897676d65c",
         "test/smoke/unit/utility.test.js": "14f04e2027c76c64"
@@ -24267,13 +24226,13 @@
     },
     "test:smoke:connected": {
       "fileCount": 5,
-      "titleCount": 21,
+      "titleCount": 20,
       "files": {
         "test/smoke/connected/api_liveness.test.js": "f3a2ad12daae92d0",
         "test/smoke/connected/api_status.test.js": "834724c1e6c86c6b",
         "test/smoke/connected/api_status.test/hub_mirror.test.js": "c4bdd6e2b5cc4eb0",
         "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
-        "test/smoke/connected/lifecycle.test.js": "20e6b91e62b0895d"
+        "test/smoke/connected/lifecycle.test.js": "7c6d8b564e036d3e"
       }
     },
     "test:smoke:unit": {
