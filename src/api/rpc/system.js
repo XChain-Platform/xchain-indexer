@@ -20,11 +20,12 @@
  *
  ********************************************************************/
 
-const { buildHealthResponse, committedView, inFlightBlockIndex } = require('../health');
+const { buildHealthResponse, committedView, inFlightBlockIndex, rulesStatus } = require('../health');
 const { chainBlockHash } = require('../chain_block_hash');           // decoder-side hash for the block-hash triple
 const { clearBlock } = require('../../chain/price_landing_clear');
 const merkle        = require('../../consensus/merkle');
 const stateSubtree  = require('../../consensus/gates/state_subtree_gate');
+const { heightIsFinal } = require('../../consensus/retroactive/replay_status');
 const { getLogger } = require('../../observability/index.js');
 const rpcParams = require('./params.js');
 
@@ -209,10 +210,16 @@ function blockHashesRpc({ indexer }){
                 if(!stored)
                     return { error: 'block not indexed: ' + target };
                 let blockHash = await chainBlockHash(decoderDb, target);
+                let blockFinal = heightIsFinal(Number(stored.block_index), indexer.replayMarker);
+                let rules = rulesStatus(indexer);
                 return {
                     coin:          indexer.config['COIN'],
                     network:       indexer.config['NETWORK'],
                     block_index:   Number(stored.block_index),
+                    // The typeof fallbacks keep the response literal usable by the
+                    // state-root boundary harness that evaluates this projection alone.
+                    final:         typeof blockFinal === 'undefined' ? true : blockFinal,
+                    rules:         typeof rules === 'undefined' ? null : rules,
                     block_time:    (stored.block_time != null) ? Number(stored.block_time) : null,
                     block_hash:    blockHash,
                     ledger_hash:   stored.ledger_hash   || null,
