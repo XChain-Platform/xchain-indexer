@@ -60,13 +60,18 @@ function witness(phase){
     };
 }
 
-function harness(phase, state){
+function harness(phase, state, { tip = 94, recorded = R } = {}){
     const calls = [];
     let latest = witness(phase);
+    const durable = {
+        marker: marker(state),
+        recorded: { gateHeights: recorded, appliedTip: tip, scope: 'registry' },
+        tip,
+    };
     const deps = {
         readBoot: async () => ({
-            recorded: { gateHeights: C, appliedTip: 94, scope: 'registry' },
-            replayMarker: marker(state),
+            recorded: durable.recorded,
+            replayMarker: durable.marker,
         }),
         readWitness: async () => latest,
         recordWitnessPhase: async (batch, next) => {
@@ -75,17 +80,30 @@ function harness(phase, state){
         },
         useRecordedRules: values => calls.push(['rules', 'recorded', values]),
         useCurrentRules: () => calls.push(['rules', 'current']),
-        recordBoot: async (map, tip) => calls.push(['boot', map, tip]),
-        recordMarker: async next => calls.push(['marker', next.state]),
-        rollback: async target => calls.push(['rollback', target]),
+        recordBoot: async (map, nextTip) => {
+            calls.push(['boot', map, nextTip]);
+            durable.recorded = {
+                gateHeights: map,
+                appliedTip: nextTip,
+                scope: 'registry',
+            };
+        },
+        recordMarker: async next => {
+            calls.push(['marker', next.state]);
+            durable.marker = next;
+        },
+        rollback: async target => {
+            calls.push(['rollback', target]);
+            durable.tip = target - 1;
+        },
         holdReplay: () => calls.push(['hold']),
         holdNeedsGo: () => {},
         refuse: message => { throw new Error(message); },
     };
-    return { calls, deps };
+    return { calls, deps, durable };
 }
 
-async function run(h, tip){
+async function run(h, tip = h.durable.tip){
     return runBootReplay({
         tip,
         current: C,
@@ -115,20 +133,52 @@ describe('retroactive replay witness boot phases @regression @tier1', function()
         assert.strictEqual(registry.get(KEY)['BTC:regtest'], 95);
     });
 
-    for(const phase of ['witness', 'witnessed', 'final']){
-        it('a crash after the ' + phase + ' rollback resumes without rolling back twice', async function(){
-            const first = harness(phase, 'pending');
-            await run(first, 100);
-            assert.strictEqual(first.calls.filter(call => call[0] === 'rollback').length, 1);
+    it('resumes a witness-phase crash under recorded rules without a second rollback', async function(){
+        const h = harness('witness', 'pending');
+        const result = await run(h);
 
-            const resumed = harness(phase, 'pending');
-            await run(resumed, 94);
-            assert.strictEqual(resumed.calls.filter(call => call[0] === 'rollback').length, 0);
-        });
-    }
+        assert.deepStrictEqual(h.calls, [
+            ['rules', 'recorded', R],
+            ['hold'],
+            ['boot', R, 94],
+            ['marker', 'replaying'],
+        ]);
+        assert.strictEqual(result.marker.state, 'replaying');
+        assert.deepStrictEqual(h.durable.recorded.gateHeights, R);
+    });
+
+    it('resumes a witnessed-phase crash into final rules without a second rollback', async function(){
+        const h = harness('witnessed', 'replayed');
+        const result = await run(h);
+
+        assert.deepStrictEqual(h.calls, [
+            ['rules', 'current'],
+            ['hold'],
+            ['marker', 'pending'],
+            ['boot', C, 94],
+            ['phase', 'final'],
+            ['marker', 'replaying'],
+        ]);
+        assert.strictEqual(result.marker.state, 'replaying');
+        assert.deepStrictEqual(h.durable.recorded.gateHeights, C);
+    });
+
+    it('resumes a final-phase crash without a second rollback or phase rewrite', async function(){
+        const h = harness('final', 'pending', { recorded: C });
+        const result = await run(h);
+
+        assert.deepStrictEqual(h.calls, [
+            ['rules', 'current'],
+            ['hold'],
+            ['boot', C, 94],
+            ['marker', 'replaying'],
+        ]);
+        assert.strictEqual(result.marker.state, 'replaying');
+        assert.strictEqual(h.calls.some(call => call[0] === 'phase'), false);
+    });
 
     it('a completed witness pass at or above H rolls back before advancing phases', async function(){
-        const h = harness('witness', 'replayed');
+        const h = harness('witness', 'replayed', { tip: 100 });
         const result = await run(h, 100);
         const rollbackAt = h.calls.findIndex(call => call[0] === 'rollback');
         const witnessedAt = h.calls.findIndex(call => call[0] === 'phase' && call[1] === 'witnessed');
@@ -142,14 +192,14 @@ describe('retroactive replay witness boot phases @regression @tier1', function()
     });
 
     it('keeps the recorded overlay through the witness pass and restores current rules for final', async function(){
-        const active = harness('witness', 'replaying');
+        const active = harness('witness', 'replaying', { tip: 97 });
         await run(active, 97);
         assert.deepStrictEqual(active.calls.filter(call => call[0] === 'rules'), [
             ['rules', 'recorded', R],
         ]);
         assert.strictEqual(active.calls.some(call => call[0] === 'rollback'), false);
 
-        const final = harness('final', 'replaying');
+        const final = harness('final', 'replaying', { tip: 97, recorded: C });
         await run(final, 97);
         assert.deepStrictEqual(final.calls.filter(call => call[0] === 'rules'), [
             ['rules', 'current'],
