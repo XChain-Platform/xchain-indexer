@@ -81,6 +81,26 @@ function replayWitnessBatch(target, replayTo, rulesFrom, windows){
     return digest(JSON.stringify([target, replayTo, rulesFrom, windows]));
 }
 
+function nextWitnessPhase(phase, next, changed){
+    if(!REPLAY_WITNESS_PHASES.includes(next))
+        throw new Error('invalid replay witness phase');
+    if(changed !== undefined && typeof changed !== 'boolean')
+        throw new TypeError('replay witness changed must be a boolean');
+    if(next === 'witness' && changed !== undefined)
+        throw new Error('witness phase cannot include changed');
+
+    const nextPhase = {
+        phase: next,
+        target: phase.target,
+        replay_to: phase.replay_to,
+        rules_from: phase.rules_from,
+        window_count: phase.window_count,
+        map_count: phase.map_count,
+    };
+    if(changed !== undefined) nextPhase.changed = changed;
+    return nextPhase;
+}
+
 function decodeReplayWitnessPhase(data){
     const phase = typeof data === 'string' ? JSON.parse(data) : data;
     if(!phase || typeof phase !== 'object' || Array.isArray(phase) ||
@@ -92,6 +112,12 @@ function decodeReplayWitnessPhase(data){
     height(phase.map_count, 'phase map_count');
     if(phase.replay_to < phase.target || !DIGEST_RE.test(phase.rules_from))
         throw new Error('invalid replay witness phase');
+    if(Object.prototype.hasOwnProperty.call(phase, 'changed') &&
+       typeof phase.changed !== 'boolean')
+        throw new Error('invalid replay witness phase changed');
+    if(phase.phase === 'witness' &&
+       Object.prototype.hasOwnProperty.call(phase, 'changed'))
+        throw new Error('witness phase cannot include changed');
     return phase;
 }
 
@@ -175,6 +201,7 @@ module.exports = {
     replayWindowDigest,
     observedWindowDigest,
     replayWitnessBatch,
+    nextWitnessPhase,
     decodeReplayWitnessPhase,
     decodeReplayWitnessWindow,
     validateReplayWitnessWindows,
