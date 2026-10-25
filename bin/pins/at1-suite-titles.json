@@ -9655,6 +9655,11 @@
     "85fb363232b73584": [
       "Rollback collectAffectedEntities capture race @regression @tier3 reads the address/ticker lists it collected even when a same-tick concurrent reset lands right after the absorb"
     ],
+    "8607446a7908f906": [
+      "retroactive time gate target @regression @tier1 leaves a height gate target in height units",
+      "retroactive time gate target @regression @tier1 reports no move when the time threshold is beyond the tip",
+      "retroactive time gate target @regression @tier1 resolves a moved time threshold to the first block at or past it"
+    ],
     "861b33b0ed92612c": [
       "Database.updateAddressBalance @unit @regression issues DELETE (not UPSERT) for a zero balance",
       "Database.updateAddressBalance @unit @regression issues UPSERT (not SELECT + INSERT/UPDATE) for a non-zero balance",
@@ -19280,8 +19285,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1535,
-      "titleCount": 14947,
+      "fileCount": 1536,
+      "titleCount": 14950,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20054,6 +20059,7 @@
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/rollcall_close/absence_streak.test.js": "98d8992dfae50cef",
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
         "test/unit/consensus/rollcall_close/signer_verify.test.js": "7e33c00ff3453bbd",
@@ -21196,8 +21202,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1169,
-      "titleCount": 11825,
+      "fileCount": 1170,
+      "titleCount": 11828,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21804,6 +21810,7 @@
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
@@ -22371,8 +22378,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 595,
-      "titleCount": 6278,
+      "fileCount": 596,
+      "titleCount": 6281,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22582,6 +22589,7 @@
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
@@ -22972,8 +22980,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1169,
-      "titleCount": 11825,
+      "fileCount": 1170,
+      "titleCount": 11828,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23580,6 +23588,7 @@
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
