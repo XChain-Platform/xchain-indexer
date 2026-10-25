@@ -26,12 +26,139 @@
 // Strict, as the class body these methods came from was.
 'use strict';
 
+const crypto = require('crypto');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
 const utf8mb4Columns = require('../../chain/utf8mb4_columns.js');
+const consensusRules = require('../../consensus_rules_digest.js');
+const gateRegistry = require('../../consensus/gate_registry.js');
 
 module.exports = {
+
+    // Resolve the shared height gates for this chain without changing the public
+    // consensus-identity module that the hub and indexer compare.
+    consensusHeightGateMap(network, coin){
+        const out = {};
+        for(const key of consensusRules.knownGateKeys()){
+            let unit;
+            try {
+                unit = gateRegistry.registry.unitOf(key);
+            } catch(e) {
+                if(e && e.name === 'RegistryMissError') continue;
+                throw e;
+            }
+            if(unit !== 'height') continue;
+            const map = gateRegistry.get(key);
+            let height;
+            if(map && typeof map === 'object' && !Array.isArray(map)){
+                const coinKey = String(coin) + ':' + network;
+                height = Object.prototype.hasOwnProperty.call(map, coinKey)
+                    ? map[coinKey] : map[network];
+            }
+            out[key] = height === undefined ? consensusRules.ABSENT : height;
+        }
+        return out;
+    },
+
+    // Record the chain-resolved height gates and refuse a changed threshold inside
+    // the applied range. The event batch remains unchanged after a refusal.
+    async recordConsensusGateBoot(gateHeights, appliedTip){
+        const current = gateHeights && typeof gateHeights === 'object' && !Array.isArray(gateHeights)
+            ? gateHeights : {};
+        const tip = appliedTip == null ? null : Number(appliedTip);
+        if(tip !== null && !Number.isFinite(tip))
+            throw new Error('consensus gate boot record received an invalid applied tip: ' + String(appliedTip));
+
+        let conn;
+        let transactionOpen = false;
+        try {
+            conn = await this.getConnection();
+            await conn.query('START TRANSACTION');
+            transactionOpen = true;
+            const markers = await conn.query(
+                "SELECT data, witness_hash FROM events WHERE code = 'CONSENSUS_GATE_BOOT' " +
+                'ORDER BY id DESC LIMIT 1 FOR UPDATE'
+            );
+            if(markers && markers.length){
+                let marker;
+                try {
+                    marker = JSON.parse(String(markers[0].data));
+                } catch(e) {
+                    throw new Error('consensus gate boot marker is not valid JSON; refusing to replace its history');
+                }
+                const batch = String(markers[0].witness_hash || '');
+                const rows = await conn.query(
+                    "SELECT data FROM events WHERE code = 'CONSENSUS_GATE_HEIGHT' AND witness_hash = ? ORDER BY id ASC",
+                    [batch]
+                );
+                if(!marker || !Number.isInteger(marker.count) || !/^[0-9a-f]{64}$/.test(batch) ||
+                   !rows || rows.length !== marker.count)
+                    throw new Error('consensus gate boot record is incomplete; refusing to replace its history');
+                const recorded = {};
+                for(const row of rows){
+                    let entry;
+                    try { entry = JSON.parse(String(row.data)); }
+                    catch(e) { throw new Error('consensus gate height record is not valid JSON; refusing to replace its history'); }
+                    if(!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string')
+                        throw new Error('consensus gate height record has an invalid shape; refusing to replace its history');
+                    recorded[entry[0]] = entry[1];
+                }
+                const recordedTip = marker.applied_tip;
+                const validRecordedTip = recordedTip === null ||
+                    (typeof recordedTip === 'number' && Number.isFinite(recordedTip));
+                const expectedBatch = crypto.createHash('sha256')
+                    .update(consensusRules.canonical(recorded) + '\n' + String(recordedTip)).digest('hex');
+                if(!validRecordedTip || Object.keys(recorded).length !== marker.count || expectedBatch !== batch)
+                    throw new Error('consensus gate boot record failed its batch witness; refusing to replace its history');
+                const moved = [];
+                for(const key of new Set([...Object.keys(recorded), ...Object.keys(current)])){
+                    const before = Object.prototype.hasOwnProperty.call(recorded, key)
+                        ? recorded[key] : consensusRules.ABSENT;
+                    const after = Object.prototype.hasOwnProperty.call(current, key)
+                        ? current[key] : consensusRules.ABSENT;
+                    if(consensusRules.canonical(before) === consensusRules.canonical(after)) continue;
+                    if(typeof after !== 'number' || !Number.isFinite(after) || tip === null || after > tip) continue;
+                    moved.push({ key, recorded: before, current: after });
+                }
+                if(moved.length){
+                    moved.sort((a, b) => a.key.localeCompare(b.key));
+                    const detail = moved.map(m => m.key + ' (' + String(m.recorded) + ' -> ' + String(m.current) + ')').join(', ');
+                    throw new Error('consensus gate height moved at or below applied tip ' + tip + ': ' + detail +
+                        '. Refusing to serve because committed blocks would be interpreted under different rules.');
+                }
+            }
+            const canonical = consensusRules.canonical(current);
+            const batch = crypto.createHash('sha256').update(canonical + '\n' + String(tip)).digest('hex');
+            const entries = Object.keys(current).sort().map(key => JSON.stringify([key, current[key]]));
+            if(entries.some(entry => Buffer.byteLength(entry, 'utf8') > 250))
+                throw new Error('consensus gate height record exceeds events.data capacity');
+            await conn.query(
+                "DELETE FROM events WHERE code IN ('CONSENSUS_GATE_HEIGHT', 'CONSENSUS_GATE_BOOT')"
+            );
+            for(const entry of entries){
+                await conn.query(
+                    "INSERT INTO events (time, code, data, witness_hash) VALUES (NOW(), 'CONSENSUS_GATE_HEIGHT', ?, ?)",
+                    [entry, batch]
+                );
+            }
+            await conn.query(
+                "INSERT INTO events (time, code, data, witness_hash) VALUES (NOW(), 'CONSENSUS_GATE_BOOT', ?, ?)",
+                [JSON.stringify({ applied_tip: tip, count: entries.length }), batch]
+            );
+            await conn.query('COMMIT');
+            transactionOpen = false;
+        } catch(e) {
+            if(conn && transactionOpen){
+                try { await conn.query('ROLLBACK'); } catch(_){}
+            }
+            throw e;
+        } finally {
+            if(conn && this.transactionConnection == null){
+                try { await conn.release(); } catch(_){}
+            }
+        }
+    },
 
     // Every column in the raw-wire widen registry must stay utf8mb4 after the
     // migration ledger says the widen has run. verifyTables cannot repair a
