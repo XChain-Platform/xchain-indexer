@@ -22,6 +22,7 @@
  *
  ********************************************************************/
 
+const crypto    = require('crypto');
 const changes   = require('../protocol_changes.js');
 const database  = require('../db');
 const actions   = require('../actions/index.js');
@@ -39,12 +40,46 @@ const { getLogger } = require('../observability/index.js');
 const { CONFIG_ENV } = require('../config.js');
 const { usesCapabilitySnapshot } = require('../db/shared.js');
 const { startupPinRefusal } = require('../consensus/capability_snapshot_proof/startup_pin_refusal.js');
+const consensusRules = require('../consensus_rules_digest.js');
+const { classifyGateMoves } = require('../consensus/retroactive/gate_heights.js');
+const { planRetroactiveBoot } = require('../consensus/retroactive/boot_plan.js');
+const { mirrorCoverageGap } = require('../consensus/retroactive/mirror_coverage.js');
+const {
+    buildReplayMarker,
+    advanceReplayMarker,
+    isReplayOpen,
+} = require('../consensus/retroactive/replay_marker.js');
+const { goCommand, goRulesSha } = require('../consensus/retroactive/go_binding.js');
 
 const ATTEST_RESPONSE_MIRROR_KEY =
     'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 const CAPABILITY_SNAPSHOT_PROOF_KEY =
     'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION';
 const MIRRORED_CAPABILITIES = ['cross_chain', 'oracle_publish', 'price', 'attestation'];
+
+function gateMapDigest(gateHeights){
+    return crypto.createHash('sha256')
+        .update(consensusRules.canonical(gateHeights)).digest('hex');
+}
+
+function throwRetroactiveRefusal(indexer, plan, moves, tip, canonicalMap){
+    if(plan.reason === 'non_movable'){
+        const refused = [...moves.refused].sort((a, b) => a.key.localeCompare(b.key));
+        const detail = refused.map(move => move.key + ' (' + String(move.from) +
+            ' -> ' + String(move.to) + ')').join(', ');
+        indexer.util.throwError('consensus gate height moved at or below applied tip ' + tip + ': ' + detail +
+            '. Refusing to serve because committed blocks would be interpreted under different rules.');
+        return;
+    }
+    if(plan.reason === 'needs_go'){
+        indexer.stallReason = plan.stallReason;
+        const rules = goRulesSha(canonicalMap, plan.target);
+        indexer.util.throwError('retroactive replay refused: needs_go for target ' + plan.target +
+            ' at distance ' + plan.distance + '. Authorize with: ' + goCommand(plan.target, rules));
+        return;
+    }
+    indexer.util.throwError('retroactive replay refused: mirror_gap: ' + plan.detail);
+}
 
 function assertCapabilitySnapshotPin(){
     const network = this.config['NETWORK'];
@@ -68,7 +103,111 @@ module.exports = {
         const appliedTip = await this.indexerDb.getBlockIndex('indexer', 'last');
         const gateHeights = this.indexerDb.consensusHeightGateMap(
             this.config['NETWORK'], this.config['COIN']);
-        await this.indexerDb.recordConsensusGateBoot(gateHeights, appliedTip);
+        if(typeof this.indexerDb.readConsensusGateBoot !== 'function'){
+            await this.indexerDb.recordConsensusGateBoot(gateHeights, appliedTip);
+            return;
+        }
+
+        const boot = await this.indexerDb.readConsensusGateBoot();
+        const openMarker = boot && isReplayOpen(boot.replayMarker) ? boot.replayMarker : null;
+        this.replayMarker = boot ? boot.replayMarker : null;
+
+        if(openMarker){
+            this.stallReason = 'retroactive_replay';
+            if(openMarker.state === 'pending' &&
+               appliedTip !== null && Number(appliedTip) >= openMarker.target)
+                await this.rollback.rollback(openMarker.target);
+            if(openMarker.state === 'pending'){
+                this.replayMarker = advanceReplayMarker(openMarker, 'replaying');
+                await this.indexerDb.recordConsensusReplayMarker(this.replayMarker);
+            }
+            return;
+        }
+
+        if(!boot || !boot.recorded || appliedTip === null){
+            await this.indexerDb.recordConsensusGateBoot(gateHeights, appliedTip,
+                { allowRetroactiveMoves: true });
+            return;
+        }
+
+        const moveInput = {
+            recorded: boot.recorded.gateHeights,
+            current: gateHeights,
+            tip: Number(appliedTip),
+        };
+        const moves = typeof this.indexerDb.classifyConsensusGateMoves === 'function'
+            ? this.indexerDb.classifyConsensusGateMoves(moveInput)
+            : classifyGateMoves(moveInput);
+        const canonicalMap = consensusRules.canonical(gateHeights);
+        let plan = planRetroactiveBoot({
+            openMarker: null,
+            refusedKeys: moves.refused.map(move => move.key),
+            target: moves.target,
+            tip: Number(appliedTip),
+            capBlocks: Number(this.config['RETROACTIVE_REPLAY_CAP_BLOCKS']),
+            goMatches: false,
+            mirrorGap: null,
+        });
+        if(plan.action === 'refuse' && plan.reason === 'non_movable')
+            return throwRetroactiveRefusal(this, plan, moves, appliedTip, canonicalMap);
+
+        if(plan.action === 'serve'){
+            await this.indexerDb.recordConsensusGateBoot(gateHeights, appliedTip,
+                { allowRetroactiveMoves: true });
+            return;
+        }
+
+        const goMatches = typeof this.indexerDb.retroactiveGoMatches === 'function'
+            ? await this.indexerDb.retroactiveGoMatches(canonicalMap, moves.target)
+            : false;
+        plan = planRetroactiveBoot({
+            openMarker: null,
+            refusedKeys: [],
+            target: moves.target,
+            tip: Number(appliedTip),
+            capBlocks: Number(this.config['RETROACTIVE_REPLAY_CAP_BLOCKS']),
+            goMatches,
+            mirrorGap: null,
+        });
+        if(plan.action === 'refuse')
+            return throwRetroactiveRefusal(this, plan, moves, appliedTip, canonicalMap);
+
+        const readings = await this.indexerDb.readRetroactiveMirrorCoverage(plan.target);
+        const mirrorGap = mirrorCoverageGap({
+            targetBlockTime: Number(readings.targetBlockTime),
+            fiatWindowSeconds: Number(this.config['FIAT_DISPENSER_PRICE_WINDOW']),
+            oldestPriceRoundTime: readings.oldestPriceRoundTime,
+            requiredCapabilityBlock: readings.requiredCapabilityBlock,
+            oldestCapabilitySnapshotBlock: readings.oldestCapabilitySnapshotBlock,
+        });
+        plan = planRetroactiveBoot({
+            openMarker: null,
+            refusedKeys: [],
+            target: moves.target,
+            tip: Number(appliedTip),
+            capBlocks: Number(this.config['RETROACTIVE_REPLAY_CAP_BLOCKS']),
+            goMatches,
+            mirrorGap,
+        });
+        if(plan.action === 'refuse')
+            return throwRetroactiveRefusal(this, plan, moves, appliedTip, canonicalMap);
+
+        const marker = buildReplayMarker({
+            target: plan.target,
+            replayTo: Number(appliedTip),
+            rulesFrom: gateMapDigest(boot.recorded.gateHeights),
+            rulesTo: gateMapDigest(gateHeights),
+        });
+        await this.indexerDb.recordConsensusGateBoot(gateHeights, appliedTip, {
+            allowRetroactiveMoves: true,
+            replayMarker: marker,
+        });
+        this.replayMarker = marker;
+        this.stallReason = plan.stallReason;
+        await this.rollback.rollback(plan.target);
+        this.stallReason = plan.stallReason;
+        this.replayMarker = advanceReplayMarker(marker, 'replaying');
+        await this.indexerDb.recordConsensusReplayMarker(this.replayMarker);
     },
 
     // The hub, DOGE-anchor and DOGE roll-call clients. Created before the hub config
