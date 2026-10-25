@@ -426,5 +426,25 @@
   "2026-10-18-anchor-actions-pre-archive-status.sql": {
     "residue": "bdcf54cd1178917a537dc2fcebe60acd86e78acea0646b92f0f30c71c768f119",
     "sha256": "29ace5abd9378dad83304568beb08945eb352022d250c66e677a0c04e5ed81ac"
+  },
+  "2026-10-19-bridge-escrow-anchor-axis-checkpoint-idx.sql": {
+    "residue": "ef8d5533319e161ac2da331b298fcd81f50cea7132277d18997bf3d123a15b1a",
+    "sha256": "5f52530ff55eeecf95a193909f057026d3e368264f9a132282fa704504a6cb36"
+  },
+  "2026-10-20-attestation-responses-batch-action-idx.sql": {
+    "residue": "35b36b058f3bb37f2507527144d201ad192dabc3ba7a193094973c8ad5ddf394",
+    "sha256": "dd5ca7e4a34115c77434736fa56f476934125cc21348f0f05f761c47df366f10"
+  },
+  "2026-10-21-rollcall-actions.sql": {
+    "residue": "2899c80c8a36168e6980f39925254f262f92312aca49a892f961dc97f78cdc83",
+    "sha256": "95bc2659cf2f16a331a16bced6daa2e5ad412c832db1ce3ba695b7d5137af167"
+  },
+  "2026-10-23-index-tickers-full-tick-prefix.sql": {
+    "residue": "cd30383ec678fefceb94a6e5a37457e2b105eba56e00b76878ae4ebf8b99532c",
+    "sha256": "c2adf41f4b0074c88bd1953f27a001045f9fd8bcf81ade37c6dea6c17e96ec46"
+  },
+  "2026-10-25-state-checkpoints-supersede-columns.sql": {
+    "residue": "06681f5ff2b3d4aafdd01b6157477be6fc390a33c7436d566e40bf867108bd6e",
+    "sha256": "16080b370d93d9278e363b026d64b2add4b79a4b1d3da03c36289b0a89a75265"
   }
 }
