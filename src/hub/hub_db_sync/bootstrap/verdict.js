@@ -174,6 +174,12 @@ module.exports = {
         if (fullyDrained && drain.fullTable && drain.servedOracleKeys)
             await this.reconcileRetractedOracleRows(drain.servedOracleKeys, drain.oracleKeysComplete,
                                                     drain.oraclePreDrainMaxId);
+
+        // state_checkpoints is append-only within one hub lineage, but a rebuilt hub can
+        // reuse checkpoint_seq with different signed content and can have a shorter history.
+        // Only a complete page from zero authorizes replacing that lineage.
+        if (fullyDrained && drain.fullTable && drain.table === 'state_checkpoints')
+            drain.reconciliationFailed = !(await this.reconcileStateCheckpoints(drain.scope));
     },
 
     // Only arm this table's barrier state once it FULLY drained. The per-table refresh
@@ -188,6 +194,7 @@ module.exports = {
     // mirror on its own path; this only withholds arming on an incomplete bootstrap.
     // Returns false when the price replay reported the table not-drained after all.
     async armBarriersAfterDrain(drain) {
+        if (drain.reconciliationFailed) return false;
         let table = drain.table;
         // Pass armBootstrap=true: this is the only path allowed to arm the
         // per-barrier <x>Bootstrapped flags, because only here has the table
