@@ -115,7 +115,7 @@ module.exports = {
         if(openMarker){
             this.stallReason = 'retroactive_replay';
             if(openMarker.state === 'pending' &&
-               appliedTip !== null && Number(appliedTip) >= openMarker.target)
+               appliedTip !== null && Number(appliedTip) > openMarker.target)
                 await this.rollback.rollback(openMarker.target);
             if(openMarker.state === 'pending'){
                 this.replayMarker = advanceReplayMarker(openMarker, 'replaying');
