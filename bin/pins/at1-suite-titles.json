@@ -2807,6 +2807,12 @@
       "wire text before validation: VOTE v0 create refused before its DEPOSIT check @regression @tier1 a text DEPOSIT \"abc\" on a refused create settles inert",
       "wire text before validation: util.bcparses @regression @tier1 answers exactly whether the raw helpers throw"
     ],
+    "2904e29ac46aa8eb": [
+      "retroactive consensus gate move at boot @regression @tier1 records the gate height map and null applied tip on an empty database",
+      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when a recorded gate moves to or below the applied tip",
+      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when an applied gate moves above the tip or becomes inactive",
+      "retroactive consensus gate move at boot @regression @tier1 serves and records the new map when the moved gate stays above the applied tip"
+    ],
     "294f6ca3123cda7e": [
       "Rollback @regression @tier3 bumps the push generation inside the transaction (after beginTransaction, before commit)",
       "Rollback @regression @tier3 calls rollbackTransaction when an error occurs inside the transaction",
@@ -10375,11 +10381,6 @@
       "consensus rules digest activeGatesAt unit filtering keeps coin-qualified height resolution without a named coin",
       "consensus rules digest activeGatesAt unit filtering keeps height, time and epoch activation rows eligible",
       "consensus rules digest activeGatesAt unit filtering returns only activation-unit rows for every supported network and coin lookup"
-    ],
-    "9011773de46fcb3d": [
-      "retroactive consensus gate move at boot @regression @tier1 records the gate height map and null applied tip on an empty database",
-      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when a recorded gate moves to or below the applied tip",
-      "retroactive consensus gate move at boot @regression @tier1 serves and records the new map when the moved gate stays above the applied tip"
     ],
     "90165b8ec993c4e6": [
       "ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1 BTC below the anchor takes the legacy unweighted branch",
@@ -19229,7 +19230,7 @@
   "scripts": {
     "test": {
       "fileCount": 1530,
-      "titleCount": 14905,
+      "titleCount": 14906,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20007,7 +20008,7 @@
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_registry_parity.test.js": "56e2effa6675b4fa",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/snapshot_checkpoint/canonical.test.js": "299c4ed3013e8a10",
         "test/unit/consensus/snapshot_checkpoint/canonical_twin.test.js": "9fccb58e5d806628",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
@@ -21140,7 +21141,7 @@
     },
     "test:regression": {
       "fileCount": 1164,
-      "titleCount": 11783,
+      "titleCount": 11784,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21744,7 +21745,7 @@
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22310,7 +22311,7 @@
     },
     "test:regression:fast": {
       "fileCount": 590,
-      "titleCount": 6236,
+      "titleCount": 6237,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22517,7 +22518,7 @@
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22906,7 +22907,7 @@
     },
     "test:regression:full": {
       "fileCount": 1164,
-      "titleCount": 11783,
+      "titleCount": 11784,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23510,7 +23511,7 @@
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
