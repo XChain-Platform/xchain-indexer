@@ -78,8 +78,13 @@ async function recordReplayWitnessPhase(db, batch, phase){
 
 async function readReplayWitnessBlocks(db, target, replayTo){
     const rows = await db.doQueryStrict(
-        'SELECT b.block_index, t.hash AS block_hash FROM blocks b ' +
+        'SELECT b.block_index, t.hash AS block_hash, t1.hash AS ledger_hash, ' +
+        't2.hash AS actions_hash, t3.hash AS contract_hash, str.state_root FROM blocks b ' +
         'JOIN index_transactions t ON t.id = b.block_hash_id ' +
+        'LEFT JOIN index_transactions t1 ON (t1.id = b.ledger_hash_id) ' +
+        'LEFT JOIN index_transactions t2 ON (t2.id = b.actions_hash_id) ' +
+        'LEFT JOIN index_transactions t3 ON (t3.id = b.contract_hash_id) ' +
+        'LEFT JOIN state_tree_roots str ON (str.block_index = b.block_index) ' +
         'WHERE b.block_index BETWEEN ? AND ? ORDER BY b.block_index ASC, b.id ASC',
         [target, replayTo]
     );
