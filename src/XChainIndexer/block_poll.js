@@ -22,6 +22,9 @@
  ********************************************************************/
 
 const { getLogger } = require('../observability/index.js');
+const { advanceReplayMarker } = require('../consensus/retroactive/replay_marker.js');
+const { replayReachedTip } = require('../consensus/retroactive/replay_status.js');
+const { recordReplayMarker } = require('../db/events/retroactive_replay_marker.js');
 
 module.exports = {
 
@@ -68,6 +71,10 @@ module.exports = {
             lastProcessedReorgId = rolled.lastProcessedReorgId;
         }
 
+        // A prior pass may have committed replay_to and stopped before appending the
+        // terminal marker. Reconcile the durable committed tip before any early return.
+        await this.completeRetroactiveReplay(indexerReorgView, lastIndexerBlock);
+
         // A decoder carrying a durable REORG_HALT is condemned to a reset: its rows
         // above the fork point may be the abandoned branch (a decoder that halted before
         // finishing its rollback) or rows decoded forward on dispenser state that no
@@ -102,6 +109,8 @@ module.exports = {
         lastIndexerBlock = caughtUp.lastIndexerBlock;
         lastDecoderBlock = caughtUp.lastDecoderBlock;
 
+        await this.completeRetroactiveReplay(indexerReorgView, lastIndexerBlock);
+
         // The catch-up loop has stopped, either caught up or because a barrier deferred
         // the block at the head of the queue. Fold that into the mirror-barrier hold so a
         // block that keeps being deferred across passes is measured against the named
@@ -114,6 +123,23 @@ module.exports = {
             this.synced = true;
             getLogger().info('Listening for blocks...');
         }
+    },
+
+    // Persist the terminal state only after the committed cursor reaches replay_to.
+    // The append happens before the in-memory state changes, so a failed write leaves
+    // the replay open and retryable on the next supervised pass.
+    async completeRetroactiveReplay(indexerReorgView, committedTip){
+        if(!replayReachedTip(this.replayMarker, committedTip)) return false;
+
+        const replayed = advanceReplayMarker(this.replayMarker, 'replayed');
+        await recordReplayMarker(indexerReorgView, replayed);
+        this.replayMarker = replayed;
+        if(this.stallReason === 'retroactive_replay'){
+            this.stallReason = null;
+            this.stallClearsAt = null;
+            this.stallBlock = null;
+        }
+        return true;
     },
 
     // Handle block reorgs. When two or more reorgs land between indexer iterations and a
