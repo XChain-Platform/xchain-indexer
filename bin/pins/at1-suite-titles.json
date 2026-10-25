@@ -3463,6 +3463,11 @@
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 DESTROY with insufficient balance is marked invalid",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 sanity check passes: supply == credits - debits == balances after ISSUE+MINT+SEND"
     ],
+    "2f30c7049940e42f": [
+      "retroactive replay witness status @regression @tier1 --rewitness appends a fresh witness phase for the latest recorded batch",
+      "retroactive replay witness status @regression @tier1 pins rules.digest to rules_to only while the witness overlay is active",
+      "retroactive replay witness status @regression @tier1 reports running, passed, diverged, and null for a pre-feature marker"
+    ],
     "2f45ed223b43de9e": [
       "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND a single 0.5 leg of a 0-decimals token is rejected (the rule that was being laundered)",
       "Multi-leg consolidation: per-leg amount format @regression @tier1 SEND an honest sibling leg still settles beside a rejected one",
@@ -19354,8 +19359,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1546,
-      "titleCount": 14999,
+      "fileCount": 1547,
+      "titleCount": 15002,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20134,6 +20139,7 @@
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
+        "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
@@ -21281,8 +21287,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1180,
-      "titleCount": 11877,
+      "fileCount": 1181,
+      "titleCount": 11880,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21895,6 +21901,7 @@
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
+        "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
@@ -22467,8 +22474,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 604,
-      "titleCount": 6321,
+      "fileCount": 605,
+      "titleCount": 6324,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22682,6 +22689,7 @@
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
+        "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
@@ -23077,8 +23085,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1180,
-      "titleCount": 11877,
+      "fileCount": 1181,
+      "titleCount": 11880,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23691,6 +23699,7 @@
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
+        "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
