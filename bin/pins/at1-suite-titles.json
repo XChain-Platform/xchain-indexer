@@ -2968,6 +2968,15 @@
       "UNSTAKE delegated-row journal gate @regression @tier1 ships unarmed on mainnet, armed on testnet at its v0.25.0 heights, and supports the regtest drill override",
       "UNSTAKE delegated-row journal gate @regression @tier1 writes no synthetic rotation when the current slot has no rotation origin"
     ],
+    "298345533732befb": [
+      "retroactive witness read overlay @regression @tier1 applies the prior overlay before a recorded witness threshold",
+      "retroactive witness read overlay @regression @tier1 exports the unchanged threshold resolver used by gate projections",
+      "retroactive witness read overlay @regression @tier1 removes both possible thresholds for an absent witness value",
+      "retroactive witness read overlay @regression @tier1 replaces the network fallback when the table has no coin threshold",
+      "retroactive witness read overlay @regression @tier1 replaces the resolved coin threshold without mutating the source table",
+      "retroactive witness read overlay @regression @tier1 returns the prior result unchanged for a key absent from witness values",
+      "retroactive witness read overlay @regression @tier1 works without a prior overlay and ignores inherited witness keys"
+    ],
     "2987ec28ce152583": [
       "AIRDROP ticker-list holder collection adds nothing for a null or undefined holders answer",
       "AIRDROP ticker-list holder collection reads bare and resolvable own-coin ticks when armed",
@@ -3215,6 +3224,13 @@
       "MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1 UNCAPPED_MAX_SUPPLY_ZERO registration mainnet is still UNARMED: the operator owes the flag day, so no guessed height ships",
       "MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1 UNCAPPED_MAX_SUPPLY_ZERO registration mainnet: inert at every plausible block time (the loosening cannot fire early)",
       "MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1 UNCAPPED_MAX_SUPPLY_ZERO registration regtest: enabled from genesis"
+    ],
+    "2d1ca922a946f347": [
+      "retroactive witness status rules @regression @tier1 maps every witness phase to its public status",
+      "retroactive witness status rules @regression @tier1 preserves an absent phase as an absent witness status",
+      "retroactive witness status rules @regression @tier1 rejects values outside the witness phase vocabulary",
+      "retroactive witness status rules @regression @tier1 reports rules_to while witnessing an open replay marker",
+      "retroactive witness status rules @regression @tier1 reports the map digest outside an open witness phase"
     ],
     "2d2977d7cebb17c1": [
       "hub consensus-hash mismatch health and status reporting records a checked match as false and clears mismatch detail",
@@ -19329,8 +19345,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1543,
-      "titleCount": 14980,
+      "fileCount": 1545,
+      "titleCount": 14992,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20110,6 +20126,8 @@
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
+        "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
+        "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rollcall_close/absence_streak.test.js": "98d8992dfae50cef",
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
         "test/unit/consensus/rollcall_close/signer_verify.test.js": "7e33c00ff3453bbd",
@@ -21253,8 +21271,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1177,
-      "titleCount": 11858,
+      "fileCount": 1179,
+      "titleCount": 11870,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21868,6 +21886,8 @@
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
+        "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
+        "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
@@ -22436,8 +22456,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 601,
-      "titleCount": 6302,
+      "fileCount": 603,
+      "titleCount": 6314,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22652,6 +22672,8 @@
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
+        "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
+        "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
@@ -23043,8 +23065,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1177,
-      "titleCount": 11858,
+      "fileCount": 1179,
+      "titleCount": 11870,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23658,6 +23680,8 @@
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
+        "test/unit/consensus/retroactive/witness/witness_overlay.test.js": "298345533732befb",
+        "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
