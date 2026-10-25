@@ -278,6 +278,26 @@ function applyBlockTiming(config){
     config['CHAIN_TIP_PUSH_MAX_LAG'] = parseIntMin0(process.env.CHAIN_TIP_PUSH_MAX_LAG, 100);
 }
 
+function applyRetroactiveReplayCap(config, coin){
+    // 72 hours of chain time at each chain's target block spacing.
+    const defaults = { BTC: 432, LTC: 1728, DOGE: 4320 };
+    const envKey = 'RETROACTIVE_REPLAY_CAP_BLOCKS';
+    const override = readEnvNow(envKey);
+
+    if(override === undefined || override === ''){
+        config['RETROACTIVE_REPLAY_CAP_BLOCKS'] = defaults[coin];
+        return;
+    }
+
+    const raw = String(override).trim();
+    const parsed = /^\d+$/.test(raw) ? Number(raw) : NaN;
+    if(!Number.isSafeInteger(parsed) || parsed <= 0)
+        throw new Error('Invalid ' + envKey + '="' + override + '": the retroactive replay cap must be ' +
+            'a positive integer number of blocks.');
+
+    config['RETROACTIVE_REPLAY_CAP_BLOCKS'] = parsed;
+}
+
 function applyGenesisLedger(config, coin){
     // Genesis ledger bootstrap (Counterparty/Dogeparty name-ownership injection). The
     // consensus-critical GENESIS_BLOCK + GENESIS_LEDGER_HASH are pinned per-network in
@@ -396,6 +416,7 @@ module.exports = {
         applyControllerPolicy(config);
         applyBalanceDeltaMode(config);
         applyBlockTiming(config);
+        applyRetroactiveReplayCap(config, coin);
         applyGenesisLedger(config, coin);
         applyGenesisAirdrop(config, network);
         applyGenesisDump(config, coin, network);
