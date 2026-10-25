@@ -17665,6 +17665,10 @@
       "BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid @regression @tier1 the sentinel names the controller that caused it an address-controller refusal names the contract, class and address",
       "BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid @regression @tier1 the sentinel names the controller that caused it isGuardInertError still matches the bare legacy sentinel and rejects everything else"
     ],
+    "e6f3ab1c60524881": [
+      "retroactive go command ships in the image @regression @tier1 copies retroactive-go.js beside the other bin scripts",
+      "retroactive go command ships in the image @regression @tier1 fails when the retroactive go COPY is omitted"
+    ],
     "e6f58e549f5b5546": [
       "recordCrossChainOrderFill fixed-notation amounts @regression @tier1 passes a null or non-numeric amount through unchanged",
       "recordCrossChainOrderFill fixed-notation amounts @regression @tier1 renders a clamped bignumber in fixed notation, never \"5e-8\"",
@@ -19320,8 +19324,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1541,
-      "titleCount": 14975,
+      "fileCount": 1542,
+      "titleCount": 14977,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20098,6 +20102,7 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/rollcall_close/absence_streak.test.js": "98d8992dfae50cef",
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
@@ -21242,8 +21247,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1175,
-      "titleCount": 11853,
+      "fileCount": 1176,
+      "titleCount": 11855,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21854,6 +21859,7 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
@@ -22423,8 +22429,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 600,
-      "titleCount": 6300,
+      "fileCount": 601,
+      "titleCount": 6302,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22637,6 +22643,7 @@
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
@@ -23029,8 +23036,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1175,
-      "titleCount": 11853,
+      "fileCount": 1176,
+      "titleCount": 11855,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23641,6 +23648,7 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
         "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
