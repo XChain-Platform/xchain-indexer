@@ -4140,6 +4140,13 @@
       "MIGRATION_CHECKSUM_REBASELINES[validator-rewards round_qualifier] @regression @tier1 pins the current file content as `to`",
       "MIGRATION_CHECKSUM_REBASELINES[validator-rewards round_qualifier] @regression @tier1 rebaselines a COMMENT-only retag: the executable SQL is byte-identical"
     ],
+    "38c029afe0f6d1a8": [
+      "checkpoint trust-root supersession refusal @regression @tier1 accepts a live row and a superseding row",
+      "checkpoint trust-root supersession refusal @regression @tier1 does not mutate the row or rows inputs",
+      "checkpoint trust-root supersession refusal @regression @tier1 ignores a superseder on another network",
+      "checkpoint trust-root supersession refusal @regression @tier1 refuses rows at and above supersedes_from with the lowest superseding seq",
+      "checkpoint trust-root supersession refusal @regression @tier1 reports a string supersedes_from as a Number"
+    ],
     "38ccb24501751722": [
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 origin-side v0 admission admits an off-BTC request and stamps its origin chain when the gate is on",
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 origin-side v0 admission leaves the admission rejection intact when the gate is off",
@@ -19303,8 +19310,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1538,
-      "titleCount": 14964,
+      "fileCount": 1539,
+      "titleCount": 14969,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20073,6 +20080,7 @@
         "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
@@ -21222,8 +21230,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1172,
-      "titleCount": 11842,
+      "fileCount": 1173,
+      "titleCount": 11847,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21826,6 +21834,7 @@
         "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
@@ -22400,8 +22409,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 597,
-      "titleCount": 6289,
+      "fileCount": 598,
+      "titleCount": 6294,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22607,6 +22616,7 @@
         "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
@@ -23003,8 +23013,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1172,
-      "titleCount": 11842,
+      "fileCount": 1173,
+      "titleCount": 11847,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23607,6 +23617,7 @@
         "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
         "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
