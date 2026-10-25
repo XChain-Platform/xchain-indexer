@@ -9536,6 +9536,16 @@
       "getNetBalances batched read @regression @tier1 dedupes keys, chunks large sets, and reads nothing for an empty set",
       "getNetBalances batched read @regression @tier1 is the read threadBalancesRoot uses instead of a per-key loop"
     ],
+    "83bee3ae87f42732": [
+      "retroactive gate height map @regression @tier1 flags a later move of an applied height at the old boundary",
+      "retroactive gate height map @regression @tier1 flags an earlier move at the new boundary",
+      "retroactive gate height map @regression @tier1 flags de-arming at the old boundary for null, absent and the sentinel",
+      "retroactive gate height map @regression @tier1 ignores a move wholly above the tip",
+      "retroactive gate height map @regression @tier1 never records epoch or ruleset rows as movable gate heights",
+      "retroactive gate height map @regression @tier1 records every height and time row, including an indexer-only gate",
+      "retroactive gate height map @regression @tier1 refuses a non-listed key and ships no movable gates",
+      "retroactive gate height map @regression @tier1 splits allowlisted and refused moves without changing their shared target"
+    ],
     "83e6fe3bdfc789e7": [
       "Legacy db-hits fee accumulation @regression @tier3 CALLBACK below flag-day: db_hits reproduces \"46\" string-concat",
       "Legacy db-hits fee accumulation @regression @tier3 CALLBACK: db_hits = 4 + recipients*3 as a Number (not \"4\" concat)",
@@ -19241,8 +19251,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1531,
-      "titleCount": 14916,
+      "fileCount": 1532,
+      "titleCount": 14924,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20009,6 +20019,7 @@
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
@@ -21153,8 +21164,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1165,
-      "titleCount": 11794,
+      "fileCount": 1166,
+      "titleCount": 11802,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21755,6 +21766,7 @@
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
@@ -22324,8 +22336,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 591,
-      "titleCount": 6247,
+      "fileCount": 592,
+      "titleCount": 6255,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22529,6 +22541,7 @@
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
@@ -22921,8 +22934,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1165,
-      "titleCount": 11794,
+      "fileCount": 1166,
+      "titleCount": 11802,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23523,6 +23536,7 @@
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
