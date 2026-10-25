@@ -117,6 +117,7 @@ function classifyGateMoves({ recorded, current, tip, blockTimes, movableGates = 
 
 module.exports = {
     RECORDED_UNITS,
+    resolvedThreshold,
     gateHeightMap,
     classifyGateMoves,
 };
