@@ -85,9 +85,9 @@ describe('consensus identity GATES field and pin comparison', function () {
         for (const block of ['bare_checkout', 'armed_regtest_venue']) {
             assert.strictEqual(pin[block].consensus_rules_gates[key],
                 '{"mainnet":9999999999,"regtest":0,"testnet":5082}', block);
-            assert.strictEqual(pin[block].gate_key_count, 48, block);
+            assert.strictEqual(pin[block].gate_key_count, 49, block);
             assert.strictEqual(pin[block].gates_field_hash,
-                '9cba94b3a4cb49673833d7a7284090d63293b3cb8d1680e99e97fd78e81e3be1', block);
+                'c2b5119873e4784e961cab9e5c25f15c1cdad6eca9a619c4c7894c62e8870488', block);
         }
     });
 
