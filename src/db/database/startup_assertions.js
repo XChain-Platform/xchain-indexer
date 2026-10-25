@@ -33,15 +33,13 @@ const Database = require('../index.js');
 const utf8mb4Columns = require('../../chain/utf8mb4_columns.js');
 const consensusRules = require('../../consensus_rules_digest.js');
 const gateRegistry = require('../../consensus/gate_registry.js');
-const { gateHeightMap, classifyGateMoves } = require('../../consensus/retroactive/gate_heights.js');
+const { gateHeightMap } = require('../../consensus/retroactive/gate_heights.js');
 const {
-    REPLAY_MARKER_CODE,
-    encodeReplayMarker,
-    decodeReplayMarker,
-} = require('../../consensus/retroactive/replay_marker.js');
-const { RETRO_GO_CODE, goAuthorizes } = require('../../consensus/retroactive/go_binding.js');
-
-const REPLAY_MARKER_DATA_MAX = 250;
+    GATE_RECORD_SCOPE,
+    classifyAgainst,
+    movedGateMessage,
+} = require('../../consensus/retroactive/boot_replay.js');
+const { readLatestReplayMarker } = require('../events/retroactive_replay_marker.js');
 
 function decodeGateBootRows(markers, rows){
     if(!markers || markers.length === 0) return null;
@@ -75,7 +73,7 @@ function decodeGateBootRows(markers, rows){
     if(!validAppliedTip || Object.keys(gateHeights).length !== marker.count || expectedBatch !== batch)
         throw new Error('consensus gate boot record failed its batch witness; refusing to replace its history');
 
-    return { gateHeights, appliedTip, batch };
+    return { gateHeights, appliedTip, batch, scope: marker.scope === undefined ? null : marker.scope };
 }
 
 async function readGateBootRecord(conn, lock){
@@ -91,38 +89,12 @@ async function readGateBootRecord(conn, lock){
     return decodeGateBootRows(markers, rows);
 }
 
-function movedGateError(moves, tip){
-    const ordered = [...moves].sort((a, b) => a.key.localeCompare(b.key));
-    const detail = ordered.map(move => move.key + ' (' + String(move.from) +
-        ' -> ' + String(move.to) + ')').join(', ');
-    return new Error('consensus gate height moved at or below applied tip ' + tip + ': ' + detail +
-        '. Refusing to serve because committed blocks would be interpreted under different rules.');
-}
-
-function decodeGoRows(rows){
-    const out = [];
-    for(const row of rows || []){
-        try {
-            const parsed = JSON.parse(String(row.data));
-            if(parsed && Number.isSafeInteger(parsed.target) && parsed.target >= 0 &&
-               typeof parsed.rules === 'string' && /^[0-9a-f]{64}$/.test(parsed.rules))
-                out.push({ target: parsed.target, rules: parsed.rules });
-        } catch(e) {}
-    }
-    return out;
-}
-
 module.exports = {
 
     // Resolve the shared height gates for this chain without changing the public
     // consensus-identity module that the hub and indexer compare.
     consensusHeightGateMap(network, coin){
         return gateHeightMap(gateRegistry, network, coin);
-    },
-
-    // Classify the recorded and current maps under the production movable-gate registry.
-    classifyConsensusGateMoves(input){
-        return classifyGateMoves(input);
     },
 
     // Read the last witnessed gate map and the newest replay marker without changing
@@ -133,12 +105,7 @@ module.exports = {
         try {
             conn = await this.getConnection();
             const recorded = await readGateBootRecord(conn, false);
-            const markerRows = await conn.query(
-                'SELECT data FROM events WHERE code = ? ORDER BY id DESC LIMIT 1',
-                [REPLAY_MARKER_CODE]
-            );
-            const replayMarker = markerRows && markerRows.length
-                ? decodeReplayMarker(String(markerRows[0].data)) : null;
+            const replayMarker = await readLatestReplayMarker(this);
             return { recorded, replayMarker };
         } finally {
             if(conn && this.transactionConnection == null){
@@ -150,7 +117,7 @@ module.exports = {
     // The mirror facts needed by the pure coverage rule. The target block timestamp
     // comes from committed indexer history; both mirror minima come from the same mirror
     // connection the consensus readers use.
-    async readRetroactiveMirrorCoverage(target){
+    async readRetroactiveMirrorCoverage(target, requiredCapabilityBlock){
         const targetBlockTime = await this.getRawBlockTime(target);
         if(targetBlockTime === false || !Number.isFinite(Number(targetBlockTime)) ||
            Number(targetBlockTime) <= 0)
@@ -166,36 +133,15 @@ module.exports = {
         return {
             targetBlockTime: Number(targetBlockTime),
             oldestPriceRoundTime: row.oldest_price_round_time,
-            requiredCapabilityBlock: this.config && this.config['COIN'] !== 'BTC' ? Number(target) : null,
+            requiredCapabilityBlock,
             oldestCapabilitySnapshotBlock: row.oldest_capability_snapshot_block,
         };
     },
 
-    // Read bounded operator authorizations. Malformed history is inert rather than an
-    // authorization, while a matching row remains append-only and rollback-exempt.
-    async retroactiveGoMatches(canonicalMap, target){
-        const rows = await this.doQueryStrict(
-            'SELECT data FROM events WHERE code = ? ORDER BY id DESC LIMIT 100',
-            [RETRO_GO_CODE]
-        );
-        return decodeGoRows(rows).some(row => goAuthorizes(row, { canonicalMap, target }));
-    },
-
-    // Append a replay state transition. A transition is a new event rather than an
-    // UPDATE so a crash cannot leave an ambiguous partially-replaced marker.
-    async recordConsensusReplayMarker(marker){
-        const encoded = encodeReplayMarker(marker);
-        if(Buffer.byteLength(encoded, 'utf8') > REPLAY_MARKER_DATA_MAX)
-            throw new Error('consensus retroactive replay marker exceeds events.data capacity');
-        await this.doQueryStrict(
-            'INSERT INTO events (time, code, data) VALUES (NOW(), ?, ?)',
-            [REPLAY_MARKER_CODE, encoded]
-        );
-    },
-
-    // Record the chain-resolved height gates and refuse a changed threshold inside
-    // the applied range. The event batch remains unchanged after a refusal.
-    async recordConsensusGateBoot(gateHeights, appliedTip, options = {}){
+    // Record the chain-resolved gate map and refuse a changed threshold inside the
+    // applied range. The event batch remains unchanged after a refusal. A boot replay
+    // records only at a tip below its target, where no move remains to refuse.
+    async recordConsensusGateBoot(gateHeights, appliedTip){
         const current = gateHeights && typeof gateHeights === 'object' && !Array.isArray(gateHeights)
             ? gateHeights : {};
         const tip = appliedTip == null ? null : Number(appliedTip);
@@ -209,14 +155,10 @@ module.exports = {
             await conn.query('START TRANSACTION');
             transactionOpen = true;
             const recorded = await readGateBootRecord(conn, true);
-            if(recorded && tip !== null && options.allowRetroactiveMoves !== true){
-                const moves = classifyGateMoves({
-                    recorded: recorded.gateHeights,
-                    current,
-                    tip,
-                });
+            if(recorded && tip !== null){
+                const moves = classifyAgainst(recorded, current, tip);
                 if(moves.movable.length || moves.refused.length)
-                    throw movedGateError(moves.movable.concat(moves.refused), tip);
+                    throw new Error(movedGateMessage(moves.movable.concat(moves.refused), tip));
             }
             const canonical = consensusRules.canonical(current);
             const batch = crypto.createHash('sha256').update(canonical + '\n' + String(tip)).digest('hex');
@@ -234,17 +176,8 @@ module.exports = {
             }
             await conn.query(
                 "INSERT INTO events (time, code, data, witness_hash) VALUES (NOW(), 'CONSENSUS_GATE_BOOT', ?, ?)",
-                [JSON.stringify({ applied_tip: tip, count: entries.length }), batch]
+                [JSON.stringify({ applied_tip: tip, count: entries.length, scope: GATE_RECORD_SCOPE }), batch]
             );
-            if(options.replayMarker){
-                const encoded = encodeReplayMarker(options.replayMarker);
-                if(Buffer.byteLength(encoded, 'utf8') > REPLAY_MARKER_DATA_MAX)
-                    throw new Error('consensus retroactive replay marker exceeds events.data capacity');
-                await conn.query(
-                    'INSERT INTO events (time, code, data) VALUES (NOW(), ?, ?)',
-                    [REPLAY_MARKER_CODE, encoded]
-                );
-            }
             await conn.query('COMMIT');
             transactionOpen = false;
         } catch(e) {

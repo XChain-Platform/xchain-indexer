@@ -154,7 +154,7 @@ describe('retroactive consensus gate move at boot @regression @tier1', function(
         assert.strictEqual(fixture.mirrorStarts(), 1, 'successful boot reaches the serving mirror');
         assert.strictEqual(fixture.conn.state.gateInserts.length, 1);
         assert.deepStrictEqual(JSON.parse(fixture.conn.state.gateInserts[0][0]), [GATE, 101]);
-        assert.deepStrictEqual(JSON.parse(fixture.conn.state.markers[0][0]), { applied_tip: 100, count: 1 });
+        assert.deepStrictEqual(JSON.parse(fixture.conn.state.markers[0][0]), { applied_tip: 100, count: 1, scope: 'registry' });
         assert.strictEqual(fixture.conn.state.gateInserts[0][1], fixture.conn.state.markers[0][1]);
         assert.strictEqual(fixture.conn.state.commits, 1);
         assert.strictEqual(fixture.conn.state.rollbacks, 0);
@@ -167,7 +167,7 @@ describe('retroactive consensus gate move at boot @regression @tier1', function(
         await fixture.run();
 
         assert.deepStrictEqual(JSON.parse(fixture.conn.state.gateInserts[0][0]), [GATE, 0]);
-        assert.deepStrictEqual(JSON.parse(fixture.conn.state.markers[0][0]), { applied_tip: null, count: 1 });
+        assert.deepStrictEqual(JSON.parse(fixture.conn.state.markers[0][0]), { applied_tip: null, count: 1, scope: 'registry' });
         assert.strictEqual(fixture.conn.state.commits, 1);
     });
 });
