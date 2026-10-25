@@ -98,7 +98,9 @@ async function checkFoldSeqs(handler, data, sections, archive, error){
     if(error) return error;
     let checkpointSeqBind = gateRegistry.activeAt(CHECKPOINT_SEQ_BIND_GATE,
         handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
-    let replayValidOnly = checkpointSeqBind || data['NETWORK'] === 'regtest';
+    let checkpointSeqBindRow = gateRegistry.copy(CHECKPOINT_SEQ_BIND_GATE);
+    let replayValidOnly = checkpointSeqBind ||
+        (data['NETWORK'] === 'regtest' && checkpointSeqBindRow.regtest === null);
     for(let section of sections){
         if(checkpointSeqBind){
             let reason = validate.checkpointSeqBindReason(section);
