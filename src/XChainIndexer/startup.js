@@ -66,30 +66,6 @@ function baseReadOverlay(){
     return baseGateReadOverlay;
 }
 
-function armReplayWitnessCompletion(phase){
-    this.replayWitnessPhase = phase || null;
-    if(this.replayWitnessCompletionArmed ||
-       typeof this.completeRetroactiveReplay !== 'function') return;
-
-    const completeRetroactiveReplay = this.completeRetroactiveReplay;
-    this.replayWitnessCompletionArmed = true;
-    this.completeRetroactiveReplay = async (...args) => {
-        if(this.replayWitnessTransitionPending){
-            await this.recordConsensusGateBoot();
-            this.replayWitnessTransitionPending = false;
-            return true;
-        }
-
-        const completed = await completeRetroactiveReplay.apply(this, args);
-        if(completed && this.replayWitnessPhase === 'witness'){
-            this.replayWitnessTransitionPending = true;
-            await this.recordConsensusGateBoot();
-            this.replayWitnessTransitionPending = false;
-        }
-        return completed;
-    };
-}
-
 function assertCapabilitySnapshotPin(){
     const network = this.config['NETWORK'];
     const coin = this.config['COIN'];
@@ -107,10 +83,9 @@ function assertCapabilitySnapshotPin(){
 
 module.exports = {
 
-    armReplayWitnessCompletion,
-
-    // Boot replay holds. Neither clears on a clock: the replay hold lifts when the
-    // replay reaches replay_to, and the go hold only after an operator go row matches.
+    // Boot replay holds. None clears on a clock: the replay hold lifts when the replay
+    // reaches replay_to, the go hold only after an operator go row matches, and the
+    // diverged hold only after a rewitness passes.
     holdRetroactiveReplay(){
         this.stallReason = 'retroactive_replay';
         this.stallClearsAt = null;          // clears when the replay reaches replay_to, not on a clock
@@ -121,12 +96,19 @@ module.exports = {
         this.stallClearsAt = null;          // clears on a matching operator go, not on a clock
     },
 
+    // A witness chunk did not reproduce its record: a data fault, so no block applies and
+    // nothing is signed until the input is fixed and the window is witnessed again.
+    holdRetroactiveReplayDiverged(){
+        this.stallReason = 'retroactive_replay_diverged';
+        this.stallClearsAt = null;          // clears only after a rewitness passes, not on a clock
+    },
+
     // Compare this build's resolved gates with the recorded map before startup can become
     // ready: serve, resume an open replay marker, refuse, or roll back to the target and
     // replay under the new map (src/consensus/retroactive/boot_replay.js).
     async recordConsensusGateBoot(){
-        // The current map is read without the witness pass overlay, so an in-process
-        // handoff after that pass compares the build's own rules, not the recorded ones.
+        // The current map is read without any witness overlay an earlier boot in this
+        // process installed, so the comparison always sees the build's own rules.
         if(witnessOverlay && changes.registry.getReadOverlay() === witnessOverlay)
             changes.registry.setReadOverlay(baseReadOverlay());
         const lastBlock = await this.indexerDb.getBlockIndex('indexer', 'last');
@@ -181,8 +163,12 @@ module.exports = {
             holdNeedsGo: () => this.holdRetroactiveReplayNeedsGo(),
             refuse: (message) => this.util.throwError(message),
         });
+        // The overlay switches only here, at boot: the block loop records each phase
+        // change and a pass that needs other rules ends the process instead.
         this.replayMarker = result.marker || null;
-        armReplayWitnessCompletion.call(this, result.phase);
+        this.replayWitnessPhase = result.phase || null;
+        this.replayWitness = null;
+        if(result.phase === 'diverged') this.holdRetroactiveReplayDiverged();
     },
 
     // The hub, DOGE-anchor and DOGE roll-call clients. Created before the hub config

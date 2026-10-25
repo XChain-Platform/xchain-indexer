@@ -302,6 +302,10 @@ class XChainIndexer {
             // after the commit (rather than before the try) ensures a failed block leaves
             // lastIndexerBlock un-advanced so it is retried instead of skipped.
             if(step.committed) lastIndexerBlock = blockToParse;
+            // A retroactive replay witness compares each recorded chunk as its last block
+            // commits, and stops here on a mismatch or at replay_to (replayWitnessChunkCommitted).
+            if(step.committed && await this.replayWitnessChunkCommitted(indexerReorgView, blockToParse))
+                step.stop = true;
             lastDecoderBlock = step.lastDecoderBlock;
             if(step.stop) break;
         }

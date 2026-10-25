@@ -179,21 +179,8 @@ describe('retroactive replay witness boot phases @regression @tier1', function()
     });
 
     it('a completed witness pass at or above H rolls back before advancing phases', async function(){
-        const h = harness('witness', 'replaying', { tip: 100 });
-        const indexer = {
-            replayWitnessPhase: 'witness',
-            completeRetroactiveReplay: async () => {
-                h.durable.marker = advanceReplayMarker(h.durable.marker, 'replayed');
-                return true;
-            },
-            recordConsensusGateBoot: async () => {
-                const result = await run(h, h.durable.tip);
-                indexer.replayWitnessPhase = result.phase;
-                indexer.replayMarker = result.marker;
-            },
-        };
-        startup.armReplayWitnessCompletion.call(indexer, 'witness');
-        await indexer.completeRetroactiveReplay();
+        const h = harness('witness', 'replayed', { tip: 100 });
+        const result = await run(h, h.durable.tip);
         const rollbackAt = h.calls.findIndex(call => call[0] === 'rollback');
         const witnessedAt = h.calls.findIndex(call => call[0] === 'phase' && call[1] === 'witnessed');
         const finalAt = h.calls.findIndex(call => call[0] === 'phase' && call[1] === 'final');
@@ -202,33 +189,8 @@ describe('retroactive replay witness boot phases @regression @tier1', function()
         assert.ok(witnessedAt < finalAt, JSON.stringify(h.calls));
         assert.strictEqual(h.calls.filter(call => call[0] === 'rollback').length, 1);
         assert.deepStrictEqual(h.calls.find(call => call[0] === 'boot'), ['boot', C, 94]);
-        assert.strictEqual(indexer.replayMarker.state, 'replaying');
-        assert.strictEqual(indexer.replayWitnessPhase, 'final');
-    });
-
-    it('retries a failed runtime phase handoff before testing final replay completion', async function(){
-        let completions = 0;
-        let transitions = 0;
-        const indexer = {
-            completeRetroactiveReplay: async () => {
-                completions++;
-                return true;
-            },
-            recordConsensusGateBoot: async () => {
-                transitions++;
-                if(transitions === 1) throw new Error('phase handoff failed');
-                indexer.replayWitnessPhase = 'final';
-            },
-        };
-        startup.armReplayWitnessCompletion.call(indexer, 'witness');
-
-        await assert.rejects(indexer.completeRetroactiveReplay(), /phase handoff failed/);
-        await indexer.completeRetroactiveReplay();
-
-        assert.strictEqual(completions, 1);
-        assert.strictEqual(transitions, 2);
-        assert.strictEqual(indexer.replayWitnessPhase, 'final');
-        assert.strictEqual(indexer.replayWitnessTransitionPending, false);
+        assert.strictEqual(result.marker.state, 'replaying');
+        assert.strictEqual(result.phase, 'final');
     });
 
     it('re-runs a mid-witness restart from the target under the recorded rules; final keeps current rules', async function(){
@@ -266,7 +228,6 @@ const {
     readLatestReplayMarker,
     recordReplayMarker,
 } = require('../../../../src/db/events/retroactive_replay_marker.js');
-const blockPoll = require('../../../../src/XChainIndexer/block_poll.js');
 
 // A live registry key whose table holds a BTC:testnet entry beside the testnet one.
 const LIVE_KEY = 'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION';
@@ -338,8 +299,8 @@ function startupIndexer(maps, { tip }){
         util: { throwError(message){ throw new Error(message); } },
         holdRetroactiveReplay: startup.holdRetroactiveReplay,
         holdRetroactiveReplayNeedsGo: startup.holdRetroactiveReplayNeedsGo,
+        holdRetroactiveReplayDiverged: startup.holdRetroactiveReplayDiverged,
         recordConsensusGateBoot: startup.recordConsensusGateBoot,
-        completeRetroactiveReplay: blockPoll.completeRetroactiveReplay,
     };
     const phases = () => events.filter(row => row.code === REPLAY_WITNESS_PHASE_CODE)
         .map(row => JSON.parse(row.data).phase);
@@ -461,22 +422,6 @@ describe('retroactive replay witness boot phases through startup @regression @ti
         assert.strictEqual(changes.registry.getReadOverlay(), base);
     });
 
-    it('the in-process handoff at replay_to rolls back once and records the build map, not the recorded one', async function(){
-        const f = startupIndexer(maps, { tip: 100 });
-        await seedWitness(f, maps, { phase: 'witness', markerState: 'pending' });
-        const running = await f.boot();
-        f.state.tip = 100;
-
-        await running.completeRetroactiveReplay(f.db, 100);
-
-        assert.deepStrictEqual(f.rollbacks, [95, 95]);
-        assert.deepStrictEqual(f.phases(), ['witness', 'witnessed', 'final']);
-        assert.deepStrictEqual(f.boots[f.boots.length - 1], [maps.current, 94]);
-        assert.strictEqual(running.replayWitnessPhase, 'final');
-        assert.strictEqual(running.replayMarker.state, 'replaying');
-        assert.strictEqual(changes.registry.getReadOverlay(), base);
-    });
-
     it('a diverged witness holds the replay with no rollback and no overlay', async function(){
         const f = startupIndexer(maps, { tip: 98 });
         await seedWitness(f, maps, { phase: 'diverged', markerState: 'replaying' });
@@ -484,7 +429,7 @@ describe('retroactive replay witness boot phases through startup @regression @ti
 
         assert.deepStrictEqual(f.rollbacks, []);
         assert.deepStrictEqual(f.boots, []);
-        assert.strictEqual(held.stallReason, 'retroactive_replay');
+        assert.strictEqual(held.stallReason, 'retroactive_replay_diverged');
         assert.strictEqual(held.stallClearsAt, null);
         assert.strictEqual(held.replayWitnessPhase, 'diverged');
         assert.strictEqual(changes.registry.getReadOverlay(), base);

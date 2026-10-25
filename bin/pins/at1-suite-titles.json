@@ -2140,6 +2140,15 @@
       "retroactive witness chunk comparisons @regression @tier1 reports unchanged windows when every observed digest matches",
       "retroactive witness chunk comparisons @regression @tier1 returns null when no chunk ends at the height"
     ],
+    "1cf367128239d14b": [
+      "retroactive replay witness chunk compare in the block loop @regression @tier1 a mismatched chunk stops block application with the marker still replaying and final false at or above target",
+      "retroactive replay witness chunk compare in the block loop @regression @tier1 the diverged stall holds every later pass with stallClearsAt null and no barrier hold",
+      "retroactive replay witness exit and final compare @regression @tier1 a full match exits at replay_to with the witnessed phase written and the rules left to the next boot",
+      "retroactive replay witness exit and final compare @regression @tier1 a matched window reaching replayed with changed set (changed under the current rules)",
+      "retroactive replay witness exit and final compare @regression @tier1 a matched window reaching replayed with changed set (unchanged under the current rules)",
+      "retroactive replay witness exit and final compare @regression @tier1 the boot-only switch: no in-process handoff remains and the exit is a nonzero process exit",
+      "retroactive replay witness exit and final compare @regression @tier1 the marker stays open at replay_to until the final pass has recorded changed"
+    ],
     "1d393910442d8d2a": [
       "Airdrop @regression @tier2 balance and authorization checks SOURCE sleeping \u2192 invalid",
       "Airdrop @regression @tier2 balance and authorization checks TICK sleeping \u2192 invalid",
@@ -5662,22 +5671,6 @@
       "05 \u2013 Chain Reorganization @regression @tier3 2. reorg reverts balance changes from rolled-back blocks",
       "05 \u2013 Chain Reorganization @regression @tier3 3. replacement blocks after reorg produce correct final balances",
       "05 \u2013 Chain Reorganization @regression @tier3 4. reorg to first block clears all subsequent state"
-    ],
-    "4c4fe0cce8ab867c": [
-      "retroactive replay witness boot phases @regression @tier1 a completed witness pass at or above H rolls back before advancing phases",
-      "retroactive replay witness boot phases @regression @tier1 composes the recorded map over the venue overlay and replaces COIN:network",
-      "retroactive replay witness boot phases @regression @tier1 re-runs a mid-witness restart from the target under the recorded rules; final keeps current rules",
-      "retroactive replay witness boot phases @regression @tier1 resumes a final-phase crash without a second rollback or phase rewrite",
-      "retroactive replay witness boot phases @regression @tier1 resumes a witness-phase crash under recorded rules without a second rollback",
-      "retroactive replay witness boot phases @regression @tier1 resumes a witnessed-phase crash into final rules without a second rollback",
-      "retroactive replay witness boot phases @regression @tier1 retries a failed runtime phase handoff before testing final replay completion",
-      "retroactive replay witness boot phases through startup @regression @tier1 a closed marker whose witness reached final compares maps again on the next boot",
-      "retroactive replay witness boot phases through startup @regression @tier1 a crash after the second rollback commits writes final without rolling back again",
-      "retroactive replay witness boot phases through startup @regression @tier1 a diverged witness holds the replay with no rollback and no overlay",
-      "retroactive replay witness boot phases through startup @regression @tier1 a restart mid-witness at or above H re-runs the window from the target",
-      "retroactive replay witness boot phases through startup @regression @tier1 a witness boot with tip >= H rolls back first and replaces the COIN:network entry with the recorded value",
-      "retroactive replay witness boot phases through startup @regression @tier1 the in-process handoff at replay_to rolls back once and records the build map, not the recorded one",
-      "retroactive replay witness boot phases through startup @regression @tier1 witnessed rolls back a second time, writes final and removes the overlay for the new-rules pass"
     ],
     "4c6fe17f3b81d78b": [
       "LIST bridge policy rules @regression @consensus any-coin items (TOKEN_POLICY_INHERITANCE_ACTIVATION) admits a foreign-coin item at/above the flag",
@@ -18889,6 +18882,20 @@
       "amount precision (bignumber math) @money @regression known float/double traps the bc* math must beat bcsub(10^21, 1) keeps the unit (a JS double collapses it to 1e21)",
       "amount precision (bignumber math) @money @regression known float/double traps the bc* math must beat never emits scientific notation for tiny amounts (the SDK parseFloat bug)"
     ],
+    "f81debb961944c1d": [
+      "retroactive replay witness boot phases @regression @tier1 a completed witness pass at or above H rolls back before advancing phases",
+      "retroactive replay witness boot phases @regression @tier1 composes the recorded map over the venue overlay and replaces COIN:network",
+      "retroactive replay witness boot phases @regression @tier1 re-runs a mid-witness restart from the target under the recorded rules; final keeps current rules",
+      "retroactive replay witness boot phases @regression @tier1 resumes a final-phase crash without a second rollback or phase rewrite",
+      "retroactive replay witness boot phases @regression @tier1 resumes a witness-phase crash under recorded rules without a second rollback",
+      "retroactive replay witness boot phases @regression @tier1 resumes a witnessed-phase crash into final rules without a second rollback",
+      "retroactive replay witness boot phases through startup @regression @tier1 a closed marker whose witness reached final compares maps again on the next boot",
+      "retroactive replay witness boot phases through startup @regression @tier1 a crash after the second rollback commits writes final without rolling back again",
+      "retroactive replay witness boot phases through startup @regression @tier1 a diverged witness holds the replay with no rollback and no overlay",
+      "retroactive replay witness boot phases through startup @regression @tier1 a restart mid-witness at or above H re-runs the window from the target",
+      "retroactive replay witness boot phases through startup @regression @tier1 a witness boot with tip >= H rolls back first and replaces the COIN:network entry with the recorded value",
+      "retroactive replay witness boot phases through startup @regression @tier1 witnessed rolls back a second time, writes final and removes the overlay for the new-rules pass"
+    ],
     "f83b44a0732adc69": [
       "rollback block-key coverage @regression every table the generic block loop deletes actually declares block_index",
       "rollback block-key coverage @regression the roll-call tables are special-cased and deleted on their real block key",
@@ -19459,8 +19466,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1559,
-      "titleCount": 15078,
+      "fileCount": 1560,
+      "titleCount": 15083,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20238,7 +20245,8 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "4c4fe0cce8ab867c",
+        "test/unit/consensus/retroactive/replay_witness_compare.test.js": "1cf367128239d14b",
+        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "f81debb961944c1d",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
@@ -21399,8 +21407,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1193,
-      "titleCount": 11956,
+      "fileCount": 1194,
+      "titleCount": 11961,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22012,7 +22020,8 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "4c4fe0cce8ab867c",
+        "test/unit/consensus/retroactive/replay_witness_compare.test.js": "1cf367128239d14b",
+        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "f81debb961944c1d",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
@@ -22598,8 +22607,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 617,
-      "titleCount": 6400,
+      "fileCount": 618,
+      "titleCount": 6405,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22812,7 +22821,8 @@
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "4c4fe0cce8ab867c",
+        "test/unit/consensus/retroactive/replay_witness_compare.test.js": "1cf367128239d14b",
+        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "f81debb961944c1d",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",
@@ -23221,8 +23231,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1193,
-      "titleCount": 11956,
+      "fileCount": 1194,
+      "titleCount": 11961,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23834,7 +23844,8 @@
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "4c4fe0cce8ab867c",
+        "test/unit/consensus/retroactive/replay_witness_compare.test.js": "1cf367128239d14b",
+        "test/unit/consensus/retroactive/replay_witness_phases.test.js": "f81debb961944c1d",
         "test/unit/consensus/retroactive/replay_witness_record.test.js": "ee5aadeee40aed75",
         "test/unit/consensus/retroactive/replay_witness_status.test.js": "2f30c7049940e42f",
         "test/unit/consensus/retroactive/retroactive_go_in_image.test.js": "e6f3ab1c60524881",

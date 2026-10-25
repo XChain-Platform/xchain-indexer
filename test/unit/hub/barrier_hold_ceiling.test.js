@@ -185,9 +185,10 @@ describe('isMirrorBarrierReason @regression @tier1', function () {
     const HOST_FAULTS = ['vm_executor_unavailable', 'anchor_reward_proof_unavailable',
                          'rollcall_proof_unavailable', 'list_share_halt'];
     // Not mirror barriers either, so no resync: a proof check, two prose reasons by prefix,
-    // and the two boot-time retroactive replay holds.
+    // and the three retroactive replay holds.
     const OTHER_NON_MIRROR = ['capability_proof_unavailable', 'parse_exception:', 'train_activation_halt:',
-                              'retroactive_replay', 'retroactive_replay_needs_go'];
+                              'retroactive_replay', 'retroactive_replay_needs_go',
+                              'retroactive_replay_diverged'];
 
     it('finds every stall reason the block loop actually sets', function () {
         assert.strictEqual(SITES.length, countStallReasonAssignments(INDEXER_SRC),
