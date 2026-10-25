@@ -2601,6 +2601,17 @@
       "Database.createSleep() @regression @tier1 INSERTs when sleep not found (ADDRESS type)",
       "Database.createSleep() @regression @tier1 UPDATEs when sleep exists"
     ],
+    "2614f9344a30480b": [
+      "retroactive boot plan @regression @tier1 orders non-movable, cap and go, and mirror refusal causes",
+      "retroactive boot plan @regression @tier1 returns refuse mirror_gap with its detail",
+      "retroactive boot plan @regression @tier1 returns refuse needs_go when replay distance exceeds the cap",
+      "retroactive boot plan @regression @tier1 returns refuse non_movable with sorted keys and leaves the input unchanged",
+      "retroactive boot plan @regression @tier1 returns resume for each open marker state without recomputing moves",
+      "retroactive boot plan @regression @tier1 returns rollback past the cap when the go matches",
+      "retroactive boot plan @regression @tier1 returns rollback when replay distance is exactly at the cap",
+      "retroactive boot plan @regression @tier1 returns serve when no retroactive target exists",
+      "retroactive boot plan @regression @tier1 throws for every invalid numeric input"
+    ],
     "261b3951229adbf1": [
       "token-bridge gates read per chain @regression @consensus ISSUE flag days (parseWire) resolves all four flag days with this chain's coin",
       "token-bridge gates read per chain @regression @consensus XBRIDGE v3/v4 (TOKEN_BRIDGE_ACTIVATION) admits v3 and v4 on the armed chain and refuses them on a sibling chain",
@@ -3618,14 +3629,6 @@
     "33ad0789078ca418": [
       "Database.getBlockHashes() consensus id-independence (reorg fork fix) @regression @tier1 produces identical block hashes for the same canonical chain regardless of local id assignment",
       "Database.getBlockHashes() consensus id-independence (reorg fork fix) @regression @tier1 selects no AUTO_INCREMENT lookup id into any consensus hash projection"
-    ],
-    "33bcfe129ec665b5": [
-      "retroactive go binding @regression @tier1 authorizes only the exact map and target binding",
-      "retroactive go binding @regression @tier1 hashes the canonical map, newline and target against node:crypto",
-      "retroactive go binding @regression @tier1 parses --target and --rules in either order",
-      "retroactive go binding @regression @tier1 prints the exact retroactive-go command",
-      "retroactive go binding @regression @tier1 publishes the retroactive go code",
-      "retroactive go binding @regression @tier1 refuses missing, repeated, unknown and malformed flags"
     ],
     "33d276ce0f8066c0": [
       "AnchorRecovery admission heights @regression @tier2 leaves a legacy archive row at NULL admission heights",
@@ -19175,8 +19178,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1523,
-      "titleCount": 14858,
+      "fileCount": 1524,
+      "titleCount": 14867,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19940,7 +19943,7 @@
         "test/unit/consensus/protocol_time.test.js": "f5f64f28d68dc118",
         "test/unit/consensus/protocol_time_caller_order.test.js": "7891fe7146b2d1e7",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
-        "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
+        "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/rollcall_close/absence_streak.test.js": "98d8992dfae50cef",
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
         "test/unit/consensus/rollcall_close/signer_verify.test.js": "7e33c00ff3453bbd",
@@ -21080,8 +21083,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1157,
-      "titleCount": 11736,
+      "fileCount": 1158,
+      "titleCount": 11745,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21679,7 +21682,7 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
-        "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
+        "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22244,8 +22247,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 583,
-      "titleCount": 6189,
+      "fileCount": 584,
+      "titleCount": 6198,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22446,7 +22449,7 @@
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
-        "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
+        "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22834,8 +22837,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1157,
-      "titleCount": 11736,
+      "fileCount": 1158,
+      "titleCount": 11745,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23433,7 +23436,7 @@
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
-        "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
+        "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
