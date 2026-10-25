@@ -18,6 +18,8 @@
 
 'use strict';
 
+const { observedWindowDigest } = require('./replay_witness.js');
+
 const HEX_DIGEST = /^[0-9a-f]{64}$/i;
 
 function windowRows(phase, windows) {
@@ -59,6 +61,30 @@ function windowChanged(windows, observed) {
     return windows.some(window => !chunkMatches(window, observed[String(window.to)]));
 }
 
+function observedWindowDigests(rows, blocks) {
+    if(!Array.isArray(rows) || rows.length === 0)
+        throw new TypeError('witness windows must not be empty');
+
+    const first = rows[0].from;
+    const last = rows[rows.length - 1].to;
+    if(!Array.isArray(blocks) || blocks.length !== last - first + 1)
+        throw new Error('replay witness blocks must cover the witness span exactly');
+
+    const observed = {};
+    for(const row of rows){
+        const offset = row.from - first;
+        const slice = blocks.slice(offset, offset + row.to - row.from + 1);
+        observed[String(row.to)] = observedWindowDigest(slice, row.from, row.to);
+    }
+    return observed;
+}
+
+function planFinalCompare({ phase, replayTo, height, rows, blocks }) {
+    if(phase !== 'final' || height < replayTo) return null;
+
+    return { changed: windowChanged(rows, observedWindowDigests(rows, blocks)) };
+}
+
 function planWitnessChunk({ phase, replayTo, rows, height, digest }) {
     if(phase !== 'witness') return null;
 
@@ -85,6 +111,8 @@ function planWitnessChunk({ phase, replayTo, rows, height, digest }) {
 module.exports = {
     chunkClosingAt,
     chunkMatches,
+    observedWindowDigests,
+    planFinalCompare,
     planWitnessChunk,
     windowChanged,
     windowRows,
