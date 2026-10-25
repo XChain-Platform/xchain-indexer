@@ -28,6 +28,7 @@ const { classifyGateMoves } = require('./gate_heights.js');
 const { planRetroactiveBoot } = require('./boot_plan.js');
 const { buildReplayMarker, advanceReplayMarker, isReplayOpen } = require('./replay_marker.js');
 const { goRulesSha, goCommand } = require('./go_binding.js');
+const { buildReplayWitness } = require('./replay_witness.js');
 
 // Marks a gate boot record written over the full height and time registry. A record
 // without it predates the widening and saw only the height keys it lists, so a key
@@ -118,6 +119,24 @@ async function mirrorGapAtTarget(chain, target, deps){
         return 'capability_snapshot_target_missing:' + coin + ':' + String(target);
     return deps.readMirrorGap(target, mirrorTarget);
 }
+
+async function recordReplayWitnessBeforeRollback(plan, tip, recorded, rulesFrom, deps){
+    const canRead = typeof deps.readWitnessBlocks === 'function';
+    const canRecord = typeof deps.recordWitness === 'function';
+    if(!canRead && !canRecord) return;
+    if(!canRead || !canRecord)
+        throw new TypeError('readWitnessBlocks and recordWitness must be provided together');
+    const blocks = await deps.readWitnessBlocks(plan.target, tip);
+    const witness = buildReplayWitness({
+        target: plan.target,
+        replayTo: tip,
+        rulesFrom,
+        gateHeights: recorded.gateHeights,
+        blocks,
+    });
+    await deps.recordWitness(witness);
+}
+
 // An open marker: roll back only while the applied tip still reaches the target, so
 // a crash after the rollback commit never rolls back twice, then record the current
 // map below the target and advance pending to replaying.
@@ -178,14 +197,16 @@ async function runBootReplay({ tip, current, capBlocks, movableGates, chain }, d
     if(plan.action === 'refuse')
         return deps.refuse('retroactive replay refused: mirror_gap: ' + plan.detail);
 
-    // Steps 2 to 4 of the design: the pending marker is durable before the rollback,
-    // and the new map is recorded at target - 1 only after the rollback commits.
+    // The old-chain witness and pending marker are durable before the rollback. The
+    // new map is recorded at target - 1 only after the rollback commits.
+    const rulesFrom = gateMapDigest(recorded.gateHeights);
     const pending = buildReplayMarker({
         target: plan.target,
         replayTo: tip,
-        rulesFrom: gateMapDigest(recorded.gateHeights),
+        rulesFrom,
         rulesTo: gateMapDigest(current),
     });
+    await recordReplayWitnessBeforeRollback(plan, tip, recorded, rulesFrom, deps);
     await deps.recordMarker(pending);
     deps.holdReplay();
     await deps.rollback(plan.target);
@@ -204,5 +225,6 @@ module.exports = {
     classifyAgainst,
     capabilityMirrorTarget,
     mirrorGapAtTarget,
+    recordReplayWitnessBeforeRollback,
     runBootReplay,
 };
