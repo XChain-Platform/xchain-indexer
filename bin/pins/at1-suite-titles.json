@@ -15368,6 +15368,14 @@
       "status-table composite (status_id, action_index) index @regression swap_statuses declares the composite (status_id, action_index) index in the base schema",
       "status-table composite (status_id, action_index) index @regression swap_statuses no longer declares a standalone single-column status_id index (redundant, dropped)"
     ],
+    "cc5f62f23b7023c8": [
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 filters legacy wrapper fallback whenever rolled absences are available",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 filters the legacy wrapper set through rolled absences in verified recovery",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 keeps a pre-gate wrapper on setFor oracle_publish",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers a post-gate wrapper against setFor archive_publish",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers an active wrapper whose archive predates archive_publish snapshots",
+      "AnchorRecovery archive_publish wrapper set @regression @tier1 verifyCompleteness refuses archive_publish when a present source was dropped"
+    ],
     "cc69dc79f84383cb": [
       "UtxoTracker boundary tests @regression @tier1 UTX-B01: height 0 (genesis) height 0 is a valid number and is returned, not treated as absent",
       "UtxoTracker boundary tests @regression @tier1 UTX-B02: negative height a negative height passes the numeric guard and is returned verbatim",
@@ -17582,14 +17590,6 @@
       "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count accepts a positive fill count",
       "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count control: a non-numeric GET_AMOUNT THROWS out of the raw divide",
       "Dispenser amount positivity @regression @tier2 DISPENSE settlement: fill count control: the arithmetic behind a negative fill count is real"
-    ],
-    "e7db7f7f9ff19f33": [
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 does not retry a present archive_publish set against oracle_publish",
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 filters the legacy wrapper set through rolled absences in verified recovery",
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 keeps a pre-gate wrapper on setFor oracle_publish",
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers a post-gate wrapper against setFor archive_publish",
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 recovers an active wrapper whose archive predates archive_publish snapshots",
-      "AnchorRecovery archive_publish wrapper set @regression @tier1 verifyCompleteness refuses archive_publish when a present source was dropped"
     ],
     "e7ea626fa8e3ec4b": [
       "Price v2 (PRICE batch) @regression @tier3 hub push (step 6) carries block_time, which v0 has no counterpart for",
@@ -20517,7 +20517,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "e7db7f7f9ff19f33",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "cc5f62f23b7023c8",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -22102,7 +22102,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "e7db7f7f9ff19f33",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "cc5f62f23b7023c8",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -22761,7 +22761,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "e7db7f7f9ff19f33",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "cc5f62f23b7023c8",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
@@ -23854,7 +23854,7 @@
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
         "test/unit/protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm.test.js": "39deaa3f8a62287c",
         "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
-        "test/unit/recovery/archive_publish_wrapper_set.test.js": "e7db7f7f9ff19f33",
+        "test/unit/recovery/archive_publish_wrapper_set.test.js": "cc5f62f23b7023c8",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",

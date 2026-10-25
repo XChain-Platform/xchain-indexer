@@ -270,7 +270,7 @@ class AnchorRecovery {
 
         capability = 'oracle_publish';
         set = setFor(capability, wrapperBlock);
-        if(this.verifyStakes && this.btcDb &&
+        if(this.btcDb &&
            typeof this.btcDb.getLatestRolledRollcallAbsentSources === 'function'){
             let absent = await this.btcDb.getLatestRolledRollcallAbsentSources(wrapperBlock);
             set = archivePublish.subtractAbsentSources(set, absent);
