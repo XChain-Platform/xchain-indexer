@@ -39,6 +39,10 @@ const { getLogger } = require('../observability/index.js');
 const { CONFIG_ENV } = require('../config.js');
 const { usesCapabilitySnapshot } = require('../db/shared.js');
 const { startupPinRefusal } = require('../consensus/capability_snapshot_proof/startup_pin_refusal.js');
+const { runBootReplay } = require('../consensus/retroactive/boot_replay.js');
+const { mirrorCoverageGap } = require('../consensus/retroactive/mirror_coverage.js');
+const { recordReplayMarker } = require('../db/events/retroactive_replay_marker.js');
+const { readRetroactiveGoRows, findMatchingGo } = require('../db/events/retroactive_go.js');
 
 const ATTEST_RESPONSE_MIRROR_KEY =
     'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
@@ -63,12 +67,63 @@ function assertCapabilitySnapshotPin(){
 
 module.exports = {
 
-    // Compare this build's resolved height gates before startup can become ready.
+    // Boot replay holds. Neither clears on a clock: the replay hold lifts when the
+    // replay reaches replay_to, and the go hold only after an operator go row matches.
+    holdRetroactiveReplay(){
+        this.stallReason = 'retroactive_replay';
+        this.stallClearsAt = null;          // clears when the replay reaches replay_to, not on a clock
+    },
+
+    holdRetroactiveReplayNeedsGo(){
+        this.stallReason = 'retroactive_replay_needs_go';
+        this.stallClearsAt = null;          // clears on a matching operator go, not on a clock
+    },
+
+    // Compare this build's resolved gates with the recorded map before startup can become
+    // ready: serve, resume an open replay marker, refuse, or roll back to the target and
+    // replay under the new map (src/consensus/retroactive/boot_replay.js).
     async recordConsensusGateBoot(){
-        const appliedTip = await this.indexerDb.getBlockIndex('indexer', 'last');
+        const lastBlock = await this.indexerDb.getBlockIndex('indexer', 'last');
+        const appliedTip = lastBlock == null ? null : Number(lastBlock);
         const gateHeights = this.indexerDb.consensusHeightGateMap(
             this.config['NETWORK'], this.config['COIN']);
-        await this.indexerDb.recordConsensusGateBoot(gateHeights, appliedTip);
+        if(typeof this.indexerDb.readConsensusGateBoot !== 'function'){
+            await this.indexerDb.recordConsensusGateBoot(gateHeights, appliedTip);
+            return;
+        }
+
+        const db = this.indexerDb;
+        // capability_snapshots.snapshot_block is a BTC height, so only a BTC target is
+        // already in its unit; on another chain the check is skipped rather than guessed.
+        const capabilityBlock = (target) => this.config['COIN'] === 'BTC' &&
+            MIRRORED_CAPABILITIES.some(capability => usesCapabilitySnapshot(this.config, capability))
+            ? target : null;
+        const result = await runBootReplay({
+            tip: appliedTip,
+            current: gateHeights,
+            capBlocks: Number(this.config['RETROACTIVE_REPLAY_CAP_BLOCKS']),
+        }, {
+            readBoot: () => db.readConsensusGateBoot(),
+            recordBoot: (map, tip) => db.recordConsensusGateBoot(map, tip),
+            recordMarker: (marker) => recordReplayMarker(db, marker),
+            readMirrorGap: async (target) => {
+                const readings = await db.readRetroactiveMirrorCoverage(target, capabilityBlock(target));
+                return mirrorCoverageGap({
+                    targetBlockTime: readings.targetBlockTime,
+                    fiatWindowSeconds: parseInt(this.config['FIAT_DISPENSER_PRICE_WINDOW']) || 86400,
+                    oldestPriceRoundTime: readings.oldestPriceRoundTime,
+                    requiredCapabilityBlock: readings.requiredCapabilityBlock,
+                    oldestCapabilitySnapshotBlock: readings.oldestCapabilitySnapshotBlock,
+                });
+            },
+            goMatches: async (canonicalMap, target) =>
+                findMatchingGo(await readRetroactiveGoRows(db), { canonicalMap, target }) !== null,
+            rollback: (target) => this.rollback.rollback(target),
+            holdReplay: () => this.holdRetroactiveReplay(),
+            holdNeedsGo: () => this.holdRetroactiveReplayNeedsGo(),
+            refuse: (message) => this.util.throwError(message),
+        });
+        this.replayMarker = result.marker || null;
     },
 
     // The hub, DOGE-anchor and DOGE roll-call clients. Created before the hub config

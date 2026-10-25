@@ -2937,6 +2937,12 @@
       "wire text before validation: VOTE v0 create refused before its DEPOSIT check @regression @tier1 a text DEPOSIT \"abc\" on a refused create settles inert",
       "wire text before validation: util.bcparses @regression @tier1 answers exactly whether the raw helpers throw"
     ],
+    "2904e29ac46aa8eb": [
+      "retroactive consensus gate move at boot @regression @tier1 records the gate height map and null applied tip on an empty database",
+      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when a recorded gate moves to or below the applied tip",
+      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when an applied gate moves above the tip or becomes inactive",
+      "retroactive consensus gate move at boot @regression @tier1 serves and records the new map when the moved gate stays above the applied tip"
+    ],
     "294f6ca3123cda7e": [
       "Rollback @regression @tier3 bumps the push generation inside the transaction (after beginTransaction, before commit)",
       "Rollback @regression @tier3 calls rollbackTransaction when an error occurs inside the transaction",
@@ -7431,6 +7437,20 @@
       "Multi-chain action processing @regression @tier1 fee-payment mode with a fee output present: native on every coin",
       "Multi-chain action processing @regression @tier1 fee-payment mode with a real fee destination and NO fee output: BTC=xchain, LTC/DOGE=rejected"
     ],
+    "65adae7ccb7afd63": [
+      "boot retroactive replay @regression @tier1 a crash after the rollback commit resumes from the open marker with no second rollback",
+      "boot retroactive replay @regression @tier1 a crash before the rollback commit rolls back from the open marker without recomputing moves",
+      "boot retroactive replay @regression @tier1 a mirror-gap move refuses with its reason and writes nothing",
+      "boot retroactive replay @regression @tier1 a non-movable move refuses with the gate-move message, naming every moved key",
+      "boot retroactive replay @regression @tier1 a record from before the registry widening compares only the keys it holds",
+      "boot retroactive replay @regression @tier1 a replaying marker holds the replay and writes nothing",
+      "boot retroactive replay @regression @tier1 an over-cap move refuses with needs_go and the go command, and a matching go replays",
+      "boot retroactive replay @regression @tier1 rolls a movable in-cap move back once to the target, marker before and record after",
+      "boot retroactive replay @regression @tier1 serves and records the map when nothing moved at or below the tip",
+      "boot retroactive replay through startup @regression @tier1 carries the marker digests as sha256 of the canonical maps",
+      "boot retroactive replay through startup @regression @tier1 refuses a non-movable production move before any write",
+      "boot retroactive replay through startup @regression @tier1 resumes a pending marker: one rollback under retroactive_replay with no clear instant"
+    ],
     "65fda33d23415561": [
       "Sleep @regression @tier3 MEMO validations MEMO with pipe \u2192 invalid",
       "Sleep @regression @tier3 MEMO validations MEMO with semicolon \u2192 invalid",
@@ -8578,6 +8598,13 @@
       "HubPushQueue pause() awaits in-flight drain does not resolve until a drain that is mid-attempt finishes",
       "HubPushQueue pause() awaits in-flight drain resolves immediately when no drain is in flight"
     ],
+    "74966a599042da53": [
+      "retroactive go event rows @regression @tier1 findMatchingGo chooses the first matching row",
+      "retroactive go event rows @regression @tier1 findMatchingGo rejects another map or a deeper target",
+      "retroactive go event rows @regression @tier1 readRetroactiveGoRows reads a bounded newest-first page and skips unsafe rows",
+      "retroactive go event rows @regression @tier1 recordRetroactiveGo inserts the exact ordered JSON payload",
+      "retroactive go event rows @regression @tier1 recordRetroactiveGo refuses a bad target or digest before querying"
+    ],
     "74c09b94fc5293c9": [
       "price age pick falls back for a null config",
       "price age pick falls back when the hourly key is missing",
@@ -9668,6 +9695,16 @@
       "getNetBalances batched read @regression @tier1 dedupes keys, chunks large sets, and reads nothing for an empty set",
       "getNetBalances batched read @regression @tier1 is the read threadBalancesRoot uses instead of a per-key loop"
     ],
+    "83bee3ae87f42732": [
+      "retroactive gate height map @regression @tier1 flags a later move of an applied height at the old boundary",
+      "retroactive gate height map @regression @tier1 flags an earlier move at the new boundary",
+      "retroactive gate height map @regression @tier1 flags de-arming at the old boundary for null, absent and the sentinel",
+      "retroactive gate height map @regression @tier1 ignores a move wholly above the tip",
+      "retroactive gate height map @regression @tier1 never records epoch or ruleset rows as movable gate heights",
+      "retroactive gate height map @regression @tier1 records every height and time row, including an indexer-only gate",
+      "retroactive gate height map @regression @tier1 refuses a non-listed key and ships no movable gates",
+      "retroactive gate height map @regression @tier1 splits allowlisted and refused moves without changing their shared target"
+    ],
     "83d49a514bbb5b26": [
       "Database.runMigrations() applies the declared-key drop guard @regression @tier1 refuses an auto file that drops a declared UNIQUE key before running any statement",
       "committed mode=auto migrations drop no declared key @regression @tier1 2026-05-30-balances-composite-index.sql: if tagged mode=auto, passes the declared-key drop guard",
@@ -9874,6 +9911,11 @@
     ],
     "85fb363232b73584": [
       "Rollback collectAffectedEntities capture race @regression @tier3 reads the address/ticker lists it collected even when a same-tick concurrent reset lands right after the absorb"
+    ],
+    "8607446a7908f906": [
+      "retroactive time gate target @regression @tier1 leaves a height gate target in height units",
+      "retroactive time gate target @regression @tier1 reports no move when the time threshold is beyond the tip",
+      "retroactive time gate target @regression @tier1 resolves a moved time threshold to the first block at or past it"
     ],
     "861b33b0ed92612c": [
       "Database.updateAddressBalance @unit @regression issues DELETE (not UPSERT) for a zero balance",
@@ -10632,11 +10674,6 @@
       "consensus rules digest activeGatesAt unit filtering keeps coin-qualified height resolution without a named coin",
       "consensus rules digest activeGatesAt unit filtering keeps height, time and epoch activation rows eligible",
       "consensus rules digest activeGatesAt unit filtering returns only activation-unit rows for every supported network and coin lookup"
-    ],
-    "9011773de46fcb3d": [
-      "retroactive consensus gate move at boot @regression @tier1 records the gate height map and null applied tip on an empty database",
-      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when a recorded gate moves to or below the applied tip",
-      "retroactive consensus gate move at boot @regression @tier1 serves and records the new map when the moved gate stays above the applied tip"
     ],
     "90165b8ec993c4e6": [
       "ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1 BTC below the anchor takes the legacy unweighted branch",
@@ -14563,6 +14600,18 @@
       "Integration: full-node participation determinism and the batch zero-reward rule @regression @tier1 re-deriving from a clean DB yields IDENTICAL reward rows + hash chain (determinism = no fork)",
       "Integration: full-node participation determinism and the batch zero-reward rule @regression @tier1 the batch validated and the challenge participation accrued per SOURCE"
     ],
+    "c2e631a4f801cc39": [
+      "retroactive mirror coverage @regression @tier1 compares numeric string readings as numbers",
+      "retroactive mirror coverage @regression @tier1 computes the required price floor with two windows and one day of slop",
+      "retroactive mirror coverage @regression @tier1 covers the price floor and refuses a round one second above it",
+      "retroactive mirror coverage @regression @tier1 covers the required capability block and refuses the next block",
+      "retroactive mirror coverage @regression @tier1 feeds planRetroactiveBoot an opaque mirror_gap or a covered null",
+      "retroactive mirror coverage @regression @tier1 reports an empty capability mirror for null and absent readings",
+      "retroactive mirror coverage @regression @tier1 reports an empty price mirror for null and absent readings",
+      "retroactive mirror coverage @regression @tier1 reports the price gap first when both mirrors have gaps",
+      "retroactive mirror coverage @regression @tier1 skips capability coverage for a null or absent required block",
+      "retroactive mirror coverage @regression @tier1 throws for every invalid floor input and non-finite mirror reading"
+    ],
     "c2fdb8f42f2319d4": [
       "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 a consumer with no mirror bound re-pages from zero",
       "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 a forced resync with no socket forgets the floor start (verifier m8)",
@@ -17891,6 +17940,12 @@
       "slashContractStake precision @regression @tier1 slashes an 18-dp contract stake without truncating the residual",
       "slashContractStake precision @regression @tier1 widens the positivity filter so sub-1e-8 contract stakes stay slashable"
     ],
+    "ebf22e87e5c41a19": [
+      "boot replay capability mirror target @regression @tier1 maps a DOGE target to its covering BTC snapshot and checks the gap",
+      "boot replay capability mirror target @regression @tier1 maps a LTC target to its covering BTC snapshot and checks the gap",
+      "boot replay capability mirror target @regression @tier1 refuses an absent or non-covering off-BTC checkpoint",
+      "boot replay capability mirror target @regression @tier1 uses the BTC target directly without reading a covering checkpoint"
+    ],
     "ebfbb476ed9bd920": [
       "VOTE settlement exact activation: split tally @regression @tier1 activation height a tally measured at 299 rounds half-up and one measured at 300 floors with a remainder",
       "VOTE settlement exact activation: split tally @regression @tier1 armed (regtest from genesis) gives the remainder of an even split to the lowest option index, whatever the row order",
@@ -19185,6 +19240,14 @@
       "genesis airdrop pass sums duplicate addresses and skips junk quantities",
       "genesis airdrop pass supports multiple buckets with independent amounts and skips zero-floor credits"
     ],
+    "fedd8c98879ad2e0": [
+      "retroactive replay marker events @regression @tier1 inserts the encoded marker as an append-only event",
+      "retroactive replay marker events @regression @tier1 keeps a maximal replayed marker within REPLAY_MARKER_DATA_MAX",
+      "retroactive replay marker events @regression @tier1 reads the newest marker row first and decodes it",
+      "retroactive replay marker events @regression @tier1 refuses an invalid marker before issuing a query",
+      "retroactive replay marker events @regression @tier1 returns null when there is no CONSENSUS_RETRO_REPLAY row",
+      "retroactive replay marker events @regression @tier1 throws when the newest marker row is malformed"
+    ],
     "fef4c3341aec5110": [
       "Price v2 (PRICE batch) @regression @tier3 straddle rule (step 3) accepts the same batch entirely below the gate, and entirely at or above it",
       "Price v2 (PRICE batch) @regression @tier3 straddle rule (step 3) an UNARMED gate straddles nothing",
@@ -19240,8 +19303,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1531,
-      "titleCount": 14915,
+      "fileCount": 1538,
+      "titleCount": 14964,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20006,12 +20069,17 @@
         "test/unit/consensus/protocol_time_caller_order.test.js": "7891fe7146b2d1e7",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
+        "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
+        "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
+        "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
+        "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
         "test/unit/consensus/rollcall_close/absence_streak.test.js": "98d8992dfae50cef",
         "test/unit/consensus/rollcall_close/epoch_inputs.test.js": "fdd6bd2baf55e6da",
         "test/unit/consensus/rollcall_close/signer_verify.test.js": "7e33c00ff3453bbd",
@@ -20020,7 +20088,7 @@
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_registry_parity.test.js": "56e2effa6675b4fa",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/snapshot_checkpoint/canonical.test.js": "299c4ed3013e8a10",
         "test/unit/consensus/snapshot_checkpoint/canonical_twin.test.js": "9fccb58e5d806628",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
@@ -20147,6 +20215,8 @@
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
         "test/unit/db/events/reorg_cursor_guards.test.js": "d18641680b374c5c",
+        "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
+        "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/adversarial_compact_id.test.js": "359bcfb442706852",
@@ -21152,8 +21222,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1165,
-      "titleCount": 11793,
+      "fileCount": 1172,
+      "titleCount": 11842,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21752,13 +21822,18 @@
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
+        "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
+        "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
+        "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
+        "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -21859,6 +21934,8 @@
         "test/unit/db/db_table_parameterized_identifiers.test.js": "42f0d570ec801310",
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
+        "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
+        "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
@@ -22323,8 +22400,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 590,
-      "titleCount": 6240,
+      "fileCount": 597,
+      "titleCount": 6289,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22526,12 +22603,17 @@
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
+        "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
+        "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
+        "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
+        "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -22607,6 +22689,8 @@
         "test/unit/db/db_sanity_check_null_tick.test.js": "12da3a56447a42df",
         "test/unit/db/db_session_sql_mode_pin.test.js": "c91642ba2d913def",
         "test/unit/db/db_session_timezone_utc.test.js": "3a25c746f0ad7a91",
+        "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
+        "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
         "test/unit/db/ledger/contract_permissions_persist.test.js": "d3332bf4be722dbe",
@@ -22919,8 +23003,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1165,
-      "titleCount": 11793,
+      "fileCount": 1172,
+      "titleCount": 11842,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23519,13 +23603,18 @@
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
+        "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
+        "test/unit/consensus/retroactive/boot_replay_mirror_target.test.js": "ebf22e87e5c41a19",
         "test/unit/consensus/retroactive/checkpoint_supersede_gate_row.test.js": "2d9c2de552e894d5",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
+        "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
         "test/unit/consensus/retroactive/replay_status_rules.test.js": "544a59345c322407",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "9011773de46fcb3d",
+        "test/unit/consensus/retroactive/time_gate_target.test.js": "8607446a7908f906",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -23626,6 +23715,8 @@
         "test/unit/db/db_table_parameterized_identifiers.test.js": "42f0d570ec801310",
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
+        "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
+        "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",

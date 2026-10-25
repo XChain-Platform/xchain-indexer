@@ -110,6 +110,10 @@ function graceWiring() {
 // reports NO clear instant above its activation, which is what lets a hold accumulate and
 // the 900 s ceiling fire on a stall that is now genuine mirror lag.
 const EXPECTED = [
+    // Boot-time retroactive replay holds: the replay clears when it reaches replay_to and
+    // the go hold on an operator go row, so neither has a clock instant to name.
+    ['retroactive_replay',              null,                          'null'],
+    ['retroactive_replay_needs_go',     null,                          'null'],
     // Train-activation safety halt, read by its prefix (the tail is the verdict prose).
     ['train_activation_halt:',          null,                          'null'],
     ['price_sync_barrier',              null,                          'null'],          // height case can clear early
