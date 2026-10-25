@@ -27,6 +27,7 @@ const {
     advanceReplayMarker,
 } = require('../../../../src/consensus/retroactive/replay_marker.js');
 const { witnessReadOverlay } = require('../../../../src/consensus/retroactive/witness_overlay.js');
+const startup = require('../../../../src/XChainIndexer/startup.js');
 
 const KEY = 'movable_activation.MOVABLE_ACTIVATION';
 const R = { [KEY]: 120 };
@@ -178,8 +179,21 @@ describe('retroactive replay witness boot phases @regression @tier1', function()
     });
 
     it('a completed witness pass at or above H rolls back before advancing phases', async function(){
-        const h = harness('witness', 'replayed', { tip: 100 });
-        const result = await run(h, 100);
+        const h = harness('witness', 'replaying', { tip: 100 });
+        const indexer = {
+            replayWitnessPhase: 'witness',
+            completeRetroactiveReplay: async () => {
+                h.durable.marker = advanceReplayMarker(h.durable.marker, 'replayed');
+                return true;
+            },
+            recordConsensusGateBoot: async () => {
+                const result = await run(h, h.durable.tip);
+                indexer.replayWitnessPhase = result.phase;
+                indexer.replayMarker = result.marker;
+            },
+        };
+        startup.armReplayWitnessCompletion.call(indexer, 'witness');
+        await indexer.completeRetroactiveReplay();
         const rollbackAt = h.calls.findIndex(call => call[0] === 'rollback');
         const witnessedAt = h.calls.findIndex(call => call[0] === 'phase' && call[1] === 'witnessed');
         const finalAt = h.calls.findIndex(call => call[0] === 'phase' && call[1] === 'final');
@@ -188,7 +202,33 @@ describe('retroactive replay witness boot phases @regression @tier1', function()
         assert.ok(witnessedAt < finalAt, JSON.stringify(h.calls));
         assert.strictEqual(h.calls.filter(call => call[0] === 'rollback').length, 1);
         assert.deepStrictEqual(h.calls.find(call => call[0] === 'boot'), ['boot', C, 94]);
-        assert.strictEqual(result.marker.state, 'replaying');
+        assert.strictEqual(indexer.replayMarker.state, 'replaying');
+        assert.strictEqual(indexer.replayWitnessPhase, 'final');
+    });
+
+    it('retries a failed runtime phase handoff before testing final replay completion', async function(){
+        let completions = 0;
+        let transitions = 0;
+        const indexer = {
+            completeRetroactiveReplay: async () => {
+                completions++;
+                return true;
+            },
+            recordConsensusGateBoot: async () => {
+                transitions++;
+                if(transitions === 1) throw new Error('phase handoff failed');
+                indexer.replayWitnessPhase = 'final';
+            },
+        };
+        startup.armReplayWitnessCompletion.call(indexer, 'witness');
+
+        await assert.rejects(indexer.completeRetroactiveReplay(), /phase handoff failed/);
+        await indexer.completeRetroactiveReplay();
+
+        assert.strictEqual(completions, 1);
+        assert.strictEqual(transitions, 2);
+        assert.strictEqual(indexer.replayWitnessPhase, 'final');
+        assert.strictEqual(indexer.replayWitnessTransitionPending, false);
     });
 
     it('keeps the recorded overlay through the witness pass and restores current rules for final', async function(){

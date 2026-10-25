@@ -58,6 +58,30 @@ const CAPABILITY_SNAPSHOT_PROOF_KEY =
 const MIRRORED_CAPABILITIES = ['cross_chain', 'oracle_publish', 'price', 'attestation'];
 const BASE_GATE_READ_OVERLAY = changes.registry.getReadOverlay();
 
+function armReplayWitnessCompletion(phase){
+    this.replayWitnessPhase = phase || null;
+    if(this.replayWitnessCompletionArmed ||
+       typeof this.completeRetroactiveReplay !== 'function') return;
+
+    const completeRetroactiveReplay = this.completeRetroactiveReplay;
+    this.replayWitnessCompletionArmed = true;
+    this.completeRetroactiveReplay = async (...args) => {
+        if(this.replayWitnessTransitionPending){
+            await this.recordConsensusGateBoot();
+            this.replayWitnessTransitionPending = false;
+            return true;
+        }
+
+        const completed = await completeRetroactiveReplay.apply(this, args);
+        if(completed && this.replayWitnessPhase === 'witness'){
+            this.replayWitnessTransitionPending = true;
+            await this.recordConsensusGateBoot();
+            this.replayWitnessTransitionPending = false;
+        }
+        return completed;
+    };
+}
+
 function assertCapabilitySnapshotPin(){
     const network = this.config['NETWORK'];
     const coin = this.config['COIN'];
@@ -74,6 +98,8 @@ function assertCapabilitySnapshotPin(){
 }
 
 module.exports = {
+
+    armReplayWitnessCompletion,
 
     // Boot replay holds. Neither clears on a clock: the replay hold lifts when the
     // replay reaches replay_to, and the go hold only after an operator go row matches.
@@ -142,6 +168,7 @@ module.exports = {
             refuse: (message) => this.util.throwError(message),
         });
         this.replayMarker = result.marker || null;
+        armReplayWitnessCompletion.call(this, result.phase);
     },
 
     // The hub, DOGE-anchor and DOGE roll-call clients. Created before the hub config
