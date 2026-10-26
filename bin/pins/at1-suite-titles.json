@@ -1906,6 +1906,14 @@
       "reconcileAnchorRewardWinner() @regression @tier1 scopes the collapse to the round_qualifier it is given (archive leg)",
       "reconcileAnchorRewardWinner() @regression @tier1 tolerates a driver result without affectedRows"
     ],
+    "18a1b7638e0d2052": [
+      "Rollback price mirror re-page @regression @tier3 launches nothing on a non-BTC coin",
+      "Rollback price mirror re-page @regression @tier3 launches nothing when the purge ran but the commit threw",
+      "Rollback price mirror re-page @regression @tier3 logs a rejected re-page and does not throw",
+      "Rollback price mirror re-page @regression @tier3 logs a synchronous re-page throw and does not throw",
+      "Rollback price mirror re-page @regression @tier3 owes and starts the price_snapshots re-page only after the commit",
+      "Rollback price mirror re-page @regression @tier3 rolls back unchanged without a hubDbSync"
+    ],
     "18f0cffa71263815": [
       "Block Discovery and Sync @regression @tier3 incremental sync picks up new blocks after initial sync",
       "Block Discovery and Sync @regression @tier3 initial sync processes all seeded blocks",
@@ -19485,8 +19493,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1564,
-      "titleCount": 15094,
+      "fileCount": 1565,
+      "titleCount": 15100,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20919,6 +20927,7 @@
         "test/unit/rollback/derived_projections/token_bridged_rederive.test.js": "db76d27633dfccde",
         "test/unit/rollback/derived_projections/tx_epoch_fence.test.js": "fb4c5f44823eb2cc",
         "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
+        "test/unit/rollback/price_mirror_repage/price_mirror_repage.test.js": "18a1b7638e0d2052",
         "test/unit/rollback/reorg_catchup_cursor.test.js": "694d08dca6dd0abb",
         "test/unit/rollback/reorg_resume_cursor_hole.test.js": "93e45958dfe95026",
         "test/unit/rollback/rollback.test.js": "147635c74f2bf70e",
