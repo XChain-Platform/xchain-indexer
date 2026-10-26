@@ -21439,8 +21439,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1198,
-      "titleCount": 11972,
+      "fileCount": 1199,
+      "titleCount": 11978,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22541,6 +22541,7 @@
         "test/unit/rollback/derived_projections/token_bridged_rederive.test.js": "db76d27633dfccde",
         "test/unit/rollback/derived_projections/tx_epoch_fence.test.js": "fb4c5f44823eb2cc",
         "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
+        "test/unit/rollback/price_mirror_repage/price_mirror_repage.test.js": "18a1b7638e0d2052",
         "test/unit/rollback/rollback.test.js": "147635c74f2bf70e",
         "test/unit/rollback/rollback.test/actionless_block_flips.test.js": "18477c824737fcc9",
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
@@ -23271,8 +23272,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1198,
-      "titleCount": 11972,
+      "fileCount": 1199,
+      "titleCount": 11978,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24373,6 +24374,7 @@
         "test/unit/rollback/derived_projections/token_bridged_rederive.test.js": "db76d27633dfccde",
         "test/unit/rollback/derived_projections/tx_epoch_fence.test.js": "fb4c5f44823eb2cc",
         "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
+        "test/unit/rollback/price_mirror_repage/price_mirror_repage.test.js": "18a1b7638e0d2052",
         "test/unit/rollback/rollback.test.js": "147635c74f2bf70e",
         "test/unit/rollback/rollback.test/actionless_block_flips.test.js": "18477c824737fcc9",
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
