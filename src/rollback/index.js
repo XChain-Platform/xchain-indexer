@@ -244,6 +244,9 @@ class Rollback {
 
         await this.commitAndInvalidateCaches();
 
+        // Only a committed purge owes the mirror its price rows back.
+        this.repagePriceMirrorAfterCommit();
+
         return staged;
     }
 
