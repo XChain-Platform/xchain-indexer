@@ -14741,13 +14741,15 @@
       "retroactive mirror coverage @regression @tier1 skips capability coverage for a null or absent required block",
       "retroactive mirror coverage @regression @tier1 throws for every invalid floor input and non-finite mirror reading"
     ],
-    "c2fdb8f42f2319d4": [
+    "81a917dd5d925a14": [
       "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 a consumer with no mirror bound re-pages from zero",
       "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 a forced resync with no socket forgets the floor start (verifier m8)",
       "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 re-pages from zero after an instance change, a forced resync or a schema refusal",
       "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 re-pages from zero when the floor has moved down (verifier m7)",
       "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 a floor-started reconcile keeps a held predecessor below the floor (verifier m6)",
+      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 retries failed pages at their cursor and restarts only for a new connection",
       "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 starts below the lowest applied id, settles the owed re-page and keeps the floor",
+      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 stops retrying a failed page once stop() runs",
       "HubDbSync stall detector spares a re-page that is still moving @regression @tier1 never forces a resync while drain ticks keep moving, and does once they stop",
       "HubDbSync stall detector spares a re-page that is still moving @regression @tier1 still resyncs a frozen mirror when no bootstrap is running"
     ],
@@ -19494,7 +19496,7 @@
   "scripts": {
     "test": {
       "fileCount": 1565,
-      "titleCount": 15100,
+      "titleCount": 15102,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20674,7 +20676,7 @@
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
-        "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
+        "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "81a917dd5d925a14",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/retraction_fence_columns.test.js": "521ffb32e51656bb",
         "test/unit/hub/hub_db_sync/snapshot_barrier_admission_height.test.js": "c3a9a6f506a2d4be",
@@ -21440,7 +21442,7 @@
     },
     "test:regression": {
       "fileCount": 1199,
-      "titleCount": 11978,
+      "titleCount": 11980,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22359,7 +22361,7 @@
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
-        "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
+        "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "81a917dd5d925a14",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
         "test/unit/hub/hub_db_sync/validity_read_tables.test.js": "816d9a465e12ae5b",
@@ -22645,7 +22647,7 @@
     },
     "test:regression:fast": {
       "fileCount": 622,
-      "titleCount": 6416,
+      "titleCount": 6418,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -23092,7 +23094,7 @@
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
-        "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
+        "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "81a917dd5d925a14",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
         "test/unit/hub/hub_db_sync/validity_read_tables.test.js": "816d9a465e12ae5b",
@@ -23273,7 +23275,7 @@
     },
     "test:regression:full": {
       "fileCount": 1199,
-      "titleCount": 11978,
+      "titleCount": 11980,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24192,7 +24194,7 @@
         "test/unit/hub/hub_db_sync/oracle_prices_generation.test.js": "00d7e3417ecc95fb",
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
-        "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "c2fdb8f42f2319d4",
+        "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "81a917dd5d925a14",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
         "test/unit/hub/hub_db_sync/validity_read_tables.test.js": "816d9a465e12ae5b",
