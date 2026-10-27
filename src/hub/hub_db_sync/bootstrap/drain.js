@@ -34,6 +34,19 @@ const { sanitizeHeights } = require('../watermark_config.js');
 
 const PAGE_LIMIT = 10000;
 const MAX_PAGES  = 1000;                             // runaway backstop (10M rows)
+const SNAPSHOT_RETRY_BASE_MS = 1000;
+const SNAPSHOT_RETRY_MAX_MS  = 30000;
+// In-place retries of one page give up well inside the 180 s watermark stall window
+// (HUB_SYNC_WATERMARK_STALL_S), so a hub that stays down falls back to the scheduled
+// bootstrap retry instead of tripping a forced resync of every mirrored table.
+const SNAPSHOT_RETRY_BUDGET_MS = 120000;
+
+// Retry failures that can clear without changing the request. Authentication and input
+// errors need operator or caller changes, so retrying those would only hide the fault.
+function isRetryableSnapshotError(error) {
+    let status = Number(error && error.statusCode);
+    return !Number.isFinite(status) || status === 429 || status >= 500;
+}
 
 module.exports = {
 
@@ -288,6 +301,23 @@ module.exports = {
             ', ' + elapsedS + 's elapsed (' + Math.round(drain.fetched / elapsedS) + ' rows/s)');
     },
 
+    // Spread concurrent mirrors across the hub's recovery window while keeping each one
+    // on its current page. Retry-After wins when the hub or a proxy supplied one.
+    async waitForSnapshotRetry(error, attempt, table, lastId) {
+        let retryAfterMs = Number(error && error.retryAfterMs);
+        let ceiling = Math.min(SNAPSHOT_RETRY_MAX_MS,
+            SNAPSHOT_RETRY_BASE_MS * Math.pow(2, Math.min(attempt, 5)));
+        let delayMs = (Number.isFinite(retryAfterMs) && retryAfterMs >= 0)
+            ? Math.min(retryAfterMs, SNAPSHOT_RETRY_MAX_MS) : Math.floor((ceiling / 2) + (Math.random() * ceiling / 2));
+        getLogger().warn('HubDbSync: ' + table + ' snapshot page after id ' + lastId +
+            ' failed (' + ((error && error.message) || error) + '), retrying in ' + delayMs + 'ms');
+        // Unref'd so a pending retry never holds a stopping process open.
+        await new Promise(resolve => {
+            let timer = setTimeout(resolve, delayMs);
+            if (timer && typeof timer.unref === 'function') timer.unref();
+        });
+    },
+
     // The page loop. Returns false when a page could not be judged at all (no rows array,
     // or a schema version this build does not mirror), which the caller reports as "not
     // drained" before anything is logged as bootstrapped; true otherwise, with the drain's
@@ -306,7 +336,24 @@ module.exports = {
             if (drain.connectionEpoch !== this._wsEpoch ||
                 drain.selectorRevision !== this._selectorRevision) return false;
             let path = '/hub-db/snapshot/' + table + '?since_id=' + drain.lastId + '&limit=' + PAGE_LIMIT;
-            let result = await this.httpGet(path);
+            let result;
+            let retryStartedMs = Date.now();
+            for (let attempt = 0; ; attempt++) {
+                try {
+                    result = await this.httpGet(path);
+                    break;
+                } catch (error) {
+                    // stop() and a new connection both end this drain; a poll-mode stop changes
+                    // no epoch, so the running flag is checked too.
+                    if (this.running === false || drain.connectionEpoch !== this._wsEpoch ||
+                        drain.selectorRevision !== this._selectorRevision) return false;
+                    if (!isRetryableSnapshotError(error) ||
+                        Date.now() - retryStartedMs >= SNAPSHOT_RETRY_BUDGET_MS) throw error;
+                    await this.waitForSnapshotRetry(error, attempt, table, drain.lastId);
+                    if (this.running === false || drain.connectionEpoch !== this._wsEpoch ||
+                        drain.selectorRevision !== this._selectorRevision) return false;
+                }
+            }
             if (drain.connectionEpoch !== this._wsEpoch ||
                 drain.selectorRevision !== this._selectorRevision) return false;
             if (!result || !Array.isArray(result.rows)) {

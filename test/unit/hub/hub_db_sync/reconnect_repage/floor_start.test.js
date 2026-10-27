@@ -87,6 +87,79 @@ describe('HubDbSync stall detector spares a re-page that is still moving @regres
 describe('HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1', function () {
     afterEach(function () { sinon.restore(); });
 
+    it('stops retrying a failed page once stop() runs', async function () {
+        const ctx = makeSync();
+        ctx.sync.running = true;
+        for (let i = 1; i <= 3; i++)
+            ctx.hub.price_snapshots.push(Object.assign(FIXTURES.price_snapshots(i), { id: i }));
+        ready(ctx.sync);
+        ctx.sync.httpGet.callsFake(async () => {
+            const error = new Error('HTTP 500');
+            error.statusCode = 500;
+            throw error;
+        });
+        ctx.sync.waitForSnapshotRetry = sinon.stub().callsFake(async () => { ctx.sync.running = false; });
+
+        assert.strictEqual(await ctx.sync.bootstrapTable('price_snapshots'), null);
+        assert.strictEqual(ctx.sync.httpGet.callCount, 1);
+    });
+
+    it('retries failed pages at their cursor and restarts only for a new connection', async function () {
+        this.timeout(30000);
+        const ctx = makeSync();
+        ctx.sync.running = true;                     // as start() leaves it
+        const rows = 10005;
+        for (let i = 1; i <= rows; i++)
+            ctx.hub.price_snapshots.push(Object.assign(FIXTURES.price_snapshots(i), { id: i }));
+        ready(ctx.sync);
+
+        let connection = 1;
+        let failures = 0;
+        ctx.sync.httpGet.callsFake(async path => {
+            const match = /since_id=(\d+)&limit=(\d+)/.exec(path);
+            const since = Number(match[1]);
+            const limit = Number(match[2]);
+            ctx.seen.pages.push({ table: 'price_snapshots', since });
+            if (connection === 1 && since === 10000) {
+                if (failures++ < 2) {
+                    const error = new Error('HTTP 500');
+                    error.statusCode = 500;
+                    throw error;
+                }
+                ctx.sync.resetOnSocketClose();
+                connection = 2;
+                const error = new Error('socket replaced');
+                error.statusCode = 500;
+                throw error;
+            }
+            if (connection === 2 && since === 10000 && failures++ < 5) {
+                const error = new Error('HTTP 500');
+                error.statusCode = 500;
+                throw error;
+            }
+            return {
+                schema_version: HUB_SCHEMA_VERSION,
+                watermark: 9000,
+                rows: ctx.hub.price_snapshots.filter(row => row.id > since).slice(0, limit)
+                    .map(row => Object.assign({}, row))
+            };
+        });
+        const wait = sinon.stub().resolves();
+        ctx.sync.waitForSnapshotRetry = wait;
+
+        assert.strictEqual(await ctx.sync.bootstrapTable('price_snapshots'), null);
+        ctx.sync.adoptReadyFrame({}, { type: 'ready', hub_instance_id: 'hub-a', max_ids: { price_snapshots: rows } });
+        assert.strictEqual(await ctx.sync.bootstrapTable('price_snapshots'), 9000);
+
+        assert.deepStrictEqual(ctx.seen.pages.map(page => page.since),
+            [0, 10000, 10000, 10000, 0, 10000, 10000, 10000]);
+        assert.strictEqual(ctx.seen.pages.filter(page => page.since === 0).length, 2,
+            'each connection starts one full re-page');
+        assert.deepStrictEqual(wait.getCalls().map(call => call.args[1]), [0, 1, 0, 1]);
+        assert.strictEqual(ctx.local.price_snapshots.length, rows);
+        assert.strictEqual(ctx.sync.repageOwedSeq('price_snapshots'), undefined);
+    });
+
     it('starts below the lowest applied id, settles the owed re-page and keeps the floor', async function () {
         const ctx = floored();
         ready(ctx.sync);
