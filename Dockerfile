@@ -23,6 +23,12 @@ COPY ./bin/archive_heads_by_author.js /XChainIndexer/bin/archive_heads_by_author
 COPY ./bin/bench_net_balance.js /XChainIndexer/bin/bench_net_balance.js
 COPY ./bin/measure_vm_snapshot_bytes.js /XChainIndexer/bin/measure_vm_snapshot_bytes.js
 COPY ./bin/retroactive-go.js /XChainIndexer/bin/retroactive-go.js
+# Pre-arming conformance tools. bench-escrow-arming-replay.js is documented as
+# mandatory before arming any chain and reads its DB credentials from the service
+# env, so it has to run by docker exec inside the deployed container.
+COPY ./bin/bench-escrow-arming-replay.js /XChainIndexer/bin/bench-escrow-arming-replay.js
+COPY ./bin/shadow-dryrun-escrow-leaf.js /XChainIndexer/bin/shadow-dryrun-escrow-leaf.js
+COPY ./bin/verify-escrow-arming-boundary.js /XChainIndexer/bin/verify-escrow-arming-boundary.js
 # Genesis-ledger bootstrap artifacts (Counterparty/Dogeparty name-ownership
 # manifests + precomputed mainnet state dumps). config.js resolves
 # GENESIS_LEDGER_PATH / GENESIS_DUMP_PATH under /XChainIndexer/data/genesis, so
