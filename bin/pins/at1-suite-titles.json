@@ -19491,12 +19491,21 @@
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amount is a plain 8dp decimal STRING",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amounts sum to exactly what the pool was drained by",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the v0 FIAT path records its fill price too"
+    ],
+    "171bbe3d05660700": [
+      "escrow arming tools ship in the image @regression @tier1 bench-escrow-arming-replay.js requires only files the image carries",
+      "escrow arming tools ship in the image @regression @tier1 copies bench-escrow-arming-replay.js into /XChainIndexer/bin",
+      "escrow arming tools ship in the image @regression @tier1 copies shadow-dryrun-escrow-leaf.js into /XChainIndexer/bin",
+      "escrow arming tools ship in the image @regression @tier1 copies verify-escrow-arming-boundary.js into /XChainIndexer/bin",
+      "escrow arming tools ship in the image @regression @tier1 fails when the bench-escrow-arming-replay COPY is omitted",
+      "escrow arming tools ship in the image @regression @tier1 shadow-dryrun-escrow-leaf.js requires only files the image carries",
+      "escrow arming tools ship in the image @regression @tier1 verify-escrow-arming-boundary.js requires only files the image carries"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 1565,
-      "titleCount": 15102,
+      "fileCount": 1566,
+      "titleCount": 15109,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20088,6 +20097,7 @@
         "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
+        "test/unit/bin/escrow_arming_tools_in_image.test.js": "171bbe3d05660700",
         "test/unit/bin/expiry_scan_probe.test.js": "8019dff4059b7364",
         "test/unit/bin/measure_vm_snapshot_bytes.test.js": "d6fa40e537d3f44b",
         "test/unit/bin/suite_title_map.test.js": "ab24904df7e00e0b",
