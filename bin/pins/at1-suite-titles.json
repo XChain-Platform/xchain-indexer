@@ -19522,12 +19522,16 @@
       "consensus identity GATES field and pin comparison pins the null-prototype TICK cache row in both checkout readings",
       "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings",
       "consensus identity GATES field and pin comparison pins the same-token offer refusal row in both checkout readings"
+    ],
+    "b9963332da94f7f4": [
+      "Utility throwError() includes an Error message in the rendered refusal log and rethrows the same Error",
+      "Utility throwError() stringifies a non-Error refusal in the rendered log"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 1569,
-      "titleCount": 15125,
+      "fileCount": 1570,
+      "titleCount": 15127,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21063,6 +21067,7 @@
         "test/unit/utility/price_age_at.test.js": "eddbf290bdbbec82",
         "test/unit/utility/price_age_pick.test.js": "74c09b94fc5293c9",
         "test/unit/utility/proceeds_split_stored_legs.test.js": "a78ec428de5411cc",
+        "test/unit/utility/throw_error_log.test.js": "b9963332da94f7f4",
         "test/unit/utility/utility.test.js": "4f9a9190b0431827",
         "test/unit/utility/utility.test/bignumber.test.js": "9c413eb2335154fc",
         "test/unit/utility/utility.test/block_loop.test.js": "b0736fe3615f59a3",
