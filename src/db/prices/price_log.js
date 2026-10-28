@@ -104,4 +104,18 @@ module.exports = {
         return await this.doQuery(query, [validationStatus, lastRound, firstRound, limit]);
     },
 
+    // One active-chain PRICE v0 batch with the stored body needed to rebuild the
+    // pushpricebatch payload. The INNER JOIN excludes a price row whose action no
+    // longer belongs to the committed chain after rollback.
+    async findValidPriceBatchPayload(actionIndex){
+        let query = 'SELECT p.action_index, p.batch_first_round, p.batch_last_round, p.round_count, ' +
+                    'p.rounds_json, p.sigs_json, a.block_index ' +
+                    'FROM prices p INNER JOIN actions a ON a.action_index = p.action_index ' +
+                    'WHERE p.action_index = ? AND p.version = 0 AND p.validation_status = \'valid\' ' +
+                    'AND p.batch_first_round IS NOT NULL AND p.batch_last_round IS NOT NULL ' +
+                    'AND p.rounds_json IS NOT NULL AND p.sigs_json IS NOT NULL LIMIT 1';
+        let rows = await this.doQuery(query, [actionIndex]);
+        return rows.length > 0 ? rows[0] : null;
+    },
+
 };

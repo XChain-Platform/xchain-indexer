@@ -23,6 +23,7 @@
 const priceBatchQuery = require('../price_batch_query');
 const { committedView } = require('../health');
 const { getLogger } = require('../../observability/index.js');
+const rpcParams = require('./params.js');
 
 // Which oracle rounds in [first_round, last_round] already ride a VALID PRICE
 // batch on this chain. The hub's batch publisher asks before it re-proposes a
@@ -71,6 +72,48 @@ function priceBatchesRpc({ indexer }){
             } catch (err) {
                 getLogger().error('getpricebatches error:', err);
                 return { error: 'failed to look up price batches' };
+            }
+        },
+
+        // Rebuild the exact body this batch delivered to pushpricebatch. Only a
+        // committed, valid PRICE v0 batch qualifies; invalid and rolled-back rows
+        // deliberately have the same not-found answer.
+        async getpricebatchpayload({action_index}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let parsed = rpcParams.integer(action_index, { name: 'action_index', min: 0 });
+            if(parsed.error) return { error: parsed.error };
+            let db = indexer.indexerDb.apiView();
+            try {
+                // Read the fence first. A rollback after this read either makes the
+                // body disappear or leaves it paired with the pre-rollback generation,
+                // which the hub rejects after processing the retraction.
+                let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
+                let row = await db.findValidPriceBatchPayload(parsed.value);
+                if(!row) return { error: 'valid price batch not found' };
+                let rounds = JSON.parse(row.rounds_json);
+                let sigs = JSON.parse(row.sigs_json);
+                if(!Array.isArray(rounds) || rounds.length === 0 || !Array.isArray(sigs))
+                    return { error: 'stored price batch payload is invalid' };
+                let blockIndex = Number(row.block_index);
+                let blockTime = await committedView(indexer.decoderDb).protocolTimeForStoredBlock(blockIndex);
+                if(blockTime === false || blockTime === null || blockTime === undefined)
+                    return { error: 'price batch landing block time is unavailable' };
+                return {
+                    source_chain: indexer.config['COIN'],
+                    first_round: Number(row.batch_first_round),
+                    last_round: Number(row.batch_last_round),
+                    btc_block_height: Number(rounds[rounds.length - 1].btc_block_height),
+                    rounds: rounds,
+                    block_time: Number(blockTime),
+                    sigs: sigs,
+                    action_index: Number(row.action_index),
+                    block_index: blockIndex,
+                    push_generation: Number(pushGeneration)
+                };
+            } catch (err) {
+                getLogger().error('getpricebatchpayload error:', err);
+                return { error: 'failed to rebuild price batch payload' };
             }
         },
     };

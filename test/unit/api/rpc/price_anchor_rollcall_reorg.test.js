@@ -77,6 +77,43 @@ describe('JSON-RPC price batch family @regression @tier1', function () {
         decoderView.protocolTimeForStoredBlock = async () => { throw new Error('x'); };
         assert.deepStrictEqual(await rpc.getpricebatches({ first_round: 1, last_round: 2 }), { error: 'failed to look up price batches' });
     });
+
+    it('getpricebatchpayload rebuilds the committed valid batch body that pushpricebatch received', async function () {
+        const rounds = [
+            { round: 3, timestamp: 1700000000, btc_block_height: 700003,
+              pairs: [{ pair: 'BTC/USD', price: '50000.00' }] },
+            { round: 4, timestamp: 1700000600, btc_block_height: 700004,
+              pairs: [{ pair: 'BTC/USD', price: '50001.00' }] }
+        ];
+        const sigs = [{ pubkey: 'ab'.repeat(32), sig: 'cd'.repeat(64) }];
+        const row = { action_index: 40, batch_first_round: 3, batch_last_round: 4,
+            round_count: 2, rounds_json: JSON.stringify(rounds), sigs_json: JSON.stringify(sigs),
+            block_index: 9 };
+        const view = recordingView({ findValidPriceBatchPayload: row, getPushGeneration: 7 });
+        const decoderView = recordingView({ protocolTimeForStoredBlock: 1700000900 });
+        const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view, decoderView,
+            config: { COIN: 'DOGE' } }) });
+
+        const body = await rpc.getpricebatchpayload({ action_index: 40 });
+        assert.deepStrictEqual(body, {
+            source_chain: 'DOGE', first_round: 3, last_round: 4, btc_block_height: 700004,
+            rounds, block_time: 1700000900, sigs, action_index: 40, block_index: 9,
+            push_generation: 7
+        });
+        assert.deepStrictEqual(view.calls, [
+            ['getPushGeneration', 'DOGE'], ['findValidPriceBatchPayload', 40]
+        ]);
+        assert.deepStrictEqual(decoderView.calls, [['protocolTimeForStoredBlock', 9]]);
+    });
+
+    it('getpricebatchpayload refuses an invalid action index and an unknown or invalid batch', async function () {
+        const view = recordingView({ getPushGeneration: 7, findValidPriceBatchPayload: null });
+        const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view }) });
+        assert.deepStrictEqual(await rpc.getpricebatchpayload({ action_index: 'bad' }),
+            { error: 'action_index must be a non-negative integer' });
+        assert.deepStrictEqual(await rpc.getpricebatchpayload({ action_index: 99 }),
+            { error: 'valid price batch not found' });
+    });
 });
 
 describe('JSON-RPC anchor family @regression @tier1', function () {

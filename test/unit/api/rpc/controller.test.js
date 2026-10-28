@@ -36,7 +36,7 @@ const EXPECTED = [
     'getpendingbridgetransfers', 'getbridgetransfer', 'getbridgebalances', 'getbridgeescrowproof',
     'gettokenpolicy', 'getappliedpolicy', 'getlistat', 'getsharedlists', 'getsharedlist',
     'getpendingcrosschaincalls', 'getcrosschaincallresult',
-    'getpricebatches', 'getattestbatches', 'getactionconfirmations', 'getanchoraction', 'getrollcallsigners',
+    'getpricebatches', 'getpricebatchpayload', 'getattestbatches', 'getactionconfirmations', 'getanchoraction', 'getrollcallsigners',
     'getanchorconfirmations', 'getarchiveanchor', 'getreorghistory', 'getstakesourcebypubkey',
     'getrollcalls', 'getrollcallabsences', 'getcapabilitystakeproof'
 ];
