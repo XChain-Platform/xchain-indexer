@@ -203,6 +203,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'airdrop_native_fee_tally_rollback_activation',
     'guard_emitted_host_discriminator_activation',
     'archive_v1_reissue_refusal_activation',
+    'same_token_offer_refusal_activation',
     'dividend_empty_allow_list_denies_activation',
     'airdrop_zero_legs_omitted_activation',
     'tick_normalize_activation',

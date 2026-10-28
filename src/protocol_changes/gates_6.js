@@ -187,3 +187,16 @@ addGate('archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVA
     testnet: UNARMED,
     regtest: 0,
 });
+
+// same_token_offer_refusal_activation
+// Height on the processing chain's own block_index. From it same-chain ORDER and SWAP
+// creates whose resolved GIVE and GET tick ids are equal are refused, and the local match
+// handlers skip pre-activation offers with that shape before settlement. Below it creation
+// and matching replay as before. Unarmed on mainnet and testnet with no per-chain testnet
+// keys; the end-of-week cut adds BTC:testnet, LTC:testnet and DOGE:testnet heights. Active
+// from genesis on regtest.
+addGate('same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});

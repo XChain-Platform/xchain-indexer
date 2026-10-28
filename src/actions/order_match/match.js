@@ -6,6 +6,7 @@ const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIS
 const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
 const MARKET_LIST_SOURCE_KEY = 'market_list_source_activation.MARKET_LIST_SOURCE_ACTIVATION';
 const PRICE_CROSS_KEY = 'order_match_price_cross_activation.ORDER_MATCH_PRICE_CROSS_ACTIVATION';
+const SAME_TOKEN_REFUSAL_KEY = 'same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION';
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -125,6 +126,15 @@ module.exports = {
     // amounts and settlement. A failed gate returns with no effect, where the loop body
     // this came from would `continue` to the next candidate.
     async fillMatch(data, orderInfo, matchInfo, order, match, lists){
+
+        // Skip a pre-activation offer whose canonical GIVE and GET token ids are equal.
+        if(lists.giveTokenInfo && lists.getTokenInfo &&
+           !this.util.isNull(lists.giveTokenInfo['TICK_ID']) &&
+           !this.util.isNull(lists.getTokenInfo['TICK_ID']) &&
+           String(lists.giveTokenInfo['TICK_ID']) === String(lists.getTokenInfo['TICK_ID']) &&
+           gateRegistry.activeAt(SAME_TOKEN_REFUSAL_KEY, this.config['NETWORK'],
+               this.config['COIN'], data['BLOCK_INDEX'], null))
+            return;
 
         if(!isTokenReciprocal.call(this, orderInfo, matchInfo))
             return;
