@@ -7386,7 +7386,7 @@
       "bridge escrow origin generalization @regression @tier1 mints colliding FUFU assets under distinct origin roots",
       "bridge escrow origin generalization @regression @tier1 releases rooted burns only from the matching native escrow asset"
     ],
-    "62629ac616387ad6": [
+    "f3c330eb249693ec": [
       "federation READ connection isolation @regression @tier1 every federation-read method has a handler in the controller",
       "federation READ connection isolation @regression @tier1 getactionconfirmations makes no bare indexerDb/decoderDb read call (would join the block tx)",
       "federation READ connection isolation @regression @tier1 getactionconfirmations resolves its DB through apiView()",
@@ -7421,6 +7421,8 @@
       "federation READ connection isolation @regression @tier1 getpendingcrosschaincalls resolves its DB through apiView()",
       "federation READ connection isolation @regression @tier1 getpricebatches makes no bare indexerDb/decoderDb read call (would join the block tx)",
       "federation READ connection isolation @regression @tier1 getpricebatches resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getpricebatchpayload makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getpricebatchpayload resolves its DB through apiView()",
       "federation READ connection isolation @regression @tier1 getrelayedattestation_requests makes no bare indexerDb/decoderDb read call (would join the block tx)",
       "federation READ connection isolation @regression @tier1 getrelayedattestation_requests resolves its DB through apiView()",
       "federation READ connection isolation @regression @tier1 getreorghistory makes no bare indexerDb/decoderDb read call (would join the block tx)",
@@ -13516,13 +13518,15 @@
       "ANCHOR v3 recorder writes only section rows when the archive is null",
       "ANCHOR v3 recorder writes section rows followed by an archive row with wrapper signatures"
     ],
-    "b1d9f588dfab0020": [
+    "1a49868c7c9dc670": [
       "JSON-RPC anchor family @regression @tier1 every anchor read refuses without a database and reports a throw",
       "JSON-RPC anchor family @regression @tier1 getanchoraction runs the owned SQL through doQuery and answers checkpoint_anchored",
       "JSON-RPC anchor family @regression @tier1 getanchorconfirmations picks the paged SQL only when a cursor is given",
       "JSON-RPC anchor family @regression @tier1 getarchiveanchor reads by content commitment and author",
       "JSON-RPC price batch family @regression @tier1 getpricebatches answers each batch landing block with its protocol time, the clock pushpricebatch carried",
       "JSON-RPC price batch family @regression @tier1 getpricebatches validates the window, reads valid batches over it and pages by truncation",
+      "JSON-RPC price batch family @regression @tier1 getpricebatchpayload rebuilds the committed valid batch body that pushpricebatch received",
+      "JSON-RPC price batch family @regression @tier1 getpricebatchpayload refuses an invalid action index and an unknown or invalid batch",
       "JSON-RPC reorg history family @regression @tier1 falls back to the indexer's last-known halt flag when the probe faults",
       "JSON-RPC reorg history family @regression @tier1 reads the decoder view, probes the live halt flag and matches an orphaned hash",
       "JSON-RPC reorg history family @regression @tier1 validates, refuses without the decoder database and reports a throw",
@@ -19523,7 +19527,7 @@
   "scripts": {
     "test": {
       "fileCount": 1569,
-      "titleCount": 15121,
+      "titleCount": 15125,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20036,7 +20040,7 @@
         "test/unit/anchor/reward_push_stake_floor.test.js": "428e1d955245f334",
         "test/unit/anchor/reward_source_resolution.test.js": "ddd725cfc7a32a32",
         "test/unit/api/api_auth_batch.test.js": "8643007e19b6fe3d",
-        "test/unit/api/api_federation_read_isolation.test.js": "62629ac616387ad6",
+        "test/unit/api/api_federation_read_isolation.test.js": "f3c330eb249693ec",
         "test/unit/api/api_pushgeneration_stamping.test.js": "b7b23e989bc73b5e",
         "test/unit/api/api_state_root_version_boundary.test.js": "7f4ec2e0d819f047",
         "test/unit/api/apiview_fallback_affordance.test.js": "158fe8328bb55251",
@@ -20078,7 +20082,7 @@
         "test/unit/api/rpc/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
-        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "b1d9f588dfab0020",
+        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "1a49868c7c9dc670",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/shared_list_params.test.js": "2add00a3c2a3b74f",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "e78d9331ac6c7a43",
@@ -21473,7 +21477,7 @@
     },
     "test:regression": {
       "fileCount": 1203,
-      "titleCount": 11997,
+      "titleCount": 12001,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21945,7 +21949,7 @@
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
         "test/unit/anchor/diagnostic_events.test.js": "3d9f64cbeacabe25",
         "test/unit/anchor/reward_push_stake_floor.test.js": "428e1d955245f334",
-        "test/unit/api/api_federation_read_isolation.test.js": "62629ac616387ad6",
+        "test/unit/api/api_federation_read_isolation.test.js": "f3c330eb249693ec",
         "test/unit/api/api_pushgeneration_stamping.test.js": "b7b23e989bc73b5e",
         "test/unit/api/api_state_root_version_boundary.test.js": "7f4ec2e0d819f047",
         "test/unit/api/apiview_fallback_affordance.test.js": "158fe8328bb55251",
@@ -21969,7 +21973,7 @@
         "test/unit/api/rpc/input_bounds.test.js": "321c16541853e588",
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
-        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "b1d9f588dfab0020",
+        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "1a49868c7c9dc670",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "e78d9331ac6c7a43",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
@@ -22682,7 +22686,7 @@
     },
     "test:regression:fast": {
       "fileCount": 626,
-      "titleCount": 6435,
+      "titleCount": 6439,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22825,7 +22829,7 @@
         "test/unit/anchor/db_get_anchor_v1_by_batch_seq_tieorder.test.js": "44cb0b8ed3723f66",
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
         "test/unit/anchor/reward_push_stake_floor.test.js": "428e1d955245f334",
-        "test/unit/api/api_federation_read_isolation.test.js": "62629ac616387ad6",
+        "test/unit/api/api_federation_read_isolation.test.js": "f3c330eb249693ec",
         "test/unit/api/apiview_fallback_affordance.test.js": "158fe8328bb55251",
         "test/unit/api/cross_chain_offer_decimals.test.js": "bc58bb65b07ae6a5",
         "test/unit/api/health/health_committed_height.test.js": "f742ecb1d380895a",
@@ -22844,7 +22848,7 @@
         "test/unit/api/rpc/input_bounds.test.js": "321c16541853e588",
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
-        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "b1d9f588dfab0020",
+        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "1a49868c7c9dc670",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "e78d9331ac6c7a43",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
@@ -23314,7 +23318,7 @@
     },
     "test:regression:full": {
       "fileCount": 1203,
-      "titleCount": 11997,
+      "titleCount": 12001,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23786,7 +23790,7 @@
         "test/unit/anchor/db_reconcile_anchor_reward_winner.test.js": "185f2e8e30926ebe",
         "test/unit/anchor/diagnostic_events.test.js": "3d9f64cbeacabe25",
         "test/unit/anchor/reward_push_stake_floor.test.js": "428e1d955245f334",
-        "test/unit/api/api_federation_read_isolation.test.js": "62629ac616387ad6",
+        "test/unit/api/api_federation_read_isolation.test.js": "f3c330eb249693ec",
         "test/unit/api/api_pushgeneration_stamping.test.js": "b7b23e989bc73b5e",
         "test/unit/api/api_state_root_version_boundary.test.js": "7f4ec2e0d819f047",
         "test/unit/api/apiview_fallback_affordance.test.js": "158fe8328bb55251",
@@ -23810,7 +23814,7 @@
         "test/unit/api/rpc/input_bounds.test.js": "321c16541853e588",
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
-        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "b1d9f588dfab0020",
+        "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "1a49868c7c9dc670",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "e78d9331ac6c7a43",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
