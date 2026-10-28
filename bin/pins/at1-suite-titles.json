@@ -21451,8 +21451,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1199,
-      "titleCount": 11980,
+      "fileCount": 1200,
+      "titleCount": 11987,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21966,6 +21966,7 @@
         "test/unit/attestation/repair_validator_stats_drift.test.js": "b2c12d6af08b6d99",
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
+        "test/unit/bin/escrow_arming_tools_in_image.test.js": "171bbe3d05660700",
         "test/unit/bin/expiry_scan_probe.test.js": "8019dff4059b7364",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
@@ -22656,8 +22657,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 622,
-      "titleCount": 6418,
+      "fileCount": 623,
+      "titleCount": 6425,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22827,6 +22828,7 @@
         "test/unit/attestation/provider_min_stake_history.test.js": "88979a43d8107259",
         "test/unit/attestation/provider_overlay_boot_refusal.test.js": "96334d9b21bb9144",
         "test/unit/attestation/relayed_attestation_requests.test.js": "3904e3eba82ab03f",
+        "test/unit/bin/escrow_arming_tools_in_image.test.js": "171bbe3d05660700",
         "test/unit/boundary/amounts/supply_limits.test.js": "a3ff598f6a613223",
         "test/unit/boundary/amounts/supply_limits.test/mint_supply.test.js": "58519e720c4d8f76",
         "test/unit/boundary/amounts/supply_limits.test/send_and_destroy.test.js": "23b9ae62039215c0",
@@ -23284,8 +23286,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1199,
-      "titleCount": 11980,
+      "fileCount": 1200,
+      "titleCount": 11987,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23799,6 +23801,7 @@
         "test/unit/attestation/repair_validator_stats_drift.test.js": "b2c12d6af08b6d99",
         "test/unit/attestation/repair_validator_stats_missed_count.test.js": "0ef5583765eab080",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
+        "test/unit/bin/escrow_arming_tools_in_image.test.js": "171bbe3d05660700",
         "test/unit/bin/expiry_scan_probe.test.js": "8019dff4059b7364",
         "test/unit/boundary/addresses/validation.test.js": "c4448f6eb0a1fc3a",
         "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js": "f1f4ad4cccc7a65a",
