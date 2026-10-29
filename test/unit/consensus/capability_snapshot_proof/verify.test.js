@@ -12,12 +12,14 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
+const sinon = require('sinon');
+const ed25519 = require('../../../../src/consensus/ed25519.js');
 const M = require('../../../../src/consensus/merkle.js');
 const stateSubtree = require('../../../../src/consensus/gates/state_subtree_gate.js');
 const checkpointCanonical = require('../../../../src/consensus/snapshot_checkpoint/canonical.js');
 const { parsePinnedSet } = require('../../../../src/consensus/capability_snapshot_proof/pinned.js');
-const { verifyCapabilitySnapshotProof } = require(
-    '../../../../src/consensus/capability_snapshot_proof/verify.js');
+const capabilityProof = require('../../../../src/consensus/capability_snapshot_proof/verify.js');
+const { verifyCapabilitySnapshotProof } = capabilityProof;
 
 const CAPABILITY = 'oracle_publish';
 const SNAPSHOT_BLOCK = 106;
@@ -98,6 +100,12 @@ function expectVerdict(result, verdict, reason){
 }
 
 describe('capability snapshot proof verifier @regression @tier1', function () {
+    afterEach(function () {
+        sinon.restore();
+        if(capabilityProof._resetCheckpointValidationMemoForTest)
+            capabilityProof._resetCheckpointValidationMemoForTest();
+    });
+
     it('holds absent and mis-addressed responses before examining signatures', function () {
         const f = fixture();
         expectVerdict(verifyCapabilitySnapshotProof(f.row, null, f.trustSet,
@@ -152,6 +160,51 @@ describe('capability snapshot proof verifier @regression @tier1', function () {
         expectVerdict(verifyCapabilitySnapshotProof(f.row,
             f.response({ signers: [f.signers[0]] }), null,
             { network: 'testnet' }), 'held', /valid quorum/);
+    });
+
+    it('validates one unchanged first-use checkpoint once at small and large row counts', function () {
+        const counts = [];
+        for(const rowCount of [2, 300]){
+            capabilityProof._resetCheckpointValidationMemoForTest();
+            const f = fixture('regtest');
+            const response = f.response();
+            const verify = sinon.spy(ed25519, 'verify');
+            for(let index = 0; index < rowCount; index++){
+                expectVerdict(verifyCapabilitySnapshotProof(f.row, response, null,
+                    { network: 'regtest', firstUse: true }), 'verified');
+            }
+            counts.push(verify.callCount);
+            verify.restore();
+        }
+        assert.deepStrictEqual(counts, [3, 3]);
+    });
+
+    it('does not reuse a plain trust-set memo entry for a truncated trust set', function () {
+        const f = fixture();
+        const response = f.response();
+        const truncated = f.trustSet.slice();
+        truncated.truncated = true;
+
+        expectVerdict(verifyCapabilitySnapshotProof(f.row, response, f.trustSet,
+            { network: 'testnet' }), 'verified');
+        expectVerdict(verifyCapabilitySnapshotProof(f.row, response, truncated,
+            { network: 'testnet' }), 'held', /valid quorum/);
+    });
+
+    it('does not reuse a null-version memo entry for a missing state-root version', function () {
+        const f = fixture('regtest');
+        const withNull = f.response({ checkpoint: { state_root_version: null } });
+        const withMissing = JSON.parse(JSON.stringify(withNull));
+        delete withMissing.checkpoint.state_root_version;
+        const opts = { network: 'regtest', firstUse: true };
+
+        const cold = verifyCapabilitySnapshotProof(f.row, withMissing, null, opts);
+        capabilityProof._resetCheckpointValidationMemoForTest();
+        verifyCapabilitySnapshotProof(f.row, withNull, null, opts);
+        const warm = verifyCapabilitySnapshotProof(f.row, withMissing, null, opts);
+
+        assert.deepStrictEqual(warm, cold);
+        expectVerdict(warm, 'held', /valid quorum/);
     });
 
     it('holds proofs with a wrong block, root, or state-root version', function () {

@@ -83,9 +83,13 @@ function restartedSync(mirror, verdictFor, servedRows) {
         hubUrl: 'http://hub.test', network: 'regtest', authoritativeDb: authoritativeDb
     });
     sinon.stub(sync, 'localColumns').resolves(new Set(COLUMNS));
-    sinon.stub(sync, 'httpGet').callsFake(async path => path.includes('/hub-db/snapshot/capability_snapshots')
-        ? { schema_version: HUB_SCHEMA_VERSION, rows: servedRows, watermark: 91 }
-        : { proof: 'ok' });
+    sinon.stub(sync, 'httpGet').callsFake(async path => {
+        if (path.includes('/hub-db/snapshot/capability_snapshots'))
+            return { schema_version: HUB_SCHEMA_VERSION, rows: servedRows, watermark: 91 };
+        const params = new URL(path, 'http://example.invalid').searchParams;
+        const pubkeys = String(params.get('pubkeys')).split(',');
+        return { proof: { members: pubkeys.map(pubkey => ({ pubkey })) } };
+    });
     sinon.stub(sync, 'mirrorNetworkScope').resolves(null);
     sinon.stub(sync, 'reconcileForeignCapabilitySnapshots').resolves();
     sinon.stub(sync, 'releaseSnapshotWaiters').resolves();
@@ -153,6 +157,29 @@ describe('capability snapshot re-page after a restart skips rows already mirrore
         assert.deepStrictEqual(judged, ['bb22', 'cc33']);
         assert.strictEqual(proofFetches(sync), 2);
         assert.strictEqual(mirror.rows.length, 3);
+    });
+
+    it('bounds proof requests for a full flush at two row counts across a path chunk boundary',
+        async function () {
+            const requestCounts = [];
+            for(const rowCount of [2, 130]){
+                const rows = Array.from({ length: rowCount }, (_, index) => snapshotRow(
+                    index + 1, (index + 1).toString(16).padStart(64, '0')));
+                const mirror = localMirror([]);
+                const { sync, judged } = restartedSync(mirror, () => 'verified', rows);
+                syncs.push(sync);
+
+                assert.strictEqual(await drainOnce(sync), 91);
+
+                const paths = sync.httpGet.getCalls().map(call => call.args[0])
+                    .filter(path => path.includes('capability_snapshot_proof'));
+                requestCounts.push(paths.length);
+                assert.strictEqual(judged.length, rowCount);
+                assert.strictEqual(mirror.rows.length, rowCount);
+                for(const path of paths)
+                    assert.ok(Buffer.byteLength(path) <= 8000, 'request path exceeds 8 KB budget');
+            }
+            assert.deepStrictEqual(requestCounts, [1, 2]);
     });
 
     it('still holds and later applies an unmirrored frontier row re-served after the restart', async function () {

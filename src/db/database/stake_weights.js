@@ -44,19 +44,38 @@ const logHeldProof = createHeldLog({ warn: message => getLogger().warn(message) 
 
 const CAPABILITY_SNAPSHOT_PROOF_ACTIVATION =
     'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION';
+const FIRST_USE_WARNING_SET_CAP = 64;
+
+function warnFirstUseSetOnce(db, key){
+    if(key === null) return;
+    if(!db._capabilityFirstUseWarningSets) db._capabilityFirstUseWarningSets = new Set();
+    const warned = db._capabilityFirstUseWarningSets;
+    if(warned.has(key)) return;
+    warned.add(key);
+    while(warned.size > FIRST_USE_WARNING_SET_CAP)
+        warned.delete(warned.values().next().value);
+    getLogger().warn('Capability snapshot proof is using an unpinned regtest checkpoint validator set for first use.');
+}
 
 async function judgeMirrorResolvedRow(db, row, capability, opts){
     if(!gateRegistry.activeAt(CAPABILITY_SNAPSHOT_PROOF_ACTIVATION,
         db.config['NETWORK'], 'BTC', row.snapshot_block, 0))
         return { verdict: 'unknown', reason: 'this chain resolves ' + capability + ' from the mirror' };
-    let proofOpts = Object.assign({}, opts, { network: db.config['NETWORK'] });
+    let firstUseSetKey = null;
+    let suppliedObserver = opts && opts.noteFirstUseSet;
+    let proofOpts = Object.assign({}, opts, {
+        network: db.config['NETWORK'],
+        noteFirstUseSet: key => {
+            firstUseSetKey = key;
+            if(typeof suppliedObserver === 'function') suppliedObserver(key);
+        },
+    });
     let proofRow = capability === 'archive_publish'
         ? Object.assign({}, row, { capability: 'oracle_publish' })
         : row;
     let result = await mirrorJudgement.judgeMirroredCapabilityRow(
         proofRow, proofOpts, capabilityProof.verifyCapabilitySnapshotProof);
-    if(result.firstUse)
-        getLogger().warn('Capability snapshot proof is using an unpinned regtest checkpoint validator set for first use.');
+    if(result.firstUse) warnFirstUseSetOnce(db, firstUseSetKey);
     if(result.verdict === 'held') logHeldProof(row, result.reason);
     return result;
 }

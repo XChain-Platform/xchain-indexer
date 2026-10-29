@@ -15,7 +15,8 @@ const sinon = require('sinon');
 
 const HubDbSync = require('../../../../../src/hub/hub_db_sync.js');
 const { HUB_SCHEMA_VERSION } = require('../../../../../src/hub/hub_schema_version.js');
-const { CAPABILITY_SNAPSHOT_KEY_CAP } = require('../../../../../src/hub/hub_db_sync/mirror_bounds.js');
+const { CAPABILITY_SNAPSHOT_KEY_CAP, capabilitySnapshotKey } = require(
+    '../../../../../src/hub/hub_db_sync/mirror_bounds.js');
 
 const ROW = Object.freeze({
     id: 31,
@@ -116,6 +117,34 @@ describe('capability snapshot proof hold barrier @regression @tier1', function (
         assert.strictEqual(sync.httpGet.callCount, 1);
         assert.match(sync.httpGet.firstCall.args[0], /pubkeys=aa11%2Cbb22$/);
         assert.strictEqual(inserted.length, 2);
+    });
+
+    it('chunks a large held-row retry by encoded request path length', async function () {
+        const made = makeSync(async (row, options) => {
+            await options.fetchProof(row.snapshot_block, row.capability, [row.signing_pubkey]);
+            return { verdict: 'verified' };
+        });
+        const { sync, inserted } = made;
+        syncs.push(sync);
+        for(let index = 1; index <= 300; index++){
+            const held = Object.assign({}, ROW, {
+                id: ROW.id + index,
+                signing_pubkey: index.toString(16).padStart(64, '0'),
+                source: 'validator/' + index,
+            });
+            sync._capabilityProofHolds.set(capabilitySnapshotKey(held), held);
+        }
+
+        await sync.retryHeldCapabilityRows();
+
+        const paths = sync.httpGet.getCalls().map(call => call.args[0]);
+        assert.ok(paths.length > 1, 'the retry must split a 300-key proof group');
+        for(const path of paths){
+            assert.ok(Buffer.byteLength(path) <= 8000, 'request path exceeds 8 KB budget');
+            const keys = String(new URL(path, 'http://example.invalid').searchParams.get('pubkeys')).split(',');
+            assert.ok(keys.length <= 256, 'request exceeds the endpoint key cap');
+        }
+        assert.strictEqual(inserted.length, 300);
     });
 
     it('releases an existing waiter when ordinary redelivery verifies the held row', async function () {

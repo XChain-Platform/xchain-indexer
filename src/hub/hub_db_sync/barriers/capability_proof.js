@@ -29,8 +29,113 @@ const { CAPABILITY_SNAPSHOT_KEY_CAP, capabilitySnapshotKey } = require('../mirro
 
 const CAPABILITY_PROOF_RETRY_MS = 15000;
 const CAPABILITY_PROOF_REQUEST_INTERVAL_MS = 110;
+const CAPABILITY_PROOF_PUBKEY_CAP = 256;
+const CAPABILITY_PROOF_PATH_BUDGET = 8000;
+const CAPABILITY_PUBKEY = /^[0-9a-fA-F]{64}$/;
+
+function proofGroupKey(snapshotBlock, capability) {
+    return String(snapshotBlock) + '\u0000' + String(capability);
+}
+
+function proofMemberKey(snapshotBlock, capability, pubkey) {
+    return proofGroupKey(snapshotBlock, capability) + '\u0000' + String(pubkey).toLowerCase();
+}
+
+function proofRequestPath(snapshotBlock, capability, pubkeys) {
+    return '/hub-db/snapshot/capability_snapshot_proof?snapshot_block=' +
+        encodeURIComponent(String(snapshotBlock)) + '&capability=' +
+        encodeURIComponent(String(capability)) + '&pubkeys=' +
+        encodeURIComponent((Array.isArray(pubkeys) ? pubkeys : []).map(String).join(','));
+}
+
+function chunkProofPubkeys(snapshotBlock, capability, pubkeys) {
+    const chunks = [];
+    let chunk = [];
+    for (const value of pubkeys) {
+        const candidate = chunk.concat(String(value));
+        if (chunk.length > 0 && (candidate.length > CAPABILITY_PROOF_PUBKEY_CAP ||
+            Buffer.byteLength(proofRequestPath(snapshotBlock, capability, candidate)) >
+                CAPABILITY_PROOF_PATH_BUDGET)) {
+            chunks.push(chunk);
+            chunk = [String(value)];
+        } else {
+            chunk = candidate;
+        }
+    }
+    if (chunk.length > 0) chunks.push(chunk);
+    return chunks;
+}
 
 module.exports = {
+
+    // During one bootstrap flush, rows sharing a snapshot and capability can use one
+    // proof response within both the request-path budget and the transport's key cap.
+    // Entries are lazy so an intact local mirror still skips every proof GET after its
+    // natural-key reads.
+    beginCapabilityProofBatch(table, rows) {
+        if (table !== 'capability_snapshots' || !Array.isArray(rows)) return null;
+
+        const groups = new Map();
+        for (const row of rows) {
+            if (!row || !CAPABILITY_PUBKEY.test(String(row.signing_pubkey))) continue;
+            const group = proofGroupKey(row.snapshot_block, row.capability);
+            if (!groups.has(group)) groups.set(group, {
+                snapshotBlock: row.snapshot_block,
+                capability: row.capability,
+                pubkeys: new Map(),
+            });
+            const pubkey = String(row.signing_pubkey);
+            groups.get(group).pubkeys.set(pubkey.toLowerCase(), pubkey);
+        }
+
+        const batch = new Map();
+        for (const group of groups.values()) {
+            const pubkeys = Array.from(group.pubkeys.values());
+            for (const chunk of chunkProofPubkeys(group.snapshotBlock, group.capability, pubkeys)) {
+                const entry = {
+                    promise: null,
+                    fetch: () => {
+                        if (entry.promise === null)
+                            entry.promise = this.fetchCapabilitySnapshotProofDirect(
+                                group.snapshotBlock, group.capability, chunk);
+                        return entry.promise;
+                    },
+                };
+                for (const pubkey of chunk)
+                    batch.set(proofMemberKey(group.snapshotBlock, group.capability, pubkey), entry);
+            }
+        }
+        const token = {
+            previous: this._capabilityProofBatchOwner || null,
+            mine: batch,
+            active: true,
+        };
+        this._capabilityProofBatchOwner = token;
+        this._capabilityProofBatch = batch;
+        return token;
+    },
+
+    restoreCapabilityProofBatch(token) {
+        if (!token || token.active !== true) return;
+        token.active = false;
+        if (this._capabilityProofBatchOwner !== token) return;
+        let previous = token.previous;
+        while (previous && previous.active !== true) previous = previous.previous;
+        this._capabilityProofBatchOwner = previous || null;
+        this._capabilityProofBatch = previous ? previous.mine : null;
+    },
+
+    sharedCapabilityProof(snapshotBlock, capability, pubkeys) {
+        if (!(this._capabilityProofBatch instanceof Map) ||
+            !Array.isArray(pubkeys) || pubkeys.length !== 1) return null;
+        const entry = this._capabilityProofBatch.get(
+            proofMemberKey(snapshotBlock, capability, pubkeys[0]));
+        return entry ? entry.fetch() : null;
+    },
+
+    capabilityProofRequestPath(snapshotBlock, capability, pubkeys) {
+        return proofRequestPath(snapshotBlock, capability, pubkeys);
+    },
 
     // Spaces this client's proof GETs. The hub's shared budget bounds what all of its
     // clients together send the BTC indexer; this keeps one client from queueing a
@@ -180,12 +285,25 @@ module.exports = {
             proofPubkeys.get(group).add(String(row.signing_pubkey));
         }
         let proofFetches = new Map();
+        for (let [group, pubkeys] of proofPubkeys) {
+            let split = group.indexOf('\u0000');
+            let snapshotBlock = group.slice(0, split);
+            let capability = group.slice(split + 1);
+            for (let chunk of chunkProofPubkeys(snapshotBlock, capability, Array.from(pubkeys))) {
+                let entry = { promise: null };
+                entry.fetch = () => {
+                    if (entry.promise === null)
+                        entry.promise = this.fetchCapabilitySnapshotProof(snapshotBlock, capability, chunk);
+                    return entry.promise;
+                };
+                for (let pubkey of chunk)
+                    proofFetches.set(proofMemberKey(snapshotBlock, capability, pubkey), entry);
+            }
+        }
         let fetchProof = (snapshotBlock, capability, pubkeys) => {
-            let key = String(snapshotBlock) + '\u0000' + String(capability);
-            if (!proofFetches.has(key)) proofFetches.set(key,
-                this.fetchCapabilitySnapshotProof(snapshotBlock, capability,
-                    proofPubkeys.has(key) ? Array.from(proofPubkeys.get(key)) : pubkeys));
-            return proofFetches.get(key);
+            let member = Array.isArray(pubkeys) && pubkeys.length > 0 ? pubkeys[0] : '';
+            let entry = proofFetches.get(proofMemberKey(snapshotBlock, capability, member));
+            return entry ? entry.fetch() : this.fetchCapabilitySnapshotProof(snapshotBlock, capability, pubkeys);
         };
         try {
             for (let [key, row] of held) {

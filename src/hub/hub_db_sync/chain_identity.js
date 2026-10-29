@@ -30,6 +30,14 @@ const { CHAIN_ID_FENCED_TABLES, REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT,
         REFUSED_ROW_NAMED_CAP } = require('./mirror_tables.js');
 const { capabilitySnapshotKey } = require('./mirror_bounds.js');
 
+function proofHasPubkeys(response, pubkeys) {
+    const members = response && response.proof && response.proof.members;
+    if (!Array.isArray(members)) return false;
+    const present = new Set(members.filter(member => member && typeof member.pubkey === 'string')
+        .map(member => member.pubkey.toLowerCase()));
+    return pubkeys.every(pubkey => present.has(String(pubkey).toLowerCase()));
+}
+
 module.exports = {
 
     // ── Chain identity fence for the CHAIN_ID_FENCED_TABLES ──────────────────────
@@ -343,12 +351,29 @@ module.exports = {
     },
 
     async fetchCapabilitySnapshotProof(snapshotBlock, capability, pubkeys) {
+        let shared = typeof this.sharedCapabilityProof === 'function'
+            ? this.sharedCapabilityProof(snapshotBlock, capability, pubkeys) : null;
+        if (shared !== null) {
+            try {
+                const response = await shared;
+                if (proofHasPubkeys(response, pubkeys)) return response;
+            } catch (error) {
+                // The row-specific request below preserves the original failure verdict.
+            }
+        }
+        return this.fetchCapabilitySnapshotProofDirect(snapshotBlock, capability, pubkeys);
+    },
+
+    async fetchCapabilitySnapshotProofDirect(snapshotBlock, capability, pubkeys) {
         await this.paceCapabilityProofRequest();
         try {
-            return await this.httpGet('/hub-db/snapshot/capability_snapshot_proof?snapshot_block=' +
-                encodeURIComponent(String(snapshotBlock)) + '&capability=' +
-                encodeURIComponent(String(capability)) + '&pubkeys=' +
-                encodeURIComponent((Array.isArray(pubkeys) ? pubkeys : []).map(String).join(',')));
+            let path = typeof this.capabilityProofRequestPath === 'function'
+                ? this.capabilityProofRequestPath(snapshotBlock, capability, pubkeys)
+                : '/hub-db/snapshot/capability_snapshot_proof?snapshot_block=' +
+                    encodeURIComponent(String(snapshotBlock)) + '&capability=' +
+                    encodeURIComponent(String(capability)) + '&pubkeys=' +
+                    encodeURIComponent((Array.isArray(pubkeys) ? pubkeys : []).map(String).join(','));
+            return await this.httpGet(path);
         } catch (error) {
             this.deferCapabilityProofRequests(error);
             throw error;

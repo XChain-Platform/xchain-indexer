@@ -139,20 +139,29 @@ describe('capability snapshot proof database wiring @regression @tier1', functio
 });
 
 describe('capability snapshot proof database wiring @regression @tier1', function () {
-    it('allows regtest first use and emits one warning line', async function () {
+    it('warns once per distinct unpinned regtest validator set', async function () {
         sinon.stub(gates, 'activeAt').withArgs(KEY).returns(true);
-        sinon.stub(proofVerifier, 'verifyCapabilitySnapshotProof').returns(
-            { verdict: 'verified', reason: null });
+        let setKey = 'set-a';
+        sinon.stub(proofVerifier, 'verifyCapabilitySnapshotProof').callsFake(
+            (_row, _response, _trustSet, options) => {
+                options.noteFirstUseSet(setKey);
+                return { verdict: 'verified', reason: null };
+            });
         const warning = sinon.stub(getLogger(), 'warn');
-
-        const actual = await verifyCapabilitySnapshotRow.call(mirrorSubject('regtest'), row(), {
+        const subject = mirrorSubject('regtest');
+        const options = {
             fetchProof: sinon.stub().resolves({ proof: true }),
             readEnv: () => undefined,
-        });
+        };
+
+        const actual = await verifyCapabilitySnapshotRow.call(subject, row(), options);
+        await verifyCapabilitySnapshotRow.call(subject, row({ signing_pubkey: 'd'.repeat(64) }), options);
+        setKey = 'set-b';
+        await verifyCapabilitySnapshotRow.call(subject, row({ signing_pubkey: 'e'.repeat(64) }), options);
 
         assert.strictEqual(actual.verdict, 'verified');
         assert.strictEqual(actual.firstUse, true);
-        assert.strictEqual(warning.callCount, 1);
+        assert.strictEqual(warning.callCount, 2);
     });
 
     it('keeps the BTC re-derivation path unchanged when the proof gate is active', async function () {

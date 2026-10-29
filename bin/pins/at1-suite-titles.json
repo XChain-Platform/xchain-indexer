@@ -3915,17 +3915,6 @@
       "state_hash index-map class (id-determinism P4) @regression armed: an IDENTICAL id map hashes the same (no false halt across the recovery boundary)",
       "state_hash index-map class (id-determinism P4) @regression armed: the id map is folded in, and a divergent id->address pair HALTS (different hash)"
     ],
-    "357df19ce32905f9": [
-      "capability snapshot proof database wiring @regression @tier1 allows regtest first use and emits one warning line",
-      "capability snapshot proof database wiring @regression @tier1 holds at the gate when no proof fetcher is available",
-      "capability snapshot proof database wiring @regression @tier1 keeps a mirror-resolved row below the gate on the legacy path",
-      "capability snapshot proof database wiring @regression @tier1 keeps the BTC re-derivation path unchanged when the proof gate is active",
-      "capability snapshot proof database wiring @regression @tier1 never derives the checkpoint trust set from mirrored capability rows",
-      "capability snapshot proof database wiring @regression @tier1 passes verified, refused, and held proof verdicts through at the gate",
-      "capability snapshot proof database wiring @regression @tier1 uses the static pin below rotation and the next pin from its block onward",
-      "capability snapshot proof database wiring: regtest seeded hub row @regression @tier1 applies the seeded row on an unpinned LTC regtest indexer",
-      "capability snapshot proof database wiring: regtest seeded hub row @regression @tier1 still refuses the seeded row when another key signed the checkpoint"
-    ],
     "359bcfb442706852": [
       "Adversarial ^<id> resolution: dangling / malformed references @adversarial @tier1 a FLOAT ^1.5 is non-canonical -> null (never coerced onto an integer FK)",
       "Adversarial ^<id> resolution: dangling / malformed references @adversarial @tier1 a NEGATIVE ^-1 is non-canonical -> null",
@@ -13999,24 +13988,6 @@
       "resolveSlashTarget slash destination validation rejects a slash destination set to null",
       "resolveSlashTarget slash destination validation rejects a slash destination set to undefined"
     ],
-    "b9d611837b350922": [
-      "capability snapshot proof verifier @regression @tier1 accepts and rejects pinned sets with the sync parser rules",
-      "capability snapshot proof verifier @regression @tier1 holds absent and mis-addressed responses before examining signatures",
-      "capability snapshot proof verifier @regression @tier1 holds checkpoints for another chain, network, or buried block",
-      "capability snapshot proof verifier @regression @tier1 holds commitments that do not hash to their member leaf",
-      "capability snapshot proof verifier @regression @tier1 holds missing and invalid stake member proofs",
-      "capability snapshot proof verifier @regression @tier1 holds proofs with a wrong block, root, or state-root version",
-      "capability snapshot proof verifier @regression @tier1 judges matching, changed, and multi-source snapshot rows",
-      "capability snapshot proof verifier @regression @tier1 refuses verified non-membership",
-      "capability snapshot proof verifier @regression @tier1 requires a trusted stake-weighted checkpoint quorum",
-      "capability snapshot proof verifier @regression @tier1 requires every listed first-use signature to be valid and at least one",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 accepts the seeded row on an unpinned regtest venue when the seeded key signed the checkpoint",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 leaves real stake members on regtest judged by the binding as before",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses a non-member whose source or amount is not the seed shape",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses a seeded row whose key did not sign the checkpoint",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses on a pinned regtest venue",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses the same seeded shape on testnet and mainnet"
-    ],
     "ba14cf587a23de6d": [
       "resolveConfigEndpoint() disables the endpoint and gives notice for seeds alone",
       "resolveConfigEndpoint() disables the endpoint without notice when nothing is set",
@@ -16892,14 +16863,6 @@
       "Anchor (ANCHOR) @regression @tier3 v0 rejects a rootless section: the bundle is root-bearing by construction",
       "Anchor (ANCHOR) @regression @tier3 v0 with a quorum of valid oracle_publish sigs is valid and stores one row per section"
     ],
-    "dc3cc58dd0e12f6d": [
-      "capability snapshot judge skips a key the mirror already holds @regression @tier1 a retained-hold retry settles a now-mirrored key without a proof fetch",
-      "capability snapshot judge skips a key the mirror already holds @regression @tier1 clears a hold without a proof fetch once the held key is mirrored",
-      "capability snapshot judge skips a key the mirror already holds @regression @tier1 judges a row when the presence read answers with a different key",
-      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 judges every row a rolled-back local mirror no longer holds",
-      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 pages from id 0 over an intact mirror and proves only the row it lacks",
-      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 still holds and later applies an unmirrored frontier row re-served after the restart"
-    ],
     "dc4a83d1ac938fa7": [
       "proof wait grace wiring @regression /status verdict passes proofWaitGraceMs",
       "proof wait grace wiring @regression advanceFields passes proofWaitGraceMs",
@@ -18033,21 +17996,6 @@
       "stateCommitment.reportOrphanStats @regression @tier2 reports zero orphans when every node is reachable from the single retained root",
       "stateCommitment.reportOrphanStats @regression @tier2 returns all-zero for an empty store",
       "stateCommitment.reportOrphanStats @regression @tier2 stops the walk at maxNodes and flags the truncated figure as an estimate"
-    ],
-    "eb59bb581b09b3a9": [
-      "capability snapshot proof hold barrier @regression @tier1 a frontier hold ends the drain and leaves the heartbeat gate open",
-      "capability snapshot proof hold barrier @regression @tier1 a held frontier retry does not reopen the bootstrap drain",
-      "capability snapshot proof hold barrier @regression @tier1 a retained bootstrap hold preserves a re-page reason the drain opened under",
-      "capability snapshot proof hold barrier @regression @tier1 applies and releases a held row when a retry can no longer judge it",
-      "capability snapshot proof hold barrier @regression @tier1 bounds the hold map, notes a full map once, and leaves overflow for a re-page",
-      "capability snapshot proof hold barrier @regression @tier1 deduplicates proof fetches by snapshot block and capability during one retry pass",
-      "capability snapshot proof hold barrier @regression @tier1 encodes every proof endpoint parameter",
-      "capability snapshot proof hold barrier @regression @tier1 keeps a held row absent, blocks, then applies and releases it after proof arrives",
-      "capability snapshot proof hold barrier @regression @tier1 keeps refused rows absent and applies unknown rows without creating a hold",
-      "capability snapshot proof hold barrier @regression @tier1 keeps the barrier closed for overflow until the required re-page drains",
-      "capability snapshot proof hold barrier @regression @tier1 paces proof request starts below the indexer rate limit",
-      "capability snapshot proof hold barrier @regression @tier1 re-serves and later applies a held row after a restart with persisted local rows",
-      "capability snapshot proof hold barrier @regression @tier1 releases an existing waiter when ordinary redelivery verifies the held row"
     ],
     "eb89e21438d117f3": [
       "ROLLCALL base-rail regtest resolver matches the running parser @regression @tier1 agrees with regtestHeight on every accepted, refused and garbage input",
@@ -19526,12 +19474,77 @@
     "b9963332da94f7f4": [
       "Utility throwError() includes an Error message in the rendered refusal log and rethrows the same Error",
       "Utility throwError() stringifies a non-Error refusal in the rendered log"
+    ],
+    "bc9b899ba93759c7": [
+      "capability snapshot proof verifier @regression @tier1 accepts and rejects pinned sets with the sync parser rules",
+      "capability snapshot proof verifier @regression @tier1 does not reuse a null-version memo entry for a missing state-root version",
+      "capability snapshot proof verifier @regression @tier1 does not reuse a plain trust-set memo entry for a truncated trust set",
+      "capability snapshot proof verifier @regression @tier1 holds absent and mis-addressed responses before examining signatures",
+      "capability snapshot proof verifier @regression @tier1 holds checkpoints for another chain, network, or buried block",
+      "capability snapshot proof verifier @regression @tier1 holds commitments that do not hash to their member leaf",
+      "capability snapshot proof verifier @regression @tier1 holds missing and invalid stake member proofs",
+      "capability snapshot proof verifier @regression @tier1 holds proofs with a wrong block, root, or state-root version",
+      "capability snapshot proof verifier @regression @tier1 judges matching, changed, and multi-source snapshot rows",
+      "capability snapshot proof verifier @regression @tier1 refuses verified non-membership",
+      "capability snapshot proof verifier @regression @tier1 requires a trusted stake-weighted checkpoint quorum",
+      "capability snapshot proof verifier @regression @tier1 requires every listed first-use signature to be valid and at least one",
+      "capability snapshot proof verifier @regression @tier1 validates one unchanged first-use checkpoint once at small and large row counts",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 accepts the seeded row on an unpinned regtest venue when the seeded key signed the checkpoint",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 leaves real stake members on regtest judged by the binding as before",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses a non-member whose source or amount is not the seed shape",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses a seeded row whose key did not sign the checkpoint",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses on a pinned regtest venue",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses the same seeded shape on testnet and mainnet"
+    ],
+    "bc089c9f6525a81c": [
+      "capability snapshot proof database wiring @regression @tier1 holds at the gate when no proof fetcher is available",
+      "capability snapshot proof database wiring @regression @tier1 keeps a mirror-resolved row below the gate on the legacy path",
+      "capability snapshot proof database wiring @regression @tier1 keeps the BTC re-derivation path unchanged when the proof gate is active",
+      "capability snapshot proof database wiring @regression @tier1 never derives the checkpoint trust set from mirrored capability rows",
+      "capability snapshot proof database wiring @regression @tier1 passes verified, refused, and held proof verdicts through at the gate",
+      "capability snapshot proof database wiring @regression @tier1 uses the static pin below rotation and the next pin from its block onward",
+      "capability snapshot proof database wiring @regression @tier1 warns once per distinct unpinned regtest validator set",
+      "capability snapshot proof database wiring: regtest seeded hub row @regression @tier1 applies the seeded row on an unpinned LTC regtest indexer",
+      "capability snapshot proof database wiring: regtest seeded hub row @regression @tier1 still refuses the seeded row when another key signed the checkpoint"
+    ],
+    "a3e9fb75a402218a": [
+      "capability snapshot proof hold barrier @regression @tier1 a frontier hold ends the drain and leaves the heartbeat gate open",
+      "capability snapshot proof hold barrier @regression @tier1 a held frontier retry does not reopen the bootstrap drain",
+      "capability snapshot proof hold barrier @regression @tier1 a retained bootstrap hold preserves a re-page reason the drain opened under",
+      "capability snapshot proof hold barrier @regression @tier1 applies and releases a held row when a retry can no longer judge it",
+      "capability snapshot proof hold barrier @regression @tier1 bounds the hold map, notes a full map once, and leaves overflow for a re-page",
+      "capability snapshot proof hold barrier @regression @tier1 chunks a large held-row retry by encoded request path length",
+      "capability snapshot proof hold barrier @regression @tier1 deduplicates proof fetches by snapshot block and capability during one retry pass",
+      "capability snapshot proof hold barrier @regression @tier1 encodes every proof endpoint parameter",
+      "capability snapshot proof hold barrier @regression @tier1 keeps a held row absent, blocks, then applies and releases it after proof arrives",
+      "capability snapshot proof hold barrier @regression @tier1 keeps refused rows absent and applies unknown rows without creating a hold",
+      "capability snapshot proof hold barrier @regression @tier1 keeps the barrier closed for overflow until the required re-page drains",
+      "capability snapshot proof hold barrier @regression @tier1 paces proof request starts below the indexer rate limit",
+      "capability snapshot proof hold barrier @regression @tier1 re-serves and later applies a held row after a restart with persisted local rows",
+      "capability snapshot proof hold barrier @regression @tier1 releases an existing waiter when ordinary redelivery verifies the held row"
+    ],
+    "9905578f0abd08aa": [
+      "capability snapshot judge skips a key the mirror already holds @regression @tier1 a retained-hold retry settles a now-mirrored key without a proof fetch",
+      "capability snapshot judge skips a key the mirror already holds @regression @tier1 clears a hold without a proof fetch once the held key is mirrored",
+      "capability snapshot judge skips a key the mirror already holds @regression @tier1 judges a row when the presence read answers with a different key",
+      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 bounds proof requests for a full flush at two row counts across a path chunk boundary",
+      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 judges every row a rolled-back local mirror no longer holds",
+      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 pages from id 0 over an intact mirror and proves only the row it lacks",
+      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 still holds and later applies an unmirrored frontier row re-served after the restart"
+    ],
+    "cb59b6c8ec65b562": [
+      "capability proof bootstrap batch @regression @tier1 does not let an overlapping price flush clear or restore a capability batch",
+      "capability proof bootstrap batch @regression @tier1 falls back to the row request when a shared response omits its member",
+      "capability proof bootstrap batch @regression @tier1 keeps distinct checkpoint keys separate",
+      "capability proof bootstrap batch @regression @tier1 keeps every shared proof request path within the 8 KB budget",
+      "capability proof bootstrap batch @regression @tier1 matches real-verifier verdict, reason, and firstUse for pinned and regtest first-use batches",
+      "capability proof bootstrap batch @regression @tier1 shares proof requests across small and large row counts for one group"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 1570,
-      "titleCount": 15127,
+      "fileCount": 1571,
+      "titleCount": 15138,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20264,8 +20277,8 @@
         "test/unit/consensus/capability_snapshot_proof/startup_pin_refusal.test.js": "e3e7ffb0929fda49",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
         "test/unit/consensus/capability_snapshot_proof/trust_set.test.js": "b468c3fd3eff32ee",
-        "test/unit/consensus/capability_snapshot_proof/verify.test.js": "b9d611837b350922",
-        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "357df19ce32905f9",
+        "test/unit/consensus/capability_snapshot_proof/verify.test.js": "bc9b899ba93759c7",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
@@ -20650,8 +20663,8 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
-        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "dc3cc58dd0e12f6d",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
+        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_proof/retry_after.test.js": "d37decb95f3187b2",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
@@ -21102,7 +21115,8 @@
         "test/unit/xchain_indexer/stall_health_smoke_parity.test.js": "850d161466315079",
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
-        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
+        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562"
       }
     },
     "test:boundary": {
@@ -21481,8 +21495,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1203,
-      "titleCount": 12001,
+      "fileCount": 1204,
+      "titleCount": 12012,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22070,8 +22084,8 @@
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
-        "test/unit/consensus/capability_snapshot_proof/verify.test.js": "b9d611837b350922",
-        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "357df19ce32905f9",
+        "test/unit/consensus/capability_snapshot_proof/verify.test.js": "bc9b899ba93759c7",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
@@ -22356,8 +22370,8 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
-        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "dc3cc58dd0e12f6d",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
+        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
@@ -22686,12 +22700,13 @@
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
-        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
+        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562"
       }
     },
     "test:regression:fast": {
-      "fileCount": 626,
-      "titleCount": 6439,
+      "fileCount": 627,
+      "titleCount": 6450,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22888,8 +22903,8 @@
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
-        "test/unit/consensus/capability_snapshot_proof/verify.test.js": "b9d611837b350922",
-        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "357df19ce32905f9",
+        "test/unit/consensus/capability_snapshot_proof/verify.test.js": "bc9b899ba93759c7",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/gates/archive_rollcall_presence_gate.test.js": "be9c80fb8a595c9d",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
@@ -23113,8 +23128,8 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
-        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "dc3cc58dd0e12f6d",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
+        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/buffer_and_scoping.test.js": "8fb5fef2c360a8e9",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/cross_chain_upgrades.test.js": "a90785fe5a2760e2",
@@ -23318,12 +23333,13 @@
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
         "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
-        "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192"
+        "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562"
       }
     },
     "test:regression:full": {
-      "fileCount": 1203,
-      "titleCount": 12001,
+      "fileCount": 1204,
+      "titleCount": 12012,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23911,8 +23927,8 @@
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
         "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
-        "test/unit/consensus/capability_snapshot_proof/verify.test.js": "b9d611837b350922",
-        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "357df19ce32905f9",
+        "test/unit/consensus/capability_snapshot_proof/verify.test.js": "bc9b899ba93759c7",
+        "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
@@ -24197,8 +24213,8 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "eb59bb581b09b3a9",
-        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "dc3cc58dd0e12f6d",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
+        "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test.js": "8ff818a8c8e46963",
@@ -24527,7 +24543,8 @@
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
-        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
+        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562"
       }
     },
     "test:security": {

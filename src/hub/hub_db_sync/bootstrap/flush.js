@@ -37,22 +37,31 @@ module.exports = {
     // batching existed, whichever path ran.
     async flushPendingRows(drain) {
         if (drain.pending.length === 0) return true;
-        // Bound-out rows still pass through applyPendingRow in wire order so all
-        // served-row, predecessor and cursor accounting stays on the original path.
-        // They are excluded only from the SQL values list. Filtering before the
-        // statement preserves the retained rows' relative order, including two
-        // states of the same natural key in one page.
-        let batch = drain.pending.map(p => p.row)
-            .filter(row => !this.priceRowBoundOut(drain, row));
-        let batched = (batch.length > 1) ? await this.applyRowsBatched(drain.table, batch) : false;
-        let ok      = true;
-        for (let entry of drain.pending) {
-            let rowBatched = batched && !this.priceRowBoundOut(drain, entry.row);
-            if (!(await this.applyPendingRow(drain, entry.row, rowBatched))) { ok = false; break; }
+        let proofBatchToken = null;
+        if (typeof this.beginCapabilityProofBatch === 'function')
+            proofBatchToken = this.beginCapabilityProofBatch(
+                drain.table, drain.pending.map(entry => entry.row));
+        try {
+            // Bound-out rows still pass through applyPendingRow in wire order so all
+            // served-row, predecessor and cursor accounting stays on the original path.
+            // They are excluded only from the SQL values list. Filtering before the
+            // statement preserves the retained rows' relative order, including two
+            // states of the same natural key in one page.
+            let batch = drain.pending.map(p => p.row)
+                .filter(row => !this.priceRowBoundOut(drain, row));
+            let batched = (batch.length > 1) ? await this.applyRowsBatched(drain.table, batch) : false;
+            let ok      = true;
+            for (let entry of drain.pending) {
+                let rowBatched = batched && !this.priceRowBoundOut(drain, entry.row);
+                if (!(await this.applyPendingRow(drain, entry.row, rowBatched))) { ok = false; break; }
+            }
+            drain.pending = [];
+            this.reportDrainProgress(drain);
+            return ok;
+        } finally {
+            if (typeof this.restoreCapabilityProofBatch === 'function')
+                this.restoreCapabilityProofBatch(proofBatchToken);
         }
-        drain.pending = [];
-        this.reportDrainProgress(drain);
-        return ok;
     },
 
     // Apply one held row (or take the batch's word that it landed), keep the drain's

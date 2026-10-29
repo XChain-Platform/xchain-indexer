@@ -15,6 +15,9 @@ const M = require('../merkle.js');
 const checkpointCanonical = require('../snapshot_checkpoint/canonical.js');
 const { judgeCapabilityStakeProof } = require('./proof_binding.js');
 
+const CHECKPOINT_VALIDATION_MEMO_CAP = 64;
+const checkpointValidationMemo = new Map();
+
 function held(reason){
     return { verdict: 'held', reason };
 }
@@ -55,6 +58,61 @@ function firstUseSigners(checkpoint){
         ed25519.verify(canonical, signature.sig, signature.pubkey));
     if(!valid) return null;
     return new Set(signatures.map(signature => String(signature.pubkey).toLowerCase()));
+}
+
+// Checkpoint quorum is shared by every capability row proved from that checkpoint.
+// Include the signed canonical value, the exact signature carrier, the mode, and the
+// exact pinned set including its non-index array metadata. A malformed cyclic carrier
+// simply takes the uncached path.
+function checkpointValidationKey(checkpoint, trustSet, firstUse){
+    try {
+        return JSON.stringify([
+            checkpointCanonical.snapshotCheckpointCanonical(checkpoint),
+            JSON.stringify(checkpoint.validator_signatures),
+            firstUse === true ? 'first-use' : 'pinned',
+            JSON.stringify(trustSet),
+            Array.isArray(trustSet) && trustSet.truncated === true,
+        ]);
+    } catch(e){
+        return null;
+    }
+}
+
+function rememberCheckpointValidation(key, validation){
+    if(key === null) return validation;
+    checkpointValidationMemo.set(key, validation);
+    while(checkpointValidationMemo.size > CHECKPOINT_VALIDATION_MEMO_CAP)
+        checkpointValidationMemo.delete(checkpointValidationMemo.keys().next().value);
+    return validation;
+}
+
+function checkpointValidation(checkpoint, trustSet, opts){
+    const firstUse = trustSet === null && opts && opts.firstUse === true;
+    const key = checkpointValidationKey(checkpoint, trustSet, firstUse);
+    if(key !== null && checkpointValidationMemo.has(key)){
+        const hit = checkpointValidationMemo.get(key);
+        checkpointValidationMemo.delete(key);
+        checkpointValidationMemo.set(key, hit);
+        return hit;
+    }
+
+    if(trustSet !== null){
+        let quorum = false;
+        try {
+            quorum = checkpointCanonical.snapshotCheckpointQuorum(
+                checkpoint, trustSet, ed25519.verify);
+        } catch(e){
+            quorum = false;
+        }
+        return rememberCheckpointValidation(key, { quorum, firstUseSet: null, firstUseSetKey: null });
+    }
+
+    const firstUseSet = firstUse ? firstUseSigners(checkpoint) : null;
+    return rememberCheckpointValidation(key, {
+        quorum: firstUseSet !== null,
+        firstUseSet,
+        firstUseSetKey: firstUseSet === null ? null : Array.from(firstUseSet).sort().join(','),
+    });
 }
 
 // The hub's regtest seam XDEX_SEED_LOCAL_VALIDATOR (xchain-hub
@@ -104,25 +162,27 @@ function verifyCapabilitySnapshotProof(row, response, trustSet, opts){
        !sameBlock(checkpoint.block_index, expectedBlock))
         return held('snapshot checkpoint is for another chain, network, or block');
 
-    let quorum = false;
-    let firstUseSet = null;
-    if(trustSet !== null){
+    const validation = checkpointValidation(checkpoint, trustSet, opts);
+    if(!validation.quorum) return held('snapshot checkpoint does not have a valid quorum');
+    if(validation.firstUseSetKey !== null && opts && typeof opts.noteFirstUseSet === 'function'){
         try {
-            quorum = checkpointCanonical.snapshotCheckpointQuorum(
-                checkpoint, trustSet, ed25519.verify);
+            opts.noteFirstUseSet(validation.firstUseSetKey);
         } catch(e){
-            quorum = false;
+            // Observability must not alter the proof verdict.
         }
-    } else if(opts && opts.firstUse === true){
-        firstUseSet = firstUseSigners(checkpoint);
-        quorum = firstUseSet !== null;
     }
-    if(!quorum) return held('snapshot checkpoint does not have a valid quorum');
 
     const judged = judgeCapabilityStakeProof(row, checkpoint, response.proof);
-    if(isRegtestSeededSigner(row, network, firstUseSet, judged))
+    if(isRegtestSeededSigner(row, network, validation.firstUseSet, judged))
         return { verdict: 'verified', reason: 'regtest seeded validator signed the snapshot checkpoint' };
     return judged;
 }
 
-module.exports = { verifyCapabilitySnapshotProof };
+function resetCheckpointValidationMemoForTest(){
+    checkpointValidationMemo.clear();
+}
+
+module.exports = {
+    verifyCapabilitySnapshotProof,
+    _resetCheckpointValidationMemoForTest: resetCheckpointValidationMemoForTest,
+};
