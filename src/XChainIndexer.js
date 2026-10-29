@@ -58,6 +58,28 @@ const blockCommitMethods        = require('./XChainIndexer/block_commit.js');
 const blockFaultMethods         = require('./XChainIndexer/block_faults.js');
 const chainTipMethods           = require('./XChainIndexer/readiness/chain_tip.js');
 
+// A database outage the block loop rides out in-process (rideOutDbOutage) instead of exiting:
+// the mariadb client's connection-level errnos, the server and client "connection gone"
+// codes, socket errors, and the circuit breaker's own refusals. beginTransaction rethrows
+// with the driver error stringified into a plain message, so the text is matched as well.
+const DB_OUTAGE_ERRNOS = [45001, 45009, 45012, 45013, 45019, 45026, 45028, 1040, 1053, 1927, 2002, 2003, 2006, 2013];
+const DB_OUTAGE_CODES  = ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'EHOSTUNREACH', 'EAI_AGAIN'];
+const DB_OUTAGE_TEXT   = new RegExp('\\bno: (' + DB_OUTAGE_ERRNOS.join('|') + ')\\b|pool timeout|\\b(' +
+    DB_OUTAGE_CODES.join('|') + ')\\b|server has gone away|Lost connection to|^Circuit breaker open|' +
+    'Could not connect to MariaDB after');
+// Past this much continuous outage the loop gives up and exits for the supervisor restart.
+const DB_OUTAGE_GIVE_UP_MS     = 10 * 60 * 1000;
+// Backoff ceiling, well under pollSilentMs so the heartbeat keeps stamping through an outage.
+const DB_OUTAGE_MAX_BACKOFF_MS = 30 * 1000;
+
+function isDbOutageError(error){
+    for(let e = error, depth = 0; e && depth < 4; e = e.cause, depth++){
+        if(DB_OUTAGE_ERRNOS.includes(Number(e.errno)) || DB_OUTAGE_CODES.includes(e.code)) return true;
+        if(DB_OUTAGE_TEXT.test(String(e.message || e))) return true;
+    }
+    return false;
+}
+
 class XChainIndexer {
 
     constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass, hubDbHost, hubDbPort, hubDbName, hubDbUser, hubDbPass, utxoTrackerUrl, utxoTrackerPort){
@@ -253,14 +275,44 @@ class XChainIndexer {
             if(this.stopFlag)
                 break;
 
-            // No catch here: a throw out of the pass rejects start(), api.js exits 1, and the
-            // supervisor restart resumes from the committed cursor. Block faults inside the
-            // block transaction are retried in-loop instead (processBlock / abandonBlock).
-            await this.pollDecoderOnce(indexerReorgView, REORG_RECHECK_BLOCKS);
+            // A database outage that escapes the pass is ridden out here (rideOutDbOutage);
+            // any other throw rejects start(), api.js exits 1, and the supervisor restart
+            // resumes from the committed cursor. Block faults inside the block transaction
+            // are retried in-loop as before (processBlock / abandonBlock).
+            try {
+                await this.pollDecoderOnce(indexerReorgView, REORG_RECHECK_BLOCKS);
+            } catch(error){
+                await this.rideOutDbOutage(error);
+                continue;
+            }
+            if(this.dbOutage){
+                getLogger().info('Block loop recovered from a database outage after ' + this.dbOutage.failures + ' failed passes');
+                this.dbOutage = null;
+            }
 
             // Sleep for BLOCK_CHECK_INTERVAL before checking for new transaction data
             await this.util.sleep(this.config['BLOCK_CHECK_INTERVAL']);
         }
+    }
+
+    // A pass threw. A database outage is logged and backed off, and the loop runs the next
+    // pass, which re-reads every cursor from the committed tables exactly as a restarted
+    // process would. Anything else rethrows to the fatal path, and so does an outage past
+    // DB_OUTAGE_GIVE_UP_MS or a pass that left a transaction open on indexerDb (a restart
+    // is the clean way to drop it; a concurrent dry-run there costs only that restart).
+    // this.dbOutage ({ since, failures }) exists only while an outage lasts.
+    async rideOutDbOutage(error){
+        if(!isDbOutageError(error) || (this.indexerDb && this.indexerDb.transactionConnection != null)) throw error;
+        let now = Date.now();
+        if(!this.dbOutage) this.dbOutage = { since: now, failures: 0 };
+        let giveUpMs = Number(this.config['DB_OUTAGE_GIVE_UP_MS']) || DB_OUTAGE_GIVE_UP_MS;
+        if(now - this.dbOutage.since > giveUpMs) throw error;
+        this.dbOutage.failures++;
+        let base  = Math.max(Number(this.config['BLOCK_CHECK_INTERVAL']) || 0, 500);
+        let delay = Math.min(base * Math.pow(2, this.dbOutage.failures - 1), DB_OUTAGE_MAX_BACKOFF_MS);
+        getLogger().error('Block loop pass failed on a database outage (' + this.dbOutage.failures +
+            ' in a row); retrying in ' + delay + 'ms:', error);
+        if(!this.stopFlag) await this.util.sleep(delay);
     }
 
     // Loop through blocks until indexer has parsed lastDecoderBlock. The stopFlag check
@@ -337,5 +389,6 @@ module.exports = Object.assign(XChainIndexer, {
     barrierHoldMs,
     barrierCeilingExceeded,
     isMirrorBarrierReason,
-    hubConfigCoinKey
+    hubConfigCoinKey,
+    isDbOutageError
 });
