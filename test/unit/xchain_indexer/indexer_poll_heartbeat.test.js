@@ -104,6 +104,7 @@ function makeIndexer(overrides = {}){
         stallReason:          null,
         lastBlockCommittedAt: null,
         lastPollAt:           0,
+        dbOutage:             null,
         isSynced:             () => true,
         isPollSilent:         () => false
     }, overrides);
@@ -154,6 +155,28 @@ describe('health payload carries loop liveness as its own axis', function () {
     });
 });
 
+describe('database outage state is published to health checks', function () {
+    const outage = { since: 1754870460000, failures: 3, lastErrorClass: 'ER_GET_CONNECTION_TIMEOUT' };
+
+    it('publishes since, failures and last error class in the health payload', async function () {
+        const res = await call(makeIndexer({ dbOutage: outage }));
+        assert.deepStrictEqual(res.dbOutage, outage);
+    });
+
+    it('publishes the same outage state in GET /status', function () {
+        const { statusVerdict, statusBody } = require('../../../src/api/status_route.js');
+        const indexer = makeIndexer({ dbOutage: outage });
+        const res = statusBody(XChainIndexer, indexer, {
+            indexerBlock: 200,
+            inFlightBlock: null,
+            decoderBlock: 200,
+            verdict: statusVerdict(XChainIndexer, indexer),
+            hubMirror: { configured: false }
+        });
+        assert.deepStrictEqual(res.dbOutage, outage);
+    });
+});
+
 describe('health payload carries loop liveness as its own axis', function () {
     it('does not fold loop liveness into status, which drives container restarts', async function () {
         // Deliberate: /status 503 is the xchain-node http_get healthcheck, and a single
@@ -181,9 +204,9 @@ describe('GET /status reports loop liveness for the fleet watcher, without gatin
         assert.strictEqual(res.pollSilent, true);
         assert.strictEqual(res.lastPollAt, indexer.lastPollAt);
         assert.deepStrictEqual(Object.keys(res).slice(-5), [
-            'hubMirror',
             'pollSilent',
             'lastPollAt',
+            'dbOutage',
             'hubConsensusHashMismatch',
             'hubConsensusHashMismatchDetail'
         ]);

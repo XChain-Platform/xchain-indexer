@@ -59,25 +59,48 @@ const blockFaultMethods         = require('./XChainIndexer/block_faults.js');
 const chainTipMethods           = require('./XChainIndexer/readiness/chain_tip.js');
 
 // A database outage the block loop rides out in-process (rideOutDbOutage) instead of exiting:
-// the mariadb client's connection-level errnos, the server and client "connection gone"
-// codes, socket errors, and the circuit breaker's own refusals. beginTransaction rethrows
-// with the driver error stringified into a plain message, so the text is matched as well.
+// the mariadb client's connection-level errnos, driver socket errors, and the database
+// circuit breaker's own refusals. beginTransaction stringifies the driver error into a plain
+// message, so its database-specific text forms are matched too.
 const DB_OUTAGE_ERRNOS = [45001, 45009, 45012, 45013, 45019, 45026, 45028, 1040, 1053, 1927, 2002, 2003, 2006, 2013];
 const DB_OUTAGE_CODES  = ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'EHOSTUNREACH', 'EAI_AGAIN'];
-const DB_OUTAGE_TEXT   = new RegExp('\\bno: (' + DB_OUTAGE_ERRNOS.join('|') + ')\\b|pool timeout|\\b(' +
-    DB_OUTAGE_CODES.join('|') + ')\\b|server has gone away|Lost connection to|^Circuit breaker open|' +
-    'Could not connect to MariaDB after');
+const DB_OUTAGE_TEXT   = new RegExp('\\bno: (' + DB_OUTAGE_ERRNOS.join('|') + ')\\b|pool timeout|' +
+    'server has gone away|Lost connection to|Could not connect to MariaDB after');
+const DB_BREAKER_TEXT  = /(?:^|beginTransaction error=(?:Error: )?)Circuit breaker open/;
+const DB_DENIED_TEXT   = /\bno: (1044|1045|1049|1146)\b/;
 // Past this much continuous outage the loop gives up and exits for the supervisor restart.
 const DB_OUTAGE_GIVE_UP_MS     = 10 * 60 * 1000;
 // Backoff ceiling, well under pollSilentMs so the heartbeat keeps stamping through an outage.
 const DB_OUTAGE_MAX_BACKOFF_MS = 30 * 1000;
 
 function isDbOutageError(error){
-    for(let e = error, depth = 0; e && depth < 4; e = e.cause, depth++){
-        if(DB_OUTAGE_ERRNOS.includes(Number(e.errno)) || DB_OUTAGE_CODES.includes(e.code)) return true;
-        if(DB_OUTAGE_TEXT.test(String(e.message || e))) return true;
+    const chain = [];
+    for(let e = error, depth = 0; e && depth < 8; e = e.cause, depth++) chain.push(e);
+    // Configuration, authentication and schema failures stay fatal even when a pool
+    // timeout wrapper sits above them. Waiting cannot repair any of these faults.
+    if(chain.some(e => [1044, 1045, 1049, 1146].includes(Number(e.errno)) ||
+                       DB_DENIED_TEXT.test(String(e.message || e)))) return false;
+    for(const e of chain){
+        const message = String(e.message || e);
+        if(DB_OUTAGE_ERRNOS.includes(Number(e.errno))) return true;
+        if(DB_OUTAGE_TEXT.test(message) || DB_BREAKER_TEXT.test(message)) return true;
+        // HTTP clients use the same Node socket codes. Only accept those codes when
+        // the MariaDB driver identified the error as its own SqlError.
+        if(e.name === 'SqlError' && DB_OUTAGE_CODES.includes(e.code)) return true;
     }
     return false;
+}
+
+function dbOutageErrorClass(error){
+    for(let e = error, depth = 0; e && depth < 8; e = e.cause, depth++){
+        if(e.name === 'SqlError' && e.code) return String(e.code);
+        const message = String(e.message || e);
+        const errno = message.match(/\bno: (\d+)\b/);
+        if(errno) return 'MARIADB_' + errno[1];
+        if(DB_BREAKER_TEXT.test(message)) return 'CIRCUIT_BREAKER';
+        if(message.includes('Could not connect to MariaDB after')) return 'CONNECT_RETRY_EXHAUSTED';
+    }
+    return (error && error.name) ? String(error.name) : 'Error';
 }
 
 class XChainIndexer {
@@ -275,6 +298,9 @@ class XChainIndexer {
             if(this.stopFlag)
                 break;
 
+            // Eligible for in-process outage recovery only until rollback or replay writes start.
+            this._passRestartOnFault = false;
+
             // A database outage that escapes the pass is ridden out here (rideOutDbOutage);
             // any other throw rejects start(), api.js exits 1, and the supervisor restart
             // resumes from the committed cursor. Block faults inside the block transaction
@@ -298,16 +324,18 @@ class XChainIndexer {
     // A pass threw. A database outage is logged and backed off, and the loop runs the next
     // pass, which re-reads every cursor from the committed tables exactly as a restarted
     // process would. Anything else rethrows to the fatal path, and so does an outage past
-    // DB_OUTAGE_GIVE_UP_MS or a pass that left a transaction open on indexerDb (a restart
-    // is the clean way to drop it; a concurrent dry-run there costs only that restart).
-    // this.dbOutage ({ since, failures }) exists only while an outage lasts.
+    // DB_OUTAGE_GIVE_UP_MS, a pass that began rollback/replay writes, or a pass that left
+    // a transaction open on indexerDb (a restart is the clean way to drop it; a concurrent
+    // dry-run there costs only that restart). this.dbOutage exists only while an outage lasts.
     async rideOutDbOutage(error){
-        if(!isDbOutageError(error) || (this.indexerDb && this.indexerDb.transactionConnection != null)) throw error;
+        if(this._passRestartOnFault || !isDbOutageError(error) ||
+           (this.indexerDb && this.indexerDb.transactionConnection != null)) throw error;
         let now = Date.now();
-        if(!this.dbOutage) this.dbOutage = { since: now, failures: 0 };
+        if(!this.dbOutage) this.dbOutage = { since: now, failures: 0, lastErrorClass: null };
         let giveUpMs = Number(this.config['DB_OUTAGE_GIVE_UP_MS']) || DB_OUTAGE_GIVE_UP_MS;
         if(now - this.dbOutage.since > giveUpMs) throw error;
         this.dbOutage.failures++;
+        this.dbOutage.lastErrorClass = dbOutageErrorClass(error);
         let base  = Math.max(Number(this.config['BLOCK_CHECK_INTERVAL']) || 0, 500);
         let delay = Math.min(base * Math.pow(2, this.dbOutage.failures - 1), DB_OUTAGE_MAX_BACKOFF_MS);
         getLogger().error('Block loop pass failed on a database outage (' + this.dbOutage.failures +

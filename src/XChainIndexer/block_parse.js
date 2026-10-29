@@ -70,7 +70,8 @@ module.exports = {
         // DISPENSE triggers keep their per-output fan-out. Consensus-gated on
         // FIX_OUTPUT_FANOUT; below activation a multi-output data-bearing tx aborts the
         // block loudly instead of double-executing. This runs before the block transaction
-        // opens, so the throw ends the pass and the process (runBlockLoop has no catch).
+        // opens, so a database outage can be ridden out only while the pass remains free of
+        // rollback and replay writes; every other throw ends the pass and the process.
         let fanoutFixActive = await this.protocolChanges.isEnabled('FIX_OUTPUT_FANOUT', blockToParse);
         blockTransactions = collapseOutputFanout(blockTransactions, fanoutFixActive, (m) => this.util.logError(m));
 

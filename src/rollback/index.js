@@ -175,8 +175,8 @@ class Rollback {
 
     // The atomic part of the reorg: every delete, reset and re-derive, plus the hub
     // retractions written ahead of the commit so they survive a crash. A throw anywhere
-    // inside leaves the database untouched; it ends the poll pass and the process (runBlockLoop
-    // has no catch), and the restarted indexer re-detects the reorg and retries.
+    // inside ends the poll pass and the process: runBlockLoop rides out only flag-free
+    // failures before rollback or replay writes start. The restarted indexer re-detects the reorg and retries.
     async runRollbackTransaction(block_index, scope, markets, addresses, tickers){
         this.sweepStats = [];
         // Begin a transaction; all deletes and recalculations are atomic
@@ -197,8 +197,8 @@ class Rollback {
                 getLogger().error('Reorg rollback to block ' + block_index + ' failed while unwinding after: ' +
                     ((e && e.message) || e) + '; rollback error: ' + ((rollbackErr && rollbackErr.message) || rollbackErr));
             }
-            // Clear the reorg marker on failure too so it can't stick; the next pass (after the
-            // restart this throw causes) re-detects the reorg and retries, re-arming it (#1812).
+            // Clear the reorg marker on failure too so it can't stick; the next pass after the
+            // required restart re-detects the reorg and retries, re-arming it.
             if(this.indexer) this.indexer.stallReason = null;
             throw e;
         }

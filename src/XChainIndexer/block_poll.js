@@ -169,7 +169,10 @@ module.exports = {
             // getblockhashes RPC reads.
             readWitnessBlocks: (from, to) =>
                 readReplayWitnessBlocks(indexerReorgView, this.decoderDb.apiView(), from, to),
-            recordWitnessPhase: (batch, phase) => recordReplayWitnessPhase(indexerReorgView, batch, phase),
+            recordWitnessPhase: (batch, phase) => {
+                this._passRestartOnFault = true;
+                return recordReplayWitnessPhase(indexerReorgView, batch, phase);
+            },
         };
     },
 
@@ -230,6 +233,7 @@ module.exports = {
             this.replayWitness ? this.replayWitness.phase : null)) return false;
 
         const replayed = advanceReplayMarker(this.replayMarker, 'replayed');
+        this._passRestartOnFault = true;
         await recordReplayMarker(indexerReorgView, replayed);
         this.replayMarker = replayed;
         if(this.stallReason === 'retroactive_replay'){
@@ -257,6 +261,7 @@ module.exports = {
         // The decoder writes one REORG event per orphaned block, so this is a block count, not a reorg count.
         getLogger().warn("Detected " + unprocessedReorgs.length + " orphaned block(s) from decoder reorg events; deepest at block #" + minReorgBlock);
         if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= minReorgBlock){
+            this._passRestartOnFault = true;
             await this.rollback.rollback(minReorgBlock);
             // Re-read the resume cursor: rollback() deleted every block >=
             // the reorg point, and lastIndexerBlock was read BEFORE the
@@ -275,8 +280,8 @@ module.exports = {
         // window left the cursor advanced and the rollback was never retried, stranding
         // orphaned old-chain rows below minReorgBlock (silent consensus divergence). Writing
         // strictly after the commit keeps the cursor un-advanced on failure, so the same
-        // reorg is re-detected and retried on the next pass (a throw ends the process, so that
-        // pass runs after the supervisor restart); the retry is idempotent because
+        // reorg is re-detected and retried after the supervisor restart. runBlockLoop rides out
+        // only failures from a pass that has not started rollback or replay writes. The retry is idempotent because
         // the rollback is skipped once lastIndexerBlock has dropped below minReorgBlock.
         // Oldest-first so a partial-write crash only advances the cursor as far as is durable.
         for(let reorg of unprocessedReorgs){

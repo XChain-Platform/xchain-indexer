@@ -42,6 +42,13 @@ function advanceFields(indexer, now){
         // container is the wrong answer to a slow block. /status carries it; the fleet watcher crits on it.
         pollSilent:       (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false,
         lastPollAt:       indexer.lastPollAt || null,
+        // A bounded in-process database outage. The class is a stable code, never the
+        // raw error message, so the health surface reports the fault without leaking data.
+        dbOutage:         indexer.dbOutage ? {
+                              since: indexer.dbOutage.since,
+                              failures: indexer.dbOutage.failures,
+                              lastErrorClass: indexer.dbOutage.lastErrorClass
+                          } : null,
         // NOTE degraded stays true during the healthy future-stamped-block wait as well,
         // deliberately: the monitor rules key on `degraded === false` for the wedge case, so
         // flipping it there would turn a healthy wait into a crit. waitingOnFutureBlock and

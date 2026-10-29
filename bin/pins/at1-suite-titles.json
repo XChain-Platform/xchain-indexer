@@ -3948,21 +3948,6 @@
       "per-block reads have an index on their driving predicate @regression @tier1 getMirroredStateCheckpointCandidates: state_checkpoints is indexed on (chain, network, block_index)",
       "per-block reads have an index on their driving predicate @regression @tier1 getMirroredStateCheckpointCandidatesAfterAnchor: state_checkpoints is indexed on (chain, network, snapshot_block)"
     ],
-    "3654541f666286e0": [
-      "GET /status reports loop liveness for the fleet watcher, without gating on it keeps pollSilent and lastPollAt after every older key monitors already read",
-      "GET /status reports loop liveness for the fleet watcher, without gating on it leaves the 503 inputs untouched: a silent loop alone is not wedged",
-      "GET /status reports loop liveness for the fleet watcher, without gating on it reads a booting indexer as not silent, with no stamp yet",
-      "XChainIndexer#isPollSilent() is false at the window edge and true past it",
-      "XChainIndexer#isPollSilent() is false before the loop has iterated once, so a booting indexer is never dead",
-      "XChainIndexer#isPollSilent() is false while the loop is iterating",
-      "XChainIndexer#isPollSilent() is stamped by BOTH loops, since a catch-up stays inside the inner one for hours",
-      "XChainIndexer#isPollSilent() sizes the window well above one barrier-timeout cycle",
-      "health payload carries loop liveness as its own axis does not fold loop liveness into status, which drives container restarts",
-      "health payload carries loop liveness as its own axis publishes pollSilent and the last iteration stamp",
-      "health payload carries loop liveness as its own axis reads not-silent from an indexer double that predates the accessor",
-      "health payload carries loop liveness as its own axis reports a hung loop that every other field renders as healthy",
-      "health payload carries loop liveness as its own axis reports not-silent on a quiet chain whose last commit is ancient"
-    ],
     "367a4c78df954f22": [
       "Deploy (DEPLOY) @regression @tier2 CODE_ENCODING activation gate a base64 field below the gate (read as hex) does not yield the base64-era contract",
       "Deploy (DEPLOY) @regression @tier2 CODE_ENCODING activation gate at/above the gate decodes base64 \u2192 valid, code_hash = sha256(source)",
@@ -19539,12 +19524,60 @@
       "capability proof bootstrap batch @regression @tier1 keeps every shared proof request path within the 8 KB budget",
       "capability proof bootstrap batch @regression @tier1 matches real-verifier verdict, reason, and firstUse for pinned and regtest first-use batches",
       "capability proof bootstrap batch @regression @tier1 shares proof requests across small and large row counts for one group"
+    ],
+    "a57290c9b830e1fa": [
+      "isDbOutageError names only database outages does not classify a pool timeout caused by access denied as an outage",
+      "isDbOutageError names only database outages does not classify a wrapped pool timeout whose text names access denied as an outage",
+      "isDbOutageError names only database outages does not classify hub or tracker socket failures as database outages",
+      "isDbOutageError names only database outages does not match a logic or SQL error",
+      "isDbOutageError names only database outages matches driver, socket, wrapped, cause-chained and breaker errors",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 caps the backoff so the heartbeat keeps stamping through a long outage",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: a non-database error still rejects the loop, so the fatal path is intact",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage past the give-up window rejects for the supervisor restart",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage with a transaction left open on indexerDb still rejects",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 exits the loop on stop during an outage without one more backoff sleep",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 keeps running through pool timeouts and a refused connection, then resumes",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 marks replay witness and marker appends as restart-only work",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 names the driver errno of a wrapped beginTransaction pool timeout in the outage class",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 rejects a lost database socket after a reorg rollback begins",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 rides out a lost database socket before rollback or replay writes begin",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 treats the wrapped beginTransaction form and the circuit breaker refusal as an outage"
+    ],
+    "9fd449fa1c41ad11": [
+      "GET /status reports loop liveness for the fleet watcher, without gating on it keeps pollSilent and lastPollAt after every older key monitors already read",
+      "GET /status reports loop liveness for the fleet watcher, without gating on it leaves the 503 inputs untouched: a silent loop alone is not wedged",
+      "GET /status reports loop liveness for the fleet watcher, without gating on it reads a booting indexer as not silent, with no stamp yet",
+      "XChainIndexer#isPollSilent() is false at the window edge and true past it",
+      "XChainIndexer#isPollSilent() is false before the loop has iterated once, so a booting indexer is never dead",
+      "XChainIndexer#isPollSilent() is false while the loop is iterating",
+      "XChainIndexer#isPollSilent() is stamped by BOTH loops, since a catch-up stays inside the inner one for hours",
+      "XChainIndexer#isPollSilent() sizes the window well above one barrier-timeout cycle",
+      "database outage state is published to health checks publishes since, failures and last error class in the health payload",
+      "database outage state is published to health checks publishes the same outage state in GET /status",
+      "health payload carries loop liveness as its own axis does not fold loop liveness into status, which drives container restarts",
+      "health payload carries loop liveness as its own axis publishes pollSilent and the last iteration stamp",
+      "health payload carries loop liveness as its own axis reads not-silent from an indexer double that predates the accessor",
+      "health payload carries loop liveness as its own axis reports a hung loop that every other field renders as healthy",
+      "health payload carries loop liveness as its own axis reports not-silent on a quiet chain whose last commit is ancient"
+    ],
+    "46a0fd81a76c7ce4": [
+      "the block loop rides out a database outage instead of exiting @regression @tier1 caps the backoff so the heartbeat keeps stamping through a long outage",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: a non-database error still rejects the loop, so the fatal path is intact",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage past the give-up window rejects for the supervisor restart",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage with a transaction left open on indexerDb still rejects",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 exits the loop on stop during an outage without one more backoff sleep",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 keeps running through pool timeouts and a refused connection, then resumes",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 marks replay witness and marker appends as restart-only work",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 names the driver errno of a wrapped beginTransaction pool timeout in the outage class",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 rejects a lost database socket after a reorg rollback begins",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 rides out a lost database socket before rollback or replay writes begin",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 treats the wrapped beginTransaction form and the circuit breaker refusal as an outage"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 1571,
-      "titleCount": 15138,
+      "fileCount": 1572,
+      "titleCount": 15156,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -21097,7 +21130,7 @@
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
         "test/unit/xchain_indexer/decoder_halt_gate.test.js": "bbd13f49af6aeed8",
-        "test/unit/xchain_indexer/indexer_poll_heartbeat.test.js": "3654541f666286e0",
+        "test/unit/xchain_indexer/indexer_poll_heartbeat.test.js": "9fd449fa1c41ad11",
         "test/unit/xchain_indexer/lost_block_transaction_commit.test.js": "6ed3fc9fc259ac99",
         "test/unit/xchain_indexer/mirror_admission_legacy_progress.test.js": "4ee376dc5f1c5cb0",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
@@ -21116,7 +21149,8 @@
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562"
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562",
+        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "a57290c9b830e1fa"
       }
     },
     "test:boundary": {
@@ -21495,8 +21529,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1204,
-      "titleCount": 12012,
+      "fileCount": 1205,
+      "titleCount": 12023,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22701,12 +22735,13 @@
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562"
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562",
+        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4"
       }
     },
     "test:regression:fast": {
-      "fileCount": 627,
-      "titleCount": 6450,
+      "fileCount": 628,
+      "titleCount": 6461,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -23334,12 +23369,13 @@
         "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562"
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562",
+        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4"
       }
     },
     "test:regression:full": {
-      "fileCount": 1204,
-      "titleCount": 12012,
+      "fileCount": 1205,
+      "titleCount": 12023,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24544,7 +24580,8 @@
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562"
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562",
+        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4"
       }
     },
     "test:security": {

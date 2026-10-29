@@ -27,6 +27,8 @@ const assert = require('assert');
 
 const XChainIndexer = require('../../../src/XChainIndexer.js');
 const { isDbOutageError } = XChainIndexer;
+const { buildReplayMarker, advanceReplayMarker } =
+    require('../../../src/consensus/retroactive/replay_marker.js');
 
 // The mariadb driver's pool-acquire timeout, as the rail logged it.
 function poolTimeout() {
@@ -38,7 +40,13 @@ function poolTimeout() {
 
 function connRefused() {
     const e = new Error('connect ECONNREFUSED 127.0.0.1:3306');
-    e.code = 'ECONNREFUSED'; e.errno = -61;
+    e.name = 'SqlError'; e.code = 'ECONNREFUSED'; e.errno = -61;
+    return e;
+}
+
+function lostSocket() {
+    const e = new Error('(conn:7, no: 45009, SQLState: 08S01) socket has unexpectedly been closed');
+    e.name = 'SqlError'; e.errno = 45009; e.code = 'ER_SOCKET_UNEXPECTED_CLOSE';
     return e;
 }
 
@@ -51,7 +59,10 @@ function makeLoop(outcomes, { config = {}, indexerDb } = {}) {
         config: Object.assign({ BLOCK_CHECK_INTERVAL: 1000 }, config),
         stopFlag: false,
         indexerDb: indexerDb || { transactionConnection: null, apiView() { return this; } },
-        util: { sleep: async (ms) => { calls.sleeps.push(ms); } },
+        util: {
+            isNull: value => value === null || value === undefined,
+            sleep: async (ms) => { calls.sleeps.push(ms); }
+        },
         async pollDecoderOnce() {
             const outcome = outcomes[calls.passes++];
             if (calls.passes >= outcomes.length) this.stopFlag = true;
@@ -83,11 +94,108 @@ describe('the block loop rides out a database outage instead of exiting @regress
 
     it('treats the wrapped beginTransaction form and the circuit breaker refusal as an outage', async function () {
         const wrapped = new Error('beginTransaction error=' + String(poolTimeout()));
-        const breaker = new Error('Circuit breaker open - database connections rejected until cooldown expires');
+        const breaker = new Error('beginTransaction error=Error: Circuit breaker open - database connections rejected until cooldown expires');
         const { calls, run } = makeLoop([wrapped, breaker, 'ok']);
         await run();
         assert.strictEqual(calls.passes, 3);
     });
+
+    it('names the driver errno of a wrapped beginTransaction pool timeout in the outage class', async function () {
+        const wrapped = new Error('beginTransaction error=' + String(poolTimeout()));
+        const { ix, run } = makeLoop([wrapped]);
+        await run();
+        assert.strictEqual(ix.dbOutage.lastErrorClass, 'MARIADB_45028');
+    });
+
+    it('rides out a lost database socket before rollback or replay writes begin', async function () {
+        const { calls, run } = makeLoop([lostSocket(), 'ok']);
+        await run();
+        assert.strictEqual(calls.passes, 2);
+    });
+});
+
+describe('the block loop rides out a database outage instead of exiting @regression @tier1', function () {
+    let realExit, exits;
+    beforeEach(function () {
+        exits = 0;
+        realExit = process.exit;
+        process.exit = () => { exits++; };
+    });
+    afterEach(function () { process.exit = realExit; });
+
+    it('rejects a lost database socket after a reorg rollback begins', async function () {
+        const { ix, run } = makeLoop([]);
+        let rollbackStarted = false;
+        ix.rollback = {
+            async rollback() {
+                rollbackStarted = true;
+                ix.stopFlag = true;
+                throw lostSocket();
+            }
+        };
+        ix.decoderDb = { getReorgEventWitness: async () => null };
+        ix.pollDecoderOnce = async function (view) {
+            await XChainIndexer.prototype.applyPendingReorgs.call(this, view,
+                [{ id: 9, block_index: 100 }], 101);
+        };
+
+        await assert.rejects(run(), /socket has unexpectedly been closed/);
+        assert.strictEqual(rollbackStarted, true);
+    });
+});
+
+describe('the block loop rides out a database outage instead of exiting @regression @tier1', function () {
+    let realExit, exits;
+    beforeEach(function () {
+        exits = 0;
+        realExit = process.exit;
+        process.exit = () => { exits++; };
+    });
+    afterEach(function () { process.exit = realExit; });
+
+    it('marks replay witness and marker appends as restart-only work', async function () {
+        const writeError = lostSocket();
+        const view = { doQueryStrict: async () => { throw writeError; } };
+        const ix = Object.create(XChainIndexer.prototype);
+        Object.assign(ix, {
+            decoderDb: { apiView() { return this; } },
+            replayWitnessPhase: null,
+            replayWitness: null,
+            replayMarker: advanceReplayMarker(buildReplayMarker({
+                target: 10,
+                replayTo: 20,
+                rulesFrom: 'a'.repeat(64),
+                rulesTo: 'b'.repeat(64)
+            }), 'replaying')
+        });
+        const phase = {
+            phase: 'diverged',
+            target: 10,
+            replay_to: 20,
+            rules_from: 'a'.repeat(64),
+            window_count: 1,
+            map_count: 1
+        };
+
+        await assert.rejects(ix.replayWitnessDeps(view).recordWitnessPhase('c'.repeat(64), phase),
+            /socket has unexpectedly been closed/);
+        assert.strictEqual(ix._passRestartOnFault, true);
+
+        ix._passRestartOnFault = false;
+        await assert.rejects(ix.completeRetroactiveReplay(view, 20),
+            /socket has unexpectedly been closed/);
+        assert.strictEqual(ix._passRestartOnFault, true);
+    });
+});
+
+describe('the block loop rides out a database outage instead of exiting @regression @tier1', function () {
+    let realExit, exits;
+    beforeEach(function () {
+        exits = 0;
+        realExit = process.exit;
+        process.exit = () => { exits++; };
+    });
+    afterEach(function () { process.exit = realExit; });
 
     it('caps the backoff so the heartbeat keeps stamping through a long outage', async function () {
         const outcomes = Array.from({ length: 12 }, poolTimeout).concat(['ok']);
@@ -97,10 +205,11 @@ describe('the block loop rides out a database outage instead of exiting @regress
     });
 
     it('exits the loop on stop during an outage without one more backoff sleep', async function () {
-        const { calls, run } = makeLoop([poolTimeout()]);
+        const { ix, calls, run } = makeLoop([poolTimeout()]);
         await run();
         assert.strictEqual(calls.passes, 1);
         assert.deepStrictEqual(calls.sleeps, []);
+        assert.strictEqual(ix.dbOutage.lastErrorClass, 'ER_GET_CONNECTION_TIMEOUT');
     });
 
     it('control: a non-database error still rejects the loop, so the fatal path is intact', async function () {
@@ -138,5 +247,29 @@ describe('isDbOutageError names only database outages', function () {
         dup.errno = 1062; dup.code = 'ER_DUP_ENTRY';
         assert.ok(!isDbOutageError(dup));
         assert.ok(!isDbOutageError(null));
+    });
+
+    it('does not classify hub or tracker socket failures as database outages', function () {
+        assert.strictEqual(isDbOutageError(new Error('hub HTTP ECONNREFUSED')), false);
+        const http = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8080'), {
+            code: 'ECONNREFUSED'
+        });
+        assert.strictEqual(isDbOutageError(http), false);
+    });
+
+    it('does not classify a wrapped pool timeout whose text names access denied as an outage', function () {
+        const wrapped = new Error('beginTransaction error=SqlError: (conn:-1, no: 45028, SQLState: HY000) ' +
+            'pool timeout: failed to retrieve a connection from pool after 10000ms; ' +
+            '(conn:-1, no: 1045, SQLState: 28000) Access denied for user');
+        assert.strictEqual(isDbOutageError(wrapped), false);
+    });
+
+    it('does not classify a pool timeout caused by access denied as an outage', function () {
+        const denied = Object.assign(new Error('(conn:-1, no: 1045, SQLState: 28000) Access denied'), {
+            name: 'SqlError', errno: 1045, code: 'ER_ACCESS_DENIED_ERROR'
+        });
+        const outer = poolTimeout();
+        outer.cause = denied;
+        assert.strictEqual(isDbOutageError(outer), false);
     });
 });

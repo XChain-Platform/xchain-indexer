@@ -67,6 +67,10 @@ function initChainState(indexer){
     // outer poll loop and the inner catch-up loop, since an initial sync legitimately stays
     // inside the inner one for hours. Read by isPollSilent().
     indexer.lastPollAt = 0;
+    // Current bounded database outage and the per-pass write-safety latch used by
+    // rideOutDbOutage. A rollback or replay append sets the latch for the rest of the pass.
+    indexer.dbOutage = null;
+    indexer._passRestartOnFault = false;
     // Wall-clock (epoch ms) this instance was constructed. The readiness verdict counts
     // "no commit" from here when nothing has committed since boot, so a restart cannot
     // turn a block stuck before it into one that is never judged (see readiness/verdict.js).

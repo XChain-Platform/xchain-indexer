@@ -239,6 +239,11 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         train_activation:     trainActivationReport(indexer),
         hubMirror:            hubMirror,
         ...pollHeartbeatFields(indexer),
+        dbOutage:             indexer.dbOutage ? {
+                                  since: indexer.dbOutage.since,
+                                  failures: indexer.dbOutage.failures,
+                                  lastErrorClass: indexer.dbOutage.lastErrorClass
+                              } : null,
         ...hubConsensusHashFields(indexer)
     };
 }
