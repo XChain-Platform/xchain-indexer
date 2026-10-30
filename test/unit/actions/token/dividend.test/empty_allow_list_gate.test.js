@@ -16,6 +16,8 @@ const { SOURCE, HOLDER1, HOLDER2, useDividendHarness } = require('./helpers/divi
 
 const ENV = 'XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION';
 const KEY = 'dividend_empty_allow_list_denies_activation.DIVIDEND_EMPTY_ALLOW_LIST_DENIES_ACTIVATION';
+// The BTC:testnet height the v0.27.0 cut armed; testnet probes sit just below it.
+const TESTNET_BTC_HEIGHT = gateRegistry.get(KEY)['BTC:testnet'];
 
 let indexer, actionsCtx, handler;
 const bind = (h) => { ({ indexer, actionsCtx, handler } = h); };
@@ -104,7 +106,7 @@ describe('DIVIDEND empty allow-list activation @regression @tier1', function () 
     it('stays fail-open on mainnet and testnet when the regtest lever is armed', async function () {
         process.env[ENV] = 'armed';
         const mainnet = await runEmptyAllowList('mainnet', 5000000);
-        const testnet = await runEmptyAllowList('testnet', 5000000);
+        const testnet = await runEmptyAllowList('testnet', TESTNET_BTC_HEIGHT - 1);
         assert.strictEqual(mainnet.debit, '30');
         assert.strictEqual(testnet.debit, '30');
         assert.deepStrictEqual(mainnet.credits, testnet.credits);
@@ -112,11 +114,13 @@ describe('DIVIDEND empty allow-list activation @regression @tier1', function () 
 
     it('publishes an unarmed public-network table and an opt-in regtest row', function () {
         delete process.env[ENV];
-        for(const network of ['mainnet', 'testnet', 'regtest'])
+        for(const network of ['mainnet', 'regtest'])
             assert.strictEqual(gateRegistry.activeAt(KEY, network, 'BTC', 5000000, null), false, network);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', TESTNET_BTC_HEIGHT - 1, null), false);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', TESTNET_BTC_HEIGHT, null), true);
         process.env[ENV] = 'armed';
         assert.strictEqual(gateRegistry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
         assert.strictEqual(gateRegistry.activeAt(KEY, 'mainnet', 'BTC', 5000000, null), false);
-        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 5000000, null), false);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', TESTNET_BTC_HEIGHT - 1, null), false);
     });
 });

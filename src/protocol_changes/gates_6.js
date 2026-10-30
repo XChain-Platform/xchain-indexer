@@ -197,6 +197,9 @@ addGate('archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVA
 // from genesis on regtest.
 addGate('same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 158396,
+    'LTC:testnet': 4946814,
+    'DOGE:testnet': 68033131,
     testnet: UNARMED,
     regtest: 0,
 });

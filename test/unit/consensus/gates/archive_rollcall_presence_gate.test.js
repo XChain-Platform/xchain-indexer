@@ -25,7 +25,9 @@ describe('archive_rollcall_presence_activation registry row @regression @tier1',
         assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 0, gateRegistry.UNARMED), false);
         assert.deepStrictEqual({ ...gateRegistry.get(KEY) }, {
             mainnet: null,
-            'BTC:testnet': gateRegistry.UNARMED,
+            'BTC:testnet': 158396,
+            'LTC:testnet': 4946814,
+            'DOGE:testnet': 68033131,
             testnet: gateRegistry.UNARMED,
             regtest: 0,
         });
@@ -39,8 +41,11 @@ describe('archive_rollcall_presence_activation registry row @regression @tier1',
     });
 
     it('is inactive on testnet below the sentinel until a cut arms it', function () {
-        for (const block of [0, 1, 156230, 9999999998]) {
+        for (const block of [0, 1, 156230, 158395]) {
             assert.strictEqual(activeAtSnapshot('testnet', block), false, 'testnet ' + block);
+        }
+        for (const block of [158396, 158397, 9999999998]) {
+            assert.strictEqual(activeAtSnapshot('testnet', block), true, 'testnet ' + block);
         }
     });
 
@@ -52,9 +57,9 @@ describe('archive_rollcall_presence_activation registry row @regression @tier1',
 
     it('resolves the BTC:testnet slot before the bare testnet fallback', function () {
         // A DOGE-coin read would land on the bare testnet fallback, so the coin passed must be BTC.
-        assert.strictEqual(gateRegistry.get(KEY)['DOGE:testnet'], undefined);
-        assert.strictEqual(gateRegistry.get(KEY)['BTC:testnet'], gateRegistry.UNARMED);
-        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', gateRegistry.UNARMED, null), true,
-            'the sentinel itself is the only testnet height that reads active');
+        assert.strictEqual(gateRegistry.get(KEY)['BTC:testnet'], 158396);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 158396, null), true);
+        // A DOGE-coin read lands on the DOGE:testnet slot, which sits far above any BTC height.
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'DOGE', 158396, null), false);
     });
 });

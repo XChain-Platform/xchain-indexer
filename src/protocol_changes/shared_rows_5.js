@@ -216,7 +216,7 @@ addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UN
 // or below that block) recorded absent. Read with coin BTC on every side, the DOGE indexer
 // included. Mainnet is unpinned and testnet ships on the sentinel until a cut arms it after
 // the fleet roll. Regtest is 0: with no rolled epoch the set equals oracle_publish.
-addGate('archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION', 'height', { mainnet: UNPINNED, 'BTC:testnet': UNARMED, 'LTC:testnet': UNARMED, 'DOGE:testnet': UNARMED, testnet: UNARMED, regtest: 0 });
+addGate('archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION', 'height', { mainnet: UNPINNED, 'BTC:testnet': 158396, 'LTC:testnet': 4946814, 'DOGE:testnet': 68033131, testnet: UNARMED, regtest: 0 });
 // archive_section_verdict_activation
 addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
 // attest_relay_response_deadline_activation: relay responses landing on an origin
@@ -249,7 +249,7 @@ addGate('bridge_row_fields_terminal_activation.BRIDGE_ROW_FIELDS_TERMINAL_ACTIVA
 // superseded; below it a checkpoint carrying the fields is refused. Read with coin BTC on
 // every side. Mainnet is unpinned and testnet ships on the sentinel until a cut arms it
 // after the fleet roll. Regtest is 0 so the rail drill runs it.
-addGate('checkpoint_supersede_activation.CHECKPOINT_SUPERSEDE_ACTIVATION', 'height', { mainnet: UNPINNED, 'BTC:testnet': UNARMED, 'LTC:testnet': UNARMED, 'DOGE:testnet': UNARMED, testnet: UNARMED, regtest: 0 });
+addGate('checkpoint_supersede_activation.CHECKPOINT_SUPERSEDE_ACTIVATION', 'height', { mainnet: UNPINNED, 'BTC:testnet': 158396, 'LTC:testnet': 4946814, 'DOGE:testnet': 68033131, testnet: UNARMED, regtest: 0 });
 // list_share_producer_activation: the hub snapshot plane begins producing shared-list versions.
 addGate('list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION', 'height', {
     mainnet: UNARMED,
@@ -305,7 +305,7 @@ addGate('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION', 'hei
     'DOGE:mainnet': UNPINNED,
     'DOGE:testnet': 67989993,
     'LTC:mainnet':  UNPINNED,
-    'LTC:testnet':  UNARMED,
+    'LTC:testnet':  4946814,
     regtest:        0,
 });
 // oracle_price_age_hourly_activation: gates the hourly price-snapshot age limit
