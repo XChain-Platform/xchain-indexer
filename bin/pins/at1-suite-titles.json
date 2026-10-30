@@ -19438,22 +19438,6 @@
       "capability snapshot proof database wiring: regtest seeded hub row @regression @tier1 applies the seeded row on an unpinned LTC regtest indexer",
       "capability snapshot proof database wiring: regtest seeded hub row @regression @tier1 still refuses the seeded row when another key signed the checkpoint"
     ],
-    "a3e9fb75a402218a": [
-      "capability snapshot proof hold barrier @regression @tier1 a frontier hold ends the drain and leaves the heartbeat gate open",
-      "capability snapshot proof hold barrier @regression @tier1 a held frontier retry does not reopen the bootstrap drain",
-      "capability snapshot proof hold barrier @regression @tier1 a retained bootstrap hold preserves a re-page reason the drain opened under",
-      "capability snapshot proof hold barrier @regression @tier1 applies and releases a held row when a retry can no longer judge it",
-      "capability snapshot proof hold barrier @regression @tier1 bounds the hold map, notes a full map once, and leaves overflow for a re-page",
-      "capability snapshot proof hold barrier @regression @tier1 chunks a large held-row retry by encoded request path length",
-      "capability snapshot proof hold barrier @regression @tier1 deduplicates proof fetches by snapshot block and capability during one retry pass",
-      "capability snapshot proof hold barrier @regression @tier1 encodes every proof endpoint parameter",
-      "capability snapshot proof hold barrier @regression @tier1 keeps a held row absent, blocks, then applies and releases it after proof arrives",
-      "capability snapshot proof hold barrier @regression @tier1 keeps refused rows absent and applies unknown rows without creating a hold",
-      "capability snapshot proof hold barrier @regression @tier1 keeps the barrier closed for overflow until the required re-page drains",
-      "capability snapshot proof hold barrier @regression @tier1 paces proof request starts below the indexer rate limit",
-      "capability snapshot proof hold barrier @regression @tier1 re-serves and later applies a held row after a restart with persisted local rows",
-      "capability snapshot proof hold barrier @regression @tier1 releases an existing waiter when ordinary redelivery verifies the held row"
-    ],
     "9905578f0abd08aa": [
       "capability snapshot judge skips a key the mirror already holds @regression @tier1 a retained-hold retry settles a now-mirrored key without a proof fetch",
       "capability snapshot judge skips a key the mirror already holds @regression @tier1 clears a hold without a proof fetch once the held key is mirrored",
@@ -19462,14 +19446,6 @@
       "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 judges every row a rolled-back local mirror no longer holds",
       "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 pages from id 0 over an intact mirror and proves only the row it lacks",
       "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 still holds and later applies an unmirrored frontier row re-served after the restart"
-    ],
-    "cb59b6c8ec65b562": [
-      "capability proof bootstrap batch @regression @tier1 does not let an overlapping price flush clear or restore a capability batch",
-      "capability proof bootstrap batch @regression @tier1 falls back to the row request when a shared response omits its member",
-      "capability proof bootstrap batch @regression @tier1 keeps distinct checkpoint keys separate",
-      "capability proof bootstrap batch @regression @tier1 keeps every shared proof request path within the 8 KB budget",
-      "capability proof bootstrap batch @regression @tier1 matches real-verifier verdict, reason, and firstUse for pinned and regtest first-use batches",
-      "capability proof bootstrap batch @regression @tier1 shares proof requests across small and large row counts for one group"
     ],
     "a57290c9b830e1fa": [
       "isDbOutageError names only database outages does not classify a pool timeout caused by access denied as an outage",
@@ -19566,12 +19542,47 @@
       "capability proof barrier scoped to the snapshot a block reads @regression @tier1 reads outside block processing are never policed",
       "capability proof barrier scoped to the snapshot a block reads @regression @tier1 the retry releases as soon as the held snapshot proves inside the wait",
       "disarms the held capability read check when a later barrier defers @regression @tier1"
+    ],
+    "41d8ab629c2e46fe": [
+      "capability snapshot proof hold barrier @regression @tier1 P1 applies newer checkpointed groups when the oldest group stays 404",
+      "capability snapshot proof hold barrier @regression @tier1 P2 isolates an unavailable proof frontier to its capability",
+      "capability snapshot proof hold barrier @regression @tier1 P3 falls back per row after a multi-pubkey 503",
+      "capability snapshot proof hold barrier @regression @tier1 R4 probes a provable group between permanent oldest and newest holes",
+      "capability snapshot proof hold barrier @regression @tier1 R5 retries a frontier-held multi-pubkey group one row at a time after a 503",
+      "capability snapshot proof hold barrier @regression @tier1 R6 drains every group between two permanent holes within the rotating probe bound",
+      "capability snapshot proof hold barrier @regression @tier1 a frontier hold ends the drain and leaves the heartbeat gate open",
+      "capability snapshot proof hold barrier @regression @tier1 a held frontier retry does not reopen the bootstrap drain",
+      "capability snapshot proof hold barrier @regression @tier1 a retained bootstrap hold preserves a re-page reason the drain opened under",
+      "capability snapshot proof hold barrier @regression @tier1 applies and releases a held row when a retry can no longer judge it",
+      "capability snapshot proof hold barrier @regression @tier1 bounds proof requests above a permanent frontier across thousands of rows and drains bridge transfers",
+      "capability snapshot proof hold barrier @regression @tier1 bounds the hold map, notes a full map once, and leaves overflow for a re-page",
+      "capability snapshot proof hold barrier @regression @tier1 chunks a large held-row retry by encoded request path length",
+      "capability snapshot proof hold barrier @regression @tier1 classifies only 404, 503, checkpoint-missing, proof-unavailable and indexer-behind holds as not yet available",
+      "capability snapshot proof hold barrier @regression @tier1 deduplicates proof fetches by snapshot block and capability during one retry pass",
+      "capability snapshot proof hold barrier @regression @tier1 does not treat a proof response mismatch as not yet available",
+      "capability snapshot proof hold barrier @regression @tier1 encodes every proof endpoint parameter",
+      "capability snapshot proof hold barrier @regression @tier1 keeps a held row absent, blocks, then applies and releases it after proof arrives",
+      "capability snapshot proof hold barrier @regression @tier1 keeps refused rows absent and applies unknown rows without creating a hold",
+      "capability snapshot proof hold barrier @regression @tier1 keeps the barrier closed for overflow until the required re-page drains",
+      "capability snapshot proof hold barrier @regression @tier1 paces proof request starts below the indexer rate limit",
+      "capability snapshot proof hold barrier @regression @tier1 re-serves and later applies a held row after a restart with persisted local rows",
+      "capability snapshot proof hold barrier @regression @tier1 releases an existing waiter when ordinary redelivery verifies the held row",
+      "capability snapshot proof hold barrier @regression @tier1 retries around an unavailable middle group without stranding a newer group"
+    ],
+    "6a0eea9298dc58c8": [
+      "capability proof bootstrap batch @regression @tier1 does not let an overlapping price flush clear or restore a capability batch",
+      "capability proof bootstrap batch @regression @tier1 falls back to the row request when a shared response omits its member",
+      "capability proof bootstrap batch @regression @tier1 keeps distinct checkpoint keys separate",
+      "capability proof bootstrap batch @regression @tier1 keeps every shared proof request path within the 8 KB budget",
+      "capability proof bootstrap batch @regression @tier1 matches real-verifier verdict, reason, and firstUse for pinned and regtest first-use batches",
+      "capability proof bootstrap batch @regression @tier1 scopes an unavailable frontier to its capability and installed batch members",
+      "capability proof bootstrap batch @regression @tier1 shares proof requests across small and large row counts for one group"
     ]
   },
   "scripts": {
     "test": {
       "fileCount": 1573,
-      "titleCount": 15167,
+      "titleCount": 15178,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20691,7 +20702,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_proof/retry_after.test.js": "d37decb95f3187b2",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
@@ -21144,7 +21155,7 @@
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
         "test/unit/xchain_indexer/block_loop_db_outage.test.js": "a57290c9b830e1fa"
       }
     },
@@ -21527,7 +21538,7 @@
     },
     "test:regression": {
       "fileCount": 1207,
-      "titleCount": 12035,
+      "titleCount": 12046,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22403,7 +22414,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
@@ -22734,13 +22745,13 @@
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
         "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4"
       }
     },
     "test:regression:fast": {
       "fileCount": 628,
-      "titleCount": 6472,
+      "titleCount": 6483,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -23162,7 +23173,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/buffer_and_scoping.test.js": "8fb5fef2c360a8e9",
@@ -23368,13 +23379,13 @@
         "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
         "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4"
       }
     },
     "test:regression:full": {
       "fileCount": 1207,
-      "titleCount": 12035,
+      "titleCount": 12046,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24250,7 +24261,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
-        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
+        "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
@@ -24581,7 +24592,7 @@
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "cb59b6c8ec65b562",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
         "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4"
       }
     },
