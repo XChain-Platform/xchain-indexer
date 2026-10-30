@@ -337,6 +337,10 @@ module.exports = {
     apiView(){
         if(!this._apiView){
             this._apiView = Object.create(this);
+            // Index-id access through this committed view is resolve-only: an open read that
+            // stored a ticker or address id outside block processing (before its ISSUE, during a
+            // reindex) would shift the ids blocks assign and fork the ledger.
+            this._apiView.suppressIndexIdCreation = true;
             this._apiView.doQuery = (query, args) => this.poolQuery(query, args);
             // doQueryStrict must also bypass transactionConnection. poolQuery already throws on a
             // query error (no swallow), so it satisfies the strict contract. Without this override,
