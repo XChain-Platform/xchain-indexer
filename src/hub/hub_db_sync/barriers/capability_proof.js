@@ -31,7 +31,51 @@ const CAPABILITY_PROOF_RETRY_MS = 15000;
 const CAPABILITY_PROOF_REQUEST_INTERVAL_MS = 110;
 const CAPABILITY_PROOF_PUBKEY_CAP = 256;
 const CAPABILITY_PROOF_PATH_BUDGET = 8000;
+const CAPABILITY_PROOF_MIDDLE_PROBE_GROUPS = 12;
 const CAPABILITY_PUBKEY = /^[0-9a-fA-F]{64}$/;
+const CAPABILITY_PROOF_NOT_YET_AVAILABLE = new Set([
+    'SNAPSHOT_NOT_YET_CHECKPOINTED',
+    'PROOF_UNAVAILABLE',
+    'INDEXER_BEHIND',
+]);
+
+// These transport outcomes say only that the proof source has not reached the
+// requested checkpoint yet. Proof mismatches and malformed or invalid proofs are
+// deliberately outside this class, so they keep their existing per-row handling.
+function capabilityProofUnavailableStatus(value) {
+    const status = Number(value && value.statusCode);
+    if (status === 404 || status === 503) return status;
+    const reason = String(value && value.reason !== undefined ? value.reason :
+        value && value.message !== undefined ? value.message : value || '').trim().toUpperCase();
+    const match = /^HTTP (404|503)(?:\b|$)/.exec(reason);
+    return match ? Number(match[1]) : null;
+}
+
+function capabilityProofNotYetAvailable(value) {
+    if (capabilityProofUnavailableStatus(value) !== null) return true;
+    const reason = String(value && value.reason !== undefined ? value.reason :
+        value && value.message !== undefined ? value.message : value || '').trim().toUpperCase();
+    if (CAPABILITY_PROOF_NOT_YET_AVAILABLE.has(reason)) return true;
+    return reason.startsWith('INDEXER_BEHIND_') ||
+        /^BLOCK_INDEX \d+ NOT YET INDEXED \(LATEST: \d+\)$/.test(reason);
+}
+
+function snapshotBlockAfter(value, frontier) {
+    if (frontier === null || frontier === undefined) return false;
+    const block = Number(value);
+    const boundary = Number(frontier);
+    return Number.isSafeInteger(block) && Number.isSafeInteger(boundary) && block > boundary;
+}
+
+function compareHeldRows(left, right) {
+    const leftBlock = Number(left[1] && left[1].snapshot_block);
+    const rightBlock = Number(right[1] && right[1].snapshot_block);
+    if (Number.isSafeInteger(leftBlock) && Number.isSafeInteger(rightBlock) && leftBlock !== rightBlock)
+        return leftBlock - rightBlock;
+    const capabilityOrder = String(left[1] && left[1].capability)
+        .localeCompare(String(right[1] && right[1].capability));
+    return capabilityOrder || String(left[0]).localeCompare(String(right[0]));
+}
 
 function proofGroupKey(snapshotBlock, capability) {
     return String(snapshotBlock) + '\u0000' + String(capability);
@@ -72,7 +116,7 @@ module.exports = {
     // proof response within both the request-path budget and the transport's key cap.
     // Entries are lazy so an intact local mirror still skips every proof GET after its
     // natural-key reads.
-    beginCapabilityProofBatch(table, rows) {
+    beginCapabilityProofBatch(table, rows, drain) {
         if (table !== 'capability_snapshots' || !Array.isArray(rows)) return null;
 
         const groups = new Map();
@@ -89,11 +133,28 @@ module.exports = {
         }
 
         const batch = new Map();
+        // Carry each capability's first unavailable snapshot through every flush of
+        // this table drain. Availability of one capability says nothing about another.
+        batch.unavailableSnapshotBlocks = drain &&
+            drain.capabilityProofUnavailableSnapshotBlocks instanceof Map
+            ? drain.capabilityProofUnavailableSnapshotBlocks : new Map();
+        if (drain)
+            drain.capabilityProofUnavailableSnapshotBlocks = batch.unavailableSnapshotBlocks;
         for (const group of groups.values()) {
             const pubkeys = Array.from(group.pubkeys.values());
             for (const chunk of chunkProofPubkeys(group.snapshotBlock, group.capability, pubkeys)) {
                 const entry = {
                     promise: null,
+                    pubkeyCount: chunk.length,
+                    noteUnavailable: error => {
+                        if (!capabilityProofNotYetAvailable(error)) return;
+                        const block = Number(group.snapshotBlock);
+                        const capability = String(group.capability);
+                        const previous = batch.unavailableSnapshotBlocks.get(capability);
+                        if (Number.isSafeInteger(block) &&
+                            (!Number.isSafeInteger(previous) || block < previous))
+                            batch.unavailableSnapshotBlocks.set(capability, block);
+                    },
                     fetch: () => {
                         if (entry.promise === null)
                             entry.promise = this.fetchCapabilitySnapshotProofDirect(
@@ -130,7 +191,27 @@ module.exports = {
             !Array.isArray(pubkeys) || pubkeys.length !== 1) return null;
         const entry = this._capabilityProofBatch.get(
             proofMemberKey(snapshotBlock, capability, pubkeys[0]));
-        return entry ? entry.fetch() : null;
+        // A batch frontier must never affect a retry pass, live row, or overlapping
+        // flush whose member is absent from the installed capability batch.
+        if (!entry) return null;
+        const unavailableSnapshotBlock = this._capabilityProofBatch.unavailableSnapshotBlocks
+            .get(String(capability));
+        if (snapshotBlockAfter(snapshotBlock, unavailableSnapshotBlock)) {
+            const error = new Error('capability proof not yet available beyond snapshot block ' +
+                unavailableSnapshotBlock);
+            error.statusCode = 503;
+            const held = Promise.reject(error);
+            held.capabilityProofSkipFallback = true;
+            return held;
+        }
+        const shared = entry.fetch();
+        shared.capabilityProofPubkeyCount = entry.pubkeyCount;
+        shared.capabilityProofNoteUnavailable = entry.noteUnavailable;
+        return shared;
+    },
+
+    capabilityProofNotYetAvailable(value) {
+        return capabilityProofNotYetAvailable(value);
     },
 
     capabilityProofRequestPath(snapshotBlock, capability, pubkeys) {
@@ -277,10 +358,19 @@ module.exports = {
             clearTimeout(this._capabilityProofRetryTimer);
             this._capabilityProofRetryTimer = null;
         }
-        let held = Array.from(this._capabilityProofHolds.entries());
+        let held = Array.from(this._capabilityProofHolds.entries()).sort(compareHeldRows);
+        let capabilityGroups = new Map();
         let proofPubkeys = new Map();
-        for (let [, row] of held) {
-            let group = String(row.snapshot_block) + '\u0000' + String(row.capability);
+        for (let [key, row] of held) {
+            let capability = String(row.capability);
+            let group = proofGroupKey(row.snapshot_block, capability);
+            if (!capabilityGroups.has(capability)) capabilityGroups.set(capability, new Map());
+            if (!capabilityGroups.get(capability).has(group))
+                capabilityGroups.get(capability).set(group, {
+                    snapshotBlock: row.snapshot_block,
+                    rows: [],
+                });
+            capabilityGroups.get(capability).get(group).rows.push([key, row]);
             if (!proofPubkeys.has(group)) proofPubkeys.set(group, new Set());
             proofPubkeys.get(group).add(String(row.signing_pubkey));
         }
@@ -290,7 +380,7 @@ module.exports = {
             let snapshotBlock = group.slice(0, split);
             let capability = group.slice(split + 1);
             for (let chunk of chunkProofPubkeys(snapshotBlock, capability, Array.from(pubkeys))) {
-                let entry = { promise: null };
+                let entry = { promise: null, pubkeyCount: chunk.length };
                 entry.fetch = () => {
                     if (entry.promise === null)
                         entry.promise = this.fetchCapabilitySnapshotProof(snapshotBlock, capability, chunk);
@@ -300,26 +390,105 @@ module.exports = {
                     proofFetches.set(proofMemberKey(snapshotBlock, capability, pubkey), entry);
             }
         }
-        let fetchProof = (snapshotBlock, capability, pubkeys) => {
+        let fetchProof = async (snapshotBlock, capability, pubkeys) => {
             let member = Array.isArray(pubkeys) && pubkeys.length > 0 ? pubkeys[0] : '';
             let entry = proofFetches.get(proofMemberKey(snapshotBlock, capability, member));
-            return entry ? entry.fetch() : this.fetchCapabilitySnapshotProof(snapshotBlock, capability, pubkeys);
+            if (!entry)
+                return this.fetchCapabilitySnapshotProof(snapshotBlock, capability, pubkeys);
+            try {
+                return await entry.fetch();
+            } catch (error) {
+                if (entry.pubkeyCount <= 1 || capabilityProofUnavailableStatus(error) !== 503)
+                    throw error;
+                return this.fetchCapabilitySnapshotProofDirect(snapshotBlock, capability, [member]);
+            }
         };
         try {
-            for (let [key, row] of held) {
-                let judgement = { fetchProof: fetchProof, retainHold: true };
-                let refused = await this.refuseUnprovenCapabilitySnapshot(row, judgement);
-                if (judgement.verdict === 'held') continue;
-                if (refused) {
-                    this._capabilityProofHolds.delete(key);
+            const processGroup = async group => {
+                let unavailable = false;
+                for (let [key, row] of group.rows) {
+                    if (!this._capabilityProofHolds.has(key)) continue;
+                    let judgement = { fetchProof: fetchProof, retainHold: true };
+                    let refused = await this.refuseUnprovenCapabilitySnapshot(row, judgement);
+                    if (judgement.verdict === 'held') {
+                        if (judgement.notYetAvailable) unavailable = true;
+                        continue;
+                    }
+                    if (refused) {
+                        this._capabilityProofHolds.delete(key);
+                        continue;
+                    }
+                    this._capabilityProofRetryApproved.add(key);
+                    try {
+                        await this.applyRow('capability_snapshots', row);
+                        this._capabilityProofHolds.delete(key);
+                    } finally {
+                        this._capabilityProofRetryApproved.delete(key);
+                    }
+                }
+                return unavailable;
+            };
+            if (!(this._capabilityProofProbeCursors instanceof Map))
+                this._capabilityProofProbeCursors = new Map();
+            for (let [capability, grouped] of capabilityGroups) {
+                const groups = Array.from(grouped.values()).sort((left, right) => {
+                    const leftBlock = Number(left.snapshotBlock);
+                    const rightBlock = Number(right.snapshotBlock);
+                    if (Number.isSafeInteger(leftBlock) && Number.isSafeInteger(rightBlock) &&
+                        leftBlock !== rightBlock) return leftBlock - rightBlock;
+                    return String(left.snapshotBlock).localeCompare(String(right.snapshotBlock));
+                });
+                let unavailableIndex = -1;
+                for (let index = 0; index < groups.length; index++) {
+                    if (await processGroup(groups[index])) {
+                        unavailableIndex = index;
+                        break;
+                    }
+                }
+                if (unavailableIndex < 0 || unavailableIndex === groups.length - 1) {
+                    this._capabilityProofProbeCursors.delete(capability);
                     continue;
                 }
-                this._capabilityProofRetryApproved.add(key);
-                try {
-                    await this.applyRow('capability_snapshots', row);
-                    this._capabilityProofHolds.delete(key);
-                } finally {
-                    this._capabilityProofRetryApproved.delete(key);
+
+                // A permanent hole cannot monopolize a capability. Probe its newest
+                // held group every pass; on success, walk down until another hole.
+                let newestUnavailableIndex = -1;
+                for (let index = groups.length - 1; index > unavailableIndex; index--) {
+                    if (await processGroup(groups[index])) {
+                        newestUnavailableIndex = index;
+                        break;
+                    }
+                }
+                if (newestUnavailableIndex <= unavailableIndex + 1) {
+                    this._capabilityProofProbeCursors.delete(capability);
+                    continue;
+                }
+
+                // Two permanent holes must not strand the groups between them. Keep a
+                // cursor per capability and spend a fixed request window walking upward
+                // through the middle, wrapping only after reaching the newer hole.
+                const middleStart = unavailableIndex + 1;
+                const middleCount = newestUnavailableIndex - middleStart;
+                const cursor = this._capabilityProofProbeCursors.get(capability);
+                let probeIndex = middleStart;
+                if (cursor !== undefined) {
+                    const cursorNumber = Number(cursor);
+                    const afterCursor = groups.findIndex((group, index) => {
+                        if (index < middleStart || index >= newestUnavailableIndex) return false;
+                        const block = Number(group.snapshotBlock);
+                        if (Number.isSafeInteger(block) && Number.isSafeInteger(cursorNumber))
+                            return block > cursorNumber;
+                        return String(group.snapshotBlock).localeCompare(String(cursor)) > 0;
+                    });
+                    if (afterCursor >= middleStart) probeIndex = afterCursor;
+                }
+                const probeCount = Math.min(CAPABILITY_PROOF_MIDDLE_PROBE_GROUPS, middleCount);
+                for (let probed = 0; probed < probeCount; probed++) {
+                    const group = groups[probeIndex];
+                    await processGroup(group);
+                    this._capabilityProofProbeCursors.set(capability, group.snapshotBlock);
+                    probeIndex++;
+                    if (probeIndex >= newestUnavailableIndex) probeIndex = middleStart;
                 }
             }
             await this.retryCapabilityProofOverflow();

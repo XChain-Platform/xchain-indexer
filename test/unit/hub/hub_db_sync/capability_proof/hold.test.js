@@ -60,6 +60,27 @@ function stopRetry(sync) {
     sync._capabilityProofRetryTimer = null;
 }
 
+function proofRow(id, snapshotBlock, overrides = {}) {
+    return Object.assign({}, ROW, {
+        id,
+        snapshot_block: snapshotBlock,
+        signing_pubkey: id.toString(16).padStart(64, '0'),
+        source: 'validator/' + id,
+    }, overrides);
+}
+
+function proofResponse(path) {
+    const params = new URL(path, 'http://example.invalid').searchParams;
+    const pubkeys = String(params.get('pubkeys')).split(',');
+    return { proof: { members: pubkeys.map(pubkey => ({ pubkey })) } };
+}
+
+function unavailable(statusCode) {
+    const error = new Error('HTTP ' + statusCode);
+    error.statusCode = statusCode;
+    return error;
+}
+
 describe('capability snapshot proof hold barrier @regression @tier1', function () {
     const syncs = [];
 
@@ -342,6 +363,378 @@ describe('capability snapshot proof hold barrier @regression @tier1', function (
             'the retained retry is not a new source gap');
         assert.strictEqual(sync._bootstrapDrained, true, 'the completed bootstrap stays complete');
     });
+
+    it('bounds proof requests above a permanent frontier across thousands of rows and drains bridge transfers',
+        async function () {
+        const rows = Array.from({ length: 2005 }, (_, index) => proofRow(index + 1, 700 + index));
+        const made = makeSync(async (row, options) => {
+            try {
+                await options.fetchProof(row.snapshot_block, row.capability, [row.signing_pubkey]);
+                return { verdict: 'verified' };
+            } catch (error) {
+                return { verdict: 'held', reason: error.message };
+            }
+        });
+        const { sync, inserted } = made;
+        syncs.push(sync);
+        sync.batchApplyRows = 256;
+        sinon.stub(sync, 'paceCapabilityProofRequest').resolves();
+        let proofRequests = 0;
+        sync.httpGet.callsFake(async path => {
+            if (path.includes('/hub-db/snapshot/capability_snapshots'))
+                return { schema_version: HUB_SCHEMA_VERSION, rows, watermark: 91 };
+            proofRequests++;
+            if (proofRequests > 8) return new Promise(() => {});
+            const snapshotBlock = Number(new URL(path, 'http://example.invalid').searchParams.get('snapshot_block'));
+            if (snapshotBlock >= 705) throw unavailable(503);
+            return proofResponse(path);
+        });
+        sinon.stub(sync, 'mirrorNetworkScope').resolves(null);
+        sinon.stub(sync, 'reconcileForeignCapabilitySnapshots').resolves();
+        sinon.stub(sync, 'releaseSnapshotWaiters').resolves();
+        const bootstrapTable = sync.bootstrapTable.bind(sync);
+        const drainedTables = [];
+        sinon.stub(sync, 'bootstrapTable').callsFake(async table => {
+            drainedTables.push(table);
+            return table === 'capability_snapshots' ? bootstrapTable(table) : 100;
+        });
+
+        const finished = await Promise.race([
+            sync.bootstrapAll().then(() => true),
+            new Promise(resolve => setTimeout(() => resolve(false), 1000)),
+        ]);
+
+        assert.strictEqual(finished, true, 'the capability drain must not consume the later table window');
+        assert.strictEqual(proofRequests, 6, 'five proved groups and one unavailable frontier probe');
+        assert.strictEqual(inserted.length, 5);
+        assert.strictEqual(sync._capabilityProofHolds.size, 2000);
+        assert.strictEqual(drainedTables.includes('bridge_transfers'), true);
+    });
+
+    it('retries around an unavailable middle group without stranding a newer group', async function () {
+        const made = makeSync(async (row, options) => {
+            try {
+                await options.fetchProof(row.snapshot_block, row.capability, [row.signing_pubkey]);
+                return { verdict: 'verified' };
+            } catch (error) {
+                return { verdict: 'held', reason: error.message };
+            }
+        });
+        const { sync, inserted } = made;
+        syncs.push(sync);
+        sinon.stub(sync, 'paceCapabilityProofRequest').resolves();
+        const rows = [proofRow(1, 700), proofRow(2, 701), proofRow(3, 702)];
+        for (const row of rows) sync._capabilityProofHolds.set(capabilitySnapshotKey(row), row);
+        let unavailableBlock = 701;
+        const requested = [];
+        sync.httpGet.callsFake(async path => {
+            const snapshotBlock = Number(new URL(path, 'http://example.invalid').searchParams.get('snapshot_block'));
+            requested.push(snapshotBlock);
+            if (snapshotBlock === unavailableBlock) throw unavailable(503);
+            return proofResponse(path);
+        });
+        const applies = sinon.spy(sync, 'applyRow');
+
+        await sync.retryHeldCapabilityRows();
+
+        assert.deepStrictEqual(requested, [700, 701, 702]);
+        assert.strictEqual(inserted.length, 2);
+        assert.strictEqual(sync._capabilityProofHolds.size, 1);
+        assert.deepStrictEqual(applies.getCalls().map(call => call.args[1].snapshot_block), [700, 702]);
+
+        unavailableBlock = null;
+        requested.length = 0;
+        applies.resetHistory();
+        await sync.retryHeldCapabilityRows();
+
+        assert.deepStrictEqual(requested, [701]);
+        assert.strictEqual(inserted.length, 3);
+        assert.strictEqual(sync._capabilityProofHolds.size, 0);
+        assert.deepStrictEqual(applies.getCalls().map(call => call.args[1].snapshot_block), [701]);
+    });
+
+    it('P1 applies newer checkpointed groups when the oldest group stays 404', async function () {
+        const made = makeSync(async (row, options) => {
+            try {
+                await options.fetchProof(row.snapshot_block, row.capability, [row.signing_pubkey]);
+                return { verdict: 'verified' };
+            } catch (error) {
+                return { verdict: 'held', reason: error.message };
+            }
+        });
+        const { sync, inserted } = made;
+        syncs.push(sync);
+        sinon.stub(sync, 'paceCapabilityProofRequest').resolves();
+        const rows = [proofRow(1, 700), proofRow(2, 701), proofRow(3, 45000)];
+        for (const item of rows) sync._capabilityProofHolds.set(capabilitySnapshotKey(item), item);
+        const requested = [];
+        sync.httpGet.callsFake(async path => {
+            const snapshotBlock = Number(new URL(path, 'http://example.invalid')
+                .searchParams.get('snapshot_block'));
+            requested.push(snapshotBlock);
+            if (snapshotBlock === 700) throw unavailable(404);
+            return proofResponse(path);
+        });
+
+        await sync.retryHeldCapabilityRows();
+
+        assert.deepStrictEqual(requested, [700, 45000, 701]);
+        assert.strictEqual(inserted.length, 2);
+        assert.strictEqual(sync._capabilityProofHolds.size, 1);
+        assert.strictEqual(sync._capabilityProofHolds.has(capabilitySnapshotKey(rows[0])), true);
+    });
+
+    it('P2 isolates an unavailable proof frontier to its capability', async function () {
+        const made = makeSync(async (row, options) => {
+            try {
+                await options.fetchProof(row.snapshot_block, row.capability, [row.signing_pubkey]);
+                return { verdict: 'verified' };
+            } catch (error) {
+                return { verdict: 'held', reason: error.message };
+            }
+        });
+        const { sync, inserted } = made;
+        syncs.push(sync);
+        sinon.stub(sync, 'paceCapabilityProofRequest').resolves();
+        const rows = [
+            proofRow(1, 700, { capability: 'attestation' }),
+            proofRow(2, 700, { capability: 'cross_chain' }),
+            proofRow(3, 701, { capability: 'price' }),
+        ];
+        for (const item of rows) sync._capabilityProofHolds.set(capabilitySnapshotKey(item), item);
+        const requested = [];
+        sync.httpGet.callsFake(async path => {
+            const params = new URL(path, 'http://example.invalid').searchParams;
+            requested.push(params.get('capability') + '@' + params.get('snapshot_block'));
+            if (params.get('capability') === 'attestation') throw unavailable(503);
+            return proofResponse(path);
+        });
+
+        await sync.retryHeldCapabilityRows();
+
+        assert.deepStrictEqual(requested, ['attestation@700', 'cross_chain@700', 'price@701']);
+        assert.strictEqual(inserted.length, 2);
+        assert.strictEqual(sync._capabilityProofHolds.size, 1);
+        assert.strictEqual(sync._capabilityProofHolds.has(capabilitySnapshotKey(rows[0])), true);
+    });
+
+    it('P3 falls back per row after a multi-pubkey 503', async function () {
+        const badPubkey = 'ff'.repeat(32);
+        const rows = [proofRow(1, 700), proofRow(2, 700),
+            proofRow(3, 700, { signing_pubkey: badPubkey })];
+        const made = makeSync(async (row, options) => {
+            try {
+                await options.fetchProof(row.snapshot_block, row.capability, [row.signing_pubkey]);
+                return { verdict: 'verified' };
+            } catch (error) {
+                return { verdict: 'held', reason: error.message };
+            }
+        });
+        const { sync, inserted } = made;
+        syncs.push(sync);
+        sinon.stub(sync, 'paceCapabilityProofRequest').resolves();
+        sync.httpGet.callsFake(async path => {
+            if (path.includes('/hub-db/snapshot/capability_snapshots'))
+                return { schema_version: HUB_SCHEMA_VERSION, rows, watermark: 9 };
+            const pubkeys = String(new URL(path, 'http://example.invalid')
+                .searchParams.get('pubkeys')).split(',');
+            if (pubkeys.includes(badPubkey)) throw unavailable(503);
+            return proofResponse(path);
+        });
+        sinon.stub(sync, 'mirrorNetworkScope').resolves(null);
+        sinon.stub(sync, 'reconcileForeignCapabilitySnapshots').resolves();
+        sinon.stub(sync, 'releaseSnapshotWaiters').resolves();
+        sync.batchApplyRows = 10;
+        sync._bootstrapping = true;
+
+        await sync.bootstrapTable('capability_snapshots');
+
+        const proofPaths = sync.httpGet.getCalls().map(call => call.args[0])
+            .filter(path => path.includes('capability_snapshot_proof'));
+        assert.strictEqual(proofPaths.length, 4, 'one shared request plus three row fallbacks');
+        assert.strictEqual(inserted.length, 2);
+        assert.strictEqual(sync._capabilityProofHolds.size, 1);
+        assert.strictEqual(sync._capabilityProofHolds.has(capabilitySnapshotKey(rows[2])), true);
+    });
+
+    it('R4 probes a provable group between permanent oldest and newest holes', async function () {
+        const made = makeSync(async (row, options) => {
+            try {
+                await options.fetchProof(row.snapshot_block, row.capability, [row.signing_pubkey]);
+                return { verdict: 'verified' };
+            } catch (error) {
+                return { verdict: 'held', reason: error.message };
+            }
+        });
+        const { sync, inserted } = made;
+        syncs.push(sync);
+        sinon.stub(sync, 'paceCapabilityProofRequest').resolves();
+        const rows = [proofRow(1, 700), proofRow(2, 701), proofRow(3, 702)];
+        for (const item of rows) sync._capabilityProofHolds.set(capabilitySnapshotKey(item), item);
+        const requested = [];
+        sync.httpGet.callsFake(async path => {
+            const snapshotBlock = Number(new URL(path, 'http://example.invalid')
+                .searchParams.get('snapshot_block'));
+            requested.push(snapshotBlock);
+            if (snapshotBlock === 700) throw unavailable(404);
+            if (snapshotBlock === 702) throw unavailable(503);
+            return proofResponse(path);
+        });
+
+        await sync.retryHeldCapabilityRows();
+
+        assert.deepStrictEqual(requested, [700, 702, 701]);
+        assert.strictEqual(inserted.length, 1);
+        assert.strictEqual(sync._capabilityProofHolds.size, 2);
+        assert.strictEqual(sync._capabilityProofHolds.has(capabilitySnapshotKey(rows[1])), false);
+    });
+
+    it('R5 retries a frontier-held multi-pubkey group one row at a time after a 503', async function () {
+        const badPubkey = 'ff'.repeat(32);
+        const rows = [proofRow(1, 700), proofRow(2, 701), proofRow(3, 701),
+            proofRow(4, 701, { signing_pubkey: badPubkey })];
+        const made = makeSync(async (row, options) => {
+            try {
+                await options.fetchProof(row.snapshot_block, row.capability, [row.signing_pubkey]);
+                return { verdict: 'verified' };
+            } catch (error) {
+                return { verdict: 'held', reason: error.message };
+            }
+        });
+        const { sync, inserted } = made;
+        syncs.push(sync);
+        sinon.stub(sync, 'paceCapabilityProofRequest').resolves();
+        sync.httpGet.callsFake(async path => {
+            if (path.includes('/hub-db/snapshot/capability_snapshots'))
+                return { schema_version: HUB_SCHEMA_VERSION, rows, watermark: 9 };
+            const params = new URL(path, 'http://example.invalid').searchParams;
+            const pubkeys = String(params.get('pubkeys')).split(',');
+            if (Number(params.get('snapshot_block')) === 700) throw unavailable(404);
+            if (pubkeys.includes(badPubkey)) throw unavailable(503);
+            return proofResponse(path);
+        });
+        sinon.stub(sync, 'mirrorNetworkScope').resolves(null);
+        sinon.stub(sync, 'reconcileForeignCapabilitySnapshots').resolves();
+        sinon.stub(sync, 'releaseSnapshotWaiters').resolves();
+        sync.batchApplyRows = 10;
+        sync._bootstrapping = true;
+
+        await sync.bootstrapTable('capability_snapshots');
+
+        assert.strictEqual(inserted.length, 0, 'the frontier holds every newer row untried');
+        assert.strictEqual(sync._capabilityProofHolds.size, 4);
+        const beforeRetry = sync.httpGet.callCount;
+
+        await sync.retryHeldCapabilityRows();
+
+        const retryPubkeys = sync.httpGet.getCalls().slice(beforeRetry)
+            .map(call => String(new URL(call.args[0], 'http://example.invalid')
+                .searchParams.get('pubkeys')).split(','));
+        assert.deepStrictEqual(retryPubkeys, [
+            [rows[0].signing_pubkey],
+            [rows[1].signing_pubkey, rows[2].signing_pubkey, badPubkey],
+            [rows[1].signing_pubkey],
+            [rows[2].signing_pubkey],
+            [badPubkey],
+        ]);
+        assert.strictEqual(inserted.length, 2);
+        assert.strictEqual(sync._capabilityProofHolds.size, 2);
+        assert.strictEqual(sync._capabilityProofHolds.has(capabilitySnapshotKey(rows[1])), false);
+        assert.strictEqual(sync._capabilityProofHolds.has(capabilitySnapshotKey(rows[2])), false);
+        assert.strictEqual(sync._capabilityProofHolds.has(capabilitySnapshotKey(rows[3])), true);
+    });
+
+    it('R6 drains every group between two permanent holes within the rotating probe bound',
+        async function () {
+        const middleProbeGroupsPerPass = 12;
+        const middleGroupCount = 1998;
+        const passCount = Math.ceil(middleGroupCount / middleProbeGroupsPerPass);
+        const made = makeSync(async (row, options) => {
+            try {
+                await options.fetchProof(row.snapshot_block, row.capability, [row.signing_pubkey]);
+                return { verdict: 'verified' };
+            } catch (error) {
+                return { verdict: 'held', reason: error.message };
+            }
+        });
+        const { sync, inserted } = made;
+        syncs.push(sync);
+        sinon.stub(sync, 'paceCapabilityProofRequest').resolves();
+        const rows = Array.from({ length: 2000 }, (_, index) => proofRow(index + 1, 700 + index));
+        for (const item of rows) sync._capabilityProofHolds.set(capabilitySnapshotKey(item), item);
+        sync.httpGet.callsFake(async path => {
+            const snapshotBlock = Number(new URL(path, 'http://example.invalid')
+                .searchParams.get('snapshot_block'));
+            if (snapshotBlock === 700 || snapshotBlock === 2699) throw unavailable(503);
+            return proofResponse(path);
+        });
+        const requestsPerPass = [];
+
+        for (let pass = 0; pass < passCount; pass++) {
+            const before = sync.httpGet.callCount;
+            await sync.retryHeldCapabilityRows();
+            requestsPerPass.push(sync.httpGet.callCount - before);
+        }
+
+        assert.strictEqual(passCount, 167);
+        assert.deepStrictEqual(requestsPerPass.slice(0, -1), Array(166).fill(14));
+        assert.strictEqual(requestsPerPass[requestsPerPass.length - 1], 8);
+        assert.strictEqual(inserted.length, middleGroupCount);
+        assert.strictEqual(sync._capabilityProofHolds.size, 2);
+        assert.strictEqual(sync._capabilityProofHolds.has(capabilitySnapshotKey(rows[0])), true);
+        assert.strictEqual(sync._capabilityProofHolds.has(capabilitySnapshotKey(rows[1999])), true);
+    });
+
+    it('does not treat a proof response mismatch as not yet available', async function () {
+        const made = makeSync(async (row, options) => {
+            await options.fetchProof(row.snapshot_block, row.capability, [row.signing_pubkey]);
+            if (row.snapshot_block === 700) return {
+                verdict: 'held',
+                reason: 'capability snapshot proof response is for another snapshot',
+            };
+            return { verdict: 'verified' };
+        });
+        const { sync, inserted } = made;
+        syncs.push(sync);
+        sinon.stub(sync, 'paceCapabilityProofRequest').resolves();
+        const rows = [proofRow(1, 700), proofRow(2, 701)];
+        for (const row of rows) sync._capabilityProofHolds.set(capabilitySnapshotKey(row), row);
+        const requested = [];
+        sync.httpGet.callsFake(async path => {
+            requested.push(Number(new URL(path, 'http://example.invalid').searchParams.get('snapshot_block')));
+            return proofResponse(path);
+        });
+
+        await sync.retryHeldCapabilityRows();
+
+        assert.deepStrictEqual(requested, [700, 701]);
+        assert.strictEqual(inserted.length, 1);
+        assert.strictEqual(sync._capabilityProofHolds.size, 1);
+        assert.strictEqual(sync._capabilityProofHolds.has(capabilitySnapshotKey(rows[0])), true);
+    });
+
+    it('classifies only 404, 503, checkpoint-missing, proof-unavailable and indexer-behind holds as not yet available',
+        function () {
+            const made = makeSync(async () => ({ verdict: 'verified' }));
+            const { sync } = made;
+            syncs.push(sync);
+
+            for (const value of [
+                unavailable(404),
+                unavailable(503),
+                { verdict: 'held', reason: 'SNAPSHOT_NOT_YET_CHECKPOINTED' },
+                { verdict: 'held', reason: 'PROOF_UNAVAILABLE' },
+                { verdict: 'held', reason: 'INDEXER_BEHIND_CHECKPOINT' },
+                { verdict: 'held', reason: 'block_index 700 not yet indexed (latest: 699)' },
+            ]) assert.strictEqual(sync.capabilityProofNotYetAvailable(value), true);
+
+            for (const reason of [
+                'HTTP 429',
+                'capability snapshot proof response is for another snapshot',
+                'capability stake member proof is invalid',
+                'capability stake amount does not match snapshot row',
+            ]) assert.strictEqual(sync.capabilityProofNotYetAvailable({ verdict: 'held', reason }), false);
+        });
 
     it('re-serves and later applies a held row after a restart with persisted local rows', async function () {
         let verdict = 'held';

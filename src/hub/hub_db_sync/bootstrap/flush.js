@@ -40,7 +40,7 @@ module.exports = {
         let proofBatchToken = null;
         if (typeof this.beginCapabilityProofBatch === 'function')
             proofBatchToken = this.beginCapabilityProofBatch(
-                drain.table, drain.pending.map(entry => entry.row));
+                drain.table, drain.pending.map(entry => entry.row), drain);
         try {
             // Bound-out rows still pass through applyPendingRow in wire order so all
             // served-row, predecessor and cursor accounting stays on the original path.
