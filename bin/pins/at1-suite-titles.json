@@ -19572,12 +19572,32 @@
       "the block loop rides out a database outage instead of exiting @regression @tier1 rejects a lost database socket after a reorg rollback begins",
       "the block loop rides out a database outage instead of exiting @regression @tier1 rides out a lost database socket before rollback or replay writes begin",
       "the block loop rides out a database outage instead of exiting @regression @tier1 treats the wrapped beginTransaction form and the circuit breaker refusal as an outage"
+    ],
+    "657b4a2adeffa9c8": [
+      "API read index id suppression @regression @tier1 an API lookup before a future ISSUE preserves the block ticker allocation",
+      "API read index id suppression @regression @tier1 apiView createAddress resolves a canonical caret id in the deterministic set",
+      "API read index id suppression @regression @tier1 apiView createAddress returns the id for a known deterministic name",
+      "API read index id suppression @regression @tier1 apiView createAddress returns the id for a known name with NULL block_index",
+      "API read index id suppression @regression @tier1 apiView createTicker resolves a canonical caret id in the deterministic set",
+      "API read index id suppression @regression @tier1 apiView createTicker returns the id for a known deterministic name",
+      "API read index id suppression @regression @tier1 apiView createTicker returns the id for a known name with NULL block_index",
+      "API read index id suppression @regression @tier1 getappliedpolicy leaves an unknown ticker absent from index_tickers",
+      "API read index id suppression @regression @tier1 gettokenpolicy leaves an unknown ticker absent from index_tickers",
+      "API read index id suppression @regression @tier1 gettokenpolicy stores nothing while the parent database has an open transaction",
+      "API read index id suppression @regression @tier1 the API view leaves an unknown address absent from index_addresses"
+    ],
+    "6e28e9553730f2b6": [
+      "API read before ISSUE replay determinism @regression @tier1 matches the clean ledger hash chain after gettokenpolicy reads the future ticker",
+      "disarms the held capability read check when a later barrier defers @regression @tier1"
+    ],
+    "4fdb2482a42bd589": [
+      "API read before ISSUE replay determinism @regression @tier1 matches the clean ledger hash chain after gettokenpolicy reads the future ticker"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 1572,
-      "titleCount": 15156,
+      "fileCount": 1573,
+      "titleCount": 15167,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20117,6 +20137,7 @@
         "test/unit/api/reads/price_batch_query.test.js": "7c370414380ce8a0",
         "test/unit/api/reads/reorg_history_query.test.js": "7ee0eb2668992ec0",
         "test/unit/api/rollcall_signers.test.js": "e2d750a8c13973fd",
+        "test/unit/api/rpc/api_read_index_id_suppression.test.js": "657b4a2adeffa9c8",
         "test/unit/api/rpc/api_time_memo_isolation.test.js": "0ff526efc3f322da",
         "test/unit/api/rpc/api_time_memo_rollback.test.js": "75f822b2b3557722",
         "test/unit/api/rpc/attest_batches.test.js": "eb22a475c243774f",
@@ -21285,12 +21306,13 @@
       }
     },
     "test:integration": {
-      "fileCount": 72,
-      "titleCount": 440,
+      "fileCount": 73,
+      "titleCount": 442,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
+        "test/integration/api_read_reindex_determinism.test.js": "6e28e9553730f2b6",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
         "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
         "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
@@ -21363,12 +21385,13 @@
       }
     },
     "test:integration:ci": {
-      "fileCount": 72,
-      "titleCount": 440,
+      "fileCount": 73,
+      "titleCount": 442,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
+        "test/integration/api_read_reindex_determinism.test.js": "6e28e9553730f2b6",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
         "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
         "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
@@ -21529,8 +21552,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1205,
-      "titleCount": 12023,
+      "fileCount": 1207,
+      "titleCount": 12035,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21541,6 +21564,7 @@
         "test/e2e/scenarios/05_error_handling.test.js": "10a57ea01148c597",
         "test/e2e/scenarios/06_explorer_queries.test.js": "3055467fb24885a0",
         "test/e2e/scenarios/07_schema_isolation.test.js": "0c725e55cd72645c",
+        "test/integration/api_read_reindex_determinism.test.js": "4fdb2482a42bd589",
         "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
         "test/integration/scenarios/29_contract_meta_flag_day_replay.test.js": "71cab2563defad19",
         "test/integration/scenarios/contract_unstake_rotation_reorg.test.js": "225195122cf06515",
@@ -22015,6 +22039,7 @@
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
         "test/unit/api/reads/bridge_escrow_proof_divergence.test.js": "677146c005a44b90",
         "test/unit/api/reads/bridge_escrow_proof_stream_stop.test.js": "104f4cec83f40a5f",
+        "test/unit/api/rpc/api_read_index_id_suppression.test.js": "657b4a2adeffa9c8",
         "test/unit/api/rpc/api_time_memo_isolation.test.js": "0ff526efc3f322da",
         "test/unit/api/rpc/api_time_memo_rollback.test.js": "75f822b2b3557722",
         "test/unit/api/rpc/attest_batches.test.js": "eb22a475c243774f",
@@ -22740,8 +22765,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 628,
-      "titleCount": 6461,
+      "fileCount": 629,
+      "titleCount": 6472,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22892,6 +22917,7 @@
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
         "test/unit/api/reads/bridge_escrow_proof_divergence.test.js": "677146c005a44b90",
         "test/unit/api/reads/bridge_escrow_proof_stream_stop.test.js": "104f4cec83f40a5f",
+        "test/unit/api/rpc/api_read_index_id_suppression.test.js": "657b4a2adeffa9c8",
         "test/unit/api/rpc/api_time_memo_isolation.test.js": "0ff526efc3f322da",
         "test/unit/api/rpc/api_time_memo_rollback.test.js": "75f822b2b3557722",
         "test/unit/api/rpc/attest_batches.test.js": "eb22a475c243774f",
@@ -23374,8 +23400,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1205,
-      "titleCount": 12023,
+      "fileCount": 1207,
+      "titleCount": 12035,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23386,6 +23412,7 @@
         "test/e2e/scenarios/05_error_handling.test.js": "10a57ea01148c597",
         "test/e2e/scenarios/06_explorer_queries.test.js": "3055467fb24885a0",
         "test/e2e/scenarios/07_schema_isolation.test.js": "0c725e55cd72645c",
+        "test/integration/api_read_reindex_determinism.test.js": "4fdb2482a42bd589",
         "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
         "test/integration/scenarios/29_contract_meta_flag_day_replay.test.js": "71cab2563defad19",
         "test/integration/scenarios/contract_unstake_rotation_reorg.test.js": "225195122cf06515",
@@ -23860,6 +23887,7 @@
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
         "test/unit/api/reads/bridge_escrow_proof_divergence.test.js": "677146c005a44b90",
         "test/unit/api/reads/bridge_escrow_proof_stream_stop.test.js": "104f4cec83f40a5f",
+        "test/unit/api/rpc/api_read_index_id_suppression.test.js": "657b4a2adeffa9c8",
         "test/unit/api/rpc/api_time_memo_isolation.test.js": "0ff526efc3f322da",
         "test/unit/api/rpc/api_time_memo_rollback.test.js": "75f822b2b3557722",
         "test/unit/api/rpc/attest_batches.test.js": "eb22a475c243774f",
