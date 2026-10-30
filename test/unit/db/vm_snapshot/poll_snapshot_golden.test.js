@@ -116,6 +116,8 @@ describe('poll VM snapshot golden bytes', function () {
         assert.strictEqual(calls.length, 2);
         assert.ok(calls[0].sql.includes('FROM polls p'));
         assert.ok(calls[1].sql.includes('FROM poll_results'));
+        // Pin the polls read's total order (snapshot key order must not rest on engine row order).
+        assert.match(calls[0].sql, /ORDER BY p\.action_index ASC\s*$/);
         assert.deepStrictEqual(calls[0].params, [BOUND]);
         assert.deepStrictEqual(calls[1].params, [BOUND]);
     });

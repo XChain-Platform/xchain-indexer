@@ -14,7 +14,7 @@
  *
  * XChain Indexer - Reader-side per-output fan-out collapse
  *
- * getDecoderBlockData (db.js) LEFT JOINs transaction_outputs and emits ONE row
+ * getDecoderBlockData (db/transactions/decoder_block_data.js) LEFT JOINs transaction_outputs and emits ONE row
  * per stored native-coin output, each row carrying the SAME transaction `data`.
  * The block loop (XChainIndexer.processTransaction) then runs once per row, and
  * createActionIndex dedupes on a per-row tx_vout, so a data-bearing action whose

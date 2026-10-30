@@ -91,7 +91,7 @@ module.exports = {
         // COIN_AMOUNT is TRANSACTION-level state that the batch loop preserves across
         // every sub-command, and nothing decrements it. So before this, each DISPENSE
         // sub-command re-ran against the SAME untouched payment from zero and bought a
-        // full multiplier off it: N sub-commands spent one payment N times. batch.js seeds
+        // full multiplier off it: N sub-commands spent one payment N times. seedValueLedger (batch/index.js) seeds
         // data['BATCH_VALUE_LEDGER'] (only when the flag is active, and only before its
         // baseKeys snapshot so the per-command field clear preserves it), and the tally is
         // shared with COINPAY: both consume the same transaction settlement value.
@@ -128,7 +128,7 @@ module.exports = {
         // on every iteration, and the defect replays byte for byte.
         //
         // A LOCAL object, deliberately never written to data['BATCH_VALUE_LEDGER']: that
-        // key's presence means "inside a batch" to batch.js, coinpay.js and
+        // key's presence means "inside a batch" to batch/index.js, the coinpay/ handler and
         // validateOracleFee, so fabricating one on non-batch data would tell three other
         // readers something untrue. Same field name and same semantics as the batch
         // ledger's coinAmountConsumed, so the drain below is one code path for both; the
@@ -167,7 +167,7 @@ module.exports = {
         // 8 dp holds a native-coin payment exactly and ROUNDS a token one: a SEND
         // trigger carries the sent tick's own amount, and a tick may be issued with up
         // to MAX_TOKEN_DECIMALS. The exact scale prevents that rounding. The batch pool
-        // is excluded: it counts the transaction's coin settlement value and coinpay.js
+        // is excluded: it counts the transaction's coin settlement value and the coinpay/ handler
         // formats it at 8 dp.
         let fiatPricing = this.util.isFiatPricingActive(block_index);
         let tallyScale = tallyScaleActivation.dispenseTallyScale(

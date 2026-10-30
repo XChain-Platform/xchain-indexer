@@ -58,10 +58,10 @@ class Coinpay {
 
     // The transaction output that pays `address`, or null.
     //
-    // FIRST match, deliberately: the same matcher utility.js validateNativeCoinFee and
+    // FIRST match, deliberately: the same matcher validateNativeCoinFee (utility/native_fee.js) and
     // validateOracleFee use, so a payer sizing one output per payee and the validator
     // reading it back cannot disagree about WHICH output is meant. tx_outputs arrives
-    // sorted by vout (db.js getDecoderBlockData), so "first" is the lowest-vout output
+    // sorted by vout (getDecoderBlockData in db/transactions/decoder_block_data.js), so "first" is the lowest-vout output
     // paying that address and is identical on every node.
     //
     // Consequence worth naming: an address paid by TWO outputs offers only the first as a

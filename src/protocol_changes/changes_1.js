@@ -144,12 +144,15 @@ module.exports = [
     ['XBRIDGE',            '0.2.0',0,0,0,0,0,0],
 
     ['UNIFIED_FEES',   '0.2.0',0,0,0,0,0,0],
-    // INVENTORY-ONLY, gates nothing. Nothing calls
-    // isEnabled('VM_ACTIONS'): the VM actions it nominally covered
-    // (DEPLOY/EXECUTE/DEPOSIT/WITHDRAW) are gated by their own '2.0.0' action
-    // registrations above and dispatched directly from actions.processAction.
-    // Kept declared, not deleted, because the cross-repo action-manifest prose
-    // cites it by name as the canonical example of a non-action feature gate.
+    // INVENTORY ROW: a feature-flag name, not an ACTION; no handler consumes it.
+    // The VM actions it nominally covered (DEPLOY/EXECUTE/DEPOSIT/WITHDRAW) are
+    // gated by their own '0.2.0' action registrations above and dispatched by
+    // dispatchProtocolAction in actions/actions_class/dispatch.js (reached from
+    // processAction). Its one read is generic admission in actions_class/
+    // transaction.js: below the ACTION_ADMISSION_DISPATCHED_ONLY gate a wire
+    // ACTION of 'VM_ACTIONS' is admitted because this row is defined, so deleting
+    // it changes replay there. The cross-repo action-manifest prose also cites it
+    // by name as the canonical example of a non-action feature gate.
     // Genesis-active (all-zero), so there is no enablement hazard either way;
     // do NOT wire a consumer to it without a flag-day, since flipping a
     // genesis-active gate into a real one changes replay.

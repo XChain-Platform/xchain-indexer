@@ -94,7 +94,7 @@ module.exports = {
     // (mirror far ahead of the tip) opens it immediately and replays byte-identically
     // (see the HUB_SYNC_WATERMARK_GRACE_S note in hub/hub_db_sync/watermark_config.js on
     // why barriers need no activation gate). It cannot freeze a quiet chain either:
-    // _priceTimeSyncSatisfied's second case opens on the hub's stream watermark, so
+    // priceTimeSyncSatisfied's second case opens on the hub's stream watermark, so
     // a chain with no rounds yet, or sitting in a round gap, proceeds once the hub
     // confirms it has sent everything through this instant. Only a genuinely-behind
     // mirror (hub unreachable, watermark frozen) defers, which is the intent.
@@ -104,7 +104,7 @@ module.exports = {
     // barrier alone does NOT imply time coverage, and FIAT settlement reads by
     // time, so BTC needed the time barrier as much as LTC/DOGE did.
     //
-    // Why the height check is not sufficient. `_priceSyncSatisfied`'s first case is
+    // Why the height check is not sufficient. `priceSyncSatisfied`'s first case is
     // a pure `priceSyncHeight >= blockHeight` test, where priceSyncHeight is the max
     // `reference_block` in the local mirror. A round's `reference_block` is the BTC
     // height it anchors to; its `block_timestamp` is the wall-clock instant the

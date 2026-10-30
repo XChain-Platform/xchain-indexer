@@ -21,7 +21,7 @@
  *   2. CAPABILITY-STAKING is BTC-ONLY: a v1 capability STAKE is rejected as
  *      `invalid: ACTION (BTC only)` on LTC/DOGE but not on BTC (src/actions/stake.js:85).
  *   3. FEE-PAYMENT MODE per chain: BTC falls back to xchain-balance when no native fee output
- *      is present; LTC/DOGE require the native output (src/utility.js detectFeePaymentMode).
+ *      is present; LTC/DOGE require the native output (src/utility/fees.js detectFeePaymentMode).
  *
  * Looping coins in one process is safe because config.getConfig() re-reads INDEXER_COIN each call
  * (no memoization) and address validation is chain-agnostic; see test/integration/setup/multi-chain.js.

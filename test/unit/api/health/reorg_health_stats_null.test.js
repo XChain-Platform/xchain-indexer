@@ -97,3 +97,82 @@ describe('getReorgHealthStats() null-on-failure contract', function () {
         assert.strictEqual(stats.lastReorgAt, Date.parse('2026-01-01T00:00:00Z'));
     });
 });
+
+const reorgHealthWarn = require('../../../../src/db/events/reorg_health_warn.js');
+const { getLogger }   = require('../../../../src/observability/index.js');
+
+// Stub the shared logger's warn around each case, with the rate-limit state cleared.
+function watchWarn() {
+    const watch = { warn: null };
+    beforeEach(() => {
+        reorgHealthWarn.resetReorgHealthWarnState();
+        watch.warn = sinon.stub(getLogger(), 'warn');
+    });
+    afterEach(() => {
+        sinon.restore();
+        reorgHealthWarn.resetReorgHealthWarnState();
+    });
+    return watch;
+}
+
+describe('getReorgHealthStats() logs a failed read at warn', function () {
+
+    const watch = watchWarn();
+    let warn;
+    beforeEach(() => { warn = watch.warn; });
+
+    it('warns once naming the count stage when the count read fails, and still returns null stats', async function () {
+        const db = makeDb();
+        stubReads(db, 'doQueryStrict', new Error('ER_LOCK_WAIT_TIMEOUT'), []);
+        const stats = await db.getReorgHealthStats();
+        assert.deepStrictEqual(stats, { reorgsProcessed: null, lastReorgBlock: null, lastReorgAt: null });
+        assert.strictEqual(warn.callCount, 1);
+        assert.match(warn.firstCall.args[0], /REORG count read failed/);
+        assert.match(warn.firstCall.args[0], /ER_LOCK_WAIT_TIMEOUT/);
+    });
+
+    it('warns naming the last-marker stage when only that read fails, and keeps the count', async function () {
+        const db = makeDb();
+        stubReads(db, 'doQueryStrict', [{ n: 7 }], new Error('ECONNRESET'));
+        const stats = await db.getReorgHealthStats();
+        assert.strictEqual(stats.reorgsProcessed, 7);
+        assert.strictEqual(warn.callCount, 1);
+        assert.match(warn.firstCall.args[0], /REORG last-marker read failed/);
+    });
+
+    it('logs nothing on a good read', async function () {
+        const db = makeDb();
+        stubReads(db, 'doQueryStrict', [{ n: 7 }], [{ time: '2026-01-01T00:00:00Z', data: '{"block_index":123}' }]);
+        await db.getReorgHealthStats();
+        assert.strictEqual(warn.callCount, 0);
+    });
+});
+
+describe('getReorgHealthStats() rate-limits its failed-read warn', function () {
+
+    const watch = watchWarn();
+    let warn;
+    beforeEach(() => { warn = watch.warn; });
+
+    it('suppresses repeat failures inside the interval and reports the suppressed count on the next warn', async function () {
+        const clock = sinon.useFakeTimers({ now: 1000000 });
+        const db = makeDb();
+        sinon.stub(db, 'doQueryStrict').rejects(new Error('ECONNRESET'));
+        await db.getReorgHealthStats();
+        await db.getReorgHealthStats();
+        await db.getReorgHealthStats();
+        assert.strictEqual(warn.callCount, 1);
+        clock.tick(reorgHealthWarn.WARN_INTERVAL_MS);
+        await db.getReorgHealthStats();
+        assert.strictEqual(warn.callCount, 2);
+        assert.match(warn.secondCall.args[0], /\[2 similar failures suppressed\]/);
+    });
+
+    it('rate-limits across fresh committed-view wrappers, the way the /health handler calls it', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'poolQuery').rejects(new Error('ECONNRESET'));
+        await db.apiView().getReorgHealthStats();
+        await db.apiView().getReorgHealthStats();
+        assert.strictEqual(warn.callCount, 1);
+    });
+});

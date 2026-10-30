@@ -82,8 +82,8 @@ module.exports = {
         return await this.getPushGeneration(coin);
     },
 
-    // Park a failed hub push for later retry. `payload` is the exact argument
-    // object the HubClient method expects; it is serialized to JSON. The source
+    // Write a hub push outbox row ahead of delivery, inside the caller's open transaction.
+    // `payload` is the exact argument object the HubClient method expects; it is serialized to JSON. The source
     // action_index is lifted out into its own column so a reorg can purge queued
     // pushes for orphaned actions via the rollback dataTables loop.
     //
@@ -110,15 +110,21 @@ module.exports = {
 
     // The one outbox writer. Routes through the OPEN transaction connection (doQuery, not
     // poolQuery) so the row commits atomically with the caller's transaction, and returns the new
-    // row id. Used by rollback.js to write-ahead its hub retractions inside the rollback transaction
+    // row id. Used by the block path (the PRICE and ATTEST pushes under src/actions/) and by
+    // src/rollback/commit.js to write-ahead its hub retractions inside the rollback transaction
     // (HUB-RETRACT-2): the durable row survives a crash between commit and live delivery, and the id
     // lets the caller markHubPushDelivered() on a successful immediate delivery. MUST be called with a
-    // transaction open (getConnection() then returns transactionConnection); otherwise it would land
-    // on a pooled connection and not be atomic with the rollback.
+    // transaction open (getConnection() then returns transactionConnection), and never on apiView(),
+    // whose doQuery is pooled; it throws in both cases rather than write a non-atomic row.
     //
     // `rollbackActionIndex` is the action whose rollback must un-land this push, which is
     // the payload's own action_index for every caller but the ATTEST v6 batch absorb.
     async enqueueHubPushTx(pushType, payload, rollbackActionIndex){
+        // Check the view first: it inherits transactionConnection from the instance it wraps.
+        if(this._poolOnlyView === true)
+            throw new Error('enqueueHubPushTx cannot run on the API view: its doQuery is pooled, so the outbox row would commit outside the open transaction');
+        if(this.transactionConnection == null)
+            throw new Error('enqueueHubPushTx requires an open transaction: an outbox row written outside it is not atomic with the block or rollback');
         let actionIndex = (rollbackActionIndex != null) ? rollbackActionIndex
                         : ((payload && payload.action_index != null) ? payload.action_index : 0);
         let query = `INSERT INTO pending_hub_pushes (push_type, action_index, payload, status, attempts, created_at)
@@ -138,6 +144,8 @@ module.exports = {
     // `maxBackoffMs` MUST be the same values HubPushQueue uses for isDue, or the
     // two due-ness checks drift; the caller passes its own configured values.
     // The queue keeps isDue as a cheap belt-and-braces re-check after fetch.
+    // Bound the exponent to 0..30 (durable rows retry forever, and MariaDB raises an
+    // error on DOUBLE overflow and on unsigned `attempts - 1` that would fail every fetch).
     async getPendingHubPushes(limit, backoffOpts){
         let max = Number(limit);
         if(!Number.isFinite(max) || max <= 0) max = 50;
@@ -148,7 +156,7 @@ module.exports = {
                      FROM pending_hub_pushes
                      WHERE status='pending'
                        AND (last_attempted_at IS NULL
-                            OR last_attempted_at <= DATE_SUB(NOW(), INTERVAL LEAST(? * POW(2, GREATEST(attempts - 1, 0)), ?) SECOND))
+                            OR last_attempted_at <= DATE_SUB(NOW(), INTERVAL LEAST(? * POW(2, LEAST(GREATEST(attempts, 1), 31) - 1), ?) SECOND))
                      ORDER BY id ASC
                      LIMIT ?`;
         return await this.poolQuery(query, [baseSec, maxSec, max]);

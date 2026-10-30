@@ -207,7 +207,7 @@ async function dispatchSubCommands(commands, data, error, normalize, isProbe){
         }
 
         // Probe only: clear the previous sub-command's verdict so a handler that
-        // returns without recording one (a settlement leg that skips, e.g. coinpay.js
+        // returns without recording one (a settlement leg that skips, e.g. the coinpay/ handler
         // on an unmatched payee) reports null rather than inheriting its predecessor's
         // status. STATUS is a base key, so the field clear above never touches it.
         if(isProbe) delete data['STATUS'];

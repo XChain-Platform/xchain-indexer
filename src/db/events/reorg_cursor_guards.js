@@ -26,8 +26,9 @@
 // marker recorded WITH a witness, that its live time + payload hash still match what we
 // recorded. A rebuilt decoder whose fresh id space overtook a stranded cursor returns
 // non-empty id>afterId results, so without this it would silently drop new-incarnation
-// REORG events at/below the cursor. Additive: a legacy (null-witness) marker keeps only
-// the old over-cursor guard so upgrades are unaffected.
+// REORG events at/below the cursor. The existence check runs for every non-null cursor,
+// legacy (null-witness) markers included, so a legacy cursor whose row is gone fails loud
+// here; only the time + hash match is skipped when the witness is absent or incomplete.
 async function assertCursorWitness(db, afterId, cursorWitness){
     let witnessRows = await db.doQueryStrict(
         `SELECT time, data FROM events WHERE id = ? AND code='REORG'`, [Number(afterId)]);

@@ -51,8 +51,9 @@ describe('coin-registry conformance (vendored copy) @regression', function(){
             const pin = CONSENSUS_CONFIG_PIN[net];
             if(pin === null || pin === undefined) continue; // pre-arm (mainnet)
             for(const tick of coins.ALLOWED_COINS){
-                if(!pin[tick]) continue; // freshly added chain, not yet pinned
                 it(`${tick}/${net} vendored pin matches the vendored consensusHash`, function(){
+                    // Require every coin pinned on an armed network, as the canonical hub pin test does.
+                    assert.ok(pin[tick], `${tick}/${net} has no pin on an armed network; every ALLOWED_COINS coin must be pinned`);
                     assert.strictEqual(coins.consensusHash(tick, net), String(pin[tick]).toLowerCase());
                 });
             }

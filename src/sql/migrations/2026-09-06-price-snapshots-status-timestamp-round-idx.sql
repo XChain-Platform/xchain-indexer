@@ -18,10 +18,12 @@
 -- block-hash preimage; which rows the preload admits is decided by the SQL predicate and
 -- its activation height, never by which index serves the read.
 --
--- Additive + idempotent: CREATE INDEX IF NOT EXISTS, so it is a no-op on any install
--- whose boot-time reconcileTableIndexes has already healed the index in from
--- src/sql/price_snapshots.sql, and it back-fills a DB converged by replaying the dated
--- migrations alone. The name and column list are byte-equal to the definition, which
+-- Additive + idempotent: CREATE INDEX IF NOT EXISTS, so re-running it is a no-op. This
+-- file is the ONLY path that gives an aged install the index: src/sql/price_snapshots.sql
+-- declares it as an inline KEY, and the boot-time reconcileTableIndexes re-adds only
+-- standalone CREATE INDEX ... ON declarations, never an inline KEY. Never baseline, squash
+-- or delete it as redundant: an install that never replayed it would lack the index a
+-- fresh install has. The name and column list are byte-equal to the definition, which
 -- sql-schema-index-parity asserts in both directions.
 --
 -- HOW TO RUN

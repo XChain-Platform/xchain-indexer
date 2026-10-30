@@ -56,7 +56,7 @@ module.exports = {
     // every sub-command, and nothing decrements it, so a running tally is the only
     // thing that stops each COINPAY sub-command judging the SAME untouched payment
     // from zero: without one, N COINPAYs in a batch settle N obligations out of ONE
-    // payment. batch.js seeds
+    // payment. seedValueLedger (batch/index.js) seeds
     // data['BATCH_VALUE_LEDGER'] (only when the flag is active, and only before its
     // baseKeys snapshot so the per-command field clear preserves it); this is where
     // the settlement half of that tally is read and written.
@@ -91,8 +91,8 @@ module.exports = {
 
     // Per-payee payment resolution INSIDE a batch (BATCH_ISSUANCE_LIMITS, spec row 25).
     //
-    // Outside a batch this handler is reached once per native-coin output: db.js
-    // getDecoderBlockData emits one row per stored output and output_fanout.js leaves
+    // Outside a batch this handler is reached once per native-coin output:
+    // getDecoderBlockData (db/transactions/decoder_block_data.js) emits one row per stored output and output_fanout.js leaves
     // a COINPAY transaction's rows alone, so COIN_DESTINATION/COIN_AMOUNT walk the
     // whole output set and exactly the row paying the payee settles.
     //
@@ -105,7 +105,8 @@ module.exports = {
     // The fix is NOT to fan a BATCH row out per output - that would re-execute every
     // sub-command (every ISSUE, SEND, ORDER) once per output. It is for this handler to
     // read the output set directly: getDecoderBlockData attaches the FULL, vout-sorted
-    // tx_outputs of the transaction to EVERY emitted row (db.js, `outputsByTx`), so the
+    // tx_outputs of the transaction to EVERY emitted row (`outputsByTx`, built by
+    // collectOutputsByTx in db/transactions/decoder_block_data.js), so the
     // surviving row already carries every payee's output; only the consumer was missing.
     //
     // Gated by the ledger's presence, which is this spec's flag AND the in-a-batch
@@ -134,16 +135,16 @@ module.exports = {
     // and coin-paid DISPENSE both spent the surviving row's COIN_DESTINATION output and
     // nothing else was reachable. Once an obligation can resolve its OWN output, a
     // scalar is wrong in exactly the way a scalar oracle-fee tally would have been
-    // wrong (utility.js validateOracleFee, which keys by oracle address for this same
-    // reason): seller A's settlement would eat the output that pays seller B, and two
+    // wrong (validateOracleFee in utility/price_age/oracle_fee.js, which keys by oracle
+    // address for this same reason): seller A's settlement would eat the output that pays seller B, and two
     // sellers each paid in full would settle only once.
     //
     // So the model is per-ADDRESS, with the existing scalar kept as the cell for one
     // address - the row's own COIN_DESTINATION. That address's arithmetic is then
     // untouched (paidAmount IS data['COIN_AMOUNT'], the tally IS coinAmountConsumed),
     // which preserves the single-address behavior byte for byte and keeps the pool that
-    // actions/dispense.js shares through the same key. Every OTHER payee gets its own
-    // cell in coinPayeeConsumed, created lazily here rather than seeded in batch.js,
+    // the dispense/ handler shares through the same key. Every OTHER payee gets its own
+    // cell in coinPayeeConsumed, created lazily here rather than seeded in seedValueLedger,
     // and one payee's exhausted output can never invalidate a sibling paid separately.
     async measurePool(data, obligationInfo, pool){
         let { batchLedger, ledger, payee, payeeOutput } = pool;
@@ -194,7 +195,7 @@ module.exports = {
     //
     // The draw lands in the cell for the address that was actually paid: the shared
     // scalar for the row's own COIN_DESTINATION (unchanged, and still visible to
-    // actions/dispense.js), or this payee's own cell otherwise.
+    // the dispense/ handler), or this payee's own cell otherwise.
     drawFromPool(pool, obligationInfo, status){
         let { data, ledger, payee, settledOutput, payeeTally, consumed } = pool;
         if(status == 'valid')

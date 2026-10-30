@@ -154,8 +154,9 @@ async function validateFreeKey(data){
     // or deactivated but still inside cooldown still hold it.
     //
     // Below the gate the legacy predicate runs byte for byte: blockIndex=null,
-    // which in db.js drops the whole activation/deactivation clause and so refuses
-    // any pubkey with a valid stakes row EVER. That null is also why the armed
+    // which (the null-blockIndex branch of stakeModeFilter in
+    // src/db/stakes/active_stake.js) drops the whole activation/deactivation
+    // clause and so refuses any pubkey with a valid stakes row EVER. That null is also why the armed
     // branch cannot simply pass the real block to the same mode: the legacy
     // predicate's activation filter would hide a freshly-staked, not-yet-activated
     // row, so the armed branch selects its own query mode instead

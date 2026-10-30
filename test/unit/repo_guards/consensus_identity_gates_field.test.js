@@ -39,7 +39,8 @@ function run(args) {
     let stdoutFd;
     try {
         stdoutFd = fs.openSync(stdoutPath, 'w');
-        // The CLI calls process.exit after logging, so pipe-backed stdout can lose its tail on a loaded host.
+        // Capture stdout in a file, not a pipe: the CLI sets process.exitCode and lets stdout drain,
+        // and a file still holds every line if a later edit made it exit hard after logging.
         const result = spawnSync(process.execPath, [BIN, ...args], {
             cwd: REPO,
             encoding: 'utf8',

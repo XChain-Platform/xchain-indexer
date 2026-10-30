@@ -30,9 +30,9 @@ const gateRegistry = require('../../../consensus/gate_registry.js');
 const ARCHIVE_ORPHAN_GEOMETRY_GATE =
     'archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION';
 
-// A batch CRC as the publisher formats it and anchor.js stores it: 8 lowercase
-// hex digits (anchor.js normalizes BATCH_CRC32 with .toLowerCase() and rejects
-// anything else at parse time, so the stored column is always this shape).
+// A batch CRC as the publisher formats it and the ANCHOR parser stores it: 8 lowercase
+// hex digits (validate.js readHeadFields lowercases BATCH_CRC32 and validateHeadShape
+// rejects anything else at parse time, so the stored column is always this shape).
 const ARCHIVE_CRC_RE = /^[0-9a-f]{8}$/;
 
 // Before a head's geometry is available, preserve the earliest row for each

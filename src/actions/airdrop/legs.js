@@ -82,6 +82,8 @@ module.exports = {
             if(format==3 && idx>0 && idx%4==1 && idx < lastIdx)
                 airdrops.push([params[idx], params[idx+1], params[idx+2], params[idx+3]]);
         }
+        // Return no legs for an unknown FORMAT or short params, so parse() records no airdrops row or
+        // STATUS (a placeholder leg like SEND's changes replay output and needs its own activation gate).
         return airdrops;
     },
 

@@ -28,6 +28,9 @@ const reorgHistoryQuery = require('../../api/reorg_history_query');
 // The fail-loud cursor checks getReorgsSince runs before and after its REORG read.
 const cursorGuards = require('./reorg_cursor_guards.js');
 
+// The rate-limited warn getReorgHealthStats logs when a REORG-marker read fails.
+const reorgHealthWarn = require('./reorg_health_warn.js');
+
 const { getLogger } = require('../../observability/index.js');
 
 // Reason reported for a clear row that lifts nothing (same text as the decoder's reader).
@@ -56,8 +59,8 @@ module.exports = {
     },
 
     // `cursorWitness` (optional #2735): { time, hash } captured for the cursor's decoder REORG
-    // event when the marker was recorded. Non-null enables the additive under-cursor check;
-    // null (legacy marker) falls back to the pre-existing one-directional over-cursor guard.
+    // event when the marker was recorded. Any non-null afterId gets the cursor-row existence
+    // check (and the over-cursor guard on an empty read); a witness adds the time/hash match.
     async getReorgsSince(afterId, cursorWitness){
         let query, args;
         if(afterId === null || afterId === undefined){
@@ -193,9 +196,9 @@ module.exports = {
 
     // #2735: read back the stored witness ({ time, hash }) for the CURRENT reorg cursor - the
     // newest new-format marker, the same one getLastProcessedReorgId returns an id for. Returns
-    // null when that marker predates the witness columns (legacy), so getReorgsSince falls back
-    // to the one-directional over-cursor guard. Runs on the indexer marker DB (doQueryStrict
-    // symmetry with getLastProcessedReorgId).
+    // null when that marker predates the witness columns (legacy), so getReorgsSince skips
+    // only the time/hash match and keeps its other cursor checks. Runs on the indexer
+    // marker DB (doQueryStrict symmetry with getLastProcessedReorgId).
     async getLastProcessedReorgWitness(){
         let results = await this.doQueryStrict(
             `SELECT data, witness_time, witness_hash FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 200`);
@@ -278,10 +281,12 @@ module.exports = {
     // dashboard reads null as "not read this tick" and a 0 as a real count to rebaseline on.
     async getReorgHealthStats(){
         let stats = { reorgsProcessed: null, lastReorgBlock: null, lastReorgAt: null };
+        let stage = 'count';
         try {
             let countRows = await this.doQueryStrict("SELECT COUNT(*) AS n FROM events WHERE code='REORG'");
             if(countRows.length > 0 && countRows[0].n != null)
                 stats.reorgsProcessed = Number(countRows[0].n);
+            stage = 'last-marker';
             let lastRows = await this.doQueryStrict("SELECT time, data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1");
             if(lastRows.length > 0){
                 let ms = new Date(lastRows[0].time).getTime();
@@ -293,7 +298,9 @@ module.exports = {
                 } catch(e){ /* legacy/plain payload: leave lastReorgBlock null */ }
             }
         } catch(e){
-            // DB unreachable / events table absent; return the null-safe defaults.
+            // DB unreachable / events table absent; return the null-safe defaults, and
+            // log the failure at warn, rate-limited, so a blind meter leaves a trace.
+            reorgHealthWarn.warnReorgHealthReadFailed(stage, e);
         }
         return stats;
     },

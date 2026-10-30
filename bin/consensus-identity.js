@@ -114,7 +114,12 @@
  *   node bin/consensus-identity.js --compare <pin>    compare the selected pin
  *                                                     block, or a flat file
  *                                                     --out wrote, field by
- *                                                     field; a pin block or
+ *                                                     field, a field either
+ *                                                     side lacks being a
+ *                                                     MISMATCH; a pin block
+ *                                                     missing network or a
+ *                                                     cross-repo value, or a
+ *                                                     pin block or
  *                                                     flat reading taken under
  *                                                     another regtest arming
  *                                                     environment is refused
@@ -154,6 +159,20 @@ function projectGates(gates) {
 }
 
 /**
+ * The absent-gate sentinel of the rules module, refused when missing, as the hub twin does.
+ * @param {{ABSENT: string}} rulesModule the digest module
+ * @returns {string}
+ */
+function absentSentinel(rulesModule) {
+    const sentinel = rulesModule.ABSENT;
+    // A missing export would filter on undefined, which no projected gate reads, so --assert-no-absent would pass silently.
+    if (typeof sentinel !== 'string' || sentinel === '') {
+        throw new Error('src/consensus_rules_digest.js exports no ABSENT sentinel, so absent gates cannot be named');
+    }
+    return sentinel;
+}
+
+/**
  * The five numbers that come from the source tree alone, with the shape fields
  * that make a mismatch diagnosable beside them.
  * @returns {{network: string, coin_registry_consensus_hash: string, coin_registry_consensus_hashes: object,
@@ -166,7 +185,10 @@ function projectGates(gates) {
 function codeIdentity(network) {
     const coins = require('../src/coins/index.js');
     const { computeArmedMapFingerprintV2, UNREADABLE } = require('../src/consensus/armed_map/fingerprint.js');
-    const { computeConsensusRulesDigest, knownGateKeys, ABSENT } = require('../src/consensus_rules_digest.js');
+    const rulesModule = require('../src/consensus_rules_digest.js');
+    const { computeConsensusRulesDigest, knownGateKeys } = rulesModule;
+    // Read before any gate is filtered, so a missing sentinel refuses (exit 2) before output.
+    const ABSENT = absentSentinel(rulesModule);
     const logicPin = require('./lib/carrier_logic_pin.js');
 
     const hashes = coins.consensusHashes(network);
@@ -279,6 +301,9 @@ function armingRefusal(where, moved) {
         + 'take both readings under the same environment');
 }
 
+// The network and the three cross-repo values, which a pin block must hold as strings to be compared at all.
+const REQUIRED_BLOCK_FIELDS = ['network', 'consensus_rules_digest', 'gates_field_hash', 'carrier_logic_digest'];
+
 // The block of a two-block pin whose whole arming env equals this run's (a block with no env was taken bare).
 function venueBlock(pin, pinPath, nowEnv) {
     const blockEnv = (name) => (isPlainObject(pin[name]) && isPlainObject(pin[name].env) ? pin[name].env : {});
@@ -287,6 +312,9 @@ function venueBlock(pin, pinPath, nowEnv) {
     const match = candidates.find((candidate) => candidate.moved.length === 0);
     if (match) {
         if (!isPlainObject(pin[match.name])) throw new CliUsageError(`${pinPath}: the pin has no ${match.name} block`);
+        // Verify the block carries the string fields every reading has, so an empty or half-written block is refused.
+        const missing = REQUIRED_BLOCK_FIELDS.filter((field) => typeof pin[match.name][field] !== 'string');
+        if (missing.length) throw new CliUsageError(`${pinPath}: its ${match.name} block has no ${missing.join(', ')}`);
         return pin[match.name];
     }
     // Name the differences against the nearer block, the one the operator most likely meant.
@@ -324,18 +352,30 @@ function sameValue(before, after) {
     return before === after;
 }
 
+/**
+ * One row per field of the pin block or the fresh reading, so a field either side lacks is a mismatch.
+ * @param {object} pinBlock the selected pin block or flat reading
+ * @param {object} fresh this run's codeIdentity()
+ * @returns {Array<{field: string, before: *, after: *, same: boolean}>}
+ */
 function compareIdentity(pinBlock, fresh) {
     const results = [];
-    for (const field of Object.keys(pinBlock)) {
+    // The pin's fields in its own order, then the fields only the fresh reading carries.
+    const fields = Object.keys(pinBlock)
+        .concat(Object.keys(fresh).filter((field) => !Object.prototype.hasOwnProperty.call(pinBlock, field)));
+    for (const field of fields) {
         // Skip the venue env and the tip, which --compare never reads (it opens no database).
         if (field === 'env' || field === 'tip') continue;
         const before = pinBlock[field];
         const after = fresh[field];
-        if (isPlainObject(before)) {
-            const keys = Array.from(new Set(Object.keys(before).concat(Object.keys(after || {})))).sort();
+        // Expand an object field key by key, reading a side that lacks the field as an empty map.
+        const pinMap = isPlainObject(before) ? before : (before === undefined ? {} : null);
+        const freshMap = isPlainObject(after) ? after : (after === undefined ? {} : null);
+        const keys = pinMap && freshMap ? Array.from(new Set(Object.keys(pinMap).concat(Object.keys(freshMap)))).sort() : [];
+        if (keys.length) {
             for (const key of keys) {
-                results.push({ field: field + '.' + key, before: before[key], after: (after || {})[key],
-                    same: sameValue(before[key], (after || {})[key]) });
+                results.push({ field: field + '.' + key, before: pinMap[key], after: freshMap[key],
+                    same: sameValue(pinMap[key], freshMap[key]) });
             }
         } else {
             results.push({ field, before, after, same: sameValue(before, after) });
@@ -550,6 +590,7 @@ if (require.main === module) {
 
 module.exports = {
     codeIdentity,
+    absentSentinel,
     parseArgs,
     readStateHash,
     compareIdentity,

@@ -179,9 +179,11 @@ function installFanOutWeights(){
 //    well above the measured one. Every execution IS hard-capped, identically on every
 //    node, by the consensus constant CONSENSUS_MAX_WALL_MS (xchain-vm
 //    src/consensus-wall-clock.js, 30000 ms), but that cap is an upper bound and NOT this
-//    weight's grounding: 30 comes from the measured cost ratios above, and a worst-case
-//    metered EXECUTE burns the gas ceiling in ~750 ms, so 30 s is ~40x the measured
-//    worst case. Any future widening of VM metering coverage moves this number's
+//    weight's grounding: 30 comes from the measured cost ratios above. On mainnet as armed
+//    today the cap's headroom is small: String trimLeft/trimRight and Number.parseInt/
+//    parseFloat burn the gas ceiling in about 15-29 s while their string-receiver meter is
+//    unarmed there, about 1-2x under 30 s, against ~750 ms (about 40x) for every other
+//    metered shape measured. Any future widening of VM metering coverage moves this number's
 //    grounding, so it must be re-derived from a fresh measurement, never inherited
 //    and never derived from the 30 s cap.
 //

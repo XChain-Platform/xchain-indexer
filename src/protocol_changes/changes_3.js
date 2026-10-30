@@ -181,7 +181,7 @@ module.exports = [
     ['UNSTAKE_COOLDOWN_COMPLETION_ACTION', '0.2.0',1786060800,0,0,0,0,0],
 
     // FIX_OUTPUT_FANOUT: collapse the reader-side per-output fan-out for data-bearing,
-    // non-COINPAY transactions. getDecoderBlockData (db.js) LEFT JOINs transaction_outputs
+    // non-COINPAY transactions. getDecoderBlockData (db/transactions/decoder_block_data.js) LEFT JOINs transaction_outputs
     // and emits ONE row per stored native-coin output, each carrying the same tx `data`;
     // the block loop runs processTransaction once per row and createActionIndex dedupes on
     // a per-row tx_vout, so a data-bearing action (e.g. SEND) whose transaction ALSO pays a

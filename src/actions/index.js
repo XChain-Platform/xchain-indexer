@@ -85,8 +85,8 @@ const PROBE_VM_REACHING_ACTIONS = new Set(['ATTEST', 'VOTE', 'XCALL']);
 // Settlement and lifecycle legs that stage NO protocol fee: the fee was already charged when
 // the originating ORDER/SWAP/DISPENSER was created, so there is nothing for feequote to price.
 // They also can't be dry-run through the synthetic-tx harness: COINPAY/DISPENSE only settle
-// against a native-coin output paying a specific payee/dispenser (coinpay.js/dispense.js
-// early-exit "skip" when it's absent), and the *_MATCH/*_EXPIRE/*_CLOSE/CROSS_SETTLE/XCALL
+// against a native-coin output paying a specific payee/dispenser (the coinpay/ and dispense/
+// handlers early-exit "skip" when it's absent), and the *_MATCH/*_EXPIRE/*_CLOSE/CROSS_SETTLE/XCALL
 // actions are system-synthesized during block processing, never wallet-broadcast (XCALL is
 // VM-emitted/synthetic-only, like CROSS_SETTLE). Quoting any of them would fall through to a
 // misleading `dry-run produced no status`; instead answer honestly with a zero-fee, feeExempt
@@ -152,8 +152,8 @@ function classifyFeeQuoteAction(action){
 // denylist" (which re-opens exactly the unauthenticated VM-compute-under-mutex the denylist
 // exists to close) with a per-sub-command refusal. It is checked TWICE on purpose - once as a
 // wire-string pre-scan before the mutex is ever taken (batchProbeForbiddenSubAction) and once
-// inside batch.js's dispatch loop against the exact name being dispatched. The second is the
-// load-bearing one: it reads the variable passed to processAction, after alias rewrite and
+// inside the batch dispatch loop (batch/index.js dispatchSubCommands) against the exact name
+// being dispatched. The second is the load-bearing one: it reads the variable passed to processAction, after alias rewrite and
 // case folding, so no spelling can route around it.
 function isBatchProbeForbiddenSubAction(action){
     let a = String(action == null ? '' : action).trim().toUpperCase();
@@ -333,7 +333,7 @@ class Actions {
 
     }
 
-    // The BATCH probe-path sub-action refusal, reached by batch.js through the loader instance it
+    // The BATCH probe-path sub-action refusal, reached by batch/index.js through the loader instance it
     // is constructed with, so that action never requires this loader (a load-time cycle) and the
     // policy stays defined once, beside the dispatch tables it reads.
     isBatchProbeForbiddenSubAction(action){
@@ -375,9 +375,9 @@ Object.assign(Actions, {
     getFeeQuoteExempt:      () => new Set(FEE_QUOTE_EXEMPT),
     getFeeQuoteStatic:      () => new Set(FEE_QUOTE_STATIC),
     // The BATCH probe-path sub-action refusal, exported for the conformance test that binds the policy
-    // to the dispatch table and for test contexts that stand in for this loader. batch.js itself reaches
+    // to the dispatch table and for test contexts that stand in for this loader. batch/index.js itself reaches
     // it through the Actions instance method above, never by requiring this module (actions/index.js
-    // requires batch.js, so a load-time require would resolve to an empty exports object).
+    // loads batch/index.js through handler_wiring.js, so a load-time require would resolve to an empty exports object).
     isBatchProbeForbiddenSubAction: isBatchProbeForbiddenSubAction,
     getProbeVmReachingActions:      () => new Set(PROBE_VM_REACHING_ACTIONS),
     // Pure consensus-runtime gate, exported so its fail-closed contract is unit-testable

@@ -76,7 +76,8 @@ module.exports = {
                FROM polls p
                LEFT JOIN index_tickers t ON (t.id = p.tick_id)
               WHERE p.poll_status IN ('finalized','failed_quorum')
-                AND p.resolved_block IS NOT NULL AND p.resolved_block < ?`,
+                AND p.resolved_block IS NOT NULL AND p.resolved_block < ?
+              ORDER BY p.action_index ASC`,
             [bound]);
         if(rows.length === 0)
             return { polls: polls };
@@ -86,10 +87,10 @@ module.exports = {
         // The predicate is character-for-character the poll query's, so the grouped
         // rows are exactly the union of what the per-poll reads returned; polls
         // (action_index) is UNIQUE, so the join cannot duplicate an option row.
-        // The snapshot is consensus-visible, so the entries below are still built
-        // from the POLLS rows in their existing order: a finalized poll with no
-        // poll_results rows must keep yielding `options: []`, and key insertion
-        // order must not shift.
+        // The snapshot is consensus-visible, so the entries below are built from the
+        // POLLS rows: a finalized poll with no poll_results rows must keep yielding
+        // `options: []`. Key insertion order comes from the polls read's ORDER BY on
+        // the UNIQUE action_index, never from the engine's row order.
         let optionRows = await this.doQuery(
             `SELECT pr.poll_index, pr.option_index, pr.total_weight, pr.voter_count
                FROM poll_results pr

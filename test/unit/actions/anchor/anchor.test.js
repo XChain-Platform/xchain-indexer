@@ -85,6 +85,24 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.ok(String(data['STATUS']).startsWith('invalid: PUBLISHER format'));
         assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
     });
+
+    // The counterpart of the v1 count-0 case below: only the archive head accepts a
+    // degraded tail, so a count-0 bundle must stay invalid rather than anchor.
+    it('v0 bundle with ATTEST_SIG_COUNT 0 is INVALID (count 0 is legal on the v1 head only)', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
+        await handler.parse(v0Params({ attest: [] }), data, null);
+        assert.strictEqual(data['STATUS'], 'invalid: ATTEST_SIG_COUNT');
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+    });
+
+    it('the shared v0/v3 bundle tail parser rejects ATTEST_SIG_COUNT 0 and accepts 1', function () {
+        let validate = require('../../../../src/actions/anchor/validate.js');
+        let degraded = validate.parseBundleTail([PUBKEY_A, '0'], {}, 0, null);
+        assert.strictEqual(degraded.error, 'invalid: ATTEST_SIG_COUNT');
+        let attested = validate.parseBundleTail([PUBKEY_A, '1', PUBKEY_A, SIG], {}, 0, null);
+        assert.strictEqual(attested.error, null);
+        assert.strictEqual(attested.publisherSigs.length, 1);
+    });
 });
 
 describe('Anchor (ANCHOR) @regression @tier3', function () {

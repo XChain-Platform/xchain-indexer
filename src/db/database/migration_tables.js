@@ -82,17 +82,16 @@ const MIGRATION_PRECONDITIONS = {
         }
     },
     // Adds validator_rewards.derive_block_index (+ its index) and
-    // anchor_reward_reconcile_log.reward_derive_block_index. It is mode=manual, but
-    // unlike the surrogate-key case alterTableForDrift documents as its BLIND SPOT
-    // (AUTO_INCREMENT / PRIMARY KEY), the drift reconciler CAN converge every object
+    // anchor_reward_reconcile_log.reward_derive_block_index. It is mode=auto (its checksum
+    // history is in MIGRATION_CHECKSUM_REBASELINES), and unlike the surrogate-key case
+    // alterTableForDrift documents as its BLIND SPOT (AUTO_INCREMENT / PRIMARY KEY), the drift reconciler CAN converge every object
     // it adds: both columns are nullable-with-DEFAULT in
     // src/sql/validator_rewards.sql and src/sql/anchor_reward_reconcile_log.sql (so
     // alterTableForDrift ADDs them rather than hitting the NOT-NULL-no-DEFAULT skip),
     // and the index is non-unique (so reconcileTableIndexes adds it unconditionally).
     // verifyTables() runs before runMigrations() at startup, so on a fresh or aged
     // install the end state is already in place by the time this file is read. The
-    // ledger row records what is true there; without it the file sits PENDING with no
-    // row forever and every operator run re-lists a no-op.
+    // ledger row records what is true there without running a statement.
     //
     // ONE bind parameter: migrationPreconditionSkip passes [this.dbName] and nothing
     // else, so the database name is bound once in a CTE and reused by each subquery.

@@ -121,7 +121,11 @@ const HEIGHT_MIRROR_TABLES = ['remote_token_snapshots'];
 // Hub federation state tables. state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
 // never retracted. A reorged height is superseded by a new row with a higher
-// checkpoint_seq. Not on any settlement-critical path (no block-loop barrier).
+// checkpoint_seq. No watermark barrier gates it, but it IS read inside the block loop:
+// the bridge checkpoint selector (consensus/bridge_proof_client/checkpoint_source.js)
+// takes candidates from here beside the locally parsed anchors, and a block with no
+// qualifying checkpoint from either source defers under the bridge proof wait, which
+// clears when a checkpoint arrives rather than on a watermark.
 // anchor_reward_attestations carries the hub's XANCPUB publisher-attestation
 // quorum per attested reward tuple; the BTC indexer derives the COLLECT-spendable
 // anchor/archive reward from it (mirror is transport, not trust: it re-verifies the
@@ -142,12 +146,17 @@ const HEIGHT_MIRROR_TABLES = ['remote_token_snapshots'];
 // its content key; its local id is only a local surrogate.
 //
 // bridge_transfers, policy_snapshots and list_snapshots are deliberately NOT here either,
-// even though policy_snapshots is otherwise shaped like state_checkpoints. Membership of
-// THIS list means
-// one thing operationally: the table rides the global streamWatermark instead of a per-table
-// watermark (see mirrorStatus), which is only correct for tables no block-loop barrier gates
-// on. Each gates one: waitForBridgeSync and waitForPolicySync cache their own
-// MAX(effective_time), while waitForListShareSync uses the per-chain height watermark.
+// even though policy_snapshots is otherwise shaped like state_checkpoints. Operationally,
+// membership of THIS list puts the table in every bootstrap drain and makes mirrorStatus
+// report it under the global streamWatermark rather than a value of its own. That entry is
+// a summary, not each member's gate: state_checkpoints has no watermark barrier (above), and
+// the barriers in barriers/attest.js key on the larger of the stream watermark and the
+// table's own drain certificate, and in the admission era on the per-chain height watermark
+// (beside that clock for anchor_reward_attestations, in place of it for attestation_responses).
+// A table stays off this list when its barrier keeps a status value the global watermark
+// would hide: bridge_transfers and policy_snapshots report their own cached
+// MAX(effective_time) (bridgeSyncTimestamp, policySyncTimestamp), and list_snapshots, gated
+// by the per-chain height watermark (waitForListShareSync), has no honest seconds value.
 const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
 
 // The tables whose hub rows change under an id the mirror has already paged past, or

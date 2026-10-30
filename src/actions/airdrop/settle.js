@@ -93,6 +93,7 @@ module.exports = {
 
             // Handle any transaction FEE according the users's ADDRESS preferences
             [ctx.credits, ctx.debits] = await this.util.processTransactionFees(this.indexerDb, ctx.credits, ctx.debits, ctx.fees);
+            this.addAirdropXchainFee(ctx);
 
             // Loop through recipient addresses
             for(let address of recipients){
@@ -105,9 +106,32 @@ module.exports = {
         }
     },
 
+    // Sum a valid leg's XCHAIN-balance fee and gas (the native tally sums its own legs). Bookkeeping
+    // only: each leg's debit is already staged from ctx.fees, which this never changes.
+    addAirdropXchainFee(ctx){
+        let fees = ctx.fees;
+        if(ctx.nativeFeeTally || fees['PAYMENT_MODE'] !== 2 || !this.util.bcgt(fees['AMOUNT'], 0)) return;
+        let total = ctx.xchainFeeTotal || (ctx.xchainFeeTotal = { amount: '0', gasCost: '0', legs: 0 });
+        total.amount = this.util.bcadd(total.amount, fees['AMOUNT'], 8);
+        total.gasCost = this.util.bcadd(total.gasCost, fees['GAS_COST'] || 0, 0);
+        total.legs += 1;
+    },
+
+    // Rewrite the action's one fees row with the summed fee once two or more legs paid from the
+    // XCHAIN balance, since each leg's own write keyed on action_index overwrites the one before
+    async recordAirdropXchainFeeTotal(ctx){
+        let total = ctx.xchainFeeTotal;
+        if(!total || total.legs < 2) return;
+        await this.indexerDb.createFeeRecord(Object.assign({}, ctx.fees, {
+            AMOUNT: total.amount, GAS_COST: total.gasCost, XCHAIN_AMOUNT: total.amount
+        }));
+    },
+
     // Close the action once every leg has settled: apply the staged ledger rows, refresh the
     // touched balances and supplies, and write the mappings
     async finishAirdrop(data, ctx){
+        await this.recordAirdropXchainFeeTotal(ctx);
+
         // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, ctx.credits, ctx.debits);
 

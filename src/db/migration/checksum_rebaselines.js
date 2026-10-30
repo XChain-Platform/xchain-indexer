@@ -299,6 +299,24 @@ const MIGRATION_CHECKSUM_REBASELINES = {
         ],
         to:   '2afcca361a652ddd0107531ef433bc63359847d176a6862b531de7719dd25f71',
     },
+    // Corrected FALSE notes in three price_snapshots index migrations. Each said it was a
+    // no-op wherever the boot-time reconcileTableIndexes had already healed the index in,
+    // but all three keys are inline KEYs in price_snapshots.sql and the reconciler re-adds
+    // only standalone CREATE INDEX, so each file is the SOLE index path for an aged install.
+    // Comment lines only: the executable residue is byte-identical. Each file has one
+    // committed revision, the hash the residue pin holds, so one `from` covers every DB.
+    '2026-09-06-price-snapshots-status-timestamp-round-idx.sql': {
+        from: '90e04f0765f02fd658196fe42a5fc7c040988a081a7caf3263871937fb310a92', // 9f56f226e, as authored
+        to:   '6a39106529a21288da8c509c014eb01af9efbd1aad69829031dc2eac610b0e7f',
+    },
+    '2026-09-11-price-snapshots-batch-block-time.sql': {
+        from: '30b35165a97bcdf1e7977724165183402f23f859203f7a51b97b117faf8c167e', // 62c8d7c78, as authored
+        to:   '5d70b25f7ff6ccaa7d281ff0a858786397b7f6d8dba5fc4bf38dd22dd0f09eb1',
+    },
+    '2026-10-14-price-snapshots-refchain-block-idx.sql': {
+        from: '4f0c81c084e065acbed9fe205d95b392cc9e63d900308bcb3c4afabae67db9e1', // f932710c7, as authored
+        to:   '552bb9a0eae9aec557cddf9156b1a40daed8897cba6f90e8721c50803371547f',
+    },
 };
 
 module.exports = { MIGRATION_CHECKSUM_REBASELINES };
