@@ -322,7 +322,12 @@ module.exports = {
                 (e && e.message ? e.message : e));
             return false;
         }
-        if (options) options.verdict = verdict && verdict.verdict;
+        if (options) {
+            options.verdict = verdict && verdict.verdict;
+            options.reason = verdict && verdict.reason;
+            options.notYetAvailable = typeof this.capabilityProofNotYetAvailable === 'function' &&
+                this.capabilityProofNotYetAvailable(verdict);
+        }
         if (verdict && verdict.verdict === 'held') {
             let repageBeforeHold = this.repageOwedSeq('capability_snapshots');
             this.holdCapabilitySnapshot(row);
@@ -358,10 +363,27 @@ module.exports = {
                 const response = await shared;
                 if (proofHasPubkeys(response, pubkeys)) return response;
             } catch (error) {
+                const status = Number(error && error.statusCode);
+                const message = String(error && error.message || error || '');
+                const missingCheckpoint = status === 404 || /^HTTP 404(?:\b|$)/i.test(message);
+                const singlePubkeyChunk = Number(shared.capabilityProofPubkeyCount) === 1;
+                if (missingCheckpoint || singlePubkeyChunk || shared.capabilityProofSkipFallback) {
+                    if (typeof shared.capabilityProofNoteUnavailable === 'function')
+                        shared.capabilityProofNoteUnavailable(error);
+                    throw error;
+                }
                 // The row-specific request below preserves the original failure verdict.
             }
         }
-        return this.fetchCapabilitySnapshotProofDirect(snapshotBlock, capability, pubkeys);
+        try {
+            return await this.fetchCapabilitySnapshotProofDirect(snapshotBlock, capability, pubkeys);
+        } catch (error) {
+            // A multi-pubkey 503 is not a frontier until this member's own request
+            // also says its proof is unavailable.
+            if (shared && typeof shared.capabilityProofNoteUnavailable === 'function')
+                shared.capabilityProofNoteUnavailable(error);
+            throw error;
+        }
     },
 
     async fetchCapabilitySnapshotProofDirect(snapshotBlock, capability, pubkeys) {

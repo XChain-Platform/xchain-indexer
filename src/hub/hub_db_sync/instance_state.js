@@ -333,6 +333,7 @@ function initChainIdentityState(sync) {
     sync._capabilityProofRetryTimer    = null;
     sync._capabilityProofRetrying      = false;
     sync._capabilityProofRetryApproved = new Set();
+    sync._capabilityProofProbeCursors  = new Map();
     sync._capabilityProofHoldCapNoted  = false;
     sync._capabilityProofOverflow      = false;
 

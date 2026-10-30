@@ -198,6 +198,40 @@ describe('capability proof bootstrap batch @regression @tier1', function () {
         assert.strictEqual(shared.httpGet.callCount, 3);
     });
 
+    it('scopes an unavailable frontier to its capability and installed batch members', async function () {
+        const shared = subject();
+        const rows = [row(1), row(2, { snapshot_block: BLOCK + 1 }),
+            row(3, { snapshot_block: BLOCK + 1, capability: 'cross_chain' })];
+        const requested = [];
+        shared.httpGet.callsFake(async path => {
+            const params = new URL(path, 'http://example.invalid').searchParams;
+            const request = params.get('capability') + '@' + params.get('snapshot_block');
+            requested.push(request);
+            if (request === CAPABILITY + '@' + BLOCK) {
+                const error = new Error('HTTP 503');
+                error.statusCode = 503;
+                throw error;
+            }
+            return responseFor(String(params.get('pubkeys')).split(','));
+        });
+        const drain = {};
+        shared.beginCapabilityProofBatch('capability_snapshots', rows, drain);
+
+        await assert.rejects(shared.fetchCapabilitySnapshotProof(
+            rows[0].snapshot_block, rows[0].capability, [rows[0].signing_pubkey]), /HTTP 503/);
+        await assert.rejects(shared.fetchCapabilitySnapshotProof(
+            rows[1].snapshot_block, rows[1].capability, [rows[1].signing_pubkey]), /beyond snapshot block/);
+        await shared.fetchCapabilitySnapshotProof(
+            rows[2].snapshot_block, rows[2].capability, [rows[2].signing_pubkey]);
+        await shared.fetchCapabilitySnapshotProof(
+            BLOCK + 2, CAPABILITY, [pubkey(4)]);
+
+        assert.deepStrictEqual(requested,
+            [CAPABILITY + '@' + BLOCK, 'cross_chain@' + (BLOCK + 1), CAPABILITY + '@' + (BLOCK + 2)]);
+        assert.strictEqual(drain.capabilityProofUnavailableSnapshotBlocks.get(CAPABILITY), BLOCK);
+        assert.strictEqual(drain.capabilityProofUnavailableSnapshotBlocks.has('cross_chain'), false);
+    });
+
     it('keeps every shared proof request path within the 8 KB budget', async function () {
         const shared = subject();
         const rows = Array.from({ length: 256 }, (_, index) => row(index + 1));
