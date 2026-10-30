@@ -22,8 +22,10 @@ const sinon = require('sinon');
 const HubDbSync = require('../../../../../src/hub/hub_db_sync.js');
 const mirrorBarriers = require('../../../../../src/XChainIndexer/mirror_barriers.js');
 const blockCommit = require('../../../../../src/XChainIndexer/block_commit.js');
+const Rollback = require('../../../../../src/rollback/index.js');
 const connections = require('../../../../../src/db/database/connections.js');
 const capabilities = require('../../../../../src/db/capabilities/index.js');
+const activeStake = require('../../../../../src/db/stakes/active_stake.js');
 const { txEpochStore } = require('../../../../../src/db/shared.js');
 const { rethrowIfInfraFault } = require('../../../../../src/consensus/fault_guard.js');
 const {
@@ -194,3 +196,101 @@ describe('capability proof barrier scoped to the snapshot a block reads @regress
     it('reads outside block processing are never policed', offBlockReadsUnpoliced);
     it('committing the held block clears its recorded read and the skip flag', commitClearsHeldRead);
 });
+
+it('disarms the held capability read check when a later barrier defers @regression @tier1',
+    async function(){
+        const heldSnapshot = [{ pubkey: 'aa11', amount: '25.00000000' }];
+        const heldAt = 40;
+        const requestAt = heldAt + 6;
+        let mirrorReads = 0;
+        let queryLog = [];
+        const hubDbSync = new HubDbSync(
+            { doQuery: async () => [] },
+            { hubUrl: 'http://hub.test', network: 'mainnet' }
+        );
+        hubDbSync.holdCapabilitySnapshot({
+            capability: 'attestation',
+            snapshot_block: heldAt,
+            signing_pubkey: 'aa11',
+            amount: '25.00000000',
+            source: 'validator/aa11'
+        });
+        if(hubDbSync._capabilityProofRetryTimer !== null)
+            clearTimeout(hubDbSync._capabilityProofRetryTimer);
+        hubDbSync._capabilityProofRetryTimer = null;
+        hubDbSync.waitForSnapshotSync = async () => true;
+        hubDbSync.waitForMatchSync = async () => { throw new Error('later barrier'); };
+        const indexer = Object.assign({
+            hubDbSync,
+            priceSyncTimeoutMs: 1,
+            capabilityProofBarrierBlock: null,
+            capabilityProofBarrierSkipped: false,
+            capabilityProofHeldRead: null,
+            config: { COIN: 'BTC', NETWORK: 'mainnet' },
+            decoderDb: {},
+            util: {
+                resetLists() {},
+                sleep: async () => {}
+            },
+            mirrorAdmissionActiveAt: () => false,
+            barrierClearsAt: () => null
+        }, mirrorBarriers);
+        const db = Object.assign({
+            indexer,
+            config: { COIN: 'LTC', NETWORK: 'mainnet', VALIDATOR_QUERY_LIMIT: 1000 },
+            _txEpoch: 1,
+            transactionConnection: null,
+            util: { throwError(error) { throw error; } },
+            beginTransaction: async () => {},
+            currentTxEpoch: () => 1,
+            rollbackTransaction: async () => {},
+            getStatusId: async () => 1,
+            mirrorDb: () => ({
+                doQueryStrict: async () => {
+                    mirrorReads++;
+                    return heldSnapshot;
+                }
+            }),
+            doQuery: async (sql) => {
+                queryLog.push(sql);
+                if(sql.includes('FROM attest_validator_stats'))
+                    return [{ validator_pubkey: 'aa11', provider_id: 'http_get' }];
+                if(sql.includes('FROM attests ar'))
+                    return [{
+                        request_id: '11'.repeat(32),
+                        provider_id: 'http_get',
+                        redundancy: 1,
+                        block_index: requestAt,
+                        deadline_block: requestAt,
+                        responsible_set_json: null
+                    }];
+                return [];
+            }
+        }, connections, capabilities, activeStake);
+        indexer.indexerDb = db;
+
+        assert.strictEqual(typeof connections.assertCapabilityProofNotHeld, 'function');
+        assert.strictEqual(typeof indexer.deferOnHeldCapabilityRead, 'function');
+        assert.strictEqual(await indexer.deferOnSnapshotSync(98582, 1700000000), false);
+        assert.strictEqual(indexer.capabilityProofBarrierSkipped, true);
+        assert.strictEqual(await indexer.deferOnMatchSync(98583, 1700000001), true);
+
+        const rollback = new Rollback(indexer);
+        for(const step of ['reverseCooldownMaturities', 'restoreInPlaceFlips',
+            'purgeOrphanedTables', 'refreshDerivedProjections', 'commitAndInvalidateCaches']){
+            rollback[step] = async () => {};
+        }
+        rollback.stageHubRetractions = async () => ({
+            retractionGeneration: null, stagedRetractions: []
+        });
+        const scope = {
+            firstActionIndex: null,
+            lastActionIndex: null,
+            unlandedAttestBatches: []
+        };
+
+        await rollback.runRollbackTransaction(requestAt + 2, scope, [], [], []);
+        assert.strictEqual(indexer.capabilityProofBarrierSkipped, false);
+        assert.strictEqual(mirrorReads, 1);
+        assert.ok(queryLog.some(sql => sql.includes('INSERT INTO attest_validator_stats')));
+    });

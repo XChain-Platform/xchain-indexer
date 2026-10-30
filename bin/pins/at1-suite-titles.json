@@ -7011,9 +7011,6 @@
       "final retroactive witness comparison @regression @tier1 reports a changed window through the recorded digest path",
       "final retroactive witness comparison @regression @tier1 reports unchanged windows at and beyond the final replay height"
     ],
-    "5d83f9ec7edd7c72": [
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
-    ],
     "5db30922de7745c3": [
       "UNSTAKE deactivation setters exclude pending-activation rows @regression @tier1 setContractStakeDeactivationByPubkey filters by activation window (currentBlock)",
       "UNSTAKE deactivation setters exclude pending-activation rows @regression @tier1 setStakeDeactivationByPubkey filters by activation window (currentBlock)"
@@ -13113,30 +13110,6 @@
       "runMigrations() precondition baseline branch, round_qualifier @regression @tier1 leaves it PENDING on the trap shape: columns drift-healed, key still four-column",
       "runMigrations() precondition baseline branch, round_qualifier @regression @tier1 returns normally when the live key already carries the qualifier"
     ],
-    "adaacfcebc3dc76a": [
-      "disarms the held capability read check when a later barrier defers @regression @tier1",
-      "mirror-admission replay witness each side resolves, from the env the parent hands it, the era A3 expects",
-      "mirror-admission replay witness runs parameterized SQL through the indexer Database wrapper",
-      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused accepts replays that ran every group, and does not demand a pass for a table with no bearing rows",
-      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused names a reader for every admission-bearing table, and that reader is a production pass calling the consumer",
-      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused refuses a side that reports no pass list, since it cannot show it read the rows",
-      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused refuses by name the replay that never ran the ATTEST response pass over a signed response",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict accepts a mirror with admission-era rows and a boundary inside the corpus",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict reads the password from the variable --db-pass-env names, and refuses when it is unset",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses a boundary above the corpus tip, the rail's H=100000 over 102 blocks",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses a mirror with no row carrying this chain's admission height",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses on the command line, before any replay, when no --mirror-db is named",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses sides that copied different mirrors",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses the rail's run: sides replayed with empty mirror tables",
-      "mirror-admission replay witness: owned artifact cleanup applies workdir cleanup on a refusal before schemas are created",
-      "mirror-admission replay witness: owned artifact cleanup makes --keep control schema and workdir cleanup through the CLI",
-      "mirror-admission replay witness: owned artifact cleanup removes owned schemas and workdir by default, but --keep preserves and prints both",
-      "mirror-admission replay witness: signal cleanup records the first catchable signal and stops the active replay side",
-      "mirror-admission replay witness: the mirror a side copies copies every hub-mirror table over the shared columns before counting admission-era rows",
-      "mirror-admission replay witness: what each side is handed and replays against binds by this chain's admission column only in the tables a consumer reads by it",
-      "mirror-admission replay witness: what each side is handed and replays against hands the OFF side no lever at all, even when the parent environment carries one",
-      "mirror-admission replay witness: what each side is handed and replays against passes the mirror schema to each side on argv, and a side accepts only a plain schema name"
-    ],
     "adb5316356f3bdf8": [
       "Attest relay fee settlement @regression @tier3 credits the verified relay payee and sends only the remainder to REWARD",
       "Attest relay fee settlement @regression @tier3 leaves the full escrow in REWARD below the relay fee gate",
@@ -13358,14 +13331,6 @@
       "AnchorRecovery.run() driver replay determinism @regression @tier1 negative control: a match_batch_seq-only ORDER BY leaves the equal-seq tie unspecified",
       "AnchorRecovery.run() driver replay determinism @regression @tier1 orders the archive-head driver query by match_batch_seq ASC, action_index ASC",
       "AnchorRecovery.run() driver replay determinism @regression @tier1 replays equal-batch_seq heads in a deterministic total order (earliest action_index first)"
-    ],
-    "b0207b20a39966e7": [
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 a block passes an unproven frontier snapshot it does not read",
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 a block that reads the held snapshot fails closed and its retry waits for the proof",
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 capabilityReadHeld matches the held (snapshot_block, capability) only",
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 committing the held block clears its recorded read and the skip flag",
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 reads outside block processing are never policed",
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 the retry releases as soon as the held snapshot proves inside the wait"
     ],
     "b06e6a79b9e81a02": [
       "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) a pre-guard (v1.x) node treats it as not-yet-active; guard stays off",
@@ -15735,25 +15700,6 @@
       "HubDbSync attest waiter timeout self-heal @regression @tier2 anchor reward: still rejects when completeness remains behind",
       "HubDbSync attest waiter timeout self-heal @regression @tier2 attestation response: resolves when completeness advanced without the release event",
       "HubDbSync attest waiter timeout self-heal @regression @tier2 attestation response: still rejects when completeness remains behind"
-    ],
-    "ccadc2f09f1936a0": [
-      "E2E: Token Lifecycle @regression @tier3 ISSUE format variants re-ISSUE by non-owner is invalid",
-      "E2E: Token Lifecycle @regression @tier3 ISSUE format variants re-ISSUE by owner updates description (format 1)",
-      "E2E: Token Lifecycle @regression @tier3 SEND format variants multi-send (format 2) creates multiple entries",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/balances returns correct amounts for each address",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/block returns block info",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/credits by address shows credit entries",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/debits by address shows debit entries",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/destroys by address returns destroy record",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/history by token shows all actions",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/holders returns all 3 holders",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/issues by block returns the issuance",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/mints by address returns mint records",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/sends by destination returns send record",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/sends by source returns send record",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/status returns explorer config",
-      "E2E: Token Lifecycle @regression @tier3 complete token lifecycle GET /api/token returns correct token info",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
     ],
     "ccecd76f58683b00": [
       "SLASH action handler: equivocation verifier @regression ACCEPTS an XCONFIG equivocation (snapshot_block recovered from content; federation membership)",
@@ -19586,12 +19532,40 @@
       "API read index id suppression @regression @tier1 gettokenpolicy stores nothing while the parent database has an open transaction",
       "API read index id suppression @regression @tier1 the API view leaves an unknown address absent from index_addresses"
     ],
-    "6e28e9553730f2b6": [
-      "API read before ISSUE replay determinism @regression @tier1 matches the clean ledger hash chain after gettokenpolicy reads the future ticker",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
-    ],
     "4fdb2482a42bd589": [
       "API read before ISSUE replay determinism @regression @tier1 matches the clean ledger hash chain after gettokenpolicy reads the future ticker"
+    ],
+    "4675f3133a96b7c1": [
+      "mirror-admission replay witness each side resolves, from the env the parent hands it, the era A3 expects",
+      "mirror-admission replay witness runs parameterized SQL through the indexer Database wrapper",
+      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused accepts replays that ran every group, and does not demand a pass for a table with no bearing rows",
+      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused names a reader for every admission-bearing table, and that reader is a production pass calling the consumer",
+      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused refuses a side that reports no pass list, since it cannot show it read the rows",
+      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused refuses by name the replay that never ran the ATTEST response pass over a signed response",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict accepts a mirror with admission-era rows and a boundary inside the corpus",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict reads the password from the variable --db-pass-env names, and refuses when it is unset",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses a boundary above the corpus tip, the rail's H=100000 over 102 blocks",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses a mirror with no row carrying this chain's admission height",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses on the command line, before any replay, when no --mirror-db is named",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses sides that copied different mirrors",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses the rail's run: sides replayed with empty mirror tables",
+      "mirror-admission replay witness: owned artifact cleanup applies workdir cleanup on a refusal before schemas are created",
+      "mirror-admission replay witness: owned artifact cleanup makes --keep control schema and workdir cleanup through the CLI",
+      "mirror-admission replay witness: owned artifact cleanup removes owned schemas and workdir by default, but --keep preserves and prints both",
+      "mirror-admission replay witness: signal cleanup records the first catchable signal and stops the active replay side",
+      "mirror-admission replay witness: the mirror a side copies copies every hub-mirror table over the shared columns before counting admission-era rows",
+      "mirror-admission replay witness: what each side is handed and replays against binds by this chain's admission column only in the tables a consumer reads by it",
+      "mirror-admission replay witness: what each side is handed and replays against hands the OFF side no lever at all, even when the parent environment carries one",
+      "mirror-admission replay witness: what each side is handed and replays against passes the mirror schema to each side on argv, and a side accepts only a plain schema name"
+    ],
+    "352024da6f65f91c": [
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 a block passes an unproven frontier snapshot it does not read",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 a block that reads the held snapshot fails closed and its retry waits for the proof",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 capabilityReadHeld matches the held (snapshot_block, capability) only",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 committing the held block clears its recorded read and the skip flag",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 reads outside block processing are never policed",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 the retry releases as soon as the held snapshot proves inside the wait",
+      "disarms the held capability read check when a later barrier defers @regression @tier1"
     ]
   },
   "scripts": {
@@ -20056,7 +20030,7 @@
         "test/unit/activations/list_owner_activation_armed.test.js": "a148644af845b9ca",
         "test/unit/activations/market_list_source_activation.test.js": "6aac3f42b9659368",
         "test/unit/activations/mirror_admission_activation.test.js": "718b1a8900dc316c",
-        "test/unit/activations/mirror_admission_replay_witness.test.js": "adaacfcebc3dc76a",
+        "test/unit/activations/mirror_admission_replay_witness.test.js": "4675f3133a96b7c1",
         "test/unit/activations/price_pair_activation.test.js": "ec6404e13c7335df",
         "test/unit/activations/state_hash_activation_delay.test.js": "03972b69204c5a4d",
         "test/unit/activations/swap_edit_rematch_activation.test.js": "f1cc4a44bc6aa157",
@@ -20716,7 +20690,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
+        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_proof/retry_after.test.js": "d37decb95f3187b2",
@@ -21307,12 +21281,12 @@
     },
     "test:integration": {
       "fileCount": 73,
-      "titleCount": 442,
+      "titleCount": 441,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
-        "test/integration/api_read_reindex_determinism.test.js": "6e28e9553730f2b6",
+        "test/integration/api_read_reindex_determinism.test.js": "4fdb2482a42bd589",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
         "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
         "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
@@ -21386,12 +21360,12 @@
     },
     "test:integration:ci": {
       "fileCount": 73,
-      "titleCount": 442,
+      "titleCount": 441,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
         "test/integration/anchor_reward_round_qualifier.test.js": "43df6c0dc2772225",
-        "test/integration/api_read_reindex_determinism.test.js": "6e28e9553730f2b6",
+        "test/integration/api_read_reindex_determinism.test.js": "4fdb2482a42bd589",
         "test/integration/archive_replay_watermarks.test.js": "e018c085ce01aca6",
         "test/integration/attest_batch_link_scope.test.js": "d5a4d9b585aa85b0",
         "test/integration/attest_relay_identity.test.js": "c486b4ffbf8516a2",
@@ -21557,7 +21531,7 @@
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
-        "test/e2e/scenarios/01_token_lifecycle.test.js": "ccadc2f09f1936a0",
+        "test/e2e/scenarios/01_token_lifecycle.test.js": "4365faef2b0a9c54",
         "test/e2e/scenarios/02_order_lifecycle.test.js": "0d895f3bfea03346",
         "test/e2e/scenarios/03_dispenser_lifecycle.test.js": "7de1998d17dc11c5",
         "test/e2e/scenarios/04_reorg.test.js": "9d9c8d999b0ace9e",
@@ -22428,7 +22402,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
+        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
@@ -22765,7 +22739,7 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 629,
+      "fileCount": 628,
       "titleCount": 6472,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
@@ -22894,7 +22868,6 @@
         "test/unit/activations/list/list_tick_coin_activation.test.js": "1dfe94a52f7f8c52",
         "test/unit/activations/list/list_transfer_activation.test.js": "bed80573a8ffe8fa",
         "test/unit/activations/list_owner_activation_armed.test.js": "a148644af845b9ca",
-        "test/unit/activations/mirror_admission_replay_witness.test.js": "5d83f9ec7edd7c72",
         "test/unit/activations/testnet_arm/dispenser_collation_arm.test.js": "0bf881f235cb766f",
         "test/unit/anchor/anchor_archive_sql_columns.test.js": "bab9c054a0998db8",
         "test/unit/anchor/anchor_fold_sql_family.test.js": "20703ba8a82c0437",
@@ -23188,7 +23161,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
+        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
@@ -23405,7 +23378,7 @@
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
-        "test/e2e/scenarios/01_token_lifecycle.test.js": "ccadc2f09f1936a0",
+        "test/e2e/scenarios/01_token_lifecycle.test.js": "4365faef2b0a9c54",
         "test/e2e/scenarios/02_order_lifecycle.test.js": "0d895f3bfea03346",
         "test/e2e/scenarios/03_dispenser_lifecycle.test.js": "7de1998d17dc11c5",
         "test/e2e/scenarios/04_reorg.test.js": "9d9c8d999b0ace9e",
@@ -24276,7 +24249,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
-        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "b0207b20a39966e7",
+        "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "a3e9fb75a402218a",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
