@@ -81,8 +81,12 @@ describe('15 – SDK<->indexer fee-fragment parity @regression @tier1', function
     describe('isValidAmountFormat() fractional-cap parity', function () {
         const util = new Utility();
         const sdkPath = resolveSdkUtilityPath();
-        const SdkUtility = sdkPath ? require(sdkPath) : null;
-        const sdkUtil = SdkUtility ? new SdkUtility() : null;
+        let sdkUtil = null;
+        before(function () {
+            if (!sdkPath) return;
+            const SdkUtility = require(sdkPath);
+            sdkUtil = new SdkUtility();
+        });
         const cases = [
             [0, '100', true], [0, '1.5', false],
             [8, '1.00000001', true], [8, '1.000000001', false],

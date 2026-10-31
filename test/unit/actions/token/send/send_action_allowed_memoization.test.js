@@ -13,8 +13,8 @@
 // sleeping check isActionAllowed(null, TICK, BLOCK) repeats per leg for the same
 // tick. The SOURCE check is now hoisted once before the loop and the TICK check is
 // memoized per distinct tick, mirroring the ticks/preferences/gatedKeyHashes dedupe.
-// The DESTINATION+TICK check stays per-leg (varies by recipient) and must be
-// unaffected. This pins the query counts without changing any leg's outcome.
+// DESTINATION membership still varies per recipient, while the shared list policy
+// is loaded once per tick. This pins the query counts without changing outcomes.
 
 'use strict';
 
@@ -74,10 +74,12 @@ describe('Send isActionAllowed memoization @regression', function () {
         const tickSleep = ia.getCalls().filter(c => c.args[0] === null && c.args[1] === 'TEST');
         assert.strictEqual(tickSleep.length, 1, 'TICK sleeping check memoized: one query for the repeated tick');
 
-        // DESTINATION+TICK check stays per-leg (distinct recipients), untouched by this change.
+        // The policy is loaded once, then each destination gets a local membership check.
         const destChecks = ia.getCalls().filter(c => (c.args[0] === DEST1 || c.args[0] === DEST2) && c.args[1] === 'TEST');
-        const destAddrs  = new Set(destChecks.map(c => c.args[0]));
-        assert.deepStrictEqual([...destAddrs].sort(), [DEST1, DEST2].sort(), 'per-recipient DESTINATION gate still runs for each leg');
+        assert.strictEqual(destChecks.length, 0, 'destination checks reuse the loaded policy');
+        const policyReads = indexer.indexerDb.getTokenInfo.getCalls()
+            .filter(c => c.args.length === 2 && c.args[0] === 'TEST' && c.args[1] === 100);
+        assert.strictEqual(policyReads.length, 1, 'one policy read serves both destinations');
     });
 });
 

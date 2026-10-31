@@ -76,14 +76,14 @@ describe('native coin fee quote @regression @tier1', function () {
                 { dryRun: { status: null, xchainFee: null, error: 'handler threw: Watchdog timeout: feequote SEND exceeded 10000ms' } });
             let q = await ctx.computeFeeQuote.call(ctx, { action: 'SEND', params: ['0', 'FOO', '1', 'dest'], source: 'src' });
             assert.strictEqual(q.supported, true);
-            assert.strictEqual(q.valid, false);
+            assert.strictEqual(q.valid, null);
             assert.strictEqual(q.retryable, true);
             assert.strictEqual(q.noVerdict, true);
             assert.strictEqual(q.busy, undefined, 'not mutex contention');
             assert.strictEqual(q.status, null);
             assert.strictEqual(q.validated, false);
             assert.strictEqual(q.requiredFeeSats, undefined, 'nothing priced');
-            assert.ok(q.xchainFee === undefined || q.xchainFee === null);
+            assert.strictEqual(q.xchainFee, null);
             assert.match(q.error, /no verdict/);
             assert.match(q.error, /handler threw/);
             assert.strictEqual(ctx._feeQuotePending, 0);

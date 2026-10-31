@@ -33,9 +33,9 @@
 // this chain's. One issuer list has to be able to hold BTC, LTC and DOGE addresses, because
 // the policy on the origin row is the policy every bridged copy inherits.
 const gateRegistry = require('../../consensus/gate_registry');
+const { readTickListPolicy, isAddressAllowedByTickPolicy } = require('./tick_list_policy');
 const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION';
 const TOKEN_POLICY_INHERITANCE_KEY = 'token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION';
-const TOKEN_GATE_LIST_AT_BLOCK_KEY = 'token_gate_list_at_block.TOKEN_GATE_LIST_AT_BLOCK';
 
 module.exports = {
 
@@ -212,44 +212,20 @@ module.exports = {
     // - Address is allowed to hold tick (allow/block lists)
     async isActionAllowed(address, tick, block_index){
         let allow = true;
-        // Keep address-plus-token checks on their historical unbounded lookup until
-        // the flag day, then pin token state and LIST membership to the action block.
         const addressAndTick = !this.util.isNull(address) && !this.util.isNull(tick);
-        const policyAtBlock = addressAndTick && gateRegistry.activeAt(
-            TOKEN_GATE_LIST_AT_BLOCK_KEY,
-            this.config['NETWORK'],
-            this.config['COIN'],
-            block_index,
-            null
-        );
-        const lookupBlockIndex = (addressAndTick && !policyAtBlock) ? undefined : block_index;
         // Check sleep only on single-subject calls with a numeric block index
-        if(!addressAndTick && allow && !this.util.isNull(lookupBlockIndex) && this.util.isNumeric(lookupBlockIndex)){
+        if(!addressAndTick && allow && !this.util.isNull(block_index) && this.util.isNumeric(block_index)){
             // Validate TICK and ADDRESS sleep status in parallel
             const [tickSleeping, addressSleeping] = await Promise.all([
-                (!this.util.isNull(tick))     ? this.isTickSleeping(tick, lookupBlockIndex)       : Promise.resolve(false),
-                (!this.util.isNull(address))  ? this.isAddressSleeping(address, lookupBlockIndex) : Promise.resolve(false)
+                (!this.util.isNull(tick))     ? this.isTickSleeping(tick, block_index)       : Promise.resolve(false),
+                (!this.util.isNull(address))  ? this.isAddressSleeping(address, block_index) : Promise.resolve(false)
             ]);
             if(tickSleeping || addressSleeping)
                 allow = false;
         }
         // Validate address against any tick allow/block lists
-        if(allow && !this.util.isNull(address) && !this.util.isNull(tick)){
-            let info = await this.getTokenInfo(tick, lookupBlockIndex);
-            // Fetch allow/block lists in parallel if both exist
-            const hasAllowList = info && !this.util.isNull(info['ALLOW_LIST']) && this.util.isNumeric(info['ALLOW_LIST']);
-            const hasBlockList = info && !this.util.isNull(info['BLOCK_LIST']) && this.util.isNumeric(info['BLOCK_LIST']);
-            const [allowList, blockList] = await Promise.all([
-                hasAllowList ? this.getList(info['ALLOW_LIST'], lookupBlockIndex) : Promise.resolve(null),
-                hasBlockList ? this.getList(info['BLOCK_LIST'], lookupBlockIndex) : Promise.resolve(null)
-            ]);
-            // False if we have an ALLOW_LIST and address is NOT on it
-            if(allow && allowList && !allowList.includes(address))
-                allow = false;
-            // False if we have a BLOCK_LIST and address IS on it
-            if(allow && blockList && blockList.includes(address))
-                allow = false;
-        }
+        if(allow && addressAndTick)
+            allow = isAddressAllowedByTickPolicy(address, await readTickListPolicy(this, tick, block_index));
         return allow;
     },
 

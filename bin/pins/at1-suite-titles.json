@@ -10151,6 +10151,9 @@
       "recovery._wrapperCanonical: independent byte-parity (ITEM 2729) first 10 base segments match Anchor._canonical FORMAT=1, the other real producer",
       "recovery._wrapperCanonical: independent byte-parity (ITEM 2729) matches the frozen 14-segment expectation, independent of the fixture join"
     ],
+    "84f7b72687be7722": [
+      "consensus parameters are frozen (track 8 guard) @regression maps every VM STATUS_ERROR_PREFIXES entry to its frozen indexer token"
+    ],
     "850d161466315079": [
       "smoke status stall-health parity keeps atProcessableTip identical across sync, reason, and clear boundaries",
       "smoke status stall-health parity keeps stallClassOf identical across every classification boundary",
@@ -19703,8 +19706,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1583,
-      "titleCount": 15253,
+      "fileCount": 1584,
+      "titleCount": 15254,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20448,6 +20451,7 @@
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
+        "test/unit/consensus/consensus_params.test/vm_status_error_prefix_coupling.test.js": "84f7b72687be7722",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/consensus_rules_digest_twin_bytes.test.js": "c8d4c432d417022a",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
@@ -21669,8 +21673,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1212,
-      "titleCount": 12094,
+      "fileCount": 1213,
+      "titleCount": 12095,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22265,6 +22269,7 @@
         "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
+        "test/unit/consensus/consensus_params.test/vm_status_error_prefix_coupling.test.js": "84f7b72687be7722",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
@@ -23525,8 +23530,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1212,
-      "titleCount": 12094,
+      "fileCount": 1213,
+      "titleCount": 12095,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24121,6 +24126,7 @@
         "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
+        "test/unit/consensus/consensus_params.test/vm_status_error_prefix_coupling.test.js": "84f7b72687be7722",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "be80fa39c6a19cdf",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
