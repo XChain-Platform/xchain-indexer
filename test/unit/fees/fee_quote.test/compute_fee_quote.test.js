@@ -69,6 +69,32 @@ describe('native coin fee quote @regression @tier1', function () {
             assert.strictEqual(q.xchainFee, null);
             assert.strictEqual(q.requiredFeeSats, undefined, 'no sizing for an invalid action');
         });
+
+        it('unfinished dry-run: retryable no-verdict, never a rejection, and a real rejection carries no marker', async function () {
+            let util = makeUtil('BTC', FEE_DEST);
+            let { ctx } = makeCtx(util, makeDb({ prices: BTC_PRICES }),
+                { dryRun: { status: null, xchainFee: null, error: 'handler threw: Watchdog timeout: feequote SEND exceeded 10000ms' } });
+            let q = await ctx.computeFeeQuote.call(ctx, { action: 'SEND', params: ['0', 'FOO', '1', 'dest'], source: 'src' });
+            assert.strictEqual(q.supported, true);
+            assert.strictEqual(q.valid, false);
+            assert.strictEqual(q.retryable, true);
+            assert.strictEqual(q.noVerdict, true);
+            assert.strictEqual(q.busy, undefined, 'not mutex contention');
+            assert.strictEqual(q.status, null);
+            assert.strictEqual(q.validated, false);
+            assert.strictEqual(q.requiredFeeSats, undefined, 'nothing priced');
+            assert.ok(q.xchainFee === undefined || q.xchainFee === null);
+            assert.match(q.error, /no verdict/);
+            assert.match(q.error, /handler threw/);
+            assert.strictEqual(ctx._feeQuotePending, 0);
+
+            let rejected = makeCtx(util, makeDb({ prices: BTC_PRICES }),
+                { dryRun: { status: 'invalid: insufficient funds', xchainFee: null, error: null } });
+            let r = await rejected.ctx.computeFeeQuote.call(rejected.ctx, { action: 'SEND', params: ['0', 'FOO', '999', 'dest'], source: 'src' });
+            assert.strictEqual(r.valid, false);
+            assert.strictEqual(r.noVerdict, undefined);
+            assert.strictEqual(r.retryable, undefined);
+        });
     });
 });
 

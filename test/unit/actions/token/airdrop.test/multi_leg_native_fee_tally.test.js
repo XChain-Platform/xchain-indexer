@@ -50,13 +50,29 @@ async function outcomeFor(nativeFeeValue, opts = {}) {
     indexer.indexerDb.createFeeRecord.callsFake(async fees => feeRecords.push({
         amount: indexer.util.bcformat(fees['AMOUNT'], 8),
         gasCost: indexer.util.bcformat(fees['GAS_COST'], 0),
+        xchainAmount: fees['XCHAIN_AMOUNT'] === undefined ? null : indexer.util.bcformat(fees['XCHAIN_AMOUNT'], 8),
         nativeCoinAmount: String(fees['NATIVE_COIN_AMOUNT']),
         tallyConsumed: fees['NATIVE_FEE_LEDGER'] && fees['NATIVE_FEE_LEDGER'].nativeFeeConsumed,
     }));
+    const ledger = sinon.spy(indexer.util, 'processTransactionLedgerChanges');
 
     assert.strictEqual(indexer.util.validateNativeCoinFee, Utility.prototype.validateNativeCoinFee);
     await handler.parse(opts.params || PARAMS, data, null);
-    return { statuses, feeRecords, batchLedger: data['BATCH_VALUE_LEDGER'] };
+    const gasTick = indexer.config['GAS'];
+    const feeDebits = ledger.calledOnce
+        ? ledger.firstCall.args[3].filter(row => row[0] === gasTick).map(row => indexer.util.bcformat(row[1], 8))
+        : null;
+    return { statuses, feeRecords, feeDebits, batchLedger: data['BATCH_VALUE_LEDGER'] };
+}
+
+// Assert every leg is valid and debits its own fee, while the action's last fees row (written
+// after each leg's own row) records the summed fee, gas and XCHAIN amount.
+function assertSummedXchainFeeRow(outcome, legDebits, amount, gasCost) {
+    assert.deepStrictEqual(outcome.statuses, legDebits.map(() => 'valid'));
+    assert.deepStrictEqual(outcome.feeDebits, legDebits);
+    assert.strictEqual(outcome.feeRecords.length, legDebits.length + 1);
+    const row = outcome.feeRecords[legDebits.length];
+    assert.deepStrictEqual([row.amount, row.gasCost, row.xchainAmount], [amount, gasCost, amount]);
 }
 
 describe('Airdrop multi-leg native fee action tally @regression @tier1', function () {
@@ -114,8 +130,8 @@ describe('Airdrop multi-leg native fee action tally @regression @tier1', functio
     });
 
     it('leaves XCHAIN-balance fee settlement on the existing per-leg path', async function () {
-        const outcome = await outcomeFor('0.02000000', { xchain: true });
-        assert.deepStrictEqual(outcome.statuses, ['valid', 'valid']);
-        assert.deepStrictEqual(outcome.feeRecords.map(row => row.amount), ['0.00100000', '0.00100000']);
+        const wide = { xchain: true, params: THREE_LEG_PARAMS, middleCostsTwoLegs: true };
+        assertSummedXchainFeeRow(await outcomeFor('0.02000000', { xchain: true }), ['0.00100000', '0.00100000'], '0.00200000', '200');
+        assertSummedXchainFeeRow(await outcomeFor('0.02000000', wide), ['0.00100000', '0.00200000', '0.00100000'], '0.00400000', '400');
     });
 });

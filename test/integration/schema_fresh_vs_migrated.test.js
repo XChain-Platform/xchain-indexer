@@ -17,7 +17,9 @@
  * MariaDB: current table definitions for a fresh install, and the frozen
  * pre-ledger table shapes followed by every dated migration, applied by
  * running src/db/migration/migrate.js as an operator would. The resulting
- * table, column, and index metadata must be identical.
+ * table, column, index, and CHECK constraint metadata must be identical.
+ * Indexes are compared sorted by name: KEY declaration order is outside the
+ * convergence scope (see the byte-identity note in schema_drift.js).
  *
  * A third database takes the path an aged node takes at boot: the frozen shapes,
  * then the verifyTables reconcile and the auto migrations, then the operator CLI
@@ -154,6 +156,8 @@ const INDEX_FIELDS = [
     'COLUMN_NAME', 'SUB_PART', 'COLLATION', 'NULLABLE', 'INDEX_COMMENT',
 ];
 const TABLE_FIELDS = ['TABLE_NAME', 'ENGINE', 'ROW_FORMAT', 'TABLE_COLLATION', 'CREATE_OPTIONS'];
+// Compare CHECK constraints too: a JSON column's implicit json_valid CHECK is its only trace (COLUMN_TYPE reads longtext)
+const CHECK_FIELDS = ['TABLE_NAME', 'CONSTRAINT_NAME', 'CHECK_CLAUSE'];
 
 function plainRows(rows, fields) {
     return rows.map(row => Object.fromEntries(fields.map(field => [field, row[field]])));
@@ -172,10 +176,15 @@ async function schemaSnapshot(conn, database) {
         'SELECT ' + INDEX_FIELDS.join(', ') + ' FROM information_schema.STATISTICS ' +
         'WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX',
         [database]);
+    const checks = await conn.query(
+        'SELECT ' + CHECK_FIELDS.join(', ') + ' FROM information_schema.CHECK_CONSTRAINTS ' +
+        'WHERE CONSTRAINT_SCHEMA = ? ORDER BY TABLE_NAME, CONSTRAINT_NAME',
+        [database]);
     return {
         tables: plainRows(tables, TABLE_FIELDS),
         columns: plainRows(columns, COLUMN_FIELDS),
         indexes: plainRows(indexes, INDEX_FIELDS),
+        checks: plainRows(checks, CHECK_FIELDS),
     };
 }
 

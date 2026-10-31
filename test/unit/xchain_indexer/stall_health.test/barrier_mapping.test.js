@@ -64,7 +64,8 @@ const SYNC_SRC = fs.readFileSync(SYNC_ENTRY, 'utf8') + '\n' +
 // are distinguished below, so dropping the height-awareness from a call site is a red
 // rather than a rename that slides through.
 const { stallReasonSites, countStallReasonAssignments } = require('../../../helpers/stall_reason_sites.js');
-const IMPORTED_REASONS = { REMOTE_TOKEN_RETRY_STALL_REASON };
+const { BRIDGE_PROOF_BARRIER } = require('../../../../src/consensus/bridge_proof_client/stall.js');
+const IMPORTED_REASONS = { REMOTE_TOKEN_RETRY_STALL_REASON, BRIDGE_PROOF_BARRIER };
 function graceWiring() {
     const pairs = [];
     const sites = stallReasonSites(INDEXER_SRC, IMPORTED_REASONS);
@@ -117,6 +118,8 @@ const EXPECTED = [
     ['retroactive_replay_diverged',     null,                          'null'],
     // Train-activation safety halt, read by its prefix (the tail is the verdict prose).
     ['train_activation_halt:',          null,                          'null'],
+    // An unreadable decoder block time: a host fault that clears when the row is readable.
+    ['decoder_block_time_unavailable',  null,                          'null'],
     ['price_sync_barrier',              null,                          'null'],          // height case can clear early
     ['price_sync_barrier',              'priceWatermarkGraceS',        'height-aware'],
     ['price_landing_barrier',           null,                          'null'],          // clears on other chains' landed time

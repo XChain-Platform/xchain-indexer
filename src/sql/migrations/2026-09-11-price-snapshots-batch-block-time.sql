@@ -34,8 +34,11 @@
 --
 -- Additive + idempotent: ADD COLUMN IF NOT EXISTS with the AFTER anchor matching the
 -- definition (so SHOW CREATE TABLE stays byte-equal between a migrated DB and a fresh
--- install), and CREATE INDEX IF NOT EXISTS, a no-op on any install whose boot-time
--- reconcile already healed both in from src/sql/price_snapshots.sql.
+-- install), and CREATE INDEX IF NOT EXISTS, so re-running it is a no-op. The boot-time
+-- alterTableForDrift can add the column, but this file is the ONLY path that gives an aged
+-- install the index: src/sql/price_snapshots.sql declares it as an inline KEY, and
+-- reconcileTableIndexes re-adds only standalone CREATE INDEX ... ON, never an inline KEY.
+-- Never baseline, squash or delete it as redundant.
 --
 -- HOW TO RUN
 --   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-09-11-price-snapshots-batch-block-time.sql

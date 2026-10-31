@@ -97,6 +97,17 @@ function feeQuoteLockBusy(base, acquireMs){
                'ms for the database transaction lock); retry shortly' });
 }
 
+// The retryable quote for a dry-run that threw before the handler left a status (a watchdog
+// timeout, an epoch-fence rejection): no chain verdict, as preflightNoVerdict says.
+// valid stays false like the other retryable fee-quote answers; noVerdict tells it apart.
+function feeQuoteNoVerdict(base, run){
+    return Object.assign(base, { valid: false, retryable: true, noVerdict: true, status: null,
+        validated:  false,
+        blockIndex: run.blockIndex,
+        blockTime:  run.blockTime,
+        error: 'fee quote produced no verdict (the dry-run did not finish: ' + run.error + '); retry shortly' });
+}
+
 // The quote a finished dry-run answers WITHOUT pricing, or null when the verdict is valid
 // and the fee should be priced.
 function dryRunVerdictQuote(actions, base, run, action){
@@ -291,6 +302,7 @@ module.exports = {
     feeQuoteBase,
     exemptFeeQuote,
     feeQuoteLockBusy,
+    feeQuoteNoVerdict,
     dryRunVerdictQuote,
     resolvePreflightFeeMode,
     preflightGateAnswer,

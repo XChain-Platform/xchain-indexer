@@ -739,6 +739,25 @@
       "HubClient getAllConfigs() sends getallconfigs to the CONFIG endpoint, not the feed endpoint",
       "HubClient getAllConfigs() still reaches the feed endpoint when no config endpoint is configured"
     ],
+    "0b4f10f70d95b773": [
+      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
+      "consensus identity GATES field and pin comparison exits zero against the committed pin",
+      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
+      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
+      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
+      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the VM harness-activation twins in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the airdrop native-fee tally rollback row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the archive v1 reissue refusal row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the batch-airdrop leg-weight row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the bridge-checkpoint v3 section row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the gas-ceiling exhaustion row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the guard emitted-host discriminator row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the null-prototype TICK cache row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings",
+      "consensus identity GATES field and pin comparison pins the same-token offer refusal row in both checkout readings"
+    ],
     "0bf881f235cb766f": [
       "testnet arm: dispenser compare and stake-weight collation @regression @tier1 BTC:testnet both predicates flip exactly at the height",
       "testnet arm: dispenser compare and stake-weight collation @regression @tier1 BTC:testnet dispenser send compare keeps the legacy predicate one block below and diverges at the height",
@@ -1530,6 +1549,15 @@
       "state_checkpoints split-brain fence parity (#3096) @regression @tier1 indexer mirror: unique key is exactly (chain, network, checkpoint_seq)",
       "state_checkpoints split-brain fence parity (#3096) @regression @tier1 the tightening migration exists and is manual, not auto-applied at boot"
     ],
+    "171bbe3d05660700": [
+      "escrow arming tools ship in the image @regression @tier1 bench-escrow-arming-replay.js requires only files the image carries",
+      "escrow arming tools ship in the image @regression @tier1 copies bench-escrow-arming-replay.js into /XChainIndexer/bin",
+      "escrow arming tools ship in the image @regression @tier1 copies shadow-dryrun-escrow-leaf.js into /XChainIndexer/bin",
+      "escrow arming tools ship in the image @regression @tier1 copies verify-escrow-arming-boundary.js into /XChainIndexer/bin",
+      "escrow arming tools ship in the image @regression @tier1 fails when the bench-escrow-arming-replay COPY is omitted",
+      "escrow arming tools ship in the image @regression @tier1 shadow-dryrun-escrow-leaf.js requires only files the image carries",
+      "escrow arming tools ship in the image @regression @tier1 verify-escrow-arming-boundary.js requires only files the image carries"
+    ],
     "1727262103280d4f": [
       "AnchorRecovery (full-parse recovery) @regression @tier2 a junk ORPHAN chunk from an outsider never enters the reassembly (#3075)",
       "AnchorRecovery (full-parse recovery) @regression @tier2 a junk head reassembles only its own chunks, so it still fails",
@@ -1983,6 +2011,24 @@
       "block-scoped token supply refresh @unit @regression @tier1 rebuilds token information immediately during rollback updates",
       "block-scoped token supply refresh @unit @regression @tier1 runs once before the blocks row is hashed and before the sanity check"
     ],
+    "1a49868c7c9dc670": [
+      "JSON-RPC anchor family @regression @tier1 every anchor read refuses without a database and reports a throw",
+      "JSON-RPC anchor family @regression @tier1 getanchoraction runs the owned SQL through doQuery and answers checkpoint_anchored",
+      "JSON-RPC anchor family @regression @tier1 getanchorconfirmations picks the paged SQL only when a cursor is given",
+      "JSON-RPC anchor family @regression @tier1 getarchiveanchor reads by content commitment and author",
+      "JSON-RPC price batch family @regression @tier1 getpricebatches answers each batch landing block with its protocol time, the clock pushpricebatch carried",
+      "JSON-RPC price batch family @regression @tier1 getpricebatches validates the window, reads valid batches over it and pages by truncation",
+      "JSON-RPC price batch family @regression @tier1 getpricebatchpayload rebuilds the committed valid batch body that pushpricebatch received",
+      "JSON-RPC price batch family @regression @tier1 getpricebatchpayload refuses an invalid action index and an unknown or invalid batch",
+      "JSON-RPC reorg history family @regression @tier1 falls back to the indexer's last-known halt flag when the probe faults",
+      "JSON-RPC reorg history family @regression @tier1 reads the decoder view, probes the live halt flag and matches an orphaned hash",
+      "JSON-RPC reorg history family @regression @tier1 validates, refuses without the decoder database and reports a throw",
+      "JSON-RPC roll-call family @regression @tier1 getrollcalls and getrollcallabsences clamp to 20 by default and 100 at most",
+      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners answers the cut, tip, manifest hash and activation heights",
+      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners refuses off DOGE, without a database, and reports a throw",
+      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners reports null for an inert activation rail",
+      "JSON-RPC roll-call family @regression @tier1 roll-call listings reject malformed limits and absence sources before reading"
+    ],
     "1a6466e594d949e6": [
       "HubDbSync feed authentication falls back to HUB_API_KEY for subscriptions and snapshots",
       "HubDbSync feed authentication leaves push and reorg credentials on their dedicated environment keys",
@@ -2112,6 +2158,11 @@
       "late anchor reward derive counter logs one diagnostic with reward identity when the derive is late",
       "late anchor reward derive counter measures derives at, before, and after the theoretical watermark",
       "late anchor reward derive counter returns lateness even when diagnostic logging throws"
+    ],
+    "1c6dd4642cc2afbc": [
+      "bin/consensus-identity.js the absent-gate sentinel exits 2 with no output when the export is gone, with or without --assert-no-absent",
+      "bin/consensus-identity.js the absent-gate sentinel refuses a rules module with a missing or empty sentinel",
+      "bin/consensus-identity.js the absent-gate sentinel takes the sentinel from the rules module, which exports a non-empty one"
     ],
     "1c7af3ff7c39a754": [
       "Dispenser refill token policy @regression @tier2 armed keeps the not-owner verdict ahead of the token policy",
@@ -2244,6 +2295,15 @@
       "BATCH MINT cap maxMintsPerDistinctTick() returns zero without reading the database for an empty list",
       "BATCH MINT cap probeTickerId() restores suppression and propagates a lookup error",
       "BATCH MINT cap probeTickerId() suppresses id creation during the lookup and restores it afterward"
+    ],
+    "1e89d0e95cbfdf59": [
+      "bin/consensus-identity.js --compare against a pin block missing fields exits one naming gates_field when the committed pin drops it from the bare block",
+      "bin/consensus-identity.js --compare against a pin block missing fields exits zero against the committed pin with gates_field and absent_gates compared",
+      "bin/consensus-identity.js --compare against a pin block missing fields refuses an empty or network-only bare block with one line naming a missing field (exit 2)",
+      "bin/consensus-identity.js compareIdentity over the union of fields expands an object field the pin lacks key by key without throwing",
+      "bin/consensus-identity.js compareIdentity over the union of fields reports every fresh field as a mismatch against an empty pin block",
+      "bin/regenerate-identity-pin.js refresh of a block appends the fields the reading carries after the block's own, never env or tip",
+      "bin/regenerate-identity-pin.js refresh of a block keeps an armed block's own env as written"
     ],
     "1ee272a3d0a523fd": [
       "coverage ratchet floors coverage includes files not loaded by the test suite",
@@ -2685,6 +2745,27 @@
       "PRICE v1 canonical reference oracle @regression @tier3 refuses a non-string text",
       "PRICE v1 canonical reference oracle @regression @tier3 splits VALUE and FEE at the 8-versus-18 fraction-digit bound"
     ],
+    "25459a22d61acde4": [
+      "Anchor (ANCHOR) @regression @tier3 at/above the derive-relocation gate the DOGE-side write is SKIPPED (relocated to BTC), bundle still valid",
+      "Anchor (ANCHOR) @regression @tier3 bundle reward (XANCPUB) canonical: six positional fields with snapshot_block at index 3",
+      "Anchor (ANCHOR) @regression @tier3 determinism: two independent parses of identical v0 bytes agree and write no reward",
+      "Anchor (ANCHOR) @regression @tier3 the shared v0/v3 bundle tail parser rejects ATTEST_SIG_COUNT 0 and accepts 1",
+      "Anchor (ANCHOR) @regression @tier3 v0 bundle with ATTEST_SIG_COUNT 0 is INVALID (count 0 is legal on the v1 head only)",
+      "Anchor (ANCHOR) @regression @tier3 v0 keeps the bundle valid but SKIPS the reward when PUBLISHER is not in the oracle_publish set",
+      "Anchor (ANCHOR) @regression @tier3 v0 keeps the bundle valid but SKIPS the reward when the attestation quorum is short",
+      "Anchor (ANCHOR) @regression @tier3 v0 rejects a malformed PUBLISHER",
+      "Anchor (ANCHOR) @regression @tier3 v0 with a valid publisher attestation is valid and the DOGE side writes no bundle reward",
+      "Anchor (ANCHOR) @regression @tier3 v1 archive reward (XANCPUB) canonical: XANCPUB|anchor_archive|batch|snapshot|publisher|amount with the archive round-id family",
+      "Anchor (ANCHOR) @regression @tier3 v1 keeps the anchor valid but SKIPS the reward when PUBLISHER is not in the oracle_publish set",
+      "Anchor (ANCHOR) @regression @tier3 v1 keeps the anchor valid but SKIPS the reward when the attestation quorum is short",
+      "Anchor (ANCHOR) @regression @tier3 v1 parses on its own shape, not on the ARCHIVE_REWARD flag-day",
+      "Anchor (ANCHOR) @regression @tier3 v1 rejects a CRC mismatch (archive integrity unchanged)",
+      "Anchor (ANCHOR) @regression @tier3 v1 still rejects a NEGATIVE ATTEST_SIG_COUNT: 0 is degraded, -1 is malformed",
+      "Anchor (ANCHOR) @regression @tier3 v1 with ATTEST_SIG_COUNT 0 is valid, stores NULL attestations and derives NO reward",
+      "Anchor (ANCHOR) @regression @tier3 v1 with a valid publisher attestation is valid, stores the archive, and the DOGE side writes no archive reward",
+      "Anchor (ANCHOR) @regression @tier3 v1 without any tail at all fails on PUBLISHER, not as a tail-less legacy shape",
+      "Anchor (ANCHOR) @regression @tier3 v1 wrapper sigs verify over the archive canonical (batch-extended, EQUIV-wrapped)"
+    ],
     "25c3d82b177fdf7c": [
       "stale state activation module references src/actions/execute/run_vm.js names neither retired activation module",
       "stale state activation module references src/consensus/gates/stake_weight_collation_gate.js names neither retired activation module",
@@ -2803,25 +2884,6 @@
       "policy apply: edit half of bridged list convergence an existing allow list moves to new membership with no ISSUE 5",
       "policy apply: unchanged halves of bridged list convergence a null allow list against a copy with no allow list injects nothing for that list",
       "policy apply: unchanged halves of bridged list convergence membership already equal to the origin injects nothing"
-    ],
-    "26ef281fc536d1b3": [
-      "Anchor (ANCHOR) @regression @tier3 at/above the derive-relocation gate the DOGE-side write is SKIPPED (relocated to BTC), bundle still valid",
-      "Anchor (ANCHOR) @regression @tier3 bundle reward (XANCPUB) canonical: six positional fields with snapshot_block at index 3",
-      "Anchor (ANCHOR) @regression @tier3 determinism: two independent parses of identical v0 bytes agree and write no reward",
-      "Anchor (ANCHOR) @regression @tier3 v0 keeps the bundle valid but SKIPS the reward when PUBLISHER is not in the oracle_publish set",
-      "Anchor (ANCHOR) @regression @tier3 v0 keeps the bundle valid but SKIPS the reward when the attestation quorum is short",
-      "Anchor (ANCHOR) @regression @tier3 v0 rejects a malformed PUBLISHER",
-      "Anchor (ANCHOR) @regression @tier3 v0 with a valid publisher attestation is valid and the DOGE side writes no bundle reward",
-      "Anchor (ANCHOR) @regression @tier3 v1 archive reward (XANCPUB) canonical: XANCPUB|anchor_archive|batch|snapshot|publisher|amount with the archive round-id family",
-      "Anchor (ANCHOR) @regression @tier3 v1 keeps the anchor valid but SKIPS the reward when PUBLISHER is not in the oracle_publish set",
-      "Anchor (ANCHOR) @regression @tier3 v1 keeps the anchor valid but SKIPS the reward when the attestation quorum is short",
-      "Anchor (ANCHOR) @regression @tier3 v1 parses on its own shape, not on the ARCHIVE_REWARD flag-day",
-      "Anchor (ANCHOR) @regression @tier3 v1 rejects a CRC mismatch (archive integrity unchanged)",
-      "Anchor (ANCHOR) @regression @tier3 v1 still rejects a NEGATIVE ATTEST_SIG_COUNT: 0 is degraded, -1 is malformed",
-      "Anchor (ANCHOR) @regression @tier3 v1 with ATTEST_SIG_COUNT 0 is valid, stores NULL attestations and derives NO reward",
-      "Anchor (ANCHOR) @regression @tier3 v1 with a valid publisher attestation is valid, stores the archive, and the DOGE side writes no archive reward",
-      "Anchor (ANCHOR) @regression @tier3 v1 without any tail at all fails on PUBLISHER, not as a tail-less legacy shape",
-      "Anchor (ANCHOR) @regression @tier3 v1 wrapper sigs verify over the archive canonical (batch-extended, EQUIV-wrapped)"
     ],
     "270e08e94cd905e1": [
       "protocol_changes BIGINT_SURFACE_STRIP_ACTIVATION row @regression @tier1 keeps the final registry part within the structure limit",
@@ -2947,6 +3009,10 @@
       "slash_historical_set_activation: unarmed @regression @tier1 emits the committed set SQL with no add-back below activation",
       "slash_historical_set_activation: unarmed @regression @tier1 is UNARMED on mainnet, armed on testnet from its v0.24.0 height, and UNPINNED on regtest, armed only by the variable",
       "slash_historical_set_activation: unarmed @regression @tier1 sums the current amount, so the slashed bond leaves the past-height read (mainnet, testnet, regtest unset)"
+    ],
+    "287c437af927e36f": [
+      "Database._destructiveAutoStatement() foreign key and CHECK constraints @regression @tier1 allows dropping a constraint and keywords inside literals or quoted identifiers",
+      "Database._destructiveAutoStatement() foreign key and CHECK constraints @regression @tier1 flags every FOREIGN KEY, REFERENCES and CHECK constraint definition"
     ],
     "28a46922b825dffd": [
       "stateCommitment: cached SMT node reads @regression an ABSENT node is never cached, so the strict-read miss keeps reaching the store",
@@ -3896,6 +3962,15 @@
       "LIST shared-list fees @regression @tier3 refuses an under-minimum DOGE native fee output",
       "LIST shared-list fees @regression @tier3 refuses an under-minimum LTC native fee output"
     ],
+    "352024da6f65f91c": [
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 a block passes an unproven frontier snapshot it does not read",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 a block that reads the held snapshot fails closed and its retry waits for the proof",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 capabilityReadHeld matches the held (snapshot_block, capability) only",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 committing the held block clears its recorded read and the skip flag",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 reads outside block processing are never policed",
+      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 the retry releases as soon as the held snapshot proves inside the wait",
+      "disarms the held capability read check when a later barrier defers @regression @tier1"
+    ],
     "35406a3409593e4a": [
       "Order_Match action handler @regression @tier2 no matches found, createOrderMatch is never called",
       "Order_Match action handler @regression @tier2 processes match when matchInfo.GET_PRICE < orderInfo.GIVE_PRICE (better price)",
@@ -3947,6 +4022,31 @@
       "per-block reads have an index on their driving predicate @regression @tier1 getEarliestValidAnchorCheckpointAfterAnchor: anchor_actions is indexed on (chain, network, snapshot_block)",
       "per-block reads have an index on their driving predicate @regression @tier1 getMirroredStateCheckpointCandidates: state_checkpoints is indexed on (chain, network, block_index)",
       "per-block reads have an index on their driving predicate @regression @tier1 getMirroredStateCheckpointCandidatesAfterAnchor: state_checkpoints is indexed on (chain, network, snapshot_block)"
+    ],
+    "365999ba7f66f31d": [
+      "parseBlock block-time sentinel guard @regression @tier1 accepts a digit-string block time, the form a BIGINT column can arrive in",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the protocol block time is ",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the protocol block time is -5",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the protocol block time is 0",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the protocol block time is Infinity",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the protocol block time is NaN",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the protocol block time is false",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the protocol block time is not-a-time",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the protocol block time is null",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the protocol block time is true",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the protocol block time is undefined",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the raw block time is ",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the raw block time is -5",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the raw block time is 0",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the raw block time is Infinity",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the raw block time is NaN",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the raw block time is false",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the raw block time is not-a-time",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the raw block time is null",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the raw block time is true",
+      "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the raw block time is undefined",
+      "parseBlock block-time sentinel guard @regression @tier1 names a stall reason that never requests a hub-mirror resync",
+      "parseBlock block-time sentinel guard @regression @tier1 passes a numeric block time through to the barriers and the passes unchanged"
     ],
     "367a4c78df954f22": [
       "Deploy (DEPLOY) @regression @tier2 CODE_ENCODING activation gate a base64 field below the gate (read as hex) does not yield the base64-era contract",
@@ -4615,6 +4715,22 @@
       "Database.runMigrations() unregistered rename guard @regression @tier1 lists ledger names with no file, sorted",
       "Database.runMigrations() unregistered rename guard @regression @tier1 refuses the renamed file on the operator path, naming the registry entry to add"
     ],
+    "3eaba8b4e6511ba2": [
+      "Airdrop @regression @tier2 format 0: single airdrop LIST_ACTION_INDEX invalid (type===false) \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop MEMO with pipe character \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop TICK not found \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop insufficient balance for total airdrop amount \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop pre-existing error passed through \u2192 createAirdrop still called",
+      "Airdrop @regression @tier2 format 0: single airdrop regtest treats Object.prototype TICK __proto__ as unknown",
+      "Airdrop @regression @tier2 format 0: single airdrop regtest treats Object.prototype TICK constructor as unknown",
+      "Airdrop @regression @tier2 format 0: single airdrop unknown format version \u2192 invalid",
+      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to address list creates airdrop record",
+      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to tick list gets holders and credits each",
+      "Airdrop @regression @tier2 format 1: multi-airdrop brief format 1 with only VERSION|LIST_ACTION_INDEX reads zero legs and writes no airdrops row or STATUS",
+      "Airdrop @regression @tier2 format 1: multi-airdrop brief valid multi-airdrop brief processes all ticks",
+      "Airdrop @regression @tier2 format 2: multi-airdrop full valid multi-airdrop full processes multiple TICK/LIST pairs",
+      "Airdrop @regression @tier2 format 3: multi-airdrop full with multiple memos valid format-3 multi-airdrop processes TICK/LIST/MEMO triples"
+    ],
     "3edaebe4951561d7": [
       "XChainIndexer._priceMirrorHorizon @regression @tier2 anchors on the decoder first block when nothing is indexed yet",
       "XChainIndexer._priceMirrorHorizon @regression @tier2 answers null rather than throwing when a read faults",
@@ -4801,6 +4917,32 @@
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_POLL_TICK_VISIBLE flag-day (/ poll electorate TICK to callback) gate ACTIVE with a null electorate tick_id: emits an empty tick slot, still shifting the developer params",
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_POLL_TICK_VISIBLE flag-day (/ poll electorate TICK to callback) gate ACTIVE: inserts the resolved electorate TICK after min_voters_met, before the developer params",
       "Vote invariants (escrow conservation + callback metering) @regression @tier1 VOTE_POLL_TICK_VISIBLE flag-day (/ poll electorate TICK to callback) gate INACTIVE: signature is byte-identical to the pre-flag layout (no tick slot, no getTicker read)"
+    ],
+    "41d8ab629c2e46fe": [
+      "capability snapshot proof hold barrier @regression @tier1 P1 applies newer checkpointed groups when the oldest group stays 404",
+      "capability snapshot proof hold barrier @regression @tier1 P2 isolates an unavailable proof frontier to its capability",
+      "capability snapshot proof hold barrier @regression @tier1 P3 falls back per row after a multi-pubkey 503",
+      "capability snapshot proof hold barrier @regression @tier1 R4 probes a provable group between permanent oldest and newest holes",
+      "capability snapshot proof hold barrier @regression @tier1 R5 retries a frontier-held multi-pubkey group one row at a time after a 503",
+      "capability snapshot proof hold barrier @regression @tier1 R6 drains every group between two permanent holes within the rotating probe bound",
+      "capability snapshot proof hold barrier @regression @tier1 a frontier hold ends the drain and leaves the heartbeat gate open",
+      "capability snapshot proof hold barrier @regression @tier1 a held frontier retry does not reopen the bootstrap drain",
+      "capability snapshot proof hold barrier @regression @tier1 a retained bootstrap hold preserves a re-page reason the drain opened under",
+      "capability snapshot proof hold barrier @regression @tier1 applies and releases a held row when a retry can no longer judge it",
+      "capability snapshot proof hold barrier @regression @tier1 bounds proof requests above a permanent frontier across thousands of rows and drains bridge transfers",
+      "capability snapshot proof hold barrier @regression @tier1 bounds the hold map, notes a full map once, and leaves overflow for a re-page",
+      "capability snapshot proof hold barrier @regression @tier1 chunks a large held-row retry by encoded request path length",
+      "capability snapshot proof hold barrier @regression @tier1 classifies only 404, 503, checkpoint-missing, proof-unavailable and indexer-behind holds as not yet available",
+      "capability snapshot proof hold barrier @regression @tier1 deduplicates proof fetches by snapshot block and capability during one retry pass",
+      "capability snapshot proof hold barrier @regression @tier1 does not treat a proof response mismatch as not yet available",
+      "capability snapshot proof hold barrier @regression @tier1 encodes every proof endpoint parameter",
+      "capability snapshot proof hold barrier @regression @tier1 keeps a held row absent, blocks, then applies and releases it after proof arrives",
+      "capability snapshot proof hold barrier @regression @tier1 keeps refused rows absent and applies unknown rows without creating a hold",
+      "capability snapshot proof hold barrier @regression @tier1 keeps the barrier closed for overflow until the required re-page drains",
+      "capability snapshot proof hold barrier @regression @tier1 paces proof request starts below the indexer rate limit",
+      "capability snapshot proof hold barrier @regression @tier1 re-serves and later applies a held row after a restart with persisted local rows",
+      "capability snapshot proof hold barrier @regression @tier1 releases an existing waiter when ordinary redelivery verifies the held row",
+      "capability snapshot proof hold barrier @regression @tier1 retries around an unavailable middle group without stranding a newer group"
     ],
     "41e0a710fdea2c8a": [
       "actions/execute/nested_gas_sum: the bounded nested refund sum @regression @tier1 boundedAt follows the registry answer",
@@ -5172,6 +5314,29 @@
       "database pool exact u64 typeCast @regression @tier1 returns safe BIGINT values as Numbers",
       "database pool exact u64 typeCast @regression @tier1 still refuses a negative value on an unsigned BIGINT"
     ],
+    "4675f3133a96b7c1": [
+      "mirror-admission replay witness each side resolves, from the env the parent hands it, the era A3 expects",
+      "mirror-admission replay witness runs parameterized SQL through the indexer Database wrapper",
+      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused accepts replays that ran every group, and does not demand a pass for a table with no bearing rows",
+      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused names a reader for every admission-bearing table, and that reader is a production pass calling the consumer",
+      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused refuses a side that reports no pass list, since it cannot show it read the rows",
+      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused refuses by name the replay that never ran the ATTEST response pass over a signed response",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict accepts a mirror with admission-era rows and a boundary inside the corpus",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict reads the password from the variable --db-pass-env names, and refuses when it is unset",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses a boundary above the corpus tip, the rail's H=100000 over 102 blocks",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses a mirror with no row carrying this chain's admission height",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses on the command line, before any replay, when no --mirror-db is named",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses sides that copied different mirrors",
+      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses the rail's run: sides replayed with empty mirror tables",
+      "mirror-admission replay witness: owned artifact cleanup applies workdir cleanup on a refusal before schemas are created",
+      "mirror-admission replay witness: owned artifact cleanup makes --keep control schema and workdir cleanup through the CLI",
+      "mirror-admission replay witness: owned artifact cleanup removes owned schemas and workdir by default, but --keep preserves and prints both",
+      "mirror-admission replay witness: signal cleanup records the first catchable signal and stops the active replay side",
+      "mirror-admission replay witness: the mirror a side copies copies every hub-mirror table over the shared columns before counting admission-era rows",
+      "mirror-admission replay witness: what each side is handed and replays against binds by this chain's admission column only in the tables a consumer reads by it",
+      "mirror-admission replay witness: what each side is handed and replays against hands the OFF side no lever at all, even when the parent environment carries one",
+      "mirror-admission replay witness: what each side is handed and replays against passes the mirror schema to each side on argv, and a side accepts only a plain schema name"
+    ],
     "4695d3e53dcc1836": [
       "mergeUnionMembers dedupes items across members",
       "mergeUnionMembers orders by UTF-8 bytes, uppercase before lowercase",
@@ -5179,6 +5344,19 @@
       "mergeUnionMembers returns a new array and leaves the input unmutated",
       "mergeUnionMembers returns an empty array for an empty union",
       "mergeUnionMembers throws a TypeError for a member that is not an array"
+    ],
+    "46a0fd81a76c7ce4": [
+      "the block loop rides out a database outage instead of exiting @regression @tier1 caps the backoff so the heartbeat keeps stamping through a long outage",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: a non-database error still rejects the loop, so the fatal path is intact",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage past the give-up window rejects for the supervisor restart",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage with a transaction left open on indexerDb still rejects",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 exits the loop on stop during an outage without one more backoff sleep",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 keeps running through pool timeouts and a refused connection, then resumes",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 marks replay witness and marker appends as restart-only work",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 names the driver errno of a wrapped beginTransaction pool timeout in the outage class",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 rejects a lost database socket after a reorg rollback begins",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 rides out a lost database socket before rollback or replay writes begin",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 treats the wrapped beginTransaction form and the circuit breaker refusal as an outage"
     ],
     "46c9fa2ede1c02da": [
       "list share target halts before any read when the address map is missing",
@@ -5994,6 +6172,9 @@
       "Utility @regression @tier1 resetLists() should clear both addresses and tickers",
       "Utility @regression @tier1 resetTickersList() should clear the tickers array"
     ],
+    "4fdb2482a42bd589": [
+      "API read before ISSUE replay determinism @regression @tier1 matches the clean ledger hash chain after gettokenpolicy reads the future ticker"
+    ],
     "4ffeb0d1e41bc3d6": [
       "list share apply determinism reaches identical state in two fresh stores over the same blocks"
     ],
@@ -6221,6 +6402,13 @@
       "stake_weighted_quorum fail-closed on truncation (SWQ-TRUNC-1) @regression @security a single-source snapshot is quorate when NOT truncated",
       "stake_weighted_quorum fail-closed on truncation (SWQ-TRUNC-1) @regression @security meetsStakeThreshold returns false when the snapshot array is marked truncated",
       "stake_weighted_quorum fail-closed on truncation (SWQ-TRUNC-1) @regression @security totalStake throws on a truncated snapshot (its sum is meaningless)"
+    ],
+    "533747181d593e25": [
+      "same-token offer creation refusal @regression @tier1 keeps a same-token ORDER valid below activation and refuses it at and above activation",
+      "same-token offer creation refusal @regression @tier1 keeps a same-token SWAP valid below activation and refuses it at and above activation",
+      "same-token offer creation refusal @regression @tier1 keeps different-token ORDER and SWAP creation valid on both sides of activation",
+      "same-token offer creation refusal @regression @tier1 refuses a SWAP whose name and caret alias resolve to one token id",
+      "same-token offer creation refusal @regression @tier1 refuses an ORDER whose differently cased tick spellings resolve to one token id"
     ],
     "534e6d3195bb81fd": [
       "list_metas holds a 4-byte character in name and description @regression createListMeta stores a 4-byte name and description against the strict server",
@@ -6945,14 +7133,6 @@
       "[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression @tier1 shape-violating answer at/after the oracle-shape flag-day (strictShape) an out-of-range numeric height is unmoved by the gate (it already fails closed)",
       "[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression @tier1 shape-violating answer at/after the oracle-shape flag-day (strictShape) the strict flip is opt-in: no option object is the legacy fail-open null"
     ],
-    "5caf6af9f6bed1d6": [
-      "getReorgHealthStats() null-on-failure contract keeps a genuine zero as 0",
-      "getReorgHealthStats() null-on-failure contract keeps the count when only the last-marker read fails",
-      "getReorgHealthStats() null-on-failure contract reports reorgsProcessed null when a raw-handle query error would otherwise read as no rows",
-      "getReorgHealthStats() null-on-failure contract reports reorgsProcessed null when the count read fails on the committed view",
-      "getReorgHealthStats() null-on-failure contract reports reorgsProcessed null when the count read returns no row",
-      "getReorgHealthStats() null-on-failure contract reports the count, block and time of the latest marker on a good read"
-    ],
     "5cc2b8143bdd5808": [
       "Security: remediated dependency advisories @regression @tier4 ADV-10: the installed mariadb reports a patched runtime version",
       "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins axios at or above 1.18.0",
@@ -7327,6 +7507,19 @@
     "61bff9365b5d2df3": [
       "stateCommitment: incremental stakes subtree updates @regression updates a changed leaf, removes a key, and rebuilds after a gap"
     ],
+    "61f5af80b4889c06": [
+      "getReorgHealthStats() logs a failed read at warn logs nothing on a good read",
+      "getReorgHealthStats() logs a failed read at warn warns naming the last-marker stage when only that read fails, and keeps the count",
+      "getReorgHealthStats() logs a failed read at warn warns once naming the count stage when the count read fails, and still returns null stats",
+      "getReorgHealthStats() null-on-failure contract keeps a genuine zero as 0",
+      "getReorgHealthStats() null-on-failure contract keeps the count when only the last-marker read fails",
+      "getReorgHealthStats() null-on-failure contract reports reorgsProcessed null when a raw-handle query error would otherwise read as no rows",
+      "getReorgHealthStats() null-on-failure contract reports reorgsProcessed null when the count read fails on the committed view",
+      "getReorgHealthStats() null-on-failure contract reports reorgsProcessed null when the count read returns no row",
+      "getReorgHealthStats() null-on-failure contract reports the count, block and time of the latest marker on a good read",
+      "getReorgHealthStats() rate-limits its failed-read warn rate-limits across fresh committed-view wrappers, the way the /health handler calls it",
+      "getReorgHealthStats() rate-limits its failed-read warn suppresses repeat failures inside the interval and reports the suppressed count on the next warn"
+    ],
     "6211c0307b8e5b60": [
       "Database.createToken() token locks @regression @tier1 INSERT column count, placeholder count and arg count all agree",
       "Database.createToken() token locks @regression @tier1 INSERT writes all seven locks, each bound to its own column",
@@ -7357,52 +7550,13 @@
       "bridge escrow origin generalization @regression @tier1 mints colliding FUFU assets under distinct origin roots",
       "bridge escrow origin generalization @regression @tier1 releases rooted burns only from the matching native escrow asset"
     ],
-    "f3c330eb249693ec": [
-      "federation READ connection isolation @regression @tier1 every federation-read method has a handler in the controller",
-      "federation READ connection isolation @regression @tier1 getactionconfirmations makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getactionconfirmations resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getactivestakeweights makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getactivestakeweights resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getactivevalidators makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getactivevalidators resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getanchoraction makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getanchoraction resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getanchorconfirmations makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getanchorconfirmations resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getarchiveanchor makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getarchiveanchor resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getattestbatches makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getattestbatches resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getcapabilityvalidators makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getcapabilityvalidators resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getcrosschaincall makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getcrosschaincall resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getcrosschaincallresult makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getcrosschaincallresult resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getfullnodeverifiers intersects via a batched capability read, like nodeproof.js",
-      "federation READ connection isolation @regression @tier1 getfullnodeverifiers makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getfullnodeverifiers resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getopencrosschainorders makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getopencrosschainorders resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getownstake makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getownstake resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getpendingattestation_requests makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getpendingattestation_requests resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getpendingcrosschaincalls makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getpendingcrosschaincalls resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getpricebatches makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getpricebatches resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getpricebatchpayload makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getpricebatchpayload resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getrelayedattestation_requests makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getrelayedattestation_requests resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getreorghistory makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getreorghistory resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getrollcallsigners makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getrollcallsigners resolves its DB through apiView()",
-      "federation READ connection isolation @regression @tier1 getstakesourcebypubkey delegates to stake_source.js (apiView routing lives there)",
-      "federation READ connection isolation @regression @tier1 getstakeweightsbycapability makes no bare indexerDb/decoderDb read call (would join the block tx)",
-      "federation READ connection isolation @regression @tier1 getstakeweightsbycapability resolves its DB through apiView()"
+    "62dcc3a31efbdbea": [
+      "shared activation-registry parts: byte-identity to the indexer tree @regression the indexer part set is exactly the vendored part list",
+      "shared activation-registry parts: byte-identity to the indexer tree @regression xchain-documentation carries every registry part byte-identical to the indexer",
+      "shared activation-registry parts: byte-identity to the indexer tree @regression xchain-explorer carries every registry part byte-identical to the indexer",
+      "shared activation-registry parts: byte-identity to the indexer tree @regression xchain-hub carries every registry part byte-identical to the indexer",
+      "shared activation-registry parts: byte-identity to the indexer tree @regression xchain-sdk carries every registry part byte-identical to the indexer",
+      "shared activation-registry parts: byte-identity to the indexer tree @regression xchain-sync carries every registry part byte-identical to the indexer"
     ],
     "6327e00cd235d36f": [
       "retroactive-go rewitness arguments @regression @tier1 accepts --rewitness with the open marker target",
@@ -7489,6 +7643,19 @@
       "Multi-chain action processing @regression @tier1 fee-payment mode every coin config ships a real (non-placeholder) FEE_DESTINATION",
       "Multi-chain action processing @regression @tier1 fee-payment mode with a fee output present: native on every coin",
       "Multi-chain action processing @regression @tier1 fee-payment mode with a real fee destination and NO fee output: BTC=xchain, LTC/DOGE=rejected"
+    ],
+    "657b4a2adeffa9c8": [
+      "API read index id suppression @regression @tier1 an API lookup before a future ISSUE preserves the block ticker allocation",
+      "API read index id suppression @regression @tier1 apiView createAddress resolves a canonical caret id in the deterministic set",
+      "API read index id suppression @regression @tier1 apiView createAddress returns the id for a known deterministic name",
+      "API read index id suppression @regression @tier1 apiView createAddress returns the id for a known name with NULL block_index",
+      "API read index id suppression @regression @tier1 apiView createTicker resolves a canonical caret id in the deterministic set",
+      "API read index id suppression @regression @tier1 apiView createTicker returns the id for a known deterministic name",
+      "API read index id suppression @regression @tier1 apiView createTicker returns the id for a known name with NULL block_index",
+      "API read index id suppression @regression @tier1 getappliedpolicy leaves an unknown ticker absent from index_tickers",
+      "API read index id suppression @regression @tier1 gettokenpolicy leaves an unknown ticker absent from index_tickers",
+      "API read index id suppression @regression @tier1 gettokenpolicy stores nothing while the parent database has an open transaction",
+      "API read index id suppression @regression @tier1 the API view leaves an unknown address absent from index_addresses"
     ],
     "65adae7ccb7afd63": [
       "boot retroactive replay @regression @tier1 a crash after the rollback commit resumes from the open marker with no second rollback",
@@ -7750,20 +7917,6 @@
       "Unstake handler @regression @tier2 v0 : capability unstake valid v0 unstake \u2192 mapper.createMappings called",
       "Unstake handler @regression @tier2 v0 : capability unstake valid v0 unstake \u2192 setStakeDeactivationByPubkey called"
     ],
-    "681ab1dcd2551bc6": [
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] XEXEC/BATCH stay unquotable: supported:false, engine never invoked",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] admission cap: over-cap quotes get a retryable busy error, engine never invoked",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] class-B invalid: handler verdict + reason surface verbatim, no pricing",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] deny-list cannot be bypassed with whitespace or alias padding: engine never invoked",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] fee-exempt settlement/lifecycle actions: zero-fee feeExempt result, engine never invoked",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] honors INDEXER_FEEQUOTE_MAX_PENDING / INDEXER_FEEQUOTE_TIMEOUT_MS overrides",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] invalid (stale/missing price) on a valid action => valid:false with the price error",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] no FEE_DESTINATION configured => supported:false, engine never invoked",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] passes the probe destination + default timeout to the engine",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] pending counter is released after the run, including on engine throw",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] previously-unsupported actions (SEND) now quote through the handler",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] valid handler run: prices the handler-staged fee, carries status + validated"
-    ],
     "685776d6426cb162": [
       "ANCHOR_FAILED: a refused anchor is separable from an accepted one @regression a bundle refused before any section parses still reports the reason",
       "ANCHOR_FAILED: a refused anchor is separable from an accepted one @regression a refused v0 bundle emits one record carrying the verdict and the chains that parsed",
@@ -7896,6 +8049,15 @@
       "state_key binary-collation gate (contract_hash preimage + VM reload) @regression @tier1 getContractState VM reload gates GROUP BY state_key_bin (index-backed utf8_bin shadow) at/after activation (regtest)",
       "state_key binary-collation gate (contract_hash preimage + VM reload) @regression @tier1 getContractState VM reload keeps the legacy folding form below the armed mainnet height",
       "state_key binary-collation gate (contract_hash preimage + VM reload) @regression @tier1 getContractState VM reload keeps the legacy folding form when no block context is supplied (historical replay safety)"
+    ],
+    "6a0eea9298dc58c8": [
+      "capability proof bootstrap batch @regression @tier1 does not let an overlapping price flush clear or restore a capability batch",
+      "capability proof bootstrap batch @regression @tier1 falls back to the row request when a shared response omits its member",
+      "capability proof bootstrap batch @regression @tier1 keeps distinct checkpoint keys separate",
+      "capability proof bootstrap batch @regression @tier1 keeps every shared proof request path within the 8 KB budget",
+      "capability proof bootstrap batch @regression @tier1 matches real-verifier verdict, reason, and firstUse for pinned and regtest first-use batches",
+      "capability proof bootstrap batch @regression @tier1 scopes an unavailable frontier to its capability and installed batch members",
+      "capability proof bootstrap batch @regression @tier1 shares proof requests across small and large row counts for one group"
     ],
     "6a3d32983360fd81": [
       "07 Deterministic simultaneous-expiry ordering @regression @tier2 getExpiredCoinpayObligations returns same-block expirations in ascending action_index order",
@@ -8269,6 +8431,12 @@
       "Collect (COLLECT) @regression @tier3 valid collect debits the reward pool and credits the validator (no mint)",
       "Collect (COLLECT) @regression @tier3 valid collect \u2192 STATUS valid, reward recorded as AMOUNT"
     ],
+    "6ec77729632635c6": [
+      "same-token offer match refusal @regression @tier1 keeps different-token ORDER and SWAP matching unchanged on both sides of activation",
+      "same-token offer match refusal @regression @tier1 leaves no match or escrow row after stored aliases canonicalize to one token",
+      "same-token offer match refusal @regression @tier1 matches a pre-activation same-token ORDER but skips it at activation before escrow",
+      "same-token offer match refusal @regression @tier1 matches a pre-activation same-token SWAP but skips it at activation before escrow"
+    ],
     "6ed3bf6ac7b149b4": [
       "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest/response.js + attest/expire.js) v1 response: a DB driver fault (deadlock 1213) in the callback PROPAGATES",
       "Callback injection infra-fault propagation @regression @tier2 ATTEST (attest/response.js + attest/expire.js) v1 response: a VM host fault in the callback PROPAGATES (block halts)",
@@ -8578,6 +8746,26 @@
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) synthesizes an ATTEST v1 with NULL tx coordinates, BLOCK_TIME, and the row pair",
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) synthesizes nothing at a block one second short of the effective_time"
     ],
+    "738a4f471563c941": [
+      "markets: a token against the native coin @regression @tier1 collects ONE pair from two opposite-orientation orders on a token/native market",
+      "markets: a token against the native coin @regression @tier1 createMarket writes the sentinel and the coin ids, never a NULL side",
+      "markets: a token against the native coin @regression @tier1 getMarketInfo resolves a tickerless side through index_coins",
+      "markets: a token against the native coin @regression @tier1 labels an existing unlabelled row with exactly one UPDATE",
+      "markets: a token against the native coin @regression @tier1 leaves a row that already carries its coin ids untouched",
+      "markets: a token against the native coin @regression @tier1 leaves a token/token pair on exactly the ids it always carried",
+      "markets: a token against the native coin @regression @tier1 persists the derived labels, and only once both sides are known",
+      "markets: a token against the native coin @regression @tier1 the ageing sweep labels a row the block path can never reach",
+      "markets: the migration that rebuilds the missing rows @regression @tier1 adds a missing pair instead of rebuilding every pair",
+      "markets: the migration that rebuilds the missing rows @regression @tier1 collapses surplus rows BEFORE normalizing a NULL side onto the sentinel",
+      "markets: the migration that rebuilds the missing rows @regression @tier1 deletes only surplus rows of a pair that keeps its lowest-id row",
+      "markets: the migration that rebuilds the missing rows @regression @tier1 is manual, and cannot be retagged auto",
+      "markets: the migration that rebuilds the missing rows @regression @tier1 parses into the five statements the runner will execute, in order",
+      "markets: the pair filter keeps the tick columns bare binds a token/token pair as plain column equalities in both orientations",
+      "markets: the pair filter keeps the tick columns bare derives an unlabelled pair's coins through the same NULL-aware pair filter",
+      "markets: the rollback collector agrees with the block path @regression @tier1 exempts the sentinel from the dangling-ticker sweep",
+      "markets: the rollback collector agrees with the block path @regression @tier1 keeps the token/native pair the block path keeps, under the same key",
+      "markets: the rollback collector agrees with the block path @regression @tier1 probes order survival NULL-aware, so a live token/native market is not swept as a zombie"
+    ],
     "73bf19393156da6f": [
       "ANCHOR v0 checkpoint sequence binding below gate @regression @tier3 keeps mainnet sequence and snapshot independent on the all-rows watermark",
       "ANCHOR v0 checkpoint sequence binding below gate @regression @tier3 keeps testnet sequence and snapshot independent on the all-rows watermark"
@@ -8703,6 +8891,18 @@
       "price_landing_wait grace wiring @regression classifies a landing stall inside its own grace as price_landing_wait",
       "price_landing_wait grace wiring @regression leaves other reasons on the generic grace",
       "price_landing_wait grace wiring @regression wedges a landing stall only past priceLandingGraceMs"
+    ],
+    "75a25823fd1288ab": [
+      "HubDbSync bootstrap retry timer lifecycle a deduped retry that fires and rejects arms exactly one new retry",
+      "HubDbSync bootstrap retry timer lifecycle collapses repeat retries to one pending retry",
+      "HubDbSync bootstrap retry timer lifecycle stop() cancels a pending bootstrap retry",
+      "HubDbSync poll timer lifecycle a restart while a poll awaits bootstrapAll retires the old chain",
+      "HubDbSync poll timer lifecycle a second startPolling() call does not start a second chain",
+      "HubDbSync poll timer lifecycle a stop and restart before the poll fires keeps one poll cadence",
+      "HubDbSync poll timer lifecycle stop() cancels a pending poll",
+      "HubDbSync start() survives a throw from its first bootstrap in WS mode resolves and arms the bootstrap retry",
+      "HubDbSync start() survives a throw from its first bootstrap in poll mode resolves and still starts the poll loop",
+      "HubDbSync start() survives a throw from its first bootstrap still rejects when the mirror id check refuses startup"
     ],
     "75c1e0031337ed39": [
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 activation plane v3 rejects a SNAPSHOT_BLOCK ahead of its own block (no future-snapshot pinning)",
@@ -8897,6 +9097,15 @@
       "Send handler @regression @tier1 format 0: single send valid send \u2192 processDispenserSends invoked",
       "Send handler @regression @tier1 format 0: single send valid send \u2192 updateBalances called",
       "Send handler @regression @tier1 format 0: single send valid single send \u2192 STATUS valid, createSend called"
+    ],
+    "7846b765289f26c4": [
+      "HubPushQueue starvation fix (MariaDB integration) @regression @tier1 excludes a row whose backoff window has not yet elapsed",
+      "HubPushQueue starvation fix (MariaDB integration) @regression @tier1 fetches a durable row with 1100 attempts once the capped backoff has elapsed",
+      "HubPushQueue starvation fix (MariaDB integration) @regression @tier1 fetches a newer due row even with 50+ older rows parked in backoff (head-of-line blocking)",
+      "HubPushQueue starvation fix (MariaDB integration) @regression @tier1 fetches a row whose attempts sit at the INT UNSIGNED maximum",
+      "HubPushQueue starvation fix (MariaDB integration) @regression @tier1 holds a durable row with 1100 attempts inside the capped backoff without failing the fetch",
+      "HubPushQueue starvation fix (MariaDB integration) @regression @tier1 still fetches a never-tried row behind a durable row with 1100 attempts",
+      "HubPushQueue starvation fix (MariaDB integration) @regression @tier1 still returns parked rows once their backoff window has actually elapsed"
     ],
     "78528049da6173b3": [
       "HubDbSync close code harness a normal close reaches the client and retains positions for the same instance",
@@ -9632,6 +9841,18 @@
       "dispense value accounting: multi-dispenser payment outside a batch @regression @tier1 one fill's worth behind THREE dispensers fills exactly ONE",
       "dispense value accounting: multi-dispenser payment outside a batch @regression @tier1 the non-batch tally never appears on data as a BATCH_VALUE_LEDGER",
       "dispense value accounting: multi-dispenser payment outside a batch @regression @tier1 the tally is scoped to ONE action: a second DISPENSE gets a fresh payment"
+    ],
+    "81a917dd5d925a14": [
+      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 a consumer with no mirror bound re-pages from zero",
+      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 a forced resync with no socket forgets the floor start (verifier m8)",
+      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 re-pages from zero after an instance change, a forced resync or a schema refusal",
+      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 re-pages from zero when the floor has moved down (verifier m7)",
+      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 a floor-started reconcile keeps a held predecessor below the floor (verifier m6)",
+      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 retries failed pages at their cursor and restarts only for a new connection",
+      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 starts below the lowest applied id, settles the owed re-page and keeps the floor",
+      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 stops retrying a failed page once stop() runs",
+      "HubDbSync stall detector spares a re-page that is still moving @regression @tier1 never forces a resync while drain ticks keep moving, and does once they stop",
+      "HubDbSync stall detector spares a re-page that is still moving @regression @tier1 still resyncs a frozen mirror when no bootstrap is running"
     ],
     "81e3a88cf8ac262a": [
       "pushvalidatorrewards is retired outright @regression @tier1 declares no handler in src/api.js",
@@ -10972,6 +11193,28 @@
       "ORDER_MATCH price-cross activation, every token-decimals pair @regression @tier2 decA=9 decB=8",
       "ORDER_MATCH price-cross activation, every token-decimals pair @regression @tier2 decA=9 decB=9"
     ],
+    "916f6fe7c7368a48": [
+      "Database capability snapshot methods @regression @tier1 getCapabilitySnapshotValidators returns mapped results",
+      "Database capability snapshot methods @regression @tier1 isPubkeyInCapabilitySnapshot returns false when no row",
+      "Database capability snapshot methods @regression @tier1 isPubkeyInCapabilitySnapshot returns true when row found",
+      "Database hub push queue methods @regression @tier1 enqueueHubPush inserts a row with serialized payload",
+      "Database hub push queue methods @regression @tier1 enqueueHubPush keys the row on an explicit rollback index when one is given",
+      "Database hub push queue methods @regression @tier1 enqueueHubPushTx refuses the API view while the parent holds a transaction",
+      "Database hub push queue methods @regression @tier1 enqueueHubPushTx refuses the API view with no transaction open",
+      "Database hub push queue methods @regression @tier1 enqueueHubPushTx refuses to write with no transaction open",
+      "Database hub push queue methods @regression @tier1 enqueueHubPushTx returns the new row id when a transaction is open",
+      "Database hub push queue methods @regression @tier1 markHubPushDelivered deletes the row",
+      "Database hub push queue methods @regression @tier1 recordHubPushAttempt defaults maxAttempts to 10 on invalid input",
+      "Database hub push queue methods @regression @tier1 recordHubPushAttempt runs an UPDATE",
+      "Database.getActiveCapabilityCount() @regression @tier1 passes blockIndex args when provided",
+      "Database.getActiveCapabilityCount() @regression @tier1 returns 0 when capability is not configured",
+      "Database.getActiveCapabilityCount() @regression @tier1 returns 0 when doQuery returns empty",
+      "Database.getActiveCapabilityCount() @regression @tier1 returns count when capability is configured",
+      "Database.getPendingHubPushes() @regression @tier1 bakes the exponential-backoff due-time predicate into the WHERE clause",
+      "Database.getPendingHubPushes() @regression @tier1 defaults limit to 50 on invalid input",
+      "Database.getPendingHubPushes() @regression @tier1 defaults the backoff window when no backoffOpts are passed",
+      "Database.getPendingHubPushes() @regression @tier1 uses provided limit"
+    ],
     "918fa176a8537ff6": [
       "index reconciler admits FULLTEXT indexes @regression a live FULLTEXT meta_search satisfies the declaration (no heal, no warning)",
       "index reconciler admits FULLTEXT indexes @regression a plain BTREE index on the same columns does NOT satisfy a declared FULLTEXT index",
@@ -11609,6 +11852,15 @@
       "sourceStreak stops at a pinned epoch where the source was present",
       "sourceStreak stops at a row with no readable pinned set"
     ],
+    "9905578f0abd08aa": [
+      "capability snapshot judge skips a key the mirror already holds @regression @tier1 a retained-hold retry settles a now-mirrored key without a proof fetch",
+      "capability snapshot judge skips a key the mirror already holds @regression @tier1 clears a hold without a proof fetch once the held key is mirrored",
+      "capability snapshot judge skips a key the mirror already holds @regression @tier1 judges a row when the presence read answers with a different key",
+      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 bounds proof requests for a full flush at two row counts across a path chunk boundary",
+      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 judges every row a rolled-back local mirror no longer holds",
+      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 pages from id 0 over an intact mirror and proves only the row it lacks",
+      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 still holds and later applies an unmirrored frontier row re-served after the restart"
+    ],
     "991c340ad529ac34": [
       "quote surfaces : the mainnet launch gate @regression @tier1 answers a fee-exempt quote as before on regtest",
       "quote surfaces : the mainnet launch gate @regression @tier1 refuses a pre-launch mainnet SEND without running the handler",
@@ -12159,6 +12411,23 @@
     "9fccb58e5d806628": [
       "snapshot checkpoint canonical twin indexer copy is byte-identical to the hub copy"
     ],
+    "9fd449fa1c41ad11": [
+      "GET /status reports loop liveness for the fleet watcher, without gating on it keeps pollSilent and lastPollAt after every older key monitors already read",
+      "GET /status reports loop liveness for the fleet watcher, without gating on it leaves the 503 inputs untouched: a silent loop alone is not wedged",
+      "GET /status reports loop liveness for the fleet watcher, without gating on it reads a booting indexer as not silent, with no stamp yet",
+      "XChainIndexer#isPollSilent() is false at the window edge and true past it",
+      "XChainIndexer#isPollSilent() is false before the loop has iterated once, so a booting indexer is never dead",
+      "XChainIndexer#isPollSilent() is false while the loop is iterating",
+      "XChainIndexer#isPollSilent() is stamped by BOTH loops, since a catch-up stays inside the inner one for hours",
+      "XChainIndexer#isPollSilent() sizes the window well above one barrier-timeout cycle",
+      "database outage state is published to health checks publishes since, failures and last error class in the health payload",
+      "database outage state is published to health checks publishes the same outage state in GET /status",
+      "health payload carries loop liveness as its own axis does not fold loop liveness into status, which drives container restarts",
+      "health payload carries loop liveness as its own axis publishes pollSilent and the last iteration stamp",
+      "health payload carries loop liveness as its own axis reads not-silent from an indexer double that predates the accessor",
+      "health payload carries loop liveness as its own axis reports a hung loop that every other field renders as healthy",
+      "health payload carries loop liveness as its own axis reports not-silent on a quiet chain whose last commit is ancient"
+    ],
     "9ffcaf3eab04af81": [
       "protocol_changes VM lint nesting-depth row is active on regtest at genesis, unarmed on mainnet and armed on each testnet chain",
       "protocol_changes VM lint nesting-depth row registers the per-chain height map"
@@ -12530,6 +12799,24 @@
       "EQUIV DEX canonical (WI-2 bump 2) at/above the flag-day (regtest) \u2192 header-wrapped with VIEW=finalizing_view",
       "EQUIV DEX canonical (WI-2 bump 2) below the flag-days (mainnet) \u2192 bare XMATCH bytes (regression-safe)",
       "EQUIV DEX canonical (WI-2 bump 2) matches buildEquivCanonical(XDEX, match_id, view, raw)"
+    ],
+    "a57290c9b830e1fa": [
+      "isDbOutageError names only database outages does not classify a pool timeout caused by access denied as an outage",
+      "isDbOutageError names only database outages does not classify a wrapped pool timeout whose text names access denied as an outage",
+      "isDbOutageError names only database outages does not classify hub or tracker socket failures as database outages",
+      "isDbOutageError names only database outages does not match a logic or SQL error",
+      "isDbOutageError names only database outages matches driver, socket, wrapped, cause-chained and breaker errors",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 caps the backoff so the heartbeat keeps stamping through a long outage",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: a non-database error still rejects the loop, so the fatal path is intact",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage past the give-up window rejects for the supervisor restart",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage with a transaction left open on indexerDb still rejects",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 exits the loop on stop during an outage without one more backoff sleep",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 keeps running through pool timeouts and a refused connection, then resumes",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 marks replay witness and marker appends as restart-only work",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 names the driver errno of a wrapped beginTransaction pool timeout in the outage class",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 rejects a lost database socket after a reorg rollback begins",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 rides out a lost database socket before rollback or replay writes begin",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 treats the wrapped beginTransaction form and the circuit breaker refusal as an outage"
     ],
     "a5d6a21bff731e18": [
       "protocol_changes VM lint destructure row is active on regtest at genesis, unarmed on every mainnet chain and armed on each testnet chain",
@@ -13195,6 +13482,11 @@
       "getContractStakeDataForVM decimal strings @regression @tier1 preserves legacy BigNumber amounts before activation",
       "getContractStakeDataForVM decimal strings @regression @tier1 returns only canonical plain-decimal amount strings once active"
     ],
+    "af6194bf77d0c04e": [
+      "committed migrations apply in their authored same-date order @regression @tier1 every grandfathered pair still exists and still inverts, so no exemption is stale",
+      "committed migrations apply in their authored same-date order @regression @tier1 invertedPrefixPairs finds a hyphen-suffixed follow-up that sorts before its base",
+      "committed migrations apply in their authored same-date order @regression @tier1 no migration filename extends a same-date base with a suffix that applies first"
+    ],
     "af6ab63739fb0ecf": [
       "price barrier decoupled from the fee flag-day @regression @tier1 the flag-day predicate itself is retained for the fee-side query",
       "price barrier decoupled from the fee flag-day @regression @tier1 the non-BTC time barrier is not guarded by isNativeFeePriceTimeGateActive",
@@ -13433,6 +13725,21 @@
       "Utility @regression @tier1 sortPriceActionIndex() should break GET_PRICE ties by ACTION_INDEX descending (matching the code comment)",
       "Utility @regression @tier1 sortPriceActionIndex() should sort by GET_PRICE descending, then ACTION_INDEX descending"
     ],
+    "b0d45d18fc61eece": [
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] XEXEC/BATCH stay unquotable: supported:false, engine never invoked",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] admission cap: over-cap quotes get a retryable busy error, engine never invoked",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] class-B invalid: handler verdict + reason surface verbatim, no pricing",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] deny-list cannot be bypassed with whitespace or alias padding: engine never invoked",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] fee-exempt settlement/lifecycle actions: zero-fee feeExempt result, engine never invoked",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] honors INDEXER_FEEQUOTE_MAX_PENDING / INDEXER_FEEQUOTE_TIMEOUT_MS overrides",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] invalid (stale/missing price) on a valid action => valid:false with the price error",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] no FEE_DESTINATION configured => supported:false, engine never invoked",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] passes the probe destination + default timeout to the engine",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] pending counter is released after the run, including on engine throw",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] previously-unsupported actions (SEND) now quote through the handler",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] unfinished dry-run: retryable no-verdict, never a rejection, and a real rejection carries no marker",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] valid handler run: prices the handler-staged fee, carries status + validated"
+    ],
     "b0ff748112af56ad": [
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 always writes the parent row even when the guard emits nothing (the guard execution itself enters the hash)",
       "runControllerGuard: guard emissions enter contract_hash @regression @tier1 keeps per-guard savepoint names unique inside a shared leg frame",
@@ -13456,24 +13763,6 @@
       "ANCHOR v3 recorder writes one row at section index zero without sections or an archive",
       "ANCHOR v3 recorder writes only section rows when the archive is null",
       "ANCHOR v3 recorder writes section rows followed by an archive row with wrapper signatures"
-    ],
-    "1a49868c7c9dc670": [
-      "JSON-RPC anchor family @regression @tier1 every anchor read refuses without a database and reports a throw",
-      "JSON-RPC anchor family @regression @tier1 getanchoraction runs the owned SQL through doQuery and answers checkpoint_anchored",
-      "JSON-RPC anchor family @regression @tier1 getanchorconfirmations picks the paged SQL only when a cursor is given",
-      "JSON-RPC anchor family @regression @tier1 getarchiveanchor reads by content commitment and author",
-      "JSON-RPC price batch family @regression @tier1 getpricebatches answers each batch landing block with its protocol time, the clock pushpricebatch carried",
-      "JSON-RPC price batch family @regression @tier1 getpricebatches validates the window, reads valid batches over it and pages by truncation",
-      "JSON-RPC price batch family @regression @tier1 getpricebatchpayload rebuilds the committed valid batch body that pushpricebatch received",
-      "JSON-RPC price batch family @regression @tier1 getpricebatchpayload refuses an invalid action index and an unknown or invalid batch",
-      "JSON-RPC reorg history family @regression @tier1 falls back to the indexer's last-known halt flag when the probe faults",
-      "JSON-RPC reorg history family @regression @tier1 reads the decoder view, probes the live halt flag and matches an orphaned hash",
-      "JSON-RPC reorg history family @regression @tier1 validates, refuses without the decoder database and reports a throw",
-      "JSON-RPC roll-call family @regression @tier1 getrollcalls and getrollcallabsences clamp to 20 by default and 100 at most",
-      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners answers the cut, tip, manifest hash and activation heights",
-      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners refuses off DOGE, without a database, and reports a throw",
-      "JSON-RPC roll-call family @regression @tier1 getrollcallsigners reports null for an inert activation rail",
-      "JSON-RPC roll-call family @regression @tier1 roll-call listings reject malformed limits and absence sources before reading"
     ],
     "b221bd2999724a00": [
       "Database.createAirdrop() @regression @tier1 INSERTs when not found",
@@ -13929,6 +14218,10 @@
       "Dispense action handler @regression @tier2 FIAT_DISPENSER_PRICING gate is genesis-active, so a FIAT dispenser settles normally",
       "Dispense action handler @regression @tier2 FIAT_DISPENSER_PRICING gate the gate never touches a non-FIAT dispenser"
     ],
+    "b9963332da94f7f4": [
+      "Utility throwError() includes an Error message in the rendered refusal log and rethrows the same Error",
+      "Utility throwError() stringifies a non-Error refusal in the rendered log"
+    ],
     "b9bb8dfb73d79738": [
       "resolveSlashTarget contract validation rejects a contract index mismatch before lookup",
       "resolveSlashTarget contract validation rejects a missing contract",
@@ -14049,6 +14342,17 @@
       "shared list storage reads returns the destination of the newest transfer after two transfers",
       "shared list storage reads returns valid shares in action order and ignores an invalid share"
     ],
+    "bc089c9f6525a81c": [
+      "capability snapshot proof database wiring @regression @tier1 holds at the gate when no proof fetcher is available",
+      "capability snapshot proof database wiring @regression @tier1 keeps a mirror-resolved row below the gate on the legacy path",
+      "capability snapshot proof database wiring @regression @tier1 keeps the BTC re-derivation path unchanged when the proof gate is active",
+      "capability snapshot proof database wiring @regression @tier1 never derives the checkpoint trust set from mirrored capability rows",
+      "capability snapshot proof database wiring @regression @tier1 passes verified, refused, and held proof verdicts through at the gate",
+      "capability snapshot proof database wiring @regression @tier1 uses the static pin below rotation and the next pin from its block onward",
+      "capability snapshot proof database wiring @regression @tier1 warns once per distinct unpinned regtest validator set",
+      "capability snapshot proof database wiring: regtest seeded hub row @regression @tier1 applies the seeded row on an unpinned LTC regtest indexer",
+      "capability snapshot proof database wiring: regtest seeded hub row @regression @tier1 still refuses the seeded row when another key signed the checkpoint"
+    ],
     "bc0fdae14389c0fc": [
       "automatic migration unique-key witness @regression @tier1 finds each key-dependent write and ignores one inside a quoted literal",
       "automatic migration unique-key witness @regression @tier1 ignores a key-dependent statement inside a quoted literal",
@@ -14104,6 +14408,27 @@
       "oracle sync barrier grace @regression @tier1 holds a block with no covering oracle row until the stream passes block_time + 120",
       "oracle sync barrier grace @regression @tier1 pins the frozen oracle grace to ordinary stream lag",
       "oracle sync barrier grace @regression @tier1 still waits on an unbootstrapped mirror regardless of stream time"
+    ],
+    "bc9b899ba93759c7": [
+      "capability snapshot proof verifier @regression @tier1 accepts and rejects pinned sets with the sync parser rules",
+      "capability snapshot proof verifier @regression @tier1 does not reuse a null-version memo entry for a missing state-root version",
+      "capability snapshot proof verifier @regression @tier1 does not reuse a plain trust-set memo entry for a truncated trust set",
+      "capability snapshot proof verifier @regression @tier1 holds absent and mis-addressed responses before examining signatures",
+      "capability snapshot proof verifier @regression @tier1 holds checkpoints for another chain, network, or buried block",
+      "capability snapshot proof verifier @regression @tier1 holds commitments that do not hash to their member leaf",
+      "capability snapshot proof verifier @regression @tier1 holds missing and invalid stake member proofs",
+      "capability snapshot proof verifier @regression @tier1 holds proofs with a wrong block, root, or state-root version",
+      "capability snapshot proof verifier @regression @tier1 judges matching, changed, and multi-source snapshot rows",
+      "capability snapshot proof verifier @regression @tier1 refuses verified non-membership",
+      "capability snapshot proof verifier @regression @tier1 requires a trusted stake-weighted checkpoint quorum",
+      "capability snapshot proof verifier @regression @tier1 requires every listed first-use signature to be valid and at least one",
+      "capability snapshot proof verifier @regression @tier1 validates one unchanged first-use checkpoint once at small and large row counts",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 accepts the seeded row on an unpinned regtest venue when the seeded key signed the checkpoint",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 leaves real stake members on regtest judged by the binding as before",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses a non-member whose source or amount is not the seed shape",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses a seeded row whose key did not sign the checkpoint",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses on a pinned regtest venue",
+      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses the same seeded shape on testnet and mainnet"
     ],
     "bca3b10d92c38f7f": [
       "HubDbSync pinned reconnect harness restores the installed fake timer",
@@ -14648,18 +14973,6 @@
       "retroactive mirror coverage @regression @tier1 skips capability coverage for a null or absent required block",
       "retroactive mirror coverage @regression @tier1 throws for every invalid floor input and non-finite mirror reading"
     ],
-    "81a917dd5d925a14": [
-      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 a consumer with no mirror bound re-pages from zero",
-      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 a forced resync with no socket forgets the floor start (verifier m8)",
-      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 re-pages from zero after an instance change, a forced resync or a schema refusal",
-      "HubDbSync price re-page from zero: every case the floor start must not cover @regression @tier1 re-pages from zero when the floor has moved down (verifier m7)",
-      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 a floor-started reconcile keeps a held predecessor below the floor (verifier m6)",
-      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 retries failed pages at their cursor and restarts only for a new connection",
-      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 starts below the lowest applied id, settles the owed re-page and keeps the floor",
-      "HubDbSync price re-page starts at the mirror floor on a same-instance reconnect @regression @tier1 stops retrying a failed page once stop() runs",
-      "HubDbSync stall detector spares a re-page that is still moving @regression @tier1 never forces a resync while drain ticks keep moving, and does once they stop",
-      "HubDbSync stall detector spares a re-page that is still moving @regression @tier1 still resyncs a frozen mirror when no bootstrap is running"
-    ],
     "c32423e09ba7f532": [
       "ORDER_MATCH price-cross activation @regression @tier2 below the height: the legacy comparison, unchanged P1 fills, and the resting order pays above its own limit",
       "ORDER_MATCH price-cross activation @regression @tier2 below the height: the legacy comparison, unchanged P2 does not fill",
@@ -14992,6 +15305,10 @@
     "c7322a84171ad37e": [
       "BATCH native fee disclosure @regression @tier1 lazily sums two ORDER native fees without changing BATCH_VALUE_LEDGER",
       "BATCH native fee disclosure @regression @tier1 reports zero for a batch with no native fee and never invents it for a non-batch"
+    ],
+    "c7ac0d87acbf0051": [
+      "Database.getMarketInfo() open-book ranking matches the separate bid and ask rankings on a native/token book",
+      "Database.getMarketInfo() open-book ranking matches the separate bid and ask rankings on a token/token book"
     ],
     "c8071ebba1ac2646": [
       "Anchor (ANCHOR) @regression @tier3 a v0 mined BELOW ANCHOR_ACTIVATION is invalid whatever it decodes to",
@@ -15904,20 +16221,9 @@
       "migration reorder and live-schema guard quoted comment markers @regression @tier1 keeps a rename target between quoted markers in the reorder table set",
       "migration reorder and live-schema guard quoted comment markers @regression @tier1 strips block comments with the splitter quote model"
     ],
-    "d12e2661f8a847b4": [
-      "Airdrop @regression @tier2 format 0: single airdrop LIST_ACTION_INDEX invalid (type===false) \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop MEMO with pipe character \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop TICK not found \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop insufficient balance for total airdrop amount \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop pre-existing error passed through \u2192 createAirdrop still called",
-      "Airdrop @regression @tier2 format 0: single airdrop regtest treats Object.prototype TICK __proto__ as unknown",
-      "Airdrop @regression @tier2 format 0: single airdrop regtest treats Object.prototype TICK constructor as unknown",
-      "Airdrop @regression @tier2 format 0: single airdrop unknown format version \u2192 invalid",
-      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to address list creates airdrop record",
-      "Airdrop @regression @tier2 format 0: single airdrop valid airdrop to tick list gets holders and credits each",
-      "Airdrop @regression @tier2 format 1: multi-airdrop brief valid multi-airdrop brief processes all ticks",
-      "Airdrop @regression @tier2 format 2: multi-airdrop full valid multi-airdrop full processes multiple TICK/LIST pairs",
-      "Airdrop @regression @tier2 format 3: multi-airdrop full with multiple memos valid format-3 multi-airdrop processes TICK/LIST/MEMO triples"
+    "d14673f26a6c6cb1": [
+      "Airdrop multi-leg XCHAIN-balance fee row with a failed leg @regression @tier1 keeps the single valid leg's own fees row when the other legs cannot pay",
+      "Airdrop multi-leg XCHAIN-balance fee row with a failed leg @regression @tier1 sums only the valid legs into the fees row when the middle leg cannot pay its fee"
     ],
     "d17e30f1f575956a": [
       "PRICE v1 refusal case fixtures builds the four cases in order for caps { value: 19, fee: 20 }",
@@ -18160,6 +18466,13 @@
       "LIST share activation @regression @tier2 refuses a union before reading whether the list is already shared",
       "LIST share activation @regression @tier2 refuses an ADD past the cap only after the list has been shared"
     ],
+    "ee9f70429f252c94": [
+      "same-token offer refusal gate row @regression @tier1 is unarmed on mainnet and testnet, has no per-chain testnet keys, and starts at regtest genesis"
+    ],
+    "eead836d35d1c6ae": [
+      "packaging: image Node patch matches CI pins every Dockerfile FROM to one full node patch",
+      "packaging: image Node patch matches CI tests in ci.yml on the patch the image ships"
+    ],
     "eecbdb20cb4ef592": [
       "mirror-twin BIGINT signedness conformance @regression anchor_reward_attestations: every shared BIGINT column matches the hub UNSIGNED declaration",
       "mirror-twin BIGINT signedness conformance @regression attestation_responses: every shared BIGINT column matches the hub UNSIGNED declaration",
@@ -18392,24 +18705,6 @@
       "Security: ledger table name whitelist @regression @tier4 SEC-28b: table = 'credits; DROP TABLE balances' \u2192 rejected",
       "Security: ledger table name whitelist @regression @tier4 SEC-28c: table = '' (empty string) \u2192 rejected"
     ],
-    "f254d69bb75856a7": [
-      "Database capability snapshot methods @regression @tier1 getCapabilitySnapshotValidators returns mapped results",
-      "Database capability snapshot methods @regression @tier1 isPubkeyInCapabilitySnapshot returns false when no row",
-      "Database capability snapshot methods @regression @tier1 isPubkeyInCapabilitySnapshot returns true when row found",
-      "Database hub push queue methods @regression @tier1 enqueueHubPush inserts a row with serialized payload",
-      "Database hub push queue methods @regression @tier1 enqueueHubPush keys the row on an explicit rollback index when one is given",
-      "Database hub push queue methods @regression @tier1 markHubPushDelivered deletes the row",
-      "Database hub push queue methods @regression @tier1 recordHubPushAttempt defaults maxAttempts to 10 on invalid input",
-      "Database hub push queue methods @regression @tier1 recordHubPushAttempt runs an UPDATE",
-      "Database.getActiveCapabilityCount() @regression @tier1 passes blockIndex args when provided",
-      "Database.getActiveCapabilityCount() @regression @tier1 returns 0 when capability is not configured",
-      "Database.getActiveCapabilityCount() @regression @tier1 returns 0 when doQuery returns empty",
-      "Database.getActiveCapabilityCount() @regression @tier1 returns count when capability is configured",
-      "Database.getPendingHubPushes() @regression @tier1 bakes the exponential-backoff due-time predicate into the WHERE clause",
-      "Database.getPendingHubPushes() @regression @tier1 defaults limit to 50 on invalid input",
-      "Database.getPendingHubPushes() @regression @tier1 defaults the backoff window when no backoffOpts are passed",
-      "Database.getPendingHubPushes() @regression @tier1 uses provided limit"
-    ],
     "f286214bc24b5fbe": [
       "retroactive witness comparison steps @regression @tier1 does no comparison outside active phases or without a witness",
       "retroactive witness comparison steps @regression @tier1 keeps comparison reads constant across two and eight windows",
@@ -18465,6 +18760,53 @@
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 ISSUE with LOCK_MINT=1 causes subsequent MINT to be invalid",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 re-ISSUE by non-owner address is marked invalid",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 re-ISSUE by owner with format 1 updates description"
+    ],
+    "f3c330eb249693ec": [
+      "federation READ connection isolation @regression @tier1 every federation-read method has a handler in the controller",
+      "federation READ connection isolation @regression @tier1 getactionconfirmations makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getactionconfirmations resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getactivestakeweights makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getactivestakeweights resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getactivevalidators makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getactivevalidators resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getanchoraction makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getanchoraction resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getanchorconfirmations makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getanchorconfirmations resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getarchiveanchor makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getarchiveanchor resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getattestbatches makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getattestbatches resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getcapabilityvalidators makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getcapabilityvalidators resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getcrosschaincall makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getcrosschaincall resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getcrosschaincallresult makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getcrosschaincallresult resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getfullnodeverifiers intersects via a batched capability read, like nodeproof.js",
+      "federation READ connection isolation @regression @tier1 getfullnodeverifiers makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getfullnodeverifiers resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getopencrosschainorders makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getopencrosschainorders resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getownstake makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getownstake resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getpendingattestation_requests makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getpendingattestation_requests resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getpendingcrosschaincalls makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getpendingcrosschaincalls resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getpricebatches makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getpricebatches resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getpricebatchpayload makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getpricebatchpayload resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getrelayedattestation_requests makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getrelayedattestation_requests resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getreorghistory makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getreorghistory resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getrollcallsigners makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getrollcallsigners resolves its DB through apiView()",
+      "federation READ connection isolation @regression @tier1 getstakesourcebypubkey delegates to stake_source.js (apiView routing lives there)",
+      "federation READ connection isolation @regression @tier1 getstakeweightsbycapability makes no bare indexerDb/decoderDb read call (would join the block tx)",
+      "federation READ connection isolation @regression @tier1 getstakeweightsbycapability resolves its DB through apiView()"
     ],
     "f3dbd2f38e5ce835": [
       "attest_responsible_widening (indexer copy) arms mainnet at genesis, so a request at block 0 runs the ladder",
@@ -18781,6 +19123,34 @@
       "XChainIndexer.resolveBtcChainId mid-chain @regression @tier2 keeps block 1 as the identity when the decoder retains it",
       "XChainIndexer.resolveBtcChainId mid-chain @regression @tier2 uses the first retained block when the decoder starts above block 1",
       "XChainIndexer.resolveBtcChainId mid-chain @regression @tier2 waits for block 1 instead of identifying a fresh chain by its shared block 0"
+    ],
+    "f8f4efae271324c6": [
+      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
+      "armed_map/manifest: collectRows carries the DOGE and LTC mirror-admission chain margins and activation",
+      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
+      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
+      "armed_map/manifest: collectRows carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights",
+      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
+      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
+      "armed_map/manifest: collectRows carries the same-token offer refusal gate without per-chain testnet keys",
+      "armed_map/manifest: collectRows carries the three row families the design names",
+      "armed_map/manifest: collectRows carries the unarmed airdrop native-fee tally rollback gate",
+      "armed_map/manifest: collectRows carries the unarmed archive v1 reissue refusal gate",
+      "armed_map/manifest: collectRows carries the unarmed batch-airdrop leg-weight gate",
+      "armed_map/manifest: collectRows carries the unarmed bridge-checkpoint v3 section gate",
+      "armed_map/manifest: collectRows carries the unarmed guard emitted-host discriminator gate",
+      "armed_map/manifest: collectRows carries the unarmed null-prototype TICK cache gate",
+      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
+      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
+      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
+      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
+      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
+      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
+      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
+      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
+      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
+      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
+      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
     ],
     "f8fbd67961145f14": [
       "getMaxArchiveBatchSeqByAuthor() returns null when the aggregate query has no row",
@@ -19329,260 +19699,12 @@
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amount is a plain 8dp decimal STRING",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amounts sum to exactly what the pool was drained by",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the v0 FIAT path records its fill price too"
-    ],
-    "171bbe3d05660700": [
-      "escrow arming tools ship in the image @regression @tier1 bench-escrow-arming-replay.js requires only files the image carries",
-      "escrow arming tools ship in the image @regression @tier1 copies bench-escrow-arming-replay.js into /XChainIndexer/bin",
-      "escrow arming tools ship in the image @regression @tier1 copies shadow-dryrun-escrow-leaf.js into /XChainIndexer/bin",
-      "escrow arming tools ship in the image @regression @tier1 copies verify-escrow-arming-boundary.js into /XChainIndexer/bin",
-      "escrow arming tools ship in the image @regression @tier1 fails when the bench-escrow-arming-replay COPY is omitted",
-      "escrow arming tools ship in the image @regression @tier1 shadow-dryrun-escrow-leaf.js requires only files the image carries",
-      "escrow arming tools ship in the image @regression @tier1 verify-escrow-arming-boundary.js requires only files the image carries"
-    ],
-    "533747181d593e25": [
-      "same-token offer creation refusal @regression @tier1 keeps a same-token ORDER valid below activation and refuses it at and above activation",
-      "same-token offer creation refusal @regression @tier1 keeps a same-token SWAP valid below activation and refuses it at and above activation",
-      "same-token offer creation refusal @regression @tier1 keeps different-token ORDER and SWAP creation valid on both sides of activation",
-      "same-token offer creation refusal @regression @tier1 refuses a SWAP whose name and caret alias resolve to one token id",
-      "same-token offer creation refusal @regression @tier1 refuses an ORDER whose differently cased tick spellings resolve to one token id"
-    ],
-    "6ec77729632635c6": [
-      "same-token offer match refusal @regression @tier1 keeps different-token ORDER and SWAP matching unchanged on both sides of activation",
-      "same-token offer match refusal @regression @tier1 leaves no match or escrow row after stored aliases canonicalize to one token",
-      "same-token offer match refusal @regression @tier1 matches a pre-activation same-token ORDER but skips it at activation before escrow",
-      "same-token offer match refusal @regression @tier1 matches a pre-activation same-token SWAP but skips it at activation before escrow"
-    ],
-    "ee9f70429f252c94": [
-      "same-token offer refusal gate row @regression @tier1 is unarmed on mainnet and testnet, has no per-chain testnet keys, and starts at regtest genesis"
-    ],
-    "f8f4efae271324c6": [
-      "armed_map/manifest: collectRows appends the VM mirror rows with the VM values",
-      "armed_map/manifest: collectRows carries the DOGE and LTC mirror-admission chain margins and activation",
-      "armed_map/manifest: collectRows carries the anchor archive fold-term heights",
-      "armed_map/manifest: collectRows carries the cross-chain remote-token gate heights",
-      "armed_map/manifest: collectRows carries the nested EXECUTE gas-sum height row, armed on regtest and at the v0.24.0 testnet heights",
-      "armed_map/manifest: collectRows carries the per-chain LIST owner testnet heights",
-      "armed_map/manifest: collectRows carries the relay-response deadline time gate",
-      "armed_map/manifest: collectRows carries the same-token offer refusal gate without per-chain testnet keys",
-      "armed_map/manifest: collectRows carries the three row families the design names",
-      "armed_map/manifest: collectRows carries the unarmed airdrop native-fee tally rollback gate",
-      "armed_map/manifest: collectRows carries the unarmed archive v1 reissue refusal gate",
-      "armed_map/manifest: collectRows carries the unarmed batch-airdrop leg-weight gate",
-      "armed_map/manifest: collectRows carries the unarmed bridge-checkpoint v3 section gate",
-      "armed_map/manifest: collectRows carries the unarmed guard emitted-host discriminator gate",
-      "armed_map/manifest: collectRows carries the unarmed null-prototype TICK cache gate",
-      "armed_map/manifest: collectRows passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix",
-      "armed_map/manifest: collectRows resolves every entry to a serialisable value, in manifest order",
-      "armed_map/manifest: collectRows turns a refused value into ok:false naming the key",
-      "armed_map/manifest: collectRows turns a resolver that throws into ok:false naming the key",
-      "armed_map/manifest: completeness guard every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one",
-      "armed_map/manifest: completeness guard no activation map or carrier is declared anywhere under src/ outside the registry part files",
-      "armed_map/manifest: completeness guard the scan still finds a declaration when one exists (it is not vacuous)",
-      "armed_map/manifest: the registry part files every row part file writes addGate() calls at column zero and holds at most 400 lines",
-      "armed_map/manifest: the row list carries exactly the ProtocolChanges table as protocol_changes.changes.* rows",
-      "armed_map/manifest: the row list carries the registry rows first, in registry order, then the VM mirror rows",
-      "armed_map/manifest: the row list never lists a key twice and never enumerates the file system"
-    ],
-    "0b4f10f70d95b773": [
-      "consensus identity GATES field and pin comparison exits one and names an altered scalar field",
-      "consensus identity GATES field and pin comparison exits zero against the committed pin",
-      "consensus identity GATES field and pin comparison exits zero with an arming lever left set in this process",
-      "consensus identity GATES field and pin comparison matches the hub shared-row bytes and pinned GATES field hash",
-      "consensus identity GATES field and pin comparison pins activeGatesAt unit filtering as identity-neutral",
-      "consensus identity GATES field and pin comparison pins both merged registry-only rows in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the VM harness-activation twins in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the airdrop native-fee tally rollback row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the archive v1 reissue refusal row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the batch-airdrop leg-weight row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the bridge-checkpoint v3 section row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the dispatched-only action admission row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the gas-ceiling exhaustion row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the guard emitted-host discriminator row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the null-prototype TICK cache row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the relay-response deadline row in both checkout readings",
-      "consensus identity GATES field and pin comparison pins the same-token offer refusal row in both checkout readings"
-    ],
-    "b9963332da94f7f4": [
-      "Utility throwError() includes an Error message in the rendered refusal log and rethrows the same Error",
-      "Utility throwError() stringifies a non-Error refusal in the rendered log"
-    ],
-    "bc9b899ba93759c7": [
-      "capability snapshot proof verifier @regression @tier1 accepts and rejects pinned sets with the sync parser rules",
-      "capability snapshot proof verifier @regression @tier1 does not reuse a null-version memo entry for a missing state-root version",
-      "capability snapshot proof verifier @regression @tier1 does not reuse a plain trust-set memo entry for a truncated trust set",
-      "capability snapshot proof verifier @regression @tier1 holds absent and mis-addressed responses before examining signatures",
-      "capability snapshot proof verifier @regression @tier1 holds checkpoints for another chain, network, or buried block",
-      "capability snapshot proof verifier @regression @tier1 holds commitments that do not hash to their member leaf",
-      "capability snapshot proof verifier @regression @tier1 holds missing and invalid stake member proofs",
-      "capability snapshot proof verifier @regression @tier1 holds proofs with a wrong block, root, or state-root version",
-      "capability snapshot proof verifier @regression @tier1 judges matching, changed, and multi-source snapshot rows",
-      "capability snapshot proof verifier @regression @tier1 refuses verified non-membership",
-      "capability snapshot proof verifier @regression @tier1 requires a trusted stake-weighted checkpoint quorum",
-      "capability snapshot proof verifier @regression @tier1 requires every listed first-use signature to be valid and at least one",
-      "capability snapshot proof verifier @regression @tier1 validates one unchanged first-use checkpoint once at small and large row counts",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 accepts the seeded row on an unpinned regtest venue when the seeded key signed the checkpoint",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 leaves real stake members on regtest judged by the binding as before",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses a non-member whose source or amount is not the seed shape",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses a seeded row whose key did not sign the checkpoint",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses on a pinned regtest venue",
-      "capability snapshot proof verifier: regtest seeded validator @regression @tier1 still refuses the same seeded shape on testnet and mainnet"
-    ],
-    "bc089c9f6525a81c": [
-      "capability snapshot proof database wiring @regression @tier1 holds at the gate when no proof fetcher is available",
-      "capability snapshot proof database wiring @regression @tier1 keeps a mirror-resolved row below the gate on the legacy path",
-      "capability snapshot proof database wiring @regression @tier1 keeps the BTC re-derivation path unchanged when the proof gate is active",
-      "capability snapshot proof database wiring @regression @tier1 never derives the checkpoint trust set from mirrored capability rows",
-      "capability snapshot proof database wiring @regression @tier1 passes verified, refused, and held proof verdicts through at the gate",
-      "capability snapshot proof database wiring @regression @tier1 uses the static pin below rotation and the next pin from its block onward",
-      "capability snapshot proof database wiring @regression @tier1 warns once per distinct unpinned regtest validator set",
-      "capability snapshot proof database wiring: regtest seeded hub row @regression @tier1 applies the seeded row on an unpinned LTC regtest indexer",
-      "capability snapshot proof database wiring: regtest seeded hub row @regression @tier1 still refuses the seeded row when another key signed the checkpoint"
-    ],
-    "9905578f0abd08aa": [
-      "capability snapshot judge skips a key the mirror already holds @regression @tier1 a retained-hold retry settles a now-mirrored key without a proof fetch",
-      "capability snapshot judge skips a key the mirror already holds @regression @tier1 clears a hold without a proof fetch once the held key is mirrored",
-      "capability snapshot judge skips a key the mirror already holds @regression @tier1 judges a row when the presence read answers with a different key",
-      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 bounds proof requests for a full flush at two row counts across a path chunk boundary",
-      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 judges every row a rolled-back local mirror no longer holds",
-      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 pages from id 0 over an intact mirror and proves only the row it lacks",
-      "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 still holds and later applies an unmirrored frontier row re-served after the restart"
-    ],
-    "a57290c9b830e1fa": [
-      "isDbOutageError names only database outages does not classify a pool timeout caused by access denied as an outage",
-      "isDbOutageError names only database outages does not classify a wrapped pool timeout whose text names access denied as an outage",
-      "isDbOutageError names only database outages does not classify hub or tracker socket failures as database outages",
-      "isDbOutageError names only database outages does not match a logic or SQL error",
-      "isDbOutageError names only database outages matches driver, socket, wrapped, cause-chained and breaker errors",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 caps the backoff so the heartbeat keeps stamping through a long outage",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 control: a non-database error still rejects the loop, so the fatal path is intact",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage past the give-up window rejects for the supervisor restart",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage with a transaction left open on indexerDb still rejects",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 exits the loop on stop during an outage without one more backoff sleep",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 keeps running through pool timeouts and a refused connection, then resumes",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 marks replay witness and marker appends as restart-only work",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 names the driver errno of a wrapped beginTransaction pool timeout in the outage class",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 rejects a lost database socket after a reorg rollback begins",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 rides out a lost database socket before rollback or replay writes begin",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 treats the wrapped beginTransaction form and the circuit breaker refusal as an outage"
-    ],
-    "9fd449fa1c41ad11": [
-      "GET /status reports loop liveness for the fleet watcher, without gating on it keeps pollSilent and lastPollAt after every older key monitors already read",
-      "GET /status reports loop liveness for the fleet watcher, without gating on it leaves the 503 inputs untouched: a silent loop alone is not wedged",
-      "GET /status reports loop liveness for the fleet watcher, without gating on it reads a booting indexer as not silent, with no stamp yet",
-      "XChainIndexer#isPollSilent() is false at the window edge and true past it",
-      "XChainIndexer#isPollSilent() is false before the loop has iterated once, so a booting indexer is never dead",
-      "XChainIndexer#isPollSilent() is false while the loop is iterating",
-      "XChainIndexer#isPollSilent() is stamped by BOTH loops, since a catch-up stays inside the inner one for hours",
-      "XChainIndexer#isPollSilent() sizes the window well above one barrier-timeout cycle",
-      "database outage state is published to health checks publishes since, failures and last error class in the health payload",
-      "database outage state is published to health checks publishes the same outage state in GET /status",
-      "health payload carries loop liveness as its own axis does not fold loop liveness into status, which drives container restarts",
-      "health payload carries loop liveness as its own axis publishes pollSilent and the last iteration stamp",
-      "health payload carries loop liveness as its own axis reads not-silent from an indexer double that predates the accessor",
-      "health payload carries loop liveness as its own axis reports a hung loop that every other field renders as healthy",
-      "health payload carries loop liveness as its own axis reports not-silent on a quiet chain whose last commit is ancient"
-    ],
-    "46a0fd81a76c7ce4": [
-      "the block loop rides out a database outage instead of exiting @regression @tier1 caps the backoff so the heartbeat keeps stamping through a long outage",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 control: a non-database error still rejects the loop, so the fatal path is intact",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage past the give-up window rejects for the supervisor restart",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage with a transaction left open on indexerDb still rejects",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 exits the loop on stop during an outage without one more backoff sleep",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 keeps running through pool timeouts and a refused connection, then resumes",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 marks replay witness and marker appends as restart-only work",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 names the driver errno of a wrapped beginTransaction pool timeout in the outage class",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 rejects a lost database socket after a reorg rollback begins",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 rides out a lost database socket before rollback or replay writes begin",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 treats the wrapped beginTransaction form and the circuit breaker refusal as an outage"
-    ],
-    "657b4a2adeffa9c8": [
-      "API read index id suppression @regression @tier1 an API lookup before a future ISSUE preserves the block ticker allocation",
-      "API read index id suppression @regression @tier1 apiView createAddress resolves a canonical caret id in the deterministic set",
-      "API read index id suppression @regression @tier1 apiView createAddress returns the id for a known deterministic name",
-      "API read index id suppression @regression @tier1 apiView createAddress returns the id for a known name with NULL block_index",
-      "API read index id suppression @regression @tier1 apiView createTicker resolves a canonical caret id in the deterministic set",
-      "API read index id suppression @regression @tier1 apiView createTicker returns the id for a known deterministic name",
-      "API read index id suppression @regression @tier1 apiView createTicker returns the id for a known name with NULL block_index",
-      "API read index id suppression @regression @tier1 getappliedpolicy leaves an unknown ticker absent from index_tickers",
-      "API read index id suppression @regression @tier1 gettokenpolicy leaves an unknown ticker absent from index_tickers",
-      "API read index id suppression @regression @tier1 gettokenpolicy stores nothing while the parent database has an open transaction",
-      "API read index id suppression @regression @tier1 the API view leaves an unknown address absent from index_addresses"
-    ],
-    "4fdb2482a42bd589": [
-      "API read before ISSUE replay determinism @regression @tier1 matches the clean ledger hash chain after gettokenpolicy reads the future ticker"
-    ],
-    "4675f3133a96b7c1": [
-      "mirror-admission replay witness each side resolves, from the env the parent hands it, the era A3 expects",
-      "mirror-admission replay witness runs parameterized SQL through the indexer Database wrapper",
-      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused accepts replays that ran every group, and does not demand a pass for a table with no bearing rows",
-      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused names a reader for every admission-bearing table, and that reader is a production pass calling the consumer",
-      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused refuses a side that reports no pass list, since it cannot show it read the rows",
-      "mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused refuses by name the replay that never ran the ATTEST response pass over a signed response",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict accepts a mirror with admission-era rows and a boundary inside the corpus",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict reads the password from the variable --db-pass-env names, and refuses when it is unset",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses a boundary above the corpus tip, the rail's H=100000 over 102 blocks",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses a mirror with no row carrying this chain's admission height",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses on the command line, before any replay, when no --mirror-db is named",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses sides that copied different mirrors",
-      "mirror-admission replay witness: a vacuous corpus is a named refusal, not a verdict refuses the rail's run: sides replayed with empty mirror tables",
-      "mirror-admission replay witness: owned artifact cleanup applies workdir cleanup on a refusal before schemas are created",
-      "mirror-admission replay witness: owned artifact cleanup makes --keep control schema and workdir cleanup through the CLI",
-      "mirror-admission replay witness: owned artifact cleanup removes owned schemas and workdir by default, but --keep preserves and prints both",
-      "mirror-admission replay witness: signal cleanup records the first catchable signal and stops the active replay side",
-      "mirror-admission replay witness: the mirror a side copies copies every hub-mirror table over the shared columns before counting admission-era rows",
-      "mirror-admission replay witness: what each side is handed and replays against binds by this chain's admission column only in the tables a consumer reads by it",
-      "mirror-admission replay witness: what each side is handed and replays against hands the OFF side no lever at all, even when the parent environment carries one",
-      "mirror-admission replay witness: what each side is handed and replays against passes the mirror schema to each side on argv, and a side accepts only a plain schema name"
-    ],
-    "352024da6f65f91c": [
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 a block passes an unproven frontier snapshot it does not read",
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 a block that reads the held snapshot fails closed and its retry waits for the proof",
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 capabilityReadHeld matches the held (snapshot_block, capability) only",
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 committing the held block clears its recorded read and the skip flag",
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 reads outside block processing are never policed",
-      "capability proof barrier scoped to the snapshot a block reads @regression @tier1 the retry releases as soon as the held snapshot proves inside the wait",
-      "disarms the held capability read check when a later barrier defers @regression @tier1"
-    ],
-    "41d8ab629c2e46fe": [
-      "capability snapshot proof hold barrier @regression @tier1 P1 applies newer checkpointed groups when the oldest group stays 404",
-      "capability snapshot proof hold barrier @regression @tier1 P2 isolates an unavailable proof frontier to its capability",
-      "capability snapshot proof hold barrier @regression @tier1 P3 falls back per row after a multi-pubkey 503",
-      "capability snapshot proof hold barrier @regression @tier1 R4 probes a provable group between permanent oldest and newest holes",
-      "capability snapshot proof hold barrier @regression @tier1 R5 retries a frontier-held multi-pubkey group one row at a time after a 503",
-      "capability snapshot proof hold barrier @regression @tier1 R6 drains every group between two permanent holes within the rotating probe bound",
-      "capability snapshot proof hold barrier @regression @tier1 a frontier hold ends the drain and leaves the heartbeat gate open",
-      "capability snapshot proof hold barrier @regression @tier1 a held frontier retry does not reopen the bootstrap drain",
-      "capability snapshot proof hold barrier @regression @tier1 a retained bootstrap hold preserves a re-page reason the drain opened under",
-      "capability snapshot proof hold barrier @regression @tier1 applies and releases a held row when a retry can no longer judge it",
-      "capability snapshot proof hold barrier @regression @tier1 bounds proof requests above a permanent frontier across thousands of rows and drains bridge transfers",
-      "capability snapshot proof hold barrier @regression @tier1 bounds the hold map, notes a full map once, and leaves overflow for a re-page",
-      "capability snapshot proof hold barrier @regression @tier1 chunks a large held-row retry by encoded request path length",
-      "capability snapshot proof hold barrier @regression @tier1 classifies only 404, 503, checkpoint-missing, proof-unavailable and indexer-behind holds as not yet available",
-      "capability snapshot proof hold barrier @regression @tier1 deduplicates proof fetches by snapshot block and capability during one retry pass",
-      "capability snapshot proof hold barrier @regression @tier1 does not treat a proof response mismatch as not yet available",
-      "capability snapshot proof hold barrier @regression @tier1 encodes every proof endpoint parameter",
-      "capability snapshot proof hold barrier @regression @tier1 keeps a held row absent, blocks, then applies and releases it after proof arrives",
-      "capability snapshot proof hold barrier @regression @tier1 keeps refused rows absent and applies unknown rows without creating a hold",
-      "capability snapshot proof hold barrier @regression @tier1 keeps the barrier closed for overflow until the required re-page drains",
-      "capability snapshot proof hold barrier @regression @tier1 paces proof request starts below the indexer rate limit",
-      "capability snapshot proof hold barrier @regression @tier1 re-serves and later applies a held row after a restart with persisted local rows",
-      "capability snapshot proof hold barrier @regression @tier1 releases an existing waiter when ordinary redelivery verifies the held row",
-      "capability snapshot proof hold barrier @regression @tier1 retries around an unavailable middle group without stranding a newer group"
-    ],
-    "6a0eea9298dc58c8": [
-      "capability proof bootstrap batch @regression @tier1 does not let an overlapping price flush clear or restore a capability batch",
-      "capability proof bootstrap batch @regression @tier1 falls back to the row request when a shared response omits its member",
-      "capability proof bootstrap batch @regression @tier1 keeps distinct checkpoint keys separate",
-      "capability proof bootstrap batch @regression @tier1 keeps every shared proof request path within the 8 KB budget",
-      "capability proof bootstrap batch @regression @tier1 matches real-verifier verdict, reason, and firstUse for pinned and regtest first-use batches",
-      "capability proof bootstrap batch @regression @tier1 scopes an unavailable frontier to its capability and installed batch members",
-      "capability proof bootstrap batch @regression @tier1 shares proof requests across small and large row counts for one group"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 1573,
-      "titleCount": 15178,
+      "fileCount": 1583,
+      "titleCount": 15253,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19613,7 +19735,7 @@
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
         "test/unit/actions/actions_class/install_methods.test.js": "13e1f9bf869b82b9",
-        "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
+        "test/unit/actions/anchor/anchor.test.js": "25459a22d61acde4",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_publish_quorum.test.js": "435e05d4e59b2c04",
@@ -19926,13 +20048,14 @@
         "test/unit/actions/tick_cache_null_prototype_gate.test.js": "5e4d509cb10b1b62",
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
-        "test/unit/actions/token/airdrop.test.js": "d12e2661f8a847b4",
+        "test/unit/actions/token/airdrop.test.js": "3eaba8b4e6511ba2",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
+        "test/unit/actions/token/airdrop.test/multi_leg_xchain_fee_failed_leg.test.js": "d14673f26a6c6cb1",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/airdrop.test/zero_legs_gate.test.js": "2100aec35b3f146e",
@@ -20111,7 +20234,7 @@
         "test/unit/api/health/indexer_metrics.test.js": "fabee4ab4b425a8a",
         "test/unit/api/health/price_landing_grace_wiring.test.js": "758b3f698abbb764",
         "test/unit/api/health/proof_wait_grace_wiring.test.js": "dc4a83d1ac938fa7",
-        "test/unit/api/health/reorg_health_stats_null.test.js": "5caf6af9f6bed1d6",
+        "test/unit/api/health/reorg_health_stats_null.test.js": "61f5af80b4889c06",
         "test/unit/api/health/shutdown.test.js": "9f1e3a4773262edd",
         "test/unit/api/health/stall_fields.test.js": "fb5344c11f961c86",
         "test/unit/api/health/sync_fields.test.js": "699a77b47130480e",
@@ -20278,6 +20401,7 @@
         "test/unit/config/engines_node_ceiling.test.js": "67835353c924205c",
         "test/unit/config/fee_destination.test.js": "d3a897007df1f562",
         "test/unit/config/genesis_airdrop_config_pinning.test.js": "6e9aa937f4be8f15",
+        "test/unit/config/image_node_matches_ci.test.js": "eead836d35d1c6ae",
         "test/unit/config/message_limits.test.js": "8d38edb1fec12246",
         "test/unit/config/parse_bridged_tick.test.js": "617c4a9b9bb25f3c",
         "test/unit/config/touch_guards_env.test.js": "8f02c7885f4b9349",
@@ -20318,7 +20442,9 @@
         "test/unit/consensus/capability_snapshot_proof/trust_set.test.js": "b468c3fd3eff32ee",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "bc9b899ba93759c7",
         "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
+        "test/unit/consensus/consensus_identity/absent_sentinel.test.js": "1c6dd4642cc2afbc",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "09c30e2a999355e7",
+        "test/unit/consensus/consensus_identity/pin_shape_compare.test.js": "1e89d0e95cbfdf59",
         "test/unit/consensus/consensus_identity_cli.test.js": "9b14f3e88a5648c6",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
@@ -20332,6 +20458,7 @@
         "test/unit/consensus/equivocation/equiv_xcall_canonical.test.js": "93b9e527a571fc32",
         "test/unit/consensus/equivocation/equivocation_header.test.js": "3ad67665f530b06c",
         "test/unit/consensus/escrow_journal_release_before_lock.test.js": "fb66a40be5e24b51",
+        "test/unit/consensus/gate_registry_parts_twin.test.js": "62dcc3a31efbdbea",
         "test/unit/consensus/gates/archive_rollcall_presence_gate.test.js": "be9c80fb8a595c9d",
         "test/unit/consensus/gates/mainnet_launch_gate.test.js": "1332bcf8f7981634",
         "test/unit/consensus/gates/mainnet_launch_rows.test.js": "4764414e4e169b31",
@@ -20500,10 +20627,11 @@
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "36cefe46bdd62f63",
-        "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "f254d69bb75856a7",
+        "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "916f6fe7c7368a48",
         "test/unit/db/db_queries.test/index_lookups.test.js": "1afc4c996e50df8f",
         "test/unit/db/db_queries.test/list_status_reads.test.js": "5c6e41cc82ef0d96",
         "test/unit/db/db_queries.test/market_and_balances.test.js": "3cfa10324fa5563a",
+        "test/unit/db/db_queries.test/market_open_book.test.js": "c7ac0d87acbf0051",
         "test/unit/db/db_queries.test/market_writers.test.js": "c4fd449a2b5e9176",
         "test/unit/db/db_queries.test/message_writers.test.js": "26072863ea231cdc",
         "test/unit/db/db_queries.test/schema_ddl.test.js": "3744e3a493e4b7e4",
@@ -20573,7 +20701,7 @@
         "test/unit/db/markets/dispenser_value_accounting.test/send_triggered.test.js": "d27a6904c05061c1",
         "test/unit/db/markets/market_day_change_precision.test.js": "3c7c11ca01ad82ad",
         "test/unit/db/markets/market_refresh/touched_and_aged_pairs.test.js": "01eb6f06411f95bc",
-        "test/unit/db/markets/markets_native_coin_pairs.test.js": "7176d07530da2fe0",
+        "test/unit/db/markets/markets_native_coin_pairs.test.js": "738a4f471563c941",
         "test/unit/db/markets/order_info_batch.test.js": "32d28eacf6d12ab7",
         "test/unit/db/markets/order_swap_info_coin_filter.test.js": "59ea96fc8c6b91fe",
         "test/unit/db/mirror_admission_schema.test.js": "f774309cdb5aef1f",
@@ -20645,7 +20773,7 @@
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
-        "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "681ab1dcd2551bc6",
+        "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "b0d45d18fc61eece",
         "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "991c340ad529ac34",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/piped_action_name.test.js": "7b28ef47eda24e27",
@@ -20701,6 +20829,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
@@ -20719,6 +20848,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync.test/ensure_tables.test.js": "27734cdd7a5bfa64",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/failover_reconnect_delay.test.js": "4b7e3de0fc957445",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/own_rollback_generation_wiring.test.js": "ed8c2bd1cc10406b",
+        "test/unit/hub/hub_db_sync/hub_db_sync.test/poll_timer_lifecycle.test.js": "75a25823fd1288ab",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/price_and_oracle_upgrades.test.js": "279b4d45f67586c9",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/resync_close_repages.test.js": "08779979a717f622",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/retraction_guards.test.js": "553d475941b54ae0",
@@ -20831,6 +20961,7 @@
         "test/unit/migration/migrate_status.test.js": "30f2df93b628c0e0",
         "test/unit/migration/migration_auto_index_key_length.test.js": "62321e67976f95c9",
         "test/unit/migration/migration_executable_residue.test.js": "acaf148f7d78ff56",
+        "test/unit/migration/migration_filename_apply_order.test.js": "af6194bf77d0c04e",
         "test/unit/migration/migration_precondition_baseline.test.js": "3892effc8fcf1240",
         "test/unit/migration/migration_precondition_baseline.test/row_format_gate.test.js": "f9b440bdcd327076",
         "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js": "ad9b4cab9e7d3566",
@@ -20843,6 +20974,7 @@
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "c2b02f4fb3266ef1",
         "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
+        "test/unit/migration/migration_runner.test/destructive_guard_foreign_key.test.js": "287c437af927e36f",
         "test/unit/migration/migration_runner.test/destructive_guard_lock_wait.test.js": "01ae3367d87ac656",
         "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
         "test/unit/migration/migration_runner.test/destructive_guard_quoted_comments.test.js": "d0b1231b8eeef634",
@@ -21132,6 +21264,8 @@
         "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1",
         "test/unit/xchain_indexer/abandon_block_rollback_failure.test.js": "e6d68acf0746746c",
         "test/unit/xchain_indexer/apply_pending_reorgs.test.js": "1c8358d37961f103",
+        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "a57290c9b830e1fa",
+        "test/unit/xchain_indexer/block_parse.test/block_time_sentinel_guard.test.js": "365999ba7f66f31d",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
@@ -21154,9 +21288,7 @@
         "test/unit/xchain_indexer/stall_health_smoke_parity.test.js": "850d161466315079",
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
-        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
-        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "a57290c9b830e1fa"
+        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
       }
     },
     "test:boundary": {
@@ -21537,8 +21669,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1207,
-      "titleCount": 12046,
+      "fileCount": 1212,
+      "titleCount": 12094,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21550,7 +21682,7 @@
         "test/e2e/scenarios/06_explorer_queries.test.js": "3055467fb24885a0",
         "test/e2e/scenarios/07_schema_isolation.test.js": "0c725e55cd72645c",
         "test/integration/api_read_reindex_determinism.test.js": "4fdb2482a42bd589",
-        "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
+        "test/integration/hub_push_starvation.test.js": "7846b765289f26c4",
         "test/integration/scenarios/29_contract_meta_flag_day_replay.test.js": "71cab2563defad19",
         "test/integration/scenarios/contract_unstake_rotation_reorg.test.js": "225195122cf06515",
         "test/integration/scenarios/controller_stake/17_slash_equivocation.test.js": "777803f5fbe4f02a",
@@ -21611,7 +21743,7 @@
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
         "test/unit/actions/actions_class/install_methods.test.js": "13e1f9bf869b82b9",
-        "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
+        "test/unit/actions/anchor/anchor.test.js": "25459a22d61acde4",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_publish_quorum.test.js": "435e05d4e59b2c04",
@@ -21881,13 +22013,14 @@
         "test/unit/actions/tick_cache_null_prototype_gate.test.js": "5e4d509cb10b1b62",
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
-        "test/unit/actions/token/airdrop.test.js": "d12e2661f8a847b4",
+        "test/unit/actions/token/airdrop.test.js": "3eaba8b4e6511ba2",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
+        "test/unit/actions/token/airdrop.test/multi_leg_xchain_fee_failed_leg.test.js": "d14673f26a6c6cb1",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/airdrop.test/zero_legs_gate.test.js": "2100aec35b3f146e",
@@ -22136,6 +22269,7 @@
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
         "test/unit/consensus/escrow_journal_release_before_lock.test.js": "fb66a40be5e24b51",
+        "test/unit/consensus/gate_registry_parts_twin.test.js": "62dcc3a31efbdbea",
         "test/unit/consensus/gates/archive_rollcall_presence_gate.test.js": "be9c80fb8a595c9d",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
@@ -22258,7 +22392,7 @@
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "36cefe46bdd62f63",
-        "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "f254d69bb75856a7",
+        "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "916f6fe7c7368a48",
         "test/unit/db/db_queries.test/index_lookups.test.js": "1afc4c996e50df8f",
         "test/unit/db/db_queries.test/list_status_reads.test.js": "5c6e41cc82ef0d96",
         "test/unit/db/db_queries.test/market_and_balances.test.js": "3cfa10324fa5563a",
@@ -22377,7 +22511,7 @@
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
-        "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "681ab1dcd2551bc6",
+        "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "b0d45d18fc61eece",
         "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "991c340ad529ac34",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/piped_action_name.test.js": "7b28ef47eda24e27",
@@ -22413,6 +22547,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
@@ -22490,6 +22625,7 @@
         "test/unit/migration/migrate_status.test.js": "30f2df93b628c0e0",
         "test/unit/migration/migration_auto_index_key_length.test.js": "62321e67976f95c9",
         "test/unit/migration/migration_executable_residue.test.js": "acaf148f7d78ff56",
+        "test/unit/migration/migration_filename_apply_order.test.js": "af6194bf77d0c04e",
         "test/unit/migration/migration_precondition_baseline.test.js": "3892effc8fcf1240",
         "test/unit/migration/migration_precondition_baseline.test/row_format_gate.test.js": "f9b440bdcd327076",
         "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js": "ad9b4cab9e7d3566",
@@ -22502,6 +22638,7 @@
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "c2b02f4fb3266ef1",
         "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
+        "test/unit/migration/migration_runner.test/destructive_guard_foreign_key.test.js": "287c437af927e36f",
         "test/unit/migration/migration_runner.test/destructive_guard_lock_wait.test.js": "01ae3367d87ac656",
         "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
         "test/unit/migration/migration_runner.test/destructive_guard_quoted_comments.test.js": "d0b1231b8eeef634",
@@ -22733,6 +22870,8 @@
         "test/unit/utility/utility.test/format_and_ledger.test.js": "8c20f0a6066f53f4",
         "test/unit/utility/utility.test/validation.test.js": "f16d88684a803df3",
         "test/unit/utility/utility_log_amount.test.js": "3863f168f47cce2b",
+        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4",
+        "test/unit/xchain_indexer/block_parse.test/block_time_sentinel_guard.test.js": "365999ba7f66f31d",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
@@ -22744,14 +22883,12 @@
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
-        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
-        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4"
+        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
       }
     },
     "test:regression:fast": {
-      "fileCount": 628,
-      "titleCount": 6483,
+      "fileCount": 632,
+      "titleCount": 6518,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -22837,6 +22974,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
+        "test/unit/actions/token/airdrop.test/multi_leg_xchain_fee_failed_leg.test.js": "d14673f26a6c6cb1",
         "test/unit/actions/token/airdrop.test/zero_legs_gate.test.js": "2100aec35b3f146e",
         "test/unit/actions/token/amounts/amount_representability.test.js": "920249a9ff1f3c26",
         "test/unit/actions/token/amounts/amount_representability.test/representability_rules.test.js": "1b85257b08351d95",
@@ -23048,7 +23186,7 @@
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "36cefe46bdd62f63",
-        "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "f254d69bb75856a7",
+        "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "916f6fe7c7368a48",
         "test/unit/db/db_queries.test/index_lookups.test.js": "1afc4c996e50df8f",
         "test/unit/db/db_queries.test/list_status_reads.test.js": "5c6e41cc82ef0d96",
         "test/unit/db/db_queries.test/market_and_balances.test.js": "3cfa10324fa5563a",
@@ -23144,7 +23282,7 @@
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
-        "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "681ab1dcd2551bc6",
+        "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "b0d45d18fc61eece",
         "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "991c340ad529ac34",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/static_quotes.test.js": "67bef1526f62d2e4",
@@ -23172,6 +23310,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
@@ -23222,6 +23361,7 @@
         "test/unit/migration/key_witness/assert_unique_key_witness.test.js": "bc0fdae14389c0fc",
         "test/unit/migration/key_witness/committed_auto_files.test.js": "47b5ee89067e58ec",
         "test/unit/migration/migration_executable_residue.test.js": "acaf148f7d78ff56",
+        "test/unit/migration/migration_filename_apply_order.test.js": "af6194bf77d0c04e",
         "test/unit/migration/migration_precondition_baseline.test.js": "3892effc8fcf1240",
         "test/unit/migration/migration_precondition_baseline.test/row_format_gate.test.js": "f9b440bdcd327076",
         "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js": "ad9b4cab9e7d3566",
@@ -23234,6 +23374,7 @@
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "c2b02f4fb3266ef1",
         "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
+        "test/unit/migration/migration_runner.test/destructive_guard_foreign_key.test.js": "287c437af927e36f",
         "test/unit/migration/migration_runner.test/destructive_guard_lock_wait.test.js": "01ae3367d87ac656",
         "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
         "test/unit/migration/migration_runner.test/destructive_guard_quoted_comments.test.js": "d0b1231b8eeef634",
@@ -23371,6 +23512,8 @@
         "test/unit/utility/utility.test/fees_and_transforms.test.js": "b0c6c69916c83dff",
         "test/unit/utility/utility.test/format_and_ledger.test.js": "8c20f0a6066f53f4",
         "test/unit/utility/utility.test/validation.test.js": "f16d88684a803df3",
+        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4",
+        "test/unit/xchain_indexer/block_parse.test/block_time_sentinel_guard.test.js": "365999ba7f66f31d",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
@@ -23378,14 +23521,12 @@
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
         "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
-        "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
-        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4"
+        "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192"
       }
     },
     "test:regression:full": {
-      "fileCount": 1207,
-      "titleCount": 12046,
+      "fileCount": 1212,
+      "titleCount": 12094,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23397,7 +23538,7 @@
         "test/e2e/scenarios/06_explorer_queries.test.js": "3055467fb24885a0",
         "test/e2e/scenarios/07_schema_isolation.test.js": "0c725e55cd72645c",
         "test/integration/api_read_reindex_determinism.test.js": "4fdb2482a42bd589",
-        "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
+        "test/integration/hub_push_starvation.test.js": "7846b765289f26c4",
         "test/integration/scenarios/29_contract_meta_flag_day_replay.test.js": "71cab2563defad19",
         "test/integration/scenarios/contract_unstake_rotation_reorg.test.js": "225195122cf06515",
         "test/integration/scenarios/controller_stake/17_slash_equivocation.test.js": "777803f5fbe4f02a",
@@ -23458,7 +23599,7 @@
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
         "test/unit/actions/actions_class/install_methods.test.js": "13e1f9bf869b82b9",
-        "test/unit/actions/anchor/anchor.test.js": "26ef281fc536d1b3",
+        "test/unit/actions/anchor/anchor.test.js": "25459a22d61acde4",
         "test/unit/actions/anchor/anchor.test/activation_gate.test.js": "c8071ebba1ac2646",
         "test/unit/actions/anchor/anchor.test/archive_chunks.test.js": "9ab84ca78e7a8f1b",
         "test/unit/actions/anchor/anchor.test/archive_publish_quorum.test.js": "435e05d4e59b2c04",
@@ -23728,13 +23869,14 @@
         "test/unit/actions/tick_cache_null_prototype_gate.test.js": "5e4d509cb10b1b62",
         "test/unit/actions/tick_cache_prototype_below_gate.test.js": "0fb60df74d8c331e",
         "test/unit/actions/token/address.test.js": "094a3c4326457ea4",
-        "test/unit/actions/token/airdrop.test.js": "d12e2661f8a847b4",
+        "test/unit/actions/token/airdrop.test.js": "3eaba8b4e6511ba2",
         "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js": "1d393910442d8d2a",
         "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js": "b13b7b6bf4b68fae",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
+        "test/unit/actions/token/airdrop.test/multi_leg_xchain_fee_failed_leg.test.js": "d14673f26a6c6cb1",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
         "test/unit/actions/token/airdrop.test/validation_branches.test.js": "8022508cbe8ef5e8",
         "test/unit/actions/token/airdrop.test/zero_legs_gate.test.js": "2100aec35b3f146e",
@@ -23983,6 +24125,7 @@
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
         "test/unit/consensus/ed25519.test.js": "d54bebe3d05981d8",
         "test/unit/consensus/escrow_journal_release_before_lock.test.js": "fb66a40be5e24b51",
+        "test/unit/consensus/gate_registry_parts_twin.test.js": "62dcc3a31efbdbea",
         "test/unit/consensus/gates/archive_rollcall_presence_gate.test.js": "be9c80fb8a595c9d",
         "test/unit/consensus/gates/mirror_admission_margin_gate.test.js": "0238926421cce290",
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
@@ -24105,7 +24248,7 @@
         "test/unit/db/db_queries.test/active_stake_order_below_gate.test.js": "c4cd22d5892484be",
         "test/unit/db/db_queries.test/attestations.test.js": "6dd6cd465e88bf36",
         "test/unit/db/db_queries.test/delegations_and_rewards.test.js": "36cefe46bdd62f63",
-        "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "f254d69bb75856a7",
+        "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js": "916f6fe7c7368a48",
         "test/unit/db/db_queries.test/index_lookups.test.js": "1afc4c996e50df8f",
         "test/unit/db/db_queries.test/list_status_reads.test.js": "5c6e41cc82ef0d96",
         "test/unit/db/db_queries.test/market_and_balances.test.js": "3cfa10324fa5563a",
@@ -24224,7 +24367,7 @@
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
-        "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "681ab1dcd2551bc6",
+        "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "b0d45d18fc61eece",
         "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "991c340ad529ac34",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/piped_action_name.test.js": "7b28ef47eda24e27",
@@ -24260,6 +24403,7 @@
         "test/unit/hub/hub_db_sync/barriers/price_landing.test.js": "0c439d8c99053723",
         "test/unit/hub/hub_db_sync/barriers/price_landing_tbtc_376.test.js": "aea66800a93e3976",
         "test/unit/hub/hub_db_sync/barriers/relay_margin_hub_parity.test.js": "4b6a44f185cc3ea1",
+        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
@@ -24337,6 +24481,7 @@
         "test/unit/migration/migrate_status.test.js": "30f2df93b628c0e0",
         "test/unit/migration/migration_auto_index_key_length.test.js": "62321e67976f95c9",
         "test/unit/migration/migration_executable_residue.test.js": "acaf148f7d78ff56",
+        "test/unit/migration/migration_filename_apply_order.test.js": "af6194bf77d0c04e",
         "test/unit/migration/migration_precondition_baseline.test.js": "3892effc8fcf1240",
         "test/unit/migration/migration_precondition_baseline.test/row_format_gate.test.js": "f9b440bdcd327076",
         "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js": "ad9b4cab9e7d3566",
@@ -24349,6 +24494,7 @@
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "c2b02f4fb3266ef1",
         "test/unit/migration/migration_runner.test/destructive_guard_drop_target.test.js": "f30340cc58c06c7d",
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
+        "test/unit/migration/migration_runner.test/destructive_guard_foreign_key.test.js": "287c437af927e36f",
         "test/unit/migration/migration_runner.test/destructive_guard_lock_wait.test.js": "01ae3367d87ac656",
         "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
         "test/unit/migration/migration_runner.test/destructive_guard_quoted_comments.test.js": "d0b1231b8eeef634",
@@ -24580,6 +24726,8 @@
         "test/unit/utility/utility.test/format_and_ledger.test.js": "8c20f0a6066f53f4",
         "test/unit/utility/utility.test/validation.test.js": "f16d88684a803df3",
         "test/unit/utility/utility_log_amount.test.js": "3863f168f47cce2b",
+        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4",
+        "test/unit/xchain_indexer/block_parse.test/block_time_sentinel_guard.test.js": "365999ba7f66f31d",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
@@ -24591,9 +24739,7 @@
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
-        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7",
-        "test/unit/hub/hub_db_sync/capability_proof/bootstrap_batch.test.js": "6a0eea9298dc58c8",
-        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4"
+        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
       }
     },
     "test:security": {

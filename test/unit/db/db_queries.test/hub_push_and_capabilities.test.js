@@ -83,7 +83,7 @@ describe('Database hub push queue methods @regression @tier1', function () {
     it('enqueueHubPush inserts a row with serialized payload', async function () {
         const db   = makeDb();
         const conn = { query: sinon.stub().resolves([]), release: sinon.stub().resolves() };
-        db.pool.getConnection.resolves(conn);
+        db.transactionConnection = conn;
         const payload = { action_index: 42, type: 'price', data: 'abc' };
         await db.enqueueHubPush('price', payload);
         const sql = conn.query.firstCall.args[0];
@@ -92,12 +92,14 @@ describe('Database hub push queue methods @regression @tier1', function () {
         assert.strictEqual(args[0], 'price');
         assert.strictEqual(args[1], 42);
         assert.strictEqual(JSON.parse(args[2]).action_index, 42);
+        assert.ok(db.pool.getConnection.notCalled, 'the row rides the transaction connection');
+        assert.ok(conn.release.notCalled, 'the transaction connection stays open');
     });
 
     it('enqueueHubPush keys the row on an explicit rollback index when one is given', async function () {
         const db   = makeDb();
         const conn = { query: sinon.stub().resolves([]), release: sinon.stub().resolves() };
-        db.pool.getConnection.resolves(conn);
+        db.transactionConnection = conn;
         // The ATTEST batch shape: the payload names the head (100) for the explorer link,
         // while the action that LANDS the delivery is the completing chunk (200). The
         // column is the reorg purge key, so it must carry 200 and the payload must not
@@ -106,6 +108,34 @@ describe('Database hub push queue methods @regression @tier1', function () {
         const args = conn.query.firstCall.args[1];
         assert.strictEqual(args[1], 200, 'the column takes the rollback key');
         assert.strictEqual(JSON.parse(args[2]).action_index, 100, 'the payload keeps the head');
+    });
+
+    it('enqueueHubPushTx returns the new row id when a transaction is open', async function () {
+        const db   = makeDb();
+        const conn = { query: sinon.stub().resolves({ insertId: 5 }), release: sinon.stub().resolves() };
+        db.transactionConnection = conn;
+        assert.strictEqual(await db.enqueueHubPushTx('price', { action_index: 1 }), 5);
+    });
+
+    it('enqueueHubPushTx refuses to write with no transaction open', async function () {
+        const db = makeDb();
+        await assert.rejects(db.enqueueHubPushTx('price', { action_index: 1 }), /open transaction/);
+        assert.ok(db.pool.getConnection.notCalled, 'no statement reached a pooled connection');
+    });
+
+    it('enqueueHubPushTx refuses the API view while the parent holds a transaction', async function () {
+        const db   = makeDb();
+        const conn = { query: sinon.stub().resolves({ insertId: 5 }), release: sinon.stub().resolves() };
+        db.transactionConnection = conn;
+        await assert.rejects(db.apiView().enqueueHubPushTx('price', { action_index: 1 }), /API view/);
+        assert.ok(conn.query.notCalled, 'nothing ran on the transaction connection');
+        assert.ok(db.pool.getConnection.notCalled, 'nothing ran on a pooled connection');
+    });
+
+    it('enqueueHubPushTx refuses the API view with no transaction open', async function () {
+        const db = makeDb();
+        await assert.rejects(db.apiView().enqueueHubPushTx('price', { action_index: 1 }), /API view/);
+        assert.ok(db.pool.getConnection.notCalled, 'nothing ran on a pooled connection');
     });
 
     it('markHubPushDelivered deletes the row', async function () {
@@ -171,7 +201,7 @@ describe('Database.getPendingHubPushes() @regression @tier1', function () {
         const sql  = conn.query.firstCall.args[0];
         const args = conn.query.firstCall.args[1];
         assert.match(sql, /last_attempted_at IS NULL/);
-        assert.match(sql, /LEAST\(\? \* POW\(2, GREATEST\(attempts - 1, 0\)\), \?\)/);
+        assert.match(sql, /LEAST\(\? \* POW\(2, LEAST\(GREATEST\(attempts, 1\), 31\) - 1\), \?\)/);
         assert.deepStrictEqual(args, [30, 600, 50], 'base/max backoff converted to whole seconds, then the limit');
     });
 

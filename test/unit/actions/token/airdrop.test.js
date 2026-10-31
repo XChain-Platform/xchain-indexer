@@ -273,6 +273,22 @@ describe('Airdrop @regression @tier2', function () {
 
             assert.ok(indexer.indexerDb.createAirdrop.callCount >= 2, 'createAirdrop called for each tick');
         });
+
+        it('format 1 with only VERSION|LIST_ACTION_INDEX reads zero legs and writes no airdrops row or STATUS', async function () {
+            indexer.indexerDb.getAddressBalances.resolves({});
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+
+            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 1 });
+            const params = ['1', '1'];
+
+            assert.strictEqual(handler.readAirdropLegs(params, 1).length, 0);
+            await handler.parse(params, data, null);
+
+            // A known FORMAT with no TICK|AMOUNT pair reads no legs, so the action is mapped with no verdict row.
+            assert.ok(indexer.indexerDb.createAirdrop.notCalled, 'a zero-leg AIRDROP writes no airdrops row');
+            assert.strictEqual(data['STATUS'], undefined);
+            assert.ok(indexer.mapper.createMappings.calledOnce, 'the action is still mapped');
+        });
     });
 
     // ─── Format 2 (Multi-Airdrop Full) ───────────────────────────────

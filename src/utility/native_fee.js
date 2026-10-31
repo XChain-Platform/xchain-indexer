@@ -34,7 +34,7 @@ const probePaymentDisclosures = new WeakMap();
 // TX_OUTPUTS is TRANSACTION-level state that the batch loop preserves across every
 // sub-command, and nothing decrements it. So before this, each sub-command judged the
 // SAME untouched fee output from zero: a batch of 100 ORDERs paid one ORDER's fee.
-// batch.js seeds data['BATCH_VALUE_LEDGER'] for BATCH sub-commands. AIRDROP supplies an
+// seedValueLedger (actions/batch/index.js) seeds data['BATCH_VALUE_LEDGER'] for BATCH sub-commands. AIRDROP supplies an
 // action-local NATIVE_FEE_LEDGER for its non-BATCH legs after its own flag day. This is
 // where either tally is read, and drawNativeFeeOutput below is where it is written.
 //

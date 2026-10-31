@@ -48,7 +48,8 @@ module.exports = {
         let lastProcessedReorgId = await indexerReorgView.getLastProcessedReorgId();
         // Pass the cursor marker's stored witness so getReorgsSince can catch an
         // out-of-band decoder rebuild that reused this cursor id for a different event
-        // (under-cursor silent skip). Null for legacy markers -> old over-cursor guard only.
+        // (under-cursor silent skip). Null for legacy markers -> the cursor-row existence
+        // check still runs; only the time/hash match is skipped.
         let cursorWitness        = (lastProcessedReorgId != null)
                                     ? await indexerReorgView.getLastProcessedReorgWitness() : null;
         let unprocessedReorgs    = await this.decoderDb.getReorgsSince(lastProcessedReorgId, cursorWitness);

@@ -294,19 +294,24 @@ module.exports = {
     },
 
     /*
-     * Hub push retry queue (`pending_hub_pushes`)
+     * Hub push outbox (`pending_hub_pushes`)
      *
-     * Durable backing for best-effort hub pushes (PRICE v0 round / PRICE v1
-     * oracle price). When a live push fails, the payload is parked here and the
-     * HubPushQueue poller drains it later with exponential backoff.
+     * A transactional outbox: every row is written AHEAD of delivery by the one
+     * writer, enqueueHubPushTx (src/db/hub_pushes/index.js), through doQuery() on
+     * the open block or rollback transaction, so it commits or rolls back with
+     * that transaction. Never move that INSERT onto poolQuery(): a pooled insert
+     * commits outside the transaction and can lose or orphan a push
+     * (test/unit/repo_guards/hub_push_outbox_tx_only.test.js pins this).
      *
-     * These methods deliberately bypass doQuery()/getConnection(): the poller
-     * runs concurrently with block processing on this same `indexerDb` instance,
-     * and getConnection() returns the open block's `transactionConnection` while
-     * a block is being processed. Routing queue writes through it would attach
-     * operational queue I/O to the block's ACID transaction (committed/rolled
-     * back with the block) and risk two statements sharing one physical
-     * connection. poolQuery() always draws an independent pooled connection.
+     * On the outbox, poolQuery() serves only the drain and settle side (the
+     * HubPushQueue poller's fetch, attempt and delivered bookkeeping, deletes,
+     * and the status reads); it also backs the apiView() override below and
+     * other reads that must stay off the block transaction. The poller runs
+     * concurrently with block processing on this same `indexerDb` instance, and
+     * getConnection() returns the open block's `transactionConnection` while a
+     * block is being processed, so routing drain-side I/O through it would tie
+     * queue bookkeeping to the block's commit or rollback and risk two
+     * statements sharing one physical connection.
      */
 
     // Run a query on a fresh pooled connection, isolated from any in-progress
@@ -337,6 +342,9 @@ module.exports = {
     apiView(){
         if(!this._apiView){
             this._apiView = Object.create(this);
+            // Mark the view pool-only: transaction-only writers check this, because the view's
+            // doQuery is pooled while it still inherits transactionConnection.
+            this._apiView._poolOnlyView = true;
             // Index-id access through this committed view is resolve-only: an open read that
             // stored a ticker or address id outside block processing (before its ISSUE, during a
             // reindex) would shift the ids blocks assign and fork the ledger.

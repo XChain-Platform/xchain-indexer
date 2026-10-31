@@ -41,22 +41,21 @@ const getMarketInfoOn = (db) => db.getMarketInfo(1, 1000000);
 
 // getMarketInfo
 describe('Database.getMarketInfo() @regression @tier1', function () {
-    // getMarketInfo issues six queries in order: market lookup, last trade, 24h-ago trade,
-    // bid orders, ask orders, 24h matches. Feed each one by call index. A seventh, the
-    // coin-label derive, runs only when the looked-up row is still unlabelled.
-    function marketDb(bids, asks, matches) {
+    // getMarketInfo issues five queries in order: market lookup, last trade, 24h-ago trade,
+    // the open book (ranked for both bid and ask), 24h matches. Feed each one by call index.
+    // A sixth, the coin-label derive, runs only when the looked-up row is still unlabelled.
+    function marketDb(book, matches) {
         const db = makeDb();
         const q  = sinon.stub(db, 'doQuery');
         // coin ids present: an already-labelled market skips the label-derive query, so
-        // the six positions below stay the six this fixture programs.
+        // the five positions below stay the five this fixture programs.
         q.onCall(0).resolves([{ market_id: 1, tick1: 'AAA', tick1_id: 10, tick1_decimals: 8,
                                 tick2: 'BBB', tick2_id: 20, tick2_decimals: 8,
                                 coin1_id: 1, coin2_id: 1 }]);
         q.onCall(1).resolves([]);   // last trade price
         q.onCall(2).resolves([]);   // 24h-ago trade price
-        q.onCall(3).resolves(bids);
-        q.onCall(4).resolves(asks);
-        q.onCall(5).resolves(matches);
+        q.onCall(3).resolves(book);
+        q.onCall(4).resolves(matches);
         return db;
     }
 
@@ -64,16 +63,16 @@ describe('Database.getMarketInfo() @regression @tier1', function () {
         // getPrice returns a decimal.js bignumber; `price > best` coerces BOTH sides to
         // strings, and '10' ranks BELOW '9' as text. Best bid of a 9-then-10 book came back
         // as 9, and best ask of a 10-then-9 book came back as 10.
-        const data = await getMarketInfoOn(marketDb(
-            [leg('1', '9'), leg('1', '10')],
-            [leg('1', '10'), leg('1', '9')],
-            []));
-        assert.strictEqual(String(data.tick1_bid), '10', 'best bid must be the numeric max');
-        assert.strictEqual(String(data.tick1_ask), '9',  'best ask must be the numeric min');
+        const bidBook = await getMarketInfoOn(marketDb([leg('1', '9'), leg('1', '10')], []));
+        const askBook = await getMarketInfoOn(marketDb([leg('1', '10'), leg('1', '9')], []));
+        assert.strictEqual(String(bidBook.tick1_bid), '10', 'best bid must be the numeric max');
+        assert.strictEqual(String(askBook.tick1_ask), '9',  'best ask must be the numeric min');
+        assert.strictEqual(String(bidBook.tick1_ask), '9');
+        assert.strictEqual(String(askBook.tick1_bid), '10');
     });
 
     it('ranks 24h high/low numerically', async function () {
-        const data = await getMarketInfoOn(marketDb([], [],
+        const data = await getMarketInfoOn(marketDb([],
             [leg('0.5', '4.5'), leg('0.4', '4'), leg('0.25', '2')]));   // prices 9, 10, 8
         assert.strictEqual(String(data.tick1_24hr_high), '10');
         assert.strictEqual(String(data.tick1_24hr_low),  '8');
@@ -82,7 +81,7 @@ describe('Database.getMarketInfo() @regression @tier1', function () {
     it('sums 24h volume at the tick scale instead of quantizing to whole units', async function () {
         // bcadd with no decimals argument formats at precision 0, so each partial sum was
         // rounded half-up: 0.5 + 0.4 + 0.25 accumulated to 1 rather than 1.15.
-        const data = await getMarketInfoOn(marketDb([], [],
+        const data = await getMarketInfoOn(marketDb([],
             [leg('0.5', '4.5'), leg('0.4', '4'), leg('0.25', '2')]));
         assert.strictEqual(String(data.tick1_24hr_volume), '1.15');
         assert.strictEqual(String(data.tick2_24hr_volume), '10.5');
@@ -99,8 +98,7 @@ describe('Database.getMarketInfo() @regression @tier1', function () {
         q.onCall(1).resolves([]);
         q.onCall(2).resolves([]);
         q.onCall(3).resolves([]);
-        q.onCall(4).resolves([]);
-        q.onCall(5).resolves([leg('3', '6'), leg('4', '8')]);
+        q.onCall(4).resolves([leg('3', '6'), leg('4', '8')]);
         const data = await getMarketInfoOn(db);
         assert.strictEqual(String(data.tick1_24hr_volume), '7');
     });

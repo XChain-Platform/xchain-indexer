@@ -43,6 +43,26 @@ function emptyMarketData(){
     };
 }
 
+// One side of a pair filter, exactly `COALESCE(col,0)=sideId` but with the column bare so
+// its tick index stays usable (orders / order_matches store NULL for a native side).
+function sideFilter(col, sideId){
+    if(sideId === 0)
+        return { sql: '(' + col + ' IS NULL OR ' + col + '=?)', args: [sideId] };
+    return { sql: col + '=?', args: [sideId] };
+}
+
+// The pair filter on an orders / order_matches alias, in both orientations of the market.
+function pairFilter(alias, data){
+    let parts = [
+        sideFilter(alias + '.give_tick_id', data.tick1_id), sideFilter(alias + '.get_tick_id', data.tick2_id),
+        sideFilter(alias + '.give_tick_id', data.tick2_id), sideFilter(alias + '.get_tick_id', data.tick1_id)
+    ];
+    return {
+        sql:  '((' + parts[0].sql + ' AND ' + parts[1].sql + ') OR (' + parts[2].sql + ' AND ' + parts[3].sql + '))',
+        args: [].concat(parts[0].args, parts[1].args, parts[2].args, parts[3].args)
+    };
+}
+
 // The market row itself: its two sides, their decimals and their coins.
 async function readMarketRow(db, Database, data, market_id, sideOf){
     // Lookup basic information on this market (tick, tick_id, decimals).
@@ -91,15 +111,15 @@ async function readMarketRow(db, Database, data, market_id, sideOf){
 // persists them. Guarded on the 0, so a labelled row costs no extra query.
 async function backfillMarketCoins(db, data, sideOf){
     if(data.coin1_id===0 || data.coin2_id===0){
+        let pair  = pairFilter('o', data);
         let coins = await db.doQuery(
             `SELECT o.give_tick_id, o.give_coin_id, o.get_coin_id
                      FROM orders o
                      WHERE o.give_coin_id=o.get_coin_id AND
-                           ((COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?)
-                         OR (COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?))
+                           ${pair.sql}
                      ORDER BY o.action_index ASC
                      LIMIT 1`,
-            [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id]);
+            pair.args);
         if(coins.length > 0){
             let give_is_tick1 = (sideOf(coins[0].give_tick_id)===data.tick1_id);
             data.coin1_id = Number(give_is_tick1 ? coins[0].give_coin_id : coins[0].get_coin_id)  || 0;
@@ -111,6 +131,7 @@ async function backfillMarketCoins(db, data, sideOf){
 // The last valid trade on the pair.
 async function readLastTradePrices(db, data, sideOf){
     // Lookup last trade prices
+    let pair  = pairFilter('m1', data);
     let query = `SELECT
                 m1.give_tick_id,
                 m1.give_amount,
@@ -120,12 +141,12 @@ async function readLastTradePrices(db, data, sideOf){
                 order_matches m1
                 INNER JOIN index_statuses s1 ON (s1.id=m1.status_id)
             WHERE
-                m1.give_coin_id=m1.get_coin_id AND 
-                ((COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?) OR (COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?))  AND
+                m1.give_coin_id=m1.get_coin_id AND
+                ${pair.sql}  AND
                 s1.status=?
-            ORDER BY m1.action_index DESC 
+            ORDER BY m1.action_index DESC
             LIMIT 1`;
-    let args    = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid'];
+    let args    = pair.args.concat(['valid']);
     let results = await db.doQuery(query, args);
     if(results.length > 0){
         let row = results[0];
@@ -139,6 +160,7 @@ async function readLastTradePrices(db, data, sideOf){
 // The last valid trade at or before 24 hours ago.
 async function readDayAgoPrices(db, data, time_24hr, sideOf){
     // Lookup trade prices 24-hours ago
+    let pair  = pairFilter('m1', data);
     let query = `SELECT
                 m1.give_tick_id,
                 m1.give_amount,
@@ -150,13 +172,13 @@ async function readDayAgoPrices(db, data, time_24hr, sideOf){
                 INNER JOIN actions        a1 ON (a1.action_index=m1.action_index)
                 INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
             WHERE
-                m1.give_coin_id=m1.get_coin_id AND 
-                ((COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?) OR (COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?))  AND
+                m1.give_coin_id=m1.get_coin_id AND
+                ${pair.sql}  AND
                 s1.status=? AND
                 b1.block_time <= ?
-            ORDER BY m1.action_index DESC 
+            ORDER BY m1.action_index DESC
             LIMIT 1`;
-    let args    = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', time_24hr];
+    let args    = pair.args.concat(['valid', time_24hr]);
     let results = await db.doQuery(query, args);
     if(results.length > 0){
         let row = results[0];
@@ -167,9 +189,9 @@ async function readDayAgoPrices(db, data, time_24hr, sideOf){
     }
 }
 
-// The best bid across the pair's open orders.
-async function readBestBids(db, data, sideOf){
-    // Lookup 'bid' prices
+// The pair's open orders, newest first: the one book the best bid and the best ask both rank.
+async function readOpenBook(db, data){
+    let pair  = pairFilter('o1', data);
     let query = `SELECT
                 o1.give_tick_id,
                 o1.give_amount,
@@ -182,7 +204,7 @@ async function readBestBids(db, data, sideOf){
                 INNER JOIN index_statuses s3 ON (s3.id=s1.status_id)
             WHERE
                 o1.give_coin_id=o1.get_coin_id AND 
-                ((COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?) OR (COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?))  AND
+                ${pair.sql}  AND
                 s2.status=? AND
                 s3.status=? AND
                 s1.action_index = (
@@ -194,11 +216,18 @@ async function readBestBids(db, data, sideOf){
                         s4.order_action_index = o1.action_index
                 )
             ORDER BY o1.action_index DESC`;
-    let args    = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', 'open'];
-    let results = await db.doQuery(query, args);
+    let args = pair.args.concat(['valid', 'open']);
+    return db.doQuery(query, args);
+}
+
+// The best bid and the best ask across the pair's open orders, ranked from one read of the book.
+async function readBestBidAsk(db, data, sideOf){
+    let results = await readOpenBook(db, data);
     if(results.length > 0){
         let tick1_bid = 0,
-            tick2_bid = 0;
+            tick2_bid = 0,
+            tick1_ask = 0,
+            tick2_ask = 0;
         for(let row of results){
             let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
             let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount : row.give_amount;
@@ -208,64 +237,17 @@ async function readBestBids(db, data, sideOf){
                 continue;
             if(tick1_bid==0) tick1_bid = price1;
             if(tick2_bid==0) tick2_bid = price2;
-            // bcgt, not `>`: getPrice returns a decimal.js bignumber, and a native
-            // relational compare between two of them coerces both to strings and ranks
-            // them LEXICOGRAPHICALLY, so '10' sorts below '9'. Same disagreement the SQL
-            // side flag-dayed in dispenser_send_amount_compare_activation.js.
-            if(db.util.bcgt(price1, tick1_bid)) tick1_bid = price1;
-            if(db.util.bcgt(price2, tick2_bid)) tick2_bid = price2;
-        }
-        data.tick1_bid  = tick1_bid;
-        data.tick2_bid  = tick2_bid;
-    }
-}
-
-// The best ask across the pair's open orders.
-async function readBestAsks(db, data, sideOf){
-    // Lookup 'ask' prices
-    let query = `SELECT
-                o1.give_tick_id,
-                o1.give_amount,
-                o1.get_tick_id,
-                o1.get_amount
-            FROM 
-                orders o1
-                INNER JOIN order_statuses s1 ON (s1.order_action_index=o1.action_index)
-                INNER JOIN index_statuses s2 ON (s2.id=o1.status_id)
-                INNER JOIN index_statuses s3 ON (s3.id=s1.status_id)
-            WHERE
-                o1.give_coin_id=o1.get_coin_id AND 
-                ((COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?) OR (COALESCE(o1.give_tick_id,0)=? AND COALESCE(o1.get_tick_id,0)=?))  AND
-                s2.status=? AND
-                s3.status=? AND
-                s1.action_index = (
-                    SELECT
-                        MAX(s4.action_index)
-                    FROM
-                        order_statuses s4
-                    WHERE
-                        s4.order_action_index = o1.action_index
-                )
-            ORDER BY o1.action_index DESC`;
-    let args    = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', 'open'];
-    let results = await db.doQuery(query, args);
-    if(results.length > 0){
-        let tick1_ask = 0,
-            tick2_ask = 0;
-        for(let row of results){
-            let give_amount = (sideOf(row.give_tick_id)===data.tick1_id) ? row.give_amount : row.get_amount;
-            let get_amount  = (sideOf(row.give_tick_id)===data.tick1_id) ? row.get_amount : row.give_amount;
-            let price1      = db.util.getPrice(get_amount, give_amount);
-            let price2      = db.util.getPrice(give_amount, get_amount);
-            if(price1==0||price2==0)
-                continue;
             if(tick1_ask==0) tick1_ask = price1;
             if(tick2_ask==0) tick2_ask = price2;
-            // bclt for the same reason as the bid block above: a lexicographic rank picks
-            // the wrong extreme here, which publishes an understated ask.
+            // bcgt / bclt, not `>` / `<`: getPrice returns a decimal.js bignumber, and a native
+            // compare between two of them ranks them as strings, so '10' sorts below '9'.
+            if(db.util.bcgt(price1, tick1_bid)) tick1_bid = price1;
+            if(db.util.bcgt(price2, tick2_bid)) tick2_bid = price2;
             if(db.util.bclt(price1, tick1_ask)) tick1_ask = price1;
             if(db.util.bclt(price2, tick2_ask)) tick2_ask = price2;
         }
+        data.tick1_bid = tick1_bid;
+        data.tick2_bid = tick2_bid;
         data.tick1_ask = tick1_ask;
         data.tick2_ask = tick2_ask;
     }
@@ -274,6 +256,7 @@ async function readBestAsks(db, data, sideOf){
 // The last 24 hours of valid trades on the pair, folded into highs, lows and volumes.
 async function readDayStats(db, data, time_24hr, sideOf){
     // Lookup all order matches in the last 24-hours
+    let pair  = pairFilter('m1', data);
     let query = `SELECT
                 m1.give_tick_id,
                 m1.give_amount,
@@ -286,11 +269,11 @@ async function readDayStats(db, data, time_24hr, sideOf){
                 INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
             WHERE
                 m1.give_coin_id=m1.get_coin_id AND 
-                ((COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?) OR (COALESCE(m1.give_tick_id,0)=? AND COALESCE(m1.get_tick_id,0)=?))  AND
+                ${pair.sql}  AND
                 s1.status=? AND
                 b1.block_time >= ?
             ORDER BY m1.action_index DESC`;
-    let args    = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', time_24hr];
+    let args    = pair.args.concat(['valid', time_24hr]);
     let results = await db.doQuery(query, args);
     if(results.length > 0){
         accumulateDayStats(db, data, results, sideOf);
@@ -369,8 +352,7 @@ module.exports = {
     readMarketRow,
     readLastTradePrices,
     readDayAgoPrices,
-    readBestBids,
-    readBestAsks,
+    readBestBidAsk,
     readDayStats,
     applyDayChanges,
 };

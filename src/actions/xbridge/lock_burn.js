@@ -14,9 +14,11 @@
  *
  * The two ledger effects XBRIDGE can have on the chain it is parsed on: a LOCK
  * (v0, v3) that moves units into the keyless escrow role address, and a BURN
- * (v1, v4) that takes them out of local supply. They are the only methods that
- * read the token row and the source balance, and they are the only ones that fill
- * the ledger plan (ctx.credits / ctx.debits), so they live together here.
+ * (v1, v4) that takes them out of local supply. applyAndCharge in index.js reads
+ * the token row and the source balance before either runs and hands them in as
+ * ctx.tokenInfo / ctx.sourceBalance; these functions consume those reads, and they
+ * are the only ones that fill the ledger plan (ctx.credits / ctx.debits), so they
+ * live together here.
  *
  * Each function is the handler method moved verbatim and invoked with
  * `.call(this, ...)` from index.js, the way execute/slash_emission.js is; the
@@ -48,8 +50,8 @@ const VERDICTS = v.VERDICTS;
  * accepted lock un-signable, and no two followers can disagree) and sets the origin
  * row's `bridged` bit, which is never cleared once set.
  *
- * v3 consults isActionAllowed for the source and tick the way SEND does: a sleeping or
- * list-blocked source cannot lock.
+ * Both lock versions (and every burn version) consult isActionAllowed for the source and
+ * tick the way SEND does: a sleeping or list-blocked source cannot lock.
  *
  * Called with the handler as `this`.
  *
@@ -59,9 +61,11 @@ const VERDICTS = v.VERDICTS;
  * @param {Object} ctx  - handler context: { coin, network, blockIndex, blockTime,
  *                        tokenInfo, sourceBalance }
  * @returns {Promise<{valid: boolean, verdict: (string|null)}>} verdict is one of
- *          VERDICTS.TICK_NOT_NATIVE, TICK_USE_V0, TICK_SUBASSET, TICK_TOO_LONG,
- *          TICK_NOT_BRIDGEABLE, DEST_COIN, DEST_ADDRESS, AMOUNT, INSUFFICIENT_FUNDS,
- *          or null when the lock applies
+ *          VERDICTS.TICK_UNKNOWN, TICK_NOT_BRIDGEABLE (v3), DEST_COIN, DEST_ADDRESS,
+ *          AMOUNT, SOURCE_SLEEPING, TICK_SLEEPING, SOURCE_UNAUTHORIZED, MEMO_PIPE,
+ *          MEMO_SEMICOLON, MEMO_LENGTH, INSUFFICIENT_FUNDS, or null when the lock
+ *          applies (the tick-shape refusals are reached earlier, by validateTickShape
+ *          in parse())
  */
 async function applyLock(data, ctx){
 
@@ -209,7 +213,9 @@ function planLockLedger(data, ctx, info, escrow, dest){
  * @param {Object} ctx  - handler context: { coin, network, blockTime, tokenInfo,
  *                        sourceBalance }
  * @returns {Promise<{valid: boolean, verdict: (string|null)}>} verdict is one of
- *          VERDICTS.TICK_NOT_BRIDGED, BTC_ADDRESS, ORIGIN_ADDRESS, AMOUNT,
+ *          VERDICTS.TICK_UNKNOWN, TICK_NOT_BRIDGED (v4), ORIGIN_ADDRESS (v4),
+ *          BTC_ADDRESS (v1), AMOUNT, SOURCE_SLEEPING, TICK_SLEEPING,
+ *          SOURCE_UNAUTHORIZED, MEMO_PIPE, MEMO_SEMICOLON, MEMO_LENGTH,
  *          INSUFFICIENT_FUNDS, or null when the burn applies
  */
 async function applyBurn(data, ctx){

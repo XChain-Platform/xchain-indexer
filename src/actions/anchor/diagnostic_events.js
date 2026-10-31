@@ -89,7 +89,7 @@ function noteAnchorFailed({ chain, reason, ...extra } = {}) {
     catch { return null; }
 }
 
-// The verdicts anchor.js stores are free text, but every refusal is prefixed
+// The verdicts the ANCHOR parser (index.js) stores are free text, but every refusal is prefixed
 // 'invalid'. 'unverified' and 'orphan' are NOT refusals: they mark an anchor a
 // snapshot-less node cannot judge yet and a chunk that arrived before its head,
 // both of which resolve on their own.

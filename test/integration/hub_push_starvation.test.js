@@ -136,6 +136,44 @@ function registerPushStarvationTests2() {
     });
 }
 
+// Durable rows retry without a cap, so attempts can pass the point where 2^(attempts-1)
+// leaves the DOUBLE range; MariaDB raises an error there instead of saturating.
+function registerPushOverflowTests() {
+    const BACKOFF = { baseBackoffMs: 30000, maxBackoffMs: 600000 };
+    async function insertRow(pushType, attempts, lastAttemptedSql) {
+        const res = await db.poolQuery(
+            `INSERT INTO pending_hub_pushes (push_type, action_index, payload, attempts, last_attempted_at, status)
+             VALUES (?, ?, ?, ?, ${lastAttemptedSql}, 'pending')`,
+            [pushType, 1, JSON.stringify({ round: 1 }), attempts]);
+        return Number(res.insertId);
+    }
+
+    it('fetches a durable row with 1100 attempts once the capped backoff has elapsed', async function () {
+        const id = await insertRow('oracle_price', 1100, 'DATE_SUB(NOW(), INTERVAL 11 MINUTE)');
+        const rows = await db.getPendingHubPushes(50, BACKOFF);
+        assert.deepStrictEqual(rows.map(r => Number(r.id)), [id]);
+    });
+
+    it('holds a durable row with 1100 attempts inside the capped backoff without failing the fetch', async function () {
+        await insertRow('oracle_price', 1100, 'NOW()');
+        const rows = await db.getPendingHubPushes(50, BACKOFF);
+        assert.strictEqual(rows.length, 0);
+    });
+
+    it('still fetches a never-tried row behind a durable row with 1100 attempts', async function () {
+        await insertRow('oracle_price', 1100, 'NOW()');
+        const fresh = await insertRow('price_round', 0, 'NULL');
+        const rows = await db.getPendingHubPushes(50, BACKOFF);
+        assert.deepStrictEqual(rows.map(r => Number(r.id)), [fresh]);
+    });
+
+    it('fetches a row whose attempts sit at the INT UNSIGNED maximum', async function () {
+        const id = await insertRow('oracle_price', 4294967295, 'DATE_SUB(NOW(), INTERVAL 11 MINUTE)');
+        const rows = await db.getPendingHubPushes(50, BACKOFF);
+        assert.deepStrictEqual(rows.map(r => Number(r.id)), [id]);
+    });
+}
+
 describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1', function () {
     this.timeout(60000);
 
@@ -158,4 +196,5 @@ describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1',
 
     registerPushStarvationTests1();
     registerPushStarvationTests2();
+    registerPushOverflowTests();
 });

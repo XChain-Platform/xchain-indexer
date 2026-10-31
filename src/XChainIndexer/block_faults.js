@@ -27,6 +27,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../observability/index.js');
+const { BRIDGE_PROOF_BARRIER } = require('../consensus/bridge_proof_client/stall.js');
 
 // The VM executor or a DOGE anchor proof is unavailable from HERE. Returns true when
 // the fault was one of these two.
@@ -83,7 +84,7 @@ function noteBridgeOrRollcallFault(error, lastIndexerBlock){
             (error && error.message) + ' Deferring the block (not committing; an ' +
             'unproven mint is exactly what D2 exists to stop). Retrying after ' +
             this.config['BLOCK_CHECK_INTERVAL'] + 'ms.');
-        this.stallReason = 'bridge_proof_barrier';
+        this.stallReason = BRIDGE_PROOF_BARRIER;
         this.stallClearsAt = null;          // clears when the checkpoint arrives, not on a clock
         return true;
     }

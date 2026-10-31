@@ -157,7 +157,8 @@ class HubPushQueue {
         if(!row.last_attempted_at) return true;
         let last    = new Date(row.last_attempted_at).getTime();
         let attempts = Number(row.attempts) || 0;
-        let backoff = Math.min(this.baseBackoffMs * Math.pow(2, Math.max(0, attempts - 1)), this.maxBackoffMs);
+        // Same 0..30 exponent bound as the SQL predicate in getPendingHubPushes, so the two agree.
+        let backoff = Math.min(this.baseBackoffMs * Math.pow(2, Math.min(Math.max(attempts, 1), 31) - 1), this.maxBackoffMs);
         return now >= last + backoff;
     }
 
@@ -285,7 +286,8 @@ class HubPushQueue {
             // the DOGE rail, delivered to pushattestbatch.
             await client.pushAttestBatch(payload);
         } else if(row.push_type === 'price_retraction'){
-            // Reorg retraction parked by rollback.js when the live RPC failed.
+            // Reorg retraction written ahead by src/rollback/commit.js inside the rollback
+            // transaction, drained here when its post-commit delivery did not succeed.
             // pushpricereorg is idempotent over a replayed range. A deferred drain bounds the
             // delete to the CLOSED range [action_index, last_action_index] so a row re-published
             // at A' inside the original open-ended range is not wiped. Old queued rows (no
@@ -297,22 +299,22 @@ class HubPushQueue {
             if(Array.isArray(payload.batches)) args.push(payload.batches);
             await client.retractPriceRange(...args);
         } else if(row.push_type === 'xcall_retraction'){
-            // Reorg XCALL relay retraction parked by rollback.js when the live RPC
-            // failed. retractXcallRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+            // Reorg XCALL relay retraction written ahead by src/rollback/commit.js, drained here
+            // when its post-commit delivery did not succeed. retractXcallRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
             await client.retractXcallRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
         } else if(row.push_type === 'attest_batch_retraction'){
-            // Reorg ATTEST batch-link retraction parked by rollback.js when the live RPC
-            // failed. Keyed on ONE batch rather than on an action range (the hub clears a
+            // Reorg ATTEST batch-link retraction written ahead by src/rollback/commit.js, drained
+            // here when its post-commit delivery did not succeed. Keyed on ONE batch rather than on an action range (the hub clears a
             // link column, never a row), and idempotent: the hub answers a retraction that
             // matches no link with an accepted no-op, so a replayed drain is free.
             await client.retractAttestBatch(payload.coin, payload);
         } else if(row.push_type === 'match_retraction'){
-            // Reorg DEX cross-chain match retraction parked by rollback.js when the
-            // live RPC failed. retractMatchRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+            // Reorg DEX cross-chain match retraction written ahead by src/rollback/commit.js,
+            // drained here when its post-commit delivery did not succeed. retractMatchRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
             await client.retractMatchRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
         } else if(row.push_type === 'bridge_retraction'){
-            // Reorg bridge transfer retraction parked by rollback.js when the live RPC
-            // failed. retractBridgeRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+            // Reorg bridge transfer retraction written ahead by src/rollback/commit.js, drained
+            // here when its post-commit delivery did not succeed. retractBridgeRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
             await client.retractBridgeRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
         } else {
             getLogger().warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');

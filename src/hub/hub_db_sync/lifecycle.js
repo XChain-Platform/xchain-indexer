@@ -73,8 +73,16 @@ module.exports = {
             this._pollMode = true;
         }
 
-        // Bootstrap each tracked table after the subscription is confirmed active
-        await this.bootstrapAll();
+        // Bootstrap each tracked table after the subscription is confirmed active. Guarded
+        // like every other bootstrapAll caller: a throw must not leave poll mode without
+        // its loop, or WS mode without its bootstrap retry.
+        try {
+            await this.bootstrapAll();
+        } catch (err) {
+            getLogger().warn('HubDbSync: initial bootstrap failed: ' + (err && err.message));
+            // Poll mode needs no retry here: the poll loop below re-runs bootstrapAll.
+            if (WebSocket && this.running && !this._bootstrapDrained) this.scheduleBootstrapRetry();
+        }
 
         if (!WebSocket) {
             this.startPolling();
@@ -220,7 +228,12 @@ module.exports = {
     scheduleBootstrapRetry(undrained) {
         let held = (Array.isArray(undrained) && undrained.length > 0) ? '; not drained: ' + undrained.join(', ') : '';
         getLogger().warn('HubDbSync: bootstrap partial, retrying in ' + this.pollIntervalMs + 'ms (heartbeat gate stays closed' + held + ')');
-        setTimeout(() => {
+        // One pending retry at a time, tracked so stop() can cancel it; the pending one
+        // re-runs every table, so a second would only double the cadence.
+        if (this._bootstrapRetryTimer != null) return;
+        const retryTimer = setTimeout(() => {
+            if (this._bootstrapRetryTimer !== retryTimer) return;
+            this._bootstrapRetryTimer = null;
             if (!this.running || this._bootstrapDrained) return;
             // A throw inside bootstrapAll never reaches its own retry, so re-arm here on
             // the error path only (a finally would double-arm after a normal partial drain).
@@ -229,6 +242,7 @@ module.exports = {
                 if (this.running && !this._bootstrapDrained) this.scheduleBootstrapRetry();
             });
         }, this.pollIntervalMs);
+        this._bootstrapRetryTimer = retryTimer;
     },
 
     stop() {
@@ -237,6 +251,17 @@ module.exports = {
         if (this._reconnectTimer != null) {
             clearTimeout(this._reconnectTimer);
             this._reconnectTimer = null;
+        }
+        // Cancel the poll chain and the bootstrap retry, so a start() on this same
+        // instance cannot resume an old chain beside its new one.
+        if (this._pollTimer != null) {
+            clearTimeout(this._pollTimer);
+            this._pollTimer = null;
+        }
+        this._pollChain = null;
+        if (this._bootstrapRetryTimer != null) {
+            clearTimeout(this._bootstrapRetryTimer);
+            this._bootstrapRetryTimer = null;
         }
         if (this.ws) {
             try { this.ws.close(); } catch (e) { /* ignore */ }
@@ -257,8 +282,8 @@ module.exports = {
                      moveReason: moveStatus.moveReason, moveCount: moveStatus.moveCount, tables: {}, heights: {} };
         }
         let tables = {};
-        // HUB_STATE_TABLES rides the global streamWatermark, not a per-table
-        // scalar: that IS what gates each of them (§4.2).
+        // Report HUB_STATE_TABLES under the global streamWatermark, not a per-table scalar:
+        // a summary, not each member's gate (see HUB_STATE_TABLES in mirror_tables.js, §4.2).
         for (let table of HUB_STATE_TABLES) tables[table] = this.streamWatermark;
         // Height-gated tables have no honest scalar seconds value. Their per-chain
         // positions are exposed by the heights map below.
@@ -394,16 +419,22 @@ module.exports = {
     // the settlement barriers fail closed (defer) rather than certify against a
     // mirror that may be silently stale. Bootstrapping/mirroring still runs each cycle.
     startPolling() {
+        // One chain per start: the chain token lets stop() retire a poll still awaiting
+        // bootstrapAll, so it cannot re-arm beside a newer chain.
+        if (this._pollChain) return;
+        const chain = {};
+        this._pollChain = chain;
         let poll = async () => {
-            if (!this.running) return;
+            if (!this.running || this._pollChain !== chain) return;
+            this._pollTimer = null;
             try {
                 await this.bootstrapAll();
             } catch (err) {
                 getLogger().warn('HubDbSync: poll error:', err);
             }
-            if (this.running) setTimeout(poll, this.pollIntervalMs);
+            if (this.running && this._pollChain === chain) this._pollTimer = setTimeout(poll, this.pollIntervalMs);
         };
-        setTimeout(poll, this.pollIntervalMs);
+        this._pollTimer = setTimeout(poll, this.pollIntervalMs);
     },
 
 };

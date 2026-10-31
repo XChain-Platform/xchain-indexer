@@ -14,7 +14,7 @@
  * Integration test: decoder -> indexer DB READ CONTRACT.
  *
  * The indexer reads block data from the decoder's database via a single hand-written
- * JOIN query (db.js:getDecoderBlockData). The decoder produces that schema from its own
+ * JOIN query (src/db/transactions/decoder_block_data.js:getDecoderBlockData). The decoder produces that schema from its own
  * canonical DDL (xchain-decoder/src/sql/*.sql). These are two independent code paths in
  * two independent repos; nothing structurally guarantees the columns the indexer SELECTs
  * still exist in what the decoder produces.
@@ -45,14 +45,14 @@ const DecoderSeeder = require('../../setup/decoder-seeder');
 const { destroyFileIndexers } = require('../../setup/indexer-launcher');
 
 // Build a standalone decoder-DB handle exactly the way XChainIndexer does
-// (db.js Database needs only indexer.config + indexer.util).
+// (the Database class in src/db/index.js needs only indexer.config + indexer.util).
 const config   = require('../../../../src/config.js');
 const Utility  = require('../../../../src/utility.js');
 const Database = require('../../../../src/db');
 
 // ---------------------------------------------------------------------------
 // THE CONTRACT: the decoder columns the indexer's getDecoderBlockData() reads.
-// Keep this in lock-step with src/db.js:getDecoderBlockData. If you change the
+// Keep this in lock-step with src/db/transactions/decoder_block_data.js:getDecoderBlockData. If you change the
 // SELECT, change this map, and this test re-validates it against the real schema.
 // ---------------------------------------------------------------------------
 const READ_SURFACE = {

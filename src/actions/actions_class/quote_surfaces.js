@@ -27,7 +27,7 @@ const dryRunSupport = require('./dry_run_support.js');
 const quoteAnswers  = require('./quote_answers.js');
 const { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome } = dryRunSupport;
 const { launchGateAdmits, NOT_ADMITTED_BEFORE_LAUNCH } = dryRunSupport;
-const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, dryRunVerdictQuote } = quoteAnswers;
+const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, feeQuoteNoVerdict, dryRunVerdictQuote } = quoteAnswers;
 const { malformedActionAnswer } = quoteAnswers;
 const { resolvePreflightFeeMode, preflightGateAnswer, preflightLockBusy, preflightNoVerdict, preflightResult } = quoteAnswers;
 
@@ -94,6 +94,7 @@ async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestin
     // Read the tip only now, under the mutex: before it, a bare read lands on the block loop's
     // open transaction, and a block committing during the wait would leave the run at the old
     // height over the new state. A failed read is an outage, never a verdict, so it propagates.
+    // Judged at tip, not tip+1: see syntheticDryRunTx in dry_run_support.js.
     let blockIndex, blockTime, syntheticTx, admitted;
     try {
         blockIndex = await this.indexerDb.getLatestBlockIndex();
@@ -285,6 +286,10 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     } finally {
         this._feeQuotePending--;
     }
+    // A run that threw before the handler left a status has no verdict (as in computePreflight)
+    if(run.error && run.status == null)
+        return feeQuoteNoVerdict(base, run);
+
     base.blockIndex = run.blockIndex;
     base.blockTime  = run.blockTime;
     base.status     = run.status;
