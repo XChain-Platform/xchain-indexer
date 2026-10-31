@@ -16,6 +16,21 @@ describe('PreflightMemo @regression', function () {
         assert.strictEqual(k1, k2, 'array and string params must key identically');
         assert.notStrictEqual(k1, m.key('SEND', '0|JDOG|1|a', 'src', 101), 'a new height is a new key');
         assert.notStrictEqual(k1, m.key('SEND', '0|JDOG|1|a', 'other', 100), 'a new source is a new key');
+        assert.notStrictEqual(
+            m.key('SEND', ['3', 'LTC', 'dest', 'hello world'], 'X', 100, 'native'),
+            m.key('SEND', ['3', 'LTC', 'dest', 'hello'], 'world X', 100, 'native'),
+            'spaces cannot shift the params/source boundary'
+        );
+        assert.notStrictEqual(
+            m.key('BATCH', 'BATCH|x|a b', 'X', 100, 'xchain'),
+            m.key('BATCH', 'BATCH|x|a', 'b X', 100, 'xchain'),
+            'spaces cannot shift a BATCH raw-wire/source boundary'
+        );
+        assert.notStrictEqual(
+            m.key('SEND', 'hello\0world', 'X', 100, 'native'),
+            m.key('SEND', 'hello', 'world\0X', 100, 'native'),
+            'separator bytes cannot shift the params/source boundary'
+        );
     });
 
     it('get/set round-trips and returns null on miss', function () {

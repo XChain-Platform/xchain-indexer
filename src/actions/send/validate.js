@@ -18,6 +18,19 @@
  *
  ********************************************************************/
 
+const { readTickListPolicy, isAddressAllowedByTickPolicy } = require('../../db/database/tick_list_policy');
+
+async function destinationIsAllowed(handler, send, ctx){
+    if(handler.util.isNull(send['DESTINATION']))
+        return await handler.indexerDb.isActionAllowed(
+            send['DESTINATION'], send['TICK'], send['BLOCK_INDEX']);
+    if(!ctx.destTickPolicy.has(send['TICK']))
+        ctx.destTickPolicy.set(send['TICK'], await readTickListPolicy(
+            handler.indexerDb, send['TICK'], send['BLOCK_INDEX'], handler.config, handler.util));
+    return isAddressAllowedByTickPolicy(
+        send['DESTINATION'], ctx.destTickPolicy.get(send['TICK']));
+}
+
 // Installed onto Send.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
@@ -75,7 +88,7 @@ module.exports = {
         }
 
         // Verify TICK action is allowed to DESTINATION (allow/block lists)
-        if(!error && await this.indexerDb.isActionAllowed(send['DESTINATION'], send['TICK'], send['BLOCK_INDEX']) == false)
+        if(!error && await destinationIsAllowed(this, send, ctx) == false)
             error = 'invalid: DESTINATION (not authorized)';
 
         // Verify no pipe in MEMO (pipe is field delimiter)

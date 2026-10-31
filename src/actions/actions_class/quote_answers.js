@@ -99,10 +99,12 @@ function feeQuoteLockBusy(base, acquireMs){
 
 // The retryable quote for a dry-run that threw before the handler left a status (a watchdog
 // timeout, an epoch-fence rejection): no chain verdict, as preflightNoVerdict says.
-// valid stays false like the other retryable fee-quote answers; noVerdict tells it apart.
+// valid is null because no handler verdict exists; noVerdict tells it apart from a priced,
+// verdict-free static quote.
 function feeQuoteNoVerdict(base, run){
-    return Object.assign(base, { valid: false, retryable: true, noVerdict: true, status: null,
+    return Object.assign(base, { valid: null, retryable: true, noVerdict: true, status: null,
         validated:  false,
+        xchainFee:   null,
         blockIndex: run.blockIndex,
         blockTime:  run.blockTime,
         error: 'fee quote produced no verdict (the dry-run did not finish: ' + run.error + '); retry shortly' });

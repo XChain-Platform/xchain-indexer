@@ -90,8 +90,9 @@ describe('Send handler @regression @tier1', function () {
                 .onFirstCall().resolves(true)   // SOURCE sleeping
                 .onSecondCall().resolves(true)   // TICK sleeping
                 .onThirdCall().resolves(true)    // SOURCE authorization
-                .onCall(3).resolves(false)        // DESTINATION authorization
                 .resolves(true);
+            indexer.indexerDb.getTokenInfo.resolves(makeToken({ BLOCK_LIST: 99 }));
+            indexer.indexerDb.getList.resolves([DESTINATION]);
 
             const params = ['0', 'TEST', '100', DESTINATION, ''];
             const data   = makeData({ FORMAT: 0, SOURCE });

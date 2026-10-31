@@ -10,14 +10,25 @@ const Utility = require('../../../src/utility.js');
 const probeVm = require('../../../src/actions/vote/callback_probe_vm.js');
 
 function makeCtx(network){
-    let calls = { latest: 0, begin: 0 };
+    let util = new Utility();
+    let calls = { latest: 0, begin: 0, rollback: 0, handler: 0, order: [] };
     return {
-        util: new Utility(),
-        config: { NETWORK: network || 'regtest', COIN: 'BTC' },
+        util,
+        config: Object.assign({}, util.config, { NETWORK: network || 'regtest', COIN: 'BTC' }),
         indexerDb: {
-            getLatestBlockIndex: async () => { calls.latest++; return 900; },
+            getLatestBlockIndex: async () => { calls.latest++; calls.order.push('latest'); return 900; },
             getBlockTime:        async () => 1700000000,
-            beginTransaction:    async () => { calls.begin++; throw new Error('engine reached'); }
+            beginTransaction:    async () => { calls.begin++; calls.order.push('begin'); },
+            rollbackTransaction: async () => { calls.rollback++; },
+            currentTxEpoch:      () => 0,
+            runInDryRunEpoch:    (epoch, fn) => fn(),
+            getFeeRecord:        async () => null
+        },
+        processTransaction: async (tx) => {
+            calls.handler++;
+            let contract = String(tx.data).split('|')[14] || '0';
+            return { STATUS: 'invalid: ' + util.guardInertContractProbeError(
+                contract, 'as a VOTE binding-poll callback') };
         },
         calls
     };
@@ -40,7 +51,11 @@ describe('public VOTE binding dry-run refusal', () => {
         assert.strictEqual(out.blockIndex, 900);
         assert.strictEqual(out.blockTime, 1700000000);
         assert.strictEqual(out.xchainFee, null);
-        assert.strictEqual(ctx.calls.begin, 0);
+        assert.strictEqual(out.nativeFeeOwed, null);
+        assert.strictEqual(out.coinPaymentsOwed, null);
+        assert.strictEqual(ctx.calls.handler, 1);
+        assert.strictEqual(ctx.calls.rollback, ctx.calls.begin);
+        assert.deepStrictEqual(ctx.calls.order.slice(0, 2), ['begin', 'latest']);
     });
 
     it('treats a lowercase action and an empty version as the same create', async () => {
@@ -48,7 +63,7 @@ describe('public VOTE binding dry-run refusal', () => {
         let out = await Actions.prototype.dryRunAction.call(ctx,
             { action: ' vote ', params: voteParams('', '5'), source: 'src', guardInert: true });
         assert.ok(out.status.includes('contract 5'));
-        assert.strictEqual(ctx.calls.begin, 0);
+        assert.strictEqual(ctx.calls.handler, 1);
     });
 
     for(let [label, request] of [
@@ -60,8 +75,9 @@ describe('public VOTE binding dry-run refusal', () => {
     ]){
         it('falls through to the real engine for ' + label, async () => {
             let ctx = makeCtx();
-            await Actions.prototype.dryRunAction.call(ctx, Object.assign({ source: 'src' }, request)).catch(() => {});
+            await Actions.prototype.dryRunAction.call(ctx, Object.assign({ source: 'src' }, request));
             assert.ok(ctx.calls.begin > 0, 'engine was not entered');
+            assert.strictEqual(ctx.calls.handler, 1);
         });
     }
 
@@ -71,15 +87,19 @@ describe('public VOTE binding dry-run refusal', () => {
             let out = await Actions.prototype.dryRunAction.call(ctx,
                 { action: 'VOTE', params: voteParams(version, '77'), source: 'src', guardInert: true });
             assert.ok(out.status.includes('contract 77'), version + ' must take the early refusal');
-            assert.strictEqual(ctx.calls.begin, 0);
+            assert.strictEqual(ctx.calls.handler, 1);
         }
     });
 
     it('falls through to the real engine below the usable-method gate', async () => {
         let ctx = makeCtx('mainnet');
-        await Actions.prototype.dryRunAction.call(ctx,
-            { action: 'VOTE', params: voteParams('0', '77'), source: 'src', guardInert: true }).catch(() => {});
-        assert.ok(ctx.calls.begin > 0, 'below the gate the handler gives a verdict, so it must run');
+        let out = await Actions.prototype.dryRunAction.call(ctx,
+            { action: 'VOTE', params: voteParams('0', '77'), source: 'src', guardInert: true });
+        assert.ok(ctx.calls.begin > 0, 'the launch check must run under the transaction mutex');
+        assert.strictEqual(ctx.calls.handler, 0, 'the launch gate must answer before the handler');
+        assert.match(out.status, /not admitted before mainnet launch/);
+        assert.strictEqual(out.nativeFeeOwed, null);
+        assert.strictEqual(out.coinPaymentsOwed, null);
     });
 
     it('builds the listing probe from the code alone so every callback method shares one probe text', () => {

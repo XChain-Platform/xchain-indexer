@@ -140,6 +140,8 @@ describe('early-decide tally watermark', function () {
         assert.ok(/FROM votes WHERE poll_index=\?/.test(sql), 'votes probe keyed by poll');
         assert.ok(/FROM vote_delegations WHERE tick_id=\?/.test(sql), 'delegations probe keyed by tick');
         assert.ok(/FROM credits WHERE tick_id=\?/.test(sql) && /FROM debits  WHERE tick_id=\?/.test(sql), 'ledger probe over credits+debits');
+        assert.ok(/GREATEST\(/.test(sql), 'ledger maxima use index-end probes');
+        assert.ok(!/UNION/i.test(sql), 'ledger probe does not materialize full histories');
         assert.deepStrictEqual(args, [42, 7, 7, 7]);
     });
 });

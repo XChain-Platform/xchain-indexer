@@ -25,7 +25,7 @@ Email **security@dankest.llc** with:
 - The affected version (see `CHANGELOG.md` and the version badge in `README.md`) and the network you tested against (mainnet / testnet / regtest, and which chain).
 - Any patches or mitigations you'd like considered.
 
-For sensitive reports, encrypt the email body to our PGP key. The fingerprint will be published alongside the first signed release artifact; until then, the email channel is acceptable for first contact and we will coordinate an encrypted exchange before you share proof-of-concept details.
+For sensitive reports, the private advisory channel above is the confidential path we recommend: it is private until we publish it and needs no key exchange. If you would rather use email, send a first message without sensitive details and we will coordinate an encrypted exchange before you share them. We do not publish a PGP key for this address. Published release signing keys are provided only to verify downloads; do not encrypt a report to them.
 
 We do not currently offer a paid bug bounty. We do offer public credit in release notes and the advisory itself, unless you prefer to remain anonymous.
 
@@ -94,4 +94,4 @@ We ship security fixes against the latest release on `master`. Older releases ar
 
 ---
 
-Last reviewed: 2026-06-16.
+Last reviewed: 2026-10-30.
