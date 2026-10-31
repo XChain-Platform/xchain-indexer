@@ -24,6 +24,8 @@
 
 const assert = require('assert');
 const { stallWedged, waitingOnFutureBlock, stallClassOf, atProcessableTip } = require('../../../src/XChainIndexer');
+const { publishedStallClass, nextBarrierHold, isOperatorActionHold } =
+    require('../../../src/XChainIndexer/stall_health.js');
 const { BRIDGE_PROOF_BARRIER } = require('../../../src/consensus/bridge_proof_client/stall.js');
 
 describe('stallWedged() healthcheck discriminator', function () {
@@ -191,6 +193,8 @@ describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', functio
                 ['price_sync_barrier',    RECENT,     null],
                 ['vm_executor_unavailable', LONG_STALL, null],
                 [BRIDGE_PROOF_BARRIER,    LONG_STALL, null],
+                ['retroactive_replay_needs_go', LONG_STALL, null],
+                ['retroactive_replay_diverged', LONG_STALL, null],
                 [null,                    LONG_STALL, null]
             ];
             for (const [reason, committedAt, clearsAt] of cases) {
@@ -199,6 +203,15 @@ describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', functio
                 assert.strictEqual(cls === 'wedged', wedged,
                                    `class ${cls} disagrees with stallWedged=${wedged} for ${String(reason)}`);
             }
+            for (const reason of ['retroactive_replay_needs_go', 'retroactive_replay_diverged']) {
+                const cls = stallClassOf(reason, LONG_STALL, GRACE, NOW);
+                assert.strictEqual(isOperatorActionHold(reason), true);
+                assert.strictEqual(cls, 'operator_action_hold');
+                assert.strictEqual(publishedStallClass(cls, reason, {}), 'operator_action_hold');
+                assert.strictEqual(nextBarrierHold({ block: 900, since: NOW - 1000 }, 900, reason, null, NOW), null);
+            }
+            assert.strictEqual(isOperatorActionHold('retroactive_replay'), false);
+            assert.strictEqual(stallClassOf('retroactive_replay', LONG_STALL, GRACE, NOW), 'wedged');
         });
     });
 });

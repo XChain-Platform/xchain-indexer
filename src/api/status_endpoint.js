@@ -84,7 +84,8 @@ async function statusSnapshot(indexer, XChainIndexer){
 // a separate route because those faults survive a restart: the container healthcheck
 // polls /status and autoheal restarts on its 503, so folding them in there would
 // restart-loop the container. Point monitors and load balancers at /ready, not
-// the container healthcheck.
+// the container healthcheck. chainLagKnown is a non-gating signal that the verdict
+// could see the coin node tip; chainTipAt shows the age of the last successful read.
 function mountStatusRoute(app, { indexer, XChainIndexer }){
     app.get('/status', async (req, res) => {
         let snap = await statusSnapshot(indexer, XChainIndexer);

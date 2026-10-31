@@ -29,9 +29,8 @@ module.exports = {
     // in sync. A halted decoder cannot advance, so the indexer would otherwise just look idle or
     // lagging. Log LOUD on the transition into halted (naming the required operator action, a full
     // decoder resync), then only periodically while it stays halted so a tight poll does not spam
-    // the log. Returns the current halted boolean. Never throws to the caller: a decoderDb read
-    // fault is logged and leaves the last known state unchanged (the reorg poll's own strict reads
-    // still fail loud on a real fault).
+    // the log. Null means no probe has completed a read yet. Never throws to the caller: a
+    // decoderDb read fault is logged and leaves the last known state unchanged.
     async checkDecoderReorgHalt(){
         if(!this.decoderDb) return this.decoderReorgHalted;
         let halted;
@@ -40,8 +39,9 @@ module.exports = {
             halted = !!(probe && probe.halted);
             var payload = probe ? probe.payload : null;
         } catch(e){
+            let state = this.decoderReorgHalted === null ? 'unverified' : this.decoderReorgHalted;
             getLogger().warn('XChainIndexer: REORG_HALT probe failed (non-fatal), keeping last known state (' +
-                this.decoderReorgHalted + '): ' + (e && e.message));
+                state + '): ' + (e && e.message));
             return this.decoderReorgHalted;
         }
         if(halted && !this.decoderReorgHalted){

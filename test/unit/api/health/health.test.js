@@ -43,6 +43,7 @@ function makeIndexer(overrides = {}){
         indexerDb:            { circuitState: 'closed' },
         lastDecoderBlock:     200,
         lastHubConfigFetchAt: null,
+        decoderReorgHalted:   false,
         stallReason:          null,
         isSynced:             () => false
     }, overrides);
@@ -162,6 +163,15 @@ describe('health() response builder', function(){
         const res = await call(makeIndexer());
         assert.strictEqual(res.decoderReorgHalted, false);
         assert.strictEqual(res.stallReason, null);
+    });
+
+    it('reports an unread decoder halt probe as an upstream hold', async function(){
+        const res = await call(makeIndexer({ decoderReorgHalted: null, isSynced: () => true }));
+        assert.strictEqual(res.decoderReorgHalted, false);
+        assert.match(res.stallReason, /^decoder_reorg_halt_unverified:/);
+        assert.strictEqual(res.stallClass, 'upstream_halted');
+        assert.strictEqual(res.synced, false);
+        assert.strictEqual(res.atProcessableTip, false);
     });
 
     it('decoder halt: decoderReorgHalted true and stallReason attributes the halt (#2736)', async function(){

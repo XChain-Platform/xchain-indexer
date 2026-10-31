@@ -68,6 +68,16 @@ describe('migration live-schema MODIFY guard @regression @tier1', function () {
         assert.match(await verdict(liveRow({ COLUMN_TYPE: "enum('a','b')" }), "ALTER TABLE t MODIFY e ENUM('a');"), /drops b/);
     });
 
+    it('refuses narrowing a nullable live column to NOT NULL or PRIMARY KEY', async function () {
+        const nullable = liveRow({ COLUMN_TYPE: 'int(11)', IS_NULLABLE: 'YES' });
+        assert.match(await verdict(nullable, 'ALTER TABLE t MODIFY n INT NOT NULL;'), /narrows NULL -> NOT NULL/);
+        assert.match(await verdict(nullable, "ALTER TABLE t MODIFY n INT NOT NULL COMMENT 'AUTO_INCREMENT';"), /narrows NULL -> NOT NULL/);
+        assert.match(await verdict(nullable, 'ALTER TABLE t MODIFY n INT PRIMARY KEY;'), /narrows NULL -> NOT NULL/);
+        assert.strictEqual(await verdict(nullable, 'ALTER TABLE t MODIFY n BIGINT NULL;'), null);
+        assert.strictEqual(await verdict(liveRow({ COLUMN_TYPE: 'int(11)', IS_NULLABLE: 'NO' }),
+            'ALTER TABLE t MODIFY n INT NOT NULL;'), null);
+    });
+
     it('passes a MODIFY that restates every attribute or only widens', async function () {
         assert.strictEqual(await verdict(liveRow({ EXTRA: 'auto_increment' }),
             'ALTER TABLE t MODIFY id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT;'), null);

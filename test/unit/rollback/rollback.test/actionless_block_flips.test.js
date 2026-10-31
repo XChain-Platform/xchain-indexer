@@ -72,6 +72,23 @@ describe('Rollback over an action-empty range @regression @tier3', function () {
         assert.ok(!sql.some(q => /UPDATE anchor_actions p/.test(q)), 'no archive head reset without an action range');
     });
 
+    it('deletes contract emissions by the first action before contract executions', async function () {
+        const { indexer, rollback } = setup();
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(6);
+        const calls = indexer.indexerDb.doQuery.getCalls();
+        const emissions = calls.filter(c => /DELETE FROM contract_emissions/.test(String(c.args[0])));
+        assert.strictEqual(emissions.length, 1, 'expected one contract emissions delete');
+        assert.match(String(emissions[0].args[0]),
+            /SELECT action_index FROM contract_executions WHERE action_index >= \?/);
+        assert.deepStrictEqual(emissions[0].args[1], [50], 'the delete keys on firstActionIndex');
+        const emissionsAt = calls.indexOf(emissions[0]);
+        const executionsAt = calls.findIndex(c => /DELETE FROM contract_executions\b/.test(String(c.args[0])));
+        assert.ok(executionsAt >= 0, 'expected the contract executions purge');
+        assert.ok(emissionsAt < executionsAt, 'emissions must be deleted before their parent executions');
+    });
+
     it('still runs the bet resets before the action-scoped deletes when the range has actions', async function () {
         const { indexer, rollback } = setup();
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);

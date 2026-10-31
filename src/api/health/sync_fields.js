@@ -36,7 +36,8 @@ function syncFields(indexer, { indexerRunning, lastIndexedBlock, inFlightBlock }
         running:          indexerRunning,
         // Level with a REORG-halted decoder is level with a chain that stopped, so not
         // synced; matches GET /status.
-        synced:           indexer.isSynced() && !indexer.decoderReorgHalted,
+        synced:           indexer.isSynced() && indexer.decoderReorgHalted !== true &&
+                          indexer.decoderReorgHalted !== null,
         // COMMITTED height only: read through apiView(), the same
         // committed-only pooled connection every federation query guard uses, so
         // a client may poll health and immediately query AT this height. The

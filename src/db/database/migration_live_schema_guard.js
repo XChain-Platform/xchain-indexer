@@ -261,6 +261,9 @@ function losses(live, definition, opts = {}){
     if(/\bon update\b/.test(extra) && !/\bON\s+UPDATE\b/i.test(bare)) out.push('strips ON UPDATE');
     if(String(live.COLUMN_COMMENT || '') !== '' && !/\bCOMMENT\b/i.test(bare)) out.push('strips COMMENT');
     if(generated && !/\bGENERATED\b|\bAS\s*\(/i.test(bare)) out.push('strips the generation expression');
+    if(String(live.IS_NULLABLE || '').toUpperCase() === 'YES' && /\bNOT\s+NULL\b|\bPRIMARY\s+KEY\b/i.test(bare)){
+        out.push('narrows NULL -> NOT NULL');
+    }
 
     const narrowed = narrowedType(parseLiveType(live.COLUMN_TYPE), parseType(definition), opts);
     if(narrowed) out.push('narrows the type (' + narrowed + ')' + (opts.liveMin == null ? '' : ', live MIN(' + opts.column + ') is ' + opts.liveMin));
@@ -334,7 +337,7 @@ async function assertNoLiveColumnLoss(conn, file, statements){
                 '`-- xchain:migration mode=manual` and apply it deliberately via `node src/db/migration/migrate.js`.');
         }
         const rows = await conn.query(
-            'SELECT COLUMN_TYPE, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT, GENERATION_EXPRESSION, CHARACTER_SET_NAME, ' +
+            'SELECT COLUMN_TYPE, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT, GENERATION_EXPRESSION, IS_NULLABLE, CHARACTER_SET_NAME, ' +
             'COLLATION_NAME, TABLE_COLLATION, t.ROW_FORMAT FROM information_schema.COLUMNS c JOIN information_schema.TABLES t ' +
             'ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME ' +
             'WHERE c.TABLE_SCHEMA = DATABASE() AND t.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = ? AND c.COLUMN_NAME = ?',
