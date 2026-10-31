@@ -286,8 +286,8 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     } finally {
         this._feeQuotePending--;
     }
-    // A run that threw before the handler left a status has no verdict (as in computePreflight)
-    if(run.error && run.status == null)
+    // Any incomplete run has no verdict, including a read-back failure after STATUS was copied.
+    if(run.error && (run.status == null || /^handler threw:/.test(run.error)))
         return feeQuoteNoVerdict(base, run);
 
     base.blockIndex = run.blockIndex;
@@ -408,8 +408,8 @@ async function computePreflight(policy, { action, params, source, feeMode }){
         this._feeQuotePending--;
     }
 
-    // A run that threw before the handler left a status has no verdict; never memoized
-    if(run.error && run.status == null)
+    // Any incomplete run has no verdict and is never memoized, even with a partial STATUS.
+    if(run.error && (run.status == null || /^handler threw:/.test(run.error)))
         return preflightNoVerdict(base, run);
 
     let result = preflightResult(this, base, run, resolvedMode, feeTick);

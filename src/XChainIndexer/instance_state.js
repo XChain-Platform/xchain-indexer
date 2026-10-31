@@ -24,7 +24,8 @@ const { CONFIG_ENV } = require('../config.js');
 // The hold ceiling comes from the same named constant HubDbSync throttles its forced
 // resync on (see initBarrierTiming).
 const { resolveBarrierHoldCeilingMs } = require('../hub/hub_db_sync.js');
-const { resolvePositiveIntMs, resolveReadyNoCommitMs } = require('./readiness/verdict.js');
+const { CHAIN_TIP_TTL_DEFAULT_MS, CHAIN_TIP_TIMEOUT_DEFAULT_MS,
+        resolvePositiveIntMs, resolveReadyNoCommitMs } = require('./readiness/verdict.js');
 const { resolveProofWaitGraceMs } = require('./stall_health.js');
 
 // Chain identity, stall and loop-liveness fields: what /health reads to tell an
@@ -245,8 +246,6 @@ function initDirectCallState(indexer){
 // here is reporting only: GET /ready and the /status readiness fields read them, and
 // nothing that gates a block or a hashed value does.
 function initReadinessState(indexer){
-    const chainTipTtlDefaultMs = 15000;
-    const chainTipTimeoutDefaultMs = 1500;
     // Coin node tip read from the utxo tracker for /status chainLag (see readiness/chain_tip.js):
     // the height, when it was read, and the refresh bookkeeping. Reporting only.
     indexer.chainTip           = null;
@@ -254,9 +253,9 @@ function initReadinessState(indexer){
     indexer._chainTipCheckedAt = 0;
     indexer._chainTipInFlight  = null;
     indexer.chainTipTtlMs      = resolvePositiveIntMs(CONFIG_ENV.INDEXER_CHAIN_TIP_TTL_MS,
-                                                      chainTipTtlDefaultMs);
+                                                      CHAIN_TIP_TTL_DEFAULT_MS);
     indexer.chainTipTimeoutMs  = resolvePositiveIntMs(CONFIG_ENV.INDEXER_CHAIN_TIP_TIMEOUT_MS,
-                                                      chainTipTimeoutDefaultMs);
+                                                      CHAIN_TIP_TIMEOUT_DEFAULT_MS);
 
     // Window (ms) the indexer may sit behind a known tip without a commit before GET /ready
     // reports it not ready (readiness/verdict.js). Readiness, never liveness: it moves no

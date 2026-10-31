@@ -184,8 +184,10 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
         blockTime:  blockTime,
         status:     verdict.status,
         error:      dryRunError,
-        // null, never '0', for a withheld batch fee: '0' would tell a confirm screen it is free.
-        xchainFee:  verdict.feeWithheld ? null
+        // null, never '0', when the read-back failed or a batch withheld its fee:
+        // '0' would tell a confirm screen it is free without a complete verdict.
+        xchainFee:  dryRunError ? null
+                   : verdict.feeWithheld ? null
                    : verdict.feeRecord ? String(verdict.feeRecord.amount)
                    : ((verdict.status === 'valid') ? '0' : null),
         sourceFeeBalance: sourceFeeBalance,

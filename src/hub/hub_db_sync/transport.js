@@ -74,10 +74,12 @@ const transportMethods = {
             let headers = {};
             let apiKey = this.feedApiKey || this.apiKey;
             if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
+            let handshakeTimeout = Number.isFinite(this.watermarkTimeoutMs) && this.watermarkTimeoutMs > 0
+                ? this.watermarkTimeoutMs : 30000;
 
             let ws;
             try {
-                ws = new WebSocket(wsUrl, { headers: headers });
+                ws = new WebSocket(wsUrl, { headers: headers, handshakeTimeout: handshakeTimeout });
             } catch (e) {
                 getLogger().warn('HubDbSync: WebSocket connect failed:', e);
                 this.scheduleReconnect();

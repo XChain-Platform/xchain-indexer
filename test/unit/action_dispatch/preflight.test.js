@@ -366,9 +366,9 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
             assert.strictEqual(calls.dryRuns, 1, 'second identical call must hit the memo');
             assert.strictEqual(a.valid, b.valid);
             assert.strictEqual(b.cached, true);
-            // A run that threw (watchdog, fence) has no verdict: retryable, and never memoized
-            let thrown = makeCtx(makeUtil('BTC', FEE_DEST), { blockIndex: 500, dryRun: { status: null, xchainFee: null,
-                error: 'handler threw: Watchdog timeout: preflight SEND exceeded 10000ms' } });
+            // An incomplete run has no verdict even when read-back copied STATUS first.
+            let thrown = makeCtx(makeUtil('BTC', FEE_DEST), { blockIndex: 500, dryRun: { status: 'valid', xchainFee: '0',
+                error: 'handler threw: fee read exploded' } });
             let t1 = await thrown.ctx.computePreflight({ action: 'SEND', params: '0|JDOG|1|addr', source: 's' });
             let t2 = await thrown.ctx.computePreflight({ action: 'SEND', params: '0|JDOG|1|addr', source: 's' });
             assert.strictEqual(thrown.calls.dryRuns, 2, 'a run with no verdict must not be served from the memo');

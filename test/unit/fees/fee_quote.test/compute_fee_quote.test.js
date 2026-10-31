@@ -95,6 +95,21 @@ describe('native coin fee quote @regression @tier1', function () {
             assert.strictEqual(r.noVerdict, undefined);
             assert.strictEqual(r.retryable, undefined);
         });
+
+        it('read-back error after valid status is retryable and is not priced', async function () {
+            let util = makeUtil('BTC', FEE_DEST);
+            let { ctx } = makeCtx(util, makeDb({ prices: BTC_PRICES }), {
+                dryRun: { status: 'valid', xchainFee: '0', error: 'handler threw: fee read exploded' }
+            });
+            let q = await ctx.computeFeeQuote.call(ctx, {
+                action: 'SEND', params: ['0', 'FOO', '1', 'dest'], source: 'src'
+            });
+            assert.strictEqual(q.valid, null);
+            assert.strictEqual(q.noVerdict, true);
+            assert.strictEqual(q.retryable, true);
+            assert.strictEqual(q.xchainFee, null);
+            assert.strictEqual(q.requiredFeeSats, undefined, 'partial output must not reach pricing');
+        });
     });
 });
 
