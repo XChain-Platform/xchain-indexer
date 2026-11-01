@@ -93,7 +93,8 @@ module.exports = {
             return;
         }
 
-        // A decoder carrying a durable REORG_HALT is condemned to a reset: its rows
+        // A decoder carrying a durable REORG_HALT, or one whose marker has not yet been
+        // read, is held here. A confirmed halt is condemned to a reset: its rows
         // above the fork point may be the abandoned branch (a decoder that halted before
         // finishing its rollback) or rows decoded forward on dispenser state that no
         // longer matches a fresh sync. So the pass stops here, after the rollbacks above
@@ -101,7 +102,7 @@ module.exports = {
         // every block this indexer does commit is decided exactly as before. The pass
         // names no stall of its own, so the status surfaces publish upstream_halted,
         // never wedged. A probe fault keeps the last known halt state (checkDecoderReorgHalt).
-        if(this.decoderReorgHalted === true){
+        if(this.decoderReorgHalted === true || this.decoderReorgHalted === null){
             this.beginPollPass(null);
             return;
         }

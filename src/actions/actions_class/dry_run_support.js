@@ -42,6 +42,19 @@ function launchGateAdmits(actions, tx){
     }) === true;
 }
 
+async function rollbackPreservingError(db, cause, context){
+    try {
+        await db.rollbackTransaction();
+    } catch(rollbackError){
+        const causeText = (cause && cause.message) || cause;
+        const rollbackText = (rollbackError && rollbackError.message) || rollbackError;
+        try {
+            getLogger().error(context + ' rollback failed while unwinding after: ' + causeText +
+                '; rollback error: ' + rollbackText);
+        } catch(_logError){}
+    }
+}
+
 // The synthetic transaction a dry-run feeds processTransaction.
 // Carries the TIP's index and time, so every height- or time-keyed rule and the fee price read
 // are judged at tip; a broadcast lands at tip+1 or later, where an activation can flip the verdict
@@ -184,4 +197,4 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
 }
 
 module.exports = { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome,
-                   launchGateAdmits, NOT_ADMITTED_BEFORE_LAUNCH };
+                   launchGateAdmits, rollbackPreservingError, NOT_ADMITTED_BEFORE_LAUNCH };

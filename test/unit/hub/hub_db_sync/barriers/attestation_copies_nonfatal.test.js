@@ -10,11 +10,8 @@
  *
  **********************************************************************
  *
- * The anchor reward copy record never holds the mirror drain. applyRow writes each applied
- * anchor_reward_attestations row to anchor_reward_attestation_copies as well
- * (hub_db_sync/apply/attestation_copies.js): a failing copy write leaves the main row applied,
- * is counted in mirrorStatus().attestationCopyFailures and logged once per distinct error, and
- * a schema without the copies table is probed once, not once per row.
+ * Anchor reward copy writes stay best effort for non-deriving consumers, while a BTC indexer
+ * fails closed so its drain cursor cannot advance over a missing consensus input.
  */
 
 'use strict';
@@ -29,15 +26,20 @@ const ROW = { id: 7, chain: 'DOGE', network: 'regtest', reward_type: 'anchor_bun
               publisher_attestations: '[]', doge_anchor_txid: '11'.repeat(32) };
 const MAIN_COLS = new Set(['id'].concat(Object.keys(ROW)));
 
-// A sync whose hub DB records every statement; `copies` decides the copies table:
-// 'throws' fails every copy write, 'missing' has no such table.
-function makeSync(copies) {
+// A sync whose hub DB records every statement; mode decides the probe and copy writes.
+function makeSync(initialMode, deriving = false) {
     const writes = [], probes = [];
+    let mode = initialMode;
     const hubDb = {
         doQuery: sinon.stub().resolves([]),
         doQueryStrict: sinon.stub().callsFake(async (sql) => {
+            if (/information_schema\.TABLES/.test(sql)) {
+                probes.push('anchor_reward_attestation_copies');
+                if (mode === 'probe-once' && probes.length === 1) throw new Error('probe interrupted');
+                return mode === 'missing' ? [] : [{ TABLE_NAME: 'anchor_reward_attestation_copies' }];
+            }
             if (/INTO anchor_reward_attestation_copies /.test(sql)) {
-                if (copies === 'throws') throw new Error('copies write refused');
+                if (mode === 'throws') throw new Error('copies write refused');
                 writes.push('copy');
                 return { affectedRows: 1 };
             }
@@ -45,16 +47,14 @@ function makeSync(copies) {
             return { affectedRows: 1 };
         }),
     };
-    const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test', network: 'regtest' });
+    if (deriving) hubDb.indexer = { indexerDb: {} };
+    const sync = new HubDbSync(hubDb, {
+        hubUrl: 'enabled', network: 'regtest', coin: deriving ? 'BTC' : 'DOGE'
+    });
     sinon.stub(sync, 'localColumns').callsFake(async (table) => {
-        if (table === 'anchor_reward_attestation_copies') {
-            probes.push(table);
-            if (copies === 'missing') throw new Error('local mirror table ' + table + ' not available yet (no columns)');
-            return new Set(['copy_digest']);
-        }
         return MAIN_COLS;
     });
-    return { sync, writes, probes };
+    return { sync, writes, probes, setMode(next) { mode = next; } };
 }
 
 describe('HubDbSync anchor reward copies never hold the drain @regression @tier1', function () {
@@ -82,5 +82,49 @@ describe('HubDbSync anchor reward copies never hold the drain @regression @tier1
         const { sync, writes } = makeSync('present');
         await sync.applyRow('anchor_reward_attestations', ROW);
         assert.deepStrictEqual(writes, ['main', 'copy']);
+    });
+});
+
+describe('HubDbSync BTC anchor reward copies fail closed @regression @tier1', function () {
+    afterEach(function () { sinon.restore(); });
+
+    it('rejects a copy write failure and succeeds when the same row is retried', async function () {
+        const { sync, writes, setMode } = makeSync('throws', true);
+        await assert.rejects(sync.applyRow('anchor_reward_attestations', ROW), /copies write refused/);
+        assert.deepStrictEqual(writes, ['main']);
+        assert.strictEqual(sync._attestationCopies.failures, 1);
+
+        setMode('present');
+        await sync.applyRow('anchor_reward_attestations', ROW);
+        assert.deepStrictEqual(writes, ['main', 'main', 'copy']);
+    });
+
+    it('rejects when the copies table is confirmed absent', async function () {
+        const { sync, writes, probes } = makeSync('missing', true);
+        await assert.rejects(sync.applyRow('anchor_reward_attestations', ROW),
+            /required for BTC anchor-reward derivation/);
+        assert.deepStrictEqual(writes, ['main']);
+        assert.strictEqual(probes.length, 1);
+    });
+
+    it('does not cache a transient table-probe failure as a missing table', async function () {
+        const { sync, writes, probes } = makeSync('probe-once', true);
+        await sync.applyRow('anchor_reward_attestations', ROW);
+        await sync.applyRow('anchor_reward_attestations', Object.assign({}, ROW, { round_reference: 21 }));
+        assert.deepStrictEqual(writes, ['main', 'copy', 'main', 'copy']);
+        assert.strictEqual(probes.length, 2);
+    });
+
+    it('keeps the bootstrap cursor before a row whose copy write fails', async function () {
+        const { sync } = makeSync('throws', true);
+        const drain = {
+            table: 'anchor_reward_attestations', lastId: 6, applied: 0, applyErrors: 0,
+            priceSkipped: 0, priceHorizon: 0, minAppliedWireId: Infinity
+        };
+        sinon.stub(sync, 'decidePriceBound').returns(false);
+        sinon.stub(sync, 'recordServedRow');
+        assert.strictEqual(await sync.applyPendingRow(drain, ROW, false), false);
+        assert.strictEqual(drain.lastId, 6);
+        assert.strictEqual(drain.applyErrors, 1);
     });
 });

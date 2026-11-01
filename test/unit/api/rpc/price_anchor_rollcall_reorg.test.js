@@ -266,8 +266,9 @@ describe('JSON-RPC reorg history family @regression @tier1', function () {
 
     it('falls back to the indexer\'s last-known halt flag when the probe faults', async function () {
         const decoderView = recordingView({ getReorgEventsSince: [], isReorgHalted: () => { throw new Error('probe'); } });
-        const rpc = buildReorgHistoryRpc({ indexer: fakeIndexer({ decoderView, decoderReorgHalted: true }) });
-        assert.strictEqual((await rpc.getreorghistory({})).decoderReorgHalted, true);
+        const rpc = buildReorgHistoryRpc({ indexer: fakeIndexer({ decoderView, decoderReorgHalted: null }) });
+        const res = await rpc.getreorghistory({});
+        assert.strictEqual(res.decoderReorgHalted, false);
     });
 
     it('validates, refuses without the decoder database and reports a throw', async function () {

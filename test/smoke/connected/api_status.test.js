@@ -130,6 +130,24 @@ describe('Smoke: REST /status', function () {
         } finally {
             server.close();
         }
+
+        const held = {
+            indexerDb: { async getLatestBlockIndex() { return 120000; } },
+            lastDecoderBlock: 120500,
+            isSynced() { return false; },
+            stallReason: 'retroactive_replay_diverged',
+            healthStallGraceMs: 120000,
+            lastBlockCommittedAt: Date.now() - 600000,
+        };
+        ({ server, port } = await listen(held));
+        try {
+            const { status, body } = await getJson(port, '/status');
+            assert.strictEqual(status, 200, 'an operator hold must not ask autoheal to restart the indexer');
+            assert.strictEqual(body.stallClass, 'operator_action_hold');
+            assert.strictEqual(body.degraded, true);
+        } finally {
+            server.close();
+        }
     });
 });
 

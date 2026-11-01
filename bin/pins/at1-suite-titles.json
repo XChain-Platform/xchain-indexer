@@ -899,6 +899,28 @@
       "E2E: Order Lifecycle @regression @tier2 order creation and matching matched orders transfer balances and appear in API",
       "E2E: Order Lifecycle @regression @tier2 order expiration expired order appears in order_expires endpoint"
     ],
+    "0df8e33d38ab2a4c": [
+      "migration live-schema MODIFY guard @regression @tier1 does not read a keyword inside a string literal as an attribute",
+      "migration live-schema MODIFY guard @regression @tier1 finds each MODIFY clause, ignoring FIRST/AFTER and other clauses",
+      "migration live-schema MODIFY guard @regression @tier1 passes a MODIFY that restates every attribute or only widens",
+      "migration live-schema MODIFY guard @regression @tier1 passes when the live column is absent or the probe answers without a column row",
+      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips AUTO_INCREMENT",
+      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips ON UPDATE, COMMENT or a generation expression",
+      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips a DEFAULT",
+      "migration live-schema MODIFY guard @regression @tier1 refuses narrowing a nullable live column to NOT NULL or PRIMARY KEY",
+      "migration live-schema MODIFY guard @regression @tier1 refuses narrowing of type, length and charset",
+      "migration live-schema MODIFY guard: block comments @regression @tier1 does not read a keyword inside a block comment as a restated attribute",
+      "migration live-schema MODIFY guard: block comments @regression @tier1 leaves comment markers inside a quoted literal and executable comments alone",
+      "migration live-schema MODIFY guard: block comments @regression @tier1 still finds a MODIFY behind a block comment anywhere before the column",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 allows the retype on an empty table and on a BigInt minimum",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 allows the retype when no stored id is negative",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 does not count AUTO_INCREMENT inside a COMMENT literal as restated",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 refuses the retype when a stored id is negative and names the minimum",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a MODIFY that drops AUTO_INCREMENT while going unsigned",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a narrower rank even when the id is AUTO_INCREMENT and unsigned",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a signed to unsigned retype of a column without AUTO_INCREMENT",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses unsigned to signed on an AUTO_INCREMENT id"
+    ],
     "0e1fdb59a16d241f": [
       "ROLLCALL epoch close (\u00a73.4) deferral: every way of not knowing defers when the DOGE peer cannot decide, rather than reading silence as absence",
       "ROLLCALL epoch close (\u00a73.4) deferral: every way of not knowing defers when the epoch block has no stored ledger_hash",
@@ -1919,11 +1941,6 @@
       "Database.releaseConnection() @regression @tier1 does nothing when no transactionConnection",
       "Database.releaseConnection() @regression @tier1 releases and clears transactionConnection when set"
     ],
-    "18477c824737fcc9": [
-      "Rollback over an action-empty range @regression @tier3 keeps the action-range resets behind the guard when there is no orphaned action",
-      "Rollback over an action-empty range @regression @tier3 runs every block-keyed in-place reset when the orphaned range holds no actions",
-      "Rollback over an action-empty range @regression @tier3 still runs the bet resets before the action-scoped deletes when the range has actions"
-    ],
     "185f2e8e30926ebe": [
       "reconcileAnchorRewardWinner() @regression @tier1 does NOT log a pre-image when no reconcile block is given (legacy 2-arg callers unchanged)",
       "reconcileAnchorRewardWinner() @regression @tier1 is a no-op for non-anchor reward types (issues no query)",
@@ -1984,26 +2001,6 @@
       "Stake handler @regression @tier2 v2 : top-up existing capability stake v2 top-up : source address id null \u2192 invalid",
       "Stake handler @regression @tier2 v2 : top-up existing capability stake v2 top-up : stake owned by different source \u2192 invalid",
       "Stake handler @regression @tier2 v2 : top-up existing capability stake valid v2 top-up \u2192 STATUS valid"
-    ],
-    "1a13d9ca8f1d3598": [
-      "health() response builder (a) healthy catch-up: stallReason is null, status healthy, lag reported",
-      "health() response builder (b) sync-barrier stall: stallReason names the barrier while status stays healthy",
-      "health() response builder (c) DB circuit-breaker tripped: stallReason null, circuit open, status unhealthy",
-      "health() response builder (d) VM executor host fault: stallReason flags the halt with circuits closed",
-      "health() response builder a genuine wedge is stallClass wedged and never a future-stamp wait",
-      "health() response builder a healthy no-stall indexer reports stallClass none and no future-block wait",
-      "health() response builder action_counters is null when the actions instance is not yet initialised",
-      "health() response builder action_counters reflects a live snapshot from getActionCounters()",
-      "health() response builder an advancing barrier defer is barrier_defer, not a future-stamp wait",
-      "health() response builder decoder halt does not clobber an existing indexer-side stallReason (#2736)",
-      "health() response builder decoder halt stallReason names the in-place clear beside the resync",
-      "health() response builder decoder halt: decoderReorgHalted true and stallReason attributes the halt (#2736)",
-      "health() response builder decoderReorgHalted false by default, no stall attribution (#2736)",
-      "health() response builder future-stamped-block wait: waitingOnFutureBlock/stallClass/atProcessableTip mark it healthy",
-      "health() response builder reorg counters are null when reorgStats is omitted (DB unread)",
-      "health() response builder reports a fatal indexer error message and unhealthy status when not running",
-      "health() response builder surfaces hub-config age in seconds from the fixed clock",
-      "health() response builder surfaces reorg counters from reorgStats (#1813)"
     ],
     "1a278c22b8f80e7c": [
       "block-scoped token supply refresh @unit @regression @tier1 does not reconstruct full supply during ordinary forward updates",
@@ -2266,6 +2263,30 @@
       "LIST tick coin activation @regression @tier1 resolves an own-coin id through the legacy ticker lookup",
       "LIST tick coin activation @regression @tier1 stores every qualified mirror member as written without validation lookup",
       "LIST tick coin activation @regression @tier1 stores foreign qualified items canonically without token lookup when armed"
+    ],
+    "1e00822a39a350d8": [
+      "UtxoTracker.getSyncStatus() asks get_sync_status with a bounded request and returns the sync view",
+      "UtxoTracker.getSyncStatus() leaves consensus calls unbounded: no signal unless one is asked for",
+      "XChainIndexer readiness state and readChainTip() answers within the timeout when the tracker hangs",
+      "XChainIndexer readiness state and readChainTip() expires failed configured tips but never returns a disabled tracker cache",
+      "XChainIndexer readiness state and readChainTip() ignores the -1 an unsynced tracker reports and keeps the last known tip on failure",
+      "XChainIndexer readiness state and readChainTip() reads node_height from the tracker and caches it for the TTL",
+      "XChainIndexer readiness state and readChainTip() reports no tip when no tracker is configured",
+      "XChainIndexer readiness state and readChainTip() stamps startedAt and the readiness window at construction",
+      "publishedStallClass() gives the roll call proof wait its own class, escalating past the ceiling",
+      "publishedStallClass() names an indexer idle behind a halted decoder upstream_halted",
+      "publishedStallClass() never refines a wedge away, and leaves every other class alone",
+      "readinessVerdict() carries every liveness fault as a readiness fault",
+      "readinessVerdict() is not ready behind a halted decoder even though decoder lag reads 0",
+      "readinessVerdict() is ready when nothing holds",
+      "readinessVerdict() judges a stuck block from boot when nothing has committed since a restart",
+      "readinessVerdict() never calls a future-stamped block wait behind_tip_no_commit",
+      "readinessVerdict() reports an aged configured chain tip only after the no-commit window",
+      "readinessVerdict() reports whether chain lag was known without gating on it",
+      "readinessVerdict() resolves the no-commit window, falling back on unusable values",
+      "readinessVerdict() stays ready while catching up inside the window, and at the tip on a quiet chain",
+      "readinessVerdict() takes the larger of decoder and chain lag, null when neither is known",
+      "readinessVerdict() tracks one behind episode and re-arms after a later commit"
     ],
     "1e1170b8eaa24c88": [
       "Database status/action id cache @regression @tier1 drops a pending id when commit fails",
@@ -5167,26 +5188,6 @@
       "HubDbSync attest table certificate stays fail-closed @regression @tier1 a queued heartbeat from the prior socket cannot advance the replacement certificate",
       "HubDbSync attest table certificate stays fail-closed @regression @tier1 an apply failure or a schema refusal keeps both barriers shut"
     ],
-    "44ca5a03f9220589": [
-      "UtxoTracker.getSyncStatus() asks get_sync_status with a bounded request and returns the sync view",
-      "UtxoTracker.getSyncStatus() leaves consensus calls unbounded: no signal unless one is asked for",
-      "XChainIndexer readiness state and readChainTip() answers within the timeout when the tracker hangs",
-      "XChainIndexer readiness state and readChainTip() ignores the -1 an unsynced tracker reports and keeps the last known tip on failure",
-      "XChainIndexer readiness state and readChainTip() reads node_height from the tracker and caches it for the TTL",
-      "XChainIndexer readiness state and readChainTip() reports no tip when no tracker is configured",
-      "XChainIndexer readiness state and readChainTip() stamps startedAt and the readiness window at construction",
-      "publishedStallClass() gives the roll call proof wait its own class, escalating past the ceiling",
-      "publishedStallClass() names an indexer idle behind a halted decoder upstream_halted",
-      "publishedStallClass() never refines a wedge away, and leaves every other class alone",
-      "readinessVerdict() carries every liveness fault as a readiness fault",
-      "readinessVerdict() is not ready behind a halted decoder even though decoder lag reads 0",
-      "readinessVerdict() is ready when nothing holds",
-      "readinessVerdict() judges a stuck block from boot when nothing has committed since a restart",
-      "readinessVerdict() never calls a future-stamped block wait behind_tip_no_commit",
-      "readinessVerdict() resolves the no-commit window, falling back on unusable values",
-      "readinessVerdict() stays ready while catching up inside the window, and at the tip on a quiet chain",
-      "readinessVerdict() takes the larger of decoder and chain lag, null when neither is known"
-    ],
     "44cb0b8ed3723f66": [
       "Database.getAnchorV1ByBatchSeq() head-selection determinism @regression @tier1 author-scoped pick adds NOTHING to the query when no author is supplied (the canonical-head pick)",
       "Database.getAnchorV1ByBatchSeq() head-selection determinism @regression @tier1 author-scoped pick binds the author as a parameter and keeps the deterministic order",
@@ -5496,6 +5497,12 @@
     ],
     "48ec89675a1f39f8": [
       "consensus block-hash conformance twins (static drift-lock) @regression state_key collation gate and splice match across xchain-indexer and xchain-sync"
+    ],
+    "493a9946a1d9186f": [
+      "Rollback over an action-empty range @regression @tier3 deletes contract emissions by the first action before contract executions",
+      "Rollback over an action-empty range @regression @tier3 keeps the action-range resets behind the guard when there is no orphaned action",
+      "Rollback over an action-empty range @regression @tier3 runs every block-keyed in-place reset when the orphaned range holds no actions",
+      "Rollback over an action-empty range @regression @tier3 still runs the bet resets before the action-scoped deletes when the range has actions"
     ],
     "494348d00a38395f": [
       "guard emitted host request id below gate @regression @tier1 assigns consecutive call paths to two emissions from one guard",
@@ -8010,15 +8017,6 @@
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 signature counting and the exact error strings the responsible signer of that same pair is accepted: 1/1",
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 signature counting and the exact error strings valid quorum: sigs inlined, error string absent"
     ],
-    "699a77b47130480e": [
-      "sync health fields is healthy only while running with neither database circuit open",
-      "sync health fields normalizes an undefined in-flight block to null",
-      "sync health fields reports null database circuits when their handles are absent",
-      "sync health fields reports null lag when either height is null or undefined",
-      "sync health fields subtracts the indexed height from the decoder height for lag",
-      "sync health fields uses the value returned by isSynced",
-      "syncFields() behind a REORG-halted decoder reads not synced, whatever isSynced says"
-    ],
     "69b28ea84c6d52df": [
       "HubClient pushChainTip() candidate fanout pushes only to the current hub when pinned",
       "HubClient pushChainTip() candidate fanout pushes to every unpinned candidate",
@@ -8730,6 +8728,12 @@
       "HTTP-surface security: JSON-RPC API perimeter input validation: gated-method payloads cannot smuggle past the gate an injection-shaped params payload on a gated method is still rejected 401 without the key",
       "HTTP-surface security: JSON-RPC API perimeter rate limiting rejects requests past the per-window limit with 429 and advertises the limit header"
     ],
+    "7303a2099d4a05e8": [
+      "Database._destructiveAutoStatement() CONVERT TO and MODIFY id @regression @tier1 flags ALTER TABLE ... CONVERT TO in every spelling",
+      "Database._destructiveAutoStatement() CONVERT TO and MODIFY id @regression @tier1 flags NOT NULL and id repairs hidden by quoted text",
+      "Database._destructiveAutoStatement() CONVERT TO and MODIFY id @regression @tier1 flags a MODIFY of id that drops AUTO_INCREMENT",
+      "Database._destructiveAutoStatement() CONVERT TO and MODIFY id @regression @tier1 keeps the AUTO_INCREMENT id repair and unrelated MODIFYs auto-eligible"
+    ],
     "730abbb44622fd07": [
       "LIST union rules canonicalMemberIndex accepts only canonical positive decimal strings",
       "LIST union rules type verdicts rejects a stored union type",
@@ -8738,6 +8742,15 @@
       "LIST union rules unionResultVerdict accepts 16 members and rejects 17 members",
       "LIST union rules unionResultVerdict rejects an empty member list only when creating a union",
       "LIST union rules unionResultVerdict reports verdicts in validation order"
+    ],
+    "7312525d01353142": [
+      "quote surfaces : the mainnet launch gate @regression @tier1 answers a fee-exempt quote as before on regtest",
+      "quote surfaces : the mainnet launch gate @regression @tier1 preserves a pre-read error when rollback also fails",
+      "quote surfaces : the mainnet launch gate @regression @tier1 refuses a pre-launch mainnet SEND without running the handler",
+      "quote surfaces : the mainnet launch gate @regression @tier1 refuses a pre-launch mainnet fee-exempt quote instead of answering valid",
+      "quote surfaces : the mainnet launch gate @regression @tier1 runs the handler for a mainnet SEND at the launch time",
+      "quote surfaces : the mainnet launch gate @regression @tier1 runs the handler for a pre-launch validator PRICE v0 on mainnet",
+      "quote surfaces : the mainnet launch gate @regression @tier1 runs the handler on regtest whatever the block time"
     ],
     "73755c9a0427e7f1": [
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) does not touch the mirror at all when nothing is pending locally",
@@ -8876,14 +8889,6 @@
       "LIST reference validity gate ordering @regression @tier1 mainnet: never activates before token policy reads carry block context",
       "LIST reference validity gate ordering @regression @tier1 regtest: never activates before token policy reads carry block context",
       "LIST reference validity gate ordering @regression @tier1 testnet: never activates before token policy reads carry block context"
-    ],
-    "756ac889a13b142f": [
-      "GET /status and GET /ready on a healthy indexer answers 200 on both for a caught-up indexer, with chainLag beside lag",
-      "GET /status and GET /ready on a healthy indexer keeps every key /status already carried, in order, with the new ones after stallClass",
-      "GET /status and GET /ready on faults a restart cannot clear reports a held block that survived a restart: /status 200, /ready 503 past the ceiling",
-      "GET /status and GET /ready on faults a restart cannot clear reports an indexer frozen behind a halted decoder: /status 200 with lag 0, /ready 503",
-      "GET /status and GET /ready through a proof wait before any restart runs capability_proof_wait, then _stuck with /ready 503, then wedged with /status 503",
-      "GET /status and GET /ready through a proof wait before any restart runs rollcall_proof_wait, then _stuck with /ready 503, then wedged with /status 503"
     ],
     "758b3f698abbb764": [
       "price_landing_wait grace wiring @regression /status verdict passes priceLandingGraceMs",
@@ -9237,11 +9242,6 @@
       "HubDbSync poll-mode watermark fail-closed (ITEM 2476) @regression @tier2 WS path: bootstrap still advances the watermark to the OLDEST per-table mark exactly as before",
       "HubDbSync poll-mode watermark fail-closed (ITEM 2476) @regression @tier2 _pollMode defaults to false on a fresh instance",
       "HubDbSync poll-mode watermark fail-closed (ITEM 2476) @regression @tier2 poll mode: rows still mirrored, watermark does NOT advance, and a warning is logged each cycle"
-    ],
-    "7a2156a5582bd413": [
-      "Database._destructiveAutoStatement() CONVERT TO and MODIFY id @regression @tier1 flags ALTER TABLE ... CONVERT TO in every spelling",
-      "Database._destructiveAutoStatement() CONVERT TO and MODIFY id @regression @tier1 flags a MODIFY of id that drops AUTO_INCREMENT",
-      "Database._destructiveAutoStatement() CONVERT TO and MODIFY id @regression @tier1 keeps the AUTO_INCREMENT id repair and unrelated MODIFYs auto-eligible"
     ],
     "7a21a49cd5237573": [
       "HubPushQueue starvation fix (MariaDB integration) @regression @tier1 excludes a row whose backoff window has not yet elapsed",
@@ -11864,14 +11864,6 @@
       "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 pages from id 0 over an intact mirror and proves only the row it lacks",
       "capability snapshot re-page after a restart skips rows already mirrored @regression @tier1 still holds and later applies an unmirrored frontier row re-served after the restart"
     ],
-    "991c340ad529ac34": [
-      "quote surfaces : the mainnet launch gate @regression @tier1 answers a fee-exempt quote as before on regtest",
-      "quote surfaces : the mainnet launch gate @regression @tier1 refuses a pre-launch mainnet SEND without running the handler",
-      "quote surfaces : the mainnet launch gate @regression @tier1 refuses a pre-launch mainnet fee-exempt quote instead of answering valid",
-      "quote surfaces : the mainnet launch gate @regression @tier1 runs the handler for a mainnet SEND at the launch time",
-      "quote surfaces : the mainnet launch gate @regression @tier1 runs the handler for a pre-launch validator PRICE v0 on mainnet",
-      "quote surfaces : the mainnet launch gate @regression @tier1 runs the handler on regtest whatever the block time"
-    ],
     "9923a571b138cf79": [
       "db.getPendingBridgeTransfers, mirror handle discipline @regression @tier1 a mirror read failure propagates instead of feeding the whole history",
       "db.getPendingBridgeTransfers, mirror handle discipline @regression @tier1 on the single-host shape the ledger connection answers alone (no hubDb handle is consulted)",
@@ -12935,6 +12927,10 @@
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 vector: PARTIALLY unstaked owner stake burns only what remains",
       "slashCapabilityStake delegated-key targeting (#3163) @regression @tier1 zero-amount rows are skipped rather than re-burned"
     ],
+    "a78779413457e85c": [
+      "Indexer special rollback coverage @regression flags an unhandled table and ignores statements that exist only in comments",
+      "Indexer special rollback coverage @regression requires source handling for every special and recomputed table"
+    ],
     "a78ec428de5411cc": [
       "Stored payout legs are applied as recorded at match applies a stored split of 6000 bps without any current-cap argument",
       "Stored payout legs are applied as recorded at match settle handlers no longer read CONTROLLER_MAX_TAKE_BPS",
@@ -13005,6 +13001,19 @@
       "getArchiveHeadsByAuthorAndSeq() queries with the author-and-seq params",
       "getArchiveHeadsByAuthorAndSeq() returns an empty array when no row matches",
       "getArchiveHeadsByAuthorAndSeq() returns the stubbed rows unchanged"
+    ],
+    "a868b2e6f0b37d38": [
+      "the decoder-halt gate follows the halt probe across passes @regression @tier1 a halted pass applies the pending rollbacks and clears the stall it carried in",
+      "the decoder-halt gate follows the halt probe across passes @regression @tier1 control: a probe answer of the wrong shape (a bare true) reads as not halted",
+      "the decoder-halt gate follows the halt probe across passes @regression @tier1 control: a probe fault while nothing is known halted leaves the pass advancing",
+      "the decoder-halt gate follows the halt probe across passes @regression @tier1 control: with no decoder DB the halt check answers the last known state and the gate is open",
+      "the decoder-halt gate follows the halt probe across passes @regression @tier1 halted, then a probe fault keeps it halted, then a cleared read resumes with no restart",
+      "the decoder-halt gate follows the halt probe across passes @regression @tier1 holds an unread marker after a probe fault and attributes the unverified state",
+      "the decoder-halt gate follows the halt probe across passes @regression @tier1 releases an unread hold after the first successful not-halted probe",
+      "the decoder-halt gate follows the halt probe across passes @regression @tier1 resumes without a restart when an unread fault is followed by a successful probe",
+      "the poll pass stops advancing while the decoder reports a durable REORG_HALT @regression @tier1 control: catches up as before once the halt is gone",
+      "the poll pass stops advancing while the decoder reports a durable REORG_HALT @regression @tier1 names no stall of its own, so the status surfaces read upstream_halted rather than wedged",
+      "the poll pass stops advancing while the decoder reports a durable REORG_HALT @regression @tier1 still applies the pending decoder reorgs, then indexes nothing new"
     ],
     "a8be1dced7a7271c": [
       "Database._destructiveAutoStatement() statement-form allow-list @regression @tier1 flags an unlisted form that follows an allowed one in the same file",
@@ -13767,6 +13776,15 @@
       "ANCHOR v3 recorder writes only section rows when the archive is null",
       "ANCHOR v3 recorder writes section rows followed by an archive row with wrapper signatures"
     ],
+    "b1a0c1f65e4c6d25": [
+      "stallFields() stall attribution coerces the decoder reorg halt marker to a boolean",
+      "stallFields() stall attribution publishes an unverified reason before the first read",
+      "stallFields() stall attribution reports the indexer stall reason or null",
+      "stallFields() stall attribution uses the decoder reorg halt fallback only when no stall reason is set",
+      "stallFields() train activation report copies every train activation field into the health shape",
+      "stallFields() train activation report defaults absent optional fields to null without erasing height zero",
+      "stallFields() train activation report reports an unevaluated train activation before any block is evaluated"
+    ],
     "b221bd2999724a00": [
       "Database.createAirdrop() @regression @tier1 INSERTs when not found",
       "Database.createAirdrop() @regression @tier1 UPDATEs when exists",
@@ -14328,16 +14346,6 @@
       "anchor-action-query: validateAnchorActionParams() txid/version rejects a malformed txid rather than silently ignoring the filter",
       "anchor-action-query: validateAnchorActionParams() txid/version treats an empty-string txid/version as \"no filter\", not as a rejection"
     ],
-    "bbd13f49af6aeed8": [
-      "the decoder-halt gate follows the halt probe across passes @regression @tier1 a halted pass applies the pending rollbacks and clears the stall it carried in",
-      "the decoder-halt gate follows the halt probe across passes @regression @tier1 control: a probe answer of the wrong shape (a bare true) reads as not halted",
-      "the decoder-halt gate follows the halt probe across passes @regression @tier1 control: a probe fault while nothing is known halted leaves the pass advancing",
-      "the decoder-halt gate follows the halt probe across passes @regression @tier1 control: with no decoder DB the halt check answers the last known state and the gate is open",
-      "the decoder-halt gate follows the halt probe across passes @regression @tier1 halted, then a probe fault keeps it halted, then a cleared read resumes with no restart",
-      "the poll pass stops advancing while the decoder reports a durable REORG_HALT @regression @tier1 control: catches up as before once the halt is gone",
-      "the poll pass stops advancing while the decoder reports a durable REORG_HALT @regression @tier1 names no stall of its own, so the status surfaces read upstream_halted rather than wedged",
-      "the poll pass stops advancing while the decoder reports a durable REORG_HALT @regression @tier1 still applies the pending decoder reorgs, then indexes nothing new"
-    ],
     "bbecc628447a4958": [
       "shared list storage reads falls back to the list source when no transfer exists",
       "shared list storage reads recognizes a valid format-2 share for a root",
@@ -14798,6 +14806,27 @@
       "Cross_Settle settlement bounds: unarmed @regression @tier1 is the committed mainnet and testnet reading at every height",
       "Cross_Settle settlement bounds: unarmed @regression @tier1 releases the match amount as signed when it exceeds the swap escrow",
       "Cross_Settle settlement bounds: unarmed @regression @tier1 releases the match tick as signed when it differs from the swap give tick"
+    ],
+    "c0c129f3b4d9b2b5": [
+      "health() response builder (a) healthy catch-up: stallReason is null, status healthy, lag reported",
+      "health() response builder (b) sync-barrier stall: stallReason names the barrier while status stays healthy",
+      "health() response builder (c) DB circuit-breaker tripped: stallReason null, circuit open, status unhealthy",
+      "health() response builder (d) VM executor host fault: stallReason flags the halt with circuits closed",
+      "health() response builder a genuine wedge is stallClass wedged and never a future-stamp wait",
+      "health() response builder a healthy no-stall indexer reports stallClass none and no future-block wait",
+      "health() response builder action_counters is null when the actions instance is not yet initialised",
+      "health() response builder action_counters reflects a live snapshot from getActionCounters()",
+      "health() response builder an advancing barrier defer is barrier_defer, not a future-stamp wait",
+      "health() response builder decoder halt does not clobber an existing indexer-side stallReason (#2736)",
+      "health() response builder decoder halt stallReason names the in-place clear beside the resync",
+      "health() response builder decoder halt: decoderReorgHalted true and stallReason attributes the halt (#2736)",
+      "health() response builder decoderReorgHalted false by default, no stall attribution (#2736)",
+      "health() response builder future-stamped-block wait: waitingOnFutureBlock/stallClass/atProcessableTip mark it healthy",
+      "health() response builder reorg counters are null when reorgStats is omitted (DB unread)",
+      "health() response builder reports a fatal indexer error message and unhealthy status when not running",
+      "health() response builder reports an unread decoder halt probe as an upstream hold",
+      "health() response builder surfaces hub-config age in seconds from the fixed clock",
+      "health() response builder surfaces reorg counters from reorgStats (#1813)"
     ],
     "c1156153bb6a807f": [
       "Execute (EXECUTE) @regression @tier2 cross-contract calls a callee run uses VM_GAS_LIMIT as its VM ceiling and reports its unused subtree gas",
@@ -16785,27 +16814,6 @@
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the parser finds migration MODIFY clauses (retype guard is not vacuous)",
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the parser finds migration-added columns (guard is not vacuous)"
     ],
-    "d7d0b4531e644306": [
-      "migration live-schema MODIFY guard @regression @tier1 does not read a keyword inside a string literal as an attribute",
-      "migration live-schema MODIFY guard @regression @tier1 finds each MODIFY clause, ignoring FIRST/AFTER and other clauses",
-      "migration live-schema MODIFY guard @regression @tier1 passes a MODIFY that restates every attribute or only widens",
-      "migration live-schema MODIFY guard @regression @tier1 passes when the live column is absent or the probe answers without a column row",
-      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips AUTO_INCREMENT",
-      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips ON UPDATE, COMMENT or a generation expression",
-      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips a DEFAULT",
-      "migration live-schema MODIFY guard @regression @tier1 refuses narrowing of type, length and charset",
-      "migration live-schema MODIFY guard: block comments @regression @tier1 does not read a keyword inside a block comment as a restated attribute",
-      "migration live-schema MODIFY guard: block comments @regression @tier1 leaves comment markers inside a quoted literal and executable comments alone",
-      "migration live-schema MODIFY guard: block comments @regression @tier1 still finds a MODIFY behind a block comment anywhere before the column",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 allows the retype on an empty table and on a BigInt minimum",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 allows the retype when no stored id is negative",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 does not count AUTO_INCREMENT inside a COMMENT literal as restated",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 refuses the retype when a stored id is negative and names the minimum",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a MODIFY that drops AUTO_INCREMENT while going unsigned",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a narrower rank even when the id is AUTO_INCREMENT and unsigned",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a signed to unsigned retype of a column without AUTO_INCREMENT",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses unsigned to signed on an AUTO_INCREMENT id"
-    ],
     "d7dd66c300ddeafd": [
       "Message action handler @regression @tier3 accepts ENCRYPTION_METHOD=1 (ECDH)",
       "Message action handler @regression @tier3 accepts ENCRYPTION_METHOD=2 (AES)",
@@ -17838,6 +17846,16 @@
       "UtxoTracker getFirstSeenStatus() reports sync as null when the tracker answered without one",
       "UtxoTracker getFirstSeenStatus() throws on an RPC error rather than answering a fabricated shape"
     ],
+    "e577317d4b06903c": [
+      "sync health fields is healthy only while running with neither database circuit open",
+      "sync health fields normalizes an undefined in-flight block to null",
+      "sync health fields reports null database circuits when their handles are absent",
+      "sync health fields reports null lag when either height is null or undefined",
+      "sync health fields subtracts the indexed height from the decoder height for lag",
+      "sync health fields uses the value returned by isSynced",
+      "syncFields() behind a REORG-halted decoder reads not synced before the halt marker has been read",
+      "syncFields() behind a REORG-halted decoder reads not synced, whatever isSynced says"
+    ],
     "e5aec9d580642730": [
       "DEX fill quantization parity, indexer half (#3145/#3146) @regression @tier1 precision alignment (the reference the hub is ported to) last-satoshi fill, exact price: derives at precision 64",
       "DEX fill quantization parity, indexer half (#3145/#3146) @regression @tier1 precision alignment (the reference the hub is ported to) order_match.js multiplies at 64 at both clamp sites",
@@ -18139,11 +18157,6 @@
       "archive_publish BTC capability reads @regression @tier1 serves archive_publish through getstakeweightsbycapability without rewriting the key",
       "archive_publish BTC capability reads @regression @tier1 treats archive_publish as configured exactly when oracle_publish is configured"
     ],
-    "e9616084430205ad": [
-      "HubDbSync anchor reward copies never hold the drain @regression @tier1 applies the main row when the copy write throws, counts it, and warns once per distinct error",
-      "HubDbSync anchor reward copies never hold the drain @regression @tier1 probes a missing copies table once and still applies every main row",
-      "HubDbSync anchor reward copies never hold the drain @regression @tier1 records the copy beside the main row when the table is present"
-    ],
     "e9c3f47b50704d38": [
       "HubDbSync failover when no candidate is caught up a caught-up ready frame clears the record",
       "HubDbSync failover when no candidate is caught up serves from the current hub after the grace when no candidate is caught up",
@@ -18285,6 +18298,15 @@
       "migrate CLI argv refusal @regression an empty --file= value applies nothing rather than widening to everything",
       "migrate CLI argv refusal @regression an unknown flag applies nothing and exits 2",
       "migrate CLI argv refusal @regression the refusal prints both modes so an operator can tell them apart"
+    ],
+    "ec54ef7f5a98eeeb": [
+      "HubDbSync BTC anchor reward copies fail closed @regression @tier1 does not cache a transient table-probe failure as a missing table",
+      "HubDbSync BTC anchor reward copies fail closed @regression @tier1 keeps the bootstrap cursor before a row whose copy write fails",
+      "HubDbSync BTC anchor reward copies fail closed @regression @tier1 rejects a copy write failure and succeeds when the same row is retried",
+      "HubDbSync BTC anchor reward copies fail closed @regression @tier1 rejects when the copies table is confirmed absent",
+      "HubDbSync anchor reward copies never hold the drain @regression @tier1 applies the main row when the copy write throws, counts it, and warns once per distinct error",
+      "HubDbSync anchor reward copies never hold the drain @regression @tier1 probes a missing copies table once and still applies every main row",
+      "HubDbSync anchor reward copies never hold the drain @regression @tier1 records the copy beside the main row when the table is present"
     ],
     "ec6404e13c7335df": [
       "PRICE v0 pair-name widening flag-day @regression isPricePairWideningActive() accepts a numeric-string block time, as the row layer hands it over",
@@ -18496,6 +18518,17 @@
       "fresh and migrated schema convergence against a real MariaDB @tier3 converges after replaying every migration through the operator CLI",
       "fresh and migrated schema convergence against a real MariaDB @tier3 converges along the boot path: reconcile, boot migrations, operator CLI, next boot",
       "fresh and migrated schema convergence against a real MariaDB @tier3 starts from a materially older schema rather than a second fresh install"
+    ],
+    "ef52fefc3070a4da": [
+      "GET /status and GET /ready on a healthy indexer answers 200 on both for a caught-up indexer, with chainLag beside lag",
+      "GET /status and GET /ready on a healthy indexer keeps every key /status already carried, in order, with the new ones after stallClass",
+      "GET /status and GET /ready on a healthy indexer starts the no-commit window when a fresh block first appears",
+      "GET /status and GET /ready on faults a restart cannot clear holds readiness and reports an unread decoder halt probe without claiming halted",
+      "GET /status and GET /ready on faults a restart cannot clear keeps liveness up but fails readiness when the configured chain tip expires",
+      "GET /status and GET /ready on faults a restart cannot clear reports a held block that survived a restart: /status 200, /ready 503 past the ceiling",
+      "GET /status and GET /ready on faults a restart cannot clear reports an indexer frozen behind a halted decoder: /status 200 with lag 0, /ready 503",
+      "GET /status and GET /ready through a proof wait before any restart runs capability_proof_wait, then _stuck with /ready 503, then wedged with /status 503",
+      "GET /status and GET /ready through a proof wait before any restart runs rollcall_proof_wait, then _stuck with /ready 503, then wedged with /status 503"
     ],
     "ef698dc60d5299ef": [
       "Programmable policy layer : Phase B enforcement @regression CONTROLLER_GUARD activation gate honored at the chokepoint at/above activation \u2192 guard runs, can deny, and surfaces payout_legs",
@@ -19352,14 +19385,6 @@
       "reorg rollback writes are fenced to their transaction @regression @tier3 a write issued while the ROLLBACK is in flight is refused",
       "reorg rollback writes are fenced to their transaction @regression @tier3 a write that fetched its connection as the teardown began is refused"
     ],
-    "fb5344c11f961c86": [
-      "stallFields() stall attribution coerces the decoder reorg halt marker to a boolean",
-      "stallFields() stall attribution reports the indexer stall reason or null",
-      "stallFields() stall attribution uses the decoder reorg halt fallback only when no stall reason is set",
-      "stallFields() train activation report copies every train activation field into the health shape",
-      "stallFields() train activation report defaults absent optional fields to null without erasing height zero",
-      "stallFields() train activation report reports an unevaluated train activation before any block is evaluated"
-    ],
     "fb66a40be5e24b51": [
       "escrow journal shadow dry run: batched lock history @regression drives the dry run, the XCHAIN_ESC leaves and a contract-state proof end to end",
       "escrow journal shadow dry run: batched lock history @regression retains every batched lock so a later release is not replayed before its lock"
@@ -19706,8 +19731,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1584,
-      "titleCount": 15254,
+      "fileCount": 1585,
+      "titleCount": 15277,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20230,7 +20255,7 @@
         "test/unit/api/cors_origin.test.js": "60d0376b16ab7901",
         "test/unit/api/cross_chain_offer_decimals.test.js": "bc58bb65b07ae6a5",
         "test/unit/api/health/counter_fields.test.js": "1354a54621fd3c55",
-        "test/unit/api/health/health.test.js": "1a13d9ca8f1d3598",
+        "test/unit/api/health/health.test.js": "c0c129f3b4d9b2b5",
         "test/unit/api/health/health_committed_height.test.js": "f742ecb1d380895a",
         "test/unit/api/health/health_train_activation.test.js": "bce604b98b5b940c",
         "test/unit/api/health/hub_consensus_hash_mismatch.test.js": "2d2977d7cebb17c1",
@@ -20239,8 +20264,8 @@
         "test/unit/api/health/proof_wait_grace_wiring.test.js": "dc4a83d1ac938fa7",
         "test/unit/api/health/reorg_health_stats_null.test.js": "61f5af80b4889c06",
         "test/unit/api/health/shutdown.test.js": "9f1e3a4773262edd",
-        "test/unit/api/health/stall_fields.test.js": "fb5344c11f961c86",
-        "test/unit/api/health/sync_fields.test.js": "699a77b47130480e",
+        "test/unit/api/health/stall_fields.test.js": "b1a0c1f65e4c6d25",
+        "test/unit/api/health/sync_fields.test.js": "e577317d4b06903c",
         "test/unit/api/reads/api_bridge_reads.test.js": "d5091677642a6150",
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
         "test/unit/api/reads/bridge_escrow_proof_divergence.test.js": "677146c005a44b90",
@@ -20275,7 +20300,7 @@
         "test/unit/api/rpc/token_policy_resolve_refs.test.js": "64c039d7b0a6d648",
         "test/unit/api/rpc/token_policy_u64_exact.test.js": "c08ee7609951ba59",
         "test/unit/api/stake_source.test.js": "273105db688814b8",
-        "test/unit/api/status_ready_route.test.js": "756ac889a13b142f",
+        "test/unit/api/status_ready_route.test.js": "ef52fefc3070a4da",
         "test/unit/api/status_schema_ready.test.js": "e624e2e0e1e9bd13",
         "test/unit/api/status_train_activation.test.js": "2f7cc80be9d7cebc",
         "test/unit/api/status_wedge_window.test.js": "a125d6a51b477187",
@@ -20778,7 +20803,7 @@
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
         "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "b0d45d18fc61eece",
-        "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "991c340ad529ac34",
+        "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "7312525d01353142",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/piped_action_name.test.js": "7b28ef47eda24e27",
         "test/unit/fees/fee_quote.test/static_quotes.test.js": "67bef1526f62d2e4",
@@ -20824,7 +20849,7 @@
         "test/unit/hub/hub_config_staleness.test.js": "e114e1b97d1caeb4",
         "test/unit/hub/hub_db_sync/barriers/admission_chain_margin.test.js": "a13a3eb9fe3202cb",
         "test/unit/hub/hub_db_sync/barriers/attest_waiter_self_heal.test.js": "cc91537bca695659",
-        "test/unit/hub/hub_db_sync/barriers/attestation_copies_nonfatal.test.js": "e9616084430205ad",
+        "test/unit/hub/hub_db_sync/barriers/attestation_copies_nonfatal.test.js": "ec54ef7f5a98eeeb",
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/bridge_policy_timeout_message.test.js": "b8dd38b3bcc8085a",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "0723d9f6d06d7f50",
@@ -20980,12 +21005,12 @@
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
         "test/unit/migration/migration_runner.test/destructive_guard_foreign_key.test.js": "287c437af927e36f",
         "test/unit/migration/migration_runner.test/destructive_guard_lock_wait.test.js": "01ae3367d87ac656",
-        "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
+        "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7303a2099d4a05e8",
         "test/unit/migration/migration_runner.test/destructive_guard_quoted_comments.test.js": "d0b1231b8eeef634",
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/destructive_guard_statement_allow_list.test.js": "a8be1dced7a7271c",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
-        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "d7d0b4531e644306",
+        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "0df8e33d38ab2a4c",
         "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "2281f19931b1249d",
         "test/unit/migration/migration_runner.test/query_timeout.test.js": "7e822a73cbf9b18f",
         "test/unit/migration/migration_runner.test/reorder_divergence.test.js": "d6f0ae17462f20b4",
@@ -21160,7 +21185,7 @@
         "test/unit/rollback/reorg_catchup_cursor.test.js": "694d08dca6dd0abb",
         "test/unit/rollback/reorg_resume_cursor_hole.test.js": "93e45958dfe95026",
         "test/unit/rollback/rollback.test.js": "147635c74f2bf70e",
-        "test/unit/rollback/rollback.test/actionless_block_flips.test.js": "18477c824737fcc9",
+        "test/unit/rollback/rollback.test/actionless_block_flips.test.js": "493a9946a1d9186f",
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
         "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "eda08e76aa5d910e",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
@@ -21175,6 +21200,7 @@
         "test/unit/rollback/rollback_attestation_stats.test.js": "14805a79dfc17ca6",
         "test/unit/rollback/rollback_collect_capture_race.test.js": "85fb363232b73584",
         "test/unit/rollback/rollback_coverage.test.js": "6b0371dac331e183",
+        "test/unit/rollback/rollback_coverage.test/01_special_tables_handled.test.js": "a78779413457e85c",
         "test/unit/rollback/rollback_coverage.test/slash_restore_twin.test.js": "7b64478cdfbc1bf7",
         "test/unit/rollback/rollback_delegation_deactivation.test.js": "bc7285313b3f26ce",
         "test/unit/rollback/rollback_dry_run_interleave.test.js": "c3a3d5692dd9f309",
@@ -21273,7 +21299,7 @@
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
-        "test/unit/xchain_indexer/decoder_halt_gate.test.js": "bbd13f49af6aeed8",
+        "test/unit/xchain_indexer/decoder_halt_gate.test.js": "a868b2e6f0b37d38",
         "test/unit/xchain_indexer/indexer_poll_heartbeat.test.js": "9fd449fa1c41ad11",
         "test/unit/xchain_indexer/lost_block_transaction_commit.test.js": "6ed3fc9fc259ac99",
         "test/unit/xchain_indexer/mirror_admission_legacy_progress.test.js": "4ee376dc5f1c5cb0",
@@ -21281,7 +21307,7 @@
         "test/unit/xchain_indexer/parse_exception_wedge.test.js": "4056956385f780ce",
         "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/poll_early_decide_watermark.test.js": "998eea1b7fd2bc86",
-        "test/unit/xchain_indexer/readiness_verdict.test.js": "44ca5a03f9220589",
+        "test/unit/xchain_indexer/readiness_verdict.test.js": "1e00822a39a350d8",
         "test/unit/xchain_indexer/resolve_btc_chain_id_midchain.test.js": "f8d27657ca37a414",
         "test/unit/xchain_indexer/stall_health.test.js": "145f063fb3380510",
         "test/unit/xchain_indexer/stall_health.test/barrier_mapping.test.js": "26506740301590af",
@@ -21673,8 +21699,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1213,
-      "titleCount": 12095,
+      "fileCount": 1214,
+      "titleCount": 12108,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22517,7 +22543,7 @@
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
         "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "b0d45d18fc61eece",
-        "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "991c340ad529ac34",
+        "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "7312525d01353142",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/piped_action_name.test.js": "7b28ef47eda24e27",
         "test/unit/fees/fee_quote.test/static_quotes.test.js": "67bef1526f62d2e4",
@@ -22544,7 +22570,7 @@
         "test/unit/hub/hash_coverage.test/content_parity.test.js": "d6d1c2ce9ac6de6a",
         "test/unit/hub/hub_config_staleness.test.js": "e114e1b97d1caeb4",
         "test/unit/hub/hub_db_sync/barriers/attest_waiter_self_heal.test.js": "cc91537bca695659",
-        "test/unit/hub/hub_db_sync/barriers/attestation_copies_nonfatal.test.js": "e9616084430205ad",
+        "test/unit/hub/hub_db_sync/barriers/attestation_copies_nonfatal.test.js": "ec54ef7f5a98eeeb",
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "0723d9f6d06d7f50",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
@@ -22645,12 +22671,12 @@
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
         "test/unit/migration/migration_runner.test/destructive_guard_foreign_key.test.js": "287c437af927e36f",
         "test/unit/migration/migration_runner.test/destructive_guard_lock_wait.test.js": "01ae3367d87ac656",
-        "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
+        "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7303a2099d4a05e8",
         "test/unit/migration/migration_runner.test/destructive_guard_quoted_comments.test.js": "d0b1231b8eeef634",
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/destructive_guard_statement_allow_list.test.js": "a8be1dced7a7271c",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
-        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "d7d0b4531e644306",
+        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "0df8e33d38ab2a4c",
         "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "2281f19931b1249d",
         "test/unit/migration/migration_runner.test/query_timeout.test.js": "7e822a73cbf9b18f",
         "test/unit/migration/migration_runner.test/reorder_divergence.test.js": "d6f0ae17462f20b4",
@@ -22789,7 +22815,7 @@
         "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
         "test/unit/rollback/price_mirror_repage/price_mirror_repage.test.js": "18a1b7638e0d2052",
         "test/unit/rollback/rollback.test.js": "147635c74f2bf70e",
-        "test/unit/rollback/rollback.test/actionless_block_flips.test.js": "18477c824737fcc9",
+        "test/unit/rollback/rollback.test/actionless_block_flips.test.js": "493a9946a1d9186f",
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
         "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "eda08e76aa5d910e",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
@@ -22803,6 +22829,7 @@
         "test/unit/rollback/rollback_attestation_stats.test.js": "14805a79dfc17ca6",
         "test/unit/rollback/rollback_collect_capture_race.test.js": "85fb363232b73584",
         "test/unit/rollback/rollback_coverage.test.js": "6b0371dac331e183",
+        "test/unit/rollback/rollback_coverage.test/01_special_tables_handled.test.js": "a78779413457e85c",
         "test/unit/rollback/rollback_coverage.test/slash_restore_twin.test.js": "7b64478cdfbc1bf7",
         "test/unit/rollback/rollback_delegation_deactivation.test.js": "bc7285313b3f26ce",
         "test/unit/rollback/rollback_dry_run_interleave.test.js": "c3a3d5692dd9f309",
@@ -22880,7 +22907,7 @@
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
-        "test/unit/xchain_indexer/decoder_halt_gate.test.js": "bbd13f49af6aeed8",
+        "test/unit/xchain_indexer/decoder_halt_gate.test.js": "a868b2e6f0b37d38",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
         "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/resolve_btc_chain_id_midchain.test.js": "f8d27657ca37a414",
@@ -22893,7 +22920,7 @@
     },
     "test:regression:fast": {
       "fileCount": 632,
-      "titleCount": 6518,
+      "titleCount": 6528,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -23288,7 +23315,7 @@
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
         "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "b0d45d18fc61eece",
-        "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "991c340ad529ac34",
+        "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "7312525d01353142",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/static_quotes.test.js": "67bef1526f62d2e4",
         "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "127c0cefaf825341",
@@ -23307,7 +23334,7 @@
         "test/unit/hub/barrier_hold_ceiling.test/drain_progress_across_windows.test.js": "208b9ec6705487e4",
         "test/unit/hub/barrier_hold_ceiling.test/indexer_reaction.test.js": "cbe019ced7ee08e9",
         "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js": "e8f38215ae3e6079",
-        "test/unit/hub/hub_db_sync/barriers/attestation_copies_nonfatal.test.js": "e9616084430205ad",
+        "test/unit/hub/hub_db_sync/barriers/attestation_copies_nonfatal.test.js": "ec54ef7f5a98eeeb",
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "0723d9f6d06d7f50",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
@@ -23381,12 +23408,12 @@
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
         "test/unit/migration/migration_runner.test/destructive_guard_foreign_key.test.js": "287c437af927e36f",
         "test/unit/migration/migration_runner.test/destructive_guard_lock_wait.test.js": "01ae3367d87ac656",
-        "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
+        "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7303a2099d4a05e8",
         "test/unit/migration/migration_runner.test/destructive_guard_quoted_comments.test.js": "d0b1231b8eeef634",
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/destructive_guard_statement_allow_list.test.js": "a8be1dced7a7271c",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
-        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "d7d0b4531e644306",
+        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "0df8e33d38ab2a4c",
         "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "2281f19931b1249d",
         "test/unit/migration/migration_runner.test/query_timeout.test.js": "7e822a73cbf9b18f",
         "test/unit/migration/migration_runner.test/reorder_divergence.test.js": "d6f0ae17462f20b4",
@@ -23522,7 +23549,7 @@
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
-        "test/unit/xchain_indexer/decoder_halt_gate.test.js": "bbd13f49af6aeed8",
+        "test/unit/xchain_indexer/decoder_halt_gate.test.js": "a868b2e6f0b37d38",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
         "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
@@ -23530,8 +23557,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1213,
-      "titleCount": 12095,
+      "fileCount": 1214,
+      "titleCount": 12108,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24374,7 +24401,7 @@
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
         "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "b0d45d18fc61eece",
-        "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "991c340ad529ac34",
+        "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "7312525d01353142",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/piped_action_name.test.js": "7b28ef47eda24e27",
         "test/unit/fees/fee_quote.test/static_quotes.test.js": "67bef1526f62d2e4",
@@ -24401,7 +24428,7 @@
         "test/unit/hub/hash_coverage.test/content_parity.test.js": "d6d1c2ce9ac6de6a",
         "test/unit/hub/hub_config_staleness.test.js": "e114e1b97d1caeb4",
         "test/unit/hub/hub_db_sync/barriers/attest_waiter_self_heal.test.js": "cc91537bca695659",
-        "test/unit/hub/hub_db_sync/barriers/attestation_copies_nonfatal.test.js": "e9616084430205ad",
+        "test/unit/hub/hub_db_sync/barriers/attestation_copies_nonfatal.test.js": "ec54ef7f5a98eeeb",
         "test/unit/hub/hub_db_sync/barriers/barrier_strict_reads.test.js": "54db3c09825bab01",
         "test/unit/hub/hub_db_sync/barriers/mirror_dispute_barrier.test.js": "0723d9f6d06d7f50",
         "test/unit/hub/hub_db_sync/barriers/policy_margin_barrier.test.js": "09433e19985136e3",
@@ -24502,12 +24529,12 @@
         "test/unit/migration/migration_runner.test/destructive_guard_engine.test.js": "2756784aae940d5a",
         "test/unit/migration/migration_runner.test/destructive_guard_foreign_key.test.js": "287c437af927e36f",
         "test/unit/migration/migration_runner.test/destructive_guard_lock_wait.test.js": "01ae3367d87ac656",
-        "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7a2156a5582bd413",
+        "test/unit/migration/migration_runner.test/destructive_guard_modify_convert.test.js": "7303a2099d4a05e8",
         "test/unit/migration/migration_runner.test/destructive_guard_quoted_comments.test.js": "d0b1231b8eeef634",
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/destructive_guard_statement_allow_list.test.js": "a8be1dced7a7271c",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
-        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "d7d0b4531e644306",
+        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "0df8e33d38ab2a4c",
         "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "2281f19931b1249d",
         "test/unit/migration/migration_runner.test/query_timeout.test.js": "7e822a73cbf9b18f",
         "test/unit/migration/migration_runner.test/reorder_divergence.test.js": "d6f0ae17462f20b4",
@@ -24646,7 +24673,7 @@
         "test/unit/rollback/market_pair_sweep_probe.test.js": "35e4f90c928ea8ef",
         "test/unit/rollback/price_mirror_repage/price_mirror_repage.test.js": "18a1b7638e0d2052",
         "test/unit/rollback/rollback.test.js": "147635c74f2bf70e",
-        "test/unit/rollback/rollback.test/actionless_block_flips.test.js": "18477c824737fcc9",
+        "test/unit/rollback/rollback.test/actionless_block_flips.test.js": "493a9946a1d9186f",
         "test/unit/rollback/rollback.test/anchor_rewards.test.js": "10065ba86499ea1c",
         "test/unit/rollback/rollback.test/attestation_and_escrow.test.js": "eda08e76aa5d910e",
         "test/unit/rollback/rollback.test/hub_bridge_retraction.test.js": "e18235819b01e519",
@@ -24660,6 +24687,7 @@
         "test/unit/rollback/rollback_attestation_stats.test.js": "14805a79dfc17ca6",
         "test/unit/rollback/rollback_collect_capture_race.test.js": "85fb363232b73584",
         "test/unit/rollback/rollback_coverage.test.js": "6b0371dac331e183",
+        "test/unit/rollback/rollback_coverage.test/01_special_tables_handled.test.js": "a78779413457e85c",
         "test/unit/rollback/rollback_coverage.test/slash_restore_twin.test.js": "7b64478cdfbc1bf7",
         "test/unit/rollback/rollback_delegation_deactivation.test.js": "bc7285313b3f26ce",
         "test/unit/rollback/rollback_dry_run_interleave.test.js": "c3a3d5692dd9f309",
@@ -24737,7 +24765,7 @@
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
-        "test/unit/xchain_indexer/decoder_halt_gate.test.js": "bbd13f49af6aeed8",
+        "test/unit/xchain_indexer/decoder_halt_gate.test.js": "a868b2e6f0b37d38",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
         "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/resolve_btc_chain_id_midchain.test.js": "f8d27657ca37a414",

@@ -24,7 +24,7 @@ const { CONFIG_ENV } = require('../config.js');
 // The hold ceiling comes from the same named constant HubDbSync throttles its forced
 // resync on (see initBarrierTiming).
 const { resolveBarrierHoldCeilingMs } = require('../hub/hub_db_sync.js');
-const { resolveReadyNoCommitMs } = require('./readiness/verdict.js');
+const { resolvePositiveIntMs, resolveReadyNoCommitMs } = require('./readiness/verdict.js');
 const { resolveProofWaitGraceMs } = require('./stall_health.js');
 
 // Chain identity, stall and loop-liveness fields: what /health reads to tell an
@@ -82,12 +82,10 @@ function initChainState(indexer){
 // The platform-train verdict and the decoder REORG_HALT bookkeeping, each empty until
 // the loop first evaluates it.
 function initHaltState(indexer){
-    // Set true when the decoder has written a durable REORG_HALT marker (a reorg it
-    // could not safely rewind). Surfaced on /health so a halted decoder is not mistaken for
-    // ordinary idle/lag. Updated by checkDecoderReorgHalt(); the log-tick counter keeps the
-    // periodic reminder from firing every tight poll.
-    indexer.decoderReorgHalted   = false;
-    indexer._reorgHaltLogTick    = 0;
+    // Null means the marker has not been read yet. The block loop holds until the first
+    // successful probe, then keeps the last known boolean across later probe faults.
+    indexer.decoderReorgHalted = null;
+    indexer._reorgHaltLogTick  = 0;
     // The platform-train consensus activation verdict for the block the loop is about
     // to apply (src/consensus/gates/train_gate.js), or null before
     // the first evaluation. `pending` means the signed release manifest names a rule set
@@ -247,19 +245,24 @@ function initDirectCallState(indexer){
 // here is reporting only: GET /ready and the /status readiness fields read them, and
 // nothing that gates a block or a hashed value does.
 function initReadinessState(indexer){
+    const chainTipTtlDefaultMs = 15000;
+    const chainTipTimeoutDefaultMs = 1500;
     // Coin node tip read from the utxo tracker for /status chainLag (see readiness/chain_tip.js):
     // the height, when it was read, and the refresh bookkeeping. Reporting only.
     indexer.chainTip           = null;
     indexer.chainTipAt         = null;
     indexer._chainTipCheckedAt = 0;
     indexer._chainTipInFlight  = null;
-    indexer.chainTipTtlMs      = parseInt(CONFIG_ENV.INDEXER_CHAIN_TIP_TTL_MS || '15000', 10);
-    indexer.chainTipTimeoutMs  = parseInt(CONFIG_ENV.INDEXER_CHAIN_TIP_TIMEOUT_MS || '1500', 10);
+    indexer.chainTipTtlMs      = resolvePositiveIntMs(CONFIG_ENV.INDEXER_CHAIN_TIP_TTL_MS,
+                                                      chainTipTtlDefaultMs);
+    indexer.chainTipTimeoutMs  = resolvePositiveIntMs(CONFIG_ENV.INDEXER_CHAIN_TIP_TIMEOUT_MS,
+                                                      chainTipTimeoutDefaultMs);
 
     // Window (ms) the indexer may sit behind a known tip without a commit before GET /ready
     // reports it not ready (readiness/verdict.js). Readiness, never liveness: it moves no
     // status code the container healthcheck reads. Purely operational, NOT a consensus parameter.
     indexer.readyNoCommitMs = resolveReadyNoCommitMs(CONFIG_ENV.INDEXER_READY_NO_COMMIT_MS);
+    indexer.readyBehindSince = null;
 }
 
 module.exports = { initChainState, initHaltState, initHubConfigState, initBarrierTiming, initDirectCallState,

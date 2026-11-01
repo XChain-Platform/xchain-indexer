@@ -86,6 +86,17 @@ describe('quote surfaces : the mainnet launch gate @regression @tier1', function
         assert.strictEqual(ctx.calls.handler, 1);
     });
 
+    it('preserves a pre-read error when rollback also fails', async function () {
+        const ctx = makeCtx('regtest', 1000);
+        const original = Object.assign(new Error('tip read failed'), { errno: 1062 });
+        ctx.indexerDb.getLatestBlockIndex = async () => { throw original; };
+        ctx.indexerDb.rollbackTransaction = async () => { throw new Error('connection lost'); };
+        await assert.rejects(
+            () => dryRun(ctx, 'SEND', ['0', 'TEST', '1', SOURCE]),
+            error => error === original && error.errno === 1062
+        );
+    });
+
     it('refuses a pre-launch mainnet fee-exempt quote instead of answering valid', async function () {
         const ctx = makeCtx('mainnet', LAUNCH - 600);
         const quote = await Actions.prototype.computeFeeQuote.call(ctx,

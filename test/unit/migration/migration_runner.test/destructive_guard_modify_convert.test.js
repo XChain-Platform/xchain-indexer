@@ -57,4 +57,16 @@ describe('Database._destructiveAutoStatement() CONVERT TO and MODIFY id @regress
             assert.strictEqual(destructiveOf([stmt]), null, stmt + ' must stay auto-eligible');
         }
     });
+
+    it('flags NOT NULL and id repairs hidden by quoted text', function () {
+        for (const stmt of [
+            "ALTER TABLE t MODIFY parent_id BIGINT NOT NULL COMMENT 'copied from AUTO_INCREMENT id'",
+            "ALTER TABLE t MODIFY memo VARCHAR(255) DEFAULT ',' NOT NULL",
+            "ALTER TABLE t MODIFY a VARCHAR(5) DEFAULT '(', MODIFY b INT NOT NULL, MODIFY id BIGINT NOT NULL AUTO_INCREMENT",
+            "ALTER TABLE t MODIFY id BIGINT COMMENT 'AUTO_INCREMENT'",
+        ]) {
+            assert.strictEqual(destructiveOf([stmt]), stmt, stmt + ' must not be auto-eligible');
+        }
+        assert.strictEqual(destructiveOf(["ALTER TABLE t MODIFY memo VARCHAR(255) DEFAULT ',' NULL"]), null);
+    });
 });

@@ -60,6 +60,7 @@ function heldIndexer(holdSince){
     ix.decoderDb   = { getBlockIndex: async () => 1000 };
     ix.utxoTracker = null;
     ix.lastPollAt  = now;
+    ix.decoderReorgHalted = false;
     ix.healthStallGraceMs   = GRACE;
     ix.barrierHoldCeilingMs = 15 * MIN;
     ix.lastBlockCommittedAt = now - 21 * MIN;

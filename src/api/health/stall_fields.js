@@ -46,6 +46,8 @@ function trainActivationReport(indexer){
 // method and GET /status so both name the same cause.
 function attributedStallReason(indexer){
     if(indexer.stallReason) return indexer.stallReason;
+    if(indexer.decoderReorgHalted === null)
+        return 'decoder_reorg_halt_unverified: no REORG_HALT probe has completed a read since start; the pass is held until one does, and the indexer log carries the failed probe';
     if(indexer.decoderReorgHalted)
         return 'decoder_reorg_halt: decoder wrote a REORG_HALT marker; resync the decoder, or clear the reviewed halt in place with `xchain-node clear-reorg-halt`';
     return null;

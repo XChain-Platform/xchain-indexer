@@ -26,7 +26,7 @@
 const dryRunSupport = require('./dry_run_support.js');
 const quoteAnswers  = require('./quote_answers.js');
 const { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome } = dryRunSupport;
-const { launchGateAdmits, NOT_ADMITTED_BEFORE_LAUNCH } = dryRunSupport;
+const { launchGateAdmits, rollbackPreservingError, NOT_ADMITTED_BEFORE_LAUNCH } = dryRunSupport;
 const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, feeQuoteNoVerdict, dryRunVerdictQuote } = quoteAnswers;
 const { malformedActionAnswer } = quoteAnswers;
 const { resolvePreflightFeeMode, preflightGateAnswer, preflightLockBusy, preflightNoVerdict, preflightResult } = quoteAnswers;
@@ -103,7 +103,7 @@ async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestin
                                                 blockIndex, blockTime, guardInert, feeProbe, rawData });
         admitted = launchGateAdmits(this, syntheticTx);
     } catch(e){
-        await this.indexerDb.rollbackTransaction();
+        await rollbackPreservingError(this.indexerDb, e, 'Fee quote pre-read');
         throw e;
     }
 
