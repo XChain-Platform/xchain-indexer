@@ -4037,6 +4037,13 @@
       "per-block reads have an index on their driving predicate @regression @tier1 getMirroredStateCheckpointCandidates: state_checkpoints is indexed on (chain, network, block_index)",
       "per-block reads have an index on their driving predicate @regression @tier1 getMirroredStateCheckpointCandidatesAfterAnchor: state_checkpoints is indexed on (chain, network, snapshot_block)"
     ],
+    "36192deae8b7f079": [
+      "utf8mb3 address lookup guard @regression @tier1 does not query or insert supplementary characters through createAddress",
+      "utf8mb3 address lookup guard @regression @tier1 queries for BMP strings, including three-byte characters",
+      "utf8mb3 address lookup guard @regression @tier1 returns absent activity and dispenser results without querying",
+      "utf8mb3 address lookup guard @regression @tier1 returns not found without querying for supplementary characters",
+      "utf8mb3 address lookup guard @regression @tier1 still resolves the 120-unit prefix when the supplementary character falls past it"
+    ],
     "365999ba7f66f31d": [
       "parseBlock block-time sentinel guard @regression @tier1 accepts a digit-string block time, the form a BIGINT column can arrive in",
       "parseBlock block-time sentinel guard @regression @tier1 defers before the barriers when the protocol block time is ",
@@ -17913,6 +17920,9 @@
       "admission binding: the direct-hub-DB call-presence member INERT (no env) below the activation at B=799000 the hub-clock escape still opens and the verdict is the clock instant",
       "admission binding: the direct-hub-DB call-presence member INERT (no env) the one-argument shape stays inert and never touches config (the pre-train harness)"
     ],
+    "e61d439e6f2e1f69": [
+      "Dispenser supplementary GET_ADDRESS @regression @tier1 records the intended invalid verdict without issuing an utf8mb3 lookup"
+    ],
     "e620395aadaaeeea": [
       "Xcall (XCALL) @regression @tier3 v0: request hard-fails when TX_HASH is missing (no silent derivation bypass)",
       "Xcall (XCALL) @regression @tier3 v0: request hard-fails when the emitter (CONTRACT_INDEX) is absent",
@@ -19784,8 +19794,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1590,
-      "titleCount": 15319,
+      "fileCount": 1592,
+      "titleCount": 15325,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20022,6 +20032,7 @@
         "test/unit/actions/market/dispenser.test/oracle_price_every_network.test.js": "a169b0a24d09bcdc",
         "test/unit/actions/market/dispenser.test/refill_guard.test.js": "0e534b2440f8d999",
         "test/unit/actions/market/dispenser.test/refill_token_policy.test.js": "1c7af3ff7c39a754",
+        "test/unit/actions/market/dispenser.test/supplementary_get_address.test.js": "e61d439e6f2e1f69",
         "test/unit/actions/market/dispenser_amount_positivity.test.js": "428bc07288797dba",
         "test/unit/actions/market/dispenser_amount_positivity.test/settlement.test.js": "e7cf9c1086608c4d",
         "test/unit/actions/market/dispenser_close.test.js": "d44cf9f8cf86cabc",
@@ -20840,6 +20851,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/cross_chain_snapshot_golden.test.js": "0cb9a34b3a919984",
@@ -21757,8 +21769,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1216,
-      "titleCount": 12119,
+      "fileCount": 1218,
+      "titleCount": 12125,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22003,6 +22015,7 @@
         "test/unit/actions/market/dispenser.test/oracle_price_every_network.test.js": "a169b0a24d09bcdc",
         "test/unit/actions/market/dispenser.test/refill_guard.test.js": "0e534b2440f8d999",
         "test/unit/actions/market/dispenser.test/refill_token_policy.test.js": "1c7af3ff7c39a754",
+        "test/unit/actions/market/dispenser.test/supplementary_get_address.test.js": "e61d439e6f2e1f69",
         "test/unit/actions/market/dispenser_amount_positivity.test.js": "428bc07288797dba",
         "test/unit/actions/market/dispenser_amount_positivity.test/settlement.test.js": "e7cf9c1086608c4d",
         "test/unit/actions/market/dispenser_close.test.js": "d44cf9f8cf86cabc",
@@ -22586,6 +22599,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
@@ -22979,8 +22993,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 634,
-      "titleCount": 6538,
+      "fileCount": 636,
+      "titleCount": 6544,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -23042,6 +23056,7 @@
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/market/dispense_payment_tally_scale.test.js": "2b43cec5c7ef3f91",
+        "test/unit/actions/market/dispenser.test/supplementary_get_address.test.js": "e61d439e6f2e1f69",
         "test/unit/actions/market/dispenser_close.test.js": "b88f87cbbf13cf8b",
         "test/unit/actions/market/dispenser_settlement_idempotency.test.js": "2f5611f310786b32",
         "test/unit/actions/market/match_origin_open_activation.test.js": "419c8fefe938f2bf",
@@ -23364,6 +23379,7 @@
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
         "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
+        "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
@@ -23619,8 +23635,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1216,
-      "titleCount": 12119,
+      "fileCount": 1218,
+      "titleCount": 12125,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23865,6 +23881,7 @@
         "test/unit/actions/market/dispenser.test/oracle_price_every_network.test.js": "a169b0a24d09bcdc",
         "test/unit/actions/market/dispenser.test/refill_guard.test.js": "0e534b2440f8d999",
         "test/unit/actions/market/dispenser.test/refill_token_policy.test.js": "1c7af3ff7c39a754",
+        "test/unit/actions/market/dispenser.test/supplementary_get_address.test.js": "e61d439e6f2e1f69",
         "test/unit/actions/market/dispenser_amount_positivity.test.js": "428bc07288797dba",
         "test/unit/actions/market/dispenser_amount_positivity.test/settlement.test.js": "e7cf9c1086608c4d",
         "test/unit/actions/market/dispenser_close.test.js": "d44cf9f8cf86cabc",
@@ -24448,6 +24465,7 @@
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
+        "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
