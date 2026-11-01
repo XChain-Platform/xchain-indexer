@@ -42,7 +42,7 @@ describe('JSON-RPC price batch family @regression @tier1', function () {
     it('getpricebatches validates the window, reads valid batches over it and pages by truncation', async function () {
         const rows = [{ first_round: 3, last_round: 5, block_index: 9, action_index: 40 }];
         const view = recordingView({ getLatestBlockIndex: 20, getPriceBatchesOverlappingRange: rows });
-        const decoderView = recordingView({ protocolTimeForStoredBlock: 1700000900 });
+        const decoderView = recordingView({ protocolTimesForStoredBlocks: new Map([[9, 1700000900]]) });
         const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view, decoderView }) });
         const res = await rpc.getpricebatches({ first_round: 1, last_round: 10, limit: 1 });
         assert.strictEqual(res.block_index, 20);
@@ -65,16 +65,16 @@ describe('JSON-RPC price batch family @regression @tier1', function () {
         const times = { 9: 1700000900, 12: false };
         const view = recordingView({ getLatestBlockIndex: 20, getPriceBatchesOverlappingRange: rows });
         // The decoder database, as block_parse.js reads the time the push carried.
-        const decoderView = recordingView({ protocolTimeForStoredBlock: (block) => times[block] });
+        const decoderView = recordingView({ protocolTimesForStoredBlocks: (blocks) =>
+            new Map(blocks.filter(block => times[block] !== false).map(block => [block, times[block]])) });
         const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view, decoderView }) });
         const res = await rpc.getpricebatches({ first_round: 1, last_round: 10 });
         assert.deepStrictEqual(res.batches.map(b => [b.first_round, b.block_index, b.block_time]),
             [[3, 9, 1700000900], [4, 9, 1700000900], [7, 12, null]]);
-        // One protocol-time read per distinct landing block.
-        assert.deepStrictEqual(decoderView.calls.filter(c => c[0] === 'protocolTimeForStoredBlock'),
-            [['protocolTimeForStoredBlock', 9], ['protocolTimeForStoredBlock', 12]]);
+        assert.deepStrictEqual(decoderView.calls,
+            [['protocolTimesForStoredBlocks', [9, 12]]]);
         sinon.stub(observability.getLogger(), 'error');
-        decoderView.protocolTimeForStoredBlock = async () => { throw new Error('x'); };
+        decoderView.protocolTimesForStoredBlocks = async () => { throw new Error('x'); };
         assert.deepStrictEqual(await rpc.getpricebatches({ first_round: 1, last_round: 2 }), { error: 'failed to look up price batches' });
     });
 

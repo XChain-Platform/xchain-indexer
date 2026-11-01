@@ -365,3 +365,5 @@ module.exports = {
     },
 
 };
+
+Object.assign(module.exports, require('./time_windows.js'));

@@ -38,20 +38,22 @@ const rpcParams = require('./params.js');
 // remainder as empty. Body: { first_round, last_round, limit? }
 // Protocol time of each distinct landing block in rows, read from the DECODER database
 // the way block_parse.js takes data['BLOCK_TIME'] for the batch's pushpricebatch, through
-// its committed view (protocolTimeForStoredBlock leaves the hot-path memo alone). An
-// unresolvable block, or no decoder database, is left out, so its batch answers null.
+// its committed view. The plural reader leaves the hot-path memo alone and resolves every
+// landing block in one statement. An unresolvable block, or no decoder database, is left
+// out, so its batch answers null.
 async function landingBlockTimes(decoderDb, rows){
-    let times = new Map();
-    if(!decoderDb) return times;
-    let db = committedView(decoderDb);
+    if(!decoderDb) return new Map();
+    let blockIndexes = [];
+    let seen = new Set();
     for(let row of (Array.isArray(rows) ? rows : [])){
         if(row.block_index === null || row.block_index === undefined) continue;
         let blockIndex = Number(row.block_index);
-        if(!Number.isSafeInteger(blockIndex) || times.has(blockIndex)) continue;
-        let time = await db.protocolTimeForStoredBlock(blockIndex);
-        if(time !== false && time !== null && time !== undefined) times.set(blockIndex, Number(time));
+        if(!Number.isSafeInteger(blockIndex) || seen.has(blockIndex)) continue;
+        seen.add(blockIndex);
+        blockIndexes.push(blockIndex);
     }
-    return times;
+    if(blockIndexes.length === 0) return new Map();
+    return await committedView(decoderDb).protocolTimesForStoredBlocks(blockIndexes);
 }
 
 function priceBatchesRpc({ indexer }){
