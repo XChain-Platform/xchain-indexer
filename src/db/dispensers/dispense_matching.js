@@ -23,6 +23,7 @@
 
 const gateRegistry = require('../../consensus/gate_registry');
 const dispenserSendCompare = require('./dispenser_send_amount_compare_gate');
+const { fitsUtf8mb3 } = require('../utf8mb3.js');
 
 // The findMatchingDispensers query: valid dispensers for a coin at an address whose
 // latest status is open or cancelling. `latestStatusCorrelate` is the column the
@@ -180,6 +181,8 @@ module.exports = {
     // and why. Purely for metrics - it changes no validation or state outcome, and
     // uses the same latest-status idiom as findMatchingDispensers / getDispenserInfo.
     async getClosedDispenserAtAddress(coin, address){
+        if(!fitsUtf8mb3(coin) || !fitsUtf8mb3(address))
+            return false;
         let query = `SELECT
                         d1.action_index,
                         s3.status

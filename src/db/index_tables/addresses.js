@@ -24,6 +24,7 @@
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { CANONICAL_CARET_ID } = require('../shared.js');
+const { fitsUtf8mb3 } = require('../utf8mb3.js');
 
 const { getLogger } = require('../../observability/index.js');
 
@@ -48,6 +49,8 @@ module.exports = {
                 id = Number(results[0].id);
             return id;
         }
+        if(!fitsUtf8mb3(str))
+            return null;
         // Genesis intern cache: serve a non-null hit from memory (see _internCache).
         if(this._internCache !== null){
             let hit = this._internCache.addr.get(str);
@@ -77,6 +80,8 @@ module.exports = {
     // prior activity, so a same-block-only GET_ADDRESS is fresh. `block_index IS NOT
     // NULL` excludes out-of-band legacy ids that are never part of the deterministic set.
     async hasXChainActivityBefore(address, blockIndex){
+        if(!fitsUtf8mb3(address))
+            return false;
         let results = await this.doQuery(
             "SELECT id FROM index_addresses WHERE `address`=? AND block_index IS NOT NULL AND block_index < ? LIMIT 1",
             [address, blockIndex]);
@@ -89,6 +94,8 @@ module.exports = {
     // credited, or it is the GET_ADDRESS of a valid dispenser (it already takes dispense
     // payments). A bare mention, such as an item in someone's LIST, is not use.
     async hasProvenUseBefore(address, blockIndex){
+        if(!fitsUtf8mb3(address))
+            return false;
         let query = `SELECT
                         a1.id
                     FROM
@@ -157,6 +164,10 @@ module.exports = {
             return null;
         // Truncate to 120 characters
         address = String(address).substring(0,120);
+        // Checked after truncation: the old lookup ran on the 120-unit prefix, so a
+        // long string whose supplementary character falls past it still resolves.
+        if(!fitsUtf8mb3(address))
+            return null;
         // Defense-in-depth: a raw wire ^<id> reference must be resolved by resolveAddressRef
         // BEFORE it reaches createAddress; it is never a value to intern. If one ever arrives
         // here (a future mis-wired caller), refuse to create a literal "^…" address row.
