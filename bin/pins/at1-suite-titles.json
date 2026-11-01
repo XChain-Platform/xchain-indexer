@@ -3981,6 +3981,13 @@
       "capability proof barrier scoped to the snapshot a block reads @regression @tier1 the retry releases as soon as the held snapshot proves inside the wait",
       "disarms the held capability read check when a later barrier defers @regression @tier1"
     ],
+    "353eceaa89404008": [
+      "SEND pre-flight answers for every leg of a multi-send @regression @tier1 a decoded (non-probe) transaction carries no leg record and the same rows",
+      "SEND pre-flight answers for every leg of a multi-send @regression @tier1 a refused leg before a valid last leg is not quoted valid",
+      "SEND pre-flight answers for every leg of a multi-send @regression @tier1 a single refused leg still answers invalid",
+      "SEND pre-flight answers for every leg of a multi-send @regression @tier1 an all-valid multi-send still answers valid, with every leg listed",
+      "SEND pre-flight answers for every leg of a multi-send @regression @tier1 the answer does not depend on leg order"
+    ],
     "35406a3409593e4a": [
       "Order_Match action handler @regression @tier2 no matches found, createOrderMatch is never called",
       "Order_Match action handler @regression @tier2 processes match when matchInfo.GET_PRICE < orderInfo.GIVE_PRICE (better price)",
@@ -6424,6 +6431,18 @@
       "the grammar-constrained raw wire columns hold a 4-byte character @regression the ingest writers survive a 4-byte character createPoll: the VOTE v0 threshold fractions (polls.*)",
       "the grammar-constrained raw wire columns hold a 4-byte character @regression the ingest writers survive a 4-byte character recordDeployChunk: a chunk of that source (deploy_chunks.code_part)",
       "the grammar-constrained raw wire columns hold a 4-byte character @regression the ingest writers survive a 4-byte character sanity: the strict-server stub rejects a 4-byte character on a utf8mb3 column"
+    ],
+    "53618595d1e401a1": [
+      "JSON-RPC input boundaries @regression @tier1 binds betting list limits as SQL parameters",
+      "JSON-RPC input boundaries @regression @tier1 bounds a batch before any element is dispatched",
+      "JSON-RPC input boundaries @regression @tier1 opens keyless gated methods only for the boolean true escape hatch",
+      "JSON-RPC input boundaries @regression @tier1 passes a field the handler does not read through to the handler, so a newer caller is still served",
+      "JSON-RPC input boundaries @regression @tier1 rejects a malformed batch element or null body as structured JSON before dispatch",
+      "JSON-RPC input boundaries @regression @tier1 rejects exponent, negative, fractional and unsafe row indexes before a DB call",
+      "JSON-RPC input boundaries @regression @tier1 rejects malformed limits and incomplete cursors instead of silently changing the query",
+      "JSON-RPC input boundaries @regression @tier1 treats non-string method names as malformed without crashing the auth gate",
+      "JSON-RPC input boundaries @regression @tier1 turns non-object params into a stable error without invoking a handler",
+      "JSON-RPC input boundaries @regression @tier1 validates batch element parameters independently"
     ],
     "53655c2e28eca03d": [
       "LIST address reference activation @regression @tier1 collapses a reference and its full address to one edit row",
@@ -19745,8 +19764,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1586,
-      "titleCount": 15293,
+      "fileCount": 1587,
+      "titleCount": 15299,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19775,6 +19794,7 @@
         "test/unit/action_dispatch/preflight.test.js": "664d7dab95e93926",
         "test/unit/action_dispatch/preflight_memo.test.js": "fcceb01127354bd9",
         "test/unit/action_dispatch/prepass_error_skip.test.js": "9ea42ee3d549b330",
+        "test/unit/action_dispatch/send_multileg_preflight.test.js": "353eceaa89404008",
         "test/unit/actions/actions_class/dispatched_actions.test.js": "b0aefc4c8409d013",
         "test/unit/actions/actions_class/install_methods.test.js": "13e1f9bf869b82b9",
         "test/unit/actions/anchor/anchor.test.js": "25459a22d61acde4",
@@ -20300,7 +20320,7 @@
         "test/unit/api/rpc/getsharedlist.test.js": "9b17e07ece10663a",
         "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
-        "test/unit/api/rpc/input_bounds.test.js": "321c16541853e588",
+        "test/unit/api/rpc/input_bounds.test.js": "53618595d1e401a1",
         "test/unit/api/rpc/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
