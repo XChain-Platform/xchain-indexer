@@ -191,7 +191,8 @@ describe('index_memos keeps every distinct memo distinct against MariaDB @regres
         await ctx.conn.query('DROP DATABASE IF EXISTS `' + ctx.dbName + '`');
         await ctx.conn.query('CREATE DATABASE `' + ctx.dbName + '` CHARACTER SET utf8mb4');
         await ctx.conn.query('USE `' + ctx.dbName + '`');
-        await ctx.conn.query(fs.readFileSync(DEF_FILE, 'utf8'));
+        // The schema file's banner lines are '--*' with no space, which MariaDB does not read as comments.
+        await ctx.conn.query(stripComments(fs.readFileSync(DEF_FILE, 'utf8')));
     });
 
     after(async function () {
