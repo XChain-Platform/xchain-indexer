@@ -320,6 +320,9 @@ describe('armed_map/manifest: collectRows', function () {
         assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
         assert.deepStrictEqual(row, {
             mainnet: ProtocolChanges.UNARMED,
+            'BTC:testnet': 158557,
+            'LTC:testnet': 4949697,
+            'DOGE:testnet': 68035864,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
         });

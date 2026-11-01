@@ -152,7 +152,10 @@ describe('ORDER and SWAP matching invariants @regression @tier1', function () {
     it('selects equal-price ORDER makers by oldest action index for every seeded permutation when armed', async function () {
         process.env[EQUAL_PRICE_ENV] = 'armed';
         assert.strictEqual(gateRegistry.activeAt(EQUAL_PRICE_GATE, 'mainnet', 'BTC', 99999999, null), false);
-        assert.strictEqual(gateRegistry.activeAt(EQUAL_PRICE_GATE, 'testnet', 'BTC', 99999999, null), false);
+        // The v0.27.0 cut armed BTC:testnet; the regtest lever moves neither public network.
+        const testnetHeight = gateRegistry.get(EQUAL_PRICE_GATE)['BTC:testnet'];
+        assert.strictEqual(gateRegistry.activeAt(EQUAL_PRICE_GATE, 'testnet', 'BTC', testnetHeight - 1, null), false);
+        assert.strictEqual(gateRegistry.activeAt(EQUAL_PRICE_GATE, 'testnet', 'BTC', testnetHeight, null), true);
         assert.strictEqual(gateRegistry.activeAt(EQUAL_PRICE_GATE, 'regtest', 'BTC', 0, null), true);
 
         for(const run of await equalPriceBooks('armed', 200, true)){

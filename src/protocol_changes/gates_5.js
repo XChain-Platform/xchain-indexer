@@ -345,6 +345,9 @@ addGate('match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION', 'height', {
 // Height on the chain's own block_index. From it equal-price ORDER makers match by lowest action_index first; below it the highest action_index remains first. Mainnet and testnet are unarmed, while regtest is venue-armed through shared_rows.js.
 addGate('match_equal_price_oldest_first_activation.MATCH_EQUAL_PRICE_OLDEST_FIRST', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 158557,
+    'LTC:testnet': 4949697,
+    'DOGE:testnet': 68035864,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_MATCH_EQUAL_PRICE_OLDEST_FIRST_REGTEST_ACTIVATION at read
 });
@@ -357,6 +360,9 @@ addGate('match_equal_price_oldest_first_activation.MATCH_EQUAL_PRICE_OLDEST_FIRS
 // XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION (shared_rows.js).
 addGate('dividend_empty_allow_list_denies_activation.DIVIDEND_EMPTY_ALLOW_LIST_DENIES_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 158557,
+    'LTC:testnet': 4949697,
+    'DOGE:testnet': 68035864,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION at read
 });
@@ -369,6 +375,9 @@ addGate('dividend_empty_allow_list_denies_activation.DIVIDEND_EMPTY_ALLOW_LIST_D
 // with XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION (shared_rows.js).
 addGate('airdrop_zero_legs_omitted_activation.AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 158557,
+    'LTC:testnet': 4949697,
+    'DOGE:testnet': 68035864,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION at read
 });
@@ -381,6 +390,9 @@ addGate('airdrop_zero_legs_omitted_activation.AIRDROP_ZERO_LEGS_OMITTED_ACTIVATI
 // XC_TICK_NORMALIZE_REGTEST_ACTIVATION (shared_rows.js).
 addGate('tick_normalize_activation.TICK_NORMALIZE_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 158557,
+    'LTC:testnet': 4949697,
+    'DOGE:testnet': 68035864,
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_TICK_NORMALIZE_REGTEST_ACTIVATION at read
 });

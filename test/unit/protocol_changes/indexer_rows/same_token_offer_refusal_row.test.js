@@ -22,9 +22,13 @@ describe('same-token offer refusal gate row @regression @tier1', function () {
             mainnet: ProtocolChanges.UNARMED,
             testnet: ProtocolChanges.UNARMED,
             regtest: 0,
+            'BTC:testnet': 158557,
+            'LTC:testnet': 4949697,
+            'DOGE:testnet': 68035864,
         });
         assert.strictEqual(ProtocolChanges.registry.activeAt(KEY, 'mainnet', 'BTC', 9999999998, null), false);
-        assert.strictEqual(ProtocolChanges.registry.activeAt(KEY, 'testnet', 'BTC', 9999999998, null), false);
+        assert.strictEqual(ProtocolChanges.registry.activeAt(KEY, 'testnet', 'BTC', 158556, null), false);
+        assert.strictEqual(ProtocolChanges.registry.activeAt(KEY, 'testnet', 'BTC', 158557, null), true);
         assert.strictEqual(ProtocolChanges.registry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
     });
 });

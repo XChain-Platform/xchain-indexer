@@ -16,6 +16,8 @@ const { freshAirdrop } = require('./helpers/airdrop_fixtures.js');
 
 const ENV = 'XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION';
 const KEY = 'airdrop_zero_legs_omitted_activation.AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION';
+// The BTC:testnet height the v0.27.0 cut armed; testnet probes sit just below it.
+const TESTNET_BTC_HEIGHT = gateRegistry.get(KEY)['BTC:testnet'];
 const RECIPIENT = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
 
 async function runAirdrop(network, blockIndex, amount = '0') {
@@ -84,7 +86,7 @@ describe('AIRDROP zero ledger-leg activation @regression @tier1', function () {
         process.env[ENV] = 'armed';
         const mainnet = await runAirdrop('mainnet', 5000000);
         sinon.restore();
-        const testnet = await runAirdrop('testnet', 5000000);
+        const testnet = await runAirdrop('testnet', TESTNET_BTC_HEIGHT - 1);
         assert.deepStrictEqual(exactTokenLegs(mainnet.debits), [['TEST', '0', mainnet.data.SOURCE]]);
         assert.deepStrictEqual(exactTokenLegs(mainnet.credits), [['TEST', '0', RECIPIENT]]);
         assert.deepStrictEqual(exactTokenLegs(testnet.debits), [['TEST', '0', testnet.data.SOURCE]]);
@@ -100,11 +102,13 @@ describe('AIRDROP zero ledger-leg activation @regression @tier1', function () {
 
     it('publishes an unarmed public-network table and an opt-in regtest row', function () {
         delete process.env[ENV];
-        for(const network of ['mainnet', 'testnet', 'regtest'])
+        for(const network of ['mainnet', 'regtest'])
             assert.strictEqual(gateRegistry.activeAt(KEY, network, 'BTC', 5000000, null), false, network);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', TESTNET_BTC_HEIGHT - 1, null), false);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', TESTNET_BTC_HEIGHT, null), true);
         process.env[ENV] = 'armed';
         assert.strictEqual(gateRegistry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
         assert.strictEqual(gateRegistry.activeAt(KEY, 'mainnet', 'BTC', 5000000, null), false);
-        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 5000000, null), false);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', TESTNET_BTC_HEIGHT - 1, null), false);
     });
 });
