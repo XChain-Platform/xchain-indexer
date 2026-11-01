@@ -27,6 +27,7 @@ const writes           = require('./writes.js');
 const dispenseMatching = require('./dispense_matching.js');
 const gateRegistry     = require('../../consensus/gate_registry');
 const { exactU64 }     = require('../database/exact_u64.js');
+const { fitsUtf8mb3 }  = require('../utf8mb3.js');
 
 const DELAY_PROTOCOL_TIME_GATE = 'dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION';
 
@@ -160,6 +161,8 @@ module.exports = {
     // canceled / expired) do not revoke standing; only the create's own
     // validity counts, so invalid create attempts confer nothing.
     async hasDispenserOriginStanding(source, getAddress, action_index){
+        if(!fitsUtf8mb3(source) || !fitsUtf8mb3(getAddress))
+            return false;
         let query = `SELECT
                         d1.action_index
                     FROM
