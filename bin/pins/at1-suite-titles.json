@@ -799,6 +799,14 @@
       "bin/pins/carrier-logic.json: the carrier logic pin (e) every twin file's bytes equal every sibling copy",
       "bin/pins/carrier-logic.json: the carrier logic pin (g) the membership rule and the pin name the same files, both ways"
     ],
+    "0c2efe9b63c9aecf": [
+      "JSON-RPC terminal error handler is mounted after the JSON-RPC router in the production app",
+      "JSON-RPC terminal error handler maps malformed JSON to a parse error",
+      "JSON-RPC terminal error handler maps non-object JSON \"text\" to a parse error",
+      "JSON-RPC terminal error handler maps non-object JSON null to a parse error",
+      "JSON-RPC terminal error handler maps oversized JSON to an invalid request",
+      "JSON-RPC terminal error handler maps thrown application errors to an internal error and logs once"
+    ],
     "0c41aab445ad49d3": [
       "ANCHOR pre-fold archive verdict chunk leaves the verdict unchanged on a CRC match below MATCH_COUNT",
       "ANCHOR pre-fold archive verdict chunk stamps the action-wide verdict once on a CRC mismatch",
@@ -5230,6 +5238,14 @@
       "static fee quote <-> handler acceptance fee parity @regression @tier1 util.vmGasCost() is the one arithmetic never substitutes a default for a missing schedule key",
       "static fee quote <-> handler acceptance fee parity @regression @tier1 util.vmGasCost() is the one arithmetic prices each VM gas family off the schedule",
       "static fee quote <-> handler acceptance fee parity @regression @tier1 util.vmGasCost() is the one arithmetic returns null for an unknown family rather than a free action"
+    ],
+    "455a3a8ce30affbc": [
+      "bulk decoder protocol-time read builds one strict statement for every requested landing block",
+      "bulk decoder protocol-time read computes each testnet median from the bulk rows in memory",
+      "bulk decoder protocol-time read requests only landing rows on a raw-time network",
+      "getpricebatches decoder read count @regression @tier1 keeps database reads constant for 2 batches",
+      "getpricebatches decoder read count @regression @tier1 keeps database reads constant for 20 batches",
+      "getpricebatches decoder read count @regression @tier1 preserves the response shape and values for a fixed fixture"
     ],
     "45970d1fc868c9cc": [
       "ANCHOR v1 archive head same-author re-issue refusal @regression @tier3 indexes the conflicting head valid below the gate without reading the stored heads",
@@ -14134,6 +14150,11 @@
       "balance delta mode configuration normalizes surrounding whitespace and letter case",
       "balance delta mode configuration rejects an unknown mode and names BALANCE_DELTA_MODE"
     ],
+    "b81ad434e3fdfc3a": [
+      "getpricebatches decoder read count @regression @tier1 keeps database reads constant for 2 batches",
+      "getpricebatches decoder read count @regression @tier1 keeps database reads constant for 20 batches",
+      "getpricebatches decoder read count @regression @tier1 preserves the response shape and values for a fixed fixture"
+    ],
     "b85c12080a6c6211": [
       "bridge_settle: row-fields refusals and the per-block cap preserves the legacy cap behavior before activation",
       "bridge_settle: row-fields refusals and the per-block cap settles the good row behind 25 malformed rows after activation"
@@ -18462,6 +18483,16 @@
       "state_root reserved sub-trees: gateSubRoots @regression a bare-network key arms nothing (coin-qualified keys are the only lookup)",
       "state_root reserved sub-trees: gateSubRoots @regression an armed escrow leaf flips the derived version to 2 (leaf-set changes are never version-invisible)"
     ],
+    "ee581ba43130a351": [
+      "JSON-RPC prototype method dispatch exposes exactly the declared methods on a prototype-free table",
+      "JSON-RPC prototype method dispatch rejects __defineGetter__ as an undeclared method",
+      "JSON-RPC prototype method dispatch rejects __proto__ as an undeclared method",
+      "JSON-RPC prototype method dispatch rejects constructor as an undeclared method",
+      "JSON-RPC prototype method dispatch rejects hasOwnProperty as an undeclared method",
+      "JSON-RPC prototype method dispatch rejects toString as an undeclared method",
+      "JSON-RPC prototype method dispatch rejects valueOf as an undeclared method",
+      "JSON-RPC prototype method dispatch still dispatches a declared method"
+    ],
     "ee5aadeee40aed75": [
       "retroactive replay witness record @regression @tier1 chunks target through replay_to into deterministic 64-block windows",
       "retroactive replay witness record @regression @tier1 keeps every persisted row within events.data and writes the phase fence last",
@@ -19753,8 +19784,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1587,
-      "titleCount": 15299,
+      "fileCount": 1590,
+      "titleCount": 15319,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -20290,6 +20321,7 @@
         "test/unit/api/health/shutdown.test.js": "9f1e3a4773262edd",
         "test/unit/api/health/stall_fields.test.js": "b1a0c1f65e4c6d25",
         "test/unit/api/health/sync_fields.test.js": "e577317d4b06903c",
+        "test/unit/api/json_error_handler.test.js": "0c2efe9b63c9aecf",
         "test/unit/api/reads/api_bridge_reads.test.js": "d5091677642a6150",
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
         "test/unit/api/reads/bridge_escrow_proof_divergence.test.js": "677146c005a44b90",
@@ -20314,7 +20346,9 @@
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
         "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "1a49868c7c9dc670",
+        "test/unit/api/rpc/price_batches_reads.test.js": "455a3a8ce30affbc",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
+        "test/unit/api/rpc/prototype_method_dispatch.test.js": "ee581ba43130a351",
         "test/unit/api/rpc/shared_list_params.test.js": "2add00a3c2a3b74f",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "e78d9331ac6c7a43",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
@@ -21723,8 +21757,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1215,
-      "titleCount": 12116,
+      "fileCount": 1216,
+      "titleCount": 12119,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22225,6 +22259,7 @@
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
         "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "1a49868c7c9dc670",
+        "test/unit/api/rpc/price_batches_reads.test.js": "b81ad434e3fdfc3a",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "e78d9331ac6c7a43",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
@@ -22944,8 +22979,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 633,
-      "titleCount": 6535,
+      "fileCount": 634,
+      "titleCount": 6538,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -23110,6 +23145,7 @@
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
         "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "1a49868c7c9dc670",
+        "test/unit/api/rpc/price_batches_reads.test.js": "b81ad434e3fdfc3a",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "e78d9331ac6c7a43",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
@@ -23583,8 +23619,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1215,
-      "titleCount": 12116,
+      "fileCount": 1216,
+      "titleCount": 12119,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24085,6 +24121,7 @@
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
         "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "1a49868c7c9dc670",
+        "test/unit/api/rpc/price_batches_reads.test.js": "b81ad434e3fdfc3a",
         "test/unit/api/rpc/price_landing_clear_rpc.test.js": "61613e389850439a",
         "test/unit/api/rpc/stakes_capabilities_attestation.test.js": "e78d9331ac6c7a43",
         "test/unit/api/rpc/system_and_fees.test.js": "b97d2027d5c02535",
