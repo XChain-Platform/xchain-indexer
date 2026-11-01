@@ -27,6 +27,14 @@ const stateCommitAct = require('../consensus/gates/state_commitment_gate.js');
 const { collapseOutputFanout } = require('../chain/output_fanout.js');
 const { getLogger } = require('../observability/index.js');
 
+// True for a block time the barriers and passes can use: positive and finite, digit strings
+// included. The decoder's `false` sentinel is refused by identity, since Number(false) is 0.
+function usableBlockTime(value){
+    if(typeof value === 'boolean' || value === null || value === undefined) return false;
+    let t = Number(value);
+    return Number.isFinite(t) && t > 0;
+}
+
 module.exports = {
 
     // Parse one block: the train gate, its inputs, the mirror barriers, then the block
@@ -51,6 +59,15 @@ module.exports = {
         }
 
         let { blockTransactions, anchorHorizonBound, blockTime, rawBlockTime } = await this.readBlockInputs(blockToParse);
+        // Defer a block whose decoder time row cannot be read, in every sync mode: a coerced 0
+        // would open each clock-keyed barrier and reach the passes and the stored block row.
+        if(!usableBlockTime(blockTime) || !usableBlockTime(rawBlockTime)){
+            getLogger().warn('Deferring block ' + blockToParse + ' (decoder block time unavailable: protocol ' +
+                String(blockTime) + ', raw ' + String(rawBlockTime) + '); retrying.');
+            this.stallReason = 'decoder_block_time_unavailable';
+            this.stallClearsAt = null;
+            return deferred;
+        }
         if(await this.deferOnSyncBarriers(blockToParse, blockTime, blockTransactions, anchorHorizonBound))
             return deferred;
         return await this.processBlock({ blockToParse, blockTime, rawBlockTime, blockTransactions },
@@ -70,7 +87,8 @@ module.exports = {
         // DISPENSE triggers keep their per-output fan-out. Consensus-gated on
         // FIX_OUTPUT_FANOUT; below activation a multi-output data-bearing tx aborts the
         // block loudly instead of double-executing. This runs before the block transaction
-        // opens, so the throw ends the pass and the process (runBlockLoop has no catch).
+        // opens, so a database outage can be ridden out only while the pass remains free of
+        // rollback and replay writes; every other throw ends the pass and the process.
         let fanoutFixActive = await this.protocolChanges.isEnabled('FIX_OUTPUT_FANOUT', blockToParse);
         blockTransactions = collapseOutputFanout(blockTransactions, fanoutFixActive, (m) => this.util.logError(m));
 

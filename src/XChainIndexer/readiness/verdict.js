@@ -42,6 +42,8 @@
 // and the price-landing grace, so a slow block or an ordinary barrier defer never reads
 // as not ready, while a block that has not moved for ten minutes with work waiting does.
 const READY_NO_COMMIT_DEFAULT_MS = 600000;
+const CHAIN_TIP_TTL_DEFAULT_MS = 15000;
+const CHAIN_TIP_TIMEOUT_DEFAULT_MS = 1500;
 
 // Blocks between this indexer and the furthest tip it knows about, or null when no tip
 // is known. decoderLag is decoder tip minus indexer height; chainLag is the coin node tip
@@ -53,9 +55,20 @@ function blocksBehind(decoderLag, chainLag){
     return Math.max(0, ...known);
 }
 
+// Preserve the first observation of one lag episode. A commit newer than the
+// stored observation proves that episode made progress, even if no probe saw lag 0.
+function nextBehindSince(previous, behind, now, lastBlockCommittedAt){
+    if(behind == null) return previous || null;
+    if(behind <= 0) return null;
+    let validPrevious = Number.isFinite(previous) && previous > 0;
+    let committedAfter = validPrevious && Number.isFinite(lastBlockCommittedAt)
+        && lastBlockCommittedAt > previous;
+    return (!validPrevious || committedAfter) ? now : previous;
+}
+
 // The readiness verdict. Every input is a plain value so the rule is testable without
-// a block loop. Returns { ready, reasons, behind, noCommitForMs } where reasons is the
-// ordered list of every condition that holds (empty when ready):
+// a block loop. Returns { ready, reasons, behind, noCommitForMs, chainLagKnown }
+// where reasons is the ordered list of every condition that holds (empty when ready):
 //   indexer_db_unreachable - the committed height cannot be read.
 //   wedged                 - the liveness wedge (stallClass 'wedged').
 //   poll_silent            - the block-poll loop has stopped iterating.
@@ -63,15 +76,16 @@ function blocksBehind(decoderLag, chainLag){
 //                            nothing past the halted height will ever arrive.
 //   barrier_ceiling_exceeded - one block has been held behind a barrier for longer
 //                            than its named ceiling.
-//   behind_tip_no_commit   - behind a known tip and no block committed for noCommitMs,
-//                            counted from boot when nothing has committed since.
+//   behind_tip_no_commit   - behind a known tip for noCommitMs without a commit.
+//   chain_tip_stale        - the configured tip source has stayed stale for a full
+//                            readiness window, so current state is unverified.
 // A future-stamped block wait is never behind_tip_no_commit: consensus forbids
 // committing that block yet, so the indexer holds everything it may hold.
 function readinessVerdict(input){
     let {
         now, indexerDbUnreachable, wedged, pollSilent, decoderReorgHalted,
-        barrierCeilingExceeded, decoderLag, chainLag, waitingOnFutureBlock,
-        lastBlockCommittedAt, startedAt, noCommitMs
+        barrierCeilingExceeded, decoderLag, chainLag, chainTipStale, chainTipStaleSince,
+        waitingOnFutureBlock, lastBlockCommittedAt, startedAt, behindSince, noCommitMs
     } = input || {};
     let reasons = [];
     if(indexerDbUnreachable) reasons.push('indexer_db_unreachable');
@@ -87,21 +101,41 @@ function readinessVerdict(input){
         ? lastBlockCommittedAt
         : (Number.isFinite(startedAt) && startedAt > 0 ? startedAt : null);
     let noCommitForMs = (progressAt != null && Number.isFinite(now)) ? Math.max(0, now - progressAt) : null;
+    let behindWindowAt = Number.isFinite(behindSince) && behindSince > 0
+        ? Math.max(progressAt || 0, behindSince)
+        : progressAt;
+    let behindNoCommitForMs = (behindWindowAt != null && Number.isFinite(now))
+        ? Math.max(0, now - behindWindowAt)
+        : null;
+    let chainTipStaleForMs = chainTipStale && Number.isFinite(chainTipStaleSince)
+        && Number.isFinite(now) ? Math.max(0, now - chainTipStaleSince) : null;
     if(behind != null && behind > 0 && !waitingOnFutureBlock
        && Number.isFinite(noCommitMs) && noCommitMs > 0
-       && noCommitForMs != null && noCommitForMs > noCommitMs)
+       && behindNoCommitForMs != null && behindNoCommitForMs > noCommitMs)
         reasons.push('behind_tip_no_commit');
+    if(chainTipStale && !waitingOnFutureBlock
+       && Number.isFinite(noCommitMs) && noCommitMs > 0
+       && chainTipStaleForMs != null && chainTipStaleForMs > noCommitMs)
+        reasons.push('chain_tip_stale');
 
-    return { ready: reasons.length === 0, reasons: reasons, behind: behind, noCommitForMs: noCommitForMs };
+    return { ready: reasons.length === 0, reasons: reasons, behind: behind,
+             noCommitForMs: noCommitForMs, behindNoCommitForMs: behindNoCommitForMs,
+             chainTipStaleForMs: chainTipStaleForMs, chainLagKnown: Number.isFinite(chainLag) };
 }
 
-// The no-commit window from INDEXER_READY_NO_COMMIT_MS, or the default. A value that
-// is not a positive integer falls back to the default rather than disabling the check.
-function resolveReadyNoCommitMs(raw){
+// Resolve an operational millisecond setting without allowing a malformed value to
+// silently disable its timeout or cache.
+function resolvePositiveIntMs(raw, defaultMs){
     let parsed = Number(raw);
     if(raw === undefined || raw === null || raw === '' || !Number.isSafeInteger(parsed) || parsed <= 0)
-        return READY_NO_COMMIT_DEFAULT_MS;
+        return defaultMs;
     return parsed;
 }
 
-module.exports = { READY_NO_COMMIT_DEFAULT_MS, blocksBehind, readinessVerdict, resolveReadyNoCommitMs };
+function resolveReadyNoCommitMs(raw){
+    return resolvePositiveIntMs(raw, READY_NO_COMMIT_DEFAULT_MS);
+}
+
+module.exports = { READY_NO_COMMIT_DEFAULT_MS, CHAIN_TIP_TTL_DEFAULT_MS, CHAIN_TIP_TIMEOUT_DEFAULT_MS,
+                   blocksBehind, nextBehindSince, readinessVerdict, resolvePositiveIntMs,
+                   resolveReadyNoCommitMs };

@@ -120,6 +120,29 @@ describe('ci fast selector', function () {
     }
   });
 
+  it('maps hub mirror twin helpers to the landing-order test without widening', function () {
+    for (const file of [
+      'bin/check-hub-db-sync-explorer-twins.js',
+      'bin/sync-hub-mirror-client.sh'
+    ]) {
+      const plan = select([file]);
+      assert.strictEqual(plan.consensus, false, file);
+      assert.deepStrictEqual(plan.tests, [{
+        group: 'main',
+        file: 'bin/test/hub_db_sync_explorer_twin_order.test.js'
+      }], file);
+    }
+  });
+
+  it('maps the donation projection guard to its regression test without widening', function () {
+    const plan = select(['bin/check-chain-registry-donations.js']);
+    assert.strictEqual(plan.consensus, false);
+    assert.deepStrictEqual(plan.tests, [{
+      group: 'main',
+      file: 'bin/test/check_chain_registry_donations.test.js'
+    }]);
+  });
+
   it('widens package manifest changes', function () {
     const plan = select(['package.json']);
     assert.strictEqual(plan.consensus, true);
@@ -208,8 +231,11 @@ describe('ci fast selector', function () {
     }), mergeBase);
   });
 
-  it('keeps the full-tier integration command and fast-plan guard', function () {
+  it('keeps the full-tier integration command, fast-plan guard and reviewed SDK pin', function () {
     const script = fs.readFileSync('bin/ci-full.sh', 'utf8');
+    const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+    const sdkRefs = Array.from(workflow.matchAll(/\|\| '([0-9a-f]{40})'\) \}\}/g), (match) => match[1]);
+    assert.deepStrictEqual(sdkRefs, ['58732583fc1f11eb1c19ac304a12b8c3f7c23961']);
     assert(script.includes('ci_fast_select.js --plan'));
     assert(script.includes('CI_TIER'));
     assert(script.includes('run_tier "integration (test:integration:ci)"'));
@@ -222,8 +248,10 @@ describe('ci fast selector', function () {
     assert(script.includes('git -C "$SIB/xchain-documentation" archive HEAD'));
     assert(script.includes('XCHAIN_DOCS_DIR="$docs_snapshot"'));
     assert(script.includes('sdk_preflight_drift_check'));
-    assert(script.includes('merge-base --is-ancestor "$sdk_head" "$sdk_develop"'));
-    assert(script.includes('archive "$sdk_develop"'));
+    assert(script.includes('sdk_ref="$(sed -nE'));
+    assert(script.includes('"$SELF/.github/workflows/ci.yml"'));
+    assert(script.includes('expected one pinned xchain-sdk drift ref'));
+    assert(script.includes('archive "$sdk_ref"'));
   });
 
   it('runs source-only VM staging in Linux fast mode', function () {

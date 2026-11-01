@@ -20,12 +20,14 @@
  *
  ********************************************************************/
 
-const { buildHealthResponse, committedView, inFlightBlockIndex } = require('../health');
+const { buildHealthResponse, committedView, inFlightBlockIndex, rulesStatus } = require('../health');
 const { chainBlockHash } = require('../chain_block_hash');           // decoder-side hash for the block-hash triple
 const { clearBlock } = require('../../chain/price_landing_clear');
 const merkle        = require('../../consensus/merkle');
 const stateSubtree  = require('../../consensus/gates/state_subtree_gate');
+const { heightIsFinal } = require('../../consensus/retroactive/replay_status');
 const { getLogger } = require('../../observability/index.js');
+const rpcParams = require('./params.js');
 
 function buildSystemRpc(ctx){
     return Object.assign({}, systemReads(ctx), latestBlockRpc(ctx), blockHashesRpc(ctx));
@@ -192,22 +194,32 @@ function blockHashesRpc({ indexer }){
         async getblockhashes({block_index}){
             if(!indexer.indexerDb || !indexer.decoderDb)
                 return { error: 'indexer database not ready' };
+            let target = null;
+            // Accept an omitted height as the committed tip and validate every explicit height.
+            if(block_index !== undefined && block_index !== null){
+                let parsed = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+                if(parsed.error) return { error: 'invalid block_index' };
+                target = parsed.value;
+            }
             try {
                 let db        = committedView(indexer.indexerDb);
                 let decoderDb = committedView(indexer.decoderDb);
-                let target = (block_index !== undefined && block_index !== null)
-                    ? Number(block_index)
-                    : await db.getLatestBlockIndex();
-                if(!Number.isFinite(target) || target < 0)
-                    return { error: 'invalid block_index' };
+                if(target === null)
+                    target = await db.getLatestBlockIndex();
                 let stored = await db.getStoredBlockHashes(target);
                 if(!stored)
                     return { error: 'block not indexed: ' + target };
                 let blockHash = await chainBlockHash(decoderDb, target);
+                let blockFinal = heightIsFinal(Number(stored.block_index), indexer.replayMarker);
+                let rules = rulesStatus(indexer);
                 return {
                     coin:          indexer.config['COIN'],
                     network:       indexer.config['NETWORK'],
                     block_index:   Number(stored.block_index),
+                    // The typeof fallbacks keep the response literal usable by the
+                    // state-root boundary harness that evaluates this projection alone.
+                    final:         typeof blockFinal === 'undefined' ? true : blockFinal,
+                    rules:         typeof rules === 'undefined' ? null : rules,
                     block_time:    (stored.block_time != null) ? Number(stored.block_time) : null,
                     block_hash:    blockHash,
                     ledger_hash:   stored.ledger_hash   || null,

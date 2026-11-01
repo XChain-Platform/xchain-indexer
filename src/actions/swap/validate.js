@@ -25,6 +25,7 @@ const { remoteTokenAcceptError } = require('../cross_chain_remote_token');
 
 const MAKER_POLICY_ADMISSION_KEY = 'order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION';
 const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
+const SAME_TOKEN_REFUSAL_KEY = 'same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION';
 
 // Coins and ticks: both COIN networks supported, GIVE on this network, the GIVE tick
 // known, cross-chain enabled, and a local GET tick known.
@@ -56,6 +57,13 @@ function validateTickAndCoin(handler, st){
     // validated by the xchain-hub federation, so skip the local existence check)
     if(!error && format==0 && !isCrossChain && !getTokenInfo)
         error = 'invalid: GET_TICK (unknown)';
+
+    // Refuse a same-chain offer whose two spellings resolve to the same token id.
+    if(!error && format==0 && !isCrossChain && giveTokenInfo && getTokenInfo &&
+       String(giveTokenInfo['TICK_ID']) === String(getTokenInfo['TICK_ID']) &&
+       gateRegistry.activeAt(SAME_TOKEN_REFUSAL_KEY, handler.config['NETWORK'],
+           handler.config['COIN'], data['BLOCK_INDEX'], null))
+        error = 'invalid: cannot trade a token for itself';
 
     st.error = error;
 }

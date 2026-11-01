@@ -24,9 +24,17 @@ const http       = require('http');
 const express    = require('express');
 const helmet     = require('helmet');
 const TRAIN_ACTIVATION_HALT_PREFIX = 'train_activation_halt:';
+const OPERATOR_ACTION_HOLDS = new Set([
+    'retroactive_replay_needs_go',
+    'retroactive_replay_diverged'
+]);
 
 function isTrainActivationHalt(stallReason){
     return typeof stallReason === 'string' && stallReason.startsWith(TRAIN_ACTIVATION_HALT_PREFIX);
+}
+
+function isOperatorActionHold(stallReason){
+    return typeof stallReason === 'string' && OPERATOR_ACTION_HOLDS.has(stallReason.trim().split(/[\s:]/)[0]);
 }
 
 // Standalone copy of src/XChainIndexer.js stallWedged (the smoke harness deliberately
@@ -36,6 +44,7 @@ function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClear
     if(!stallReason) return false;
     if(stallReason === 'bridge_proof_barrier') return false;
     if(isTrainActivationHalt(stallReason)) return false;
+    if(isOperatorActionHold(stallReason)) return false;
     if(lastBlockCommittedAt == null) return false;
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
     return (now - lastBlockCommittedAt) > graceMs;
@@ -53,6 +62,7 @@ function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClea
     if(!stallReason) return 'none';
     if(stallReason === 'bridge_proof_barrier') return 'bridge_proof_wait';
     if(isTrainActivationHalt(stallReason)) return 'train_activation_halt';
+    if(isOperatorActionHold(stallReason)) return 'operator_action_hold';
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
     if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs)) return 'wedged';
     return 'barrier_defer';

@@ -45,7 +45,7 @@ function replaceActivationGet(registry) {
     registry.get = function(key) {
         const value = original(key);
         if(key !== ACTIVATION_KEY) return value;
-        return Object.freeze(Object.assign({}, value, { 'DOGE:testnet': 1000 }));
+        return Object.freeze(Object.assign({}, value, { 'DOGE:testnet': 1000, 'LTC:testnet': 1000 }));
     };
     return original;
 }
@@ -202,16 +202,62 @@ describe('mirror-admission margin cross-repo parity', function() {
         ]);
     });
 
-    it('hub and indexer agree on both sides of a stubbed DOGE testnet boundary', function() {
-        for(const table of tables(loaded.boundaryIndexer)) {
-            for(let tip = 980; tip <= 1003; tip++) {
-                const stamped = loaded.boundaryHub.admitBlocks(
-                    ['DOGE'], { DOGE: tip }, table, 'testnet').DOGE;
-                assert.strictEqual(stamped - tip, loaded.boundaryIndexer.rowMarginBlocks(
-                    table, 'DOGE', 'testnet', stamped), table + ' at tip ' + tip);
-                assert.strictEqual(loaded.boundaryIndexer.consumerTargetHeight(
-                    table, 'DOGE', 'testnet', stamped), tip, table + ' at tip ' + tip);
+    for(const chain of ['DOGE', 'LTC']) {
+        it('hub and indexer agree on both sides of a stubbed ' + chain + ' testnet boundary', function() {
+            for(const table of tables(loaded.boundaryIndexer)) {
+                for(let tip = 980; tip <= 1003; tip++) {
+                    const stamped = loaded.boundaryHub.admitBlocks(
+                        [chain], { [chain]: tip }, table, 'testnet')[chain];
+                    assert.strictEqual(stamped - tip, loaded.boundaryIndexer.rowMarginBlocks(
+                        table, chain, 'testnet', stamped), table + ' at tip ' + tip);
+                    assert.strictEqual(loaded.boundaryIndexer.consumerTargetHeight(
+                        table, chain, 'testnet', stamped), tip, table + ' at tip ' + tip);
+                }
+            }
+        });
+    }
+
+    it('hub and indexer keep the legacy LTC stamp on testnet below its activation', function() {
+        const H = loaded.normalIndexer.activationHeight('LTC', 'testnet');
+        for(const table of tables(loaded.normalIndexer)) {
+            const legacy = loaded.normalIndexer.baseMarginBlocks(table);
+            for(const tip of [H - 1000, H - 100, H - 18]) {
+                const stamped = loaded.normalHub.admitBlocks(['LTC'], { LTC: tip }, table, 'testnet').LTC;
+                assert.strictEqual(stamped, tip + legacy, table + ' at tip ' + tip);
+                assert.strictEqual(loaded.normalIndexer.consumerTargetHeight(
+                    table, 'LTC', 'testnet', stamped), tip, table + ' at tip ' + tip);
             }
         }
+    });
+
+    it('the LTC margins clear the burst watermark trail on both round windows that the legacy margin cannot', function() {
+        // 44 s blocks reproduce the worst 12-block trail measured on the 8-minute round
+        // tables during TLTC bursts; the 10-minute price window then trails 15.
+        const start = 1_700_000_000_000;
+        const cadenceMs = 44000;
+        const trails = {};
+        for(const table of ['cross_chain_matches', 'price_snapshots']) {
+            const watermark = withoutHubWindowEnv(() => new loaded.normalWatermark({
+                HUB_NETWORK: 'regtest',
+            }));
+            const steadyStart = Math.ceil(watermark.roundTerminalMs(table) / cadenceMs) + 2;
+            trails[table] = [];
+            for(let i = 0; i <= steadyStart + 4; i++) {
+                const tip = 1000 + i;
+                watermark.observeTip('LTC', tip, start + i * cadenceMs);
+                if(i < steadyStart) continue;
+                const claimed = watermark.heights(start + i * cadenceMs)[table].LTC;
+                const trail = tip - claimed;
+                const activated = loaded.normalIndexer.rowMarginBlocks(table, 'LTC', 'regtest', tip);
+                trails[table].push(trail);
+                assert.ok(trail > loaded.normalIndexer.baseMarginBlocks(table));
+                assert.ok(activated > trail, table + ' margin ' + activated + ' at trail ' + trail);
+                assert.ok(claimed >= loaded.normalIndexer.consumerTargetHeight(table, 'LTC', 'regtest', tip));
+            }
+        }
+        assert.deepStrictEqual(trails, {
+            cross_chain_matches: [12, 12, 12, 12, 12],
+            price_snapshots:     [15, 15, 15, 15, 15],
+        });
     });
 });

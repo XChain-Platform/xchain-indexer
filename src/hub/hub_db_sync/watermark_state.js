@@ -88,6 +88,12 @@ function initBootstrapWatermarkState(sync) {
     // subscription), a heartbeat must not certify the mirror as caught-up.
     // Reset on disconnect; re-set after the reconnect re-bootstrap drains.
     sync._bootstrapDrained = false;
+    // Per-table completeness belongs to one socket epoch. A table may open its own
+    // barrier as soon as its drain completes, without waiting for a later heavy table,
+    // but an epoch from a closed socket never certifies the replacement connection.
+    sync._tableDrainEpochs = Object.create(null);
+    sync._tableDrainRevisions = Object.create(null);
+    sync._tableWatermarks = Object.create(null);
     // Track recent row or table progress so the block-loop ceiling does not replace
     // the connection beneath a healthy long drain. Null means no drain is active.
     sync._bootstrapLastProgressAt = null;
@@ -259,6 +265,11 @@ function initStallDetectorState(sync, options) {
     sync._hubTipTs               = 0;
     sync._lastWatermarkAdvanceAt = null;
     sync._watermarkStallResyncAt = null;
+    // Disconnect and bootstrap time is excluded from both detector windows. The
+    // timestamps are shifted when the last pause reason clears, preserving elapsed
+    // connected, non-draining time on either side of the pause.
+    sync._watermarkStallPausedAt = null;
+    sync._watermarkStallPauseReasons = new Set();
     sync._stallTimer             = null;
     sync.watermarkStallMs     = Number.isFinite(options.watermarkStallMs)
         ? options.watermarkStallMs

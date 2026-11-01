@@ -31,6 +31,7 @@ const assert = require('assert');
 const blockPollMethods = require('../../../src/XChainIndexer/block_poll');
 const barrierClock     = require('../../../src/XChainIndexer/barrier_clock');
 const decoderProbes    = require('../../../src/XChainIndexer/decoder_probes');
+const { attributedStallReason } = require('../../../src/api/health/stall_fields');
 
 // A catch-up that reaches a block a barrier defers, the way a real pass behind the
 // price mirror does: it names the barrier on the instance.
@@ -106,6 +107,34 @@ describe('the poll pass stops advancing while the decoder reports a durable REOR
 });
 
 describe('the decoder-halt gate follows the halt probe across passes @regression @tier1', function () {
+    it('holds an unread marker after a probe fault and attributes the unverified state', async function () {
+        const { ix, calls, view } = makeProbedIndexer(async () => { throw new Error('probe down'); }, { last: null });
+        await ix.pollDecoderOnce(view, 50);
+        assert.strictEqual(calls.catchUpToDecoder, 0);
+        assert.match(attributedStallReason(ix), /^decoder_reorg_halt_unverified:/);
+    });
+
+    it('releases an unread hold after the first successful not-halted probe', async function () {
+        const { ix, calls, view } = makeProbedIndexer(async () => ({ halted: false }), { last: null });
+        await ix.pollDecoderOnce(view, 50);
+        assert.strictEqual(calls.catchUpToDecoder, 1);
+        assert.strictEqual(ix.decoderReorgHalted, false);
+    });
+
+    it('resumes without a restart when an unread fault is followed by a successful probe', async function () {
+        let available = false;
+        const probe = async () => {
+            if(!available) throw new Error('probe down');
+            return { halted: false };
+        };
+        const { ix, calls, view } = makeProbedIndexer(probe, { last: null });
+        await ix.pollDecoderOnce(view, 50);
+        available = true;
+        await ix.pollDecoderOnce(view, 50);
+        assert.strictEqual(calls.catchUpToDecoder, 1);
+        assert.strictEqual(ix.decoderReorgHalted, false);
+    });
+
     it('halted, then a probe fault keeps it halted, then a cleared read resumes with no restart', async function () {
         let mode = 'halted';
         const probe = async () => {

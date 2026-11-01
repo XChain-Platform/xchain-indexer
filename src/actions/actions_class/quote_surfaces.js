@@ -26,8 +26,8 @@
 const dryRunSupport = require('./dry_run_support.js');
 const quoteAnswers  = require('./quote_answers.js');
 const { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome } = dryRunSupport;
-const { launchGateAdmits, NOT_ADMITTED_BEFORE_LAUNCH } = dryRunSupport;
-const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, dryRunVerdictQuote } = quoteAnswers;
+const { launchGateAdmits, rollbackPreservingError, NOT_ADMITTED_BEFORE_LAUNCH } = dryRunSupport;
+const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, feeQuoteNoVerdict, dryRunVerdictQuote } = quoteAnswers;
 const { malformedActionAnswer } = quoteAnswers;
 const { resolvePreflightFeeMode, preflightGateAnswer, preflightLockBusy, preflightNoVerdict, preflightResult } = quoteAnswers;
 
@@ -94,6 +94,7 @@ async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestin
     // Read the tip only now, under the mutex: before it, a bare read lands on the block loop's
     // open transaction, and a block committing during the wait would leave the run at the old
     // height over the new state. A failed read is an outage, never a verdict, so it propagates.
+    // Judged at tip, not tip+1: see syntheticDryRunTx in dry_run_support.js.
     let blockIndex, blockTime, syntheticTx, admitted;
     try {
         blockIndex = await this.indexerDb.getLatestBlockIndex();
@@ -102,7 +103,7 @@ async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestin
                                                 blockIndex, blockTime, guardInert, feeProbe, rawData });
         admitted = launchGateAdmits(this, syntheticTx);
     } catch(e){
-        await this.indexerDb.rollbackTransaction();
+        await rollbackPreservingError(this.indexerDb, e, 'Fee quote pre-read');
         throw e;
     }
 
@@ -285,6 +286,10 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     } finally {
         this._feeQuotePending--;
     }
+    // Any incomplete run has no verdict, including a read-back failure after STATUS was copied.
+    if(run.error && (run.status == null || /^handler threw:/.test(run.error)))
+        return feeQuoteNoVerdict(base, run);
+
     base.blockIndex = run.blockIndex;
     base.blockTime  = run.blockTime;
     base.status     = run.status;
@@ -403,8 +408,8 @@ async function computePreflight(policy, { action, params, source, feeMode }){
         this._feeQuotePending--;
     }
 
-    // A run that threw before the handler left a status has no verdict; never memoized
-    if(run.error && run.status == null)
+    // Any incomplete run has no verdict and is never memoized, even with a partial STATUS.
+    if(run.error && (run.status == null || /^handler threw:/.test(run.error)))
         return preflightNoVerdict(base, run);
 
     let result = preflightResult(this, base, run, resolvedMode, feeTick);

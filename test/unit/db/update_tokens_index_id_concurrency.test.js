@@ -85,6 +85,10 @@ function makeDb(state, pauseMaxReads){
             if(/INSERT IGNORE INTO index_tickers/.test(sql))
                 return insertTicker(state, args);
 
+            // The legacy tick(200) collision probe finds no row in this fixture.
+            if(/LEFT\(tick, 200\)=LEFT\(\?, 200\)/.test(sql))
+                return [];
+
             throw new Error('Unexpected query: ' + sql);
         },
     };

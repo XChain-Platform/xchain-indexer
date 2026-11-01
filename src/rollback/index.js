@@ -175,8 +175,8 @@ class Rollback {
 
     // The atomic part of the reorg: every delete, reset and re-derive, plus the hub
     // retractions written ahead of the commit so they survive a crash. A throw anywhere
-    // inside leaves the database untouched; it ends the poll pass and the process (runBlockLoop
-    // has no catch), and the restarted indexer re-detects the reorg and retries.
+    // inside ends the poll pass and the process: runBlockLoop rides out only flag-free
+    // failures before rollback or replay writes start. The restarted indexer re-detects the reorg and retries.
     async runRollbackTransaction(block_index, scope, markets, addresses, tickers){
         this.sweepStats = [];
         // Begin a transaction; all deletes and recalculations are atomic
@@ -197,8 +197,8 @@ class Rollback {
                 getLogger().error('Reorg rollback to block ' + block_index + ' failed while unwinding after: ' +
                     ((e && e.message) || e) + '; rollback error: ' + ((rollbackErr && rollbackErr.message) || rollbackErr));
             }
-            // Clear the reorg marker on failure too so it can't stick; the next pass (after the
-            // restart this throw causes) re-detects the reorg and retries, re-arming it (#1812).
+            // Clear the reorg marker on failure too so it can't stick; the next pass after the
+            // required restart re-detects the reorg and retries, re-arming it.
             if(this.indexer) this.indexer.stallReason = null;
             throw e;
         }
@@ -207,7 +207,7 @@ class Rollback {
     // The writes of the reorg transaction, in order, ending with the commit. Returns the
     // staged hub retractions for the post-commit delivery.
     async applyRollbackWrites(block_index, scope, markets, addresses, tickers){
-        let { firstActionIndex, lastActionIndex, unlandedAttestBatches } = scope;
+        let { firstActionIndex, lastActionIndex, unlandedAttestBatches, retractedPriceBatches } = scope;
         // Reverse any cooldown maturities orphaned by this reorg. Runs UNCONDITIONALLY (outside
         // the firstActionIndex guard) and BEFORE the generic deletes: the legacy (pre-flag-day)
         // maturity path writes the refund credit + 'completed' flip against a SURVIVING unstake
@@ -239,9 +239,13 @@ class Rollback {
 
         await this.refreshDerivedProjections(block_index, addresses, tickers, markets);
 
-        let staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches);
+        let staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches,
+            retractedPriceBatches);
 
         await this.commitAndInvalidateCaches();
+
+        // Only a committed purge owes the mirror its price rows back.
+        this.repagePriceMirrorAfterCommit();
 
         return staged;
     }

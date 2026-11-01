@@ -1977,7 +1977,7 @@
       {
         "name": "tick",
         "columns": [
-          "tick(200"
+          "tick(250"
         ],
         "unique": true
       }

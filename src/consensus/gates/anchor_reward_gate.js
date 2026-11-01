@@ -21,8 +21,8 @@
  * plus a 2f+1 `oracle_publish` attestation (XANCPUB) over the reward tuple; the
  * indexer verifies that quorum and credits the publisher with
  * ANCHOR_REWARD_AMOUNT, a frozen consensus constant never taken from the wire.
- * Below the threshold the legacy anchor wire applies and a publisher-bearing
- * bundle is rejected.
+ * Below the threshold no reward is derived. The wire is not height-gated: no
+ * parser reads this gate, and the bundle tail is mandatory at every height.
  *
  * The credited reward is a COLLECT-spendable `validator_rewards` row, so this
  * is consensus-relevant and must deploy to the hub and every indexer
@@ -46,7 +46,7 @@ const ANCHOR_REWARD_AMOUNT = copy('anchor_reward_activation.ANCHOR_REWARD_AMOUNT
 
 // Whether anchor rewards are DERIVED from chain for an ANCHOR whose BTC-anchored
 // snapshot is at `snapshotBlock` on `network`. Below the threshold -> off (none
-// derived, and the hub push rail is retired; a publisher-bearing bundle is rejected). An unpinned (null) or unknown
+// derived, and the hub push rail is retired; the bundle still parses on its own shape). An unpinned (null) or unknown
 // network -> off (safe); `sb >= null` would otherwise arm at height 0.
 function isAnchorRewardActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
@@ -62,7 +62,7 @@ const ARCHIVE_REWARD_AMOUNT = copy('anchor_reward_activation.ARCHIVE_REWARD_AMOU
 
 // Whether the anchor_archive reward is DERIVED from chain for an archive anchor
 // whose BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the threshold
-// -> off (none derived, and the hub push rail is retired; a publisher-bearing archive head is rejected).
+// -> off (none derived, and the hub push rail is retired; the archive head still parses on its own shape).
 // An unpinned (null) or unknown network -> off (safe).
 function isArchiveRewardActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);

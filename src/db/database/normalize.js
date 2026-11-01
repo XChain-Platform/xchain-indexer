@@ -26,6 +26,15 @@
 // Strict, as the class body these methods came from was.
 'use strict';
 
+// Numeric wire text stored in VARCHAR(250) amount columns. A strict server rejects a
+// longer value even on an invalid action row; '0' is the placeholder these writers
+// already use for absent and malformed numeric text.
+const DECIMAL_TEXT_FIELDS = Object.freeze([
+    'AMOUNT', 'CALLBACK_AMOUNT', 'DEPOSIT', 'FEE_AMOUNT', 'FIAT_AMOUNT',
+    'GAS_ESCROW', 'GET_AMOUNT', 'GIVE_AMOUNT', 'GIVE_ESCROW', 'MAX_SUPPLY',
+    'MAX_MINT', 'MINT_ADDRESS_MAX', 'MIN_AMOUNT', 'MINT_SUPPLY'
+]);
+
 // normalizeDataValues, first pass over its own copy: boxed values become plain primitives
 // and the LIST and NUMBER fields become numeric or NULL.
 function normalizeNumericFields(self, data){
@@ -72,6 +81,10 @@ function boundIntegerLockAndDecimalFields(self, data){
         if(self.util.isNull(data[field])) continue;
         if(self.util.exceedsUnsignedColumn(data[field], self.config['INTEGER_FIELDS'][field]))
             data[field] = null;
+    }
+    for(let field of DECIMAL_TEXT_FIELDS){
+        if(data['STATUS'] !== 'valid' && !self.util.isNull(data[field]) && Array.from(String(data[field])).length > 250)
+            data[field] = '0';
     }
     // set LOCK field values to explicitly unlocked (0), locked (1), or null
     for(let field of self.config['LOCK_FIELDS']){

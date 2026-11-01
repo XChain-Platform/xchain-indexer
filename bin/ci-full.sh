@@ -126,7 +126,7 @@ export TEST_DB_PASS="${TEST_DB_PASS:-${CI_DB_PASS:-xchain-fixture-throwaway}}"
 export XCHAIN_DECODER_SQL_PATH="${XCHAIN_DECODER_SQL_PATH:-$SIB/xchain-decoder/src/sql}"
 export XCHAIN_SDK_PATH="${XCHAIN_SDK_PATH:-$SIB/xchain-sdk}"
 
-need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub xchain-documentation
+need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub xchain-documentation xchain-explorer
 
 if [ -z "${XCHAIN_SIBLING_COMMITS:-}" ] && [ -f "$SELF/.git" ]; then
   export XCHAIN_SIBLING_COMMITS="$(node - "$SIB" \
@@ -243,6 +243,8 @@ run_tier "perf: load regimes (test:perf:regimes)" \
 # way the workflow lays them out (hub checkout beside this repo's checkout).
 sync_coins_check() { (cd "$SIB" && "xchain-hub/bin/sync-coins.sh" --check --only "$(basename "$SELF")"); }
 run_tier "drift: coin-registry byte-identity" sync_coins_check
+run_tier "drift: chain-registry donation projection" node bin/check-chain-registry-donations.js
+run_tier "drift: changed hub_db_sync explorer twins" node bin/check-hub-db-sync-explorer-twins.js
 run_tier "drift: coin consensus-pin conformance" node -e '
   const coins = require("./src/coins");
   for (const net of ["testnet", "regtest"]) {
@@ -252,19 +254,17 @@ run_tier "drift: coin consensus-pin conformance" node -e '
   console.log("consensus pin conformance OK (testnet, regtest)");
 '
 sdk_preflight_drift_check() {
-  local sdk_head sdk_develop sdk_snapshot status
-  sdk_head="$(git -C "$XCHAIN_SDK_PATH" rev-parse HEAD 2>/dev/null || true)"
-  sdk_develop="$(git -C "$XCHAIN_SDK_PATH" rev-parse origin/develop 2>/dev/null || true)"
-  if [ -z "$sdk_develop" ] || [ "$sdk_head" = "$sdk_develop" ] || \
-      ! git -C "$XCHAIN_SDK_PATH" merge-base --is-ancestor "$sdk_head" "$sdk_develop"; then
-    env XCHAIN_INDEXER_PATH="$SELF" node "$XCHAIN_SDK_PATH/bin/check-preflight-drift.js"
-    return
+  local sdk_ref sdk_snapshot status
+  sdk_ref="$(sed -nE "s/.*\|\| '([0-9a-f]{40})'\) \}\}/\1/p" "$SELF/.github/workflows/ci.yml")"
+  if ! printf '%s\n' "$sdk_ref" | grep -Eq '^[0-9a-f]{40}$'; then
+    echo "ci:full: expected one pinned xchain-sdk drift ref in .github/workflows/ci.yml" >&2
+    return 1
   fi
 
   mkdir -p "$SELF/tmp" || return 1
   sdk_snapshot="$(mktemp -d "$SELF/tmp/sdk-drift.XXXXXX")" || return 1
-  if git -C "$XCHAIN_SDK_PATH" archive "$sdk_develop" | tar -x -C "$sdk_snapshot"; then
-    echo "ci:full: drift gate uses xchain-sdk origin/develop $sdk_develop (adjacent HEAD is $sdk_head)"
+  if git -C "$XCHAIN_SDK_PATH" archive "$sdk_ref" | tar -x -C "$sdk_snapshot"; then
+    echo "ci:full: drift gate uses workflow-pinned xchain-sdk $sdk_ref"
     NODE_PATH="$XCHAIN_SDK_PATH/node_modules" XCHAIN_INDEXER_PATH="$SELF" \
       node "$sdk_snapshot/bin/check-preflight-drift.js"
     status=$?

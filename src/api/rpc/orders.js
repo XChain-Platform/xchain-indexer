@@ -24,6 +24,7 @@ const { stampGiveDecimals } = require('../cross_chain_offer_decimals');
 const { tipBlockTime }   = require('../tip_block_time');            // expiry filter clock for the open book
 const { getLogger } = require('../../observability/index.js');
 const gateRegistry = require('../../protocol_changes.js');
+const rpcParams = require('./params.js');
 
 const OFFER_LIST_EXPORT_KEY = 'cross_chain_offer_list_export_activation.CROSS_CHAIN_OFFER_LIST_EXPORT';
 
@@ -43,7 +44,14 @@ function openCrossChainOrdersRpc({ indexer }){
         async getopencrosschainorders({to_coin, limit, after_action_index}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let max = clampOrderLimit(limit);
+            // Bound paging and the optional destination coin before querying the open book.
+            let page = rpcParams.limit(limit, { defaultValue: 100, max: 500 });
+            if(page.error) return { error: page.error };
+            let cursor = rpcParams.optionalInteger(after_action_index, { name: 'after_action_index', min: 0 });
+            if(cursor.error) return { error: cursor.error };
+            let coin = rpcParams.string(to_coin, { name: 'to_coin', maxLength: 16 });
+            if(coin.error) return { error: coin.error };
+            let max = page.value;
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
@@ -71,7 +79,7 @@ function openCrossChainOrdersRpc({ indexer }){
                 // (price-time partial fills) drawn in one UNION ALL so a single global
                 // LIMIT + keyset cursor bounds the whole book. Each offer is tagged `kind`; the
                 // returned array carries .truncated + .next_cursor out-of-band.
-                let merged = await db.getOpenCrossChainOffers(max, after_action_index, to_coin, blockTime);
+                let merged = await db.getOpenCrossChainOffers(max, cursor.value, coin.value, blockTime);
                 let truncated = await shapeOpenOffers(indexer, db, merged, { max, latest, pushGeneration });
                 return openOrdersResult(indexer, merged, latest, truncated);
             } catch (err) {
@@ -80,15 +88,6 @@ function openCrossChainOrdersRpc({ indexer }){
             }
         },
     };
-}
-
-// A missing, non-numeric or non-positive page size reads as 100; anything over
-// 500 is capped at 500.
-function clampOrderLimit(limit){
-    let max = Number(limit);
-    if(!Number.isFinite(max) || max <= 0) max = 100;
-    if(max > 500) max = 500;
-    return max;
 }
 
 // Overlay the effective offer lists when their export is active at the tip, warn

@@ -27,6 +27,28 @@
 const { getLogger } = require('../../observability/index.js');
 const { PRICE_FINALIZED_KEY_CAP, priceRoundKey, CAPABILITY_SNAPSHOT_KEY_CAP,
         capabilitySnapshotKey, ORACLE_PRICE_KEY_CAP, oraclePriceKey } = require('./mirror_bounds.js');
+const { coerceMirrorValue, applyMirrorWrite, strictHubRead } = require('./mirror_write.js');
+
+const CHECKPOINT_PAGE_LIMIT = 10000;
+const CHECKPOINT_MAX_PAGES  = 1000;
+
+function checkpointKey(row) {
+    return [row.chain, row.network, row.checkpoint_seq].map(v => String(v)).join('\u0000');
+}
+
+function checkpointValue(value) {
+    if (value === null || value === undefined) return value;
+    if (value instanceof Date) return value.toISOString().replace('.000Z', 'Z');
+    return String(value);
+}
+
+function checkpointRowsEqual(local, served, columns) {
+    for (let column of columns) {
+        if (column === 'id' || column === 'created_at') continue;
+        if (checkpointValue(local[column]) !== checkpointValue(served[column])) return false;
+    }
+    return true;
+}
 
 module.exports = {
 
@@ -152,6 +174,115 @@ module.exports = {
             'not hold (a repointed or rebuilt hub leaves the previous one\'s rounds behind, and the newest ' +
             'round_number wins every price read); the mirror now holds only what this hub serves');
         await this.refreshPriceSyncHeight();
+    },
+
+    // A hub rebuild can reuse checkpoint_seq for a different signed lineage. The ordinary
+    // INSERT IGNORE bootstrap cannot move a local row at that natural key, and it cannot
+    // remove sequences the rebuilt hub no longer serves. Take a second, read-only page walk
+    // and stage it completely before touching the mirror. Conflicting served keys are
+    // replaced first; only after every replacement lands are pre-pass rows absent from the
+    // served key set removed. Rows delivered live after the local snapshot are not candidates
+    // for deletion and remain available while the replacement runs.
+    async reconcileStateCheckpoints(scope) {
+        let allowed;
+        try {
+            allowed = await this.localColumns('state_checkpoints');
+        } catch (e) {
+            getLogger().warn('HubDbSync: checkpoint reconciliation skipped (local schema read failed):', e);
+            return false;
+        }
+        // Compatibility with a legacy or reduced mirror schema. Without the natural key,
+        // replacement cannot be made safer than the existing filtered INSERT IGNORE path.
+        if (!allowed.has('chain') || !allowed.has('network') || !allowed.has('checkpoint_seq')) return true;
+
+        let local;
+        try {
+            local = await strictHubRead(this.hubDb,
+                'SELECT * FROM state_checkpoints' + (scope ? ' WHERE network = ?' : ''),
+                scope ? [scope] : undefined);
+        } catch (e) {
+            getLogger().warn('HubDbSync: checkpoint reconciliation skipped (local read failed):', e);
+            return false;
+        }
+        local = Array.isArray(local) ? local : [];
+        if (local.length === 0) return true;
+
+        let served = await this.completeStateCheckpointPage();
+        if (served === null) return false;
+        let localByKey = new Map(local.map(row => [checkpointKey(row), row]));
+        let servedKeys = new Set();
+        let replaced = 0;
+        try {
+            for (let row of served) {
+                if (scope && String(row.network) !== String(scope)) continue;
+                let key = checkpointKey(row);
+                servedKeys.add(key);
+                let columns = Object.keys(row).filter(column => column !== 'id' && allowed.has(column));
+                if (!columns.includes('chain') || !columns.includes('network') || !columns.includes('checkpoint_seq'))
+                    throw new Error('served checkpoint row is missing its natural key');
+                let prior = localByKey.get(key);
+                if (prior && checkpointRowsEqual(prior, row, columns)) continue;
+                let sql = 'REPLACE INTO state_checkpoints (' + columns.map(column => '`' + column + '`').join(', ') +
+                    ') VALUES (' + columns.map(() => '?').join(', ') + ')';
+                let args = columns.map(column =>
+                    coerceMirrorValue(row[column], this.cachedColumnType('state_checkpoints', column)));
+                await applyMirrorWrite(this.hubDb, sql, args);
+                replaced++;
+            }
+        } catch (e) {
+            getLogger().warn('HubDbSync: checkpoint reconciliation stopped before stale-row removal:', e);
+            return false;
+        }
+
+        let stale = local.filter(row => !servedKeys.has(checkpointKey(row)))
+            .map(row => Number(row.id)).filter(Number.isFinite);
+        for (let i = 0; i < stale.length; i += 500) {
+            let chunk = stale.slice(i, i + 500);
+            try {
+                await applyMirrorWrite(this.hubDb,
+                    'DELETE FROM state_checkpoints WHERE id IN (' + chunk.map(() => '?').join(',') + ')', chunk);
+            } catch (e) {
+                getLogger().warn('HubDbSync: checkpoint reconciliation failed during stale-row removal:', e);
+                return false;
+            }
+        }
+        if (replaced > 0 || stale.length > 0)
+            getLogger().warn('HubDbSync: reconciled state_checkpoints to the serving hub lineage (' + replaced +
+                ' conflicting row(s) replaced, ' + stale.length + ' unserved row(s) removed)');
+        return true;
+    },
+
+    // Return the complete source table, or null without modifying the mirror. A short page
+    // is the completion proof. Missing rows, schema refusal, a non-advancing cursor, a fetch
+    // failure, or the page-count backstop all leave the existing checkpoint lineage intact.
+    async completeStateCheckpointPage() {
+        let rows = [];
+        let lastId = 0;
+        for (let page = 0; page < CHECKPOINT_MAX_PAGES; page++) {
+            let result;
+            try {
+                result = await this.httpGet('/hub-db/snapshot/state_checkpoints?since_id=' + lastId +
+                    '&limit=' + CHECKPOINT_PAGE_LIMIT);
+                if (!result || !Array.isArray(result.rows) ||
+                    !(await this.acceptSnapshotPage('state_checkpoints', result)))
+                    return null;
+            } catch (e) {
+                getLogger().warn('HubDbSync: checkpoint reconciliation page fetch failed:', e);
+                return null;
+            }
+            for (let row of result.rows) {
+                let rowId = Number(row && row.id);
+                if (!Number.isInteger(rowId) || rowId <= lastId) {
+                    getLogger().warn('HubDbSync: checkpoint reconciliation refused a non-advancing source page');
+                    return null;
+                }
+                lastId = rowId;
+                rows.push(row);
+            }
+            if (result.rows.length < CHECKPOINT_PAGE_LIMIT) return rows;
+        }
+        getLogger().warn('HubDbSync: checkpoint reconciliation reached its page-count backstop; mirror left unchanged');
+        return null;
     },
 
     // The local finalized rows the drain proves foreign, by natural key when the served

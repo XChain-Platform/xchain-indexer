@@ -66,11 +66,9 @@ const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 //            finalize on a binding poll injects a callback EXECUTE (vote.js
 //            injectCallbackExecute), but that reach stays closed: vote.js refuses a v2 whose
 //            data is not IS_SYNTHETIC, which no probe sets. VOTE is 'quotable', so its public
-//            fee-quote dry-run answers a guard-inert VOTE v0 binding create (withVoteBindingDryRunRefusal)
-//            as guard-inert (unjudged) before any transaction or mutex is taken wherever the probe
-//            could run. It hands the real handler only a create that cannot reach the probe (a
-//            non-numeric contract, or below that gate), and the handler's GUARD_INERT refusal still
-//            stands before the probe, so the public path never runs the probe VM. It is deliberately kept in this set
+//            fee-quote and pre-flight run the real handler like every other quotable action.
+//            The handler's GUARD_INERT refusal in validateCallbackTarget stands before
+//            isCallbackMethodUsable, so the public path never runs the probe VM. It is deliberately kept in this set
 //            because the v0 create probe still reaches the VM in block processing and on the
 //            API-key dry-run, and because relaxing the v2 refusal would silently open another
 //            VM door. The cost is named honestly: a batch of legitimate VOTE v0/v1
@@ -85,8 +83,8 @@ const PROBE_VM_REACHING_ACTIONS = new Set(['ATTEST', 'VOTE', 'XCALL']);
 // Settlement and lifecycle legs that stage NO protocol fee: the fee was already charged when
 // the originating ORDER/SWAP/DISPENSER was created, so there is nothing for feequote to price.
 // They also can't be dry-run through the synthetic-tx harness: COINPAY/DISPENSE only settle
-// against a native-coin output paying a specific payee/dispenser (coinpay.js/dispense.js
-// early-exit "skip" when it's absent), and the *_MATCH/*_EXPIRE/*_CLOSE/CROSS_SETTLE/XCALL
+// against a native-coin output paying a specific payee/dispenser (the coinpay/ and dispense/
+// handlers early-exit "skip" when it's absent), and the *_MATCH/*_EXPIRE/*_CLOSE/CROSS_SETTLE/XCALL
 // actions are system-synthesized during block processing, never wallet-broadcast (XCALL is
 // VM-emitted/synthetic-only, like CROSS_SETTLE). Quoting any of them would fall through to a
 // misleading `dry-run produced no status`; instead answer honestly with a zero-fee, feeExempt
@@ -152,52 +150,14 @@ function classifyFeeQuoteAction(action){
 // denylist" (which re-opens exactly the unauthenticated VM-compute-under-mutex the denylist
 // exists to close) with a per-sub-command refusal. It is checked TWICE on purpose - once as a
 // wire-string pre-scan before the mutex is ever taken (batchProbeForbiddenSubAction) and once
-// inside batch.js's dispatch loop against the exact name being dispatched. The second is the
-// load-bearing one: it reads the variable passed to processAction, after alias rewrite and
+// inside the batch dispatch loop (batch/index.js dispatchSubCommands) against the exact name
+// being dispatched. The second is the load-bearing one: it reads the variable passed to processAction, after alias rewrite and
 // case folding, so no spelling can route around it.
 function isBatchProbeForbiddenSubAction(action){
     let a = String(action == null ? '' : action).trim().toUpperCase();
     if(Object.prototype.hasOwnProperty.call(ACTION_ALIASES, a))
         a = ACTION_ALIASES[a];
     return FEE_QUOTE_DENYLIST.has(a) || PROBE_VM_REACHING_ACTIONS.has(a);
-}
-
-// Position of CALLBACK_CONTRACT in a VOTE v0 create's params (VERSION is index 0).
-const VOTE_CALLBACK_CONTRACT_PARAM = 13;
-// The handler's own usable-method gate: below it a binding create never runs the callback probe.
-const gateRegistry = require('../consensus/gate_registry.js');
-const { USABLE_CALLBACK_GATE } = require('./vote/binding_callback.js');
-
-// The callback contract a guard-inert VOTE v0 create names, or null for any other request. Such a
-// create is answered without a transaction: its only unjudged check is the callback probe, so
-// running the real handler would hold the block-loop mutex for a verdict it cannot give.
-// `formatOf` derives the version as dispatch does (util.getFormatVersion), so "0" and 0.0 are v0.
-function guardInertVoteBindingContract(request, formatOf){
-    if(!request || request.guardInert !== true || !Array.isArray(request.params)) return null;
-    if(String(request.action == null ? '' : request.action).trim().toUpperCase() !== 'VOTE') return null;
-    if(formatOf(String(request.params[0] == null ? '' : request.params[0]).trim()) !== 0) return null;
-    let contract = String(request.params[VOTE_CALLBACK_CONTRACT_PARAM] == null ? '' : request.params[VOTE_CALLBACK_CONTRACT_PARAM]).trim();
-    return contract === '' ? null : contract;
-}
-
-// Wrap the quote surfaces' dryRunAction so a public guard-inert VOTE binding create returns the
-// guard-inert refusal before any transaction or mutex is taken.
-function withVoteBindingDryRunRefusal(methods){
-    let dryRunAction = methods.dryRunAction;
-    methods.dryRunAction = async function(request){
-        let contract = guardInertVoteBindingContract(request, (v) => this.util.getFormatVersion(v));
-        // Let the handler answer a non-numeric contract: it refuses on format before any probe
-        if(contract === null || !this.util.isNumeric(contract)) return dryRunAction.call(this, request);
-        let blockIndex = await this.indexerDb.getLatestBlockIndex();
-        // Let the handler answer below the usable-method gate too: it never runs the probe there
-        if(!gateRegistry.activeAt(USABLE_CALLBACK_GATE, this.config['NETWORK'], this.config['COIN'], blockIndex, null))
-            return dryRunAction.call(this, request);
-        let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
-        let status = 'invalid: ' + this.util.guardInertContractProbeError(contract, 'as a VOTE binding-poll callback');
-        return dryRunOutcome(blockIndex, blockTime,
-            { status: status, feeRecord: null, subCommands: null, oracleFeesOwed: null }, null, null);
-    };
-    return methods;
 }
 
 // Load indexer actions: every handler class, constructed onto the instance by the two
@@ -233,7 +193,6 @@ const installMethods     = require('./actions_class/install_methods.js');
 
 // The dry-run engine and both public read-only surfaces, bound below to the fee-quote policy above.
 const quoteSurfaceMethods = require('./actions_class/quote_surfaces.js');
-const { dryRunOutcome }   = require('./actions_class/dry_run_support.js');
 const voteCallbackProbeVm = require('./vote/callback_probe_vm.js');
 
 const PreflightMemo      = require('../chain/preflight_memo.js');
@@ -333,7 +292,7 @@ class Actions {
 
     }
 
-    // The BATCH probe-path sub-action refusal, reached by batch.js through the loader instance it
+    // The BATCH probe-path sub-action refusal, reached by batch/index.js through the loader instance it
     // is constructed with, so that action never requires this loader (a load-time cycle) and the
     // policy stays defined once, beside the dispatch tables it reads.
     isBatchProbeForbiddenSubAction(action){
@@ -362,8 +321,7 @@ class Actions {
 // Install the split-out method families on the prototype NON-ENUMERABLE, the shape the class
 // body they came from produced (see actions_class/install_methods.js).
 installMethods(Actions.prototype, [transactionMethods, addressPrePass, feePricingMethods, feeViewMethods, dispatchMethods,
-    withVoteBindingDryRunRefusal(
-        quoteSurfaceMethods({ classifyFeeQuoteAction, isBatchProbeForbiddenSubAction, FEE_QUOTE_STATIC, CONFIG_ENV }))]);
+    quoteSurfaceMethods({ classifyFeeQuoteAction, isBatchProbeForbiddenSubAction, FEE_QUOTE_STATIC, CONFIG_ENV })]);
 
 // Static members ride on the class, so module.exports keeps one shape: the class itself.
 Object.assign(Actions, {
@@ -375,9 +333,9 @@ Object.assign(Actions, {
     getFeeQuoteExempt:      () => new Set(FEE_QUOTE_EXEMPT),
     getFeeQuoteStatic:      () => new Set(FEE_QUOTE_STATIC),
     // The BATCH probe-path sub-action refusal, exported for the conformance test that binds the policy
-    // to the dispatch table and for test contexts that stand in for this loader. batch.js itself reaches
+    // to the dispatch table and for test contexts that stand in for this loader. batch/index.js itself reaches
     // it through the Actions instance method above, never by requiring this module (actions/index.js
-    // requires batch.js, so a load-time require would resolve to an empty exports object).
+    // loads batch/index.js through handler_wiring.js, so a load-time require would resolve to an empty exports object).
     isBatchProbeForbiddenSubAction: isBatchProbeForbiddenSubAction,
     getProbeVmReachingActions:      () => new Set(PROBE_VM_REACHING_ACTIONS),
     // Pure consensus-runtime gate, exported so its fail-closed contract is unit-testable

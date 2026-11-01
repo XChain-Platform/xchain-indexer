@@ -24,7 +24,8 @@ const { CONFIG_ENV } = require('../config.js');
 // The hold ceiling comes from the same named constant HubDbSync throttles its forced
 // resync on (see initBarrierTiming).
 const { resolveBarrierHoldCeilingMs } = require('../hub/hub_db_sync.js');
-const { resolveReadyNoCommitMs } = require('./readiness/verdict.js');
+const { CHAIN_TIP_TTL_DEFAULT_MS, CHAIN_TIP_TIMEOUT_DEFAULT_MS,
+        resolvePositiveIntMs, resolveReadyNoCommitMs } = require('./readiness/verdict.js');
 const { resolveProofWaitGraceMs } = require('./stall_health.js');
 
 // Chain identity, stall and loop-liveness fields: what /health reads to tell an
@@ -67,6 +68,10 @@ function initChainState(indexer){
     // outer poll loop and the inner catch-up loop, since an initial sync legitimately stays
     // inside the inner one for hours. Read by isPollSilent().
     indexer.lastPollAt = 0;
+    // Current bounded database outage and the per-pass write-safety latch used by
+    // rideOutDbOutage. A rollback or replay append sets the latch for the rest of the pass.
+    indexer.dbOutage = null;
+    indexer._passRestartOnFault = false;
     // Wall-clock (epoch ms) this instance was constructed. The readiness verdict counts
     // "no commit" from here when nothing has committed since boot, so a restart cannot
     // turn a block stuck before it into one that is never judged (see readiness/verdict.js).
@@ -78,12 +83,10 @@ function initChainState(indexer){
 // The platform-train verdict and the decoder REORG_HALT bookkeeping, each empty until
 // the loop first evaluates it.
 function initHaltState(indexer){
-    // Set true when the decoder has written a durable REORG_HALT marker (a reorg it
-    // could not safely rewind). Surfaced on /health so a halted decoder is not mistaken for
-    // ordinary idle/lag. Updated by checkDecoderReorgHalt(); the log-tick counter keeps the
-    // periodic reminder from firing every tight poll.
-    indexer.decoderReorgHalted   = false;
-    indexer._reorgHaltLogTick    = 0;
+    // Null means the marker has not been read yet. The block loop holds until the first
+    // successful probe, then keeps the last known boolean across later probe faults.
+    indexer.decoderReorgHalted = null;
+    indexer._reorgHaltLogTick  = 0;
     // The platform-train consensus activation verdict for the block the loop is about
     // to apply (src/consensus/gates/train_gate.js), or null before
     // the first evaluation. `pending` means the signed release manifest names a rule set
@@ -141,6 +144,13 @@ function initActionBarrierFlags(indexer){
     indexer.remoteTokenBarrierBlock      = null;
     indexer.remoteTokenBarrierSkipped    = false;
     indexer.remoteTokenBarrierForceBlock = null;
+    // The capability proof barrier: the block its skip flag describes, whether mirrored
+    // capability reads are being policed by db.assertCapabilityProofNotHeld(), and the
+    // held read that failed a block ({ block, capability, snapshotBlock }), which makes
+    // that block's retry wait on the one snapshot it reads. Cleared once the block commits.
+    indexer.capabilityProofBarrierBlock   = null;
+    indexer.capabilityProofBarrierSkipped = false;
+    indexer.capabilityProofHeldRead       = null;
 }
 
 // Barrier timing and hold state: the per-attempt timeout, the hold ceiling and record,
@@ -242,13 +252,16 @@ function initReadinessState(indexer){
     indexer.chainTipAt         = null;
     indexer._chainTipCheckedAt = 0;
     indexer._chainTipInFlight  = null;
-    indexer.chainTipTtlMs      = parseInt(CONFIG_ENV.INDEXER_CHAIN_TIP_TTL_MS || '15000', 10);
-    indexer.chainTipTimeoutMs  = parseInt(CONFIG_ENV.INDEXER_CHAIN_TIP_TIMEOUT_MS || '1500', 10);
+    indexer.chainTipTtlMs      = resolvePositiveIntMs(CONFIG_ENV.INDEXER_CHAIN_TIP_TTL_MS,
+                                                      CHAIN_TIP_TTL_DEFAULT_MS);
+    indexer.chainTipTimeoutMs  = resolvePositiveIntMs(CONFIG_ENV.INDEXER_CHAIN_TIP_TIMEOUT_MS,
+                                                      CHAIN_TIP_TIMEOUT_DEFAULT_MS);
 
     // Window (ms) the indexer may sit behind a known tip without a commit before GET /ready
     // reports it not ready (readiness/verdict.js). Readiness, never liveness: it moves no
     // status code the container healthcheck reads. Purely operational, NOT a consensus parameter.
     indexer.readyNoCommitMs = resolveReadyNoCommitMs(CONFIG_ENV.INDEXER_READY_NO_COMMIT_MS);
+    indexer.readyBehindSince = null;
 }
 
 module.exports = { initChainState, initHaltState, initHubConfigState, initBarrierTiming, initDirectCallState,

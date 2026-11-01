@@ -24,7 +24,7 @@
 const path    = require('path');
 
 const { emptyMarketData, readMarketRow, readLastTradePrices, readDayAgoPrices,
-        readBestBids, readBestAsks, readDayStats, applyDayChanges } = require('./market_reads.js');
+        readBestBidAsk, readDayStats, applyDayChanges } = require('./market_reads.js');
 const orderRows        = require('./order_rows.js');
 const orderInfo        = require('./order_info.js');
 const matchRows        = require('./match_rows.js');
@@ -51,8 +51,7 @@ module.exports = Object.assign({
         await readMarketRow(this, Database, data, market_id, sideOf);
         await readLastTradePrices(this, data, sideOf);
         await readDayAgoPrices(this, data, time_24hr, sideOf);
-        await readBestBids(this, data, sideOf);
-        await readBestAsks(this, data, sideOf);
+        await readBestBidAsk(this, data, sideOf);
         await readDayStats(this, data, time_24hr, sideOf);
         applyDayChanges(this, data);
         // Sort the market data object 

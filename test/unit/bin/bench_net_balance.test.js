@@ -15,6 +15,7 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
+const { spawnSync } = require('child_process');
 
 const { getTestConfig } = require('../../fixtures/config');
 const Utility = require('../../../src/utility');
@@ -24,7 +25,8 @@ const {
     timeBatch,
     timeBlocks,
     bench,
-    render
+    render,
+    exitCodeFor
 } = require('../../../bin/bench_net_balance.js');
 
 const util = new Utility(getTestConfig());
@@ -123,6 +125,28 @@ describe('bin/bench_net_balance', function () {
         for (const h of HOT) timings.push({ address: h.address, tick: h.tick, rows: h.rows, net: NETS[h.address + '\t' + h.tick] });
         const batch = await timeBatch(db, timings, 2, stepClock([1]));
         assert.strictEqual(batch.mismatches, 1);
+    });
+
+    it('returns the mismatch exit status for batched bench results', async function () {
+        const db = stubDb({ 'a2\tXCHAIN': '2.6' });
+        const result = await bench(db, parseArgs(['--keys', '3', '--repeat', '1', '--batched']), stepClock([1]));
+        assert.strictEqual(exitCodeFor(result), 1);
+    });
+
+    it('maps only batched mismatches to exit status 1', function () {
+        assert.strictEqual(exitCodeFor({ batch: { mismatches: 1 } }), 1);
+        assert.strictEqual(exitCodeFor({ batch: { mismatches: 0 } }), 0);
+        assert.strictEqual(exitCodeFor({}), 0);
+    });
+
+    it('exits 2 with its error line on a usage error', function () {
+        const script = require.resolve('../../../bin/bench_net_balance.js');
+        const child = spawnSync(process.execPath, [script, '--keys', '0'], {
+            cwd: __dirname,
+            encoding: 'utf8',
+        });
+        assert.strictEqual(child.status, 2);
+        assert.match(child.stderr, /bench_net_balance: --keys needs a positive integer, got "0"/);
     });
 
     it('returns zeros for no keys', async function () {

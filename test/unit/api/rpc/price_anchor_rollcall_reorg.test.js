@@ -42,7 +42,8 @@ describe('JSON-RPC price batch family @regression @tier1', function () {
     it('getpricebatches validates the window, reads valid batches over it and pages by truncation', async function () {
         const rows = [{ first_round: 3, last_round: 5, block_index: 9, action_index: 40 }];
         const view = recordingView({ getLatestBlockIndex: 20, getPriceBatchesOverlappingRange: rows });
-        const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view }) });
+        const decoderView = recordingView({ protocolTimeForStoredBlock: 1700000900 });
+        const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view, decoderView }) });
         const res = await rpc.getpricebatches({ first_round: 1, last_round: 10, limit: 1 });
         assert.strictEqual(res.block_index, 20);
         assert.strictEqual(res.truncated, true);
@@ -53,6 +54,65 @@ describe('JSON-RPC price batch family @regression @tier1', function () {
         sinon.stub(observability.getLogger(), 'error');
         view.getPriceBatchesOverlappingRange = async () => { throw new Error('x'); };
         assert.deepStrictEqual(await rpc.getpricebatches({ first_round: 1, last_round: 2 }), { error: 'failed to look up price batches' });
+    });
+
+    it('getpricebatches answers each batch landing block with its protocol time, the clock pushpricebatch carried', async function () {
+        const rows = [
+            { batch_first_round: 3, batch_last_round: 5, block_index: 9, action_index: 40 },
+            { batch_first_round: 4, batch_last_round: 6, block_index: 9, action_index: 41 },
+            { batch_first_round: 7, batch_last_round: 8, block_index: 12, action_index: 42 }
+        ];
+        const times = { 9: 1700000900, 12: false };
+        const view = recordingView({ getLatestBlockIndex: 20, getPriceBatchesOverlappingRange: rows });
+        // The decoder database, as block_parse.js reads the time the push carried.
+        const decoderView = recordingView({ protocolTimeForStoredBlock: (block) => times[block] });
+        const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view, decoderView }) });
+        const res = await rpc.getpricebatches({ first_round: 1, last_round: 10 });
+        assert.deepStrictEqual(res.batches.map(b => [b.first_round, b.block_index, b.block_time]),
+            [[3, 9, 1700000900], [4, 9, 1700000900], [7, 12, null]]);
+        // One protocol-time read per distinct landing block.
+        assert.deepStrictEqual(decoderView.calls.filter(c => c[0] === 'protocolTimeForStoredBlock'),
+            [['protocolTimeForStoredBlock', 9], ['protocolTimeForStoredBlock', 12]]);
+        sinon.stub(observability.getLogger(), 'error');
+        decoderView.protocolTimeForStoredBlock = async () => { throw new Error('x'); };
+        assert.deepStrictEqual(await rpc.getpricebatches({ first_round: 1, last_round: 2 }), { error: 'failed to look up price batches' });
+    });
+
+    it('getpricebatchpayload rebuilds the committed valid batch body that pushpricebatch received', async function () {
+        const rounds = [
+            { round: 3, timestamp: 1700000000, btc_block_height: 700003,
+              pairs: [{ pair: 'BTC/USD', price: '50000.00' }] },
+            { round: 4, timestamp: 1700000600, btc_block_height: 700004,
+              pairs: [{ pair: 'BTC/USD', price: '50001.00' }] }
+        ];
+        const sigs = [{ pubkey: 'ab'.repeat(32), sig: 'cd'.repeat(64) }];
+        const row = { action_index: 40, batch_first_round: 3, batch_last_round: 4,
+            round_count: 2, rounds_json: JSON.stringify(rounds), sigs_json: JSON.stringify(sigs),
+            block_index: 9 };
+        const view = recordingView({ findValidPriceBatchPayload: row, getPushGeneration: 7 });
+        const decoderView = recordingView({ protocolTimeForStoredBlock: 1700000900 });
+        const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view, decoderView,
+            config: { COIN: 'DOGE' } }) });
+
+        const body = await rpc.getpricebatchpayload({ action_index: 40 });
+        assert.deepStrictEqual(body, {
+            source_chain: 'DOGE', first_round: 3, last_round: 4, btc_block_height: 700004,
+            rounds, block_time: 1700000900, sigs, action_index: 40, block_index: 9,
+            push_generation: 7
+        });
+        assert.deepStrictEqual(view.calls, [
+            ['getPushGeneration', 'DOGE'], ['findValidPriceBatchPayload', 40]
+        ]);
+        assert.deepStrictEqual(decoderView.calls, [['protocolTimeForStoredBlock', 9]]);
+    });
+
+    it('getpricebatchpayload refuses an invalid action index and an unknown or invalid batch', async function () {
+        const view = recordingView({ getPushGeneration: 7, findValidPriceBatchPayload: null });
+        const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view }) });
+        assert.deepStrictEqual(await rpc.getpricebatchpayload({ action_index: 'bad' }),
+            { error: 'action_index must be a non-negative integer' });
+        assert.deepStrictEqual(await rpc.getpricebatchpayload({ action_index: 99 }),
+            { error: 'valid price batch not found' });
     });
 });
 
@@ -168,10 +228,22 @@ describe('JSON-RPC roll-call family @regression @tier1', function () {
         view.getRollcalls = async () => { throw new Error('x'); };
         view.getRollcallAbsencesBySource = async () => { throw new Error('x'); };
         assert.deepStrictEqual(await rpc.getrollcalls({}), { error: 'failed to look up roll calls' });
-        assert.deepStrictEqual(await rpc.getrollcallabsences({}), { error: 'failed to look up roll call absences' });
+        assert.deepStrictEqual(await rpc.getrollcallabsences({ source: 'bc1q' }), { error: 'failed to look up roll call absences' });
         const notReady = buildRollcallRpc({ indexer: fakeIndexer({ indexerDb: null }), rollcallManifestHash: () => null });
         assert.deepStrictEqual(await notReady.getrollcalls({}), NOT_READY);
         assert.deepStrictEqual(await notReady.getrollcallabsences({}), NOT_READY);
+    });
+
+    it('roll-call listings reject malformed limits and absence sources before reading', async function () {
+        const view = recordingView({});
+        const rpc = buildRollcallRpc({ indexer: fakeIndexer({ view }), rollcallManifestHash: () => null });
+        assert.deepStrictEqual(await rpc.getrollcalls({ limit: 0 }),
+            { error: 'limit must be a positive integer' });
+        assert.deepStrictEqual(await rpc.getrollcallabsences({ source: 7 }),
+            { error: 'source must be a string of at most 255 characters' });
+        assert.deepStrictEqual(await rpc.getrollcallabsences({ source: 'x'.repeat(256) }),
+            { error: 'source must be a string of at most 255 characters' });
+        assert.deepStrictEqual(view.calls, []);
     });
 });
 
@@ -194,8 +266,9 @@ describe('JSON-RPC reorg history family @regression @tier1', function () {
 
     it('falls back to the indexer\'s last-known halt flag when the probe faults', async function () {
         const decoderView = recordingView({ getReorgEventsSince: [], isReorgHalted: () => { throw new Error('probe'); } });
-        const rpc = buildReorgHistoryRpc({ indexer: fakeIndexer({ decoderView, decoderReorgHalted: true }) });
-        assert.strictEqual((await rpc.getreorghistory({})).decoderReorgHalted, true);
+        const rpc = buildReorgHistoryRpc({ indexer: fakeIndexer({ decoderView, decoderReorgHalted: null }) });
+        const res = await rpc.getreorghistory({});
+        assert.strictEqual(res.decoderReorgHalted, false);
     });
 
     it('validates, refuses without the decoder database and reports a throw', async function () {

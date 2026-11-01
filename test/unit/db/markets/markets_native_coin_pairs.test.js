@@ -177,6 +177,10 @@ describe('markets: a token against the native coin @regression @tier1', function
     it('getMarketInfo resolves a tickerless side through index_coins', async function () {
         const db = makeDb();
         const q  = sinon.stub(db, 'doQuery').resolves([]);
+        // A native (tick 0) / token pair whose coins are labelled, so no coin-derive query runs.
+        q.onCall(0).resolves([{ market_id: 7, tick1: 'BTC', tick1_id: 0, tick1_decimals: 8,
+                                tick2: 'TKA', tick2_id: TOKEN_A, tick2_decimals: 8,
+                                coin1_id: COIN, coin2_id: COIN }]);
         await db.getMarketInfo(7, 1700000000);
         const lookup = q.getCall(0).args[0];
         assert.ok(/LEFT JOIN index_coins   c1/.test(lookup) && /LEFT JOIN index_coins   c2/.test(lookup),
@@ -184,10 +188,55 @@ describe('markets: a token against the native coin @regression @tier1', function
         assert.ok(!/INNER JOIN tokens/.test(lookup),
             'an inner join on tokens drops the whole market when either side is the native coin');
         assert.ok(/COALESCE\(t3\.tick, c1\.coin\)/.test(lookup));
-        // The five stats queries filter order/order_matches sides, which store NULL there.
-        const filtered = q.getCalls().slice(1).filter(c => /COALESCE\((m1|o1)\.give_tick_id,0\)=\?/.test(c.args[0]));
-        assert.strictEqual(filtered.length, 5,
-            'every price/bid/ask/volume query must compare the sides NULL-aware, or the pair prices at zero');
+        // The four stats queries (last trade, 24h-ago trade, open book, 24h matches) filter
+        // order/order_matches sides, which store NULL for the native coin.
+        const stats = q.getCalls().slice(1);
+        assert.strictEqual(stats.length, 4);
+        for (const c of stats) {
+            const alias = /FROM\s+orders o1/.test(c.args[0]) ? 'o1' : 'm1';
+            const nativeGive = '(' + alias + '.give_tick_id IS NULL OR ' + alias + '.give_tick_id=?)';
+            const nativeGet  = '(' + alias + '.get_tick_id IS NULL OR ' + alias + '.get_tick_id=?)';
+            const expected = '((' + nativeGive + ' AND ' + alias + '.get_tick_id=?) OR (' +
+                             alias + '.give_tick_id=? AND ' + nativeGet + '))';
+            assert.ok(c.args[0].includes(expected),
+                'every price/bid/ask/volume query must compare the sides NULL-aware, or the pair prices at zero');
+            assert.ok(!/COALESCE\((m1|o1)\.(give|get)_tick_id/.test(c.args[0]),
+                'a COALESCE-wrapped tick column cannot use its index');
+            assert.deepStrictEqual(c.args[1].slice(0, 4), [0, TOKEN_A, TOKEN_A, 0]);
+        }
+    });
+});
+
+describe('markets: the pair filter keeps the tick columns bare', function () {
+
+    it('binds a token/token pair as plain column equalities in both orientations', async function () {
+        const db = makeDb();
+        const q  = sinon.stub(db, 'doQuery').resolves([]);
+        q.onCall(0).resolves([{ market_id: 8, tick1: 'TKA', tick1_id: TOKEN_A, tick1_decimals: 8,
+                                tick2: 'TKB', tick2_id: TOKEN_B, tick2_decimals: 8,
+                                coin1_id: COIN, coin2_id: COIN }]);
+        await db.getMarketInfo(8, 1700000000);
+        const stats = q.getCalls().slice(1);
+        assert.strictEqual(stats.length, 4);
+        for (const c of stats) {
+            assert.ok(/\(\((m1|o1)\.give_tick_id=\? AND \1\.get_tick_id=\?\) OR \(\1\.give_tick_id=\? AND \1\.get_tick_id=\?\)\)/.test(c.args[0]));
+            assert.ok(!/IS NULL/.test(c.args[0]), 'no side of a token/token pair is the native coin');
+            assert.deepStrictEqual(c.args[1].slice(0, 4), [TOKEN_A, TOKEN_B, TOKEN_B, TOKEN_A]);
+        }
+    });
+
+    it('derives an unlabelled pair\'s coins through the same NULL-aware pair filter', async function () {
+        const db = makeDb();
+        const q  = sinon.stub(db, 'doQuery').resolves([]);
+        q.onCall(0).resolves([{ market_id: 9, tick1: 'TKA', tick1_id: TOKEN_A, tick1_decimals: 8,
+                                tick2: 'BTC', tick2_id: 0, tick2_decimals: 8,
+                                coin1_id: 0, coin2_id: 0 }]);
+        await db.getMarketInfo(9, 1700000000);
+        const derive = q.getCall(1);
+        assert.ok(/FROM orders o\b/.test(derive.args[0]));
+        assert.ok(derive.args[0].includes('((o.give_tick_id=? AND (o.get_tick_id IS NULL OR o.get_tick_id=?)) OR ' +
+                                          '((o.give_tick_id IS NULL OR o.give_tick_id=?) AND o.get_tick_id=?))'));
+        assert.deepStrictEqual(derive.args[1], [TOKEN_A, 0, 0, TOKEN_A]);
     });
 });
 

@@ -32,7 +32,7 @@ const { hubConsensusHashFields } = require('./health/hub_fields');
 // the route is handed, so a stub class in a test still gets the real rule.
 const { barrierHoldMs, barrierCeilingExceeded, publishedStallClass } = require('../XChainIndexer/stall_health.js');
 const { attributedStallReason, trainActivationReport } = require('./health/stall_fields');
-const { readinessVerdict } = require('../XChainIndexer/readiness/verdict.js');
+const { blocksBehind, nextBehindSince, readinessVerdict } = require('../XChainIndexer/readiness/verdict.js');
 
 // The coin node tip for chainLag, or the empty shape when the indexer cannot read one
 // (no tracker configured, or a stub without the method). Never throws.
@@ -43,7 +43,7 @@ async function readChainTip(indexer){
     } catch (err) {
         // Reporting only: an unreadable tip is an unknown tip.
     }
-    return { height: null, source: null, at: null };
+    return { height: null, source: null, at: null, stale: null, staleSince: null };
 }
 
 // Tip, barrier-hold and readiness fields, inserted after stallClass so every key
@@ -51,12 +51,17 @@ async function readChainTip(indexer){
 // gate on it); chainLag is the same figure against the coin node tip, which keeps
 // moving while a halted decoder's tip is frozen. ready / notReadyReasons are the
 // readiness verdict (../XChainIndexer/readiness/verdict.js): reported here and answered
-// as the status code of GET /ready, never folded into this route's 503.
+// as the status code of GET /ready, never folded into this route's 503. chainLagKnown
+// reports whether the verdict saw the coin node tip and does not gate readiness.
 function readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexerDbUnreachable, chainTip }){
     let now = verdict.now;
-    let tip = chainTip || { height: null, source: null, at: null };
+    let tip = chainTip || { height: null, source: null, at: null, stale: null, staleSince: null };
     let decoderLag = (decoderBlock != null && indexerBlock != null) ? decoderBlock - indexerBlock : null;
     let chainLag   = (Number.isFinite(tip.height) && indexerBlock != null) ? tip.height - indexerBlock : null;
+    let verdictChainLag = tip.stale === true ? null : chainLag;
+    let behind = blocksBehind(decoderLag, verdictChainLag);
+    indexer.readyBehindSince = nextBehindSince(indexer.readyBehindSince, behind, now,
+                                                indexer.lastBlockCommittedAt);
     let pollSilent = (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false;
     let holdMs     = barrierHoldMs(indexer.barrierHold, now);
     let exceeded   = barrierCeilingExceeded(indexer.barrierHold, indexer.barrierHoldCeilingMs, now);
@@ -65,26 +70,31 @@ function readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexer
         indexerDbUnreachable:   !!indexerDbUnreachable,
         wedged:                 !!verdict.wedged,
         pollSilent:             pollSilent,
-        decoderReorgHalted:     !!indexer.decoderReorgHalted,
+        decoderReorgHalted:     indexer.decoderReorgHalted === true || indexer.decoderReorgHalted === null,
         barrierCeilingExceeded: exceeded,
         decoderLag:             decoderLag,
-        chainLag:               chainLag,
+        chainLag:               verdictChainLag,
+        chainTipStale:          tip.stale === true,
+        chainTipStaleSince:     tip.staleSince,
         waitingOnFutureBlock:   !!verdict.futureWait,
         lastBlockCommittedAt:   indexer.lastBlockCommittedAt,
         startedAt:              indexer.startedAt,
+        behindSince:            indexer.readyBehindSince,
         noCommitMs:             indexer.readyNoCommitMs
     });
     return {
         chainTip:               tip.height,
         chainTipSource:         tip.source,
         chainTipAt:             tip.at,
+        chainTipStale:          tip.stale,
         chainLag:               chainLag,
-        decoderReorgHalted:     !!indexer.decoderReorgHalted,
+        decoderReorgHalted:     indexer.decoderReorgHalted === true,
         barrierHoldMs:          holdMs,
         barrierHoldCeilingMs:   indexer.barrierHoldCeilingMs || null,
         barrierCeilingExceeded: exceeded,
         ready:                  readiness.ready,
-        notReadyReasons:        readiness.reasons
+        notReadyReasons:        readiness.reasons,
+        chainLagKnown:          readiness.chainLagKnown
     };
 }
 
@@ -165,8 +175,9 @@ function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock,
     // A halted decoder's tip is frozen, so an indexer level with it is not synced: it
     // is level with a chain that stopped. isSynced keeps its decoder-parity meaning
     // otherwise, and atProcessableTip follows it.
-    let halted = !!indexer.decoderReorgHalted;
-    let synced = indexer.isSynced() && !halted;
+    let halted = indexer.decoderReorgHalted === true;
+    let gateHeld = indexer.decoderReorgHalted === true || indexer.decoderReorgHalted === null;
+    let synced = indexer.isSynced() && !gateHeld;
     return {
         indexerBlock: indexerBlock,
         inFlightBlock: inFlightBlock,
@@ -211,11 +222,11 @@ function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock,
         waitingOnFutureBlock: futureWait,
         // Single machine-readable verdict on the counter, so a probe does not have to
         // join stallReason/degraded/stallClearsAt: 'none' | 'future_block_wait' |
-        // 'bridge_proof_wait' | 'train_activation_halt' | 'price_landing_wait' |
-        // 'barrier_defer' | 'wedged', plus the refinements publishedStallClass makes:
+        // 'bridge_proof_wait' | 'train_activation_halt' | 'operator_action_hold' |
+        // 'price_landing_wait' | 'barrier_defer' | 'wedged', plus the refinements publishedStallClass makes:
         // 'upstream_halted', 'rollcall_proof_wait' and 'capability_proof_wait', each proof wait
         // escalating to its '_stuck' class past the hold ceiling. stall_health.js is the source of truth.
-        stallClass:   publishedStallClass(stallClass, indexer.stallReason, { decoderReorgHalted: halted,
+        stallClass:   publishedStallClass(stallClass, indexer.stallReason, { decoderReorgHalted: gateHeld,
             ceilingExceeded: barrierCeilingExceeded(indexer.barrierHold, indexer.barrierHoldCeilingMs, now) }),
         ...readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexerDbUnreachable, chainTip })
     };
@@ -239,6 +250,11 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         train_activation:     trainActivationReport(indexer),
         hubMirror:            hubMirror,
         ...pollHeartbeatFields(indexer),
+        dbOutage:             indexer.dbOutage ? {
+                                  since: indexer.dbOutage.since,
+                                  failures: indexer.dbOutage.failures,
+                                  lastErrorClass: indexer.dbOutage.lastErrorClass
+                              } : null,
         ...hubConsensusHashFields(indexer)
     };
 }

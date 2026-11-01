@@ -26,6 +26,21 @@
 
 module.exports = {
 
+    // The completeness watermark both barriers below compare against: the global stream
+    // watermark, or this table's own certificate when that is further along. A full
+    // bootstrap re-pages price_snapshots LAST, and neither pass reads it (the derive pass
+    // reads anchor_reward_attestations, the response applier attestation_responses; blocks
+    // that read prices wait on the price barriers), so once a table has drained on the
+    // current connection its certificate is the same claim the global watermark makes,
+    // scoped to the rows these passes read. Without this, every BTC block deferred for the
+    // whole price re-page after a hub reconnect. tableWatermark is 0 unless the table drained
+    // on this socket and selector revision with no apply-failure or schema latch set, and a
+    // poll-mode drain certifies 0, so the per-table half never opens where the global one
+    // would refuse to advance. The global half keeps exactly what the barrier accepted before.
+    attestTableWatermark(table) {
+        return Math.max(this.streamWatermark, this.tableWatermark(table));
+    },
+
     // ── Anchor-reward attestation mirror-completeness barrier ──────────────────
     //
     // The BTC indexer mints a COLLECT-spendable reward from mirrored
@@ -64,7 +79,8 @@ module.exports = {
     // No row-content watermark is possible here. These rows carry no effective_time, and
     // their arrival is governed by DOGE confirmation depth and hub failover, neither of
     // which is comparable to a BTC block height or time. So the clock half gates on the STREAM
-    // watermark alone: "the hub has told me I hold everything it produced up to this
+    // watermark alone (global, or this table's certificate, see attestTableWatermark): "the
+    // hub has told me I hold everything it produced up to this
     // block's time (or up to the maturity horizon, whichever is earlier)."
     //
     // Disabled sync is satisfied by definition: with no mirror the indexer reads the hub's
@@ -89,7 +105,7 @@ module.exports = {
         // `false` is exactly what getBlockTime returns for a block it cannot serve.
         let usable = (typeof horizonBound === 'number') && Number.isFinite(horizonBound);
         let target = usable ? Math.min(blockTime, horizonBound) : blockTime;
-        return this.streamWatermark >= target + this.anchorAttestWatermarkGraceS;
+        return this.attestTableWatermark('anchor_reward_attestations') >= target + this.anchorAttestWatermarkGraceS;
     },
 
     releaseAnchorAttestWaiters() {
@@ -180,7 +196,7 @@ module.exports = {
             return this.heightSatisfied('attestation_responses', blockHeight);
         blockTime = Number(blockTime);
         if (!Number.isFinite(blockTime)) return true;
-        return this.streamWatermark >= blockTime + this.attestResponseWatermarkGraceS;
+        return this.attestTableWatermark('attestation_responses') >= blockTime + this.attestResponseWatermarkGraceS;
     },
 
     releaseAttestResponseWaiters() {

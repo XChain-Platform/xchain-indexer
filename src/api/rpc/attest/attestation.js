@@ -21,6 +21,27 @@
  ********************************************************************/
 
 const { getLogger } = require('../../../observability/index.js');
+const rpcParams = require('../params.js');
+
+function attestationPageParams({ limit, after_block_index, after_action_index }){
+    // Default and cap the page size while refusing malformed explicit values.
+    let page = rpcParams.limit(limit, { defaultValue: 100, max: 500 });
+    if(page.error) return { error: page.error };
+    let hasBlock = after_block_index !== undefined && after_block_index !== null;
+    let hasAction = after_action_index !== undefined && after_action_index !== null;
+    // Require both columns of the keyset cursor so no request silently restarts at page one.
+    if(hasBlock !== hasAction)
+        return { error: 'after_block_index and after_action_index must be supplied together' };
+    if(!hasBlock) return { max: page.value, cursor: null };
+    // Parse both cursor columns as exact row indexes.
+    let block = rpcParams.integer(after_block_index, { name: 'after_block_index', min: 0 });
+    let action = rpcParams.integer(after_action_index, { name: 'after_action_index', min: 0 });
+    if(block.error || action.error) return { error: block.error || action.error };
+    return {
+        max: page.value,
+        cursor: { after_block_index: block.value, after_action_index: action.value }
+    };
+}
 
 function buildAttestationRpc(ctx){
     return Object.assign({}, pendingAttestationRpc(ctx), relayedAttestationRpc(ctx), actionConfirmationsRpc(ctx));
@@ -40,21 +61,16 @@ function pendingAttestationRpc({ indexer }){
         async getpendingattestation_requests({provider_id, limit, after_block_index, after_action_index}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 100;
-            if(max > 500) max = 500;
-            // Optional keyset cursor: caller pages forward by passing the last
-            // (block_index, action_index) it consumed. Only honoured when both
-            // components are present and finite; otherwise a full sweep is returned.
-            let cursor = null;
-            if(Number.isFinite(Number(after_block_index)) && Number.isFinite(Number(after_action_index))){
-                cursor = { after_block_index, after_action_index };
-            }
+            let page = attestationPageParams({ limit, after_block_index, after_action_index });
+            if(page.error) return { error: page.error };
+            // Bound the optional provider filter before it reaches the database query.
+            let provider = rpcParams.string(provider_id, { name: 'provider_id', maxLength: 255 });
+            if(provider.error) return { error: provider.error };
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latest  = await db.getLatestBlockIndex();
-                let rows    = await db.getPendingAttestationRequests(provider_id, max, cursor);
+                let rows    = await db.getPendingAttestationRequests(provider.value, page.max, page.cursor);
                 return {
                     latest_block_index: latest,
                     count:              rows.length,
@@ -86,19 +102,17 @@ function relayedAttestationRpc({ indexer }){
         async getrelayedattestation_requests({request_id, limit, after_block_index, after_action_index}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 100;
-            if(max > 500) max = 500;
-            let cursor = null;
-            if(Number.isFinite(Number(after_block_index)) && Number.isFinite(Number(after_action_index))){
-                cursor = { after_block_index, after_action_index };
-            }
+            let page = attestationPageParams({ limit, after_block_index, after_action_index });
+            if(page.error) return { error: page.error };
+            // Bound the optional request filter before it reaches the database query.
+            let request = rpcParams.string(request_id, { name: 'request_id', maxLength: 255 });
+            if(request.error) return { error: request.error };
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
                 let rows   = await db.getRelayedAttestationRequests(
-                    indexer.config['COIN'], request_id, max, cursor);
+                    indexer.config['COIN'], request.value, page.max, page.cursor);
                 return {
                     latest_block_index: latest,
                     count:              rows.length,
@@ -123,9 +137,10 @@ function actionConfirmationsRpc({ indexer }){
         async getactionconfirmations({action_index}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let idx = Number(action_index);
-            if(!Number.isInteger(idx) || idx <= 0)
-                return { error: 'action_index must be a positive integer' };
+            // Require an exact positive action row index.
+            let parsed = rpcParams.integer(action_index, { name: 'action_index', min: 1 });
+            if(parsed.error) return { error: parsed.error };
+            let idx = parsed.value;
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {

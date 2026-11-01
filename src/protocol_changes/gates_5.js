@@ -340,3 +340,59 @@ addGate('match_origin_open_activation.MATCH_ORIGIN_OPEN_ACTIVATION', 'height', {
     testnet: UNARMED,
     regtest: UNPINNED,   // ARMS by XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION at read
 });
+
+// match_equal_price_oldest_first_activation
+// Height on the chain's own block_index. From it equal-price ORDER makers match by lowest action_index first; below it the highest action_index remains first. Mainnet and testnet are unarmed, while regtest is venue-armed through shared_rows.js.
+addGate('match_equal_price_oldest_first_activation.MATCH_EQUAL_PRICE_OLDEST_FIRST', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 158557,
+    'LTC:testnet': 4949697,
+    'DOGE:testnet': 68035864,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_MATCH_EQUAL_PRICE_OLDEST_FIRST_REGTEST_ACTIVATION at read
+});
+
+// dividend_empty_allow_list_denies_activation
+// Height on the chain's own block_index. From it a DIVIDEND whose payout token has
+// an attached ALLOW_LIST that resolves to no members pays no holders. Below it the
+// empty list keeps its legacy fail-open behavior. Unarmed on mainnet and testnet.
+// The regtest entry is UNPINNED: a venue arms it with
+// XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION (shared_rows.js).
+addGate('dividend_empty_allow_list_denies_activation.DIVIDEND_EMPTY_ALLOW_LIST_DENIES_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 158557,
+    'LTC:testnet': 4949697,
+    'DOGE:testnet': 68035864,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION at read
+});
+
+// airdrop_zero_legs_omitted_activation
+// Height on the chain's own block_index. From it a valid AIRDROP omits payer and
+// recipient ledger legs whose amount is zero, so those no-op rows do not enter the
+// ledger hash or block-content Merkle root. Below it the rows are written as before.
+// Unarmed on mainnet and testnet. The regtest entry is UNPINNED: a venue arms it
+// with XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION (shared_rows.js).
+addGate('airdrop_zero_legs_omitted_activation.AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 158557,
+    'LTC:testnet': 4949697,
+    'DOGE:testnet': 68035864,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION at read
+});
+
+// tick_normalize_activation
+// Height on the processing chain's own block_index. From it distinct accepted TICK names
+// may differ after character 200, and ISSUE accepts caret references only as ^<positive
+// decimal id> without leading zeroes. Below it both behaviors replay as before. Unarmed on
+// mainnet and testnet. The regtest entry is UNPINNED: a venue arms it with
+// XC_TICK_NORMALIZE_REGTEST_ACTIVATION (shared_rows.js).
+addGate('tick_normalize_activation.TICK_NORMALIZE_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 158557,
+    'LTC:testnet': 4949697,
+    'DOGE:testnet': 68035864,
+    testnet: UNARMED,
+    regtest: UNPINNED,   // ARMS by XC_TICK_NORMALIZE_REGTEST_ACTIVATION at read
+});

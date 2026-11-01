@@ -63,6 +63,11 @@ describe('reorg-history-query: validateReorgHistoryParams()', function () {
         assert.strictEqual(validateReorgHistoryParams({ block_index: 'abc' }).ok, false);
         assert.strictEqual(validateReorgHistoryParams({ limit: 0 }).ok, false);
         assert.strictEqual(validateReorgHistoryParams({ limit: -5 }).ok, false);
+        assert.strictEqual(validateReorgHistoryParams({ since_id: '1e2' }).ok, false);
+        assert.strictEqual(validateReorgHistoryParams({ block_index: Number.MAX_SAFE_INTEGER + 1 }).ok, false);
+        assert.strictEqual(validateReorgHistoryParams({ since_id: '' }).ok, false);
+        assert.strictEqual(validateReorgHistoryParams({ block_hash: '' }).ok, false);
+        assert.strictEqual(validateReorgHistoryParams({ limit: '' }).ok, false);
     });
 
     it('accepts block_index 0 and since_id 0', function () {

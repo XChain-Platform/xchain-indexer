@@ -37,10 +37,11 @@ function seedProbeCollectors(data){
     //                        or status null plus a `refused` note for the two things the
     //                        probe declines to answer (a VM sub-action it never
     //                        dispatches, and a controller guard it never enters).
-    //   PROBE_ORACLE_FEES  - per-oracle fees owed, filled in by dispenser.js.
+    //   PROBE_ORACLE_FEES  - per-oracle fees owed, filled in by chargeOracleUsageFee
+    //                        (dispenser/validate_format.js).
     //
     // Both are probe-LOCAL and deliberately separate from BATCH_VALUE_LEDGER: that
-    // key's PRESENCE is how coinpay.js, dispense.js and validateOracleFee recognise
+    // key's PRESENCE is how the coinpay/ and dispense/ handlers and validateOracleFee recognise
     // "inside a flagged batch", and its CONTENTS are consensus state a read-only
     // surface must never write. No probe collector writes to it.
     let isProbe = data['FEE_PROBE'] === true;

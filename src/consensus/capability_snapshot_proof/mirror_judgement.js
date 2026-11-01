@@ -49,10 +49,13 @@ async function judgeMirroredCapabilityRow(row, opts, verifyProof){
 
     let result;
     try {
-        result = await verifyProof(row, response, resolved.trustSet, {
+        const verifyOpts = {
             network: opts.network,
             firstUse: resolved.firstUse,
-        });
+        };
+        if(typeof opts.noteFirstUseSet === 'function')
+            verifyOpts.noteFirstUseSet = opts.noteFirstUseSet;
+        result = await verifyProof(row, response, resolved.trustSet, verifyOpts);
     } catch(error){
         return held(errorMessage(error));
     }

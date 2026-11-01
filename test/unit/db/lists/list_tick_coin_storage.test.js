@@ -65,6 +65,9 @@ function harness(extraRows=[]){
                     rows.push({ id, tick, block_index });
                 return { affectedRows: 1 };
             }
+            // The legacy tick(200) collision probe finds no row in this fixture.
+            if(/LEFT\(tick, 200\)=LEFT\(\?, 200\)/.test(sql))
+                return [];
             throw new Error('Unexpected query: ' + sql);
         },
     };

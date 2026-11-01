@@ -73,10 +73,15 @@ function walkSections(handler, params, data, checkpointSeqBind, error){
 // re-broadcast that can only produce a duplicate row, while a genuinely lower seq
 // is something the hub's selector cannot emit (its MAX subquery only ever climbs),
 // so it is a replay or a forgery. Under the all-or-nothing verdict it takes the whole bundle down.
-async function checkSectionSeqs(handler, sections, validOnly, error){
+async function checkSectionSeqs(handler, data, sections, validOnly, error){
+    // Regtest chains can be reset below rows already bundled on DOGE. Unverified
+    // rows from the abandoned chain must not become permanent replay watermarks.
+    // Same scope as the archive head's replay guard (archive/archive_head.js).
+    let replayValidOnly = validOnly || data['NETWORK'] === 'regtest';
     if(!error){
         for(let s of sections){
-            let maxSeq = await handler.indexerDb.getMaxAnchorCheckpointSeq(s.CHAIN, s.NETWORK, validOnly);
+            let maxSeq = await handler.indexerDb.getMaxAnchorCheckpointSeq(
+                s.CHAIN, s.NETWORK, replayValidOnly);
             if(maxSeq !== null && Number(s.CHECKPOINT_SEQ) < maxSeq){
                 error = 'invalid: SECTION ' + s.SECTION_INDEX +
                         ' CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
@@ -176,7 +181,7 @@ async function parseBundleAction(handler, params, data, error){
     let publisherSigs = tail.publisherSigs;
     error = tail.error;
 
-    error = await checkSectionSeqs(handler, sections, checkpointSeqBind, error);
+    error = await checkSectionSeqs(handler, data, sections, checkpointSeqBind, error);
 
     let oracleSetFor = quorum.makeOracleSetResolver(handler);
     let verdict = await quorum.verifySections(handler, data, sections, oracleSetFor, error);

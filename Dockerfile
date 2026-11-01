@@ -2,7 +2,7 @@
 # image whose V8/ICU build matches xchain-vm's consensus runtime pin: a
 # floating tag can advance to a Node patch that fails that check (same
 # Node-version pin as xchain-utxo-tracker).
-FROM node:22.23.2-bookworm@sha256:dd5847a04b0deee391fa145f1f4c6d214196668b6bcc7988ebed67249f226844
+FROM node:22.23.4-bookworm@sha256:2bd396628eceb5c999a6e43731fab69d5fb98b94ba9d9d90b5f64575c5178765
 
 RUN mkdir /XChainIndexer/
 # xchain-vm is staged into the build context by xchain-node's install path
@@ -17,11 +17,18 @@ COPY ./src /XChainIndexer/src
 # The committed carrier logic pin is what health publishes as carrier_logic_digest
 # (src/api/health/carrier_logic.js reads it; without it the field is UNREADABLE).
 COPY ./bin/pins/carrier-logic.json /XChainIndexer/bin/pins/carrier-logic.json
-# Read-only operator readings run by docker exec from the WORKDIR; they need
-# only src/ and the installed dependencies.
+# Operator commands run by docker exec from the WORKDIR; they need only src/
+# and the installed dependencies.
 COPY ./bin/archive_heads_by_author.js /XChainIndexer/bin/archive_heads_by_author.js
 COPY ./bin/bench_net_balance.js /XChainIndexer/bin/bench_net_balance.js
 COPY ./bin/measure_vm_snapshot_bytes.js /XChainIndexer/bin/measure_vm_snapshot_bytes.js
+COPY ./bin/retroactive-go.js /XChainIndexer/bin/retroactive-go.js
+# Pre-arming conformance tools. bench-escrow-arming-replay.js is documented as
+# mandatory before arming any chain and reads its DB credentials from the service
+# env, so it has to run by docker exec inside the deployed container.
+COPY ./bin/bench-escrow-arming-replay.js /XChainIndexer/bin/bench-escrow-arming-replay.js
+COPY ./bin/shadow-dryrun-escrow-leaf.js /XChainIndexer/bin/shadow-dryrun-escrow-leaf.js
+COPY ./bin/verify-escrow-arming-boundary.js /XChainIndexer/bin/verify-escrow-arming-boundary.js
 # Genesis-ledger bootstrap artifacts (Counterparty/Dogeparty name-ownership
 # manifests + precomputed mainnet state dumps). config.js resolves
 # GENESIS_LEDGER_PATH / GENESIS_DUMP_PATH under /XChainIndexer/data/genesis, so

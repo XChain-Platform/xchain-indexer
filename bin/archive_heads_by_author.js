@@ -20,20 +20,22 @@
  *
  * Reads connection settings from the indexer environment (INDEXER_DB_HOST/PORT/
  * NAME/USER/PASS, INDEXER_COIN, INDEXER_NETWORK). Exits 0 on success, 1 when
- * an expected redraw is absent, and 2 on a usage or database error.
+ * an expected redraw or conflict is absent, and 2 on a usage or database error.
  *
  * Usage:  node bin/archive_heads_by_author.js --author ADDRESS
  *         [--from-seq N] [--limit N] [--db NAME] [--json] [--expect-redrawn]
+ *         [--expect-conflict]
  *
  ********************************************************************/
 
 'use strict';
 
-const { ARCHIVE_REISSUE_RETRY_REASON } =
+const { ARCHIVE_REISSUE_RETRY_REASON, classifyArchiveReissue } =
     require('../src/actions/anchor/archive/archive_reissue.js');
 
 const DEFAULTS = {
-    author: null, fromSeq: null, limit: 50, db: null, json: false, expectRedrawn: false
+    author: null, fromSeq: null, limit: 50, db: null, json: false,
+    expectRedrawn: false, expectConflict: false
 };
 
 function valueAfter(argv, index, flag){
@@ -62,6 +64,7 @@ function parseArgs(argv){
         else if(arg === '--db') opts.db = valueAfter(argv, i++, arg);
         else if(arg === '--json') opts.json = true;
         else if(arg === '--expect-redrawn') opts.expectRedrawn = true;
+        else if(arg === '--expect-conflict') opts.expectConflict = true;
         else throw new Error('unknown argument ' + arg);
     }
     if(!opts.author) throw new Error('--author is required');
@@ -125,10 +128,40 @@ function exitCodeFor(summary, opts){
     return 0;
 }
 
+function conflicts(rows){
+    const heads = rows || [];
+    const refusedHeads = heads.filter(row => row.status === ARCHIVE_REISSUE_RETRY_REASON);
+    const unexplainedActions = [];
+    let confirmed = 0;
+    for(const refused of refusedHeads){
+        const prior = heads.filter(row =>
+            (row.status === 'valid' || row.status === 'unverified') &&
+            Number(row.match_batch_seq) === Number(refused.match_batch_seq) &&
+            Number(row.action_index) < Number(refused.action_index));
+        if(classifyArchiveReissue(prior, refused) === 'conflict') confirmed += 1;
+        else unexplainedActions.push(Number(refused.action_index));
+    }
+    unexplainedActions.sort((a, b) => a - b);
+    return {
+        refused: refusedHeads.length,
+        confirmed,
+        unexplained: unexplainedActions.length,
+        unexplainedActions
+    };
+}
+
+function conflictExitCode(conflict, opts){
+    if(!opts.expectConflict) return 0;
+    if(!conflict || conflict.refused === 0 || conflict.unexplained > 0) return 1;
+    return 0;
+}
+
 async function readHeads(db, opts){
     const query = archiveHeadsQuery(opts);
     const rows = await db.doQueryStrict(query.sql, query.args);
-    return { author: opts.author, rows: rows || [], summary: summarize(rows) };
+    const result = { author: opts.author, rows: rows || [], summary: summarize(rows) };
+    if(opts.expectConflict) result.conflict = conflicts(rows);
+    return result;
 }
 
 function render(result, json){
@@ -147,6 +180,9 @@ function render(result, json){
         ' refused=' + summary.refused +
         ' max-valid-seq=' + summary.maxValidSeq +
         ' redrawn-above=' + (summary.redrawnAbove ? 'yes' : 'no'));
+    if(result.conflict) lines.push('# conflict refused=' + result.conflict.refused +
+        ' confirmed=' + result.conflict.confirmed +
+        ' unexplained=' + result.conflict.unexplained);
     return lines.join('\n');
 }
 
@@ -172,7 +208,7 @@ async function main(argv){
     try {
         const result = await readHeads(db, opts);
         console.log(render(result, opts.json));
-        return exitCodeFor(result.summary, opts);
+        return Math.max(exitCodeFor(result.summary, opts), conflictExitCode(result.conflict, opts));
     } finally {
         if(db.close) await db.close();
     }
@@ -185,4 +221,7 @@ if(require.main === module){
     });
 }
 
-module.exports = { parseArgs, archiveHeadsQuery, summarize, exitCodeFor, readHeads, render };
+module.exports = {
+    parseArgs, archiveHeadsQuery, summarize, exitCodeFor, conflicts, conflictExitCode,
+    readHeads, render
+};

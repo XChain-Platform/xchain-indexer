@@ -46,6 +46,19 @@ const AddressRetry = require('./hub_push_queue/address_retry.js');
  *
  ********************************************************************/
 
+// The text of a drain failure. An AggregateError (a connect that failed on every
+// resolved address) has an empty message, so its inner errors carry the cause.
+function describeDrainError(err){
+    if(err == null) return 'unknown error';
+    if(typeof err !== 'object') return String(err) || 'unknown error';
+    if(err.message) return err.message;
+    if(Array.isArray(err.errors) && err.errors.length){
+        let inner = err.errors.map(e => (e && (e.message || e.code)) || String(e)).filter(Boolean);
+        if(inner.length) return inner.join('; ');
+    }
+    return err.code || err.name || 'unknown error';
+}
+
 class HubPushQueue {
 
     constructor(indexer, opts){
@@ -117,9 +130,7 @@ class HubPushQueue {
             getLogger().info('HubPushQueue: no hub configured, retry queue idle');
             return;
         }
-        this.timer = setInterval(() => {
-            this.drain().catch(err => getLogger().warn('HubPushQueue: drain error:', err.message || err));
-        }, this.intervalMs);
+        this.timer = setInterval(() => this.drainAndLog(), this.intervalMs);
         // Never keep the process alive on the timer alone.
         if(this.timer.unref) this.timer.unref();
         getLogger().info('HubPushQueue: started (interval ' + this.intervalMs + 'ms, max ' + this.maxAttempts + ' attempts)');
@@ -129,13 +140,25 @@ class HubPushQueue {
         if(this.timer){ clearInterval(this.timer); this.timer = null; }
     }
 
+    // One timer tick. The cause goes into the message string itself: the logger's second
+    // argument is a fields object, so a bare err.message passed there was dropped and every
+    // failing tick logged an empty "drain error:" line. A drain that finds nothing logs nothing.
+    async drainAndLog(logger = getLogger()){
+        try {
+            return await this.drain();
+        } catch (err){
+            logger.warn('HubPushQueue: drain error: ' + describeDrainError(err));
+        }
+    }
+
     // A pending row is due when enough time has elapsed since its last attempt,
     // per the exponential-backoff schedule. Rows never tried are immediately due.
     isDue(row, now){
         if(!row.last_attempted_at) return true;
         let last    = new Date(row.last_attempted_at).getTime();
         let attempts = Number(row.attempts) || 0;
-        let backoff = Math.min(this.baseBackoffMs * Math.pow(2, Math.max(0, attempts - 1)), this.maxBackoffMs);
+        // Same 0..30 exponent bound as the SQL predicate in getPendingHubPushes, so the two agree.
+        let backoff = Math.min(this.baseBackoffMs * Math.pow(2, Math.min(Math.max(attempts, 1), 31) - 1), this.maxBackoffMs);
         return now >= last + backoff;
     }
 
@@ -263,30 +286,35 @@ class HubPushQueue {
             // the DOGE rail, delivered to pushattestbatch.
             await client.pushAttestBatch(payload);
         } else if(row.push_type === 'price_retraction'){
-            // Reorg retraction parked by rollback.js when the live RPC failed.
+            // Reorg retraction written ahead by src/rollback/commit.js inside the rollback
+            // transaction, drained here when its post-commit delivery did not succeed.
             // pushpricereorg is idempotent over a replayed range. A deferred drain bounds the
             // delete to the CLOSED range [action_index, last_action_index] so a row re-published
             // at A' inside the original open-ended range is not wiped. Old queued rows (no
             // last_action_index) fall back to open-ended via undefined. retraction_generation
             // fences the delete to push_generation <= it; absent on old queued rows.
-            await client.retractPriceRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+            // batches names the retracted PRICE batch round windows; rows staged before it
+            // existed carry none and keep the four-argument call.
+            let args = [payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation];
+            if(Array.isArray(payload.batches)) args.push(payload.batches);
+            await client.retractPriceRange(...args);
         } else if(row.push_type === 'xcall_retraction'){
-            // Reorg XCALL relay retraction parked by rollback.js when the live RPC
-            // failed. retractXcallRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+            // Reorg XCALL relay retraction written ahead by src/rollback/commit.js, drained here
+            // when its post-commit delivery did not succeed. retractXcallRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
             await client.retractXcallRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
         } else if(row.push_type === 'attest_batch_retraction'){
-            // Reorg ATTEST batch-link retraction parked by rollback.js when the live RPC
-            // failed. Keyed on ONE batch rather than on an action range (the hub clears a
+            // Reorg ATTEST batch-link retraction written ahead by src/rollback/commit.js, drained
+            // here when its post-commit delivery did not succeed. Keyed on ONE batch rather than on an action range (the hub clears a
             // link column, never a row), and idempotent: the hub answers a retraction that
             // matches no link with an accepted no-op, so a replayed drain is free.
             await client.retractAttestBatch(payload.coin, payload);
         } else if(row.push_type === 'match_retraction'){
-            // Reorg DEX cross-chain match retraction parked by rollback.js when the
-            // live RPC failed. retractMatchRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+            // Reorg DEX cross-chain match retraction written ahead by src/rollback/commit.js,
+            // drained here when its post-commit delivery did not succeed. retractMatchRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
             await client.retractMatchRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
         } else if(row.push_type === 'bridge_retraction'){
-            // Reorg bridge transfer retraction parked by rollback.js when the live RPC
-            // failed. retractBridgeRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+            // Reorg bridge transfer retraction written ahead by src/rollback/commit.js, drained
+            // here when its post-commit delivery did not succeed. retractBridgeRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
             await client.retractBridgeRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
         } else {
             getLogger().warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');

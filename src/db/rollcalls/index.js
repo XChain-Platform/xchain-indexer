@@ -285,6 +285,26 @@ module.exports = {
         return rows.map((r) => parseInt(r.epoch_height));
     },
 
+    // Sources absent from the latest ROLLED epoch closed at or below the
+    // requested block. The close block selects the applicable verdict.
+    async getLatestRolledRollcallAbsentSources(atOrBelowBlock){
+        let b = parseInt(atOrBelowBlock);
+        if(!Number.isFinite(b)) return [];
+        let query = `SELECT ia.address AS source
+                       FROM rollcall_absences ra
+                       INNER JOIN index_addresses ia ON (ia.id = ra.source_id)
+                      WHERE ra.epoch_height = (
+                            SELECT r.epoch_height
+                              FROM rollcalls r
+                             WHERE r.rolled = 1 AND r.close_block <= ?
+                             ORDER BY r.close_block DESC, r.epoch_height DESC
+                             LIMIT 1
+                      )
+                      ORDER BY ia.address ASC`;
+        let rows = await this.doQueryStrict(query, [b]);
+        return rows.map((r) => String(r.source));
+    },
+
     // Public roll-call verdict history, BTC side (JSON-RPC getrollcalls). Newest
     // first, each row carrying its absence count via a correlated subquery rather
     // than a stored counter, since an UNROLLED epoch writes no absences by

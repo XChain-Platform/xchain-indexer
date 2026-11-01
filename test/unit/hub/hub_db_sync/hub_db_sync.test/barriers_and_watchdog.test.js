@@ -37,6 +37,7 @@ describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function
         doQuery.callsFake(async () => [{ h: maxReferenceBlock, ts: maxTimestamp }]);
         const hubDb = { doQuery };
         const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test' });
+        sync._bootstrapDrained = true;
         return { sync, hubDb, doQuery };
     }
 

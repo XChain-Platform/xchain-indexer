@@ -219,8 +219,9 @@ describe('Database.createTicker() @regression @tier1', function () {
         const db   = makeDb();
         const stub = sinon.stub(db, 'doQuery');
         stub.onCall(0).resolves([]);        // getTickerId → not found
-        stub.onCall(1).resolves([]);        // INSERT IGNORE
-        stub.onCall(2).resolves([{ id: 9 }]); // getTickerId after insert
+        stub.onCall(1).resolves([]);        // legacy tick(200) collision probe → none
+        stub.onCall(2).resolves([]);        // INSERT IGNORE
+        stub.onCall(3).resolves([{ id: 9 }]); // getTickerId after insert
         assert.strictEqual(await db.createTicker('NEWT'), 9);
     });
 });

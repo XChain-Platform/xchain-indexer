@@ -35,8 +35,9 @@ const COLS = ['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'bl
         const upsert = (row) => {
             const i = rows.findIndex(r => key(r) === key(row));
             if (i === -1) { rows.push(Object.assign({}, row)); return; }
-            // The ODKU body: content moves only when the INCOMING row is finalized.
-            if (String(row.status) === 'finalized') rows[i] = Object.assign({}, row);
+            // The ODKU body: finalized and disputed content move, skipped does not.
+            if (String(row.status) === 'finalized' || String(row.status) === 'disputed')
+                rows[i] = Object.assign({}, row);
         };
 
         const doQuery = sinon.stub().callsFake(async (sql, args) => {
@@ -78,9 +79,11 @@ const COLS = ['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'bl
     }
 
 function stubHub(sync, hubRows) {
-    sinon.stub(sync, 'httpGet').callsFake(async (path) => {
+    return sinon.stub(sync, 'httpGet').callsFake(async (path) => {
         const since = Number(/since_id=(\d+)/.exec(path)[1]);
-        return { schema_version: HUB_SCHEMA_VERSION, rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
+        const limit = Number(/limit=(\d+)/.exec(path)[1]);
+        return { schema_version: HUB_SCHEMA_VERSION,
+                 rows: hubRows.filter(r => Number(r.id) > since).slice(0, limit), watermark: 5000 };
     });
 }
 
@@ -321,5 +324,83 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
             if (prev === undefined) delete process.env.HUB_SYNC_BATCH_APPLY;
             else process.env.HUB_SYNC_BATCH_APPLY = prev;
         }
+    });
+});
+
+describe('HubDbSync price bootstrap throughput and progress @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
+
+    it('emits one statement per default-sized batch of a downloaded page', async function () {
+        const { sync, rows, stmts } = makeSync();
+        const get = stubHub(sync, hubTable(2501));         // one row past the default batch
+
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), 5000);
+        assert.strictEqual(rows.length, 2501);
+        assert.strictEqual(stmts.length, 2, 'the page must commit as default-sized batches');
+        assert.strictEqual(stmts[1].rows, 1);
+        assert.strictEqual(stmts[0].rows, 2500);
+        assert.match(get.firstCall.args[0], /[?&]limit=10000(?:&|$)/,
+            'the client must request the hub handler maximum');
+    });
+
+    it('uses the fail-loud write seam for the atomic page statement', async function () {
+        const doQuery = sinon.stub().rejects(new Error('non-strict write must not run'));
+        const doQueryStrict = sinon.stub().resolves({ affectedRows: 2 });
+        const sync = new HubDbSync({ doQuery, doQueryStrict }, { hubUrl: 'http://hub.test' });
+        sinon.stub(sync, 'localColumns').resolves(new Set(COLS));
+
+        assert.strictEqual(await sync.applyRowsBatched('price_snapshots', hubTable(2)), true);
+        assert.strictEqual(doQueryStrict.callCount, 1);
+        assert.strictEqual(doQuery.callCount, 0);
+    });
+});
+
+// One bounded page: a bound-out row first, then three states of one natural key and a
+// second pair, so the batch must keep wire order among the retained rows.
+const BOUNDED_PAGE = [
+    { id: 1, round_number: 1, coin_pair: 'XCHAIN/USD', price: null,
+      reference_block: 1, block_timestamp: 100, status: 'skipped' },
+    { id: 7, round_number: 10, coin_pair: 'XCHAIN/USD', price: '1.00',
+      reference_block: 10, block_timestamp: 600, status: 'finalized' },
+    { id: 7, round_number: 20, coin_pair: 'DOGE/USD', price: '0.10',
+      reference_block: 20, block_timestamp: 700, status: 'finalized' },
+    { id: 8, round_number: 10, coin_pair: 'XCHAIN/USD', price: null,
+      reference_block: 10, block_timestamp: 610, status: 'disputed' },
+    { id: 9, round_number: 10, coin_pair: 'XCHAIN/USD', price: null,
+      reference_block: 10, block_timestamp: 620, status: 'skipped' },
+];
+
+function boundedDrain() {
+    return {
+        table: 'price_snapshots', pending: BOUNDED_PAGE.map(row => ({ row })), lastId: 0,
+        priceHorizon: 1000, priceFloor: 500, priceSkipped: 0, applied: 0, applyErrors: 0,
+        preHorizonServed: new Set(), preHorizonRetained: new Set(),
+        pricePairHeld: new Map(), pricePairCovered: new Set(), servedPriceKeys: new Set(),
+        priceKeysComplete: true, maxServedRound: 0, fetched: BOUNDED_PAGE.length, pagesFetched: 1,
+        drainStartedAt: 0, lastProgressAt: Infinity,         // keeps the progress clock out of the comparison
+    };
+}
+
+describe('HubDbSync price bootstrap throughput and progress @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
+
+    it('batches retained bounded rows without changing ordered upsert results', async function () {
+        const batched = makeSync();
+        const perRow = makeSync({ batchApply: false });
+        const batchedDrain = boundedDrain();
+        const perRowDrain = boundedDrain();
+        await batched.sync.flushPendingRows(batchedDrain);
+        await perRow.sync.flushPendingRows(perRowDrain);
+
+        const ordered = rows => rows.slice().sort((a, b) =>
+            String(a.coin_pair).localeCompare(String(b.coin_pair)) || Number(a.round_number) - Number(b.round_number));
+        assert.deepStrictEqual(ordered(batched.rows), ordered(perRow.rows));
+        assert.strictEqual(batched.stmts.length, 1, 'all retained rows must share one page transaction');
+        assert.strictEqual(batched.stmts[0].rows, 4, 'the one bound-out row must stay out of the values list');
+        assert.strictEqual(batched.rows.find(r => r.coin_pair === 'XCHAIN/USD').status, 'disputed',
+            'a dispute must replace finalized content and a later skipped row must not demote it');
+        // The drain's accounting, cursor and predecessor state match the per-row drain.
+        assert.deepStrictEqual(batchedDrain, perRowDrain);
+        assert.deepStrictEqual(batched.sync._drainPositions, perRow.sync._drainPositions);
     });
 });

@@ -63,9 +63,15 @@ module.exports = {
         // the dataTables purge below, and the hub retraction has to name a batch that no
         // longer exists locally by the time it is sent.
         let unlandedAttestBatches = [];
-        if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled)
+        // The PRICE batches it un-lands, by round window, for the same reason: a hub that
+        // finalized every round of a batch itself holds no row from it, so the window is
+        // the only way it can find the landing clock that batch stamped.
+        let retractedPriceBatches = [];
+        if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled){
             unlandedAttestBatches = await this.collectUnlandedAttestBatches(firstActionIndex);
-        return { firstActionIndex, lastActionIndex, unlandedAttestBatches };
+            retractedPriceBatches = await this.collectRetractedPriceBatches(firstActionIndex);
+        }
+        return { firstActionIndex, lastActionIndex, unlandedAttestBatches, retractedPriceBatches };
     },
 
     // The addresses, tickers and DEX market pairs the orphaned range touched, read into
@@ -180,6 +186,16 @@ module.exports = {
     // outside the transaction, where doQuery collapses a transient DB fault into an empty
     // result, which here is indistinguishable from "no batch was un-landed" and would
     // silently skip a retraction the reorg is never retried to re-issue.
+    // The round window of each valid PRICE batch the reorg rolls back, as the price
+    // retraction carries it to the hub.
+    async collectRetractedPriceBatches(firstActionIndex){
+        let rows = await readSql.readRetractedPriceBatchRows(this.indexerView, firstActionIndex);
+        return (rows || []).map(r => ({
+            first_round: Number(r.batch_first_round),
+            last_round:  Number(r.batch_last_round)
+        }));
+    },
+
     async collectUnlandedAttestBatches(firstActionIndex){
         let rows = await readSql.readUnlandedAttestBatchRows(this.indexerView, firstActionIndex);
         return (rows || []).map(r => ({

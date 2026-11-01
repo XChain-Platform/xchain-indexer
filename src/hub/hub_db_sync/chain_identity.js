@@ -30,6 +30,14 @@ const { CHAIN_ID_FENCED_TABLES, REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT,
         REFUSED_ROW_NAMED_CAP } = require('./mirror_tables.js');
 const { capabilitySnapshotKey } = require('./mirror_bounds.js');
 
+function proofHasPubkeys(response, pubkeys) {
+    const members = response && response.proof && response.proof.members;
+    if (!Array.isArray(members)) return false;
+    const present = new Set(members.filter(member => member && typeof member.pubkey === 'string')
+        .map(member => member.pubkey.toLowerCase()));
+    return pubkeys.every(pubkey => present.has(String(pubkey).toLowerCase()));
+}
+
 module.exports = {
 
     // ── Chain identity fence for the CHAIN_ID_FENCED_TABLES ──────────────────────
@@ -290,6 +298,10 @@ module.exports = {
     //   - Only CONTRADICTIONS are refused. A row the hub withheld is invisible here.
     //   - A 'held' row stays out of the mirror and is retried, and the block loop waits
     //     on the hold (barriers/capability_proof.js) rather than read a partial snapshot.
+    //     A retained hold is not a bootstrap hole: its retry state survives after the
+    //     page cursor advances, so the heartbeat gate may certify the rest of the mirror.
+    //   - A row whose key the mirror already holds is not judged again (verdict 'mirrored',
+    //     see judgeUnmirroredCapabilityRow): INSERT IGNORE would not write it.
     //   - Every other non-refusal (unreached block, unconfigured capability, truncated
     //     set, a judge that threw, no authoritative db wired) applies the row. An
     //     unjudgeable row must never become a permanent mirror hole.
@@ -303,18 +315,33 @@ module.exports = {
         try {
             let fetchProof = options && typeof options.fetchProof === 'function'
                 ? options.fetchProof : this.fetchCapabilitySnapshotProof.bind(this);
-            verdict = await db.verifyCapabilitySnapshotRow(row, { fetchProof: fetchProof });
+            verdict = await this.judgeUnmirroredCapabilityRow(db, row, fetchProof);
         } catch (e) {
             // A failed re-derivation is not evidence of a forgery.
             getLogger().warn('HubDbSync: capability_snapshots re-derivation failed, applying row unchecked: ' +
                 (e && e.message ? e.message : e));
             return false;
         }
-        if (options) options.verdict = verdict && verdict.verdict;
+        if (options) {
+            options.verdict = verdict && verdict.verdict;
+            options.reason = verdict && verdict.reason;
+            options.notYetAvailable = typeof this.capabilityProofNotYetAvailable === 'function' &&
+                this.capabilityProofNotYetAvailable(verdict);
+        }
         if (verdict && verdict.verdict === 'held') {
+            let repageBeforeHold = this.repageOwedSeq('capability_snapshots');
             this.holdCapabilitySnapshot(row);
-            if (this._bootstrapping && !(options && options.retainHold))
-                throw new Error('capability snapshot held pending proof');
+            // holdCapabilitySnapshot owes a re-page for live delivery and overflow. During
+            // bootstrap, or while re-judging a retained row, the hold map already supplies
+            // the retry source, so only overflow still needs that re-page.
+            // Restore an older reason rather than erasing it: only the mark this hold added
+            // is redundant, and the drain can settle a mark it opened under in the usual way.
+            if ((this._bootstrapping || (options && options.retainHold)) &&
+                this._capabilityProofHolds.has(rowKey) &&
+                this._repageOwed instanceof Map) {
+                if (repageBeforeHold === undefined) this._repageOwed.delete('capability_snapshots');
+                else this._repageOwed.set('capability_snapshots', repageBeforeHold);
+            }
             return true;
         }
         if (!(options && options.retainHold)) {
@@ -328,11 +355,51 @@ module.exports = {
         return true;
     },
 
-    fetchCapabilitySnapshotProof(snapshotBlock, capability, pubkeys) {
-        return this.httpGet('/hub-db/snapshot/capability_snapshot_proof?snapshot_block=' +
-            encodeURIComponent(String(snapshotBlock)) + '&capability=' +
-            encodeURIComponent(String(capability)) + '&pubkeys=' +
-            encodeURIComponent((Array.isArray(pubkeys) ? pubkeys : []).map(String).join(',')));
+    async fetchCapabilitySnapshotProof(snapshotBlock, capability, pubkeys) {
+        let shared = typeof this.sharedCapabilityProof === 'function'
+            ? this.sharedCapabilityProof(snapshotBlock, capability, pubkeys) : null;
+        if (shared !== null) {
+            try {
+                const response = await shared;
+                if (proofHasPubkeys(response, pubkeys)) return response;
+            } catch (error) {
+                const status = Number(error && error.statusCode);
+                const message = String(error && error.message || error || '');
+                const missingCheckpoint = status === 404 || /^HTTP 404(?:\b|$)/i.test(message);
+                const singlePubkeyChunk = Number(shared.capabilityProofPubkeyCount) === 1;
+                if (missingCheckpoint || singlePubkeyChunk || shared.capabilityProofSkipFallback) {
+                    if (typeof shared.capabilityProofNoteUnavailable === 'function')
+                        shared.capabilityProofNoteUnavailable(error);
+                    throw error;
+                }
+                // The row-specific request below preserves the original failure verdict.
+            }
+        }
+        try {
+            return await this.fetchCapabilitySnapshotProofDirect(snapshotBlock, capability, pubkeys);
+        } catch (error) {
+            // A multi-pubkey 503 is not a frontier until this member's own request
+            // also says its proof is unavailable.
+            if (shared && typeof shared.capabilityProofNoteUnavailable === 'function')
+                shared.capabilityProofNoteUnavailable(error);
+            throw error;
+        }
+    },
+
+    async fetchCapabilitySnapshotProofDirect(snapshotBlock, capability, pubkeys) {
+        await this.paceCapabilityProofRequest();
+        try {
+            let path = typeof this.capabilityProofRequestPath === 'function'
+                ? this.capabilityProofRequestPath(snapshotBlock, capability, pubkeys)
+                : '/hub-db/snapshot/capability_snapshot_proof?snapshot_block=' +
+                    encodeURIComponent(String(snapshotBlock)) + '&capability=' +
+                    encodeURIComponent(String(capability)) + '&pubkeys=' +
+                    encodeURIComponent((Array.isArray(pubkeys) ? pubkeys : []).map(String).join(','));
+            return await this.httpGet(path);
+        } catch (error) {
+            this.deferCapabilityProofRequests(error);
+            throw error;
+        }
     },
 
     // Report the refusals counted for `table` since the last report, one line per foreign

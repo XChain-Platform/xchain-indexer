@@ -33,9 +33,9 @@
 // this chain's. One issuer list has to be able to hold BTC, LTC and DOGE addresses, because
 // the policy on the origin row is the policy every bridged copy inherits.
 const gateRegistry = require('../../consensus/gate_registry');
+const { readTickListPolicy, isAddressAllowedByTickPolicy } = require('./tick_list_policy');
 const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION';
 const TOKEN_POLICY_INHERITANCE_KEY = 'token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION';
-const TOKEN_GATE_LIST_AT_BLOCK_KEY = 'token_gate_list_at_block.TOKEN_GATE_LIST_AT_BLOCK';
 
 module.exports = {
 
@@ -212,44 +212,20 @@ module.exports = {
     // - Address is allowed to hold tick (allow/block lists)
     async isActionAllowed(address, tick, block_index){
         let allow = true;
-        // Keep address-plus-token checks on their historical unbounded lookup until
-        // the flag day, then pin token state and LIST membership to the action block.
         const addressAndTick = !this.util.isNull(address) && !this.util.isNull(tick);
-        const policyAtBlock = addressAndTick && gateRegistry.activeAt(
-            TOKEN_GATE_LIST_AT_BLOCK_KEY,
-            this.config['NETWORK'],
-            this.config['COIN'],
-            block_index,
-            null
-        );
-        const lookupBlockIndex = (addressAndTick && !policyAtBlock) ? undefined : block_index;
         // Check sleep only on single-subject calls with a numeric block index
-        if(!addressAndTick && allow && !this.util.isNull(lookupBlockIndex) && this.util.isNumeric(lookupBlockIndex)){
+        if(!addressAndTick && allow && !this.util.isNull(block_index) && this.util.isNumeric(block_index)){
             // Validate TICK and ADDRESS sleep status in parallel
             const [tickSleeping, addressSleeping] = await Promise.all([
-                (!this.util.isNull(tick))     ? this.isTickSleeping(tick, lookupBlockIndex)       : Promise.resolve(false),
-                (!this.util.isNull(address))  ? this.isAddressSleeping(address, lookupBlockIndex) : Promise.resolve(false)
+                (!this.util.isNull(tick))     ? this.isTickSleeping(tick, block_index)       : Promise.resolve(false),
+                (!this.util.isNull(address))  ? this.isAddressSleeping(address, block_index) : Promise.resolve(false)
             ]);
             if(tickSleeping || addressSleeping)
                 allow = false;
         }
         // Validate address against any tick allow/block lists
-        if(allow && !this.util.isNull(address) && !this.util.isNull(tick)){
-            let info = await this.getTokenInfo(tick, lookupBlockIndex);
-            // Fetch allow/block lists in parallel if both exist
-            const hasAllowList = info && !this.util.isNull(info['ALLOW_LIST']) && this.util.isNumeric(info['ALLOW_LIST']);
-            const hasBlockList = info && !this.util.isNull(info['BLOCK_LIST']) && this.util.isNumeric(info['BLOCK_LIST']);
-            const [allowList, blockList] = await Promise.all([
-                hasAllowList ? this.getList(info['ALLOW_LIST'], lookupBlockIndex) : Promise.resolve(null),
-                hasBlockList ? this.getList(info['BLOCK_LIST'], lookupBlockIndex) : Promise.resolve(null)
-            ]);
-            // False if we have an ALLOW_LIST and address is NOT on it
-            if(allow && allowList && !allowList.includes(address))
-                allow = false;
-            // False if we have a BLOCK_LIST and address IS on it
-            if(allow && blockList && blockList.includes(address))
-                allow = false;
-        }
+        if(allow && addressAndTick)
+            allow = isAddressAllowedByTickPolicy(address, await readTickListPolicy(this, tick, block_index));
         return allow;
     },
 
@@ -294,19 +270,24 @@ module.exports = {
     },
 
     /*
-     * Hub push retry queue (`pending_hub_pushes`)
+     * Hub push outbox (`pending_hub_pushes`)
      *
-     * Durable backing for best-effort hub pushes (PRICE v0 round / PRICE v1
-     * oracle price). When a live push fails, the payload is parked here and the
-     * HubPushQueue poller drains it later with exponential backoff.
+     * A transactional outbox: every row is written AHEAD of delivery by the one
+     * writer, enqueueHubPushTx (src/db/hub_pushes/index.js), through doQuery() on
+     * the open block or rollback transaction, so it commits or rolls back with
+     * that transaction. Never move that INSERT onto poolQuery(): a pooled insert
+     * commits outside the transaction and can lose or orphan a push
+     * (test/unit/repo_guards/hub_push_outbox_tx_only.test.js pins this).
      *
-     * These methods deliberately bypass doQuery()/getConnection(): the poller
-     * runs concurrently with block processing on this same `indexerDb` instance,
-     * and getConnection() returns the open block's `transactionConnection` while
-     * a block is being processed. Routing queue writes through it would attach
-     * operational queue I/O to the block's ACID transaction (committed/rolled
-     * back with the block) and risk two statements sharing one physical
-     * connection. poolQuery() always draws an independent pooled connection.
+     * On the outbox, poolQuery() serves only the drain and settle side (the
+     * HubPushQueue poller's fetch, attempt and delivered bookkeeping, deletes,
+     * and the status reads); it also backs the apiView() override below and
+     * other reads that must stay off the block transaction. The poller runs
+     * concurrently with block processing on this same `indexerDb` instance, and
+     * getConnection() returns the open block's `transactionConnection` while a
+     * block is being processed, so routing drain-side I/O through it would tie
+     * queue bookkeeping to the block's commit or rollback and risk two
+     * statements sharing one physical connection.
      */
 
     // Run a query on a fresh pooled connection, isolated from any in-progress
@@ -337,6 +318,13 @@ module.exports = {
     apiView(){
         if(!this._apiView){
             this._apiView = Object.create(this);
+            // Mark the view pool-only: transaction-only writers check this, because the view's
+            // doQuery is pooled while it still inherits transactionConnection.
+            this._apiView._poolOnlyView = true;
+            // Index-id access through this committed view is resolve-only: an open read that
+            // stored a ticker or address id outside block processing (before its ISSUE, during a
+            // reindex) would shift the ids blocks assign and fork the ledger.
+            this._apiView.suppressIndexIdCreation = true;
             this._apiView.doQuery = (query, args) => this.poolQuery(query, args);
             // doQueryStrict must also bypass transactionConnection. poolQuery already throws on a
             // query error (no swallow), so it satisfies the strict contract. Without this override,

@@ -39,7 +39,8 @@ function run(args) {
     let stdoutFd;
     try {
         stdoutFd = fs.openSync(stdoutPath, 'w');
-        // The CLI calls process.exit after logging, so pipe-backed stdout can lose its tail on a loaded host.
+        // Capture stdout in a file, not a pipe: the CLI sets process.exitCode and lets stdout drain,
+        // and a file still holds every line if a later edit made it exit hard after logging.
         const result = spawnSync(process.execPath, [BIN, ...args], {
             cwd: REPO,
             encoding: 'utf8',
@@ -85,9 +86,9 @@ describe('consensus identity GATES field and pin comparison', function () {
         for (const block of ['bare_checkout', 'armed_regtest_venue']) {
             assert.strictEqual(pin[block].consensus_rules_gates[key],
                 '{"mainnet":9999999999,"regtest":0,"testnet":5082}', block);
-            assert.strictEqual(pin[block].gate_key_count, 47, block);
+            assert.strictEqual(pin[block].gate_key_count, 49, block);
             assert.strictEqual(pin[block].gates_field_hash,
-                '3d31976181db95861cd0a92ecb1c01ada526278c421a199bbe15f3136c71b9dd', block);
+                'c2b5119873e4784e961cab9e5c25f15c1cdad6eca9a619c4c7894c62e8870488', block);
         }
     });
 
@@ -171,6 +172,14 @@ describe('consensus identity GATES field and pin comparison', function () {
     it('pins the archive v1 reissue refusal row in both checkout readings', function () {
         const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
         const key = 'archive_v1_reissue_refusal_activation.ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION';
+        for (const block of ['bare_checkout', 'armed_regtest_venue']) {
+            assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
+        }
+    });
+
+    it('pins the same-token offer refusal row in both checkout readings', function () {
+        const pin = JSON.parse(fs.readFileSync(PIN, 'utf8'));
+        const key = 'same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION';
         for (const block of ['bare_checkout', 'armed_regtest_venue']) {
             assert.match(pin[block].armed_map_rows[key], /^[0-9a-f]{64}$/, block);
         }

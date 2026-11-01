@@ -85,6 +85,7 @@ function makeSync(table, spec) {
     const hubDb = {
         doQuery: sinon.stub().resolves([]),
         doQueryStrict: sinon.stub().callsFake(async (sql, args) => {
+            if (/information_schema\.TABLES/.test(sql)) return [{ TABLE_NAME: 'anchor_reward_attestation_copies' }];
             // The copy record beside an anchor_reward_attestations row is its own table.
             if (/INTO anchor_reward_attestation_copies /.test(sql)) return { affectedRows: 1 };
             writes.push({ sql, args });

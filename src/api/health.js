@@ -26,8 +26,11 @@
 // fatal error, the freshly-read indexed-block height, and the current epoch
 // ms). Async only for the hub_push_queue stats fetch; all other fields are
 // derived synchronously from already-resolved values.
+const crypto = require('crypto');
 const { computeArmedMapFingerprintV2 } = require('../consensus/armed_map/fingerprint');
-const { computeConsensusRulesDigest } = require('../consensus_rules_digest');
+const { canonical, computeConsensusRulesDigest } = require('../consensus_rules_digest');
+const { rulesStatusBody } = require('../consensus/retroactive/replay_status');
+const { statusRulesDigest } = require('../consensus/retroactive/witness_status');
 const { barrierHoldMs, barrierCeilingExceeded } = require('../XChainIndexer');
 // Field groups assembled in the parts under ./health/; each is placed at the
 // position its fields always held, so the payload keeps its key order.
@@ -66,6 +69,26 @@ function inFlightBlockIndex(db){
     if(!db || !db.transactionConnection) return null;
     let bi = db.blockIndex;
     return (bi === null || bi === undefined) ? null : Number(bi);
+}
+
+// Public rules identity for this chain. The boot record and replay marker hash the
+// chain-resolved registry map, so derive the status digest from that same map.
+// Minimal API test doubles predate the map reader; their fallback retains the existing
+// all-rules digest. The witness pass reports its target digest while its read overlay
+// temporarily presents the recorded map.
+function rulesStatus(indexer){
+    const marker = indexer && indexer.replayMarker ? indexer.replayMarker : null;
+    const witness = indexer && indexer.replayWitness ? indexer.replayWitness : null;
+    const phase = witness && witness.phase && typeof witness.phase === 'object'
+        ? witness.phase : witness;
+    let digest = computeConsensusRulesDigest().digest;
+    const db = indexer && indexer.indexerDb;
+    if(db && typeof db.consensusHeightGateMap === 'function' && indexer.config){
+        const map = db.consensusHeightGateMap(indexer.config['NETWORK'], indexer.config['COIN']);
+        digest = crypto.createHash('sha256').update(canonical(map)).digest('hex');
+    }
+    digest = statusRulesDigest(digest, marker, phase && phase.phase);
+    return rulesStatusBody(digest, marker, phase);
 }
 
 async function buildHealthResponse({ indexer, indexerRunning, indexerError, lastIndexedBlock, inFlightBlock, now, reorgStats }){
@@ -122,6 +145,8 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         // federation it follows and see a flag-day disagreement BEFORE it has produced
         // divergent state rather than after.
         consensus_rules_digest: computeConsensusRulesDigest().digest,
+        // Chain-resolved rules and the replay window that controls finality.
+        rules: rulesStatus(indexer),
         // Reorg/rollback observability, null when the API server did not read it.
         ...reorgFields(reorgStats),
         error:            indexerError ? indexerError.message : null,
@@ -129,4 +154,4 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
     };
 }
 
-module.exports = { buildHealthResponse, committedView, inFlightBlockIndex };
+module.exports = { buildHealthResponse, committedView, inFlightBlockIndex, rulesStatus };

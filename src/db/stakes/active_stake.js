@@ -36,6 +36,21 @@ function activeStakeOrderCollate(config, blockIndex){
     return stakeWeightCollation.stakeWeightCollate(active);
 }
 
+function archivePublishValidators(db, weights){
+    let byPubkey = new Map();
+    for(let row of weights){
+        let pubkey = String(row.pubkey);
+        let key = pubkey.toLowerCase();
+        let amount = String(row.weight);
+        let current = byPubkey.get(key);
+        if(!current || db.util.bcgt(amount, current.amount))
+            byPubkey.set(key, { pubkey, amount });
+    }
+    let result = Array.from(byPubkey.values());
+    if(weights.truncated === true) result.truncated = true;
+    return result;
+}
+
 // The row filter one getActiveStakeByPubkey mode adds, as the SQL suffix and the binds it
 // appends in order. No blockIndex means no filter: every valid row of the pubkey counts.
 function stakeModeFilter(config, blockIndex, opts){
@@ -117,6 +132,13 @@ module.exports = {
     // Count distinct active validators (by pubkey) qualified for the given capability.
     // Used for PBFT quorum calculation: quorum = max(2 * floor((N - 1) / 3) + 1, ceil((N + 1) / 2)).
     async getActiveCapabilityCount(capability, blockIndex, minStakeOverride){
+        if(capability === 'archive_publish' && this.config['COIN'] === 'BTC'){
+            if(blockIndex === undefined || blockIndex === null)
+                blockIndex = await this.getLatestBlockIndex();
+            let weights = await this.getStakeWeightsByCapability(
+                capability, blockIndex, minStakeOverride);
+            return new Set(weights.map(row => String(row.pubkey).toLowerCase())).size;
+        }
         // Same redirect, same predicate, as the set and weight resolvers: this count is the
         // quorum DENOMINATOR, so if it came from the local (empty off BTC) path while the
         // capable set came from the mirror, the two would disagree about who is capable and
@@ -273,6 +295,11 @@ module.exports = {
     // arrive at the same set, so consensus on quorum N is deterministic.
     // Spec: capability-staking model §6 (deterministic quorum selection).
     async getValidatorsByCapability(capability, blockIndex, minStakeOverride){
+        if(capability === 'archive_publish' && this.config['COIN'] === 'BTC'){
+            let weights = await this.getStakeWeightsByCapability(
+                capability, blockIndex, minStakeOverride);
+            return archivePublishValidators(this, weights);
+        }
         // Off-BTC chains have no local capability stakes, so the qualifying set comes from
         // the hub-mirrored capability_snapshots. `blockIndex` MUST be a BTC height on this
         // path (snapshot_block is BTC-anchored); see usesCapabilitySnapshot.

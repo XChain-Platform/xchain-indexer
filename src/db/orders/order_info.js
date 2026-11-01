@@ -211,7 +211,7 @@ function subtractMatch(db, action_index, amounts, row){
 module.exports = {
 
     // Handle looking up potential order matches
-    async findOrderMatches(data){
+    async findOrderMatches(data, oldestEqualPriceFirst=false){
         let matches = false;
         // Normalize data
         let source_id    = await this.createAddress(data['SOURCE']);
@@ -223,9 +223,12 @@ module.exports = {
         if(results.length > 0){
             matches = await this.getOrderInfoBatch(results);
         }
-        // Sort matches by price, then by action_index
-        if(matches)
-            matches = this.util.sortPriceActionIndex(matches);
+        // Sort equal-price makers oldest-first only when the caller has activated FIFO.
+        if(matches){
+            matches = oldestEqualPriceFirst
+                ? this.util.sortPriceActionIndex(matches, true)
+                : this.util.sortPriceActionIndex(matches);
+        }
         return matches;
     },
 

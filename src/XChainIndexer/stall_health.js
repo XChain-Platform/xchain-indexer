@@ -26,11 +26,19 @@ const { BRIDGE_PROOF_BARRIER } = require('../consensus/bridge_proof_client/stall
 const PRICE_LANDING_BARRIER = 'price_landing_barrier';
 const ROLLCALL_PROOF_REASON = 'rollcall_proof_unavailable';
 const CAPABILITY_PROOF_REASON = 'capability_proof_unavailable';
+const RETROACTIVE_REPLAY_NEEDS_GO = 'retroactive_replay_needs_go';
+const RETROACTIVE_REPLAY_DIVERGED = 'retroactive_replay_diverged';
 // Marks a safety halt raised while evaluating or enforcing train activation.
 const TRAIN_ACTIVATION_HALT_PREFIX = 'train_activation_halt:';
 
 function isTrainActivationHalt(stallReason){
     return typeof stallReason === 'string' && stallReason.startsWith(TRAIN_ACTIVATION_HALT_PREFIX);
+}
+
+function isOperatorActionHold(stallReason){
+    if(typeof stallReason !== 'string') return false;
+    const word = stallReason.trim().split(/[\s:]/)[0];
+    return word === RETROACTIVE_REPLAY_NEEDS_GO || word === RETROACTIVE_REPLAY_DIVERGED;
 }
 
 // The no-progress window a stall is judged against. The price-landing barrier waits on
@@ -96,6 +104,7 @@ function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClear
     if(!stallReason) return false;
     if(stallReason === BRIDGE_PROOF_BARRIER) return false;
     if(isTrainActivationHalt(stallReason)) return false;
+    if(isOperatorActionHold(stallReason)) return false;
     if(lastBlockCommittedAt == null) return false;
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
     let windowStart = Number.isFinite(barrierHoldSinceMs) ? Math.max(lastBlockCommittedAt, barrierHoldSinceMs) : lastBlockCommittedAt;
@@ -131,6 +140,8 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 //                         never graded wedged, and it builds no barrier hold.
 //   'train_activation_halt' - halted at a rule-set boundary until the node is updated;
 //                             never graded wedged because a restart cannot clear it.
+//   'operator_action_hold' - held until an operator records replay approval or completes
+//                            a rewitness; never wedged because a restart cannot clear it.
 //   'price_landing_wait' - waiting on the other landing chains' landed times, judged
 //                         against its own priceLandingGraceMs; wedged once that passes.
 //   'barrier_defer'     - a real barrier defer (mirror behind, host fault), still
@@ -143,6 +154,7 @@ function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClea
     if(!stallReason) return 'none';
     if(stallReason === BRIDGE_PROOF_BARRIER) return 'bridge_proof_wait';
     if(isTrainActivationHalt(stallReason)) return 'train_activation_halt';
+    if(isOperatorActionHold(stallReason)) return 'operator_action_hold';
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
     if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs, priceLandingGraceMs, barrierHoldSinceMs,
                    proofWaitGraceMs)) return 'wedged';
@@ -206,7 +218,7 @@ function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
 // the whole rule is testable without a block loop. It returns the new record, or null
 // when there is no hold to carry.
 //
-// Five things reset it, and each is a case where the mirror wait is NOT open-ended:
+// Six things reset it, and each is a case where the mirror wait is NOT open-ended:
 //   - no stall reason at all (the loop is advancing),
 //   - a different block at the head of the queue (the previous one committed),
 //   - a future-stamped block (waitingOnFutureBlock). That wait already has its own named
@@ -217,10 +229,13 @@ function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
 //     hub-mirror resync cannot shorten it either.
 //   - a train activation halt. Only updating the node to a build with the required rule
 //     set clears it, so the ceiling would name a barrier or host fault that is not there.
+//   - an operator-action replay hold. A go row or a successful rewitness clears it, so a
+//     hub-mirror resync cannot shorten it.
 function nextBarrierHold(prev, block, stallReason, stallClearsAtMs, now){
     if(!stallReason || block == null) return null;
     if(stallReason === BRIDGE_PROOF_BARRIER) return null;
     if(isTrainActivationHalt(stallReason)) return null;
+    if(isOperatorActionHold(stallReason)) return null;
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return null;
     if(prev && prev.block === block)
         return { block: block, reason: stallReason, since: prev.since, notified: prev.notified };
@@ -255,8 +270,11 @@ function barrierCeilingExceeded(hold, ceilingMs, now){
 }
 
 module.exports = {
+    RETROACTIVE_REPLAY_NEEDS_GO,
+    RETROACTIVE_REPLAY_DIVERGED,
     TRAIN_ACTIVATION_HALT_PREFIX,
     isTrainActivationHalt,
+    isOperatorActionHold,
     stallWedged,
     resolveProofWaitGraceMs,
     waitingOnFutureBlock,

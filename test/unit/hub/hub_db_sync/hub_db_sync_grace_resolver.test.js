@@ -40,7 +40,9 @@ function clearGraceEnv() {
 
 function makeSync(network) {
     const doQuery = sinon.stub().callsFake(async () => [{ h: 0 }]);
-    return new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', network });
+    const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', network });
+    sync._bootstrapDrained = true;
+    return sync;
 }
 
 describe('HubDbSync watermark-grace resolver @regression @tier1', function () {

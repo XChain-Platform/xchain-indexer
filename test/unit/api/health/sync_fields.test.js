@@ -9,6 +9,7 @@ function makeIndexer(overrides = {}){
         decoderDb:        { circuitState: 'closed' },
         indexerDb:        { circuitState: 'closed' },
         lastDecoderBlock: 200,
+        decoderReorgHalted: false,
         isSynced:         () => false
     }, overrides);
 }
@@ -83,6 +84,11 @@ describe('sync health fields', function(){
 describe('syncFields() behind a REORG-halted decoder', function(){
     it('reads not synced, whatever isSynced says', function(){
         const result = fields(makeIndexer({ isSynced: () => true, decoderReorgHalted: true }));
+        assert.strictEqual(result.synced, false);
+    });
+
+    it('reads not synced before the halt marker has been read', function(){
+        const result = fields(makeIndexer({ isSynced: () => true, decoderReorgHalted: null }));
         assert.strictEqual(result.synced, false);
     });
 });

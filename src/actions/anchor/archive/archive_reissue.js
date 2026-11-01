@@ -14,11 +14,13 @@
  *
  * Same-publisher archive re-issue guard: classifies an incoming archive
  * against the rows its author already holds under one seq. Pure; reads no
- * DB, config or activation height. Live on the v3 fold path only, through
- * archiveReissueRefusal (archive_reissue_guard.js) from checkFoldArchiveReissue
- * (archive_head.js), which applies the activation gates and picks the author;
- * v1 heads are not covered. A change to this classification moves v3 fold
- * verdicts, so it ships only behind a new activation height.
+ * DB, config or activation height. Live on two paths through
+ * archiveReissueRefusal (archive_reissue_guard.js): v3 folds from
+ * checkFoldArchiveReissue and v1 archive heads from checkHeadArchiveReissue
+ * under ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION, both in archive_head.js. Each
+ * applies its own activation gate and picks the author. A change to this
+ * classification moves both v3 fold and v1 head verdicts, so it ships only
+ * behind a new activation height.
  *
  ********************************************************************/
 

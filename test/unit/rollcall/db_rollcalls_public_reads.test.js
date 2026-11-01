@@ -319,13 +319,13 @@ describe('api.js getrollcalls / getrollcallabsences wiring (source-scan) @regres
         assert.match(bodies['getrollcallabsences'], /\.apiView\(\)/);
     });
 
-    it('both clamp limit to a default of 20 and a cap of 100', function () {
+    it('both validate limit with a default of 20 and a cap of 100', function () {
         for (const name of ['getrollcalls', 'getrollcallabsences']) {
             const body = bodies[name];
-            assert.match(body, /if\(!Number\.isFinite\(max\) \|\| max <= 0\) max = 20;/,
-                name + ' must default an absent/non-numeric/non-positive limit to 20');
-            assert.match(body, /if\(max > 100\) max = 100;/,
-                name + ' must clamp limit to at most 100');
+            assert.match(body, /rpcParams\.limit\(limit, \{ defaultValue: 20, max: 100 \}\)/,
+                name + ' must validate limit with the shared bounded parser');
+            assert.match(body, /if\(page\.error\) return \{ error: page\.error \};/,
+                name + ' must reject malformed limits');
         }
     });
 });
@@ -341,7 +341,7 @@ describe('api.js getrollcalls / getrollcallabsences wiring (source-scan) @regres
 
     it('getrollcalls delegates to db.getRollcalls and getrollcallabsences to db.getRollcallAbsencesBySource', function () {
         assert.match(bodies['getrollcalls'], /db\.getRollcalls\(max\)/);
-        assert.match(bodies['getrollcallabsences'], /db\.getRollcallAbsencesBySource\(source, max\)/);
+        assert.match(bodies['getrollcallabsences'], /db\.getRollcallAbsencesBySource\(sourceParam\.value, max\)/);
     });
 });
 

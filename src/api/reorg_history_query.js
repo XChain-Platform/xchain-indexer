@@ -33,6 +33,8 @@
 
 'use strict';
 
+const rpcParams = require('./rpc/params.js');
+
 // A block hash as the decoder records it.
 const BLOCK_HASH_RE = /^[0-9a-fA-F]{64}$/;
 
@@ -52,28 +54,32 @@ const MAX_LIMIT     = 1000;
 // Returns {ok:true, since_id, block_index, block_hash, limit} or {ok:false, error}.
 function validateReorgHistoryParams({ since_id, block_index, block_hash, limit } = {}) {
     let sinceId = 0;
-    if (since_id !== undefined && since_id !== null && since_id !== '') {
-        let s = Number(since_id);
-        if (!Number.isInteger(s) || s < 0) return { ok: false, error: 'since_id must be a non-negative integer' };
-        sinceId = s;
+    // Parse an explicit event cursor without coercing empty or compound values.
+    if (since_id !== undefined && since_id !== null) {
+        let parsed = rpcParams.integer(since_id, { name: 'since_id', min: 0 });
+        if (parsed.error) return { ok: false, error: parsed.error };
+        sinceId = parsed.value;
     }
     let blockIndex = null;
-    if (block_index !== undefined && block_index !== null && block_index !== '') {
-        let bi = Number(block_index);
-        if (!Number.isInteger(bi) || bi < 0) return { ok: false, error: 'block_index must be a non-negative integer' };
-        blockIndex = bi;
+    // Parse an explicit height as an exact non-negative integer.
+    if (block_index !== undefined && block_index !== null) {
+        let parsed = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+        if (parsed.error) return { ok: false, error: parsed.error };
+        blockIndex = parsed.value;
     }
     let blockHash = null;
-    if (block_hash !== undefined && block_hash !== null && block_hash !== '') {
+    // Accept only the decoder's fixed-width hexadecimal block hash form.
+    if (block_hash !== undefined && block_hash !== null) {
         if (typeof block_hash !== 'string' || !BLOCK_HASH_RE.test(block_hash))
             return { ok: false, error: 'block_hash must be a 64-character hex string' };
         blockHash = block_hash.toLowerCase();
     }
     let lim = DEFAULT_LIMIT;
-    if (limit !== undefined && limit !== null && limit !== '') {
-        let l = Number(limit);
-        if (!Number.isInteger(l) || l < 1) return { ok: false, error: 'limit must be a positive integer' };
-        lim = Math.min(l, MAX_LIMIT);
+    // Default an omitted page size and cap every explicit positive size.
+    if (limit !== undefined && limit !== null) {
+        let parsed = rpcParams.limit(limit, { defaultValue: DEFAULT_LIMIT, max: MAX_LIMIT });
+        if (parsed.error) return { ok: false, error: parsed.error };
+        lim = parsed.value;
     }
     return { ok: true, since_id: sinceId, block_index: blockIndex, block_hash: blockHash, limit: lim };
 }

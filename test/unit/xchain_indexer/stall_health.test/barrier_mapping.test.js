@@ -64,7 +64,8 @@ const SYNC_SRC = fs.readFileSync(SYNC_ENTRY, 'utf8') + '\n' +
 // are distinguished below, so dropping the height-awareness from a call site is a red
 // rather than a rename that slides through.
 const { stallReasonSites, countStallReasonAssignments } = require('../../../helpers/stall_reason_sites.js');
-const IMPORTED_REASONS = { REMOTE_TOKEN_RETRY_STALL_REASON };
+const { BRIDGE_PROOF_BARRIER } = require('../../../../src/consensus/bridge_proof_client/stall.js');
+const IMPORTED_REASONS = { REMOTE_TOKEN_RETRY_STALL_REASON, BRIDGE_PROOF_BARRIER };
 function graceWiring() {
     const pairs = [];
     const sites = stallReasonSites(INDEXER_SRC, IMPORTED_REASONS);
@@ -110,8 +111,15 @@ function graceWiring() {
 // reports NO clear instant above its activation, which is what lets a hold accumulate and
 // the 900 s ceiling fire on a stall that is now genuine mirror lag.
 const EXPECTED = [
+    // Retroactive replay holds: the replay clears when it reaches replay_to, the go hold on
+    // an operator go row and the diverged hold on a rewitness, so none has a clock instant.
+    ['retroactive_replay',              null,                          'null'],
+    ['retroactive_replay_needs_go',     null,                          'null'],
+    ['retroactive_replay_diverged',     null,                          'null'],
     // Train-activation safety halt, read by its prefix (the tail is the verdict prose).
     ['train_activation_halt:',          null,                          'null'],
+    // An unreadable decoder block time: a host fault that clears when the row is readable.
+    ['decoder_block_time_unavailable',  null,                          'null'],
     ['price_sync_barrier',              null,                          'null'],          // height case can clear early
     ['price_sync_barrier',              'priceWatermarkGraceS',        'height-aware'],
     ['price_landing_barrier',           null,                          'null'],          // clears on other chains' landed time
@@ -129,8 +137,9 @@ const EXPECTED = [
     ['call_presence_barrier',           'directCallGraceS',            'height-aware'],
     ['anchor_attest_barrier',           'anchorAttestWatermarkGraceS', 'bound-aware'],
     ['attest_response_sync_barrier',    'attestResponseWatermarkGraceS', 'height-aware'],
-    ['capability_proof_unavailable',    null,                          'null'],          // proof verification, not wall clock
     ['snapshot_sync_barrier',           null,                          'null'],          // presence, not wall clock
+    // Read-scoped: deferOnHeldCapabilityRead sits after deferOnSnapshotSync in the source.
+    ['capability_proof_unavailable',    null,                          'null'],          // proof verification, not wall clock
     // Host faults, not mirror barriers: none of them has a clock instant to name, and a
     // grace field appearing on one would be a category error rather than a drift.
     ['vm_executor_unavailable',         null,                          'null'],

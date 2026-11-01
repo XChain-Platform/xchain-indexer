@@ -27,15 +27,20 @@ const { getLogger } = require('../observability/index.js');
 
 'use strict';
 
+const rpcParams = require('./rpc/params.js');
+
 // Resolve the source address backing `pubkey` at `block_index`, or null.
 // Returns { source } on success (source may be null), or { error } on bad
 // input / unavailable DB, mirroring the RPC's response contract exactly.
 async function getStakeSourceByPubkey(indexer, { pubkey, block_index }){
-    if(!pubkey || !/^[0-9a-fA-F]{64}$/.test(String(pubkey)))
+    // Require the signing key's fixed-width hexadecimal wire form.
+    if(typeof pubkey !== 'string' || !/^[0-9a-fA-F]{64}$/.test(pubkey))
         return { error: 'pubkey must be 64 hex chars' };
-    let blockIdx = Number(block_index);
-    if(!Number.isFinite(blockIdx) || blockIdx < 0)
+    // Require an exact non-negative snapshot height.
+    let parsed = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+    if(parsed.error)
         return { error: 'block_index is required' };
+    let blockIdx = parsed.value;
     if(!indexer.indexerDb)
         return { error: 'indexer database not ready' };
     try {

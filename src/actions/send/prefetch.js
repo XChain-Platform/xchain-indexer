@@ -138,6 +138,10 @@ module.exports = {
         // (Brief) to N recipients was paying up to 3N round-trips for one answer.
         let sourceTickAllowed = {};
 
-        return { balances, gasTick, gasInfo, gasBalances, sourceActionAllowed, tickActionAllowed, sourceTickAllowed };
+        // A SEND cannot edit token policy or list membership, so all destinations for
+        // one tick can share the policy read while retaining their own membership checks.
+        let destTickPolicy = new Map();
+
+        return { balances, gasTick, gasInfo, gasBalances, sourceActionAllowed, tickActionAllowed, sourceTickAllowed, destTickPolicy };
     }
 };

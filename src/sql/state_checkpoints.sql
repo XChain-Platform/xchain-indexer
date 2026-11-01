@@ -23,6 +23,8 @@ CREATE TABLE state_checkpoints (
     contract_hash        VARCHAR(64)  NOT NULL,                    -- indexer blocks.contract_hash (chained)
     checkpoint_seq       BIGINT UNSIGNED NOT NULL,                 -- monotonic per (chain, network)
     snapshot_block       BIGINT UNSIGNED NOT NULL,                 -- BTC block selecting the oracle_publish set
+    supersedes_from      BIGINT UNSIGNED DEFAULT NULL,             -- first checkpointed height replaced by a retroactive rules replay
+    rules_digest         CHAR(64) DEFAULT NULL,                    -- digest of the rules map that caused the replay
     state_root           CHAR(64),                                 -- SPV light-client state_root; NULL pre CHECKPOINT_COMMITMENT flag-day
     state_root_version   TINYINT UNSIGNED,                         -- merkle.js STATE_ROOT_VERSION the state_root was computed under
     block_merkle_root    CHAR(64),                                 -- SPV per-block content Merkle root (§5); NULL pre-flag-day

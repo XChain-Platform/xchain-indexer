@@ -29,6 +29,7 @@ describe('HubDbSync barrier timeout self-heal (ITEM 2492) @regression @tier2', f
         // behind the target (500). Before the fix the timeout rejected; now it re-reads.
         const doQuery = sinon.stub().callsFake(async () => [{ ts: 1600 }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sync._bootstrapDrained = true;
         sync.oracleBootstrapped  = true;
         sync.oracleSyncTimestamp = 500;                 // stale, behind the target block time
         const got = await sync.waitForOracleSyncTimestamp(1500, 50);
@@ -39,6 +40,7 @@ describe('HubDbSync barrier timeout self-heal (ITEM 2492) @regression @tier2', f
     it('oracle: still REJECTS on timeout when the mirror genuinely stays behind', async function () {
         const doQuery = sinon.stub().callsFake(async () => [{ ts: 500 }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sync._bootstrapDrained = true;
         sync.oracleBootstrapped  = true;
         sync.oracleSyncTimestamp = 500;
         await assert.rejects(sync.waitForOracleSyncTimestamp(1500, 50), /oracle sync barrier timed out/);
@@ -48,6 +50,7 @@ describe('HubDbSync barrier timeout self-heal (ITEM 2492) @regression @tier2', f
     it('match: stale in-memory scalar + current mirror => waiter resolves at timeout, not rejects', async function () {
         const doQuery = sinon.stub().callsFake(async () => [{ ts: 1600 }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sync._bootstrapDrained = true;
         sync.matchBootstrapped  = true;
         sync.matchSyncTimestamp = 500;
         const got = await sync.waitForMatchSync(1500, 50);
@@ -58,6 +61,7 @@ describe('HubDbSync barrier timeout self-heal (ITEM 2492) @regression @tier2', f
     it('match: still REJECTS on timeout when the mirror genuinely stays behind', async function () {
         const doQuery = sinon.stub().callsFake(async () => [{ ts: 500 }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sync._bootstrapDrained = true;
         sync.matchBootstrapped  = true;
         sync.matchSyncTimestamp = 500;
         await assert.rejects(sync.waitForMatchSync(1500, 50), /match sync barrier timed out/);
@@ -67,6 +71,7 @@ describe('HubDbSync barrier timeout self-heal (ITEM 2492) @regression @tier2', f
     it('call: stale in-memory scalar + current mirror => waiter resolves at timeout, not rejects', async function () {
         const doQuery = sinon.stub().callsFake(async () => [{ ts: 1600 }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sync._bootstrapDrained = true;
         sync.callBootstrapped  = true;
         sync.callSyncTimestamp = 500;
         const got = await sync.waitForCallSync(1500, 50);
@@ -79,6 +84,7 @@ describe('HubDbSync barrier timeout self-heal (ITEM 2492) @regression @tier2', f
     it('call: still REJECTS on timeout when the mirror genuinely stays behind', async function () {
         const doQuery = sinon.stub().callsFake(async () => [{ ts: 500 }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sync._bootstrapDrained = true;
         sync.callBootstrapped  = true;
         sync.callSyncTimestamp = 500;
         await assert.rejects(sync.waitForCallSync(1500, 50), /call sync barrier timed out/);

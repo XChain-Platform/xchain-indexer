@@ -22,9 +22,11 @@
  * a landing regenerate the pin after a merge instead of asking for a rebase.
  *
  * WHAT IT KEEPS. Each block keeps the fields it already lists, in the order it
- * lists them, and the armed block keeps its `env` as written: the pin records
- * only the levers it armed, while a reading lists every lever with null for
- * the unset ones. The levers are read from that `env`, never restated here.
+ * lists them, and gains after them any field the reading carries that it
+ * lacks, so no field goes unpinned. The armed block keeps its `env` as
+ * written: the pin records only the levers it armed, while a reading lists
+ * every lever with null for the unset ones. The levers are read from that
+ * `env`, never restated here.
  *
  * USAGE (from the repo root)
  *   node bin/regenerate-identity-pin.js            rewrite the pin in place
@@ -55,6 +57,12 @@ function refresh(block, reading) {
         if (key === 'env') continue;
         if (!Object.prototype.hasOwnProperty.call(reading, key)) throw new Error(`the reading carries no ${key}`);
         block[key] = reading[key];
+    }
+    // Append the fields the reading carries and the block lacks, since --compare reads a missing one as a mismatch.
+    for (const key of Object.keys(reading)) {
+        // Skip env (the pin keeps only the levers it armed) and tip (no tree can re-derive it).
+        if (key === 'env' || key === 'tip') continue;
+        if (!Object.prototype.hasOwnProperty.call(block, key)) block[key] = reading[key];
     }
 }
 

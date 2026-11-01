@@ -98,7 +98,7 @@ function consolidateLegs(destroys, ticks, data){
     for(let idx in destroys){
         let [tick, amount, memo] = destroys[idx];
         let key = tick + '|' + memo;
-        key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
+        key = (ticks[tick] && !this.util.isValidAmountMergeFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
             ? 'i|' + idx
             : 'k|' + key;
         // An unknown TICK maps to false in `ticks`; it merges at 0 decimals, as an unlooked-up

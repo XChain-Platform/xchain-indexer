@@ -193,6 +193,21 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         assert.strictEqual(calls.blockIndexAtRollback, 105, 'the stale height is restored before the rollback, even on throw');
         assert.strictEqual(ctx.indexerDb.blockIndex, 105);
     });
+
+    it('fee read-back failure never turns a partial valid status into a zero fee', async () => {
+        let { ctx, calls } = makeCtx({ status: 'valid' });
+        ctx.indexerDb.getFeeRecord = async (actionIndex) => {
+            calls.order.push('getFeeRecord:' + actionIndex);
+            throw new Error('fee read exploded');
+        };
+        let r = await ctx.dryRunAction.call(ctx, {
+            action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'src1', timeoutMs: 300000
+        });
+        assert.strictEqual(r.status, 'valid', 'the partial field remains visible for diagnostics');
+        assert.match(r.error, /handler threw: fee read exploded/);
+        assert.strictEqual(r.xchainFee, null, 'an incomplete read-back cannot claim the action is free');
+        assert.strictEqual(calls.rollback, 1, 'the failed read-back still releases the transaction');
+    });
 });
 
 describe('_dryRunAction (shared dry-run engine)', () => {

@@ -313,6 +313,21 @@ describe('armed_map/manifest: collectRows', function () {
         });
     });
 
+    it('carries the same-token offer refusal gate without per-chain testnet keys', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        const key = 'same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION';
+        const row = byKey.get(key);
+        assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
+        assert.deepStrictEqual(row, {
+            mainnet: ProtocolChanges.UNARMED,
+            'BTC:testnet': 158557,
+            'LTC:testnet': 4949697,
+            'DOGE:testnet': 68035864,
+            testnet: ProtocolChanges.UNARMED,
+            regtest: 0,
+        });
+    });
+
     it('carries the three row families the design names', function () {
         const keys = rowKeys();
         assert.ok(keys.has('state_commitment_activation.STATE_COMMITMENT_ACTIVATION'), 'an activation map');
@@ -326,25 +341,32 @@ describe('armed_map/manifest: collectRows', function () {
         assert.ok(keys.has('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS'), 'the chain-margin table');
     });
 
-    it('carries the DOGE mirror-admission chain margins and activation', function () {
+    it('carries the DOGE and LTC mirror-admission chain margins and activation', function () {
         const byKey = new Map(manifest.collectRows().rows);
         const key = 'mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_ACTIVATION';
         const row = byKey.get(key);
         assert.deepStrictEqual(row, { ...ProtocolChanges.get(key) });
-        assert.deepStrictEqual(Object.keys(row).sort(), ['DOGE:mainnet', 'DOGE:testnet', 'mainnet', 'regtest']);
+        assert.deepStrictEqual(Object.keys(row).sort(),
+            ['DOGE:mainnet', 'DOGE:testnet', 'LTC:mainnet', 'LTC:testnet', 'mainnet', 'regtest']);
         assert.strictEqual(row.mainnet, null);
         assert.strictEqual(row['DOGE:mainnet'], null);
+        assert.strictEqual(row['LTC:mainnet'], null);
         assertSizedTestnetSlot(row['DOGE:testnet'], 'DOGE:testnet');
+        // Shipped on the sentinel; the cut that arms it replaces it with a sized height.
+        if (row['LTC:testnet'] !== ProtocolChanges.UNARMED) assertSizedTestnetSlot(row['LTC:testnet'], 'LTC:testnet');
         assert.strictEqual(row.regtest, 0);
-        assert.deepStrictEqual(byKey.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS').DOGE, {
+        const rounds = {
             bridge_transfers: 14,
             cross_chain_calls: 14,
             cross_chain_matches: 14,
             list_snapshots: 14,
             policy_snapshots: 14,
-            price_snapshots: 16,
             remote_token_snapshots: 14,
-        });
+        };
+        const blocks = byKey.get('mirror_admission_margin_activation.ADMIT_CHAIN_MARGIN_BLOCKS');
+        assert.deepStrictEqual(Object.keys(blocks).sort(), ['DOGE', 'LTC']);
+        assert.deepStrictEqual(blocks.DOGE, { ...rounds, price_snapshots: 16 });
+        assert.deepStrictEqual(blocks.LTC, { ...rounds, price_snapshots: 17 });
     });
 
     it('carries the anchor archive fold-term heights', function () {

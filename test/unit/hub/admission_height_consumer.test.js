@@ -75,6 +75,7 @@ function makeSync(HubDbSync, opts) {
     // are not what these cases are about.
     sync.priceBootstrapped = sync.oracleBootstrapped = sync.matchBootstrapped =
         sync.callBootstrapped = sync.bridgeBootstrapped = sync.policyBootstrapped = true;
+    sync._bootstrapDrained = true;
     sync.oracleSyncTimestamp = 1;   // a non-null scalar, so the empty-mirror escape is closed
     sync.matchSyncTimestamp  = 1;
     sync.callSyncTimestamp   = 1;

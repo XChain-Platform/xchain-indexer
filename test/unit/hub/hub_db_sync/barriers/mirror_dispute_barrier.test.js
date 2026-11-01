@@ -130,6 +130,16 @@ function makeSync(coin, answer) {
     return { sync, calls };
 }
 
+function certify(sync, table, watermark = 0, heights = null) {
+    return sync.certifyTableDrain({
+        table: table,
+        connectionEpoch: sync._wsEpoch,
+        selectorRevision: sync._selectorRevision,
+        watermark: watermark,
+        heights: heights
+    });
+}
+
 // A hub clock second the relay cases below are stamped from.
 const t = 20000;
 
@@ -195,27 +205,154 @@ describe('hub_db_sync bridge content shortcut and empty-mirror paths @regression
         assert.strictEqual(sync.bridgeSyncSatisfied(t + 400), true);
     });
 
-    it('bridge: the empty-mirror path waits for a drained connection', function () {
-        // bridgeBootstrapped outlives a close; resetOnSocketClose clears _bootstrapDrained.
-        // A transfer finalized during the outage is due 240 s later on DOGE and is not local.
+    it('bridge: the empty-mirror path needs this table certified on this connection', function () {
+        // A transfer finalized during an outage is due 240 s later on DOGE and is not local.
+        // Only the bridge drain on the replacement connection proves that scope empty again.
         const { sync } = makeSync('DOGE');
         sync.bridgeBootstrapped  = true;
         sync.bridgeSyncTimestamp = null;
         sync._bootstrapDrained   = false;
-        assert.strictEqual(sync.bridgeSyncSatisfied(1000), false, 'closed socket: must defer');
-        sync._bootstrapDrained   = true;
-        assert.strictEqual(sync.bridgeSyncSatisfied(1000), true, 're-drained: the empty scope is proven again');
+        certify(sync, 'bridge_transfers');
+        assert.strictEqual(sync.bridgeSyncSatisfied(1000), true, 'this table is complete on this connection');
+        sync.resetOnSocketClose();
+        assert.strictEqual(sync.bridgeSyncSatisfied(1000), false, 'the prior connection cannot certify absence');
+        certify(sync, 'bridge_transfers');
+        assert.strictEqual(sync.bridgeSyncSatisfied(1000), true, 'the replacement drain proves absence again');
     });
 
-    it('match and call: the empty-mirror path waits for a drained connection', function () {
+    it('match and call: each empty-mirror path needs its own current connection drain', function () {
         const { sync } = makeSync('DOGE');
         sync.matchBootstrapped = true; sync.callBootstrapped = true;
         sync.matchSyncTimestamp = null; sync.callSyncTimestamp = null;
         sync._bootstrapDrained = false;
-        assert.strictEqual(sync.matchSyncSatisfied(1000), false);
-        assert.strictEqual(sync.callSyncSatisfied(1000), false);
-        sync._bootstrapDrained = true;
+        certify(sync, 'cross_chain_matches');
         assert.strictEqual(sync.matchSyncSatisfied(1000), true);
+        assert.strictEqual(sync.callSyncSatisfied(1000), false, 'the match certificate cannot open the call barrier');
+        certify(sync, 'cross_chain_calls');
         assert.strictEqual(sync.callSyncSatisfied(1000), true);
+    });
+});
+
+describe('hub_db_sync per-table connection certificates @regression @tier1', function () {
+    const cases = [
+        {
+            name: 'match', table: 'cross_chain_matches',
+            arm(sync) { sync.matchBootstrapped = true; sync.matchSyncTimestamp = null; },
+            satisfied(sync) { return sync.matchSyncSatisfied(1000); }
+        },
+        {
+            name: 'call', table: 'cross_chain_calls',
+            arm(sync) { sync.callBootstrapped = true; sync.callSyncTimestamp = null; },
+            satisfied(sync) { return sync.callSyncSatisfied(1000); }
+        },
+        {
+            name: 'bridge', table: 'bridge_transfers',
+            arm(sync) { sync.bridgeBootstrapped = true; sync.bridgeSyncTimestamp = null; },
+            satisfied(sync) { return sync.bridgeSyncSatisfied(1000); }
+        },
+        {
+            name: 'policy', table: 'policy_snapshots',
+            arm(sync) { sync.policyBootstrapped = true; sync.policySyncTimestamp = null; },
+            satisfied(sync) { return sync.policySyncSatisfied(1000); }
+        },
+        {
+            name: 'list share', table: 'list_snapshots',
+            arm(sync) { sync.listShareBootstrapped = true; sync.listShareMirrorEmpty = true; },
+            satisfied(sync) { return sync.listShareSyncSatisfied(1000); }
+        },
+        {
+            name: 'price', table: 'price_snapshots',
+            arm(sync) { sync.priceBootstrapped = true; sync.priceSyncMaxTimestamp = 0; },
+            satisfied(sync) { return sync.priceTimeSyncSatisfied(1000); },
+            watermark(sync) { return 1000 + sync.priceWatermarkGraceS; }
+        }
+    ];
+
+    for (const testCase of cases) {
+        it(testCase.name + ': its current drain opens while the full bootstrap is still active', function () {
+            const { sync } = makeSync('DOGE');
+            sync._bootstrapDrained = false;
+            sync._bootstrapping = true;
+            testCase.arm(sync);
+            certify(sync, testCase.table,
+                testCase.watermark ? testCase.watermark(sync) : 0);
+            assert.strictEqual(testCase.satisfied(sync), true);
+            assert.strictEqual(sync._bootstrapDrained, false, 'price_snapshots has not completed the full drain');
+        });
+
+        it(testCase.name + ': a certificate from the previous socket never opens it', function () {
+            const { sync } = makeSync('DOGE');
+            sync._bootstrapDrained = false;
+            testCase.arm(sync);
+            certify(sync, testCase.table,
+                testCase.watermark ? testCase.watermark(sync) : 0);
+            sync.resetOnSocketClose();
+            assert.strictEqual(testCase.satisfied(sync), false);
+        });
+
+        it(testCase.name + ': a replacement hub keeps it shut until this table drains again', function () {
+            const { sync } = makeSync('DOGE');
+            sync._bootstrapDrained = false;
+            testCase.arm(sync);
+            sync.adoptReadyFrame({}, { type: 'ready', hub_instance_id: 'hub-a', max_ids: {} });
+            certify(sync, testCase.table,
+                testCase.watermark ? testCase.watermark(sync) : 0);
+            sync.adoptReadyFrame({}, { type: 'ready', hub_instance_id: 'hub-b', max_ids: {} });
+            assert.strictEqual(testCase.satisfied(sync), false, 'the old hub certificate was invalidated');
+            certify(sync, testCase.table,
+                testCase.watermark ? testCase.watermark(sync) : 0);
+            assert.strictEqual(testCase.satisfied(sync), true, 'the replacement hub drain certifies this table');
+        });
+    }
+
+    it('a poll-mode drain certifies absence but never opens a stream or height escape', function () {
+        // #2476: append-only REST pages miss in-place upserts and retractions, so a poll
+        // drain's snapshot watermark must not certify coverage on any per-table barrier.
+        const { sync } = makeSync('DOGE');
+        sync._bootstrapDrained = false;
+        sync._pollMode = true;
+        const tables = ['oracle_prices', 'cross_chain_matches', 'cross_chain_calls',
+                        'bridge_transfers', 'policy_snapshots', 'price_snapshots'];
+        for (const table of tables) certify(sync, table, 100000, { [table]: { DOGE: 100000 } });
+        sync.oracleBootstrapped = true; sync.oracleSyncTimestamp = 50;
+        sync.matchBootstrapped  = true; sync.matchSyncTimestamp  = 50; sync.matchCoveredTimestamp  = 50;
+        sync.callBootstrapped   = true; sync.callSyncTimestamp   = 50; sync.callGatedSyncTimestamp = 50;
+        sync.bridgeBootstrapped = true; sync.bridgeSyncTimestamp = 50; sync.bridgeDestSyncTimestamp = 50;
+        sync.policyBootstrapped = true; sync.policySyncTimestamp = 50; sync.policyCoveredTimestamp = 50;
+        sync.priceBootstrapped  = true; sync.priceSyncMaxTimestamp = 50; sync.priceSyncHeight = 1;
+        for (const table of tables) assert.strictEqual(sync.tableWatermark(table), 0, table);
+        assert.deepStrictEqual(sync.heightWatermarks, {});
+        assert.strictEqual(sync.oracleSyncSatisfied(100), false);
+        assert.strictEqual(sync.matchSyncSatisfied(100), false);
+        assert.strictEqual(sync.callSyncSatisfied(100), false);
+        assert.strictEqual(sync.bridgeSyncSatisfied(100), false);
+        assert.strictEqual(sync.policySyncSatisfied(100), false);
+        assert.strictEqual(sync.priceTimeSyncSatisfied(100), false);
+        assert.strictEqual(sync.priceSyncSatisfied(50, 100), false);
+        sync.matchSyncTimestamp = null;
+        assert.strictEqual(sync.matchSyncSatisfied(100), true, 'a drained empty scope still opens, as before');
+    });
+
+    it('a heartbeat advances only tables certified on its connection', function () {
+        const { sync } = makeSync('DOGE');
+        sync._bootstrapDrained = false;
+        sync.matchBootstrapped = true;
+        sync.callBootstrapped = true;
+        certify(sync, 'cross_chain_matches', 100);
+        sync.handleWatermarkFrame({ ts: 500 });
+        assert.strictEqual(sync.tableWatermark('cross_chain_matches'), 500);
+        assert.strictEqual(sync.tableWatermark('cross_chain_calls'), 0);
+    });
+
+    it('a queued heartbeat from the prior socket cannot advance the replacement certificate', async function () {
+        const { sync } = makeSync('DOGE');
+        sync._bootstrapDrained = false;
+        const oldEpoch = sync._wsEpoch;
+        const oldRevision = sync._selectorRevision;
+        sync.resetOnSocketClose();
+        certify(sync, 'cross_chain_matches', 100);
+        sync.enqueueStreamFrame({ type: 'watermark', ts: 500 }, oldEpoch, oldRevision);
+        await sync._msgChain;
+        assert.strictEqual(sync.tableWatermark('cross_chain_matches'), 100);
     });
 });

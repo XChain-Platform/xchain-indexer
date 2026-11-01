@@ -47,8 +47,48 @@
 #   sync-hub-mirror-client.sh           Copy canonical -> every consumer (overwrites vendored copies).
 #   sync-hub-mirror-client.sh --check   Verify every vendored copy is byte-identical; exit 1 on drift.
 #                                       Use in CI so a drifted/forgotten copy fails the build.
+#   sync-hub-mirror-client.sh --landing-order <explorer-branch>
+#                                       Print the push order for a committed twin change.
 #
 set -euo pipefail
+
+usage() {
+    echo "usage: sync-hub-mirror-client.sh [--check | --landing-order <explorer-branch>]" >&2
+}
+
+landing_order() {
+    branch="$1"
+    case "$branch" in
+        ""|*[!A-Za-z0-9._/-]*)
+            echo "sync-hub-mirror-client: explorer branch must use only letters, digits, '.', '_', '/', and '-'" >&2
+            return 2
+            ;;
+    esac
+    if ! git check-ref-format --branch "$branch" >/dev/null 2>&1; then
+        echo "sync-hub-mirror-client: invalid explorer branch: $branch" >&2
+        return 2
+    fi
+    printf '%s\n' \
+        "Twin landing order:" \
+        "1. Commit the canonical change in xchain-indexer and the synced copy on xchain-explorer branch $branch." \
+        "2. Push and land xchain-indexer first with the committed explorer branch as its CI companion:" \
+        "   CI_COMPANIONS=\"xchain-explorer=$branch\" git push" \
+        "3. After the indexer commit is on origin/develop, push and land xchain-explorer normally:" \
+        "   git push"
+}
+
+case "$#:${1:-}" in
+    0:) CHECK=0 ;;
+    1:--check) CHECK=1 ;;
+    2:--landing-order)
+        landing_order "$2"
+        exit $?
+        ;;
+    *)
+        usage
+        exit 2
+        ;;
+esac
 
 # Repo root is two levels up from this script (xchain-indexer/bin -> xchain-indexer -> root).
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -64,10 +104,23 @@ REGISTRY_ENTRY="consensus/gate_registry.js"
 SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql bridge_transfers.sql policy_snapshots.sql list_snapshots.sql remote_token_snapshots.sql"
 SERVICES="xchain-explorer"
 
-CHECK=0
-[ "${1:-}" = "--check" ] && CHECK=1
-
 drift=0
+caller_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ "$CHECK" -eq 1 ] && [ "$(basename "$caller_root")" = "xchain-explorer" ]; then
+    canonical_paths=()
+    for f in $HUB_FILES; do canonical_paths+=("src/hub/$f"); done
+    for d in $HUB_DIRS; do canonical_paths+=("src/hub/$d"); done
+    for f in $DEP_FILES; do canonical_paths+=("src/$f"); done
+    for f in $SQL_FILES; do canonical_paths+=("src/sql/$f"); done
+    if ! git -C "$HERE/.." rev-parse --verify --quiet origin/develop^{commit} >/dev/null; then
+        echo "DRIFT: xchain-indexer origin/develop is unavailable; cannot verify canonical hub-mirror source"
+        drift=1
+    elif ! git -C "$HERE/.." diff --quiet origin/develop -- "${canonical_paths[@]}"; then
+        echo "DRIFT: canonical hub-mirror source differs from xchain-indexer origin/develop; land xchain-indexer first"
+        drift=1
+    fi
+fi
+
 for svc in $SERVICES; do
     dest="$ROOT/$svc/src"
     hubdest="$dest/hub"

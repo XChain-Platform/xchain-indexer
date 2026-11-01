@@ -51,10 +51,11 @@ const PENDING_PRICE_EVENT_CAP = 10000;
 // The batch is an OPTIMIZATION ONLY and never a new failure mode. It engages for
 // price_snapshots alone, only across a run of rows carrying identical columns,
 // and any statement that does not come back as a driver OK result falls straight
-// back to the per-row path - which then applies that whole chunk in order and
-// keeps the "stop at the FIRST unappliable row" hole semantics bootstrapTable
-// depends on. Set HUB_SYNC_BATCH_APPLY=false to force the per-row path.
-const PRICE_BATCH_APPLY_ROWS = 500;
+// back to the per-row path. A price row costs about 190 + 216 x validators bytes,
+// so 2500 rows stay under a 16 MB max_allowed_packet with up to 21 validators per
+// round; a 10000-row hub page applies as four statements. Set
+// HUB_SYNC_BATCH_APPLY=false to force the per-row path.
+const PRICE_BATCH_APPLY_ROWS = 2500;
 
 // How often a long drain reports progress. A drain that finishes inside this
 // interval stays silent, so nothing changes for the small mirrored tables.

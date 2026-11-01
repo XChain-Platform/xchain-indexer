@@ -92,8 +92,8 @@ async function parseCapabilityStake(params, data, error, format){
 /**
  * The wire-only checks: chain, AMOUNT shape and sign, SIGNING_PUBKEY presence and shape.
  * This function reads no database, but a refused shape still reaches settleCapabilityStake,
- * whose createStake interns the status and the SIGNING_PUBKEY id, so the id is interned
- * whatever the verdict.
+ * whose createStake interns the status and every non-empty SIGNING_PUBKEY. An empty key
+ * has no pubkey id, so its invalid row stores the reserved placeholder id 0.
  *
  * @param {Object}      data  - the action row; reads COIN, AMOUNT, SIGNING_PUBKEY
  * @param {string|null} error - the verdict so far
@@ -112,7 +112,7 @@ function validateCapabilityWire(data, error){
      * AMOUNT Validations
      ****************************************************************/
     // AMOUNT must be a positive 8-decimal string
-    if(!error && (this.util.isNull(data['AMOUNT']) || !/^[0-9]+(\.[0-9]{1,8})?$/.test(String(data['AMOUNT']))))
+    if(!error && (this.util.storesAsNull(data['AMOUNT']) || !/^[0-9]+(\.[0-9]{1,8})?$/.test(String(data['AMOUNT']))))
         error = 'invalid: AMOUNT (format)';
     // Verify AMOUNT is greater than zero (an empty stake would bond nothing)
     if(!error && !this.util.bcgt(data['AMOUNT'], '0'))
@@ -154,8 +154,9 @@ async function validateFreeKey(data){
     // or deactivated but still inside cooldown still hold it.
     //
     // Below the gate the legacy predicate runs byte for byte: blockIndex=null,
-    // which in db.js drops the whole activation/deactivation clause and so refuses
-    // any pubkey with a valid stakes row EVER. That null is also why the armed
+    // which (the null-blockIndex branch of stakeModeFilter in
+    // src/db/stakes/active_stake.js) drops the whole activation/deactivation
+    // clause and so refuses any pubkey with a valid stakes row EVER. That null is also why the armed
     // branch cannot simply pass the real block to the same mode: the legacy
     // predicate's activation filter would hide a freshly-staked, not-yet-activated
     // row, so the armed branch selects its own query mode instead

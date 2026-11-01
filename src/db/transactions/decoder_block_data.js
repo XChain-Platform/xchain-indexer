@@ -52,8 +52,8 @@ const DECODER_BLOCK_SQL = `SELECT
 
 // First pass: collect the stored outputs for each transaction so every emitted row can
 // carry the full output set. The indexer uses this for native-coin fee detection
-// (xchain-indexer/src/utility.js detectFeePaymentMode / validateNativeCoinFee). The
-// decoder persists the fee-destination output (and COINPAY/dispense outputs) to
+// (detectFeePaymentMode in src/utility/fees.js, validateNativeCoinFee in
+// src/utility/native_fee.js). The decoder persists the fee-destination output (and COINPAY/dispense outputs) to
 // transaction_outputs. A module function over the Database instance, kept off the
 // exported object so Database.prototype gains no method.
 function collectOutputsByTx(db, results){

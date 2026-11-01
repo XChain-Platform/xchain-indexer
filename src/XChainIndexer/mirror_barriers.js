@@ -30,7 +30,9 @@ const {
     remoteTokenAdmissionActive,
     REMOTE_TOKEN_RETRY_STALL_REASON
 } = require('../actions/cross_chain_remote_token.js');
+const { capabilityReadHeld } = require('../consensus/capability_snapshot_proof/held_read.js');
 const CAPABILITY_PROOF_REASON = 'capability_proof_unavailable';
+const CAPABILITY_PROOF_POLL_MS = 250;
 
 module.exports = {
 
@@ -86,6 +88,7 @@ module.exports = {
                 getLogger().warn('Deferring block ' + blockToParse + ' (cross-chain match sync): ', err);
                 this.stallReason = 'match_sync_barrier';
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'matchWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -110,6 +113,7 @@ module.exports = {
                 // discriminator the moment the two constants diverge or a regtest override
                 // moves one.
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'callWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -134,6 +138,7 @@ module.exports = {
                 // and sharing another table's grace couples two producers' timing, the
                 // documented mistake the call barrier was split out to end.
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'bridgeWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -154,6 +159,7 @@ module.exports = {
                 getLogger().warn('Deferring block ' + blockToParse + ' (policy snapshot sync): ', err);
                 this.stallReason = 'policy_sync_barrier';
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'policyWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -178,6 +184,7 @@ module.exports = {
             getLogger().warn('Deferring block ' + blockToParse + ' (list share sync)', err);
             this.stallReason = 'list_share_sync_barrier';
             this.stallClearsAt = null;
+            this.capabilityProofBarrierSkipped = false;
             return true;
         }
         return false;
@@ -208,6 +215,7 @@ module.exports = {
             getLogger().warn('Deferring block ' + blockToParse + ' (remote token sync)', err);
             this.stallReason = REMOTE_TOKEN_RETRY_STALL_REASON;
             this.stallClearsAt = null;
+            this.capabilityProofBarrierSkipped = false;
             return true;
         }
         return false;
@@ -246,6 +254,7 @@ module.exports = {
                 // wait, no read and no write (health verdict only, see barrierClearsAt).
                 // Null above the admission activation, where no clock instant opens it.
                 this.stallClearsAt = this.directCallBarrierClearsAt(blockTime, blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -270,6 +279,7 @@ module.exports = {
                 this.stallReason = 'anchor_attest_barrier';
                 this.stallClearsAt = this.anchorBarrierClearsAt(
                     blockTime, anchorHorizonBound, blockToParse, 'anchorAttestWatermarkGraceS');
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -296,6 +306,7 @@ module.exports = {
                 getLogger().warn('Deferring block ' + blockToParse + ' (attestation response mirror): ', err);
                 this.stallReason = 'attest_response_sync_barrier';
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'attestResponseWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -306,24 +317,46 @@ module.exports = {
     // for every effective cross-chain match AND call relay row has mirrored in, so
     // neither is ever skipped (and applied later at a per-operator-variable height)
     // for a missing snapshot. Defers the block on timeout, same as the barriers above.
+    // The capability proof hold is policed per read rather than per block first: see
+    // deferOnHeldCapabilityRead.
     async deferOnSnapshotSync(blockToParse, blockTime){
         if(this.hubDbSync){
-            try {
-                await this.hubDbSync.waitForCapabilityProof(this.priceSyncTimeoutMs);
-            } catch(err){
-                getLogger().warn('Deferring block ' + blockToParse + ' (capability proof): ', err);
-                this.stallReason = CAPABILITY_PROOF_REASON;
-                this.stallClearsAt = null;
-                return true;
-            }
+            if(await this.deferOnHeldCapabilityRead(blockToParse)) return true;
             try {
                 await this.hubDbSync.waitForSnapshotSync(blockTime, this.priceSyncTimeoutMs, blockToParse);
             } catch(err){
                 getLogger().warn('Deferring block ' + blockToParse + ' (cross-chain snapshot sync): ', err);
                 this.stallReason = 'snapshot_sync_barrier';
                 this.stallClearsAt = null;          // snapshot presence, not wall clock
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
+        }
+        return false;
+    },
+
+    // Capability proof barrier, scoped to the snapshot a block actually reads. Waiting on
+    // every proof-held row stalled every block behind the newest frontier snapshot, which
+    // stays unproven until its checkpoint is cut, and off BTC no block height bounds the
+    // snapshot a block reads: the reads key on BTC heights carried inside its transactions.
+    // So the block runs with db.assertCapabilityProofNotHeld() armed at every mirrored
+    // capability read; a read of a held snapshot fails the block and records itself, and
+    // this retry waits for that one snapshot's proof, deferring on timeout as before.
+    async deferOnHeldCapabilityRead(blockToParse){
+        this.capabilityProofBarrierBlock = blockToParse;
+        this.capabilityProofBarrierSkipped = true;
+        let read = this.capabilityProofHeldRead;
+        if(!read || read.block !== blockToParse) return false;
+        let deadline = Date.now() + this.priceSyncTimeoutMs;
+        while(capabilityReadHeld(this.hubDbSync, read.capability, read.snapshotBlock)){
+            if(Date.now() >= deadline){
+                getLogger().warn('Deferring block ' + blockToParse + ' (capability proof): ' + read.capability +
+                    ' at snapshot_block ' + read.snapshotBlock + ' is still held for its proof');
+                this.stallReason = CAPABILITY_PROOF_REASON;
+                this.stallClearsAt = null;
+                return true;
+            }
+            await this.util.sleep(Math.min(CAPABILITY_PROOF_POLL_MS, Math.max(1, deadline - Date.now())));
         }
         return false;
     }

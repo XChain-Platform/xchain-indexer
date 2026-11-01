@@ -38,6 +38,16 @@ try {
     // ws is optional; if not installed, live updates are disabled but bootstrap still works
 }
 
+// A 429's Retry-After in ms: delta-seconds or an HTTP-date, null when absent or unreadable.
+function retryAfterHeaderMs(header) {
+    let value = Array.isArray(header) ? header[0] : header;
+    if (typeof value !== 'string' || value.trim() === '') return null;
+    let seconds = Number(value);
+    if (Number.isFinite(seconds)) return seconds >= 0 ? seconds * 1000 : null;
+    let at = Date.parse(value);
+    return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
+}
+
 const transportMethods = {
 
     fetchHubList() {
@@ -64,10 +74,12 @@ const transportMethods = {
             let headers = {};
             let apiKey = this.feedApiKey || this.apiKey;
             if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
+            let handshakeTimeout = Number.isFinite(this.watermarkTimeoutMs) && this.watermarkTimeoutMs > 0
+                ? this.watermarkTimeoutMs : 30000;
 
             let ws;
             try {
-                ws = new WebSocket(wsUrl, { headers: headers });
+                ws = new WebSocket(wsUrl, { headers: headers, handshakeTimeout: handshakeTimeout });
             } catch (e) {
                 getLogger().warn('HubDbSync: WebSocket connect failed:', e);
                 this.scheduleReconnect();
@@ -112,6 +124,7 @@ const transportMethods = {
     // promise's settle, handed in so the ready frame can resolve it without this method
     // holding the promise.
     onSocketFrame(ws, data, onReady) {
+        if (ws !== this.ws) return;
         // Liveness stamp at frame ARRIVAL (#2477). The watchdog measures
         // TRANSPORT liveness, so stamp on ANY inbound frame here, BEFORE the
         // frame is enqueued to _msgChain. Stamping inside the chain instead (behind
@@ -136,11 +149,12 @@ const transportMethods = {
             onReady(event);
             return;
         }
-        this.enqueueStreamFrame(event);
+        this.enqueueStreamFrame(event, this._wsEpoch, this._selectorRevision);
     },
 
     // The hub has registered our subscription: take what the ready frame carries.
     adoptReadyFrame(ws, event) {
+        this.resumeWatermarkStall('disconnected');
         this._readyCaughtUp = event.caught_up !== false;
         this._readyCaughtUpHandled = false;
         // A position may cross a connection boundary only when the hub explicitly
@@ -148,6 +162,14 @@ const transportMethods = {
         // re-page from zero on every reconnect.
         let instanceId = (typeof event.hub_instance_id === 'string' && event.hub_instance_id !== '')
             ? event.hub_instance_id : null;
+        // A ready frame naming a replacement database instance invalidates even an
+        // in-flight drain on this socket. Advancing the revision makes every drain and
+        // table certificate opened under the prior instance fail its boundary checks.
+        if (this._lastHubInstanceId !== null && instanceId !== this._lastHubInstanceId) {
+            this._selectorRevision++;
+            this._bootstrapDrained = false;
+            this.heightWatermarks = {};
+        }
         if (instanceId === null || instanceId !== this._lastHubInstanceId) {
             this._drainPositions = Object.create(null);
             this._priceRepageFloor = null;
@@ -187,8 +209,13 @@ const transportMethods = {
     // serialized through _msgChain so a watermark frame can never
     // advance streamWatermark while a preceding row:inserted apply
     // is still awaiting its DB write.
-    enqueueStreamFrame(event) {
+    enqueueStreamFrame(event, connectionEpoch = this._wsEpoch,
+                       selectorRevision = this._selectorRevision) {
         this._msgChain = this._msgChain.then(async () => {
+            // A frame proves delivery only on the connection it arrived on. A queued
+            // heartbeat from a closed socket must not advance tables certified later by
+            // its replacement, even if the old message chain finishes afterward.
+            if (connectionEpoch !== this._wsEpoch || selectorRevision !== this._selectorRevision) return;
             try {
                 if (event.type === 'watermark') {
                     // Liveness is stamped at frame ARRIVAL in the raw ws.on('message')
@@ -234,6 +261,7 @@ const transportMethods = {
         getLogger().info('HubDbSync: WebSocket disconnected, reconnecting in 5s');
         this.stopWatchdog();
         this.ws = null;
+        this.pauseWatermarkStall('disconnected');
         // Rows produced while disconnected won't arrive on the socket;
         // close the heartbeat gate (and freeze the watermark) until the
         // reconnect re-bootstrap has drained the gap.
@@ -291,7 +319,13 @@ const transportMethods = {
                 res.on('data', (chunk) => { body += chunk; });
                 res.on('end', () => {
                     if (res.statusCode !== 200) {
-                        return reject(new Error('HTTP ' + res.statusCode));
+                        let error = new Error('HTTP ' + res.statusCode);
+                        error.statusCode = res.statusCode;
+                        if (res.statusCode === 429) {
+                            let retryAfterMs = retryAfterHeaderMs(res.headers['retry-after']);
+                            if (retryAfterMs !== null) error.retryAfterMs = retryAfterMs;
+                        }
+                        return reject(error);
                     }
                     try {
                         resolve(JSON.parse(body));

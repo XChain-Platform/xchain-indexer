@@ -189,6 +189,7 @@ const LIVE_COLUMN_CASES = [
         "ENUM('a') NOT NULL", /narrows the type \(enum drops b\)/),
     liveColumn('character set', 'CREATE TABLE guard_probe (value VARCHAR(100) CHARACTER SET utf8mb4 NOT NULL)',
         'VARCHAR(100) CHARACTER SET utf8 NOT NULL', /changes the charset \(utf8mb4 -> utf8\)/),
+    liveColumn('nullability', 'CREATE TABLE guard_probe (value INT NULL)', 'INT NOT NULL', /narrows NULL -> NOT NULL/),
     liveColumn('restated AUTO_INCREMENT', AUTO_COLUMN, 'BIGINT UNSIGNED NOT NULL AUTO_INCREMENT'),
     liveColumn('restated DEFAULT and COMMENT',
         "CREATE TABLE guard_probe (value INT NOT NULL DEFAULT 7 COMMENT 'kept')", "INT NOT NULL DEFAULT 7 COMMENT 'kept'"),

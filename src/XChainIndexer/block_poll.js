@@ -16,12 +16,24 @@
  *
  * One pass of the block loop around the catch-up: the reorg cursor and the two tips a
  * pass starts from, the deepest-rollback handling of every unprocessed decoder reorg,
- * and the bounded mid-catch-up reorg recheck. runBlockLoop and catchUpToDecoder stay in
- * ../XChainIndexer.js beside start(). Installed onto XChainIndexer.prototype by ../XChainIndexer.js.
+ * the bounded mid-catch-up reorg recheck, and the retroactive replay witness: each recorded
+ * chunk compared as its last block commits, the diverged hold, and the close at replay_to.
+ * runBlockLoop and catchUpToDecoder stay in ../XChainIndexer.js beside start(). Installed
+ * onto XChainIndexer.prototype by ../XChainIndexer.js.
  *
  ********************************************************************/
 
 const { getLogger } = require('../observability/index.js');
+const { advanceReplayMarker } = require('../consensus/retroactive/replay_marker.js');
+const { replayReachedTip, replayMayComplete } = require('../consensus/retroactive/replay_status.js');
+const { witnessHoldsBlocks } = require('../consensus/retroactive/witness_status.js');
+const { stepWitnessChunk, stepWitnessFinal } = require('../consensus/retroactive/witness_compare_step.js');
+const { recordReplayMarker } = require('../db/events/retroactive_replay_marker.js');
+const {
+    readLatestReplayWitness,
+    readReplayWitnessBlocks,
+    recordReplayWitnessPhase,
+} = require('../db/events/retroactive_replay_witness.js');
 
 module.exports = {
 
@@ -36,7 +48,8 @@ module.exports = {
         let lastProcessedReorgId = await indexerReorgView.getLastProcessedReorgId();
         // Pass the cursor marker's stored witness so getReorgsSince can catch an
         // out-of-band decoder rebuild that reused this cursor id for a different event
-        // (under-cursor silent skip). Null for legacy markers -> old over-cursor guard only.
+        // (under-cursor silent skip). Null for legacy markers -> the cursor-row existence
+        // check still runs; only the time/hash match is skipped.
         let cursorWitness        = (lastProcessedReorgId != null)
                                     ? await indexerReorgView.getLastProcessedReorgWitness() : null;
         let unprocessedReorgs    = await this.decoderDb.getReorgsSince(lastProcessedReorgId, cursorWitness);
@@ -68,7 +81,20 @@ module.exports = {
             lastProcessedReorgId = rolled.lastProcessedReorgId;
         }
 
-        // A decoder carrying a durable REORG_HALT is condemned to a reset: its rows
+        // A prior pass may have committed replay_to and stopped before appending the
+        // terminal marker. Reconcile the durable committed tip before any early return.
+        await this.completeRetroactiveReplay(indexerReorgView, lastIndexerBlock);
+
+        // A diverged witness applies no block until a rewitness. The hold is named after
+        // beginPollPass, which would otherwise clear it, so every pass reports it.
+        if(await this.replayWitnessHoldsBlocks(indexerReorgView)){
+            this.beginPollPass(null);
+            this.holdRetroactiveReplayDiverged();
+            return;
+        }
+
+        // A decoder carrying a durable REORG_HALT, or one whose marker has not yet been
+        // read, is held here. A confirmed halt is condemned to a reset: its rows
         // above the fork point may be the abandoned branch (a decoder that halted before
         // finishing its rollback) or rows decoded forward on dispenser state that no
         // longer matches a fresh sync. So the pass stops here, after the rollbacks above
@@ -76,7 +102,7 @@ module.exports = {
         // every block this indexer does commit is decided exactly as before. The pass
         // names no stall of its own, so the status surfaces publish upstream_halted,
         // never wedged. A probe fault keeps the last known halt state (checkDecoderReorgHalt).
-        if(this.decoderReorgHalted === true){
+        if(this.decoderReorgHalted === true || this.decoderReorgHalted === null){
             this.beginPollPass(null);
             return;
         }
@@ -102,6 +128,19 @@ module.exports = {
         lastIndexerBlock = caughtUp.lastIndexerBlock;
         lastDecoderBlock = caughtUp.lastDecoderBlock;
 
+        await this.completeRetroactiveReplay(indexerReorgView, lastIndexerBlock);
+
+        // A diverged chunk stopped the catch-up; hold now rather than fold it into the
+        // mirror-barrier ceiling, which would ask the mirror to resync over a data fault.
+        if(this.replayWitnessPhase === 'diverged') return;
+
+        // The witness pass reproduced its record through replay_to. The new rules apply
+        // only from a fresh boot, so this process ends here and the supervisor restarts it.
+        if(this.replayWitnessPhase === 'witnessed'){
+            this.exitAfterReplayWitness(lastIndexerBlock);
+            return;
+        }
+
         // The catch-up loop has stopped, either caught up or because a barrier deferred
         // the block at the head of the queue. Fold that into the mirror-barrier hold so a
         // block that keeps being deferred across passes is measured against the named
@@ -114,6 +153,97 @@ module.exports = {
             this.synced = true;
             getLogger().info('Listening for blocks...');
         }
+    },
+
+    // The witness rows of the open replay, read once and then kept current from the phase
+    // rows this process writes. Null when the boot found no witness for the marker.
+    async readReplayWitness(indexerReorgView){
+        if(!this.replayWitnessPhase) return null;
+        if(!this.replayWitness) this.replayWitness = await readLatestReplayWitness(indexerReorgView);
+        return this.replayWitness;
+    },
+
+    // Witness reads and phase writes go through the committed-only view, like the reorg
+    // markers, so no dry-run transaction can adopt or discard them.
+    replayWitnessDeps(indexerReorgView){
+        return {
+            // Chain block hashes come from the decoder's committed-only view, the one the
+            // getblockhashes RPC reads.
+            readWitnessBlocks: (from, to) =>
+                readReplayWitnessBlocks(indexerReorgView, this.decoderDb.apiView(), from, to),
+            recordWitnessPhase: (batch, phase) => {
+                this._passRestartOnFault = true;
+                return recordReplayWitnessPhase(indexerReorgView, batch, phase);
+            },
+        };
+    },
+
+    async replayWitnessHoldsBlocks(indexerReorgView){
+        const witness = await this.readReplayWitness(indexerReorgView);
+        return witness !== null && witnessHoldsBlocks(witness.phase);
+    },
+
+    // Called by catchUpToDecoder after each committed block. Under the recorded rules,
+    // the chunk that closes at this height is digested from the committed rows and held
+    // against its record. True stops block application at this block: a mismatch writes
+    // 'diverged' and holds, and the last chunk matching at replay_to writes 'witnessed'.
+    async replayWitnessChunkCommitted(indexerReorgView, committedTip){
+        if(this.replayWitnessPhase !== 'witness') return this.replayWitnessPhase === 'diverged';
+
+        const witness = await this.readReplayWitness(indexerReorgView);
+        const step = await stepWitnessChunk(witness, Number(committedTip),
+            this.replayWitnessDeps(indexerReorgView));
+        if(!step || !step.phase) return false;
+
+        this.replayWitness = Object.assign({}, witness, { phase: step.phase });
+        this.replayWitnessPhase = step.phase.phase;
+        if(step.phase.phase === 'diverged'){
+            getLogger().error('Retroactive replay witness diverged in chunk ' + step.chunk.from + '-' +
+                step.chunk.to + ': recorded ' + step.chunk.d + ', replayed ' + step.digest +
+                '. Holding block application; nothing is signed over this window.');
+            this.holdRetroactiveReplayDiverged();
+        }
+        return true;
+    },
+
+    // Exit nonzero so an on-failure supervisor restarts the process as well as an
+    // unless-stopped one. A method, like fatalExit, so a test can observe the decision.
+    exitAfterReplayWitness(committedTip){
+        getLogger().info('Retroactive replay witness reproduced the window through block ' +
+            committedTip + '; restarting to replay it under the current rules.');
+        process.exit(1);
+    },
+
+    // Persist the terminal state only after the committed cursor reaches replay_to and,
+    // under a witness, only after the final pass has recorded whether the window changed.
+    // Each append happens before the in-memory state changes, so a failed write leaves
+    // the replay open and retryable on the next supervised pass.
+    async completeRetroactiveReplay(indexerReorgView, committedTip){
+        if(!replayReachedTip(this.replayMarker, committedTip)) return false;
+
+        const witness = await this.readReplayWitness(indexerReorgView);
+        if(witness){
+            const final = await stepWitnessFinal(witness, Number(committedTip),
+                this.replayWitnessDeps(indexerReorgView));
+            if(final){
+                this.replayWitness = Object.assign({}, witness, { phase: final.phase });
+                getLogger().info('Retroactive replay final pass reached block ' + committedTip + '; the window ' +
+                    (final.changed ? 'changed' : 'did not change') + ' under the current rules.');
+            }
+        }
+        if(!replayMayComplete(this.replayMarker, committedTip,
+            this.replayWitness ? this.replayWitness.phase : null)) return false;
+
+        const replayed = advanceReplayMarker(this.replayMarker, 'replayed');
+        this._passRestartOnFault = true;
+        await recordReplayMarker(indexerReorgView, replayed);
+        this.replayMarker = replayed;
+        if(this.stallReason === 'retroactive_replay'){
+            this.stallReason = null;
+            this.stallClearsAt = null;
+            this.stallBlock = null;
+        }
+        return true;
     },
 
     // Handle block reorgs. When two or more reorgs land between indexer iterations and a
@@ -133,6 +263,7 @@ module.exports = {
         // The decoder writes one REORG event per orphaned block, so this is a block count, not a reorg count.
         getLogger().warn("Detected " + unprocessedReorgs.length + " orphaned block(s) from decoder reorg events; deepest at block #" + minReorgBlock);
         if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= minReorgBlock){
+            this._passRestartOnFault = true;
             await this.rollback.rollback(minReorgBlock);
             // Re-read the resume cursor: rollback() deleted every block >=
             // the reorg point, and lastIndexerBlock was read BEFORE the
@@ -151,8 +282,8 @@ module.exports = {
         // window left the cursor advanced and the rollback was never retried, stranding
         // orphaned old-chain rows below minReorgBlock (silent consensus divergence). Writing
         // strictly after the commit keeps the cursor un-advanced on failure, so the same
-        // reorg is re-detected and retried on the next pass (a throw ends the process, so that
-        // pass runs after the supervisor restart); the retry is idempotent because
+        // reorg is re-detected and retried after the supervisor restart. runBlockLoop rides out
+        // only failures from a pass that has not started rollback or replay writes. The retry is idempotent because
         // the rollback is skipped once lastIndexerBlock has dropped below minReorgBlock.
         // Oldest-first so a partial-write crash only advances the cursor as far as is durable.
         for(let reorg of unprocessedReorgs){

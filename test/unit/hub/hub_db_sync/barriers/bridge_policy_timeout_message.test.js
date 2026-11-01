@@ -8,8 +8,9 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// The bridge barrier's timeout message: above the height-map activation it names the
-// admission height shortfall and omits the clock mirror time, below it keeps the old text.
+// The bridge and policy barriers' timeout messages: above the height-map activation each
+// names the admission height shortfall and omits the clock mirror time, below it keeps the
+// old text.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -49,5 +50,34 @@ describe('bridge barrier timeout message', function () {
         assert.strictEqual(message,
             'bridge sync barrier timed out after 1ms waiting for block_time 5000' +
             ' (bridge mirror at 1234)');
+    });
+});
+
+async function policyTimeoutMessage(sync) {
+    sync.policyBootstrapped  = true;
+    sync._bootstrapDrained   = true;
+    sync.policySyncTimestamp = 1234;
+    sinon.stub(sync, 'refreshPolicySyncTimestamp').resolves(1234);
+    try {
+        await sync.waitForPolicySync(5000, 1, 800);
+        return null;
+    } catch (e) {
+        return e.message;
+    }
+}
+
+describe('policy barrier timeout message', function () {
+    it('above the activation names the admission height and drops the mirror time', async function () {
+        const message = await policyTimeoutMessage(makeSync(true));
+        assert.strictEqual(message,
+            'policy sync barrier timed out after 1ms' +
+            ' (admission height policy_snapshots.BTC at none, needs 796)');
+    });
+
+    it('below the activation keeps the mirror time text', async function () {
+        const message = await policyTimeoutMessage(makeSync(false));
+        assert.strictEqual(message,
+            'policy sync barrier timed out after 1ms waiting for block_time 5000' +
+            ' (policy mirror at 1234)');
     });
 });

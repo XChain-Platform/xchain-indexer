@@ -78,6 +78,9 @@ function queryHandler(context, clientState){
             return await readLatestTickerId(sql, context, clientState);
         if(/INSERT IGNORE INTO index_tickers/.test(sql))
             return insertTicker(args, context, clientState);
+        // The legacy tick(200) collision probe finds no row in this fixture.
+        if(/LEFT\(tick, 200\)=LEFT\(\?, 200\)/.test(sql))
+            return [];
         throw new Error('Unexpected query: ' + sql);
     };
 }

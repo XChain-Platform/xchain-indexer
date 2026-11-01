@@ -23,7 +23,7 @@ CREATE TABLE index_tickers (
     block_index BIGINT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE UNIQUE INDEX tick on index_tickers (tick(200));
+CREATE UNIQUE INDEX tick on index_tickers (tick(250));
 -- Secondary index on block_index, mirroring index_addresses.sql. Declared here (not
 -- only in the dated migration that added it out of band) so reconcileTableIndexes can
 -- parse it and the definition path self-heals: without this line the index exists as a

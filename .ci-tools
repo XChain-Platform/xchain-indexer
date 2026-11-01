@@ -9,6 +9,9 @@
 # query text, not binaries the suite runs. CREATE is the same kind of false
 # positive: the mirror dispute barrier test builds its in-memory SQLite tables
 # with db.exec('CREATE TABLE ...'), which the spawn scan reads as a command.
+# ALTER is the same: the mirror supersede columns test migrates its SQLite table
+# with db.exec('ALTER TABLE ...').
 -DELETE
 -UPDATE
 -CREATE
+-ALTER

@@ -23,7 +23,8 @@
  * ANCHOR_REWARD_COPY_SELECTION_ACTIVATION (src/sql/anchor_reward_attestation_copies.sql).
  *
  * A consumer whose schema has no copies table (a vendored mirror without the SQL file)
- * skips the write; the main row is applied either way.
+ * skips the write. A BTC indexer fails the row apply instead because copy completeness
+ * decides anchor-reward derivation there.
  *
  ********************************************************************/
 
@@ -31,7 +32,7 @@
 
 const crypto = require('crypto');
 const { applyMirrorWrite } = require('../mirror_write.js');
-const { LOCAL_COLUMN_CACHE_TTL_MS } = require('../mirror_bounds.js');
+const { mirrorTablePresent } = require('../barriers/mirror_table_probe.js');
 const { getLogger } = require('../../../observability/index.js');
 
 const COPIES_TABLE = 'anchor_reward_attestation_copies';
@@ -55,37 +56,32 @@ function copyInsert(row){
     return { sql, args };
 }
 
-// Per-instance copy-write state on the HubDbSync instance: when the copies table was last found
-// missing, the error texts already logged, and the failure count mirrorStatus reports.
+// Per-instance copy-write state on the HubDbSync instance: the error texts already logged and
+// the failure count mirrorStatus reports.
 function copyState(sync){
-    if(!sync._attestationCopies) sync._attestationCopies = { missingAt: null, warned: new Set(), failures: 0 };
+    if(!sync._attestationCopies) sync._attestationCopies = { warned: new Set(), failures: 0 };
     return sync._attestationCopies;
 }
 
-// Whether the copies table is present, probing at most once per column-cache window: a
-// consumer without it (a vendored mirror) answers from the cached miss for every later row,
-// and a table built after a cold-start race is found again once the window passes.
-async function copiesTablePresent(sync, state){
-    if(state.missingAt !== null && (Date.now() - state.missingAt) < LOCAL_COLUMN_CACHE_TTL_MS) return false;
-    try {
-        await sync.localColumns(COPIES_TABLE);
-        state.missingAt = null;
-        return true;
-    } catch (e) {
-        state.missingAt = Date.now();
-        return false;
-    }
+// The explorer vendors this client but has no indexer back-reference. Only a BTC indexer
+// derives anchor rewards from the copy set and therefore needs copy writes to fail closed.
+function isDerivingAnchorRewardNode(sync){
+    const indexer = sync && sync.hubDb && sync.hubDb.indexer;
+    return String(sync && sync.coin || '').trim().toUpperCase() === 'BTC' &&
+        !!(indexer && indexer.indexerDb);
 }
 
 // Record `row`, an anchor_reward_attestations row applyRow has just applied, as a copy.
-// `sync` is the HubDbSync instance (hubDb, localColumns). Never fails the apply: the main row
-// has landed, and a copy only adds a candidate the copy selector reads when its gate is
-// armed. A missing table skips the write; a failed write is counted in
-// sync._attestationCopies.failures (mirrorStatus attestationCopyFailures) and logged once per
-// distinct error. Returns whether the copy was written.
+// A missing table or failed write rejects the apply on a BTC indexer, keeping the drain cursor
+// before the row so its idempotent main upsert and copy insert can retry. Other consumers keep
+// best-effort behavior. Failed writes are counted and logged once per distinct error.
 async function recordAttestationCopy(sync, row){
     const state = copyState(sync);
-    if(!await copiesTablePresent(sync, state)) return false;
+    const deriving = isDerivingAnchorRewardNode(sync);
+    if(!await mirrorTablePresent(sync, COPIES_TABLE)){
+        if(deriving) throw new Error(COPIES_TABLE + ' is required for BTC anchor-reward derivation');
+        return false;
+    }
     try {
         const { sql, args } = copyInsert(row);
         await applyMirrorWrite(sync.hubDb, sql, args);
@@ -95,11 +91,12 @@ async function recordAttestationCopy(sync, row){
         const text = String(e && e.message ? e.message : e);
         if(!state.warned.has(text)){
             state.warned.add(text);
-            getLogger().warn('HubDbSync: ' + COPIES_TABLE + ' write failed (' + text + '); the ' +
-                'anchor_reward_attestations row is applied and only this copy is not recorded');
+            getLogger().warn('HubDbSync: ' + COPIES_TABLE + ' write failed (' + text + ')' +
+                (deriving ? '; the BTC mirror row will retry' : '; only this copy is not recorded'));
         }
+        if(deriving) throw e;
         return false;
     }
 }
 
-module.exports = { COPIES_TABLE, copyDigest, copyInsert, recordAttestationCopy };
+module.exports = { COPIES_TABLE, copyDigest, copyInsert, isDerivingAnchorRewardNode, recordAttestationCopy };

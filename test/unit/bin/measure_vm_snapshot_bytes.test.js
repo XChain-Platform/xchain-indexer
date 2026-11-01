@@ -13,7 +13,7 @@ const blocksMixin = require('../../../src/db/blocks/index.js');
 const pollSnapshotMixin = require('../../../src/db/polls/vm_snapshot.js');
 const valueChecks = require('../../../src/utility/validation/value_checks.js');
 const {
-    parseArgs, vmBlocksQuery, measure, render,
+    parseArgs, vmBlocksQuery, measure, render, exitCodeFor,
 } = require('../../../bin/measure_vm_snapshot_bytes.js');
 
 const SETTLEMENT_SQL = /FROM cross_chain_settlements/;
@@ -45,13 +45,21 @@ function makeDb(executionRows){
 }
 
 describe('bin/measure_vm_snapshot_bytes', function () {
-    it('parses bounds, limit, database, cached and JSON modes', function () {
+    it('parses bounds, limit, database, cached, expect-hits and JSON modes', function () {
         assert.deepStrictEqual(parseArgs([]), {
-            from: null, to: null, limit: 50, db: null, cached: false, polls: false, json: false,
+            from: null, to: null, limit: 50, db: null,
+            cached: false, expectHits: false, polls: false, json: false,
         });
         assert.deepStrictEqual(parseArgs([
             '--from', '0', '--to', '12', '--limit', '5', '--db', 'indexer', '--cached', '--json',
-        ]), { from: 0, to: 12, limit: 5, db: 'indexer', cached: true, polls: false, json: true });
+        ]), {
+            from: 0, to: 12, limit: 5, db: 'indexer',
+            cached: true, expectHits: false, polls: false, json: true,
+        });
+        assert.deepStrictEqual(parseArgs(['--expect-hits']), {
+            from: null, to: null, limit: 50, db: null,
+            cached: true, expectHits: true, polls: false, json: false,
+        });
     });
 
     it('parses --polls to true and its absence to false', function () {
@@ -160,6 +168,47 @@ describe('bin/measure_vm_snapshot_bytes', function () {
         assert.strictEqual(db._vmSnapshotMemo, null);
         assert.match(render(result, false), /\n# cache blocks=3 hits=2 misses=1 max-hit=1ms max-miss=1ms$/);
         assert.deepStrictEqual(JSON.parse(render(result, true)).cache, result.cache);
+    });
+
+    it('returns cache-hit expectation exit codes for cached measurement results', async function () {
+        const snapshot = { attestations: {}, settled: {}, calls: {} };
+        const rows = [
+            { block_index: '12', executions: 1 },
+            { block_index: '11', executions: 1 },
+        ];
+        const makeCacheDb = getCrossChainDataForVM => ({
+            doQueryStrict: async () => rows,
+            buildCrossChainDataForVM: async () => snapshot,
+            getCrossChainDataForVM,
+        });
+        const cachedDb = makeCacheDb(async function (blockIndex){
+            if(!this.cachedSnapshot)
+                this.cachedSnapshot = await this.buildCrossChainDataForVM(blockIndex);
+            return this.cachedSnapshot;
+        });
+        const rebuildingDb = makeCacheDb(function (blockIndex){
+            return this.buildCrossChainDataForVM(blockIndex);
+        });
+        const opts = parseArgs(['--expect-hits']);
+        const cached = await measure(cachedDb, opts, () => 0);
+        const rebuilding = await measure(rebuildingDb, opts, () => 0);
+
+        assert.strictEqual(cached.cache.hits, 1);
+        assert.strictEqual(exitCodeFor(cached, opts), 0);
+        assert.strictEqual(rebuilding.cache.hits, 0);
+        assert.strictEqual(exitCodeFor(rebuilding, opts), 1);
+    });
+
+    it('returns zero without expect-hits and requires a positive hit with it', function () {
+        const hit = { cache: { hits: 2, misses: 1 } };
+        const miss = { cache: { hits: 0, misses: 1 } };
+        const absent = {};
+
+        for(const result of [hit, miss, absent])
+            assert.strictEqual(exitCodeFor(result, { expectHits: false }), 0);
+        assert.strictEqual(exitCodeFor(hit, { expectHits: true }), 0);
+        assert.strictEqual(exitCodeFor(miss, { expectHits: true }), 1);
+        assert.strictEqual(exitCodeFor(absent, { expectHits: true }), 1);
     });
 
     it('restores the original builder and database state when cached measurement throws', async function () {

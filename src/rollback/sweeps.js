@@ -28,6 +28,7 @@
 // the two collectors disagree about which markets a reorg must recompute.
 const Database  = require('../db');
 const sweepSql  = require('../db/rollback/sweeps.js');
+const { getLogger } = require('../observability/index.js');
 
 const attestRecomputeStatsRecorder = Symbol('attestRecomputeStatsRecorder');
 
@@ -108,6 +109,28 @@ function installAttestRecomputeStatsRecorder(rollback){
 
 module.exports = {
 
+    // The hub mirror streams only new price_snapshots rows after its bootstrap, so the
+    // rounds the BTC purge deleted would never return and fee quotes would refuse for
+    // lack of a fresh round. Called once the reorg has committed (a re-page started
+    // earlier would race the open transaction). Owes the table a full re-page, then
+    // drains just that table in the background; a failed or unready drain leaves the
+    // debt owed for the mirror's own retry. Never throws.
+    repagePriceMirrorAfterCommit(){
+        if(!this._priceMirrorRepageOwed) return;
+        this._priceMirrorRepageOwed = false;
+        let sync = this.indexer && this.indexer.hubDbSync;
+        if(!sync || typeof sync.markRepageOwed !== 'function' || typeof sync.bootstrapTable !== 'function') return;
+
+        const report = error => getLogger().warn('Rollback: price_snapshots re-page failed; the mirror will retry: ' +
+            ((error && error.message) || error));
+        try {
+            sync.markRepageOwed(['price_snapshots']);
+            Promise.resolve(sync.bootstrapTable('price_snapshots')).catch(report);
+        } catch(error){
+            report(error);
+        }
+    },
+
     // Sweep balances rows orphaned by the index-table delete above. `balances` is a
     // derived table keyed by (address_id, tick_id); it is NOT in dataTables (not
     // deleted by action_index) and is normally reconciled by updateAddressBalance.
@@ -185,6 +208,8 @@ module.exports = {
     async purgeOrphanedPriceSnapshots(block_index){
         if(this.config['COIN'] === 'BTC'){
             await sweepSql.purgeOrphanedPriceSnapshots(this.indexerDb, block_index);
+            // The purge is only a transaction write here; the re-page waits for the commit.
+            this._priceMirrorRepageOwed = true;
         }
     },
 

@@ -4,6 +4,7 @@ const { tokenPolicyRejects } = require('../../consensus/order_swap_payout_policy
 const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
 const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
 const MARKET_LIST_SOURCE_KEY = 'market_list_source_activation.MARKET_LIST_SOURCE_ACTIVATION';
+const SAME_TOKEN_REFUSAL_KEY = 'same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION';
 
 /*********************************************************************
  *
@@ -108,6 +109,15 @@ module.exports = {
         let ctx = await this.loadSwapLists(data, swap, swapInfo);
         ctx.perTokenPolicy = gateRegistry.activeAt(PAYOUT_POLICY_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
         ctx.checkCounterpartySource = gateRegistry.activeAt(MARKET_LIST_SOURCE_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+
+        // Skip a pre-activation offer whose canonical GIVE and GET token ids are equal.
+        if(ctx.giveTokenInfo && ctx.getTokenInfo &&
+           !this.util.isNull(ctx.giveTokenInfo['TICK_ID']) &&
+           !this.util.isNull(ctx.getTokenInfo['TICK_ID']) &&
+           String(ctx.giveTokenInfo['TICK_ID']) === String(ctx.getTokenInfo['TICK_ID']) &&
+           gateRegistry.activeAt(SAME_TOKEN_REFUSAL_KEY, this.config['NETWORK'],
+               this.config['COIN'], data['BLOCK_INDEX'], null))
+            return false;
 
         // Loop through matches and take the first valid one
         for(let match of matches){

@@ -27,37 +27,36 @@
 
 'use strict';
 
+const rpcParams = require('./rpc/params.js');
+
 // Rows a single answer may carry. A busy hour publishes three 2-round batches,
 // so 500 rows span roughly a week of windows; the caller pages by advancing
 // first_round past the last batch it received when `truncated` is set.
 const PRICE_BATCHES_DEFAULT_LIMIT = 500;
 const PRICE_BATCHES_MAX_LIMIT     = 1000;
 
-function isRound(v) {
-    return Number.isSafeInteger(v) && v >= 0;
-}
-
-// A JSON number or a decimal-digit string as a number, anything else NaN. Typed
-// before it is numbered, because Number() reads null, '', [] and false as 0 and '0x10' as 16.
-function integerParam(v) {
-    if (typeof v === 'number') return v;
-    return (typeof v === 'string' && /^\d+$/.test(v)) ? Number(v) : NaN;
-}
-
 function validateInclusiveBounds(body, firstName, lastName) {
     body = body || {};
-    let first = integerParam(body[firstName]);
-    let last  = integerParam(body[lastName]);
-    if (!isRound(first)) return { ok: false, error: firstName + ' must be a non-negative integer' };
-    if (!isRound(last))  return { ok: false, error: lastName + ' must be a non-negative integer' };
+    // Parse both required round boundaries as exact non-negative integers.
+    let firstParam = rpcParams.integer(body[firstName], { name: firstName, min: 0 });
+    let lastParam = rpcParams.integer(body[lastName], { name: lastName, min: 0 });
+    if (firstParam.error) return { ok: false, error: firstParam.error };
+    if (lastParam.error) return { ok: false, error: lastParam.error };
+    let first = firstParam.value;
+    let last = lastParam.value;
+    // Refuse a reversed closed range rather than turning it into an empty query.
     if (first > last)    return { ok: false, error: firstName + ' must not exceed ' + lastName };
     return { ok: true, first, last };
 }
 
 function validatedLimit(body) {
-    let limit = body.limit === undefined || body.limit === null ? PRICE_BATCHES_DEFAULT_LIMIT : integerParam(body.limit);
-    if (!Number.isInteger(limit) || limit < 1) return { ok: false, error: 'limit must be a positive integer' };
-    return { ok: true, limit: Math.min(limit, PRICE_BATCHES_MAX_LIMIT) };
+    // Default an omitted page size and cap every explicit positive size.
+    let parsed = rpcParams.limit(body.limit, {
+        defaultValue: PRICE_BATCHES_DEFAULT_LIMIT,
+        max: PRICE_BATCHES_MAX_LIMIT
+    });
+    if (parsed.error) return { ok: false, error: parsed.error };
+    return { ok: true, limit: parsed.value };
 }
 
 /**
@@ -69,6 +68,13 @@ function validatedLimit(body) {
  * @param {{first_round:*, last_round:*, limit?:*}} body
  * @returns {{ok:true, first_round:number, last_round:number, limit:number}|{ok:false, error:string}}
  */
+// A driver number, BigInt or digit string as a number; null, undefined and false as null.
+function nullableNumber(v) {
+    if (v === null || v === undefined || v === false) return null;
+    let n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
 function validatePriceBatchParams(body) {
     body = body || {};
     let bounds = validateInclusiveBounds(body, 'first_round', 'last_round');
@@ -98,18 +104,31 @@ function validateAttestBatchParams(body) {
  * unanswered rather than empty. Rows come from the driver as BigInt-or-string
  * BIGINTs, so every number is normalized through Number() for the wire.
  *
+ * Each batch also carries its landing block_index and that block's PROTOCOL
+ * block_time, the same clock the pushpricebatch for it carried, so a hub the push
+ * never reached can stamp the landing from this read. Either is null when it
+ * cannot be resolved, never a guess.
+ *
  * @param {number|null} latestBlockIndex the indexer's committed tip
  * @param {Array<object>} rows
  * @param {{first_round:number, last_round:number, limit:number}} v
+ * @param {Map<number, number>} [blockTimes] protocol time by landing block_index
  */
-function buildPriceBatchesResponse(latestBlockIndex, rows, v) {
+function buildPriceBatchesResponse(latestBlockIndex, rows, v, blockTimes) {
     let list = Array.isArray(rows) ? rows : [];
-    let batches = list.map(r => ({
-        action_index: Number(r.action_index),
-        first_round:  Number(r.batch_first_round),
-        last_round:   Number(r.batch_last_round),
-        round_count:  r.round_count === null || r.round_count === undefined ? null : Number(r.round_count)
-    }));
+    let times = blockTimes instanceof Map ? blockTimes : new Map();
+    let batches = list.map(r => {
+        let blockIndex = nullableNumber(r.block_index);
+        let blockTime  = blockIndex === null ? null : nullableNumber(times.get(blockIndex));
+        return {
+            action_index: Number(r.action_index),
+            first_round:  Number(r.batch_first_round),
+            last_round:   Number(r.batch_last_round),
+            round_count:  nullableNumber(r.round_count),
+            block_index:  blockIndex,
+            block_time:   blockTime
+        };
+    });
     return {
         block_index: latestBlockIndex === null || latestBlockIndex === undefined ? null : Number(latestBlockIndex),
         first_round: v.first_round,

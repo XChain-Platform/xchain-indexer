@@ -98,7 +98,8 @@ module.exports = {
 
     // Throw an error and log to console
     throwError(error){
-        getLogger().error('throwError:', error);
+        const message = (error instanceof Error) ? error.message : String(error);
+        getLogger().error('throwError: ' + message);
         throw (error instanceof Error) ? error : new Error(String(error));
     },
 

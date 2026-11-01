@@ -32,8 +32,85 @@ const { isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirro
 const { consumerTargetHeight } = require('../../consensus/gates/mirror_admission_margin_gate.js');
 const { WATERMARK_STALL_CHECK_MS, watermarkStallVerdict, sanitizeHeights,
         heightsAdvanced } = require('./watermark_config.js');
+const { MIRRORED_TABLES } = require('./mirror_tables.js');
 
 module.exports = {
+
+    // Record that one table completed its drain on the connection that opened it.
+    // The snapshot watermark is the initial completeness point; later heartbeats on
+    // this socket advance only tables carrying this same epoch and selector revision.
+    certifyTableDrain(drain) {
+        if (!drain || drain.connectionEpoch !== this._wsEpoch ||
+            drain.selectorRevision !== this._selectorRevision) return false;
+        const table = drain.table;
+        this._tableDrainEpochs[table] = drain.connectionEpoch;
+        this._tableDrainRevisions[table] = drain.selectorRevision;
+        // Poll mode certifies completeness but never coverage, as certifyFullDrain does
+        // (#2476): append-only REST pages miss in-place upserts and retractions, so the
+        // snapshot watermark and heights must not open a stream or height escape.
+        const watermark = this._pollMode ? 0 : Number(drain.watermark);
+        this._tableWatermarks[table] = Number.isFinite(watermark) ? watermark : 0;
+        if (drain.heights && !this._pollMode) this.noteCertifiedTableHeight(table, drain.heights);
+        this.releaseTableWaiters(table);
+        return true;
+    },
+
+    // A global full-drain certificate remains a valid fallback for direct unit callers
+    // and consumers that complete the whole mirror in one step.
+    tableCertifiedOnCurrentConnection(table) {
+        if (this._schemaMismatchSeen || this._applyFailureSeen) return false;
+        return (this._tableDrainEpochs[table] === this._wsEpoch &&
+                this._tableDrainRevisions[table] === this._selectorRevision) ||
+               this._bootstrapDrained;
+    },
+
+    tableWatermark(table) {
+        if (!this.tableCertifiedOnCurrentConnection(table)) return 0;
+        if (this._tableDrainEpochs[table] === this._wsEpoch &&
+            this._tableDrainRevisions[table] === this._selectorRevision) {
+            const value = Number(this._tableWatermarks[table]);
+            return Number.isFinite(value) ? value : 0;
+        }
+        return this.streamWatermark;
+    },
+
+    noteCertifiedTableHeight(table, raw) {
+        const heights = sanitizeHeights(raw);
+        if (heights === null) return false;
+        const next = Object.assign({}, this.heightWatermarks);
+        if (Object.prototype.hasOwnProperty.call(heights, table)) next[table] = heights[table];
+        else delete next[table];
+        return this.noteHeights(next);
+    },
+
+    advanceCertifiedTableWatermarks(ts, heights) {
+        const value = Number(ts);
+        for (const table of MIRRORED_TABLES) {
+            if (!this.tableCertifiedOnCurrentConnection(table)) continue;
+            if (Number.isFinite(value) && value > this.tableWatermark(table))
+                this._tableWatermarks[table] = value;
+            if (heights) this.noteCertifiedTableHeight(table, heights);
+            this.releaseTableWaiters(table);
+        }
+    },
+
+    releaseTableWaiters(table) {
+        const releases = {
+            price_snapshots: 'releasePriceWaiters',
+            oracle_prices: 'releaseOracleWaiters',
+            cross_chain_matches: 'releaseMatchWaiters',
+            cross_chain_calls: 'releaseCallWaiters',
+            bridge_transfers: 'releaseBridgeWaiters',
+            policy_snapshots: 'releasePolicyWaiters',
+            list_snapshots: 'releaseListShareWaiters',
+            remote_token_snapshots: 'releaseRemoteTokenWaiters',
+            anchor_reward_attestations: 'releaseAnchorAttestWaiters',
+            attestation_responses: 'releaseAttestResponseWaiters'
+        };
+        const method = releases[table];
+        if (method && typeof this[method] === 'function') this[method]();
+        if (table === 'price_snapshots') this.releasePriceTimeWaiters();
+    },
 
     // Advance the stream watermark (monotonic) and re-evaluate every pending
     // barrier waiter; a watermark advance can satisfy any of them.
@@ -101,7 +178,9 @@ module.exports = {
     // claimed tip BEFORE this gate, because a tip the gate refuses is exactly the evidence the
     // stall detector runs on.
     handleWatermarkFrame(event) {
-        if (!this._bootstrapDrained || this._schemaMismatchSeen || this._applyFailureSeen) return;
+        if (this._schemaMismatchSeen || this._applyFailureSeen) return;
+        this.advanceCertifiedTableWatermarks((event || {}).ts, (event || {}).heights);
+        if (!this._bootstrapDrained) return;
         // Heights first, so waiters released by the seconds advance below already see the
         // fresh map rather than the previous frame's.
         this.noteHeights((event || {}).heights);
@@ -219,9 +298,12 @@ module.exports = {
 
     // Sample the stall condition once and act on the verdict. Split from the timer so a
     // test can drive a single evaluation at a chosen clock, with no socket and no DB.
+    // A disconnect pauses both windows; a bootstrap is spared (drainProgressing) only
+    // while its drain keeps moving, so one wedged on an await that never settles exits.
     checkWatermarkStall(now) {
         if (now === undefined) now = Date.now();
         if (!this.enabled || !this.running) return 'ok';
+        if (this._watermarkStallPauseReasons.size > 0 && !this._bootstrapping) return 'paused';
 
         const verdict = watermarkStallVerdict({
             stallMs:         this.watermarkStallMs,
@@ -292,6 +374,25 @@ module.exports = {
             this._stallSeenProgressAt = now;
         }
         return (now - this._stallSeenProgressAt) < this.watermarkStallMs;
+    },
+
+    pauseWatermarkStall(reason, now) {
+        if (now === undefined) now = Date.now();
+        if (this._watermarkStallPauseReasons.size === 0) this._watermarkStallPausedAt = now;
+        this._watermarkStallPauseReasons.add(reason);
+    },
+
+    resumeWatermarkStall(reason, now) {
+        if (now === undefined) now = Date.now();
+        this._watermarkStallPauseReasons.delete(reason);
+        if (this._watermarkStallPauseReasons.size > 0 || this._watermarkStallPausedAt === null) return;
+        const elapsed = Math.max(0, now - this._watermarkStallPausedAt);
+        for (const field of ['_lastWatermarkAdvanceAt', '_heightsLastAdvanceAt',
+                             '_watermarkStallResyncAt', '_stallSeenProgressAt']) {
+            if (Number.isFinite(this[field]) && this[field] <= this._watermarkStallPausedAt)
+                this[field] += elapsed;
+        }
+        this._watermarkStallPausedAt = null;
     },
 
     // Cadence for the sampler, clamped down when the windows themselves are small so a

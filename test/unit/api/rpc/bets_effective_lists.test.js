@@ -126,7 +126,7 @@ describe('public BET reads expose effective list references', function(){
 
         assert.strictEqual(result, rows);
         assertEffectiveListFold(db.doQuery.calls[0][0]);
-        assert.deepStrictEqual(db.doQuery.calls[0][1], ['open']);
+        assert.deepStrictEqual(db.doQuery.calls[0][1], ['open', 25]);
     });
 
     it('rejects regressions that admit invalid edits or leak the zero sentinel', async function(){

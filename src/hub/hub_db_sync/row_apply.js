@@ -83,15 +83,18 @@ module.exports = {
 
         let result;
         try {
-            result = await this.hubDb.doQuery(priceUpsertSql(cols, rows.length), args);
+            // One InnoDB DML statement is one atomic autocommit transaction. Use the
+            // strict write seam so an execution error cannot be mistaken for an empty
+            // success result before the ordered per-row fallback runs.
+            result = await applyMirrorWrite(this.hubDb, priceUpsertSql(cols, rows.length), args);
         } catch (e) {
             result = null;                                   // treated as "did not land", below
         }
-        // doQuery SWALLOWS a query error for a non-transactional statement and returns its
-        // `[]` default; a statement that ran comes back as the driver's OK result object.
-        // An array (or a throw, or nothing) therefore means this batch did not land, and the
-        // caller must re-apply these rows one at a time - where a genuine failure is visible
-        // per row and stops the page at the offending row, as it always did.
+        // The indexer reaches this write through doQueryStrict. The array check also keeps
+        // compatibility with a consumer or test double that exposes only the older doQuery
+        // surface and reports a swallowed error as []. An array, throw or empty result means
+        // the batch did not land, so the caller re-applies the rows in order and a genuine
+        // per-row failure still stops the page at the offending row.
         if (!result || Array.isArray(result)) {
             if (!this._batchApplyWarned) {
                 this._batchApplyWarned = true;

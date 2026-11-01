@@ -27,7 +27,7 @@
  *                     (xchain-sync/src/client/rollback.js). Generates both
  *                     sets of generic delete lists.
  *   3. HASH COVERAGE- which integrity hash (if any) would catch a divergence
- *                     in the table. Declarative: guards in
+ *                     in the table. Declarative: guards in xchain-indexer
  *                     test/unit/hub/hash_coverage.test.js bind the declarations
  *                     to the actual hashing code.
  *
@@ -37,7 +37,8 @@
  *
  * Adding a table: create src/sql/<table>.sql, then add ONE entry to the
  * registry parts under table_lifecycle/ declaring all three dimensions.
- * test/unit/rollback/rollback_coverage.test.js fails until the entry exists, and the
+ * xchain-indexer test/unit/rollback/rollback_coverage.test.js and xchain-sync
+ * test/unit/rollback_coverage.test.js fail until the entry exists, and the
  * per-dimension guards fail until the entry matches reality. Classify by
  * understanding the table, not by silencing the tests.
  *
@@ -48,8 +49,8 @@
  *
  * Entry fields:
  *   table       table name (src/sql/<table>.sql for owner 'indexer')
- *   owner       'indexer' (schema in this repo) | 'sync' (schema in
- *               xchain-sync/src/sql; participates in replication artifacts)
+ *   owner       'indexer' (schema in xchain-indexer/src/sql) | 'sync' (schema
+ *               in xchain-sync/src/sql; participates in replication artifacts)
  *   replication how rows reach a follower:
  *                 'stream:action'  per-block stream, action_index scoped
  *                 'stream:block'   per-block stream, block_index scoped
@@ -84,6 +85,12 @@
  *                 'mirror'      same generic list as the source
  *                 'recomputed' | 'special' | 'exempt' | 'lookup'  as above
  *                 'local'       indexer-local; table never exists on replicas
+ *   replicaRepair  replica-side repair of a count gap that persists across
+ *               completeness sweeps (xchain-sync/src/client/sync.js):
+ *                 'replace'     re-fetch the table from the source and replace
+ *                               the replica's rows wholesale; only for a mirror
+ *                               table safe to rebuild whole from the source
+ *               absent: no self-repair, the gap is reported only
  *   alsoRecomputed  true when a generically-deleted table is ADDITIONALLY
  *               refreshed by the recompute pass (coverage is a union)
  *   hashed      { classes: [...], note }. classes from:
@@ -162,7 +169,7 @@ const ORPHAN_SWEEPS = [
 //
 // This block is the coverage contract. The guards bind it to the code:
 // xchain-sync test/unit/table_content_parity.test.js (every replicated table is
-// in the window or in one of the exclusions below) and this repo's
+// in the window or in one of the exclusions below) and xchain-indexer
 // test/unit/hub/hash_coverage.test.js (the carve-outs stay pinned to the
 // operator ruling).
 //

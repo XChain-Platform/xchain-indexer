@@ -70,6 +70,10 @@ function rethrowIfInfraFault(e){
     // Remote-token barrier deferral: the same node-local coverage verdict for the admitted
     // remote-token pin read (db.assertRemoteTokenBarrierNotSkipped()), retried the same way.
     if(e && e.code === 'REMOTE_TOKEN_BARRIER_DEFERRED') throw e;
+    // Capability proof deferral: db.assertCapabilityProofNotHeld() fires when a quorum read
+    // keys on a snapshot whose rows are still held for their proof. A verdict computed from
+    // the partial set is node-local, so the block rolls back and waits for the proof.
+    if(e && e.code === 'CAPABILITY_PROOF_DEFERRED') throw e;
     // UTXO tracker gave no answer (unreachable, non-2xx, unreadable, unconfigured): a
     // node-local fault whose healthy peers got an answer, so a verdict here would fork.
     if(e && e.code === 'UTXO_TRACKER_UNAVAILABLE') throw e;

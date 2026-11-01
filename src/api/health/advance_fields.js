@@ -42,6 +42,13 @@ function advanceFields(indexer, now){
         // container is the wrong answer to a slow block. /status carries it; the fleet watcher crits on it.
         pollSilent:       (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false,
         lastPollAt:       indexer.lastPollAt || null,
+        // A bounded in-process database outage. The class is a stable code, never the
+        // raw error message, so the health surface reports the fault without leaking data.
+        dbOutage:         indexer.dbOutage ? {
+                              since: indexer.dbOutage.since,
+                              failures: indexer.dbOutage.failures,
+                              lastErrorClass: indexer.dbOutage.lastErrorClass
+                          } : null,
         // NOTE degraded stays true during the healthy future-stamped-block wait as well,
         // deliberately: the monitor rules key on `degraded === false` for the wedge case, so
         // flipping it there would turn a healthy wait into a crit. waitingOnFutureBlock and
@@ -60,8 +67,8 @@ function advanceFields(indexer, now){
         waitingOnFutureBlock: waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now),
         // Single machine-readable verdict on the block counter, so a monitor reads one field
         // instead of joining three. stallClassOf returns 'none' | 'future_block_wait' |
-        // 'bridge_proof_wait' | 'train_activation_halt' | 'price_landing_wait' | 'barrier_defer' |
-        // 'wedged', then publishedStallClass can refine it to 'upstream_halted' |
+        // 'bridge_proof_wait' | 'train_activation_halt' | 'operator_action_hold' |
+        // 'price_landing_wait' | 'barrier_defer' | 'wedged', then publishedStallClass can refine it to 'upstream_halted' |
         // 'rollcall_proof_wait' | 'rollcall_proof_stuck' | 'capability_proof_wait' |
         // 'capability_proof_stuck', exactly as GET /status publishes it. The source of truth is
         // stallClassOf and publishedStallClass in src/XChainIndexer/stall_health.js; check those
@@ -73,14 +80,16 @@ function advanceFields(indexer, now){
                                            indexer.barrierHold && indexer.barrierHold.since,
                                            indexer.proofWaitGraceMs),
                               indexer.stallReason,
-                              { decoderReorgHalted: !!indexer.decoderReorgHalted,
+                              { decoderReorgHalted: indexer.decoderReorgHalted === true ||
+                                                       indexer.decoderReorgHalted === null,
                                 ceilingExceeded: barrierCeilingExceeded(indexer.barrierHold,
                                                                         indexer.barrierHoldCeilingMs, now) }),
         // true when every block consensus currently PERMITS this indexer to commit is
         // committed (level with the decoder tip, or the only blocker is a future-stamped
         // block). The "functionally caught up" signal: `synced` keeps its literal
         // decoder-tip-parity meaning and reads false through the whole future-stamp wait.
-        atProcessableTip: atProcessableTip(indexer.isSynced() && !indexer.decoderReorgHalted, indexer.stallReason,
+        atProcessableTip: atProcessableTip(indexer.isSynced() && indexer.decoderReorgHalted !== true &&
+                                           indexer.decoderReorgHalted !== null, indexer.stallReason,
                                            indexer.stallClearsAt, now),
         // Epoch-ms at which the current time-keyed barrier can first be satisfied,
         // or null. Non-null means the indexer is waiting on WALL CLOCK (a future-stamped

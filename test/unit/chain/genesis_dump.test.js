@@ -38,10 +38,25 @@ const util = { isNull: (v) => v === null || v === undefined || v === '' };
 // Uncompressed content bytes == concatenation of `JSON.stringify(obj) + '\n'`,
 // exactly what write() hashes; gzip to disk. Returns { file, contentHash }.
 let counter = 0;
+const tempFiles = new Set();
+
+function tempFile(){
+    const file = path.join(os.tmpdir(), `xchain-gd-unit-${process.pid}-${counter++}.ndjson.gz`);
+    tempFiles.add(file);
+    return file;
+}
+
+function cleanupTempFiles(){
+    for (const file of tempFiles) {
+        try { fs.unlinkSync(file); } catch (_) {}
+        tempFiles.delete(file);
+    }
+}
+
 function buildDump(objs){
     let content = objs.map(o => JSON.stringify(o) + '\n').join('');
     let contentHash = crypto.createHash('sha256').update(content).digest('hex');
-    let file = path.join(os.tmpdir(), `xchain-gd-unit-${process.pid}-${counter++}.ndjson.gz`);
+    let file = tempFile();
     fs.writeFileSync(file, zlib.gzipSync(Buffer.from(content, 'utf8')));
     return { file, contentHash };
 }
@@ -85,12 +100,7 @@ const GOOD = [
 ];
 
 describe('GenesisDump.read @regression', function () {
-    afterEach(function () {
-        // best-effort temp cleanup
-        for (const f of fs.readdirSync(os.tmpdir()))
-            if (f.startsWith(`xchain-gd-unit-${process.pid}-`))
-                try { fs.unlinkSync(path.join(os.tmpdir(), f)); } catch (_) {}
-    });
+    afterEach(cleanupTempFiles);
 
     it('verify-then-import: a pinned-hash mismatch is rejected BEFORE any INSERT', async function () {
         const { file } = buildDump(GOOD);
@@ -157,14 +167,10 @@ describe('GenesisDump.read @regression', function () {
 });
 
 describe('GenesisDump.write @regression', function () {
-    afterEach(function () {
-        for (const f of fs.readdirSync(os.tmpdir()))
-            if (f.startsWith(`xchain-gd-unit-${process.pid}-`))
-                try { fs.unlinkSync(path.join(os.tmpdir(), f)); } catch (_) {}
-    });
+    afterEach(cleanupTempFiles);
 
     it('leaves a non-empty schema_migrations table out of tableOrder', async function () {
-        const file = path.join(os.tmpdir(), `xchain-gd-unit-${process.pid}-${counter++}.ndjson.gz`);
+        const file = tempFile();
         const db = mockDb(HASHES);
         db.listTableNames = async () => ['schema_migrations', 'tokens'];
         db.countRowsInTable = async table => table === 'schema_migrations' ? 2 : 1;
@@ -182,7 +188,7 @@ describe('GenesisDump.write @regression', function () {
     });
 
     it('refuses a BIGINT the pool has already rounded past 2^53-1 instead of writing it', async function () {
-        const file = path.join(os.tmpdir(), `xchain-gd-unit-${process.pid}-${counter++}.ndjson.gz`);
+        const file = tempFile();
         const db = mockDb(HASHES);
         db.listTableNames = async () => ['dispensers'];
         db.countRowsInTable = async () => 1;
@@ -196,12 +202,7 @@ describe('GenesisDump.write @regression', function () {
 });
 
 describe('GenesisDump.read @regression', function () {
-    afterEach(function () {
-        // best-effort temp cleanup
-        for (const f of fs.readdirSync(os.tmpdir()))
-            if (f.startsWith(`xchain-gd-unit-${process.pid}-`))
-                try { fs.unlinkSync(path.join(os.tmpdir(), f)); } catch (_) {}
-    });
+    afterEach(cleanupTempFiles);
 
     it('rejects a row that precedes any table header (no unbounded buffering)', async function () {
         const bad = [ { meta: META }, { r: [1, 2] } ];

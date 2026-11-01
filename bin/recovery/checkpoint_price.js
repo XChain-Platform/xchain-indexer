@@ -20,8 +20,9 @@ const swq = require('../../src/consensus/stake_weighted_quorum.js');
 const HEX64 = /^[0-9a-f]{64}$/;
 const PRICE_STATUSES = new Set(['finalized', 'skipped', 'disputed']);
 const CHECKPOINT_COLUMNS = ['chain', 'network', 'block_index', 'block_hash', 'ledger_hash',
-    'actions_hash', 'contract_hash', 'checkpoint_seq', 'snapshot_block', 'state_root',
-    'state_root_version', 'block_merkle_root', 'block_merkle_version', 'validator_signatures'];
+    'actions_hash', 'contract_hash', 'checkpoint_seq', 'snapshot_block', 'supersedes_from',
+    'rules_digest', 'state_root', 'state_root_version', 'block_merkle_root',
+    'block_merkle_version', 'validator_signatures'];
 
 function fail(kind, key, reason){
     throw new Error(kind + ' ' + String(key || '').substring(0, 32) + '... ' + reason);
@@ -55,6 +56,11 @@ function validateCheckpoint(row, network){
         fail('checkpoint', key, 'has malformed integer fields');
     for(let name of ['block_hash', 'ledger_hash', 'actions_hash', 'contract_hash'])
         if(!HEX64.test(String(row[name] || ''))) fail('checkpoint', key, 'has malformed ' + name);
+    let supersedesFrom = row.supersedes_from == null ? null : row.supersedes_from;
+    let rulesDigest = row.rules_digest == null ? null : row.rules_digest;
+    let plain = supersedesFrom === null && rulesDigest === null;
+    let superseding = integer(supersedesFrom) && typeof rulesDigest === 'string' && HEX64.test(rulesDigest);
+    if(!plain && !superseding) fail('checkpoint', key, 'has malformed supersede fields');
     let rootless = row.state_root === null && row.state_root_version === null &&
         row.block_merkle_root === null && row.block_merkle_version === null;
     let rooted = HEX64.test(String(row.state_root || '')) && integer(row.state_root_version) &&
@@ -215,7 +221,7 @@ function verifyArchive(archive, ctx){
 function comparable(column, value){
     if(value === null || value === undefined) return null;
     if(['block_index', 'checkpoint_seq', 'snapshot_block', 'state_root_version',
-        'block_merkle_version'].includes(column)) return Number(value);
+        'block_merkle_version', 'supersedes_from'].includes(column)) return Number(value);
     return String(value);
 }
 
@@ -235,12 +241,14 @@ async function writeCheckpoint(db, row){
     await db.doQuery(
         `INSERT IGNORE INTO state_checkpoints
             (id, chain, network, block_index, block_hash, ledger_hash, actions_hash,
-             contract_hash, checkpoint_seq, snapshot_block, state_root, state_root_version,
-             block_merkle_root, block_merkle_version, validator_signatures)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             contract_hash, checkpoint_seq, snapshot_block, supersedes_from, rules_digest,
+             state_root, state_root_version, block_merkle_root, block_merkle_version,
+             validator_signatures)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [Number(row.id), row.chain, row.network, Number(row.block_index), row.block_hash,
          row.ledger_hash, row.actions_hash, row.contract_hash, Number(row.checkpoint_seq),
-         Number(row.snapshot_block), row.state_root,
+         Number(row.snapshot_block), row.supersedes_from == null ? null : Number(row.supersedes_from),
+         row.rules_digest == null ? null : row.rules_digest, row.state_root,
          row.state_root_version == null ? null : Number(row.state_root_version), row.block_merkle_root,
          row.block_merkle_version == null ? null : Number(row.block_merkle_version), row.validator_signatures]);
 }

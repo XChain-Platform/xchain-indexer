@@ -85,11 +85,15 @@ describe('ANCHOR v0 checkpoint sequence binding @regression @tier1', function ()
             ['BTC', 'regtest', true]);
     });
 
-    it('keeps the all-status watermark immediately before activation', async function () {
+    // Regtest reads verified rows on either side of the bind gate, as the archive
+    // head does, so an abandoned chain's unverified rows never set the watermark.
+    // The all-status read below the gate is pinned for mainnet and testnet in
+    // anchor_checkpoint_seq_bind_v0_below_gate.test.js.
+    it('reads only verified rows on regtest immediately before activation', async function () {
         const data = await parseSection('99', '100', 99);
 
         assert.strictEqual(data.STATUS, 'valid');
         assert.deepStrictEqual(armed.indexer.indexerDb.getMaxAnchorCheckpointSeq.firstCall.args,
-            ['BTC', 'regtest', false]);
+            ['BTC', 'regtest', true]);
     });
 });

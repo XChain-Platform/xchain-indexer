@@ -57,8 +57,10 @@ function apiKeyGate({ INDEXER_API_KEY, ALLOW_UNAUTHED, WRITE_METHODS, FEDERATION
         let id = (Array.isArray(req.body) ? null : (req.body && req.body.id)) || null;
         let gated = calls.some(call => {
             let method = call && call.method;
-            let normalized = method ? method.toLowerCase() : '';
-            return method && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized) || GATED_EXEC_METHODS.has(normalized));
+            // Leave malformed method names for the JSON-RPC router instead of calling string methods on them.
+            if(typeof method !== 'string') return false;
+            let normalized = method.toLowerCase();
+            return WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized) || GATED_EXEC_METHODS.has(normalized);
         });
         if(gated){
             if(INDEXER_API_KEY){
@@ -69,7 +71,8 @@ function apiKeyGate({ INDEXER_API_KEY, ALLOW_UNAUTHED, WRITE_METHODS, FEDERATION
                         error: { code: -32001, message: 'Unauthorized' }
                     });
                 }
-            } else if(!ALLOW_UNAUTHED){
+            // Open keyless access only for the boolean derived from the exact configuration value.
+            } else if(ALLOW_UNAUTHED !== true){
                 return res.status(401).json({
                     jsonrpc: '2.0', id,
                     error: { code: -32001, message: 'Unauthorized: this method requires INDEXER_API_KEY, or set INDEXER_ALLOW_UNAUTHENTICATED=true for keyless single-host/regtest access' }

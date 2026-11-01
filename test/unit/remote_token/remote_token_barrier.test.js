@@ -145,11 +145,12 @@ describe('remote-token pin barrier, HubDbSync height wait @regression @tier1', f
     });
 
     it('opens at B only when the watermark reaches B minus the table margin', async function () {
+        // LTC's chain margin (14 blocks on remote_token_snapshots) is active from genesis on regtest.
         const s = sync({ remote_token_snapshots: { LTC: 95 } });
         await s.refreshRemoteTokenSyncState(true);
-        assert.strictEqual(s.remoteTokenSyncSatisfied(99), true);
-        assert.strictEqual(s.remoteTokenSyncSatisfied(100), false);
-        assert.strictEqual(s.remoteTokenSyncSatisfied(101), false);
+        assert.strictEqual(s.remoteTokenSyncSatisfied(109), true);
+        assert.strictEqual(s.remoteTokenSyncSatisfied(110), false);
+        assert.strictEqual(s.remoteTokenSyncSatisfied(111), false);
     });
 
     it('reads its own table and chain only', async function () {
@@ -166,7 +167,7 @@ describe('remote-token pin barrier, HubDbSync height wait @regression @tier1', f
         s.noteHeights({ remote_token_snapshots: { LTC: 96 } });
         assert.strictEqual(await waiting, true);
         await assert.rejects(s.waitForRemoteTokenSync(20, 500),
-            /remote token sync barrier timed out .* waiting for block_height 500 \(admission height remote_token_snapshots\.LTC at 96, needs 496\)/);
+            /remote token sync barrier timed out .* waiting for block_height 500 \(admission height remote_token_snapshots\.LTC at 96, needs 486\)/);
         assert.strictEqual(s._remoteTokenWaiters.length, 0);
     });
 

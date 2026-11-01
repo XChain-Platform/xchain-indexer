@@ -84,6 +84,12 @@ describe('stallFields() stall attribution', function(){
         }).stallReason, 'specific indexer reason');
     });
 
+    it('publishes an unverified reason before the first read', function(){
+        const fields = stallFields({ decoderReorgHalted: null });
+        assert.match(fields.stallReason, /^decoder_reorg_halt_unverified:/);
+        assert.strictEqual(fields.decoderReorgHalted, false);
+    });
+
     it('coerces the decoder reorg halt marker to a boolean', function(){
         assert.strictEqual(stallFields({ decoderReorgHalted: 'halted' }).decoderReorgHalted,
             true);

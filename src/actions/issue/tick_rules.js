@@ -25,9 +25,11 @@
 'use strict';
 
 const { createRegistry, UNARMED } = require('../../protocol_changes/core.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 const CHILD_TOKEN_INDEPENDENT_EDITS_KEY =
     'child_token_independent_edits_activation.CHILD_TOKEN_INDEPENDENT_EDITS_ACTIVATION';
+const TICK_NORMALIZE_KEY = 'tick_normalize_activation.TICK_NORMALIZE_ACTIVATION';
 const childTokenIndependentEditsGate = createRegistry();
 childTokenIndependentEditsGate.addGate(CHILD_TOKEN_INDEPENDENT_EDITS_KEY, 'height', {
     mainnet: UNARMED,
@@ -112,10 +114,15 @@ function validateTickForm(ctx){
     let { data, str, batchIssuanceLimitsV2 } = ctx;
     let error = ctx.error;
 
-    // Verify any TICK ID given is valid tick ID
+    // Verify a TICK ID uses the legacy numeric form below the activation and the
+    // canonical positive decimal form from the activation onward.
     let tid = str.substring(1); // Possible TICK ID (everything after the ^ prefix)
-    if(!error && str.substring(0,1)=='^' && !this.util.isNumeric(tid))
-        error = 'invalid: TICK (id)';
+    if(!error && str.substring(0,1)=='^'){
+        let normalize = gateRegistry.activeAt(TICK_NORMALIZE_KEY, this.config['NETWORK'],
+            this.config['COIN'], data['BLOCK_INDEX'], null);
+        if(normalize ? !/^[1-9]\d*$/.test(tid) : !this.util.isNumeric(tid))
+            error = 'invalid: TICK (id)';
+    }
 
     // Caret rule: isNumeric() is parseFloat-based, so a caret
     // tail containing '.' (e.g. "^12.5" or "^1.0") reads as a number and slips past the

@@ -32,8 +32,8 @@ const NOT_ADMITTED_BEFORE_LAUNCH = 'invalid: not admitted before mainnet launch 
     '(only validator and seed-source transactions are indexed until then)';
 
 // True when the mainnet launch gate admits `tx`, read with the block loop's own inputs and gate
-// values (block_passes.js runOpeningPasses). Judged at `tx.block_time`, the tip for a dry-run, so
-// in the last block before launch it can refuse a transaction the next block would admit.
+// values (block_passes.js runOpeningPasses). Judged at `tx.block_time`, the tip for a dry-run
+// (see syntheticDryRunTx for why that is not the block the transaction lands in).
 function launchGateAdmits(actions, tx){
     const network = actions.config['NETWORK'];
     return prelaunchAdmits(prelaunchInput(tx, { network, coin: actions.config['COIN'], blockTime: tx.block_time }), {
@@ -42,7 +42,23 @@ function launchGateAdmits(actions, tx){
     }) === true;
 }
 
+async function rollbackPreservingError(db, cause, context){
+    try {
+        await db.rollbackTransaction();
+    } catch(rollbackError){
+        const causeText = (cause && cause.message) || cause;
+        const rollbackText = (rollbackError && rollbackError.message) || rollbackError;
+        try {
+            getLogger().error(context + ' rollback failed while unwinding after: ' + causeText +
+                '; rollback error: ' + rollbackText);
+        } catch(_logError){}
+    }
+}
+
 // The synthetic transaction a dry-run feeds processTransaction.
+// Carries the TIP's index and time, so every height- or time-keyed rule and the fee price read
+// are judged at tip; a broadcast lands at tip+1 or later, where an activation can flip the verdict
+// or fee either way. Not stamped tip+1: isEnabled reads that block's time, which does not exist yet.
 // `rawData` (optional) is the caller's literal wire, used as-is in place of the rebuilt string.
 function syntheticDryRunTx(actions, { action, params, source, feeOutputs, probeFeeDestination,
                                       blockIndex, blockTime, guardInert, feeProbe, rawData }){
@@ -168,8 +184,10 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
         blockTime:  blockTime,
         status:     verdict.status,
         error:      dryRunError,
-        // null, never '0', for a withheld batch fee: '0' would tell a confirm screen it is free.
-        xchainFee:  verdict.feeWithheld ? null
+        // null, never '0', when the read-back failed or a batch withheld its fee:
+        // '0' would tell a confirm screen it is free without a complete verdict.
+        xchainFee:  dryRunError ? null
+                   : verdict.feeWithheld ? null
                    : verdict.feeRecord ? String(verdict.feeRecord.amount)
                    : ((verdict.status === 'valid') ? '0' : null),
         sourceFeeBalance: sourceFeeBalance,
@@ -181,4 +199,4 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
 }
 
 module.exports = { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome,
-                   launchGateAdmits, NOT_ADMITTED_BEFORE_LAUNCH };
+                   launchGateAdmits, rollbackPreservingError, NOT_ADMITTED_BEFORE_LAUNCH };

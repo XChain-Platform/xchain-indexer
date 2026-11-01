@@ -30,6 +30,7 @@ const swqCap = require('../../consensus/gates/swq_source_cap_gate');
 const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 const srb = require('../../consensus/snapshot_reorg_buffer.js');
 const gateRegistry = require('../../consensus/gate_registry.js');
+const archivePublish = require('../../consensus/archive_publish_set.js');
 const mirrorJudgement = require('../../consensus/capability_snapshot_proof/mirror_judgement.js');
 const capabilityProof = require('../../consensus/capability_snapshot_proof/verify.js');
 const { getLogger } = require('../../observability/index.js');
@@ -43,16 +44,38 @@ const logHeldProof = createHeldLog({ warn: message => getLogger().warn(message) 
 
 const CAPABILITY_SNAPSHOT_PROOF_ACTIVATION =
     'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION';
+const FIRST_USE_WARNING_SET_CAP = 64;
+
+function warnFirstUseSetOnce(db, key){
+    if(key === null) return;
+    if(!db._capabilityFirstUseWarningSets) db._capabilityFirstUseWarningSets = new Set();
+    const warned = db._capabilityFirstUseWarningSets;
+    if(warned.has(key)) return;
+    warned.add(key);
+    while(warned.size > FIRST_USE_WARNING_SET_CAP)
+        warned.delete(warned.values().next().value);
+    getLogger().warn('Capability snapshot proof is using an unpinned regtest checkpoint validator set for first use.');
+}
 
 async function judgeMirrorResolvedRow(db, row, capability, opts){
     if(!gateRegistry.activeAt(CAPABILITY_SNAPSHOT_PROOF_ACTIVATION,
         db.config['NETWORK'], 'BTC', row.snapshot_block, 0))
         return { verdict: 'unknown', reason: 'this chain resolves ' + capability + ' from the mirror' };
-    let proofOpts = Object.assign({}, opts, { network: db.config['NETWORK'] });
+    let firstUseSetKey = null;
+    let suppliedObserver = opts && opts.noteFirstUseSet;
+    let proofOpts = Object.assign({}, opts, {
+        network: db.config['NETWORK'],
+        noteFirstUseSet: key => {
+            firstUseSetKey = key;
+            if(typeof suppliedObserver === 'function') suppliedObserver(key);
+        },
+    });
+    let proofRow = capability === 'archive_publish'
+        ? Object.assign({}, row, { capability: 'oracle_publish' })
+        : row;
     let result = await mirrorJudgement.judgeMirroredCapabilityRow(
-        row, proofOpts, capabilityProof.verifyCapabilitySnapshotProof);
-    if(result.firstUse)
-        getLogger().warn('Capability snapshot proof is using an unpinned regtest checkpoint validator set for first use.');
+        proofRow, proofOpts, capabilityProof.verifyCapabilitySnapshotProof);
+    if(result.firstUse) warnFirstUseSetOnce(db, firstUseSetKey);
     if(result.verdict === 'held') logHeldProof(row, result.reason);
     return result;
 }
@@ -89,6 +112,14 @@ module.exports = {
     // aggregate `weight`. Σ weight over DISTINCT sources = S. CONSENSUS-CRITICAL:
     // must resolve identically on the hub and every indexer or validation forks.
     async getStakeWeightsByCapability(capability, blockIndex, minStakeOverride){
+        if(capability === 'archive_publish' && this.config['COIN'] === 'BTC'){
+            let weights = await this.getStakeWeightsByCapability(
+                'oracle_publish', blockIndex, minStakeOverride);
+            if(!archivePublish.isArchivePublishSetActive(blockIndex, this.config['NETWORK']))
+                return weights;
+            let absent = await this.getLatestRolledRollcallAbsentSources(blockIndex);
+            return archivePublish.subtractAbsentSources(weights, absent);
+        }
         // Off-BTC chains have no local capability stakes - read the source-keyed
         // weights from the hub-mirrored capability_snapshots. Routed through the SAME
         // predicate as getValidatorsByCapability so the count set and the weight set can
@@ -168,7 +199,7 @@ module.exports = {
     // capability_snapshots is the only mirrored table with no authentication on the
     // wire: rows arrive over a bare SELECT and land via INSERT IGNORE, and they are the
     // verification authority every off-BTC resolver reads (cross_chain, oracle_publish,
-    // price, attestation). usesCapabilitySnapshot picks one of two judges:
+    // archive_publish, price, attestation). usesCapabilitySnapshot picks one of two judges:
     //   - A chain that RESOLVES the capability from the mirror has no local stakes to
     //     re-derive from. Once CAPABILITY_SNAPSHOT_PROOF_ACTIVATION is active at the row's
     //     BTC snapshot_block, judgeMirrorResolvedRow checks a hub checkpoint proof against
@@ -287,6 +318,7 @@ module.exports = {
     // rather than an empty set that looks identical to "no qualified validators".
     isCapabilityConfigured(capability){
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
+        if(capability === 'archive_publish') capability = 'oracle_publish';
         return !!caps[capability];
     },
 

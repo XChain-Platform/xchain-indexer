@@ -179,13 +179,17 @@ describe('isMirrorBarrierReason @regression @tier1', function () {
     // Literal, constant and prefixed sites alike; the reader throws on a form it cannot resolve.
     const { stallReasonSites, countStallReasonAssignments } = require('../../helpers/stall_reason_sites.js');
     const { REMOTE_TOKEN_RETRY_STALL_REASON } = require('../../../src/actions/cross_chain_remote_token.js');
-    const SITES = stallReasonSites(INDEXER_SRC, { REMOTE_TOKEN_RETRY_STALL_REASON });
+    const SITES = stallReasonSites(INDEXER_SRC, { REMOTE_TOKEN_RETRY_STALL_REASON, BRIDGE_PROOF_BARRIER });
     const REASONS = [...new Set(SITES.map(s => s.reason))];
 
     const HOST_FAULTS = ['vm_executor_unavailable', 'anchor_reward_proof_unavailable',
-                         'rollcall_proof_unavailable', 'list_share_halt'];
-    // Not mirror barriers either, so no resync: a proof check and two prose reasons by prefix.
-    const OTHER_NON_MIRROR = ['capability_proof_unavailable', 'parse_exception:', 'train_activation_halt:'];
+                         'rollcall_proof_unavailable', 'list_share_halt',
+                         'decoder_block_time_unavailable'];
+    // Not mirror barriers either, so no resync: a proof check, two prose reasons by prefix,
+    // and the three retroactive replay holds.
+    const OTHER_NON_MIRROR = ['capability_proof_unavailable', 'parse_exception:', 'train_activation_halt:',
+                              'retroactive_replay', 'retroactive_replay_needs_go',
+                              'retroactive_replay_diverged'];
 
     it('finds every stall reason the block loop actually sets', function () {
         assert.strictEqual(SITES.length, countStallReasonAssignments(INDEXER_SRC),

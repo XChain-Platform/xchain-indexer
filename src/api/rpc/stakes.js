@@ -22,6 +22,7 @@
 
 const { getStakeSourceByPubkey } = require('../stake_source');
 const { getLogger } = require('../../observability/index.js');
+const rpcParams = require('./params.js');
 
 function buildStakesRpc(ctx){
     return Object.assign({}, ownStakeRpc(ctx), activeValidatorsRpc(ctx), activeStakeWeightsRpc(ctx));
@@ -90,9 +91,10 @@ function activeValidatorsRpc({ indexer }){
         async getactivevalidators({block_index}){
             if(block_index === undefined || block_index === null)
                 return { error: 'block_index is required' };
-            let blk = Number(block_index);
-            if(!Number.isInteger(blk) || blk < 0)
-                return { error: 'block_index must be a non-negative integer' };
+            // Require an exact non-negative snapshot height.
+            let parsed = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+            if(parsed.error) return { error: parsed.error };
+            let blk = parsed.value;
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             // Federation READ isolation: committed-only, off the block tx.
@@ -129,9 +131,10 @@ function activeStakeWeightsRpc({ indexer }){
         async getactivestakeweights({block_index}){
             if(block_index === undefined || block_index === null)
                 return { error: 'block_index is required' };
-            let blk = Number(block_index);
-            if(!Number.isInteger(blk) || blk < 0)
-                return { error: 'block_index must be a non-negative integer' };
+            // Require an exact non-negative snapshot height.
+            let parsed = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+            if(parsed.error) return { error: parsed.error };
+            let blk = parsed.value;
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             // Federation READ isolation: committed-only, off the block tx.

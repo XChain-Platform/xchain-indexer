@@ -243,7 +243,8 @@ module.exports = {
         // guards declined - a SEND consults up to three (the token's, the sender's, the
         // recipient's) - so a wallet could only say "something about this is controlled". The
         // detail is appended, never substituted, so every existing consumer (which matches the
-        // sentinel as a SUBSTRING: actions.js, sdk preflight/tier1.js) is unaffected. Safe to
+        // sentinel as a SUBSTRING: isGuardInertError's callers in actions_class/quote_answers.js
+        // and batch/probe.js, sdk preflight/tier1.js) is unaffected. Safe to
         // change freely: this branch is reachable only on the synthetic GUARD_INERT probe tx, so
         // the string never enters a decoded action's status and carries no consensus weight.
         if(data['GUARD_INERT'])

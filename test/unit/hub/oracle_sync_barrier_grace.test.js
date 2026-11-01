@@ -15,6 +15,7 @@ function makeSync(network) {
         network
     });
     sync.oracleBootstrapped = true;
+    sync._bootstrapDrained = true;
     sync.oracleSyncTimestamp = LAST_ORACLE_PRICE;
     return sync;
 }

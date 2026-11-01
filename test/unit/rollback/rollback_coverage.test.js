@@ -104,6 +104,7 @@ describe('Rollback coverage guard @regression', function () {
     });
 
     it('every table the indexer owns is covered by the rollback strategy', function () {
+        // The companion special-table suite verifies the source behind these label-based entries.
         const covered = new Set([
             ...rollback.dataTables,
             ...rollback.blockTables,

@@ -117,12 +117,14 @@ function parseHeadSigs(params, sigBase, error){
 // ALWAYS present on an archive head, so a wire carrying version 1 without one fails
 // here on 'PUBLISHER format' rather than parsing as some tail-less shape.
 //
-// ATTEST_SIG_COUNT 0 is LEGAL: it is what the hub emits when the attestation round
-// did not reach quorum, and it is the same degraded shape the bundle leg already
-// uses. A degraded round must not cost the federation its checkpoint, so the count
-// rides at 0, publisher_attestations stores NULL, and the reward derivation
-// simply finds no attestation to meet quorum with. Negative is still rejected: it
-// is not a shape any signer produces.
+// ATTEST_SIG_COUNT 0 is LEGAL here, on the v1 archive head ONLY: it is what the hub
+// emits when the attestation round did not reach quorum. A degraded round must not
+// cost the federation its checkpoint, so the count rides at 0, publisher_attestations
+// stores NULL, and the reward derivation simply finds no attestation to meet quorum
+// with. Negative is still rejected: it is not a shape any signer produces. The v0
+// bundle and v3 fold tail (parseBundleTail below) requires >= 1 and the hub defers a
+// degraded bundle instead; the two floors are deliberately different, so relaxing
+// parseBundleTail to match this one is a consensus change, not a cleanup.
 function parseHeadPublisherTail(params, data, sigBase, sigCount, error, format){
     let publisherSigs = [];
     if(!error && format === 1){
@@ -225,6 +227,7 @@ function parseBundleTail(params, data, cursor, error){
             data['PUBLISHER'] = String(params[cursor] || '').toLowerCase();
             if(!/^[0-9a-f]{64}$/.test(data['PUBLISHER'])) throw new Error('PUBLISHER format');
             let attestCount = parseInt(params[cursor + 1]);
+            // Stricter than the v1 head's floor on purpose: count 0 is invalid on v0 and v3.
             if(!Number.isFinite(attestCount) || attestCount < 1) throw new Error('ATTEST_SIG_COUNT');
             for(let i = 0; i < attestCount; i++){
                 let pubkey = params[cursor + 2 + 2 * i];
