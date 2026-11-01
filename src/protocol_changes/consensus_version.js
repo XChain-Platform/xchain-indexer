@@ -115,6 +115,8 @@
 // 0.26.2 -> 0.26.3 is an indexer-only patch train that re-pins six LTC testnet
 // heights and registers nothing new on this ordinal; the pin advances only
 // because it must track the package version.
-const CONSENSUS_VERSION = '0.27.0';
+// 0.27.0 -> 0.27.1 is an indexer-only patch train that registers nothing new on
+// this ordinal; the pin advances only because it must track the package version.
+const CONSENSUS_VERSION = '0.27.1';
 
 module.exports = { CONSENSUS_VERSION };
