@@ -280,6 +280,11 @@ function preflightResult(actions, base, run, resolvedMode, feeTick){
     // "the BATCH is valid" says nothing about which of them will settle.
     if(run.subCommands) result.subCommands = run.subCommands;
 
+    // SEND only. Each leg's own verdict in settle order: legs settle independently, so a
+    // multi-send can move some legs while the chain refuses others, and `status` (the first
+    // refused leg's, or 'valid' when every leg settles) cannot say which.
+    if(run.legs) result.legs = run.legs;
+
     // Oracle usage fees this batch owes, per oracle address, summed over its Mode B
     // DISPENSER sub-commands. DISCLOSED, not judged: a probe carries no transaction and
     // therefore no oracle fee outputs, so the handler's own check (util.validateOracleFee)

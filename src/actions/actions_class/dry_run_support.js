@@ -135,6 +135,20 @@ function quietAbandonedRun(dryRunProcessing){
     });
 }
 
+// A multi-leg SEND settles each leg on its own and leaves STATUS holding the LAST leg's
+// verdict, which is not the action's: the leg verdicts the probe kept (send/settle.js
+// recordProbeLegVerdict) answer instead. The quote reads 'valid' only when every leg settles;
+// otherwise it carries the first refused leg's own status, so every consumer that keys on the
+// status string (isGuardInertError, the fee quote) still sees a real chain verdict. `legs`
+// lists each leg in settle order so a composer can see which will settle.
+function applyLegVerdicts(resultData, verdict){
+    let legs = resultData ? resultData['PROBE_LEG_VERDICTS'] : null;
+    if(!Array.isArray(legs) || legs.length === 0) return;
+    verdict.legs = legs.map((leg) => Object.assign({}, leg));
+    let refused = legs.find((leg) => leg.status !== 'valid');
+    if(refused) verdict.status = refused.status;
+}
+
 // Read the handler's verdict, staged fee and probe disclosures off a finished run into
 // `verdict`, field by field in the order the run exposes them, while the transaction is
 // still open. Filling the caller's object (rather than returning a new one) keeps what was
@@ -149,6 +163,7 @@ async function readDryRunVerdict(actions, resultData, verdict){
     verdict.status = primary
         ? primary.status
         : ((resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null);
+    if(!batched && !primary) applyLegVerdicts(resultData, verdict);
     // Extract the handler-computed fee while the transaction is still open (the row
     // vanishes on rollback). `amount` is XCHAIN-denominated in every payment mode.
     let actionIndex = primary
@@ -192,6 +207,7 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
                    : ((verdict.status === 'valid') ? '0' : null),
         sourceFeeBalance: sourceFeeBalance,
         subCommands:      verdict.subCommands,
+        legs:             verdict.legs,
         oracleFeesOwed:   verdict.oracleFeesOwed,
         nativeFeeOwed:    verdict.nativeFeeOwed,
         coinPaymentsOwed: verdict.coinPaymentsOwed
