@@ -74,14 +74,31 @@ function installMiddleware(app, ctx){
     app.use(apiKeyGate(ctx));
 }
 
-// A client-supplied body that fails to parse (or is oversized) is the caller's
-// fault, not a server fault: answer with the parser's own 4xx and log one warn
-// line without the stack, instead of letting Express print it at error level.
-function jsonBodyErrorHandler(err, req, res, next){
-    const status = err && err.status;
-    if(!err || !(status >= 400 && status < 500) || res.headersSent) return next(err);
-    getLogger().warn('[api] rejected request body: ' + (err.type || 'body_error') + ' (' + status + ')');
-    res.status(status).json({ error: 'Invalid request body' });
+function classifyRpcError(err){
+    if(err && err.type === 'entity.too.large')
+        return { status: 413, code: -32600, message: 'Request body too large' };
+    if(err && err.type === 'entity.parse.failed')
+        return { status: 400, code: -32700, message: 'Parse error' };
+    const status = err && Number(err.status || err.statusCode);
+    if(status >= 400 && status < 500)
+        return { status, code: -32600, message: 'Invalid Request' };
+    return { status: 500, code: -32603, message: 'Internal error' };
+}
+
+// Mounted after every route so parser and application errors use one JSON-RPC
+// envelope and Express never emits its HTML stack-trace response.
+function rpcErrorHandler(err, req, res, next){
+    if(res.headersSent) return next(err);
+    const failure = classifyRpcError(err);
+    if(failure.status >= 500)
+        getLogger().error('[api] JSON-RPC request failed: ' + (err && err.message));
+    else
+        getLogger().warn('[api] rejected request body: ' + ((err && err.type) || 'request_error') + ' (' + failure.status + ')');
+    return res.status(failure.status).json({
+        jsonrpc: '2.0',
+        error: { code: failure.code, message: failure.message },
+        id: null
+    });
 }
 
 function installSecurityLayers(app, { CONFIG_ENV }){
@@ -92,7 +109,6 @@ function installSecurityLayers(app, { CONFIG_ENV }){
     // Content-Encoding body without running a decompressor, so the Brotli and gzip
     // decoders of the Node runtime are never reachable from a request body.
     app.use(bodyParser.json({ inflate: false }));
-    app.use(jsonBodyErrorHandler);
     app.use(jsonRpcBatchGuard);
 
     // Allow CORS (restricted to the configured allowlist, defaults to localhost).
@@ -139,4 +155,4 @@ function installObservabilityLayers(app, { indexer, CONFIG_ENV, INDEXER_NETWORK 
     installIndexerMetrics(observability, indexer);
 }
 
-module.exports = { installMiddleware, jsonBodyErrorHandler, jsonRpcBatchGuard, JSON_RPC_MAX_BATCH };
+module.exports = { installMiddleware, rpcErrorHandler, jsonRpcBatchGuard, JSON_RPC_MAX_BATCH };

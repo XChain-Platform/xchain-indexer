@@ -5,7 +5,7 @@ const http    = require('http')
 const express = require('express')
 const sinon   = require('sinon')
 const observability = require('../../../../src/observability/index.js')
-const { installMiddleware } = require('../../../../src/api/middleware.js')
+const { installMiddleware, rpcErrorHandler } = require('../../../../src/api/middleware.js')
 const { fakeIndexer } = require('../rpc/helpers/fake_indexer.js')
 
 function post(port, body){
@@ -33,6 +33,7 @@ describe('api body parse rejection through installMiddleware', () => {
             WRITE_METHODS: new Set(), GATED_EXEC_METHODS: new Set(), FEDERATION_READ_METHODS: new Set()
         })
         app.post('/', (req, res) => res.json({ ok: true }))
+        app.use(rpcErrorHandler)
         server = app.listen(0, () => { port = server.address().port; done() })
     })
 

@@ -30,7 +30,7 @@ dotenv.config();
 const express       = require('express');
 const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
-const { installMiddleware } = require('./api/middleware');
+const { installMiddleware, rpcErrorHandler } = require('./api/middleware');
 const { buildRpcController } = require('./api/rpc');
 const { mountStatusRoute } = require('./api/status_endpoint');
 const { createShutdown, createIndexerDrain } = require('./api/shutdown');
@@ -342,6 +342,10 @@ async function startApi(){
 
     // Allow JSON-RPC requests
     app.use(jsonRouter({methods: jsonRpcController}));
+
+    // Keep this last: parser failures and errors thrown by any route must become
+    // JSON-RPC envelopes instead of Express's HTML stack-trace response.
+    app.use(rpcErrorHandler);
 
     // Start the server. The handle is kept so the shutdown drain below can stop
     // accepting connections and let in-flight requests finish.
