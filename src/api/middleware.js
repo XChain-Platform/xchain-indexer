@@ -39,7 +39,20 @@ const { apiKeyGate } = require('./auth_gate');
 
 const JSON_RPC_MAX_BATCH = 100;
 
+function isRpcObject(v){
+    return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
 function jsonRpcBatchGuard(req, res, next){
+    // A null body or a batch element that is not an object would make the router
+    // throw while reading its id, so reject it here as structured JSON.
+    if(req.body === null || (Array.isArray(req.body) && !req.body.every(isRpcObject))){
+        return res.status(400).json({
+            jsonrpc: '2.0',
+            id: null,
+            error: { code: -32600, message: 'Invalid Request: each batch element must be an object' }
+        });
+    }
     // Bound batch fan-out before the router dispatches any element.
     if(!Array.isArray(req.body) || req.body.length <= JSON_RPC_MAX_BATCH)
         return next();

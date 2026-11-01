@@ -52,6 +52,21 @@ describe('JSON-RPC input boundaries @regression @tier1', function () {
         });
     });
 
+    it('rejects a malformed batch element or null body as structured JSON before dispatch', function () {
+        const good = { jsonrpc: '2.0', id: 2, method: 'getpricebatches', params: {} };
+        const bad = [[null], [null, good], [1], ['x'], [[]], [good, null], null];
+        for (const body of bad) {
+            const r = runMiddleware(jsonRpcBatchGuard, body);
+            assert.strictEqual(r.passed, false, JSON.stringify(body));
+            assert.strictEqual(r.status, 400);
+            assert.strictEqual(r.payload.jsonrpc, '2.0');
+            assert.strictEqual(r.payload.error.code, -32600);
+        }
+        assert.strictEqual(runMiddleware(jsonRpcBatchGuard, [good, good]).passed, true);
+        assert.strictEqual(runMiddleware(jsonRpcBatchGuard, good).passed, true);
+        assert.strictEqual(runMiddleware(jsonRpcBatchGuard, []).passed, true);
+    });
+
     it('turns non-object params into a stable error without invoking a handler', async function () {
         const controller = buildRpcController({
             indexer: fakeIndexer(),
