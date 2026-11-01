@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-01
+
+### Added
+- Added checkpoint supersession, boot-time retroactive replay with durable witness phases, and per-chain retroactive replay caps.
+- Added the archive roll-call presence, checkpoint supersede and LTC admission margin gates, plus same-token offer refusal and ticker normalization behind gates.
+- Added two automatic migrations: the full-tick ticker key and the checkpoint supersede columns.
+
+### Changed
+- Armed eight testnet gates, including checkpoint supersede and equal-price oldest-first matching, with mainnet left unarmed.
+- Re-pinned the expected VM consensus runtime to epoch 8 on the pinned Node 22 patch and reuse the VM snapshot across forward blocks.
+- Armed ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION on BTC:testnet at 158557.
+- Armed ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION on LTC:testnet at 4949697.
+- Armed ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION on DOGE:testnet at 68035864.
+- Armed CHECKPOINT_SUPERSEDE_ACTIVATION on BTC:testnet at 158557.
+- Armed CHECKPOINT_SUPERSEDE_ACTIVATION on LTC:testnet at 4949697.
+- Armed CHECKPOINT_SUPERSEDE_ACTIVATION on DOGE:testnet at 68035864.
+- Armed ADMIT_CHAIN_MARGIN_ACTIVATION on LTC:testnet at 4949697.
+- Armed MATCH_EQUAL_PRICE_OLDEST_FIRST on BTC:testnet at 158557.
+- Armed MATCH_EQUAL_PRICE_OLDEST_FIRST on LTC:testnet at 4949697.
+- Armed MATCH_EQUAL_PRICE_OLDEST_FIRST on DOGE:testnet at 68035864.
+- Armed DIVIDEND_EMPTY_ALLOW_LIST_DENIES_ACTIVATION on BTC:testnet at 158557.
+- Armed DIVIDEND_EMPTY_ALLOW_LIST_DENIES_ACTIVATION on LTC:testnet at 4949697.
+- Armed DIVIDEND_EMPTY_ALLOW_LIST_DENIES_ACTIVATION on DOGE:testnet at 68035864.
+- Armed AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION on BTC:testnet at 158557.
+- Armed AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION on LTC:testnet at 4949697.
+- Armed AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION on DOGE:testnet at 68035864.
+- Armed TICK_NORMALIZE_ACTIVATION on BTC:testnet at 158557.
+- Armed TICK_NORMALIZE_ACTIVATION on LTC:testnet at 4949697.
+- Armed TICK_NORMALIZE_ACTIVATION on DOGE:testnet at 68035864.
+- Armed SAME_TOKEN_OFFER_REFUSAL_ACTIVATION on BTC:testnet at 158557.
+- Armed SAME_TOKEN_OFFER_REFUSAL_ACTIVATION on LTC:testnet at 4949697.
+- Armed SAME_TOKEN_OFFER_REFUSAL_ACTIVATION on DOGE:testnet at 68035864.
+
+### Fixed
+- A short database outage no longer makes the block loop exit, and write faults during rollback or replay now exit with a clear report.
+- Hub mirror bootstrap retries failed pages in place, certifies barriers per table, and batches price snapshot and capability proof reads.
+- API reads validate JSON-RPC parameters before touching the database and refuse compressed request bodies.
+- Market and order reads were reworked into cheaper queries, and quote and dry-run answers were corrected.
+- Airdrop settlement now records the summed fee when several legs pay from the XCHAIN balance, and bridge, coinpay and send validation were tightened.
+- Readiness, health and status endpoints report chain tip, stall and advance state more accurately, and a failed reorg health read is now logged.
+- Hub mirror capability proof and flush paths, plus the migration checks and ticker policy, were hardened.
+
 ## [0.26.3] - 2026-10-23
 
 ### Changed

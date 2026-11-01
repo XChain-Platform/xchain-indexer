@@ -4,8 +4,8 @@
 # XChain Platform Indexer
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.21.0-blue" alt="Version">
-  <img src="https://img.shields.io/badge/tests-10%2C603%2B%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/version-0.27.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/tests-15%2C706%2B%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
 </p>
@@ -144,26 +144,26 @@ neither source sets one, so these defaults hold on an unconfigured box:
 | `node bin/archive_heads_by_author.js --author ADDRESS [--from-seq N] [--limit N] [--db NAME] [--json] [--expect-redrawn] [--expect-conflict]` | Read-only; issues SELECTs only. Lists the author's archive heads at every status and summarizes refused sequences and later valid or unverified heads. `--expect-redrawn` exits 1 when no valid head follows a refused sequence. `--expect-conflict` exits 1 when no refused head is found or a refused head has no earlier valid or unverified head at its sequence with a different CRC or count. |
 | `node bin/bench_net_balance.js` | Read-only; issues SELECTs only. Times `getNetBalance` for the address and tick pairs with the longest credit/debit history, then reports per-key timings and p50/p95/max. `--batched` also times and checks grouped reads; `--blocks N` benchmarks recent ledger-changing blocks. |
 | `node bin/measure_vm_snapshot_bytes.js` | Read-only; issues SELECTs only. Builds uncached cross-chain VM snapshots for recent contract-execution blocks and reports serialized size, build time and serialization time. Select blocks with `--from N`, `--to N` and `--limit N`; add `--cached` to report cross-block cache hits and misses for the same blocks; add `--polls` to also report the per-execution poll snapshot bytes. |
-| `npm test` | Run unit tests (~9,881 tests) |
+| `npm test` | Run unit tests (~15,293 tests) |
 | `npm run test:integration` | Integration tests (~293 tests, requires MariaDB) |
 | `npm run test:e2e` | End-to-end tests (46 tests, requires full stack) |
-| `npm run test:boundary` | Boundary condition tests (142 tests) |
+| `npm run test:boundary` | Boundary condition tests (205 tests) |
 | `npm run test:smoke` | Smoke tests (unit + connected, 27 tests) |
-| `npm run test:security` | Security tests (130 tests) |
+| `npm run test:security` | Security tests (136 tests) |
 | `npm run test:fuzz` | Fuzz tests (property-based, 122 tests) |
 | `npm run test:fuzz:quick` | Quick fuzz (1,000 iterations, tier1, 84 tests) |
 | `npm run test:fuzz:full` | Full fuzz (10,000 iterations, 122 tests) |
 | `npm run test:chaos` | Chaos engineering tests (44 tests) |
-| `npm run test:guard-dependencies` | Guard dependency tests |
-| `npm run test:guard-dependencies:tier1` | Tier1 guard dependency tests |
-| `npm run test:guard-dependencies:report` | Guard dependency tests with coverage report |
+| `npm run test:guard-dependencies` | Guard dependency tests (125 tests) |
+| `npm run test:guard-dependencies:tier1` | Tier1 guard dependency tests (96 tests) |
+| `npm run test:guard-dependencies:report` | Guard dependency tests with coverage report (125 tests) |
 | `npm run test:perf` | All performance tests (26 tests) |
 | `npm run test:perf:regimes` | Load-regime scenarios: fast chain (DOGE) and fee spike (9 tests) |
 | `npm run test:regression` | Regression tests (tagged across all suites, 8,566 tests) |
-| `npm run test:regression:fast` | Fast regression (tier1 + tier4, unit only, 4,165 tests) |
+| `npm run test:regression:fast` | Fast regression (tier1 + tier4, unit only, 6,529 tests) |
 | `npm run test:regression:full` | Full regression suite (8,566 tests) |
-| `npm run test:nodb` | All tests that don't require a database (10,134 tests) |
-| `npm run test:full` | Complete test suite (10,500 tests) |
+| `npm run test:nodb` | All tests that don't require a database (15,546 tests) |
+| `npm run test:full` | Complete test suite (15,619 tests) |
 
 Run these readings from the indexer working directory against the database named by the indexer's own `INDEXER_DB_*` environment, and use `--json` to print JSON.
 In a deployed indexer container, prefix the same commands and flags with `docker exec <indexer-container>`; they run from the image WORKDIR `/XChainIndexer` against the database named by the container's own `INDEXER_DB_*` environment.
