@@ -167,6 +167,21 @@ describe('GET /status and GET /ready on faults a restart cannot clear', function
         assert.deepStrictEqual(status.body.notReadyReasons, ['decoder_reorg_halt']);
     });
 
+    it('keeps a stale tip visible but does not treat it as readiness evidence', async function(){
+        let ix = stubIndexer({ indexerBlock: 900, decoderBlock: 900, nodeHeight: 900 });
+        let staleSince = Date.now() - 11 * MIN;
+        ix.readChainTip = async () => ({ height: 900, source: 'utxo_tracker',
+                                        at: staleSince - ix.chainTipTtlMs,
+                                        stale: true, staleSince: staleSince });
+        await serve(ix);
+        let status = await get(port, '/status');
+        assert.strictEqual(status.status, 200);
+        assert.strictEqual(status.body.chainTip, 900, 'the last known height remains observable');
+        assert.strictEqual(status.body.chainLag, 0, 'display lag remains available for diagnosis');
+        assert.deepStrictEqual(status.body.notReadyReasons, ['chain_tip_stale']);
+        assert.strictEqual((await get(port, '/ready')).status, 503);
+    });
+
     it('reports a held block that survived a restart: /status 200, /ready 503 past the ceiling', async function(){
         let ix = stubIndexer({ indexerBlock: 1000, decoderBlock: 4800 });
         let now = Date.now();

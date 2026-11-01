@@ -97,8 +97,8 @@ function feeQuoteLockBusy(base, acquireMs){
                'ms for the database transaction lock); retry shortly' });
 }
 
-// The retryable quote for a dry-run that threw before the handler left a status (a watchdog
-// timeout, an epoch-fence rejection): no chain verdict, as preflightNoVerdict says.
+// The retryable quote for an incomplete dry-run (a watchdog timeout, an epoch-fence rejection
+// or a verdict read-back failure): no chain verdict, as preflightNoVerdict says.
 // valid is null because no handler verdict exists; noVerdict tells it apart from a priced,
 // verdict-free static quote.
 function feeQuoteNoVerdict(base, run){
@@ -207,8 +207,8 @@ function preflightLockBusy(base, acquireMs){
                'ms for the database transaction lock); retry shortly' });
 }
 
-// The retryable pre-flight for a dry-run that threw before the handler left a status (a
-// watchdog timeout, an epoch-fence rejection). The block loop retries such a block rather than
+// The retryable pre-flight for an incomplete dry-run (a watchdog timeout, an epoch-fence
+// rejection or a verdict read-back failure). The block loop retries such a block rather than
 // indexing it invalid, so there is no chain verdict to report and nothing to memoize.
 function preflightNoVerdict(base, run){
     return Object.assign(base, { valid: null, retryable: true, noVerdict: true, status: null,

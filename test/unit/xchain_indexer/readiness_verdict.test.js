@@ -25,7 +25,8 @@
 const assert = require('assert');
 
 const { readinessVerdict, blocksBehind, nextBehindSince, resolvePositiveIntMs, resolveReadyNoCommitMs,
-        READY_NO_COMMIT_DEFAULT_MS } = require('../../../src/XChainIndexer/readiness/verdict.js');
+        READY_NO_COMMIT_DEFAULT_MS, CHAIN_TIP_TTL_DEFAULT_MS,
+        CHAIN_TIP_TIMEOUT_DEFAULT_MS } = require('../../../src/XChainIndexer/readiness/verdict.js');
 const XChainIndexer = require('../../../src/XChainIndexer.js');
 const { publishedStallClass } = require('../../../src/XChainIndexer/stall_health.js');
 const UtxoTracker = require('../../../src/chain/utxo_tracker.js');
@@ -83,6 +84,14 @@ describe('readinessVerdict()', function(){
         assert.deepStrictEqual(v.reasons, ['indexer_db_unreachable', 'wedged', 'poll_silent']);
     });
 
+    it('is not ready when the last known chain tip is stale', function(){
+        let v = readinessVerdict(clean({ decoderLag: 0, chainLag: null, chainTipStale: true,
+                                         chainTipStaleSince: NOW - 11 * MIN }));
+        assert.strictEqual(v.ready, false);
+        assert.deepStrictEqual(v.reasons, ['chain_tip_stale']);
+        assert.strictEqual(v.behind, 0);
+    });
+
     it('takes the larger of decoder and chain lag, null when neither is known', function(){
         assert.strictEqual(blocksBehind(2, 9), 9);
         assert.strictEqual(blocksBehind(null, 4), 4);
@@ -130,6 +139,16 @@ describe('readinessVerdict()', function(){
         for(const raw of [undefined, null, '', 'abc', '15s', '0', '-5', '1.5', 'NaN'])
             assert.strictEqual(resolvePositiveIntMs(raw, 1234), 1234);
         assert.strictEqual(resolvePositiveIntMs('20000', 1234), 20000);
+    });
+
+    it('resolves chain tip timings as positive integers with safe defaults', function(){
+        for (const raw of [undefined, '', 'abc', '0', '-1', '1.5', '12ms']) {
+            assert.strictEqual(resolvePositiveIntMs(raw, CHAIN_TIP_TTL_DEFAULT_MS),
+                               CHAIN_TIP_TTL_DEFAULT_MS);
+            assert.strictEqual(resolvePositiveIntMs(raw, CHAIN_TIP_TIMEOUT_DEFAULT_MS),
+                               CHAIN_TIP_TIMEOUT_DEFAULT_MS);
+        }
+        assert.strictEqual(resolvePositiveIntMs('2500', CHAIN_TIP_TIMEOUT_DEFAULT_MS), 2500);
     });
 });
 

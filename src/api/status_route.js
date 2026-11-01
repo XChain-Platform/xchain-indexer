@@ -58,7 +58,8 @@ function readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexer
     let tip = chainTip || { height: null, source: null, at: null, stale: null, staleSince: null };
     let decoderLag = (decoderBlock != null && indexerBlock != null) ? decoderBlock - indexerBlock : null;
     let chainLag   = (Number.isFinite(tip.height) && indexerBlock != null) ? tip.height - indexerBlock : null;
-    let behind = blocksBehind(decoderLag, chainLag);
+    let verdictChainLag = tip.stale === true ? null : chainLag;
+    let behind = blocksBehind(decoderLag, verdictChainLag);
     indexer.readyBehindSince = nextBehindSince(indexer.readyBehindSince, behind, now,
                                                 indexer.lastBlockCommittedAt);
     let pollSilent = (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false;
@@ -72,7 +73,7 @@ function readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexer
         decoderReorgHalted:     indexer.decoderReorgHalted === true || indexer.decoderReorgHalted === null,
         barrierCeilingExceeded: exceeded,
         decoderLag:             decoderLag,
-        chainLag:               chainLag,
+        chainLag:               verdictChainLag,
         chainTipStale:          tip.stale === true,
         chainTipStaleSince:     tip.staleSince,
         waitingOnFutureBlock:   !!verdict.futureWait,

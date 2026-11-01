@@ -21,6 +21,7 @@
 // server (no DB, no HTTP bootstrap) so the arrival-stamp wiring itself is exercised.
 
 const assert = require('assert');
+const net = require('net');
 const sinon = require('sinon');
 const ws = require('ws');
 const WebSocketServer = ws.WebSocketServer || ws.Server;
@@ -41,6 +42,42 @@ function makeSync() {
     s.running = true;
     return s;
 }
+
+describe('HubDbSync WebSocket opening handshake deadline @regression @tier2', function () {
+    this.timeout(5000);
+    const sockets = new Set();
+
+    beforeEach(async function () {
+        server = net.createServer((socket) => {
+            sockets.add(socket);
+            socket.on('close', () => sockets.delete(socket));
+        });
+        server.listen(0, '127.0.0.1');
+        port = await new Promise((res) => server.on('listening', () => res(server.address().port)));
+    });
+
+    afterEach(function () {
+        if (sync) { sync.running = false; try { sync.stop(); } catch (e) { /* ignore */ } sync = null; }
+        for (const socket of sockets) socket.destroy();
+        sockets.clear();
+        if (server) { try { server.close(); } catch (e) { /* ignore */ } server = null; }
+        sinon.restore();
+    });
+
+    it('rejects and schedules reconnect when a peer accepts TCP but never upgrades', async function () {
+        sync = makeSync();
+        const reconnect = sinon.stub(sync, 'scheduleReconnect');
+        const outcome = await Promise.race([
+            sync.connectWebSocket().then(() => ({ kind: 'ready' }), error => ({ kind: 'error', error })),
+            sleep(1000).then(() => ({ kind: 'deadline' }))
+        ]);
+
+        assert.strictEqual(outcome.kind, 'error', 'a hung upgrade must fail before the test deadline');
+        assert.match(outcome.error.message, /opening handshake.*timed out/i);
+        await waitUntil(() => reconnect.calledOnce);
+        assert.strictEqual(reconnect.calledOnce, true, 'the close path must re-arm reconnect');
+    });
+});
 
 describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regression @tier2', function () {
     this.timeout(15000);

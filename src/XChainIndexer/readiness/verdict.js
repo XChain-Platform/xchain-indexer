@@ -42,6 +42,8 @@
 // and the price-landing grace, so a slow block or an ordinary barrier defer never reads
 // as not ready, while a block that has not moved for ten minutes with work waiting does.
 const READY_NO_COMMIT_DEFAULT_MS = 600000;
+const CHAIN_TIP_TTL_DEFAULT_MS = 15000;
+const CHAIN_TIP_TIMEOUT_DEFAULT_MS = 1500;
 
 // Blocks between this indexer and the furthest tip it knows about, or null when no tip
 // is known. decoderLag is decoder tip minus indexer height; chainLag is the coin node tip
@@ -134,5 +136,6 @@ function resolveReadyNoCommitMs(raw){
     return resolvePositiveIntMs(raw, READY_NO_COMMIT_DEFAULT_MS);
 }
 
-module.exports = { READY_NO_COMMIT_DEFAULT_MS, blocksBehind, nextBehindSince,
-                   readinessVerdict, resolvePositiveIntMs, resolveReadyNoCommitMs };
+module.exports = { READY_NO_COMMIT_DEFAULT_MS, CHAIN_TIP_TTL_DEFAULT_MS, CHAIN_TIP_TIMEOUT_DEFAULT_MS,
+                   blocksBehind, nextBehindSince, readinessVerdict, resolvePositiveIntMs,
+                   resolveReadyNoCommitMs };
