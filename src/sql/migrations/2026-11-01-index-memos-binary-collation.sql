@@ -1,0 +1,50 @@
+--********************************************************************
+--
+-- Copyright © 2025-2026 Dankest, LLC
+-- Based on XChain Platform by Dankest, LLC - https://dankest.llc
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+--
+-- This file is part of XChain Platform. Licensed under the GNU Affero
+-- General Public License v3.0 or later; see LICENSE.md. A commercial
+-- license (without AGPL source-disclosure terms) is available -
+-- contact legal@dankest.llc.
+--
+--********************************************************************
+
+-- xchain:migration mode=manual
+--
+-- Migration: index_memos.memo utf8mb4_general_ci -> utf8mb4_nopad_bin.
+--
+-- index_memos interns MEMO text: createMemo looks a memo up by equality and, when no row
+-- matches, does INSERT IGNORE plus a refetch against the UNIQUE index on memo. Under
+-- utf8mb4_general_ci that equality folds letter case and gives every 4-byte character
+-- the same weight, so 'memo case' matched the stored 'Memo Case' and one emoji matched a
+-- different one. The second SEND was then linked to the first memo's row and its own
+-- text was never stored. A binary collation makes equality byte equality, which is the
+-- only identity an interning table can use. utf8mb4_bin is not enough on its own: it is
+-- PAD SPACE, so 'memo' and 'memo ' would still fold. utf8mb4_nopad_bin compares trailing
+-- spaces too.
+--
+-- Changing to a strictly finer equality can never create a duplicate under the UNIQUE
+-- index, so this ALTER cannot fail on existing rows. It does not split rows that were
+-- already folded: sends written before it keep the memo id they were given.
+--
+-- mode=manual for the same reason as 2026-08-19-utf8mb4-index-memos-memo.sql: the column
+-- is NOT NULL, and a MODIFY carrying NOT NULL reads as a narrowing to the auto-apply
+-- destructive-DDL classifier. Omitting NOT NULL would relax the column and diverge the
+-- two schema paths. The rebuild rewrites the table and its UNIQUE key, so run it in a
+-- quiet window on a large table. The key stays 1000 bytes, the same width the 2026-08-19
+-- widening already required (ROW_FORMAT=DYNAMIC); a table that ran that file is fine.
+--
+-- NOT consensus-visible: index_memos is a derived id-interning table and memo text enters
+-- no block-hash or state-hash preimage.
+--
+-- IDEMPOTENT: re-running a MODIFY to the same type, charset and collation is a no-op, and
+-- the schema_migrations ledger records this file once per DB.
+--
+-- HOW TO RUN
+--   node src/db/migration/migrate.js --file 2026-11-01-index-memos-binary-collation.sql
+
+ALTER TABLE index_memos
+  MODIFY memo VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_nopad_bin NOT NULL;

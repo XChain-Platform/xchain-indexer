@@ -18,7 +18,11 @@ CREATE TABLE index_memos (
     -- utf8mb4: MEMO is free-form text carried by nearly every action, so a 4-byte
     -- character here is legal content. The UNIQUE index below is then a 1000-byte key,
     -- which needs InnoDB ROW_FORMAT=DYNAMIC (the MariaDB 10.2+ default, 3072-byte limit).
-    memo   VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
+    -- utf8mb4_nopad_bin: this table interns memo text by equality through the UNIQUE
+    -- index, so equality must be byte equality. A folding collation (general_ci) maps
+    -- 'memo case' onto 'Memo Case' and one 4-byte character onto another, and a PAD SPACE
+    -- one (utf8mb4_bin) maps 'memo ' onto 'memo'; either links a SEND to another memo's text.
+    memo   VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_nopad_bin NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX memo on index_memos (memo);

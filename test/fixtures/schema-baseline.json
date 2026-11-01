@@ -2102,7 +2102,7 @@
       },
       {
         "name": "memo",
-        "spec": "VARCHAR(250) CHARACTER SET UTF8MB4 COLLATE UTF8MB4_GENERAL_CI NOT NULL"
+        "spec": "VARCHAR(250) CHARACTER SET UTF8MB4 COLLATE UTF8MB4_NOPAD_BIN NOT NULL"
       }
     ],
     "index_mime_types": [
