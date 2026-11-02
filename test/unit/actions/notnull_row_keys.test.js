@@ -118,6 +118,8 @@ function realWriter(indexer, method, table){
         util:   indexer.util,
         config: indexer.config,
         normalizeDataValues: Database.prototype.normalizeDataValues,
+        fitRefusedIntegerFields: Database.prototype.fitRefusedIntegerFields,
+        nullRefusedPrefixedFields: Database.prototype.nullRefusedPrefixedFields,
         createMemo:   async () => 1,
         createStatus: async () => 1,
         createTicker: async () => 1,

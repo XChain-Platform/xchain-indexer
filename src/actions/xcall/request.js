@@ -74,6 +74,11 @@ function validateCallTarget(data, error){
     // Verify TARGET_CONTRACT_INDEX names a contract (contract indexes are positive whole numbers)
     if(!error && (!Number.isInteger(targetContract) || targetContract <= 0))
         error = 'invalid: TARGET_CONTRACT_INDEX (must be a positive integer)';
+    // parseInt reads a '0x' literal as hexadecimal, but the xcalls row binds the wire text and
+    // a strict session refuses it, so every such request halted the block whatever its verdict
+    // and none is in any history.
+    if(!error && this.util.keepsPrefixedSpelling(data['TARGET_CONTRACT_INDEX'], this.config['INTEGER_FIELDS']['TARGET_CONTRACT_INDEX']))
+        error = 'invalid: TARGET_CONTRACT_INDEX (format)';
 
     // Verify METHOD was supplied (the call needs a function name to run on the far side)
     if(!error && this.util.isNull(data['METHOD']))

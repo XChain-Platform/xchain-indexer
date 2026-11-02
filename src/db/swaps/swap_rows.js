@@ -20,11 +20,16 @@
  *
  ********************************************************************/
 
+// The integer wire fields a swaps row binds; a refused row fits them to their BIGINT
+// UNSIGNED columns (see fitRefusedIntegerFields). Every reader of the table's expiration
+// and lists selects open swaps only.
+const SWAP_INTEGER_FIELDS = Object.freeze(['EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST']);
+
 module.exports = {
 
     // Create/Update record in `swaps` table
     async createSwap(data){
-        data               = this.normalizeDataValues(data);
+        data               = this.fitRefusedIntegerFields(this.normalizeDataValues(data), SWAP_INTEGER_FIELDS);
         let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
         let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
         let get_coin_id    = await this.createCoin(data['GET_COIN']);

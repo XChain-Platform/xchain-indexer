@@ -23,6 +23,10 @@
 
 const { exactU64 } = require('../database/exact_u64.js');
 
+// The integer wire fields a swap_edits row binds; a refused row fits them to their BIGINT
+// UNSIGNED columns (see fitRefusedIntegerFields). Every reader selects valid edits only.
+const SWAP_EDIT_INTEGER_FIELDS = Object.freeze(['EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST']);
+
 module.exports = {
 
     // Return swap info for given action_index
@@ -104,7 +108,7 @@ module.exports = {
 
     // Create/Update record in `swap_edits` table
     async createSwapEdit(data){
-        data = this.normalizeDataValues(data);
+        data = this.fitRefusedIntegerFields(this.normalizeDataValues(data), SWAP_EDIT_INTEGER_FIELDS);
         // Standardize LIST values to numeric or NULL
         for(let list of this.config['LIST_FIELDS']){
             if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))

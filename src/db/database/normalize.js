@@ -199,4 +199,35 @@ module.exports = {
         return data;
     },
 
+    // A refused row's integer wire fields fitted to their columns, for a writer to bind
+    // after normalizeDataValues. Normalization keeps a hexadecimal, binary or octal literal
+    // the column's range holds as written, and a strict session refuses it (errno 1265),
+    // which threw inside the block transaction and retried the block forever; the fit binds
+    // the integer the literal names instead. Every value the column stores comes back
+    // unchanged. A valid row is returned as it is: its handler refuses such a literal before
+    // the row is written. Each field is an INTEGER_FIELDS key, which names the column's bound.
+    fitRefusedIntegerFields(data, fields){
+        if(data['STATUS'] === 'valid') return data;
+        let fitted = Object.assign({}, data);
+        for(let field of fields)
+            fitted[field] = this.util.fitIntegerColumn(fitted[field], '0', this.config['INTEGER_FIELDS'][field]);
+        return fitted;
+    },
+
+    // A refused row's wire fields that name a contract or a list, with a hexadecimal, binary
+    // or octal literal stored as NULL. Bound as written, such a literal failed the insert
+    // (errno 1265), so no history holds one. NULL is what normalization already stores for a
+    // non-numeric value in these columns: it names nothing, where a fitted integer would read
+    // as a reference to a real contract or list in the contract hash and the list-chain
+    // readers. Every other value comes back unchanged, and a valid row is returned as it is.
+    nullRefusedPrefixedFields(data, fields){
+        if(data['STATUS'] === 'valid') return data;
+        let cleared = Object.assign({}, data);
+        for(let field of fields){
+            if(this.util.keepsPrefixedSpelling(cleared[field], this.config['INTEGER_FIELDS'][field]))
+                cleared[field] = null;
+        }
+        return cleared;
+    },
+
 };

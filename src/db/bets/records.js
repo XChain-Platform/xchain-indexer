@@ -32,11 +32,20 @@ function feedText(data, field){
     return (data['STATUS'] === 'valid') ? data[field] : fitColumnText(data[field], REFUSED_FEED_TEXT[field], false);
 }
 
+// The integer wire fields each bet row binds; a refused row fits them to their columns
+// (see fitRefusedIntegerFields). Settlement, the passes and the effective-list overlay read
+// open feeds and bets and valid edits only, and the state hash reads only block stamps a
+// refused row never carries.
+const FEED_INTEGER_FIELDS    = Object.freeze(['DEADLINE', 'REFUND_WINDOW', 'ALLOW_LIST', 'BLOCK_LIST']);
+const BET_INTEGER_FIELDS     = Object.freeze(['FEED_ACTION_INDEX', 'OUTCOME']);
+const CANCEL_INTEGER_FIELDS  = Object.freeze(['FEED_ACTION_INDEX']);
+const EDIT_INTEGER_FIELDS    = Object.freeze(['FEED_ACTION_INDEX', 'ALLOW_LIST', 'BLOCK_LIST']);
+
 module.exports = {
 
     // Create/Update record in `bet_feeds` table
     async createBetFeed(data){
-        data               = this.normalizeDataValues(data);
+        data               = this.fitRefusedIntegerFields(this.normalizeDataValues(data), FEED_INTEGER_FIELDS);
         let tick_id        = await this.createTicker(data['TICK']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
@@ -97,7 +106,7 @@ module.exports = {
 
     // Create/Update record in `bets` table
     async createBet(data){
-        data              = this.normalizeDataValues(data);
+        data              = this.fitRefusedIntegerFields(this.normalizeDataValues(data), BET_INTEGER_FIELDS);
         let tick_id       = await this.createTicker(data['TICK']);
         let memo_id       = await this.createMemo(data['MEMO']);
         let status_id     = await this.createStatus(data['STATUS']);
@@ -147,7 +156,7 @@ module.exports = {
     // could distinguish it from a successful one. `status_id` is the PARSE status;
     // the feed's lifecycle status lives in bet_feed_statuses / bet_feeds
     async createBetCancel(data){
-        data                  = this.normalizeDataValues(data);
+        data                  = this.fitRefusedIntegerFields(this.normalizeDataValues(data), CANCEL_INTEGER_FIELDS);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
@@ -186,7 +195,7 @@ module.exports = {
     // createBetCancel: stored whatever the parse status. `outcome` is the outcome the
     // oracle CLAIMED, so on an invalid row it settles nothing and is audit data only
     async createBetResolve(data){
-        data                  = this.normalizeDataValues(data);
+        data                  = this.fitRefusedIntegerFields(this.normalizeDataValues(data), BET_INTEGER_FIELDS);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
@@ -227,7 +236,7 @@ module.exports = {
     // stay NULL and therefore inherit their prior effective value; zero is a
     // stored detach sentinel interpreted by the effective-feed reads.
     async createBetEdit(data){
-        data                  = this.normalizeDataValues(data);
+        data                  = this.fitRefusedIntegerFields(this.normalizeDataValues(data), EDIT_INTEGER_FIELDS);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];

@@ -302,7 +302,9 @@ module.exports = {
 
     // Create record in `lists` table
     async createList(data){
-        data                  = this.normalizeDataValues(data);
+        // A refused edit's prefixed LIST_ACTION_INDEX stores NULL, as an unknown one already does
+        // (see nullRefusedPrefixedFields)
+        data                  = this.nullRefusedPrefixedFields(this.normalizeDataValues(data), ['LIST_ACTION_INDEX']);
         let action_index      = data['ACTION_INDEX'];
         let status_id         = await this.createStatus(data['STATUS']);
         let list_type         = data['TYPE'];

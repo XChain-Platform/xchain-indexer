@@ -19,11 +19,15 @@
  *
  ********************************************************************/
 
+// broadcasts.broadcast_action_index is BIGINT UNSIGNED; a refused row fits the wire value to
+// it (see fitRefusedIntegerFields). No reader brings the column into a verdict or a hash.
+const BROADCAST_INTEGER_FIELDS = Object.freeze(['BROADCAST_ACTION_INDEX']);
+
 module.exports = {
 
     // Create/Update record in `broadcasts` table
     async createBroadcast(data){
-        data                       = this.normalizeDataValues(data);
+        data                       = this.fitRefusedIntegerFields(this.normalizeDataValues(data), BROADCAST_INTEGER_FIELDS);
         let memo_id                = await this.createMemo(data['MEMO']);
         let status_id              = await this.createStatus(data['STATUS']);
         let action_index           = data['ACTION_INDEX'];

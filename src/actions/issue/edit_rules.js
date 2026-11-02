@@ -14,7 +14,7 @@
  *
  * ISSUE edit rules: fields a set lock freezes, the DESCRIPTION length, the CALLBACK
  * fields once supply is distributed, the ALLOW/BLOCK lists, the mint-window recency
- * checks and the MEMO rules.
+ * checks, the MEMO rules, and a CALLBACK_BLOCK the tokens row can store.
  *
  * Each function runs with `this` bound to the Issue handler (./index.js calls each as
  * fn.call(this, ctx)) and reads and writes the shared context.
@@ -140,4 +140,18 @@ async function validateMintWindowAndMemo(ctx){
     ctx.error = error;
 }
 
-module.exports = { validateLockedEdits, validateCallbackAndListFields, validateMintWindowAndMemo };
+// The tokens row a valid ISSUE writes binds CALLBACK_BLOCK as carried whenever it reads above
+// zero (db/tokens/token_writer.js), into a BIGINT UNSIGNED column. A hexadecimal, binary or
+// octal literal passes every rule above, which read it as a number, and a strict session
+// refuses it there, so every otherwise valid ISSUE carrying one halted the block and none is
+// in any history. A refused ISSUE writes only its issues row, whose VARCHAR stores the
+// literal, so this runs after every other verdict, the fee included, and a refused ISSUE
+// keeps its own. A literal reading zero binds 0 and stays valid.
+function validateStoredCallbackBlock(ctx){
+    let callbackBlock = ctx.data['CALLBACK_BLOCK'];
+    if(!ctx.error && callbackBlock > 0 &&
+       this.util.keepsPrefixedSpelling(callbackBlock, this.config['INTEGER_FIELDS']['CALLBACK_BLOCK']))
+        ctx.error = 'invalid: CALLBACK_BLOCK (format)';
+}
+
+module.exports = { validateLockedEdits, validateCallbackAndListFields, validateMintWindowAndMemo, validateStoredCallbackBlock };

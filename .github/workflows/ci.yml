@@ -290,7 +290,7 @@ jobs:
           repository: XChain-Platform/xchain-sdk
           # Release/hotfix follow the sibling branch; master follows master.
           # Develop and ordinary PRs use the exact reviewed handler-map snapshot.
-          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || ((github.ref == 'refs/heads/master' || github.base_ref == 'master') && 'master' || '292d471819cf24f76d1e994f56e45433ff358cec') }}
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || ((github.ref == 'refs/heads/master' || github.base_ref == 'master') && 'master' || 'e9f0bf1411e9f328d298d7be113f87ae6dcbb4c2') }}
           ssh-key: ${{ secrets.XCHAIN_SDK_DEPLOY_KEY }}
           path: xchain-sdk
 
