@@ -26,6 +26,11 @@
  * against a strict-conversion model read from the shipped DDL. The controls: a valid row
  * binds its values unchanged, and a refused row binds every spelling the column already
  * converts ('1e12', '+100', '00100') unchanged.
+ *
+ * The columns that name a contract or a list (deposits, withdrawals and
+ * contract_executions contract_index, lists.list_action_index) store NULL for a refused
+ * literal instead, as they already do for a non-numeric value: the contract hash and the
+ * list-chain readers would read a fitted integer as a reference to a real contract or list.
  */
 
 'use strict';
@@ -60,6 +65,14 @@ const SITES = [
     ['createListMeta',              'list_metas',      ['LIST_ACTION_INDEX']],
     ['createIssue',                 'issues',          ['ALLOW_LIST', 'BLOCK_LIST']],
     ['createCrossChainCallRequest', 'xcalls',          ['TARGET_CONTRACT_INDEX']]
+];
+
+// Writer, the field, its table and column, for the sites a refused literal stores NULL in.
+const NULL_SITES = [
+    ['createDeposit',           'CONTRACT_ACTION_INDEX', 'deposits',            'contract_index'],
+    ['createWithdrawal',        'CONTRACT_ACTION_INDEX', 'withdrawals',         'contract_index'],
+    ['createContractExecution', 'CONTRACT_INDEX',        'contract_executions', 'contract_index'],
+    ['createList',              'LIST_ACTION_INDEX',     'lists',               'list_action_index']
 ];
 
 // Each spelling and the integer a refused row binds for it.
@@ -171,4 +184,27 @@ describe('refused rows bind integer columns only values they store @regression @
         const kept = await bindsFor('createOrder', 'orders', ['EXPIRATION'], '1700000000', 'valid');
         assert.strictEqual(kept['expiration'], '1700000000');
     });
+});
+
+describe('refused rows store NULL for a literal naming a contract or a list @regression @tier1', function(){
+    for(const [writer, field, table, column] of NULL_SITES){
+        it(writer + ' stores NULL for a prefixed ' + field + ' on a refused row', async function(){
+            for(const [spelling] of PREFIXED){
+                const binds = await bindsFor(writer, table, [field], spelling, 'invalid: probe');
+                assert.ok(column in binds, table + '.' + column + ' was not bound');
+                assert.strictEqual(binds[column], null, table + '.' + column + ' for ' + spelling);
+                assert.ok(columnAccepts(table, column, binds[column]));
+            }
+        });
+
+        it(writer + ' keeps every other spelling of ' + field + ' as it stores today', async function(){
+            for(const spelling of DECIMAL.concat(['abc', '0x10000000000000000'])){
+                const binds = await bindsFor(writer, table, [field], spelling, 'invalid: probe');
+                const normalized = makeDb().db.normalizeDataValues({ STATUS: 'invalid: probe', [field]: spelling })[field];
+                assert.strictEqual(binds[column], normalized, table + '.' + column + ' for ' + spelling);
+            }
+            const valid = await bindsFor(writer, table, [field], '0x10', 'valid');
+            assert.strictEqual(valid[column], '0x10', 'a valid row is left as its handler admitted it');
+        });
+    }
 });

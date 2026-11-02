@@ -214,4 +214,20 @@ module.exports = {
         return fitted;
     },
 
+    // A refused row's wire fields that name a contract or a list, with a hexadecimal, binary
+    // or octal literal stored as NULL. Bound as written, such a literal failed the insert
+    // (errno 1265), so no history holds one. NULL is what normalization already stores for a
+    // non-numeric value in these columns: it names nothing, where a fitted integer would read
+    // as a reference to a real contract or list in the contract hash and the list-chain
+    // readers. Every other value comes back unchanged, and a valid row is returned as it is.
+    nullRefusedPrefixedFields(data, fields){
+        if(data['STATUS'] === 'valid') return data;
+        let cleared = Object.assign({}, data);
+        for(let field of fields){
+            if(this.util.keepsPrefixedSpelling(cleared[field], this.config['INTEGER_FIELDS'][field]))
+                cleared[field] = null;
+        }
+        return cleared;
+    },
+
 };
