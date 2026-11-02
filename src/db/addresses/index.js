@@ -19,6 +19,17 @@
  *
  ********************************************************************/
 
+const U64_MAX = '18446744073709551615';   // BIGINT UNSIGNED
+
+// The three preference columns are nullable BIGINT UNSIGNED, and every ADDRESS writes its
+// row valid or not, so a refused '-1' or 1e30 preference failed the insert and wedged the
+// block. Only a refused row can carry such a value (a valid one holds 0, 1 or 2), and
+// getAddressPreferences reads valid rows only, so the fitted value is never read back. A
+// preference that is not a number stores NULL.
+function storablePreference(util, value){
+    return util.fitIntegerColumn(value, '0', U64_MAX);
+}
+
 module.exports = {
 
     // Create record in `addresses` table
@@ -27,9 +38,9 @@ module.exports = {
         let status_id            = await this.createStatus(data['STATUS']);
         let memo_id              = await this.createMemo(data['MEMO']);
         let action_index         = data['ACTION_INDEX'];
-        let fee_preference       = data['FEE_PREFERENCE'];
-        let require_memo         = data['REQUIRE_MEMO'];
-        let dispenser_preference = data['DISPENSER_PREFERENCE'];
+        let fee_preference       = storablePreference(this.util, data['FEE_PREFERENCE']);
+        let require_memo         = storablePreference(this.util, data['REQUIRE_MEMO']);
+        let dispenser_preference = storablePreference(this.util, data['DISPENSER_PREFERENCE']);
         // Check if record already exists for this address
         let query  = "SELECT action_index FROM addresses WHERE action_index=? LIMIT 1";
         let args   = [action_index];

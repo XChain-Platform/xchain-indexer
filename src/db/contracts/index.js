@@ -26,6 +26,21 @@ const path    = require('path');
 // keyed '<COIN>:<network>' so the coin goes with the height.
 const gateRegistry = require('../../consensus/gate_registry');
 const STATE_KEY_COLLATION_KEY = 'state_key_collation_activation.STATE_KEY_COLLATION_ACTIVATION';
+const U64_MAX = '18446744073709551615';   // BIGINT UNSIGNED
+
+// contract_executions.gas_limit is BIGINT UNSIGNED NOT NULL, and a DEPLOY's limit is its
+// wire GAS_LIMIT, which validation only requires to be numeric: '-1' or a value past
+// 2^64-1 failed the insert and wedged the block. Fitted to the column here; a limit that
+// is not a number at all (a DEPLOY refused as invalid: GAS_LIMIT) stores GAS_USED, the
+// gas charged, which is what the DEPLOY writer already stores for an absent limit. The
+// column enters no block-hash preimage (the executions leaf is caller, gas_used, status,
+// emitted_count). Its one reader is a deferred chunked deploy, which takes
+// min(limit, GAS_CEILING), so a bound gives it the same reserve as the out-of-range value
+// it replaces.
+function storableGasLimit(util, data){
+    let gas_limit = util.fitIntegerColumn(data['GAS_LIMIT'], '0', U64_MAX);
+    return (gas_limit === null) ? data['GAS_USED'] : gas_limit;
+}
 // The contracts mixin is cut into parts by behaviour under contracts/; this entry merges them
 // back into the one method set db/index.js installs, at the position those methods held here.
 const stakes             = require('./stakes.js');
@@ -207,7 +222,7 @@ module.exports = {
         let method_name  = data['METHOD_NAME'];
         let input_params = data['INPUT_PARAMS'];
         let gas_used     = data['GAS_USED'];
-        let gas_limit    = data['GAS_LIMIT'];
+        let gas_limit    = storableGasLimit(this.util, data);
         let error_message = data['ERROR_MESSAGE'];
         let emitted_count = data['EMITTED_COUNT'] || 0;
         let block_index  = data['BLOCK_INDEX'];

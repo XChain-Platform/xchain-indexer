@@ -23,6 +23,17 @@
 
 const mathjs = require('mathjs');
 
+// A plain decimal spelling: the only form a strict MariaDB session converts into an
+// integer column. It rounds a fraction and evaluates an exponent, and refuses a result
+// outside the column's range (errno 1264). Text and hexadecimal, binary or octal prefixes
+// are not numbers to it at all (errno 1265 or 1366).
+const DECIMAL_SPELLING = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+
+// An unsigned hexadecimal, binary or octal literal. JavaScript reads these as integers
+// (Number('0x10') and parseInt('0x10') are both 16), so a handler can judge one in range
+// while the column refuses it.
+const PREFIXED_SPELLING = /^0(?:x[0-9a-f]+|b[01]+|o[0-7]+)$/i;
+
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
 module.exports = {
@@ -90,6 +101,41 @@ module.exports = {
         } catch(e){
             return false;
         }
+    },
+
+    // The value to bind into an integer column holding [min, max] (decimal strings) so a
+    // strict session never refuses the row, which would otherwise throw inside the block
+    // transaction and retry the same block forever.
+    //
+    // A value the column already stores is returned unchanged, so every row that inserted
+    // before still binds the identical value and stores the identical integer. A decimal
+    // spelling outside the range becomes the nearest bound, the integer a permissive
+    // session stores for it. A prefixed literal stores the integer JavaScript read it as,
+    // bounded the same way. Anything else returns null and the caller picks its own
+    // placeholder. null, undefined and '' pass through unchanged.
+    //
+    // Only for columns that enter no block-hash or state-hash preimage: the caller owns
+    // that proof.
+    fitIntegerColumn(value, min, max){
+        if(value === null || value === undefined || value === '') return value;
+        let raw = String(value).trim();
+        if(PREFIXED_SPELLING.test(raw)){
+            let n = BigInt(raw);
+            if(n < BigInt(min)) return min;
+            return (n > BigInt(max)) ? max : n.toString();
+        }
+        if(!DECIMAL_SPELLING.test(raw)) return null;
+        let rounded;
+        try {
+            rounded = mathjs.round(mathjs.bignumber(raw));
+        } catch(e){
+            return null;
+        }
+        // An exponent past the BigNumber range overflows to a signed infinity.
+        if(!rounded.isFinite()) return rounded.isNegative() ? min : max;
+        if(rounded.lt(mathjs.bignumber(min))) return min;
+        if(rounded.gt(mathjs.bignumber(max))) return max;
+        return value;
     },
 
     // Whether a numeric wire value needs the target NOT NULL column's zero placeholder:
