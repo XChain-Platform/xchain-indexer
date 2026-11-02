@@ -26,6 +26,9 @@
 // enforced here and by the hub's refusal to sign a larger snapshot.
 const { XPOLICY_MAX_MEMBERS } = require('../../protocol/constants.js');
 
+// The width of issues.min_depth, VARCHAR(15), which stores MIN_DEPTH as its wire text.
+const MIN_DEPTH_MAX_CHARS = 15;
+
 // ── Token bridge: the issuer's opt-in (format 7) and the milestone-1 policy
 //    mutual exclusion in both directions ─────────────────────────────────────────
 //
@@ -115,6 +118,11 @@ function validateBridgeFieldValues(ctx){
     // max(platform default, MIN_DEPTH), so 0 means no raise. Digits only, the
     // COOLDOWN_BLOCKS shape above.
     if(!error && format === 7 && !this.util.isNull(issue['MIN_DEPTH']) && !/^\d+$/.test(String(issue['MIN_DEPTH'])))
+        error = 'invalid: MIN_DEPTH (format)';
+    // issues.min_depth is VARCHAR(15). A longer digit string failed that insert and retried
+    // the block forever, so no indexed history holds one and the refusal needs no activation
+    // height. Fifteen digits also stay below 2^53, so tokens.min_depth parses them exactly.
+    if(!error && format === 7 && !this.util.isNull(issue['MIN_DEPTH']) && String(issue['MIN_DEPTH']).length > MIN_DEPTH_MAX_CHARS)
         error = 'invalid: MIN_DEPTH (format)';
 
     // LOCK_BRIDGE=1 freezes both fields forever. The 0/1 format check and the

@@ -23,6 +23,16 @@
 
 const { getLogger } = require('../../observability/index.js');
 
+// attests.redundancy is TINYINT UNSIGNED and attests.deadline_block BIGINT UNSIGNED. A valid
+// request holds a provider-allowed redundancy and a deadline inside the provider window,
+// which bind unchanged. A refused one (a user-broadcast v0) writes its row with the wire as
+// Number and parseInt read it, and '300', '-1' or a 23-digit DEADLINE_BLOCKS failed that
+// insert and retried the block forever. Such a value binds the nearest bound, or 0 when it
+// is not a number. A refused row is 'rejected', which no response, expiry or relay path
+// acts on, and neither column enters a state-hash preimage.
+const U8_MAX  = '255';
+const U64_MAX = '18446744073709551615';
+
 // The column values of one ATTEST v0 request row, resolved from the normalized action
 // data in the order the writer has always resolved them (status, fee payer, then the
 // fee tick), so the lookup-table ids those calls mint are minted in the same order.
@@ -36,8 +46,8 @@ async function requestColumns(db, data){
     let payload          = data['REQUEST_PAYLOAD'] || null;
     let callback_method  = data['CALLBACK_METHOD'];
     let callback_params  = data['CALLBACK_PARAMS'] || null;
-    let redundancy       = Number(data['REDUNDANCY']) || 0;
-    let deadline_block   = data['DEADLINE_BLOCK'] || 0;
+    let redundancy       = db.util.fitIntegerColumn(Number(data['REDUNDANCY']) || 0, '0', U8_MAX) ?? 0;
+    let deadline_block   = db.util.fitIntegerColumn(data['DEADLINE_BLOCK'] || 0, '0', U64_MAX) ?? 0;
     let gas_escrow       = data['GAS_ESCROW'] || '0';
     let request_status   = data['REQUEST_STATUS'] || 'pending';
     let block_index      = data['BLOCK_INDEX'];

@@ -19,6 +19,8 @@
  *
  ********************************************************************/
 
+const { fitColumnText } = require('../column_text.js');
+
 const U64_MAX = '18446744073709551615';   // BIGINT UNSIGNED
 const I32_MIN = '-2147483648';            // INT
 const I32_MAX = '2147483647';
@@ -37,6 +39,22 @@ function storableRequestLimits(util, data){
     };
 }
 
+// The four text columns a refused XCALL v0 fills from its raw wire (a request broadcast
+// inside a BATCH is refused as not a VM emission, and its row is still written): call_id
+// VARCHAR(80) and target_chain VARCHAR(10) are utf8mb3, method and callback_method are
+// VARCHAR(64) utf8mb4. An over-long value or a supplementary-plane character in a utf8mb3
+// column failed the INSERT on every retry. A valid row's values (a 64-hex id, a listed chain,
+// names of at most 64 bytes) already fit and bind unchanged, and every reader of these
+// columns selects valid rows, so the fitted value of a refused row is never read back.
+function storableRequestText(data){
+    return {
+        call_id:         fitColumnText(String(data['CALL_ID']).toLowerCase(), 80, true),
+        target_chain:    fitColumnText(data['TARGET_CHAIN'], 10, true),
+        method:          fitColumnText(data['METHOD'], 64, false),
+        callback_method: fitColumnText(data['CALLBACK_METHOD'], 64, false)
+    };
+}
+
 module.exports = {
 
     // ── Cross-chain contract calls (XCALL) ──────────────────────────────────────
@@ -46,15 +64,16 @@ module.exports = {
         data = this.normalizeDataValues(data);
         let status_id = await this.createStatus(data['STATUS']);
         let limits    = storableRequestLimits(this.util, data);
+        let text      = storableRequestText(data);
         await this.doQuery(
             `INSERT INTO xcalls
              (action_index, version, call_id, contract_index, target_chain, target_contract_index,
               method, params_json, gas_limit, cross_hops, callback_method, callback_params_json,
               deadline_block, request_status, block_index, status_id)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [data['ACTION_INDEX'], 0, String(data['CALL_ID']).toLowerCase(), data['CONTRACT_INDEX'],
-             data['TARGET_CHAIN'], data['TARGET_CONTRACT_INDEX'], data['METHOD'], data['PARAMS_JSON'],
-             limits.gas_limit, limits.cross_hops, data['CALLBACK_METHOD'], data['CALLBACK_PARAMS'],
+            [data['ACTION_INDEX'], 0, text.call_id, data['CONTRACT_INDEX'],
+             text.target_chain, data['TARGET_CONTRACT_INDEX'], text.method, data['PARAMS_JSON'],
+             limits.gas_limit, limits.cross_hops, text.callback_method, data['CALLBACK_PARAMS'],
              limits.deadline_block, data['REQUEST_STATUS'], data['BLOCK_INDEX'], status_id]);
     },
 

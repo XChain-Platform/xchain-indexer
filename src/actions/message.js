@@ -34,6 +34,8 @@ const { getLogger } = require('../observability/index.js');
  * 
  ********************************************************************/
 
+const { exceedsCodePoints } = require('../db/column_text.js');
+
 class Message {
 
     // Handle constructing a class instance
@@ -131,6 +133,21 @@ class Message {
         if(!error && !this.util.isNull(data['ENCRYPTION_METHOD']) && !this.util.isNumeric(data['ENCRYPTION_METHOD']))
             error = 'invalid: ENCRYPTION_METHOD (format)';
 
+        return this.fitEncryptionMethod(data, error);
+    }
+
+    // messages.encryption_method is VARCHAR(1), and numeric text such as '01' or '1.0' both
+    // passes the checks (Number() reads it as a listed method) and survives storage
+    // normalization as written, so the INSERT failed on every retry. Any such value halted
+    // the block whatever the verdict, so refusing it here changes no recorded action. The
+    // value is cleared on every verdict, which is also what lets a refused row be stored.
+    fitEncryptionMethod(data, error){
+        let method = data['ENCRYPTION_METHOD'];
+        if(!this.util.isNull(method) && this.util.isNumeric(method) && exceedsCodePoints(method, 1)){
+            if(!error)
+                error = 'invalid: ENCRYPTION_METHOD (length)';
+            data['ENCRYPTION_METHOD'] = null;
+        }
         return error;
     }
 
