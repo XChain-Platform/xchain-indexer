@@ -26,6 +26,14 @@ const addresses    = require('./addresses.js');
 const tickers      = require('./tickers.js');
 const expiredItems = require('./expired_items.js');
 const statusActionCache = require('./status_action_cache.js');
+const { clipCodePoints } = require('../column_text.js');
+const { toUtf8mb3 }      = require('../utf8mb3.js');
+
+// index_statuses.status is VARCHAR(250) utf8mb3 (src/sql/index_statuses.sql): 250 characters,
+// counted one per code point. A verdict can echo contract source (a lint verdict quotes the
+// offending text), so it can be longer than the column or carry a character utf8mb3 cannot
+// hold, and either one made createStatus return a NULL id or throw on every retry.
+const STATUS_MAX_CHARS = 250;
 
 module.exports = {
 
@@ -130,6 +138,10 @@ module.exports = {
         // Ignore empty status and return NULL
         if(this.util.isNull(status))
             return null;
+        // Store, look up and re-read the one value the column can hold, so the refetch finds
+        // the row the INSERT wrote and the hashed status (read back from this table) is the
+        // same on every node. A value that already fits is unchanged.
+        status = clipCodePoints(toUtf8mb3(status), STATUS_MAX_CHARS);
         var id = await this.getStatusId(status);
         // Handle creating record
         if(id==null){

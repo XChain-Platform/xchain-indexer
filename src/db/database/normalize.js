@@ -26,6 +26,8 @@
 // Strict, as the class body these methods came from was.
 'use strict';
 
+const { clipCodePoints } = require('../column_text.js');
+
 // Numeric wire text stored in VARCHAR(250) amount columns. A strict server rejects a
 // longer value even on an invalid action row; '0' is the placeholder these writers
 // already use for absent and malformed numeric text.
@@ -128,22 +130,6 @@ function clipUtf8Bytes(value, maxBytes){
     let end = maxBytes;
     while(end > 0 && (buf[end] & 0xC0) === 0x80) end--;
     return buf.toString('utf8', 0, end);
-}
-
-// Clip a string to at most maxChars code points without splitting a surrogate pair. A
-// UTF-16 length within the limit already fits (code units never undercount code points),
-// so only a longer string is walked.
-function clipCodePoints(value, maxChars){
-    let s = String(value);
-    if(s.length <= maxChars) return s;
-    let end = 0;
-    for(let count = 0; count < maxChars && end < s.length; count++){
-        let c = s.charCodeAt(end);
-        let pair = c >= 0xD800 && c <= 0xDBFF && end + 1 < s.length &&
-                   (s.charCodeAt(end + 1) & 0xFC00) === 0xDC00;
-        end += pair ? 2 : 1;
-    }
-    return s.substring(0, end);
 }
 
 // Last pass: the per-ACTION text truncations, the MEMO cap, and the contract execution
