@@ -25,6 +25,9 @@ const path    = require('path');
 const pollCreate = require('./poll_create.js');
 const vmSnapshot = require('./vm_snapshot.js');
 
+// poll_results.option_index is SMALLINT UNSIGNED.
+const MAX_OPTION_INDEX = 65535;
+
 module.exports = Object.assign({
 
     // Fetch a poll definition row by its id (the VOTE v0 action_index). Returns
@@ -128,8 +131,15 @@ module.exports = Object.assign({
         // No winner is recorded for a poll that failed its gates.
         let winning_option = passed ? tally.winning_option : null;
 
-        // One poll_results row per option (per-option weight + distinct voter count)
+        // One poll_results row per option (per-option weight + distinct voter count), up to
+        // the last index option_index (SMALLINT UNSIGNED) stores. createPoll keeps every
+        // OPTIONS entry, so a poll can store more, and inserting index 65536 failed under a
+        // strict session and halted the block. No row past it can hold anything: votes.choice
+        // is the same type and a ballot naming a higher index is refused, so each such option
+        // tallies weight 0 and no voters, never wins (a winner needs weight above 0), and reads
+        // back as exactly that from getPollResult, which fills a missing row with zero.
         for(let opt of tally.options){
+            if(opt.index > MAX_OPTION_INDEX) continue;
             await this.doQuery(
                 `INSERT INTO poll_results
                     (action_index, block_index, poll_index, option_index, total_weight, voter_count, resolved_block, status_id)

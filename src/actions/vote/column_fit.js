@@ -39,18 +39,11 @@ const U16_MAX = '65535';
 // polls.quorum, polls.min_vote_balance, polls.decide_threshold and votes.share are VARCHAR(60).
 const NUMERIC_TEXT_MAX_CHARS = 60;
 
-// The finalize writes one poll_results row per stored option, its index in a SMALLINT
-// UNSIGNED (and the winner in polls.winning_option, the same type): 65536 entries at most.
-const MAX_STORED_OPTIONS = 65536;
-
 // The finalize stamps a timelocked callback_due_block (BIGINT UNSIGNED) as a Number, and the
 // driver writes its decimal, so 2^64 is the first stamp the column refuses. No finalize runs
 // past block 2^53: the catch-up loop advances with Number(lastIndexerBlock) + 1, which stops there.
 const DUE_BLOCK_OVERFLOW     = 2 ** 64;
 const LAST_PROCESSABLE_BLOCK = 2 ** 53;
-// end_block rounds half away from zero, so it stores at 2^53 or below exactly when the wire
-// value is below this.
-const LAST_PROCESSABLE_ROUNDING_EDGE = '9007199254740992.5';
 
 // VOTE v0 phase - the live poll row. createPoll binds END_BLOCK, MAX_SELECTIONS and
 // MIN_VOTERS raw (a 23-digit END_BLOCK, MIN_VOTERS=1e30 and MAX_SELECTIONS=0x2 each failed
@@ -68,7 +61,6 @@ function validateCreateStorable(data, error){
         error = 'invalid: CALLBACK_DELAY_BLOCKS (format)';
     if(!error && data['IS_BINDING'] && !this.util.isNull(data['CALLBACK_DELAY_BLOCKS']) && callbackDueOverflows(this.util, data))
         error = 'invalid: CALLBACK_DELAY_BLOCKS (format)';
-    error = optionCountError.call(this, data, error);
     return createTextError.call(this, data, error);
 }
 
@@ -78,23 +70,17 @@ function validateCreateStorable(data, error){
 // rounding is monotone, so the Number sum fireBindingCallback computes at the last block a
 // poll can close, the stored end_block or 2^53, is the largest stamp it can ever write. A
 // delay of 0 takes the immediate path and stamps nothing. The check stays in Number to match
-// the stamp: above 2^63 the parsed delay and the sum both round to multiples of 2048.
+// the stamp: above 2^63 the parsed delay and the sum both round to multiples of 2048. The
+// close block is end_block as the column stores it, rounded on every wire digit (bcround
+// works at 64 significant digits and read a 67-digit 3071.4999... as 3072); Number holds it
+// exactly up to 2^53, past which the clamp applies.
 function callbackDueOverflows(util, data){
     let delay = parseInt(data['CALLBACK_DELAY_BLOCKS']);
     if(!(delay > 0)) return false;
-    let lastClose = Math.min(Number(util.bcround(data['END_BLOCK'], 0)), LAST_PROCESSABLE_BLOCK);
+    let endBlock = util.storedIntegerOf(data['END_BLOCK']);
+    if(endBlock === null) return false;
+    let lastClose = Math.min(endBlock.toNumber(), LAST_PROCESSABLE_BLOCK);
     return lastClose + delay >= DUE_BLOCK_OVERFLOW;
-}
-
-// createPoll stores every comma-separated OPTIONS entry, empty ones included, so a poll can
-// store more entries than its option count, and its finalize failed the poll_results insert
-// of index 65536 (errno 1264). The time sweep finalizes a poll at its stored end_block when
-// the indexer reaches that block, so the create is refused only then; a poll whose end_block
-// lies past 2^53 never closes by time and stays valid.
-function optionCountError(data, error){
-    if(error || String(data['OPTIONS']).split(',').length <= MAX_STORED_OPTIONS) return error;
-    if(!this.util.bclt(data['END_BLOCK'], LAST_PROCESSABLE_ROUNDING_EDGE)) return error;
-    return 'invalid: OPTIONS (format)';
 }
 
 // QUORUM, MIN_VOTE_BALANCE and DECIDE_THRESHOLD pass rules that read them as numbers of any
@@ -116,7 +102,8 @@ function createTextError(data, error){
 // up by parseInt, so '0x5' or '5e30' named poll 5 and then failed the BIGINT UNSIGNED bind
 // (errno 1366 or 1264); '5.4' stores 5 and stays valid. It binds each selection's choice into
 // a SMALLINT UNSIGNED, past which only a poll storing more than 65536 entries can offer a
-// choice, and a split share as its trimmed text into a VARCHAR(60) (errno 1264 or 1406).
+// choice (and since none is ever cast, that poll's finalize writes no poll_results row past
+// index 65535), and a split share as its trimmed text into a VARCHAR(60) (errno 1264 or 1406).
 function validateBallotStorable(data, selections, error){
     if(!error && !this.util.storesInIntegerColumn(data['POLL_REF'], '0', U64_MAX))
         error = 'invalid: POLL_REF (format)';

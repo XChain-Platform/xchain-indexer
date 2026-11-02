@@ -19,7 +19,11 @@
  * A split share longer than votes.share VARCHAR(60) failed the same way (errno 1406), and
  * a poll storing more than 65536 entries offered choices past votes.choice SMALLINT
  * UNSIGNED (errno 1264). Each halted every indexer on the block that carried it, so the
- * refusals here carry no activation height.
+ * refusals here carry no activation height. POLL_REF is judged as the column converts it,
+ * rounding the exact decimal half away from zero, so U64_MAX + '.4999999999999' stays valid.
+ *
+ * Such a poll's finalize writes poll_results only for indexes up to 65535, which every
+ * reader takes as zero beyond: no ballot can name a higher option, so none counts there.
  *
  * Every row runs the real handler, then the real row writer, and checks each bound value
  * against the strict-conversion model read from the shipped DDL. Rows marked valid or
@@ -39,9 +43,13 @@ const { createBaseData }   = require('../fixtures/mocks');
 const { freshVote }        = require('../unit/actions/stake/vote_invariants.test/helpers/vote_fixtures.js');
 const { columnAccepts }    = require('../helpers/strict_columns.js');
 const votesDb              = require('../../src/db/votes/index.js');
+const pollsDb              = require('../../src/db/polls/index.js');
+const Utility              = require('../../src/utility');
+const { finalizeInserts, OPTION_INDEX_AT } = require('../helpers/poll_finalize.js');
 
-// A poll storing 65537 entries, which a create still stores when its END_BLOCK lies past
-// block 2^53 and so its finalize never comes by time.
+const U64_MAX = '18446744073709551615';
+
+// A poll storing 65537 entries: createPoll keeps the empty ones its option count skips.
 const OPTIONS_PAST_INDEX = 'yes,no' + ','.repeat(65535);
 
 // A poll row as getPoll hands it back.
@@ -84,6 +92,15 @@ const BALLOT_CASES = [
     ['POLL_REF whose exponent form is the column maximum', '1.8446744073709551615e19', '0', { action_index: 1 }, 'valid'],
     ['POLL_REF whose exponent form is one past the column maximum', '1.8446744073709551616e19', '0', { action_index: 1 },
         'invalid: POLL_REF (format)'],
+    // parseInt reads a plain U64_MAX fraction as the Number 2^64, and the exponent forms as 18446.
+    ['POLL_REF just under half past the column maximum, which the column rounds down', U64_MAX + '.4999999999999', '0',
+        { action_index: 2 ** 64 }, 'valid'],
+    ['POLL_REF half past the column maximum, which the column rounds up past it', U64_MAX + '.5', '0',
+        { action_index: 2 ** 64 }, 'invalid: POLL_REF (format)'],
+    ['POLL_REF in exponent form just under half past the column maximum', '18446.7440737095516154999999999999e15', '0',
+        { action_index: 18446 }, 'valid'],
+    ['POLL_REF in exponent form half past the column maximum', '18446.7440737095516155e15', '0',
+        { action_index: 18446 }, 'invalid: POLL_REF (format)'],
     ['a hexadecimal POLL_REF on a closed poll keeps its verdict', '0x5', '0', { end_block: '50' }, 'invalid: poll closed'],
     // A split share binds as trimmed text into VARCHAR(60); approval mode binds '1'.
     ['a split share of 60 characters, the column width', '5', '0:' + '1'.repeat(60), SPLIT, 'valid'],
@@ -114,3 +131,28 @@ describe('VOTE v1 refuses a value its votes row cannot store @regression @tier1'
     }
 });
 
+describe('VOTE v2 writes only the poll_results rows their column stores @regression @tier1', function () {
+    const stored = OPTIONS_PAST_INDEX.split(',').map(o => o.trim());
+
+    it('the finalize of a poll storing 65537 entries writes indexes 0 to 65535', async function () {
+        const inserts = await finalizeInserts(stored);
+        assert.strictEqual(inserts.length, 65536);
+        assert.strictEqual(inserts[inserts.length - 1][OPTION_INDEX_AT], 65535);
+        for (const args of inserts)
+            assert.ok(columnAccepts('poll_results', 'option_index', args[OPTION_INDEX_AT]),
+                'poll_results.option_index bound ' + args[OPTION_INDEX_AT]);
+    });
+
+    it('getPollResult reads the unwritten option 65536 at weight 0 and no voters', async function () {
+        const rows = (await finalizeInserts(stored)).map(a => ({ option_index: a[3], total_weight: a[4], voter_count: a[5] }));
+        const db = Object.assign({}, pollsDb, {
+            util: new Utility(),
+            getPoll: async () => ({ action_index: 50, options: JSON.stringify(stored), poll_status: 'finalized', tick_id: null }),
+            doQuery: async () => rows,
+        });
+        const result = await db.getPollResult(50);
+        assert.strictEqual(result.options.length, 65537);
+        assert.deepStrictEqual(result.options[65536], { index: 65536, label: '', weight: '0', voters: 0 });
+        assert.deepStrictEqual(result.options[65535], { index: 65535, label: '', weight: '0', voters: 0 });
+    });
+});

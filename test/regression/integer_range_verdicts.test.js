@@ -23,8 +23,12 @@
  * callback_due_block = finalize block + delay; that delay is refused the same way. So is
  * a QUORUM, MIN_VOTE_BALANCE or DECIDE_THRESHOLD wider than its VARCHAR(60) (errno 1406),
  * a binding poll's CALLBACK_PARAMS holding a character its utf8mb3 column refuses (errno
- * 1366), and an OPTIONS list storing more than 65536 entries on a poll the time sweep
- * finalizes, whose poll_results.option_index SMALLINT UNSIGNED refused the last ones.
+ * 1366). Each verdict follows the column's own conversion exactly: a fraction rounds half
+ * away from zero on its exact decimal, so U64_MAX + '.4999999999999' stores and stays valid.
+ *
+ * An OPTIONS list storing more than 65536 entries stays valid: its finalize writes
+ * poll_results only for indexes up to 65535, the last poll_results.option_index SMALLINT
+ * UNSIGNED stores and the last a ballot can name, so every row it skips would read zero.
  *
  * Every table row runs the real handler, then the real row writer, and checks the bound
  * value against a strict-conversion model read from the shipped DDL. Rows marked
@@ -39,7 +43,6 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const mathjs = require('mathjs');
 
 const { createBaseData }   = require('../fixtures/mocks');
 const { getTestConfig }    = require('../fixtures/config');
@@ -47,14 +50,23 @@ const { freshVote }        = require('../unit/actions/stake/vote_invariants.test
 const { setUpAttestHandler, v0Data, v0Params } = require('../helpers/attest_fixture.js');
 const issueFixtures        = require('../unit/bridge/issue_bridge_optin.test/helpers/issue_fixtures.js');
 const pollCreate           = require('../../src/db/polls/poll_create.js');
+const { finalizeInserts, OPTION_INDEX_AT } = require('../helpers/poll_finalize.js');
 const bindingCallback      = require('../../src/actions/vote/binding_callback.js');
 const { exactU64 }         = require('../../src/db/database/exact_u64.js');
 const Utility              = require('../../src/utility');
 const Database             = require('../../src/db');
-const { columnAccepts }    = require('../helpers/strict_columns.js');
+const { columnAccepts, storedInteger } = require('../helpers/strict_columns.js');
 
 const U64_MAX  = '18446744073709551615';
 const OVER_U64 = '18446744073709551616';
+// Just under half past the maximum: the column rounds it down to U64_MAX, while rounding to
+// 12 decimals first (as mathjs.round does) turns it into a half and rounds it up.
+const U64_MAX_NEAR_HALF = U64_MAX + '.4999999999999';
+// A 67-digit END_BLOCK that stores 3071; a 64-digit rounding of it reads 3071.5 and rounds to 3072.
+const END_3071_LONG = '3071.4' + '9'.repeat(62);
+// 2^64 - 4096, which parseInt reads exactly: the due block it stamps at 3071 is 2^64 - 2048
+// and stores, while at 3072 the Number sum is the tie 2^64 - 1024, which rounds to 2^64.
+const DELAY_AT_3071_EDGE = '18446744073709547520';
 
 // ── VOTE v0 ───────────────────────────────────────────────────────────────────
 
@@ -106,6 +118,8 @@ const VOTE_CASES = [
     // END_BLOCK binds raw into BIGINT UNSIGNED.
     ['END_BLOCK at the column maximum',             { endBlock: U64_MAX },                   'valid'],
     ['END_BLOCK one past the column maximum',       { endBlock: OVER_U64 },                  'invalid: END_BLOCK (format)'],
+    ['END_BLOCK just under half past the column maximum, which the column rounds down', { endBlock: U64_MAX_NEAR_HALF }, 'valid'],
+    ['END_BLOCK half past the column maximum, which the column rounds up past it', { endBlock: U64_MAX + '.5' }, 'invalid: END_BLOCK (format)'],
     ['END_BLOCK of 23 digits',                      { endBlock: '10000000000000000000000' }, 'invalid: END_BLOCK (format)'],
     ['END_BLOCK as a hexadecimal literal',          { endBlock: '0x7fffffff' },              'invalid: END_BLOCK (format)'],
     ['END_BLOCK with a fraction the column rounds', { endBlock: '200.4' },                   'valid'],
@@ -118,9 +132,13 @@ const VOTE_CASES = [
     ['MAX_SELECTIONS one past the column maximum',  { maxSelections: '65536', options: MANY_OPTIONS }, 'invalid: MAX_SELECTIONS (format)'],
     ['MAX_SELECTIONS as a hexadecimal literal',     { maxSelections: '0x2' },                'invalid: MAX_SELECTIONS (format)'],
     ['MAX_SELECTIONS of 0 keeps its verdict',       { maxSelections: '0' },                  'invalid: MAX_SELECTIONS (range)'],
+    ['MAX_SELECTIONS just under half past the column maximum keeps its verdict, since Number reads a fraction',
+        { maxSelections: '65535.4999999999999', options: MANY_OPTIONS },                     'invalid: MAX_SELECTIONS (range)'],
     // MIN_VOTERS binds raw into BIGINT UNSIGNED.
     ['MIN_VOTERS at the column maximum',            { minVoters: U64_MAX },                  'valid'],
     ['MIN_VOTERS one past the column maximum',      { minVoters: OVER_U64 },                 'invalid: MIN_VOTERS (format)'],
+    ['MIN_VOTERS just under half past the column maximum, which the column rounds down', { minVoters: U64_MAX_NEAR_HALF }, 'valid'],
+    ['MIN_VOTERS half past the column maximum, which the column rounds up past it', { minVoters: U64_MAX + '.5' }, 'invalid: MIN_VOTERS (format)'],
     ['MIN_VOTERS of 1e30',                          { minVoters: '1e30' },                   'invalid: MIN_VOTERS (format)'],
     ['MIN_VOTERS as a hexadecimal literal',         { minVoters: '0x10' },                   'invalid: MIN_VOTERS (format)'],
     ['MIN_VOTERS in exponent form the column converts', { minVoters: '1e1' },                'valid'],
@@ -147,6 +165,11 @@ const VOTE_CASES = [
         { endBlock: '2000', delay: '18446744073709548545' },                                  'invalid: CALLBACK_DELAY_BLOCKS (format)'],
     ['CALLBACK_DELAY_BLOCKS the column stores, whose due block at a live END_BLOCK passes the maximum',
         { endBlock: '900000', delay: '18446744073709550591' },                                'invalid: CALLBACK_DELAY_BLOCKS (format)'],
+    // The poll closes at END_BLOCK as the column stores it, rounded on every wire digit.
+    ['CALLBACK_DELAY_BLOCKS whose due block at a 67-digit END_BLOCK the column stores as 3071 is storable',
+        { endBlock: END_3071_LONG, delay: DELAY_AT_3071_EDGE },                               'valid'],
+    ['CALLBACK_DELAY_BLOCKS whose due block at END_BLOCK 3072 passes the maximum',
+        { endBlock: '3072', delay: DELAY_AT_3071_EDGE },                                      'invalid: CALLBACK_DELAY_BLOCKS (format)'],
     // END_BLOCK past 2^53 finalizes at 2^53 at the latest: 2^64-2^53-1025 parses to
     // 2^64-2^53-2048 (stamp 2^64-2048) and 2^64-2^53-1024 to 2^64-2^53 (stamp 2^64).
     ['CALLBACK_DELAY_BLOCKS whose due block at block 2^53, the last the indexer reaches, is the largest storable',
@@ -171,18 +194,12 @@ const VOTE_CASES = [
     ['CALLBACK_PARAMS with a supplementary character', { callbackParams: '["' + EMOJI + '"]' }, 'invalid: CALLBACK_PARAMS (format)'],
     ['CALLBACK_PARAMS with a supplementary character on a signaling poll, which binds none',
         Object.assign({ callbackParams: '["' + EMOJI + '"]' }, SIGNALING),                   'valid'],
-    // poll_results.option_index and polls.winning_option are SMALLINT UNSIGNED, and the
-    // finalize writes one row per stored entry, empty ones included.
-    ['OPTIONS of 65536 stored entries, the last index the finalize can write', { options: MANY_OPTIONS }, 'valid'],
-    ['OPTIONS of 65537 stored entries',             { options: OPTIONS_PAST_INDEX },         'invalid: OPTIONS (format)'],
+    // createPoll stores every entry, empty ones included, and poll_results.option_index is
+    // SMALLINT UNSIGNED: the finalize writes rows for indexes up to 65535 only.
+    ['OPTIONS of 65536 stored entries, every one of which the finalize writes', { options: MANY_OPTIONS }, 'valid'],
+    ['OPTIONS of 65537 stored entries, whose finalize writes the first 65536', { options: OPTIONS_PAST_INDEX }, 'valid'],
     ['OPTIONS of 65537 stored entries on a poll that closes at block 2^53, the last the indexer reaches',
-        { options: OPTIONS_PAST_INDEX, endBlock: String(2 ** 53) },                           'invalid: OPTIONS (format)'],
-    ['OPTIONS of 65537 stored entries on a poll closing at block 2^53 + 1, which the indexer never reaches',
-        { options: OPTIONS_PAST_INDEX, endBlock: '9007199254740993' },                         'valid'],
-    ['OPTIONS of 65537 stored entries on a poll whose END_BLOCK the column rounds up past block 2^53',
-        { options: OPTIONS_PAST_INDEX, endBlock: '9007199254740992.5' },                       'valid'],
-    ['OPTIONS of 65537 stored entries on a poll whose END_BLOCK the column rounds down to block 2^53',
-        { options: OPTIONS_PAST_INDEX, endBlock: '9007199254740992.4' },                       'invalid: OPTIONS (format)'],
+        { options: OPTIONS_PAST_INDEX, endBlock: String(2 ** 53) },                           'valid'],
 ];
 
 // Run one VOTE_CASES row: the verdict, then every value the row writer bound against its column.
@@ -196,11 +213,16 @@ async function checkCreateRow(overrides, expected){
             'polls.' + column + ' bound ' + String(bound[at]) + ', which its column refuses');
     assert.ok(bound[CALLBACK_PARAMS_AT] === null || !/[\u{10000}-\u{10FFFF}]/u.test(bound[CALLBACK_PARAMS_AT]),
         'polls.callback_params bound a character its utf8mb3 column refuses');
-    // A poll that closes by time inserts poll_results.option_index for every stored entry.
-    const closes = mathjs.round(mathjs.bignumber(params[2])).lte(2 ** 53);
-    if (expected === 'valid' && closes)
-        assert.ok(columnAccepts('poll_results', 'option_index', JSON.parse(bound[3]).length - 1),
-            'the finalize would write an option index its column refuses');
+    // The real finalize of a valid poll binds only option indexes its column stores, one row
+    // per stored entry up to the column maximum.
+    if (expected === 'valid') {
+        const stored = JSON.parse(bound[3]);
+        const inserts = await finalizeInserts(stored);
+        assert.strictEqual(inserts.length, Math.min(stored.length, 65536));
+        for (const args of inserts)
+            assert.ok(columnAccepts('poll_results', 'option_index', args[OPTION_INDEX_AT]),
+                'the finalize bound option index ' + args[OPTION_INDEX_AT] + ', which its column refuses');
+    }
     if (expected !== 'valid')
         assert.strictEqual(bound[2], null, 'a refused create writes the inert row');
 }
@@ -243,7 +265,7 @@ describe('VOTE v0 refuses a value its poll column cannot store @regression @tier
             // The delay createPoll binds without this refusal, stored and read back.
             const delay = parseInt(params[18]);
             if (expected === 'valid') assert.strictEqual(bound[POLL_COLUMNS.callback_delay_blocks], delay, title);
-            const endBlock = mathjs.round(mathjs.bignumber(params[2]));
+            const endBlock = storedInteger(params[2]);
             const lastClose = Math.min(Number(endBlock), 2 ** 53);
             const { indexer, handler } = freshVote();
             indexer.indexerDb.setPollCallbackDue = sinon.stub().resolves();

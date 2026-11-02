@@ -53,11 +53,22 @@ function columnAccepts(table, column, value){
     const bits = { TINYINT: 8, SMALLINT: 16, MEDIUMINT: 24, INT: 32, BIGINT: 64 }[type[1].toUpperCase()];
     if(!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw))
         return false;
-    const n = mathjs.round(mathjs.bignumber(raw));
+    // The exact decimal against the half-units past each bound: rounding half away from
+    // zero lands inside [lo, hi] exactly when lo - 0.5 < n < hi + 0.5. The construction keeps
+    // every wire digit and the comparisons are exact; the bounds have at most 21 digits, well
+    // inside the BigNumber precision their arithmetic rounds to. mathjs.round is no model
+    // here: it first rounds to 12 decimals, so a fraction in [.4999999999995, .5) rounds up.
+    const n = mathjs.bignumber(raw);
     const unsigned = /\bUNSIGNED\b/i.test(spec);
     const lo = unsigned ? mathjs.bignumber(0) : mathjs.bignumber(2).pow(bits - 1).neg();
     const hi = unsigned ? mathjs.bignumber(2).pow(bits).minus(1) : mathjs.bignumber(2).pow(bits - 1).minus(1);
-    return n.isFinite() && n.gte(lo) && n.lte(hi);
+    return n.isFinite() && n.gt(lo.minus(0.5)) && n.lt(hi.plus(0.5));
 }
 
-module.exports = { columnSpec, columnAccepts };
+// The integer a strict session stores for a plain decimal spelling: the exact value rounded
+// half away from zero, at any digit count.
+function storedInteger(raw){
+    return mathjs.bignumber(String(raw).trim()).toDecimalPlaces(0, mathjs.BigNumber.ROUND_HALF_UP);
+}
+
+module.exports = { columnSpec, columnAccepts, storedInteger };
