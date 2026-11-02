@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.6] - 2026-11-02
+
+### Fixed
+- One transaction can no longer halt an indexer through a hexadecimal, binary or octal number in an integer field.
+
 ## [0.27.5] - 2026-11-01
 
 ### Fixed
