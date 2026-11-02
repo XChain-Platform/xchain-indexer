@@ -25,4 +25,14 @@ function fitsUtf8mb3(value){
     return true;
 }
 
-module.exports = { fitsUtf8mb3 };
+// For a value that must still be stored, map every code point utf8mb3 cannot hold to
+// U+FFFD, one for one: supplementary-plane characters, and lone surrogates (which the
+// driver's UTF-8 encoder already binds as U+FFFD, so the in-memory string now equals the
+// stored one). A value that already fits is returned unchanged.
+function toUtf8mb3(value){
+    let s = String(value);
+    if(fitsUtf8mb3(s) && s.isWellFormed()) return s;
+    return s.toWellFormed().replace(/[\u{10000}-\u{10FFFF}]/gu, '�');
+}
+
+module.exports = { fitsUtf8mb3, toUtf8mb3 };
