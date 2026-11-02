@@ -2194,6 +2194,51 @@
       "retroactive replay witness exit and final compare @regression @tier1 the boot-only switch: no in-process handoff remains and the exit is a nonzero process exit",
       "retroactive replay witness exit and final compare @regression @tier1 the marker stays open at replay_to until the final pass has recorded changed"
     ],
+    "1d2bc895c71b8da6": [
+      "refused rows bind integer columns only values they store @regression @tier1 createAirdrop binds a converted spelling as normalization left it on a refused airdrops row",
+      "refused rows bind integer columns only values they store @regression @tier1 createAirdrop fits a prefixed literal on a refused airdrops row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBet binds a converted spelling as normalization left it on a refused bets row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBet fits a prefixed literal on a refused bets row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBetCancel binds a converted spelling as normalization left it on a refused bet_cancels row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBetCancel fits a prefixed literal on a refused bet_cancels row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBetEdit binds a converted spelling as normalization left it on a refused bet_edits row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBetEdit fits a prefixed literal on a refused bet_edits row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBetFeed binds a converted spelling as normalization left it on a refused bet_feeds row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBetFeed fits a prefixed literal on a refused bet_feeds row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBetResolve binds a converted spelling as normalization left it on a refused bet_resolves row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBetResolve fits a prefixed literal on a refused bet_resolves row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBroadcast binds a converted spelling as normalization left it on a refused broadcasts row",
+      "refused rows bind integer columns only values they store @regression @tier1 createBroadcast fits a prefixed literal on a refused broadcasts row",
+      "refused rows bind integer columns only values they store @regression @tier1 createCrossChainCallRequest binds a converted spelling as normalization left it on a refused xcalls row",
+      "refused rows bind integer columns only values they store @regression @tier1 createCrossChainCallRequest fits a prefixed literal on a refused xcalls row",
+      "refused rows bind integer columns only values they store @regression @tier1 createDispenser binds a converted spelling as normalization left it on a refused dispensers row",
+      "refused rows bind integer columns only values they store @regression @tier1 createDispenser fits a prefixed literal on a refused dispensers row",
+      "refused rows bind integer columns only values they store @regression @tier1 createDispenserEdit binds a converted spelling as normalization left it on a refused dispenser_edits row",
+      "refused rows bind integer columns only values they store @regression @tier1 createDispenserEdit fits a prefixed literal on a refused dispenser_edits row",
+      "refused rows bind integer columns only values they store @regression @tier1 createIssue binds a converted spelling as normalization left it on a refused issues row",
+      "refused rows bind integer columns only values they store @regression @tier1 createIssue fits a prefixed literal on a refused issues row",
+      "refused rows bind integer columns only values they store @regression @tier1 createLink binds a converted spelling as normalization left it on a refused links row",
+      "refused rows bind integer columns only values they store @regression @tier1 createLink fits a prefixed literal on a refused links row",
+      "refused rows bind integer columns only values they store @regression @tier1 createListMeta binds a converted spelling as normalization left it on a refused list_metas row",
+      "refused rows bind integer columns only values they store @regression @tier1 createListMeta fits a prefixed literal on a refused list_metas row",
+      "refused rows bind integer columns only values they store @regression @tier1 createOrder binds a converted spelling as normalization left it on a refused orders row",
+      "refused rows bind integer columns only values they store @regression @tier1 createOrder fits a prefixed literal on a refused orders row",
+      "refused rows bind integer columns only values they store @regression @tier1 createOrderEdit binds a converted spelling as normalization left it on a refused order_edits row",
+      "refused rows bind integer columns only values they store @regression @tier1 createOrderEdit fits a prefixed literal on a refused order_edits row",
+      "refused rows bind integer columns only values they store @regression @tier1 createSwap binds a converted spelling as normalization left it on a refused swaps row",
+      "refused rows bind integer columns only values they store @regression @tier1 createSwap fits a prefixed literal on a refused swaps row",
+      "refused rows bind integer columns only values they store @regression @tier1 createSwapEdit binds a converted spelling as normalization left it on a refused swap_edits row",
+      "refused rows bind integer columns only values they store @regression @tier1 createSwapEdit fits a prefixed literal on a refused swap_edits row",
+      "refused rows bind integer columns only values they store @regression @tier1 leaves a valid row as its handler admitted it",
+      "refused rows store NULL for a literal naming a contract or a list @regression @tier1 createContractExecution keeps every other spelling of CONTRACT_INDEX as it stores today",
+      "refused rows store NULL for a literal naming a contract or a list @regression @tier1 createContractExecution stores NULL for a prefixed CONTRACT_INDEX on a refused row",
+      "refused rows store NULL for a literal naming a contract or a list @regression @tier1 createDeposit keeps every other spelling of CONTRACT_ACTION_INDEX as it stores today",
+      "refused rows store NULL for a literal naming a contract or a list @regression @tier1 createDeposit stores NULL for a prefixed CONTRACT_ACTION_INDEX on a refused row",
+      "refused rows store NULL for a literal naming a contract or a list @regression @tier1 createList keeps every other spelling of LIST_ACTION_INDEX as it stores today",
+      "refused rows store NULL for a literal naming a contract or a list @regression @tier1 createList stores NULL for a prefixed LIST_ACTION_INDEX on a refused row",
+      "refused rows store NULL for a literal naming a contract or a list @regression @tier1 createWithdrawal keeps every other spelling of CONTRACT_ACTION_INDEX as it stores today",
+      "refused rows store NULL for a literal naming a contract or a list @regression @tier1 createWithdrawal stores NULL for a prefixed CONTRACT_ACTION_INDEX on a refused row"
+    ],
     "1d393910442d8d2a": [
       "Airdrop @regression @tier2 balance and authorization checks SOURCE sleeping \u2192 invalid",
       "Airdrop @regression @tier2 balance and authorization checks TICK sleeping \u2192 invalid",
@@ -11854,6 +11899,16 @@
       "Recovery-determinism e2e (consensus) @integration (6) deploy_chunks carriers are byte-identical A vs B despite different insert order",
       "Recovery-determinism e2e (consensus) @integration sanity: both nodes assigned the stake source the same deterministic id"
     ],
+    "9413d336ccb36031": [
+      "prefixed integer spellings on valid BET and LINK actions @regression @tier1 refuses a prefixed BET DEADLINE or REFUND_WINDOW on a feed create",
+      "prefixed integer spellings on valid BET and LINK actions @regression @tier1 refuses a prefixed BET OUTCOME on a bet and a resolve",
+      "prefixed integer spellings on valid BET and LINK actions @regression @tier1 refuses a prefixed LINK action index on either side",
+      "prefixed integer spellings on valid DISPENSER, ORDER and SWAP actions @regression @tier1 keepsPrefixedSpelling answers true only for a literal normalization keeps",
+      "prefixed integer spellings on valid DISPENSER, ORDER and SWAP actions @regression @tier1 refuses a prefixed DISPENSER EXPIRATION and keeps every other spelling",
+      "prefixed integer spellings on valid DISPENSER, ORDER and SWAP actions @regression @tier1 refuses a prefixed ORDER or SWAP EXPIRATION on a create and an edit",
+      "prefixed integer spellings on valid XCALL and ISSUE actions @regression @tier1 refuses a hexadecimal XCALL TARGET_CONTRACT_INDEX that parseInt reads as a contract",
+      "prefixed integer spellings on valid XCALL and ISSUE actions @regression @tier1 refuses an ISSUE CALLBACK_BLOCK the tokens row cannot store, after every other verdict"
+    ],
     "941495f731e28879": [
       "list sharing activation registry rows exports the list member limits through protocol constants",
       "list sharing activation registry rows keeps the producer row on the network plane",
@@ -20174,8 +20229,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1595,
-      "titleCount": 15609,
+      "fileCount": 1597,
+      "titleCount": 15660,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -20183,6 +20238,8 @@
         "test/regression/integer_range_verdicts.test.js": "69f404ad0cbfd834",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
+        "test/regression/prefixed_integer_refused_rows.test.js": "1d2bc895c71b8da6",
+        "test/regression/prefixed_integer_valid_verdicts.test.js": "9413d336ccb36031",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
         "test/regression/vote_ballot_column_verdicts.test.js": "aaed2124c8f1290a",
         "test/security/http-surface/auth_gate.test.js": "55856394f174fcb5",
@@ -22152,8 +22209,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1223,
-      "titleCount": 12388,
+      "fileCount": 1225,
+      "titleCount": 12439,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22209,6 +22266,8 @@
         "test/regression/integer_range_verdicts.test.js": "69f404ad0cbfd834",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
+        "test/regression/prefixed_integer_refused_rows.test.js": "1d2bc895c71b8da6",
+        "test/regression/prefixed_integer_valid_verdicts.test.js": "9413d336ccb36031",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
         "test/regression/vote_ballot_column_verdicts.test.js": "aaed2124c8f1290a",
         "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
@@ -23381,14 +23440,16 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 639,
-      "titleCount": 6760,
+      "fileCount": 641,
+      "titleCount": 6811,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/integer_range_verdicts.test.js": "69f404ad0cbfd834",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
+        "test/regression/prefixed_integer_refused_rows.test.js": "1d2bc895c71b8da6",
+        "test/regression/prefixed_integer_valid_verdicts.test.js": "9413d336ccb36031",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
         "test/regression/vote_ballot_column_verdicts.test.js": "aaed2124c8f1290a",
         "test/unit/action_dispatch/batch_guard_inert_sub_command.test.js": "e6ecddd2370fac2d",
@@ -24026,8 +24087,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1223,
-      "titleCount": 12388,
+      "fileCount": 1225,
+      "titleCount": 12439,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24083,6 +24144,8 @@
         "test/regression/integer_range_verdicts.test.js": "69f404ad0cbfd834",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
+        "test/regression/prefixed_integer_refused_rows.test.js": "1d2bc895c71b8da6",
+        "test/regression/prefixed_integer_valid_verdicts.test.js": "9413d336ccb36031",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
         "test/regression/vote_ballot_column_verdicts.test.js": "aaed2124c8f1290a",
         "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
