@@ -47,6 +47,7 @@ const POLL_ESCROW_AMOUNT_MAX_CHARS = 60;
 const validate        = require('./validate.js');
 const bindingCallback = require('./binding_callback.js');
 const settle          = require('./settle.js');
+const columnFit       = require('./column_fit.js');
 class Vote {
 
     // Handle constructing a class instance
@@ -121,8 +122,8 @@ class Vote {
             error = 'invalid: DEPOSIT (format)';
         if(!error && Array.from(String(data['GAS_ESCROW'])).length > POLL_ESCROW_AMOUNT_MAX_CHARS)
             error = 'invalid: GAS_ESCROW (format)';
-        // The same rule for the integer columns, in the same position.
-        error = validate.validateCreateStorable.call(this, data, error);
+        // The same rule for every other column the poll row and its finalize write, in the same position.
+        error = columnFit.validateCreateStorable.call(this, data, error);
 
         await settle.settleCreatePoll.call(this, data, error, depositCheck.deposit);
     }
@@ -139,6 +140,9 @@ class Vote {
         // MEMO (optional): bounded length
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).length > this.config['MAX_MESSAGE_LENGTH'])
             error = 'invalid: MEMO (length)';
+        // The votes row the ballot writes must fit its columns; checked last, so a ballot
+        // refused for another reason keeps that verdict.
+        error = columnFit.validateBallotStorable.call(this, data, selections, error);
 
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
