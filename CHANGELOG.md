@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.4] - 2026-11-01
+
+### Fixed
+- One transaction can no longer halt an indexer through an out-of-range or over-long field.
+
 ## [0.27.3] - 2026-11-01
 
 ### Fixed
