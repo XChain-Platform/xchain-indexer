@@ -34,6 +34,11 @@ function fitRefused(status, column, value){
     return (status === 'valid') ? value : fitColumnText(value, REFUSED_TEXT_WIDTHS[column], false);
 }
 
+// issues.allow_list and block_list are BIGINT UNSIGNED, and a refused ISSUE binds them as
+// carried, so they are fitted to the column (see fitRefusedIntegerFields). Every issues
+// reader selects valid rows.
+const ISSUE_INTEGER_FIELDS = Object.freeze(['ALLOW_LIST', 'BLOCK_LIST']);
+
 module.exports = {
 
     // Create/Update record in `issues` table
@@ -65,7 +70,7 @@ module.exports = {
 const issueRecord = {
 
     async fields(db, data){
-        data                   = db.normalizeDataValues(data);
+        data                   = db.fitRefusedIntegerFields(db.normalizeDataValues(data), ISSUE_INTEGER_FIELDS);
         let action_index       = data['ACTION_INDEX'];
         let description        = data['DESCRIPTION'];
         let max_supply         = data['MAX_SUPPLY'];

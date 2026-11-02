@@ -151,6 +151,17 @@ module.exports = {
         return this.fitIntegerColumn(value, min, max) === value;
     },
 
+    // Whether storage normalization leaves this integer wire value as a hexadecimal, binary
+    // or octal literal: the one spelling isNumeric and isInteger accept that a strict session
+    // refuses in an integer column (errno 1265). normalizeDataValues nulls a literal past
+    // `max` (a decimal string, config['INTEGER_FIELDS']), and that NULL stores, so such a
+    // literal answers false.
+    keepsPrefixedSpelling(value, max){
+        if(this.isNull(value)) return false;
+        if(!PREFIXED_SPELLING.test(String(value).trim())) return false;
+        return !this.exceedsUnsignedColumn(value, max);
+    },
+
     // The integer a strict session converts a plain decimal spelling to before its range
     // check, as an exact BigNumber (a signed infinity past the BigNumber exponent range), or
     // null for any other spelling. Absent values answer null.

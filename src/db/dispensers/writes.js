@@ -44,11 +44,16 @@ const DISPENSER_UPDATE_SQL = `UPDATE
                     WHERE
                         action_index=?`;
 
+// The integer wire fields a dispensers or dispenser_edits row binds; a refused row fits
+// them to their BIGINT UNSIGNED columns (see fitRefusedIntegerFields). Every reader of
+// either table's expiration and lists selects valid rows or open dispensers only.
+const DISPENSER_INTEGER_FIELDS = Object.freeze(['EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST']);
+
 module.exports = {
 
     // Create/Update record in `dispensers` table
     async createDispenser(data){
-        data                  = this.normalizeDataValues(data);
+        data                  = this.fitRefusedIntegerFields(this.normalizeDataValues(data), DISPENSER_INTEGER_FIELDS);
         let give_coin_id      = await this.createCoin(data['GIVE_COIN']);
         let give_tick_id      = await this.createTicker(data['GIVE_TICK']);
         let get_coin_id       = await this.createCoin(data['GET_COIN']);
@@ -135,7 +140,7 @@ module.exports = {
 
     // Create/Update record in `dispenser_edits` table
     async createDispenserEdit(data){
-        data                       = this.normalizeDataValues(data);
+        data                       = this.fitRefusedIntegerFields(this.normalizeDataValues(data), DISPENSER_INTEGER_FIELDS);
         let memo_id                = await this.createMemo(data['MEMO']);
         let status_id              = await this.createStatus(data['STATUS']);
         let action_index           = data['ACTION_INDEX'];

@@ -19,11 +19,15 @@
  *
  ********************************************************************/
 
+// airdrops.list_action_index is BIGINT UNSIGNED; a refused row fits the wire value to it (see
+// fitRefusedIntegerFields). No reader brings the column into a verdict or a hash.
+const AIRDROP_INTEGER_FIELDS = Object.freeze(['LIST_ACTION_INDEX']);
+
 module.exports = {
 
     // Create/Update record in `airdrops` table
     async createAirdrop(data){
-        data                  = this.normalizeDataValues(data);
+        data                  = this.fitRefusedIntegerFields(this.normalizeDataValues(data), AIRDROP_INTEGER_FIELDS);
         let tick_id           = await this.createTicker(data['TICK']);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);

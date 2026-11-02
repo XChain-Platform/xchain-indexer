@@ -139,6 +139,13 @@ module.exports = {
            this.util.exceedsUnsignedColumn(data['EXPIRATION'], this.config['INTEGER_FIELDS']['EXPIRATION']))
             error = "invalid: EXPIRATION (format)";
 
+        // Reject a hexadecimal, binary or octal EXPIRATION. It passes the integer check above
+        // and the expiry comparison reads it as a number, but the dispensers and
+        // dispenser_edits rows bind it as written and a strict session refuses it, so every
+        // such action halted the block whatever its verdict and none is in any history.
+        if(!error && this.util.keepsPrefixedSpelling(data['EXPIRATION'], this.config['INTEGER_FIELDS']['EXPIRATION']))
+            error = "invalid: EXPIRATION (format)";
+
         // Validate that FIAT_AMOUNT is in 0.00 format
         if(!error && format==0 && !this.util.isNull(data['FIAT_CODE']) && !this.util.isNull(data['FIAT_AMOUNT']) && !this.util.isValidFiatFormat(2, data['FIAT_AMOUNT'], data['BLOCK_TIME']))
             error = 'invalid: FIAT_AMOUNT (format)';

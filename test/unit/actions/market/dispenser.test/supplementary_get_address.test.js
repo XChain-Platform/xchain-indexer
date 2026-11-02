@@ -38,6 +38,7 @@ describe('Dispenser supplementary GET_ADDRESS @regression @tier1', function () {
             transactionConnection: null,
             deterministicIndexingStarted: false,
             normalizeDataValues: value => value,
+            fitRefusedIntegerFields: value => value,
             getAddressId: addressMethods.getAddressId,
             createAddress: addressMethods.createAddress,
             createCoin: sinon.stub().resolves(1),

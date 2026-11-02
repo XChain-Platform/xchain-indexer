@@ -86,6 +86,11 @@ module.exports = {
             let outcomeCount = feedInfo ? String(feedInfo['OUTCOMES']).split(',').length : 0;
             if(!error && (this.util.isNull(data['OUTCOME']) || !this.util.isNumeric(data['OUTCOME']) || !this.util.isInteger(data['OUTCOME']) || Number(data['OUTCOME']) < 0 || Number(data['OUTCOME']) >= outcomeCount))
                 error = 'invalid: OUTCOME (range)';
+            // A hexadecimal, binary or octal OUTCOME passes the range rule, which reads it as a
+            // number, but the bets row binds it as written and a strict session refuses it, so
+            // every such bet halted the block whatever its verdict and none is in any history.
+            if(!error && this.util.keepsPrefixedSpelling(data['OUTCOME'], this.config['INTEGER_FIELDS']['OUTCOME']))
+                error = 'invalid: OUTCOME (format)';
 
             // AMOUNT at the feed tick's DECIMALS, strictly positive
             if(!error && (this.util.isNull(data['AMOUNT']) || !this.util.isValidAmountFormat(feedTokenInfo['DECIMALS'], data['AMOUNT'], data['BLOCK_TIME'])))
@@ -151,6 +156,9 @@ module.exports = {
             // Verify OUTCOME is an integer inside the feed's outcome range
             if(!error && (this.util.isNull(data['OUTCOME']) || !this.util.isNumeric(data['OUTCOME']) || !this.util.isInteger(data['OUTCOME']) || Number(data['OUTCOME']) < 0 || Number(data['OUTCOME']) >= outcomeCount))
                 error = 'invalid: OUTCOME (range)';
+            // A hexadecimal, binary or octal OUTCOME: see validatePlaceBet (the bet_resolves row).
+            if(!error && this.util.keepsPrefixedSpelling(data['OUTCOME'], this.config['INTEGER_FIELDS']['OUTCOME']))
+                error = 'invalid: OUTCOME (format)';
         }
 
         return error;

@@ -89,6 +89,7 @@ describe('list meta storage reads', function(){
         const queries = [];
         const db = {
             normalizeDataValues: sinon.stub().callsFake(data => ({ ...data })),
+            fitRefusedIntegerFields: data => data,
             createMemo: sinon.stub().resolves(7),
             createStatus: sinon.stub().resolves(8),
             doQuery: sinon.stub().callsFake(async (sql, args) => {

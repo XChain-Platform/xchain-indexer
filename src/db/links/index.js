@@ -19,11 +19,16 @@
  *
  ********************************************************************/
 
+// links.coin1_action_index and coin2_action_index are BIGINT UNSIGNED; a refused row fits the
+// wire values to them (see fitRefusedIntegerFields). No reader brings either column into a
+// verdict or a hash.
+const LINK_INTEGER_FIELDS = Object.freeze(['COIN1_ACTION_INDEX', 'COIN2_ACTION_INDEX']);
+
 module.exports = {
 
     // Create/Update record in `links` table
     async createLink(data){
-        data                   = this.normalizeDataValues(data);
+        data                   = this.fitRefusedIntegerFields(this.normalizeDataValues(data), LINK_INTEGER_FIELDS);
         let coin1_id           = await this.createCoin(data['COIN1']);
         let coin2_id           = await this.createCoin(data['COIN2']);
         let memo_id            = await this.createMemo(data['MEMO']);
