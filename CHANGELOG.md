@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.5] - 2026-11-01
+
+### Fixed
+- One transaction can no longer halt an indexer through a vote, attestation, price or stake value its columns cannot store.
+
 ## [0.27.4] - 2026-11-01
 
 ### Fixed
