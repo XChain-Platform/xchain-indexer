@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.2] - 2026-11-01
+
+### Fixed
+- One transaction can no longer halt an indexer through an over-long contract verdict or a file type.
+
 ## [0.27.1] - 2026-11-01
 
 ### Fixed
