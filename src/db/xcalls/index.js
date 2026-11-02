@@ -19,6 +19,24 @@
  *
  ********************************************************************/
 
+const U64_MAX = '18446744073709551615';   // BIGINT UNSIGNED
+const I32_MIN = '-2147483648';            // INT
+const I32_MAX = '2147483647';
+
+// gas_limit, cross_hops and deadline_block are nullable integer columns, and an XCALL v0
+// writes its row valid or not, so a refused request (one broadcast inside a BATCH, which is
+// not a VM emission) carrying '-1' or 1e30 failed the insert and wedged the block. A valid
+// row holds values range-checked as JavaScript reads them, which the fitted value keeps,
+// and every reader selects valid rows only. A value that is not a number stores NULL.
+// None of the three enters the state hash, which covers the request_status flip alone.
+function storableRequestLimits(util, data){
+    return {
+        gas_limit:      util.fitIntegerColumn(data['GAS_LIMIT'], '0', U64_MAX),
+        cross_hops:     util.fitIntegerColumn(data['CROSS_HOPS'], I32_MIN, I32_MAX),
+        deadline_block: util.fitIntegerColumn(data['DEADLINE_BLOCK'], '0', U64_MAX)
+    };
+}
+
 module.exports = {
 
     // ── Cross-chain contract calls (XCALL) ──────────────────────────────────────
@@ -27,6 +45,7 @@ module.exports = {
     async createCrossChainCallRequest(data){
         data = this.normalizeDataValues(data);
         let status_id = await this.createStatus(data['STATUS']);
+        let limits    = storableRequestLimits(this.util, data);
         await this.doQuery(
             `INSERT INTO xcalls
              (action_index, version, call_id, contract_index, target_chain, target_contract_index,
@@ -35,8 +54,8 @@ module.exports = {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [data['ACTION_INDEX'], 0, String(data['CALL_ID']).toLowerCase(), data['CONTRACT_INDEX'],
              data['TARGET_CHAIN'], data['TARGET_CONTRACT_INDEX'], data['METHOD'], data['PARAMS_JSON'],
-             data['GAS_LIMIT'], data['CROSS_HOPS'], data['CALLBACK_METHOD'], data['CALLBACK_PARAMS'],
-             data['DEADLINE_BLOCK'], data['REQUEST_STATUS'], data['BLOCK_INDEX'], status_id]);
+             limits.gas_limit, limits.cross_hops, data['CALLBACK_METHOD'], data['CALLBACK_PARAMS'],
+             limits.deadline_block, data['REQUEST_STATUS'], data['BLOCK_INDEX'], status_id]);
     },
 
     // Latest VALID v0 request row for a call_id.

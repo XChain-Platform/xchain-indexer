@@ -15,7 +15,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "46e5823eeff923c312578fe4418cecbdb9cd78eb7ace74343c22a3bd59cab38e",
+    "armed_map_fingerprint": "5cba3908f1575df6a1508a1953752a851e5dbd978dde5ed2110a058740c1c34b",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY": "813f95010af2ab02a8d76a1ab03feb8fe4c0542e6251f34a2530737c312234b9",
@@ -220,7 +220,7 @@
       "protocol_changes.BATCH_ROOT_SUB_INDEX_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "protocol_changes.BROADCAST_FEE_LENGTH_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
       "protocol_changes.BROADCAST_FEE_LENGTH_TESTNET_TIME": "e4f0db5e86683f97e69579e1e7a88e8fc6ff2a34f95c72b630be3998073fca96",
-      "protocol_changes.CONSENSUS_VERSION": "4c858114412beccecc083d01059219c5d31ba87ce4c5e71fded7b6ca1a965269",
+      "protocol_changes.CONSENSUS_VERSION": "4a671d45663423b0558d10b6ba7c3b3b7985b79c5fc2a8f9c0eccaa92f2a4778",
       "protocol_changes.CONTRACT_META_REQUIRED_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "protocol_changes.CONTRACT_META_REQUIRED_TESTNET_TIME": "0458b8fba52a7fa63784a2bb3defd8fbeb52c35bd12365001cb27697fad12645",
       "protocol_changes.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
@@ -570,7 +570,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "2cffc020859022d3bd13e7770abb78121d7efed0746b4f3c5ceb123c1abae0f8",
+    "armed_map_fingerprint": "280db54bf2df553c633f972c7c133f79bdbb98bf5f248bd1c691ec4e531bf877",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "action_admission_dispatched_only.ACTION_ADMISSION_DISPATCHED_ONLY": "813f95010af2ab02a8d76a1ab03feb8fe4c0542e6251f34a2530737c312234b9",
@@ -775,7 +775,7 @@
       "protocol_changes.BATCH_ROOT_SUB_INDEX_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "protocol_changes.BROADCAST_FEE_LENGTH_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
       "protocol_changes.BROADCAST_FEE_LENGTH_TESTNET_TIME": "e4f0db5e86683f97e69579e1e7a88e8fc6ff2a34f95c72b630be3998073fca96",
-      "protocol_changes.CONSENSUS_VERSION": "4c858114412beccecc083d01059219c5d31ba87ce4c5e71fded7b6ca1a965269",
+      "protocol_changes.CONSENSUS_VERSION": "4a671d45663423b0558d10b6ba7c3b3b7985b79c5fc2a8f9c0eccaa92f2a4778",
       "protocol_changes.CONTRACT_META_REQUIRED_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "protocol_changes.CONTRACT_META_REQUIRED_TESTNET_TIME": "0458b8fba52a7fa63784a2bb3defd8fbeb52c35bd12365001cb27697fad12645",
       "protocol_changes.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
