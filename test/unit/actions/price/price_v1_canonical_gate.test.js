@@ -18,15 +18,18 @@ function validate(network, value, fee, data = { BLOCK_TIME: 1790000000 }, indexe
     return validatePriceV1(config, handler.util, params, data, null);
 }
 
+// The unarmed legacy patterns admit a VALUE and FEE longer than their VARCHAR(250)
+// columns; such a v1 halted the block at its INSERT, so it is refused by width.
 describe('PRICE v1 canonical gate overflow witness', function () {
     const value = '0'.repeat(297) + '1.5';
     const fee   = '0'.repeat(297) + '0.5';
 
     for(const network of ['mainnet', 'testnet']){
-        it(`accepts 300-character VALUE and FEE on ${network}`, function () {
+        it(`refuses 300-character VALUE and FEE on ${network} by column width`, function () {
             assert.strictEqual(value.length, 300);
             assert.strictEqual(fee.length, 300);
-            assert.strictEqual(validate(network, value, fee), null);
+            assert.strictEqual(validate(network, value, fee), 'invalid: VALUE (length)');
+            assert.strictEqual(validate(network, '1.5', fee), 'invalid: FEE (length)');
         });
     }
 });
@@ -67,8 +70,8 @@ describe('PRICE v1 canonical gate armed on regtest', function () {
 
 describe('PRICE v1 canonical gate fail-closed time', function () {
     it('uses the legacy rule when BLOCK_TIME is missing', function () {
-        const value = '0'.repeat(297) + '1.5';
-        const fee   = '0'.repeat(297) + '0.5';
+        const value = '0'.repeat(197) + '1.5';
+        const fee   = '0'.repeat(197) + '0.5';
         assert.strictEqual(validate('regtest', value, fee, {}), null);
     });
 });
@@ -94,8 +97,8 @@ describe('PRICE v1 canonical gate post-arm coin thresholds', function () {
 
     for(const coin of ['BTC', 'LTC', 'DOGE']){
         it('activates ' + coin + ' exactly at its armed testnet instant', function () {
-            const value = '0'.repeat(297) + '1.5';
-            const fee = '0'.repeat(297) + '0.5';
+            const value = '0'.repeat(197) + '1.5';
+            const fee = '0'.repeat(197) + '0.5';
             assert.strictEqual(validate('testnet', value, fee,
                 { BLOCK_TIME: instant - 1 }, coin), null);
             assert.strictEqual(validate('testnet', value, fee,

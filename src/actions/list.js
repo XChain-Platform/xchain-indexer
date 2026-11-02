@@ -63,6 +63,7 @@ const transferPart   = require('./list/transfer.js');
 const unionPart      = require('./list/union.js');
 
 const { getLogger } = require('../observability/index.js');
+const { exceedsCodePoints } = require('../db/column_text.js');
 class List {
 
     // Handle constructing a class instance
@@ -231,6 +232,16 @@ class List {
         return !gate || gateRegistry.activeAt(gate, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
     }
 
+    fitListCode(data, field, applies, error){
+        let value = data[field];
+        if(applies && !this.util.isNull(value) && this.util.isNumeric(value) && exceedsCodePoints(value, 1)){
+            if(!error)
+                error = 'invalid: ' + field + ' (length)';
+            data[field] = null;
+        }
+        return error;
+    }
+
     isCreateFormat(format){
         return [0, 4].includes(Number(format));
     }
@@ -271,6 +282,16 @@ class List {
         // Validate EDIT
         if(!error && format==1 && !this.editTypes.includes(Number(data['EDIT'])))
             error = 'invalid: EDIT (unknown)';
+
+        // lists.type and lists.edit are VARCHAR(1), and numeric text such as '01' or '1.0'
+        // passes the checks above (Number() reads it as a listed type) and survives storage
+        // normalization as written, so the INSERT failed on every retry. Any such value
+        // halted the block whatever the verdict, so refusing it changes no recorded action.
+        // The value is cleared on every verdict, which is what lets a refused row ('12',
+        // refused as unknown) be stored; a cleared type reads back as no type, the way a
+        // non-numeric one already does.
+        error = this.fitListCode(data, 'TYPE', this.isCreateFormat(format), error);
+        error = this.fitListCode(data, 'EDIT', format==1, error);
 
         // Parse in the list type (if any)
         if(!error && !this.isCreateFormat(format)){

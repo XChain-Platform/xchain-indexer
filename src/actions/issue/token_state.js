@@ -23,6 +23,20 @@
 
 'use strict';
 
+const { normalizeDataValues } = require('../../db/database/normalize.js');
+const { exceedsCodePoints }   = require('../../db/column_text.js');
+
+// The issues columns a wire field reaches with no width check of its own, and their widths
+// (src/sql/issues.sql, VARCHAR). MIN_DEPTH (VARCHAR(15)) is bounded with its range rule.
+const STORED_TEXT_WIDTHS = Object.freeze({
+    DECIMALS:         2,
+    CALLBACK_BLOCK:   15,
+    MINT_START_BLOCK: 15,
+    MINT_STOP_BLOCK:  15,
+    BRIDGE_CHAINS:    250,
+    LOCK_BRIDGE:      1
+});
+
 // The TICK row, the lazy distribution probe, the merge into empty PARAMS and the
 // CALLBACK_TICK row. Leaves ctx.tokenInfo, ctx.distributionProbe and ctx.cbInfo.
 async function loadTokenState(ctx){
@@ -91,7 +105,24 @@ function validateFieldFormats(ctx){
             error = "invalid: " + name + " (format)";
     };
 
-    ctx.error = error;
+    ctx.error = storedWidthError.call(this, issue, error);
+}
+
+// Every ISSUE writes its issues row from the wire snapshot through normalizeDataValues,
+// whatever its verdict, so a stored value longer than its column failed the INSERT on every
+// retry: DECIMALS '001', a 16-digit MINT_START_BLOCK, LOCK_BRIDGE '01' or a 251-character
+// BRIDGE_CHAINS all pass the rules above. The check reads the very value the writer binds
+// (the same normalization, run on a copy), so it refuses exactly the actions that halted
+// the block and leaves every recorded verdict as it was.
+function storedWidthError(issue, error){
+    if(error)
+        return error;
+    let stored = normalizeDataValues.call({ util: this.util, config: this.config }, issue);
+    for(let name in STORED_TEXT_WIDTHS){
+        if(exceedsCodePoints(stored[name], STORED_TEXT_WIDTHS[name]))
+            return 'invalid: ' + name + ' (length)';
+    }
+    return error;
 }
 
 // General Validations on who may edit the row: SOURCE awake, SOURCE is the owner, the

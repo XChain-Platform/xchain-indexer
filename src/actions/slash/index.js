@@ -84,6 +84,8 @@ const eq      = require('../../consensus/equivocation_header.js');
 const srb     = require('../../consensus/snapshot_reorg_buffer.js');
 
 const { getLogger } = require('../../observability/index.js');
+const { exceedsCodePoints } = require('../../db/column_text.js');
+const { fitsUtf8mb3 }       = require('../../db/utf8mb3.js');
 // The proof's own parts. The handler keeps the chain-facing rules (signatures,
 // membership, idempotency, settlement) and delegates the rules that are purely
 // about the submitted bytes or about payout policy.
@@ -91,6 +93,21 @@ const { CONFIG_CAPABILITY, readProofWire, deriveEquivKey,
         capabilityForEngine } = require('./proof_wire.js');
 const { resolveSlot: resolveProofSlot, listShareSlashable } = require('./resolve_slot.js');
 const { bountyTreasurySplit: splitBountyTreasury } = require('./bounty.js');
+
+// capability_slash_events.equiv_key is VARCHAR(250) utf8mb3, and a valid SLASH writes the
+// key it derived from MSG_A, whose ROUND_ID no rule bounds: a key longer than the column or
+// holding a supplementary-plane character failed the INSERT on every retry. Checked last,
+// so only a proof that passed every rule (and so halted the block) is refused, and every
+// recorded verdict stands. A refused SLASH writes no event row. MariaDB cuts excess trailing
+// spaces from a VARCHAR with only a note in every sql_mode, so a key over the width only by
+// trailing spaces stored and indexed; the width test ignores them to refuse only what halted.
+function equivKeyStorableError(equivKey, error){
+    if(!error && exceedsCodePoints(String(equivKey).replace(/ +$/, ''), 250))
+        return 'invalid: EQUIV_KEY (length)';
+    if(!error && !fitsUtf8mb3(equivKey))
+        return 'invalid: EQUIV_KEY (format)';
+    return error;
+}
 
 class Slash {
 
@@ -145,6 +162,8 @@ class Slash {
             if(await this.indexerDb.hasCapabilitySlashEvent(pubkeyId, capability))
                 error = 'invalid: already slashed (pubkey, capability)';
         }
+
+        error = equivKeyStorableError(equivKey, error);
 
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
@@ -337,5 +356,8 @@ class Slash {
         return splitBountyTreasury(this.config, this.util, capability, burned);
     }
 }
+
+// Read by the column-width regression suite, the way the other handlers expose their rules.
+Slash.equivKeyStorableError = equivKeyStorableError;
 
 module.exports = Slash;

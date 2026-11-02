@@ -20,6 +20,8 @@
  *
  ********************************************************************/
 
+const { fitColumnText } = require('../column_text.js');
+
 // The two halves of createPrice's upsert, keyed by action_index. Their column lists alone
 // would carry the method past the function limit, so the statements live here, text unchanged.
 const PRICE_UPDATE_SQL = `UPDATE prices SET
@@ -64,8 +66,11 @@ module.exports = {
         let coin_id         = (data['V1_COIN'])  ? await this.createCoin(data['V1_COIN'])     : null;
         let tick_id         = (data['V1_TICK'])  ? await this.createTicker(data['V1_TICK'])   : null;
         let fiat_id         = (data['V1_FIAT'])  ? await this.createFiat(data['V1_FIAT'])     : null;
-        let value           = data['V1_VALUE'] || null;
-        let fee             = data['V1_FEE']   || null;
+        // A refused v1 stores VALUE and FEE as carried, with no width rule, so they are
+        // clipped to their VARCHAR(250) columns; a valid row is bounded by the handler.
+        let refused         = data['STATUS'] !== 'valid';
+        let value           = refused ? fitColumnText(data['V1_VALUE'] || null, 250, false) : (data['V1_VALUE'] || null);
+        let fee             = refused ? fitColumnText(data['V1_FEE']   || null, 250, false) : (data['V1_FEE']   || null);
         let memo_id         = (data['MEMO'])     ? await this.createMemo(data['MEMO'])         : null;
         // Check if record exists (idempotent for retries)
         let query   = "SELECT action_index FROM prices WHERE action_index=? LIMIT 1";

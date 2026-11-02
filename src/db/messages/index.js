@@ -19,6 +19,8 @@
  *
  ********************************************************************/
 
+const { fitColumnText } = require('../column_text.js');
+
 module.exports = {
 
     // Create/Update record in `messages` table
@@ -27,7 +29,10 @@ module.exports = {
         let destination_id    = await this.createAddress(data['DESTINATION']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
-        let coin              = data['COIN'];
+        // messages.coin is VARCHAR(4). A valid COIN is a listed coin and fits; a refused one
+        // ('invalid: COIN (value)') is stored as carried, so it is clipped to the column here.
+        // The column is never read back into logic.
+        let coin              = fitColumnText(data['COIN'], 4, false);
         let encryption_method = data['ENCRYPTION_METHOD'];
         let encryption_key    = data['ENCRYPTION_KEY'];
         let encrypted_message = data['ENCRYPTED_MESSAGE'];

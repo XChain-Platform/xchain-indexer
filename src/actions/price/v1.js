@@ -23,6 +23,12 @@
 
 const priceRange = require('./price_zero_validity_gate.js');
 const priceScale = require('../../consensus/gates/price_scale_gate.js');
+const { exceedsCodePoints } = require('../../db/column_text.js');
+
+// prices.value and prices.fee are VARCHAR(250). Where the canonical gate is unarmed, the
+// VALUE and FEE patterns admit any number of leading zeros, so a valid v1 could carry a
+// value its column cannot hold and fail the INSERT on every retry.
+const PRICE_V1_TEXT_MAX_CHARS = 250;
 
 // Every v1 field rule, in order. Returns the error chain.
 function validatePriceV1(config, util, params, data, error){
@@ -74,6 +80,13 @@ function validatePriceV1(config, util, params, data, error){
         data['BLOCK_TIME'], config['NETWORK'], config['COIN']) &&
        !priceScale.isCanonicalPriceV1Fee(data['V1_FEE']))
         error = 'invalid: FEE (format)';
+
+    // Last, behind every other rule: only a v1 that passed them all and then halted the
+    // block is refused here, so every recorded verdict stands.
+    if(!error && exceedsCodePoints(data['V1_VALUE'], PRICE_V1_TEXT_MAX_CHARS))
+        error = 'invalid: VALUE (length)';
+    if(!error && data['V1_FEE'] && exceedsCodePoints(data['V1_FEE'], PRICE_V1_TEXT_MAX_CHARS))
+        error = 'invalid: FEE (length)';
     return error;
 }
 

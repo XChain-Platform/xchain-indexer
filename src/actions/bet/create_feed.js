@@ -21,6 +21,8 @@
  *
  ********************************************************************/
 
+const { exceedsCodePoints } = require('../../db/column_text.js');
+
 // Installed onto Bet.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
@@ -120,6 +122,12 @@ module.exports = {
                 error = 'invalid: FEE (format)';
             else if(this.util.bclt(data['FEE'], 0) || this.util.bcgt(data['FEE'], this.config['MAX_FEED_FEE']))
                 error = 'invalid: FEE (range)';
+            // bet_feeds.fee is VARCHAR(11), and the pattern admits leading zeros
+            // ('000000000005'), which the feed row stores as carried on every verdict, so
+            // such a FEE failed the INSERT on every retry. Refusing it changes no recorded
+            // action.
+            else if(exceedsCodePoints(data['FEE'], 11))
+                error = 'invalid: FEE (length)';
         }
 
         // Verify DEADLINE: required integer unix time strictly in the future

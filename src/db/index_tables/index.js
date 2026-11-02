@@ -27,7 +27,7 @@ const tickers      = require('./tickers.js');
 const expiredItems = require('./expired_items.js');
 const statusActionCache = require('./status_action_cache.js');
 const { clipCodePoints } = require('../column_text.js');
-const { toUtf8mb3 }      = require('../utf8mb3.js');
+const { fitsUtf8mb3, toUtf8mb3 } = require('../utf8mb3.js');
 
 // index_statuses.status is VARCHAR(250) utf8mb3 (src/sql/index_statuses.sql): 250 characters,
 // counted one per code point. A verdict can echo contract source (a lint verdict quotes the
@@ -225,6 +225,11 @@ module.exports = {
         // Ignore empty coin and return NULL
         if(this.util.isNull(coin))
             return null;
+        // index_coins is utf8mb3, and a refused LINK/ORDER/SWAP/DISPENSER/PRICE row interns
+        // its wire coin: a supplementary-plane character made the lookup throw errno 1267 on
+        // every retry. It is stored as U+FFFD instead. Only the mapping, never a clip: an
+        // over-long value is cut by INSERT IGNORE and resolves to a NULL id, as it always has.
+        coin = toUtf8mb3(coin);
         var id = await this.getCoinId(coin);
         // Handle creating record
         if(id==null){
@@ -253,6 +258,8 @@ module.exports = {
         // Ignore empty fiat and return NULL
         if(this.util.isNull(code))
             return null;
+        // Same utf8mb3 mapping as createCoin, for a refused DISPENSER or PRICE row's fiat code.
+        code = toUtf8mb3(code);
         var id = await this.getFiatId(code);
         // Handle creating record
         if(id==null){
@@ -304,6 +311,10 @@ module.exports = {
     // Get pubkey id from index_pubkeys table
     async getPubkeyId(pubkey){
         let id    = null;
+        // index_pubkeys is utf8mb3: no stored key holds a supplementary-plane character,
+        // and binding one would throw errno 1267 rather than miss.
+        if(!fitsUtf8mb3(pubkey))
+            return id;
         let query = "SELECT id FROM index_pubkeys WHERE `pubkey`=? LIMIT 1";
         let results = await this.doQuery(query, [pubkey]);
         if(results.length > 0)
@@ -316,8 +327,9 @@ module.exports = {
         // Ignore empty pubkey and return NULL
         if(this.util.isNull(pubkey))
             return null;
-        // Normalize to lowercase hex
-        pubkey = String(pubkey).toLowerCase().substring(0, 64);
+        // Normalize to lowercase hex. A refused STAKE or DELEGATE row interns its raw key,
+        // so a supplementary-plane character is stored as U+FFFD rather than halting.
+        pubkey = toUtf8mb3(String(pubkey).toLowerCase().substring(0, 64));
         let id = await this.getPubkeyId(pubkey);
         // Create pubkey if it does not already exist
         if(id === null){
