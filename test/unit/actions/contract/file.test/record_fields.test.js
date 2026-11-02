@@ -78,6 +78,32 @@ describe('File action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('TYPE'), `Expected TYPE length error, got: ${data['STATUS']}`);
     });
 
+    // ─── TYPE character range ─────────────────────────────────────────
+
+    it('rejects TYPE with a character above U+FFFF as invalid: TYPE (format) and stores no type', async function () {
+        const data = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
+        const params = ['0', 'test.txt', 'text/\u{1F600}', 'Title', ''];
+        await handler.parse(params, data, null);
+        assert.strictEqual(data['STATUS'], 'invalid: TYPE (format)');
+        assert.strictEqual(indexer.indexerDb.createFile.firstCall.args[0]['TYPE'], '');
+    });
+
+    it('keeps a TYPE with a BMP non-ASCII character valid', async function () {
+        const data = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
+        const params = ['0', 'test.txt', 'text/caf\u00E9\u4E2D', 'Title', ''];
+        await handler.parse(params, data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.strictEqual(indexer.indexerDb.createFile.firstCall.args[0]['TYPE'], 'text/caf\u00E9\u4E2D');
+    });
+
+    it('keeps an ASCII text/plain TYPE valid', async function () {
+        const data = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
+        const params = ['0', 'test.txt', 'text/plain', 'Title', ''];
+        await handler.parse(params, data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.strictEqual(indexer.indexerDb.createFile.firstCall.args[0]['TYPE'], 'text/plain');
+    });
+
     // ─── TITLE length limit ───────────────────────────────────────────
 
     it('rejects TITLE exceeding MAX_FILE_TITLE_LENGTH', async function () {

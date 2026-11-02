@@ -45,6 +45,7 @@
 // wallet uses. Vendored byte-identical from xchain-documentation/protocol/constants.js.
 const { THRESHOLD_SCALE } = require('../protocol/constants.js');
 const { getLogger } = require('../observability/index.js');
+const { fitsUtf8mb3 } = require('../db/utf8mb3.js');
 const GATE_MIN_AMOUNT_MAX_LENGTH = 40;
 
 class File {
@@ -155,6 +156,16 @@ class File {
         // Verify TYPE is shorter than MAX_FILE_NAME_LENGTH
         if(!error && String(data['TYPE']).length > this.config['MAX_FILE_TYPE_LENGTH'])
             error = 'invalid: TYPE (length)';
+
+        // Verify TYPE has no character above U+FFFF. index_mime_types is utf8mb3, so
+        // such a TYPE would throw errno 1267 and halt the indexer. createFile still
+        // runs for an invalid FILE, so the unstorable TYPE is blanked (stored as NULL)
+        // whatever error came first; the verdict itself never depends on the blanking.
+        if(!fitsUtf8mb3(data['TYPE'])){
+            data['TYPE'] = '';
+            if(!error)
+                error = 'invalid: TYPE (format)';
+        }
 
         // Verify TITLE is shorter than MAX_FILE_NAME_LENGTH
         if(!error && String(data['TITLE']).length > this.config['MAX_FILE_TITLE_LENGTH'])
