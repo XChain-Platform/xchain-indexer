@@ -21,6 +21,9 @@
  *
  ********************************************************************/
 
+// stakes.version TINYINT UNSIGNED (src/sql/stakes.sql).
+const STAKE_VERSION_MAX = '255';
+
 module.exports = {
 
     /*
@@ -41,6 +44,15 @@ module.exports = {
             signing_pubkey_id = 0;
         let action_index      = data['ACTION_INDEX'];
         let version           = data['VERSION'] || 1;
+        // stakes.version is TINYINT UNSIGNED NOT NULL, and a refused STAKE stores the wire
+        // VERSION it was refused for: getFormatVersion reads '-1' (or '-5', '-1.0') as a
+        // negative format, which `|| 1` keeps, and the row failed its write (errno 1264),
+        // retrying the block forever. On a refused row a version the column cannot hold binds
+        // its nearest column bound, 0, which no stake row otherwise stores (a format 0 or
+        // NULL binds 1). A version that fits binds unchanged, and a valid row is always 1 or
+        // 2. No reader selects stakes.version, and no hash reads it.
+        if(data['STATUS'] !== 'valid')
+            version = this.util.fitIntegerColumn(version, '0', STAKE_VERSION_MAX) ?? 1;
         // Invalid amount text longer than stakes.amount can hold is stored under the
         // same '0' placeholder as every other missing or non-numeric invalid amount.
         let amount            = this.util.storesAsNull(data['AMOUNT']) ? '0' : (data['AMOUNT'] || '0');
