@@ -25,17 +25,19 @@ const U64_MAX = '18446744073709551615';   // BIGINT UNSIGNED
 const I32_MIN = '-2147483648';            // INT
 const I32_MAX = '2147483647';
 
-// gas_limit, cross_hops and deadline_block are nullable integer columns, and an XCALL v0
-// writes its row valid or not, so a refused request (one broadcast inside a BATCH, which is
-// not a VM emission) carrying '-1' or 1e30 failed the insert and wedged the block. A valid
-// row holds values range-checked as JavaScript reads them, which the fitted value keeps,
-// and every reader selects valid rows only. A value that is not a number stores NULL.
-// None of the three enters the state hash, which covers the request_status flip alone.
+// gas_limit, cross_hops, deadline_block and target_contract_index are nullable integer
+// columns, and an XCALL v0 writes its row valid or not, so a refused request (one broadcast
+// inside a BATCH, which is not a VM emission) carrying '-1', 1e30 or a hexadecimal, binary or
+// octal literal failed the insert and wedged the block. A valid row holds values
+// range-checked as JavaScript reads them, which the fitted value keeps, and every reader
+// selects valid rows only. A value that is not a number stores NULL. None of the four
+// enters the state hash, which covers the request_status flip alone.
 function storableRequestLimits(util, data){
     return {
         gas_limit:      util.fitIntegerColumn(data['GAS_LIMIT'], '0', U64_MAX),
         cross_hops:     util.fitIntegerColumn(data['CROSS_HOPS'], I32_MIN, I32_MAX),
-        deadline_block: util.fitIntegerColumn(data['DEADLINE_BLOCK'], '0', U64_MAX)
+        deadline_block: util.fitIntegerColumn(data['DEADLINE_BLOCK'], '0', U64_MAX),
+        target_index:   util.fitIntegerColumn(data['TARGET_CONTRACT_INDEX'], '0', U64_MAX)
     };
 }
 
@@ -72,7 +74,7 @@ module.exports = {
               deadline_block, request_status, block_index, status_id)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [data['ACTION_INDEX'], 0, text.call_id, data['CONTRACT_INDEX'],
-             text.target_chain, data['TARGET_CONTRACT_INDEX'], text.method, data['PARAMS_JSON'],
+             text.target_chain, limits.target_index, text.method, data['PARAMS_JSON'],
              limits.gas_limit, limits.cross_hops, text.callback_method, data['CALLBACK_PARAMS'],
              limits.deadline_block, data['REQUEST_STATUS'], data['BLOCK_INDEX'], status_id]);
     },

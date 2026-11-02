@@ -133,6 +133,12 @@ module.exports = {
         // Verify DEADLINE: required integer unix time strictly in the future
         if(!error && (this.util.isNull(data['DEADLINE']) || !this.util.isNumeric(data['DEADLINE']) || !this.util.isInteger(data['DEADLINE'])))
             error = 'invalid: DEADLINE (format)';
+        // A hexadecimal, binary or octal DEADLINE or REFUND_WINDOW passes the integer checks and
+        // the range rules read it as a number, but the bet_feeds row binds it as written and a
+        // strict session refuses it, so every such feed halted the block whatever its verdict
+        // and none is in any history.
+        if(!error && this.util.keepsPrefixedSpelling(data['DEADLINE'], this.config['INTEGER_FIELDS']['DEADLINE']))
+            error = 'invalid: DEADLINE (format)';
         if(!error && this.util.bclte(data['DEADLINE'], data['BLOCK_TIME']))
             error = 'invalid: DEADLINE (past)';
         // Horizon cap bounds the expire_at arithmetic and keeps open feeds out of
@@ -145,6 +151,8 @@ module.exports = {
             data['REFUND_WINDOW'] = this.config['DEFAULT_BET_REFUND_WINDOW'];
         // Verify REFUND_WINDOW is a whole number of seconds
         if(!error && (!this.util.isNumeric(data['REFUND_WINDOW']) || !this.util.isInteger(data['REFUND_WINDOW'])))
+            error = 'invalid: REFUND_WINDOW (format)';
+        if(!error && this.util.keepsPrefixedSpelling(data['REFUND_WINDOW'], this.config['INTEGER_FIELDS']['REFUND_WINDOW']))
             error = 'invalid: REFUND_WINDOW (format)';
         // Verify REFUND_WINDOW falls between the configured minimum and maximum
         if(!error && (this.util.bclt(data['REFUND_WINDOW'], this.config['MIN_BET_REFUND_WINDOW']) || this.util.bcgt(data['REFUND_WINDOW'], this.config['MAX_BET_REFUND_WINDOW'])))

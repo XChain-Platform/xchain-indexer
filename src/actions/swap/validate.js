@@ -101,6 +101,13 @@ function validateFormats(handler, st){
        handler.util.exceedsUnsignedColumn(data['EXPIRATION'], handler.config['INTEGER_FIELDS']['EXPIRATION']))
         error = "invalid: EXPIRATION (format)";
 
+    // Reject a hexadecimal, binary or octal EXPIRATION. It passes the integer check above and
+    // the expiry comparison reads it as a number, but the swaps and swap_edits rows bind it as
+    // written and a strict session refuses it, so every such action halted the block whatever
+    // its verdict and none is in any history.
+    if(!error && handler.util.keepsPrefixedSpelling(data['EXPIRATION'], handler.config['INTEGER_FIELDS']['EXPIRATION']))
+        error = "invalid: EXPIRATION (format)";
+
     st.error = error;
 }
 

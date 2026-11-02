@@ -64,6 +64,7 @@ describe('public BET reads expose effective list references', function(){
         const calls = [];
         const db = {
             normalizeDataValues: data => data,
+            fitRefusedIntegerFields: data => data,
             createMemo: async () => 14,
             createStatus: async () => 15,
             doQuery: async (...args) => {

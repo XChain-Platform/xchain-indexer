@@ -14,8 +14,12 @@
 
 'use strict';
 
+// list_metas.list_action_index is BIGINT UNSIGNED; a refused row fits the wire value to it
+// (see fitRefusedIntegerFields). getListMeta reads valid rows only.
+const META_INTEGER_FIELDS = Object.freeze(['LIST_ACTION_INDEX']);
+
 async function createListMeta(data, name, description){
-    data = this.normalizeDataValues(data);
+    data = this.fitRefusedIntegerFields(this.normalizeDataValues(data), META_INTEGER_FIELDS);
     let actionIndex = data['ACTION_INDEX'];
     let listActionIndex = data['LIST_ACTION_INDEX'];
     let statusId = await this.createStatus(data['STATUS']);

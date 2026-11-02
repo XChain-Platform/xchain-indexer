@@ -37,6 +37,7 @@ function editDb(existing = []){
     return {
         calls,
         normalizeDataValues: data => data,
+        fitRefusedIntegerFields: data => data,
         createMemo: async () => 14,
         createStatus: async () => 15,
         doQuery: async (...args) => {

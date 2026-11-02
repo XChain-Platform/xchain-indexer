@@ -116,6 +116,15 @@ class Link {
         if(!error && (this.util.isNull(data['COIN2_ACTION_INDEX']) || !this.util.isNumeric(data['COIN2_ACTION_INDEX'])))
             error = 'invalid: COIN2_ACTION_INDEX (format)';
 
+        // Reject a hexadecimal, binary or octal action index. It passes the numeric checks
+        // above (and a side on another chain is never looked up), but the links row binds it
+        // as written and a strict session refuses it, so every such LINK halted the block
+        // whatever its verdict and none is in any history.
+        for(let field of ['COIN1_ACTION_INDEX', 'COIN2_ACTION_INDEX']){
+            if(!error && this.util.keepsPrefixedSpelling(data[field], this.config['INTEGER_FIELDS'][field]))
+                error = 'invalid: ' + field + ' (format)';
+        }
+
         return error;
     }
 

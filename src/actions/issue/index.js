@@ -271,6 +271,9 @@ class Issue {
         await fees.priceIssuance.call(this, ctx);
         await fees.validateFeePayment.call(this, ctx);
 
+        // The last verdict: a CALLBACK_BLOCK the tokens row a valid ISSUE writes can store
+        editRules.validateStoredCallbackBlock.call(this, ctx);
+
         // Record the issue, and create the token record only when it is valid
         let status = await settle.recordIssue.call(this, ctx);
         if(status=='valid')

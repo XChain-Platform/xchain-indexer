@@ -33,6 +33,7 @@ function buildHandler(gateEnabled){
     indexer.indexerDb.config = indexer.config;
     indexer.indexerDb.util = indexer.util;
     indexer.indexerDb.normalizeDataValues = Database.prototype.normalizeDataValues;
+    indexer.indexerDb.fitRefusedIntegerFields = Database.prototype.fitRefusedIntegerFields;
     indexer.indexerDb.createBroadcast = Database.prototype.createBroadcast;
 
     const handler = new Broadcast({
