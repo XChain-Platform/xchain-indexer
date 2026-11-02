@@ -35,10 +35,7 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const fs     = require('fs');
-const path   = require('path');
 const sinon  = require('sinon');
-const mathjs = require('mathjs');
 
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
@@ -153,37 +150,8 @@ describe('exceedsUnsignedColumn proves overflow and never guesses @regression @t
  * column already stores bind unchanged, so the in-range spellings are controls.
  */
 
-const SQL_DIR  = path.join(__dirname, '../../../src/sql');
-
-// Column definitions as the shipped DDL states them.
-function columnSpec(table, column){
-    const raw = fs.readFileSync(path.join(SQL_DIR, table + '.sql'), 'utf8');
-    const parsed = Database.prototype.parseExpectedColumns.call(
-        { stripSqlLineComments: Database.prototype.stripSqlLineComments }, raw);
-    const col = parsed.find(c => c.name === column);
-    assert.ok(col, table + '.' + column + ' is absent from its schema definition');
-    return col.definition;
-}
-
-// The strict-session integer conversion: a plain decimal spelling, rounded half away from
-// zero, inside the type's range; NULL only where the column allows it.
-function columnAccepts(table, column, value){
-    const spec = columnSpec(table, column);
-    if(value === null || value === undefined)
-        return !/\bNOT\s+NULL\b/i.test(spec);
-    const type = /\b(TINYINT|SMALLINT|MEDIUMINT|INT|BIGINT)\b/i.exec(spec);
-    assert.ok(type, table + '.' + column + ' is not an integer column');
-    const unsigned = /\bUNSIGNED\b/i.test(spec);
-    const bits = { TINYINT: 8, SMALLINT: 16, MEDIUMINT: 24, INT: 32, BIGINT: 64 }[type[1].toUpperCase()];
-    const raw = String(value).trim();
-    if(!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw))
-        return false;
-    const n = mathjs.round(mathjs.bignumber(raw));
-    const two = mathjs.bignumber(2);
-    const min = unsigned ? mathjs.bignumber(0) : two.pow(bits - 1).negated();
-    const max = unsigned ? two.pow(bits).minus(1) : two.pow(bits - 1).minus(1);
-    return n.isFinite() && n.gte(min) && n.lte(max);
-}
+// The strict-session column model the regression suites share, read from the shipped DDL.
+const { columnAccepts } = require('../../helpers/strict_columns.js');
 
 // A Database whose lookups answer 1 and whose doQuery records each statement.
 function makeWritingDb(){
@@ -317,4 +285,32 @@ describe('Utility.fitIntegerColumn @tier1', function () {
         assert.strictEqual(new Utility().fitIntegerColumn('-99999999999', '-2147483648', '2147483647'), '-2147483648');
         assert.strictEqual(new Utility().fitIntegerColumn('-5', '-2147483648', '2147483647'), '-5');
     });
+});
+
+// A strict session rounds the exact decimal half away from zero. Rounding to 12 decimals
+// first, as mathjs.round does, turns a fraction in [.4999999999995, .5) into a half and
+// rounds it up, which refused values the column stores.
+describe('Utility.fitIntegerColumn rounds the exact decimal at each bound @tier1', function () {
+    const LONG_UNDER_HALF = '.4' + '9'.repeat(80);
+    // [column, its maximum, wire value, the bound a refused value fits to, or null if it stores]
+    const U64 = ['polls', 'end_block', U64_MAX], U16 = ['polls', 'max_selections', '65535'];
+    const cases = [
+        [U64, U64_MAX + '.4999999999999', null], [U64, U64_MAX + '.4999999999995', null],
+        [U64, U64_MAX + LONG_UNDER_HALF, null], [U64, U64_MAX + '.5', U64_MAX],
+        [U64, '18446.7440737095516154999999999999e15', null], [U64, '18446.7440737095516155e15', U64_MAX],
+        [U64, '-0.4999999999999', null], [U64, '-0.5', '0'],
+        [U16, '65535.4999999999999', null], [U16, '65535.4999999999995', null],
+        [U16, '65535.4999999999994', null], [U16, '65535' + LONG_UNDER_HALF, null],
+        [U16, '65535.5', '65535'], [U16, '65535.5000000000001', '65535'],
+        [U16, '6553.55e1', '65535'], [U16, '6553.54999999999999e1', null],
+    ];
+    for(const [[table, column, max], input, fitsTo] of cases){
+        const stores = (fitsTo === null);
+        it((stores ? 'stores ' : 'refuses ') + JSON.stringify(input) + ' in a column up to ' + max, function () {
+            const util = new Utility();
+            assert.strictEqual(util.storesInIntegerColumn(input, '0', max), stores);
+            assert.strictEqual(util.fitIntegerColumn(input, '0', max), stores ? input : fitsTo);
+            assert.strictEqual(columnAccepts(table, column, input), stores, 'the strict column model agrees');
+        });
+    }
 });

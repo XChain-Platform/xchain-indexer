@@ -34,6 +34,15 @@ const DECIMAL_SPELLING = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
 // while the column refuses it.
 const PREFIXED_SPELLING = /^0(?:x[0-9a-f]+|b[01]+|o[0-7]+)$/i;
 
+// The integer a strict session stores for a decimal spelling: the exact decimal rounded half
+// away from zero. The BigNumber constructor keeps every digit of the string (it applies only
+// the exponent limits, never the configured precision) and toDecimalPlaces rounds at an
+// absolute digit position, so no step here loses a digit at any length. mathjs.round is not
+// this: it first rounds to 12 decimals, so a fraction in [.4999999999995, .5) rounds up.
+function roundToStoredInteger(raw){
+    return mathjs.bignumber(raw).toDecimalPlaces(0, mathjs.BigNumber.ROUND_HALF_UP);
+}
+
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
 module.exports = {
@@ -124,13 +133,8 @@ module.exports = {
             if(n < BigInt(min)) return min;
             return (n > BigInt(max)) ? max : n.toString();
         }
-        if(!DECIMAL_SPELLING.test(raw)) return null;
-        let rounded;
-        try {
-            rounded = mathjs.round(mathjs.bignumber(raw));
-        } catch(e){
-            return null;
-        }
+        let rounded = this.storedIntegerOf(raw);
+        if(rounded === null) return null;
         // An exponent past the BigNumber range overflows to a signed infinity.
         if(!rounded.isFinite()) return rounded.isNegative() ? min : max;
         if(rounded.lt(mathjs.bignumber(min))) return min;
@@ -145,6 +149,20 @@ module.exports = {
     storesInIntegerColumn(value, min, max){
         if(this.isNull(value)) return false;
         return this.fitIntegerColumn(value, min, max) === value;
+    },
+
+    // The integer a strict session converts a plain decimal spelling to before its range
+    // check, as an exact BigNumber (a signed infinity past the BigNumber exponent range), or
+    // null for any other spelling. Absent values answer null.
+    storedIntegerOf(value){
+        if(this.isNull(value)) return null;
+        let raw = String(value).trim();
+        if(!DECIMAL_SPELLING.test(raw)) return null;
+        try {
+            return roundToStoredInteger(raw);
+        } catch(e){
+            return null;
+        }
     },
 
     // Whether a numeric wire value needs the target NOT NULL column's zero placeholder:
