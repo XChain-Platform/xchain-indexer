@@ -18,7 +18,9 @@
  * (errno 1264, 1265 or 1366), so the block retried forever. ISSUE|7 admitted a MIN_DEPTH
  * of any digit count into issues.min_depth VARCHAR(15) (errno 1406), and a refused ATTEST
  * v0 or ISSUE|7 wrote its row with the raw wire value. Each such action halted every
- * indexer, so the verdicts here carry no activation height.
+ * indexer, so the verdicts here carry no activation height. A binding poll whose
+ * CALLBACK_DELAY_BLOCKS its column stored could still halt at the finalize, which stamps
+ * callback_due_block = finalize block + delay; that delay is refused the same way.
  *
  * Every table row runs the real handler, then the real row writer, and checks the bound
  * value against a strict-conversion model read from the shipped DDL. Rows marked
@@ -43,6 +45,8 @@ const { freshVote }        = require('../unit/actions/stake/vote_invariants.test
 const { setUpAttestHandler, v0Data, v0Params } = require('../helpers/attest_fixture.js');
 const issueFixtures        = require('../unit/bridge/issue_bridge_optin.test/helpers/issue_fixtures.js');
 const pollCreate           = require('../../src/db/polls/poll_create.js');
+const bindingCallback      = require('../../src/actions/vote/binding_callback.js');
+const { exactU64 }         = require('../../src/db/database/exact_u64.js');
 const Utility              = require('../../src/utility');
 const Database             = require('../../src/db');
 
@@ -157,7 +161,27 @@ const VOTE_CASES = [
     ['CALLBACK_DELAY_BLOCKS whose parsed value passes the maximum', { delay: '18446744073709550592' }, 'invalid: CALLBACK_DELAY_BLOCKS (format)'],
     ['CALLBACK_DELAY_BLOCKS at the column maximum, which parseInt rounds past it', { delay: U64_MAX }, 'invalid: CALLBACK_DELAY_BLOCKS (format)'],
     ['CALLBACK_DELAY_BLOCKS that parseInt cannot read', { delay: '.5e1' },                   'invalid: CALLBACK_DELAY_BLOCKS (format)'],
+    // The finalize stamps callback_due_block = finalize block + delay in Number, at END_BLOCK
+    // at the latest and never past block 2^53, so the delay must leave that stamp below 2^64.
+    // Above 2^63 parseInt reads multiples of 2048 and the sum rounds again, so the boundary
+    // sits on a rounding midpoint, not at 2^64 - 1 - END_BLOCK: at END_BLOCK 2000,
+    // 2^64-3072 parses to 2^64-4096 (stamp 2^64-2048) and 2^64-3071 to 2^64-2048 (stamp 2^64).
+    ['CALLBACK_DELAY_BLOCKS whose due block at END_BLOCK is the largest storable',
+        { endBlock: '2000', delay: '18446744073709548544' },                                  'valid'],
+    ['CALLBACK_DELAY_BLOCKS one past it, whose due block at END_BLOCK passes the maximum',
+        { endBlock: '2000', delay: '18446744073709548545' },                                  'invalid: CALLBACK_DELAY_BLOCKS (format)'],
+    ['CALLBACK_DELAY_BLOCKS the column stores, whose due block at a live END_BLOCK passes the maximum',
+        { endBlock: '900000', delay: '18446744073709550591' },                                'invalid: CALLBACK_DELAY_BLOCKS (format)'],
+    // END_BLOCK past 2^53 finalizes at 2^53 at the latest: 2^64-2^53-1025 parses to
+    // 2^64-2^53-2048 (stamp 2^64-2048) and 2^64-2^53-1024 to 2^64-2^53 (stamp 2^64).
+    ['CALLBACK_DELAY_BLOCKS whose due block at block 2^53, the last the indexer reaches, is the largest storable',
+        { endBlock: U64_MAX, delay: '18437736874454809599' },                                 'valid'],
+    ['CALLBACK_DELAY_BLOCKS one past it, whose due block at block 2^53 passes the maximum',
+        { endBlock: U64_MAX, delay: '18437736874454809600' },                                 'invalid: CALLBACK_DELAY_BLOCKS (format)'],
 ];
+
+// The rows above that bound callback_due_block, by title prefix.
+const DUE_BLOCK_ROWS = VOTE_CASES.filter(([title]) => /whose due block/.test(title));
 
 describe('VOTE v0 refuses a value its poll column cannot store @regression @tier1', function () {
     afterEach(() => sinon.restore());
@@ -180,6 +204,32 @@ describe('VOTE v0 refuses a value its poll column cannot store @regression @tier
         assert.strictEqual(status, 'valid');
         assert.strictEqual(bound[POLL_COLUMNS.end_block], U64_MAX);
         assert.strictEqual(bound[POLL_COLUMNS.min_voters], '1e1');
+    });
+
+    // The verdict is exactly the halting set: the real finalize, run at the last block it can
+    // come at with the delay as the column hands it back, stamps a due block the column
+    // stores for every valid row and one it refuses for every refused row.
+    it('the finalize at the last block a poll can close stamps a storable due block exactly when the create is valid', async function () {
+        for (const [title, overrides, expected] of DUE_BLOCK_ROWS) {
+            const params = voteParams(overrides);
+            const { status, bound } = await runVoteCreate(params);
+            assert.strictEqual(status, expected, title);
+            // The delay createPoll binds without this refusal, stored and read back.
+            const delay = parseInt(params[18]);
+            if (expected === 'valid') assert.strictEqual(bound[POLL_COLUMNS.callback_delay_blocks], delay, title);
+            const endBlock = mathjs.round(mathjs.bignumber(params[2]));
+            const lastClose = Math.min(Number(endBlock), 2 ** 53);
+            const { indexer, handler } = freshVote();
+            indexer.indexerDb.setPollCallbackDue = sinon.stub().resolves();
+            const poll = { action_index: 50, callback_contract_index: 5, callback_on: 'always',
+                           callback_delay_blocks: exactU64(String(delay)) };
+            await bindingCallback.fireBindingCallback.call(handler, poll, { BLOCK_INDEX: lastClose },
+                { poll_status: 'finalized', winning_option: 'yes' });
+            assert.ok(indexer.indexerDb.setPollCallbackDue.calledOnce, title + ': no due block stamped');
+            const due = indexer.indexerDb.setPollCallbackDue.firstCall.args[1];
+            assert.strictEqual(columnAccepts('polls', 'callback_due_block', `${due}`), expected === 'valid',
+                title + ': stamped ' + `${due}`);
+        }
     });
 });
 

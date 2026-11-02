@@ -36,6 +36,12 @@ const ESCROW_DECIMALS = 8;
 const U64_MAX = '18446744073709551615';
 const U16_MAX = '65535';
 
+// The finalize stamps a timelocked callback_due_block (BIGINT UNSIGNED) as a Number, and the
+// driver writes its decimal, so 2^64 is the first stamp the column refuses. No finalize runs
+// past block 2^53: the catch-up loop advances with Number(lastIndexerBlock) + 1, which stops there.
+const DUE_BLOCK_OVERFLOW     = 2 ** 64;
+const LAST_PROCESSABLE_BLOCK = 2 ** 53;
+
 // Whether vote_settlement_exact_activation is active at this block for the handler's chain.
 function settlementExactAt(handler, blockIndex){
     return gateRegistry.activeAt(SETTLEMENT_EXACT_KEY, handler.config['NETWORK'], handler.config['COIN'], Number(blockIndex), null);
@@ -327,7 +333,23 @@ function validateCreateStorable(data, error){
     if(!error && data['IS_BINDING'] && !this.util.isNull(data['CALLBACK_DELAY_BLOCKS']) &&
        !this.util.storesInIntegerColumn(parseInt(data['CALLBACK_DELAY_BLOCKS']), '0', U64_MAX))
         error = 'invalid: CALLBACK_DELAY_BLOCKS (format)';
+    if(!error && data['IS_BINDING'] && !this.util.isNull(data['CALLBACK_DELAY_BLOCKS']) && callbackDueOverflows(this.util, data))
+        error = 'invalid: CALLBACK_DELAY_BLOCKS (format)';
     return error;
+}
+
+// Whether a stored delay makes the finalize stamp a due block its column refuses, which
+// retries that block forever, so no indexed history holds one. The time sweep closes a poll
+// at end_block exactly (every block runs it, in order) and an early decide closes it sooner;
+// rounding is monotone, so the Number sum fireBindingCallback computes at the last block a
+// poll can close, the stored end_block or 2^53, is the largest stamp it can ever write. A
+// delay of 0 takes the immediate path and stamps nothing. The check stays in Number to match
+// the stamp: above 2^63 the parsed delay and the sum both round to multiples of 2048.
+function callbackDueOverflows(util, data){
+    let delay = parseInt(data['CALLBACK_DELAY_BLOCKS']);
+    if(!(delay > 0)) return false;
+    let lastClose = Math.min(Number(util.bcround(data['END_BLOCK'], 0)), LAST_PROCESSABLE_BLOCK);
+    return lastClose + delay >= DUE_BLOCK_OVERFLOW;
 }
 
 module.exports = {
