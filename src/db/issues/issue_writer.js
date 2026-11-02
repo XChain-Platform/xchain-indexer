@@ -20,6 +20,9 @@
  *
  ********************************************************************/
 
+// The width of issues.min_depth, VARCHAR(15).
+const MIN_DEPTH_MAX_CHARS = 15;
+
 module.exports = {
 
     // Create/Update record in `issues` table
@@ -78,7 +81,11 @@ const issueRecord = {
         // replays the issues rows and skips an empty field, and a typed/NOT NULL column
         // could not express "the action did not carry this field at all".
         let bridge_chains      = data['BRIDGE_CHAINS'];
-        let min_depth          = data['MIN_DEPTH'];
+        // A valid ISSUE|7 carries at most MIN_DEPTH_MAX_CHARS digits (actions/issue). A
+        // refused one stores whatever it carried, and a longer value failed the insert and
+        // retried the block forever, so it stores NULL; getTokenInfo replays valid rows only.
+        let min_depth          = (!db.util.isNull(data['MIN_DEPTH']) && Array.from(String(data['MIN_DEPTH'])).length > MIN_DEPTH_MAX_CHARS)
+                               ? null : data['MIN_DEPTH'];
         let lock_bridge        = data['LOCK_BRIDGE'];
         let callback_tick_id   = await db.createTicker(data['CALLBACK_TICK']);
         let tick_id            = await db.createTicker(data['TICK']);

@@ -138,6 +138,15 @@ module.exports = {
         return value;
     },
 
+    // Whether a strict session stores this bound value in an integer column holding
+    // [min, max] as it is: the case fitIntegerColumn returns unchanged. A validator uses it
+    // to refuse an action whose row the column would refuse (errno 1264, 1265 or 1366).
+    // Absent values answer false; the caller decides whether a field may be absent.
+    storesInIntegerColumn(value, min, max){
+        if(this.isNull(value)) return false;
+        return this.fitIntegerColumn(value, min, max) === value;
+    },
+
     // Whether a numeric wire value needs the target NOT NULL column's zero placeholder:
     // empty, non-numeric or longer than an amount VARCHAR(250), or, for an integer field,
     // refused by the existing unsigned normalizer or by the database's base-prefix rules.

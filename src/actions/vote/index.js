@@ -121,6 +121,8 @@ class Vote {
             error = 'invalid: DEPOSIT (format)';
         if(!error && Array.from(String(data['GAS_ESCROW'])).length > POLL_ESCROW_AMOUNT_MAX_CHARS)
             error = 'invalid: GAS_ESCROW (format)';
+        // The same rule for the integer columns, in the same position.
+        error = validate.validateCreateStorable.call(this, data, error);
 
         await settle.settleCreatePoll.call(this, data, error, depositCheck.deposit);
     }
