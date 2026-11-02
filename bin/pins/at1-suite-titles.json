@@ -3915,6 +3915,12 @@
       "bridge escrow checkpoint on the BTC anchor axis (BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION) @regression @tier1 the registry row ships unarmed on mainnet and testnet and armed on regtest from genesis",
       "bridge escrow checkpoint on the BTC anchor axis (BRIDGE_ESCROW_ANCHOR_MATCH_ACTIVATION) @regression @tier1 the whole check on the issue 62 row verifies at the anchor-matched checkpoint and refuses one at the stamp's own height once armed"
     ],
+    "3426478dd6093149": [
+      "prefixed MINT_START_BLOCK and MINT_STOP_BLOCK on a valid mainnet ISSUE @regression @tier1 keeps decimal spellings and a literal past the range valid, each bound as a storable integer",
+      "prefixed MINT_START_BLOCK and MINT_STOP_BLOCK on a valid mainnet ISSUE @regression @tier1 keeps the verdict of an ISSUE refused for another reason",
+      "prefixed MINT_START_BLOCK and MINT_STOP_BLOCK on a valid mainnet ISSUE @regression @tier1 refuses a prefixed MINT_START_BLOCK or MINT_STOP_BLOCK the tokens row would bind",
+      "prefixed MINT_START_BLOCK and MINT_STOP_BLOCK on an armed testnet ISSUE @regression @tier1 keeps the representability verdicts the testnet path already returned"
+    ],
     "347825e427284ec5": [
       "Security: decimal precision clamped to [0, 18] @regression @tier4 SEC-19: decimals = 0 \u2192 returns 0",
       "Security: decimal precision clamped to [0, 18] @regression @tier4 SEC-20: decimals = 18 \u2192 returns 18",
@@ -20281,8 +20287,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1602,
-      "titleCount": 15697,
+      "fileCount": 1603,
+      "titleCount": 15701,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -20292,6 +20298,7 @@
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
         "test/regression/prefixed_integer_refused_rows.test.js": "1d2bc895c71b8da6",
         "test/regression/prefixed_integer_valid_verdicts.test.js": "9413d336ccb36031",
+        "test/regression/prefixed_mint_window_verdicts.test.js": "3426478dd6093149",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
         "test/regression/vote_ballot_column_verdicts.test.js": "aaed2124c8f1290a",
         "test/security/http-surface/auth_gate.test.js": "55856394f174fcb5",
@@ -22266,8 +22273,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1228,
-      "titleCount": 12459,
+      "fileCount": 1229,
+      "titleCount": 12463,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22325,6 +22332,7 @@
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
         "test/regression/prefixed_integer_refused_rows.test.js": "1d2bc895c71b8da6",
         "test/regression/prefixed_integer_valid_verdicts.test.js": "9413d336ccb36031",
+        "test/regression/prefixed_mint_window_verdicts.test.js": "3426478dd6093149",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
         "test/regression/vote_ballot_column_verdicts.test.js": "aaed2124c8f1290a",
         "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
@@ -23500,8 +23508,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 643,
-      "titleCount": 6824,
+      "fileCount": 644,
+      "titleCount": 6828,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -23510,6 +23518,7 @@
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/prefixed_integer_refused_rows.test.js": "1d2bc895c71b8da6",
         "test/regression/prefixed_integer_valid_verdicts.test.js": "9413d336ccb36031",
+        "test/regression/prefixed_mint_window_verdicts.test.js": "3426478dd6093149",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
         "test/regression/vote_ballot_column_verdicts.test.js": "aaed2124c8f1290a",
         "test/unit/action_dispatch/batch_guard_inert_sub_command.test.js": "e6ecddd2370fac2d",
@@ -24149,8 +24158,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1228,
-      "titleCount": 12459,
+      "fileCount": 1229,
+      "titleCount": 12463,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24208,6 +24217,7 @@
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
         "test/regression/prefixed_integer_refused_rows.test.js": "1d2bc895c71b8da6",
         "test/regression/prefixed_integer_valid_verdicts.test.js": "9413d336ccb36031",
+        "test/regression/prefixed_mint_window_verdicts.test.js": "3426478dd6093149",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
         "test/regression/vote_ballot_column_verdicts.test.js": "aaed2124c8f1290a",
         "test/smoke/connected/db_connectivity.test.js": "89418977b7589e82",
