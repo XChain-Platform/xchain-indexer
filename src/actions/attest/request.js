@@ -119,6 +119,8 @@ module.exports = {
 
         error = await this.requestCapError(data, error);
 
+        error = this.requestFeeWidthError(data, error);
+
         let status = this.stampRequestStatus(data, error, relayOrigin);
 
         getLogger().info("\t ATTEST v0 : id=" + (data['REQUEST_ID'] ? String(data['REQUEST_ID']).substring(0,16) + '...' : '?') +

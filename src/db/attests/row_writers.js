@@ -22,6 +22,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
+const { fitColumnText } = require('../column_text.js');
 
 // attests.redundancy is TINYINT UNSIGNED and attests.deadline_block BIGINT UNSIGNED. A valid
 // request holds a provider-allowed redundancy and a deadline inside the provider window,
@@ -32,6 +33,37 @@ const { getLogger } = require('../../observability/index.js');
 // acts on, and neither column enters a state-hash preimage.
 const U8_MAX  = '255';
 const U64_MAX = '18446744073709551615';
+
+// The text a refused ATTEST v0 request row binds. A user-broadcast v0 (alone or inside a
+// BATCH) is refused as not a VM emission and still writes its row with the wire as carried,
+// and no rule bounds that wire: request_id CHAR(64) is utf8mb3 (the table default),
+// provider_id VARCHAR(32) is NOT NULL, callback_method VARCHAR(64) and fee_amount VARCHAR(60)
+// are utf8mb4, and callback_params_json is TEXT (65,535 bytes). An over-long value, a
+// supplementary-plane character in request_id (errno 1267 on the single-v0 lookup, 1366 on the
+// write), an absent PROVIDER_ID (errno 1048) or an envelope-sized CALLBACK_PARAMS failed the
+// write and retried the block forever. Such a value is fitted to its column, an absent
+// provider is the empty string a provider-less batch row already stores, and callback params
+// past the column store NULL. A value that already fits binds unchanged. The single-v0 lookup
+// binds the fitted id, so it can only meet a row that stores that same id. A refused row is
+// 'rejected': no response, expiry, relay or admission path acts on it, its resolved_block stays
+// NULL so the request_status state-hash class never reads it, and no other column of it
+// enters a hash preimage. A valid row (a VM emission, or an admitted relay) binds as before.
+const REQUEST_ID_CHARS      = 64;
+const PROVIDER_ID_CHARS     = 32;
+const CALLBACK_METHOD_CHARS = 64;
+const FEE_AMOUNT_CHARS      = 60;
+const TEXT_MAX_BYTES        = 65535;
+
+function refusedRequestText(cols){
+    let params = cols.callback_params;
+    return {
+        request_id:      fitColumnText(cols.request_id, REQUEST_ID_CHARS, true),
+        provider_id:     fitColumnText(cols.provider_id ?? '', PROVIDER_ID_CHARS, false),
+        callback_method: fitColumnText(cols.callback_method, CALLBACK_METHOD_CHARS, false),
+        callback_params: (params !== null && Buffer.byteLength(String(params), 'utf8') > TEXT_MAX_BYTES) ? null : params,
+        fee_amount:      fitColumnText(cols.fee_amount, FEE_AMOUNT_CHARS, false)
+    };
+}
 
 // The column values of one ATTEST v0 request row, resolved from the normalized action
 // data in the order the writer has always resolved them (status, fee payer, then the
@@ -66,6 +98,9 @@ async function requestColumns(db, data){
     // local callback, since the contract is not on BTC).
     let origin_chain     = !db.util.isNull(data['ORIGIN_CHAIN']) ? String(data['ORIGIN_CHAIN']) : null;
     let origin_action    = !db.util.isNull(data['ORIGIN_ACTION_INDEX']) ? Number(data['ORIGIN_ACTION_INDEX']) : null;
+    if(data['STATUS'] !== 'valid')
+        ({ request_id, provider_id, callback_method, callback_params, fee_amount } =
+            refusedRequestText({ request_id, provider_id, callback_method, callback_params, fee_amount }));
     return { status_id, fee_payer_id, action_index, request_id, contract_index, provider_id, payload,
              callback_method, callback_params, redundancy, deadline_block, gas_escrow, request_status,
              block_index, fee_tick_id, fee_amount, responsible_set, origin_chain, origin_action };
