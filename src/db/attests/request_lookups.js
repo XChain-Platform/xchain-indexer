@@ -21,10 +21,17 @@
  *
  ********************************************************************/
 
+const { fitsUtf8mb3 } = require('../utf8mb3.js');
+
 module.exports = {
 
-    // Look up an ATTEST v0 (request) row by its request_id (64-hex hash)
+    // Look up an ATTEST v0 (request) row by its request_id (64-hex hash). attests.request_id is
+    // utf8mb3, so no stored row holds a supplementary-plane character, and binding one threw
+    // errno 1267 rather than missing. A SLASH resolving an XATTEST slot passes its ROUND_ID here
+    // with no format rule ahead of it, which halted the block; such an id is answered absent.
     async getAttestationRequestById(requestId){
+        if(!fitsUtf8mb3(String(requestId || '')))
+            return null;
         let query = `SELECT ar.*, ia.address AS fee_payer
                      FROM attests ar
                      LEFT JOIN index_addresses ia ON ia.id = ar.fee_payer_id

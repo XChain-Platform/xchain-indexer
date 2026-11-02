@@ -22,6 +22,53 @@
 
 const { fitColumnText } = require('../column_text.js');
 
+// Integer and TEXT columns a refused row fills from the wire with no rule bounding them
+// (src/sql/prices.sql): version TINYINT UNSIGNED NOT NULL, round_number, batch_first_round and
+// batch_last_round BIGINT UNSIGNED, round_count SMALLINT UNSIGNED, and rounds_json and sigs_json
+// TEXT (65,535 bytes). A PRICE whose VERSION is not a number recorded VERSION NULL (errno 1048)
+// and one of '-1' recorded -1 (errno 1264); a v0 batch refused for its window header still
+// records the FIRST_ROUND, LAST_ROUND and ROUND_COUNT it claimed ('-5', 23 digits, 70000:
+// errno 1264); and a batch refused after its body parsed (a failed quorum) records its round
+// and signature lists, which an envelope-sized wire carries past the TEXT column (errno 1406).
+// Each failed the write and retried the block forever. On a refused row a version the column
+// cannot hold binds 255, which no PRICE version uses; a round bound binds its nearest column
+// bound; and a list past the column stores NULL, the value a batch whose body did not parse
+// already stores. Every value that fits binds unchanged. A valid row binds what its handler
+// set: version 0 or 1, and a window the header rules admitted and a quorum signed. Every reader
+// of these columns selects valid rows (getPriceBatchesOverlappingRange through its only caller,
+// findValidPriceBatchPayload, the rollback batch-window read) or version 1 (the v1 mapping
+// backfill), and the table is in no hash beyond the action status its row already carries.
+const U8_MAX          = '255';
+const U16_MAX         = '65535';
+const U64_MAX         = '18446744073709551615';
+const UNKNOWN_VERSION = 255;
+const TEXT_MAX_BYTES  = 65535;
+
+// The version and v0 batch columns as createPrice binds them.
+function batchColumns(util, data){
+    let cols = {
+        version:           data['VERSION'],
+        round_number:      data['ROUND'] || null,
+        batch_first_round: data['BATCH_FIRST_ROUND'] || null,
+        batch_last_round:  data['BATCH_LAST_ROUND'] || null,
+        round_count:       data['ROUND_COUNT'] || null,
+        rounds_json:       data['ROUNDS_JSON'] || null,
+        sigs_json:         data['SIGS_JSON'] || null
+    };
+    if(data['STATUS'] === 'valid') return cols;
+    let fitInt  = (v, max) => util.fitIntegerColumn(v, '0', max) ?? null;
+    let fitText = (v) => (v !== null && Buffer.byteLength(String(v), 'utf8') > TEXT_MAX_BYTES) ? null : v;
+    return {
+        version:           util.storesInIntegerColumn(cols.version, '0', U8_MAX) ? cols.version : UNKNOWN_VERSION,
+        round_number:      fitInt(cols.round_number, U64_MAX),
+        batch_first_round: fitInt(cols.batch_first_round, U64_MAX),
+        batch_last_round:  fitInt(cols.batch_last_round, U64_MAX),
+        round_count:       fitInt(cols.round_count, U16_MAX),
+        rounds_json:       fitText(cols.rounds_json),
+        sigs_json:         fitText(cols.sigs_json)
+    };
+}
+
 // The two halves of createPrice's upsert, keyed by action_index. Their column lists alone
 // would carry the method past the function limit, so the statements live here, text unchanged.
 const PRICE_UPDATE_SQL = `UPDATE prices SET
@@ -48,20 +95,15 @@ module.exports = {
         let status_id       = await this.createStatus(data['STATUS']);
         let source_id       = await this.getAddressId(data['SOURCE']);
         let action_index    = data['ACTION_INDEX'];
-        let version         = data['VERSION'];
         let validation      = data['VALIDATION_STATUS'] || 'pending';
-        // v0 fields (round_number holds FIRST_ROUND on a batch row; see prices.sql)
-        let round_number    = data['ROUND'] || null;
+        // v0 fields (round_number holds FIRST_ROUND on a batch row; see prices.sql), the v2
+        // BATCH window (NULL on a v0/v1 row) and the version, fitted on a refused row
+        let { version, round_number, sigs_json, batch_first_round, batch_last_round,
+              round_count, rounds_json } = batchColumns(this.util, data);
         let round_timestamp = data['TIMESTAMP'] || null;
         let pair_count      = data['PAIR_COUNT'] || null;
         let pairs_json      = data['PAIRS_JSON'] || null;
         let sig_count       = data['SIG_COUNT'] || null;
-        let sigs_json       = data['SIGS_JSON'] || null;
-        // v2 fields (BATCH window; NULL on a v0/v1 row)
-        let batch_first_round = data['BATCH_FIRST_ROUND'] || null;
-        let batch_last_round  = data['BATCH_LAST_ROUND'] || null;
-        let round_count       = data['ROUND_COUNT'] || null;
-        let rounds_json       = data['ROUNDS_JSON'] || null;
         // v1 fields
         let coin_id         = (data['V1_COIN'])  ? await this.createCoin(data['V1_COIN'])     : null;
         let tick_id         = (data['V1_TICK'])  ? await this.createTicker(data['V1_TICK'])   : null;

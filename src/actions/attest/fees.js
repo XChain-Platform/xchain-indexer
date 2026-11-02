@@ -22,6 +22,11 @@
 
 'use strict';
 
+const { exceedsCodePoints } = require('../../db/column_text.js');
+
+// attests.fee_amount is VARCHAR(60) (src/sql/attests.sql).
+const FEE_AMOUNT_CHARS = 60;
+
 module.exports = {
     // The optional request fee's own rules. Returns the verdict plus whether a fee is
     // actually present, which every later phase keys on.
@@ -58,6 +63,21 @@ module.exports = {
             error = 'invalid: FEE_TICK (required when FEE_AMOUNT > 0)';
 
         return { error, feePresent };
+    },
+
+    // The request row binds FEE_AMOUNT as numeric text into a VARCHAR(60), but the rules above
+    // admit any amount up to the 250 code points of an amount column. A zero fee spelled with
+    // more than 60 digits (emitted unrounded when the GAS tick has no index row on the chain,
+    // so no funding check runs) passed every rule and failed the insert with errno 1406,
+    // halting every indexer on that block. Checked after every other rule and on the value the
+    // writer binds (excess trailing spaces the server trims with a note are not counted), so it
+    // refuses only a request whose row could never be written: every recorded verdict stands
+    // and the rule needs no activation height.
+    requestFeeWidthError(data, error){
+        let fee = data['FEE_AMOUNT'];
+        if(!error && !this.util.isNull(fee) && this.util.isNumeric(fee) && exceedsCodePoints(String(fee).replace(/ +$/, ''), FEE_AMOUNT_CHARS))
+            error = 'invalid: FEE_AMOUNT (length)';
+        return error;
     },
 
     async requestFeeFundingError(data, error, feePresent){
