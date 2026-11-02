@@ -119,7 +119,7 @@ module.exports = {
 
         error = await this.requestCapError(data, error);
 
-        error = this.requestFeeWidthError(data, error);
+        error = await this.requestFeeWidthError(data, error);
 
         let status = this.stampRequestStatus(data, error, relayOrigin);
 

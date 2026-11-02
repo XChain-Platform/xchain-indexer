@@ -30,6 +30,27 @@ const { isAdmissionEra } = require('../../consensus/gates/mirror_admission_gate.
 const { getLogger } = require('../../observability/index.js');
 const { BATCH_CHAIN } = require('./constants.js');
 
+// attests.batch_window_start, batch_window_end and batch_btc_block_height are BIGINT UNSIGNED
+// (src/sql/attests.sql), but the head parser admits WINDOW_START, WINDOW_END and
+// BTC_BLOCK_HEIGHT at any digit count and the writer binds them as Number read them. A head
+// naming more than one chunk is recorded valid before its continuations land, with no quorum
+// read, and the batch key derives from whatever window the head declares, so anyone could
+// file a well-formed head whose window or anchor ran past 2^64 - 1 and fail its insert with
+// errno 1264, halting every indexer on that block. Such a head is refused, after every other
+// rule and on the exact Number the writer binds, so it refuses only a head whose row could
+// never be written: every recorded verdict stands and the rule needs no activation height.
+const U64_MAX = '18446744073709551615';
+
+function batchHeadColumnError(util, head, error){
+    if(error || !head || !head.ok) return error;
+    for(const [field, value] of [['WINDOW_START', head.windowStart], ['WINDOW_END', head.windowEnd],
+                                 ['BTC_BLOCK_HEIGHT', head.btcBlockHeight]]){
+        if(!util.storesInIntegerColumn(value, '0', U64_MAX))
+            return 'invalid: ' + field + ' (format)';
+    }
+    return error;
+}
+
 function batchContinuationWire(config, params, error){
     if(!error && String(config['COIN']) !== BATCH_CHAIN)
         error = 'invalid: ATTEST v6 (batches ride the ' + BATCH_CHAIN + ' rail)';
@@ -122,6 +143,7 @@ module.exports = {
 
         let assembled = await this.assembleBatchHead(wire.head, wire.mine, error);
         error         = assembled.error;
+        error         = batchHeadColumnError(this.util, wire.head, error);
         let batch     = assembled.batch;
         let head      = wire.head;
 

@@ -70,12 +70,17 @@ module.exports = {
     // more than 60 digits (emitted unrounded when the GAS tick has no index row on the chain,
     // so no funding check runs) passed every rule and failed the insert with errno 1406,
     // halting every indexer on that block. Checked after every other rule and on the value the
-    // writer binds (excess trailing spaces the server trims with a note are not counted), so it
+    // writer binds (excess trailing spaces the server trims with a note are not counted), and
+    // only when the writer would write the row at all: createAttestationRequest skips a v0
+    // whose request_id already has a v0 row of any status (unless a row already sits at this
+    // action_index), so such a request never reached the failing INSERT and stays valid. It
     // refuses only a request whose row could never be written: every recorded verdict stands
-    // and the rule needs no activation height.
-    requestFeeWidthError(data, error){
+    // and the rule needs no activation height. The lookup runs only for an over-wide fee.
+    async requestFeeWidthError(data, error){
         let fee = data['FEE_AMOUNT'];
-        if(!error && !this.util.isNull(fee) && this.util.isNumeric(fee) && exceedsCodePoints(String(fee).replace(/ +$/, ''), FEE_AMOUNT_CHARS))
+        if(!error && !this.util.isNull(fee) && this.util.isNumeric(fee) &&
+           exceedsCodePoints(String(fee).replace(/ +$/, ''), FEE_AMOUNT_CHARS) &&
+           await this.indexerDb.attestationRequestRowWrites(data['REQUEST_ID'], data['ACTION_INDEX']))
             error = 'invalid: FEE_AMOUNT (length)';
         return error;
     },
