@@ -102,12 +102,14 @@ module.exports = {
             BTC:  '3e0083d555399e54eff2670a0ea5e8d76c8935d3e7423451c1221ae698386b5a',
             LTC:  'd9c315b36adf5ab8bd6831ccc59a2a01124df70ba9fc8141662ec682285251e8',
             DOGE: '82c6bc814e3de4a1e023d008457b7186c5a6ac142c85be9bf0a18f2d5989fd72',
+            KAS:  'a5eceb4f9c0ef85090312510daddea3b6f171de59f7867f37aef2a2d8a5a7b7c',   // Added: non-Bitcoin family (see the KAS.js header)
         },
 
         regtest: {
             BTC:  'ad800ecb8d28448f9d39743bd3a28e6aac121d0e9add30743ee1dcbbf694af86',
             LTC:  '16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36',
             DOGE: 'd7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6',
+            KAS:  'b81fe5581c8108575b06910de1749981a0518bf918a6277b05905ebff70c3d1c',   // Added: non-Bitcoin family (see the KAS.js header)
         },
     },
 };
