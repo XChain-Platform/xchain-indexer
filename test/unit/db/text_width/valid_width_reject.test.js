@@ -77,6 +77,9 @@ const EQUIV_CASES = [
     ['CKPT|' + 'r'.repeat(240) + '|0', null, null],
     ['CKPT|' + 'r'.repeat(246) + '|0', null, 'invalid: EQUIV_KEY (length)'],
     ['CKPT|' + EMOJI + '|0', null, 'invalid: EQUIV_KEY (format)'],
+    // Over the width only by trailing spaces: the column drops them, so the proof stored and stands
+    ['XDEX|' + 'r'.repeat(240) + '|0' + ' '.repeat(10), null, null],
+    ['XDEX|' + 'r'.repeat(246) + '|0' + ' '.repeat(5), null, 'invalid: EQUIV_KEY (length)'],
     ['CKPT|' + 'r'.repeat(300) + '|0', 'invalid: SIG_A (does not verify)', 'invalid: SIG_A (does not verify)']
 ];
 
