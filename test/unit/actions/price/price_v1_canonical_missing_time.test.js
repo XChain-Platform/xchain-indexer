@@ -10,7 +10,8 @@ const LEGACY_CASES = [
     { name: 'leading-zero VALUE', value: '0012.5', fee: '' },
     { name: 'leading-zero FEE', value: '12.5', fee: '00.5' },
     { name: 'VALUE one over the canonical cap', value: '12345678901.1234567', fee: '' },
-    { name: 'very long VALUE and FEE', value: '0'.repeat(297) + '1.5', fee: '0'.repeat(297) + '0.5' },
+    // Within the VARCHAR(250) columns: a longer one is refused by width on every network.
+    { name: 'very long VALUE and FEE', value: '0'.repeat(197) + '1.5', fee: '0'.repeat(197) + '0.5' },
 ];
 
 describe('PRICE v1 canonical bound with no BLOCK_TIME falls back to the legacy rule', function () {

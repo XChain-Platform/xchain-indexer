@@ -21,6 +21,17 @@
  *
  ********************************************************************/
 
+const { fitColumnText } = require('../column_text.js');
+
+// The bet_feeds text a refused feed stores as carried (OUTCOMES is canonicalized only on
+// a valid feed), clipped to its utf8mb4 column. A refused feed's row is read back only for
+// its feed status, which every later rule checks before any of these fields.
+const REFUSED_FEED_TEXT = Object.freeze({ LABEL: 250, OUTCOMES: 1100, FEE: 11 });
+
+function feedText(data, field){
+    return (data['STATUS'] === 'valid') ? data[field] : fitColumnText(data[field], REFUSED_FEED_TEXT[field], false);
+}
+
 module.exports = {
 
     // Create/Update record in `bet_feeds` table
@@ -31,9 +42,9 @@ module.exports = {
         let status_id      = await this.createStatus(data['STATUS']);
         let feed_status_id = await this.createStatus(data['FEED_STATUS']);
         let action_index   = data['ACTION_INDEX'];
-        let label          = data['LABEL'];
-        let outcomes       = data['OUTCOMES'];
-        let fee            = data['FEE'];
+        let label          = feedText(data, 'LABEL');
+        let outcomes       = feedText(data, 'OUTCOMES');
+        let fee            = feedText(data, 'FEE');
         let deadline       = data['DEADLINE'];
         let refund_window  = data['REFUND_WINDOW'];
         let expire_at      = data['EXPIRE_AT'];
