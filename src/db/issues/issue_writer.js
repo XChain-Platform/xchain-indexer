@@ -20,8 +20,19 @@
  *
  ********************************************************************/
 
-// The width of issues.min_depth, VARCHAR(15).
-const MIN_DEPTH_MAX_CHARS = 15;
+const { fitColumnText } = require('../column_text.js');
+
+// The issues columns (VARCHAR, utf8mb4) a refused ISSUE fills with a wire value no rule
+// bounded. A refused row is never read back (every issues reader selects valid rows), so
+// its value is clipped to the column; a valid row's values are bounded by the handler.
+const REFUSED_TEXT_WIDTHS = Object.freeze({
+    decimals: 2, callback_block: 15, mint_start_block: 15, mint_stop_block: 15,
+    bridge_chains: 250, min_depth: 15, lock_bridge: 1
+});
+
+function fitRefused(status, column, value){
+    return (status === 'valid') ? value : fitColumnText(value, REFUSED_TEXT_WIDTHS[column], false);
+}
 
 module.exports = {
 
@@ -61,10 +72,10 @@ const issueRecord = {
         let max_mint           = data['MAX_MINT'];
         let mint_supply        = data['MINT_SUPPLY'];
         let mint_address_max   = data['MINT_ADDRESS_MAX'];
-        let mint_start_block   = data['MINT_START_BLOCK'];
-        let mint_stop_block    = data['MINT_STOP_BLOCK'];
-        let decimals           = data['DECIMALS'];
         let status             = data['STATUS'];
+        let mint_start_block   = fitRefused(status, 'mint_start_block', data['MINT_START_BLOCK']);
+        let mint_stop_block    = fitRefused(status, 'mint_stop_block', data['MINT_STOP_BLOCK']);
+        let decimals           = fitRefused(status, 'decimals', data['DECIMALS']);
         let lock_max_supply    = data['LOCK_MAX_SUPPLY'];
         let lock_mint          = data['LOCK_MINT'];
         let lock_mint_supply   = data['LOCK_MINT_SUPPLY'];
@@ -72,7 +83,7 @@ const issueRecord = {
         let lock_description   = data['LOCK_DESCRIPTION'];
         let lock_sleep         = data['LOCK_SLEEP'];
         let lock_callback      = data['LOCK_CALLBACK'];
-        let callback_block     = data['CALLBACK_BLOCK'];
+        let callback_block     = fitRefused(status, 'callback_block', data['CALLBACK_BLOCK']);
         let callback_amount    = data['CALLBACK_AMOUNT'];
         let allow_list         = data['ALLOW_LIST'];
         let block_list         = data['BLOCK_LIST'];
@@ -80,13 +91,9 @@ const issueRecord = {
         // them. That is what makes "empty means unchanged" true on this table: getTokenInfo
         // replays the issues rows and skips an empty field, and a typed/NOT NULL column
         // could not express "the action did not carry this field at all".
-        let bridge_chains      = data['BRIDGE_CHAINS'];
-        // A valid ISSUE|7 carries at most MIN_DEPTH_MAX_CHARS digits (actions/issue). A
-        // refused one stores whatever it carried, and a longer value failed the insert and
-        // retried the block forever, so it stores NULL; getTokenInfo replays valid rows only.
-        let min_depth          = (!db.util.isNull(data['MIN_DEPTH']) && Array.from(String(data['MIN_DEPTH'])).length > MIN_DEPTH_MAX_CHARS)
-                               ? null : data['MIN_DEPTH'];
-        let lock_bridge        = data['LOCK_BRIDGE'];
+        let bridge_chains      = fitRefused(status, 'bridge_chains', data['BRIDGE_CHAINS']);
+        let min_depth          = fitRefused(status, 'min_depth', data['MIN_DEPTH']);
+        let lock_bridge        = fitRefused(status, 'lock_bridge', data['LOCK_BRIDGE']);
         let callback_tick_id   = await db.createTicker(data['CALLBACK_TICK']);
         let tick_id            = await db.createTicker(data['TICK']);
         let transfer_id        = await db.createAddress(data['TRANSFER']);

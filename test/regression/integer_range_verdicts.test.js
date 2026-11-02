@@ -282,6 +282,7 @@ describe('ISSUE|7 refuses a MIN_DEPTH its columns cannot store @regression @tier
         const { db, calls } = makeDb();
         await db.createIssue({ ACTION: 'ISSUE', ACTION_INDEX: 80, TICK: 'FUFU', MIN_DEPTH: 'x'.repeat(40),
                                STATUS: 'invalid: MIN_DEPTH (format)' });
-        assert.strictEqual(insertArgs(calls, 'issues')[24], null);
+        // A refused row is clipped to the VARCHAR(15) column, never read back.
+        assert.strictEqual(insertArgs(calls, 'issues')[24], 'x'.repeat(15));
     });
 });

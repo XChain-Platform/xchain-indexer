@@ -20,6 +20,8 @@
  *
  ********************************************************************/
 
+const { toUtf8mb3 } = require('../utf8mb3.js');
+
 // EVERY bound value must be storable in its column, whatever the wire carried.
 //
 // anchor.js records a rejected wire rather than dropping it (a retired version below
@@ -51,11 +53,14 @@ const intOrNull = (v, max) => {
     return (Number.isSafeInteger(n) && n >= 0 && n <= max) ? n : null;
 };
 // String columns: NULL when longer than the column (never truncated: a cut hash would be
-// a plausible-looking lie, NULL says "unreadable" and the status says why).
+// a plausible-looking lie, NULL says "unreadable" and the status says why). Every column
+// here is utf8mb3, so a supplementary-plane character inside the bound (a refused wire's
+// CHAIN of one emoji) is stored as U+FFFD instead of failing the INSERT with errno 1366.
+// The mapping runs after the length test, so a value the test sends to NULL still does.
 const strOrNull = (v, max) => {
     if(v == null || v === '') return null;
     let s = String(v);
-    return (s.length <= max) ? s : null;
+    return (s.length <= max) ? toUtf8mb3(s) : null;
 };
 // MEDIUMTEXT holds 16 MiB; a wire cannot approach that, but the bound is stated.
 const TEXT = 16777215;
