@@ -98,9 +98,11 @@ const { bountyTreasurySplit: splitBountyTreasury } = require('./bounty.js');
 // key it derived from MSG_A, whose ROUND_ID no rule bounds: a key longer than the column or
 // holding a supplementary-plane character failed the INSERT on every retry. Checked last,
 // so only a proof that passed every rule (and so halted the block) is refused, and every
-// recorded verdict stands. A refused SLASH writes no event row.
+// recorded verdict stands. A refused SLASH writes no event row. MariaDB cuts excess trailing
+// spaces from a VARCHAR with only a note in every sql_mode, so a key over the width only by
+// trailing spaces stored and indexed; the width test ignores them to refuse only what halted.
 function equivKeyStorableError(equivKey, error){
-    if(!error && exceedsCodePoints(equivKey, 250))
+    if(!error && exceedsCodePoints(String(equivKey).replace(/ +$/, ''), 250))
         return 'invalid: EQUIV_KEY (length)';
     if(!error && !fitsUtf8mb3(equivKey))
         return 'invalid: EQUIV_KEY (format)';
