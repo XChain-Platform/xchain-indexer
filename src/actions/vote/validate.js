@@ -31,6 +31,11 @@ const SETTLEMENT_EXACT_KEY = 'vote_settlement_exact_activation.VOTE_SETTLEMENT_E
 // The decimal places settle.js locks and releases a poll's GAS escrow at.
 const ESCROW_DECIMALS = 8;
 
+// polls.end_block, polls.min_voters and polls.callback_delay_blocks are BIGINT UNSIGNED;
+// polls.max_selections is SMALLINT UNSIGNED.
+const U64_MAX = '18446744073709551615';
+const U16_MAX = '65535';
+
 // Whether vote_settlement_exact_activation is active at this block for the handler's chain.
 function settlementExactAt(handler, blockIndex){
     return gateRegistry.activeAt(SETTLEMENT_EXACT_KEY, handler.config['NETWORK'], handler.config['COIN'], Number(blockIndex), null);
@@ -304,8 +309,29 @@ function parseBallotSelections(poll, data, error){
     return { error: error, selections: selections };
 }
 
+// VOTE v0 phase - the integer columns of the live poll row. The rules above read these
+// fields through Number or parseInt, which admit magnitudes and spellings a strict session
+// refuses on the bind (a 23-digit END_BLOCK, MIN_VOTERS=1e30, MAX_SELECTIONS=0x2), and such
+// a create failed its insert and retried the block forever, so no indexed history holds
+// one and the refusal needs no activation height. createPoll binds END_BLOCK,
+// MAX_SELECTIONS and MIN_VOTERS raw and CALLBACK_DELAY_BLOCKS as parseInt reads it, on a
+// binding poll only, so each check judges the value it binds: a delay of '0x10' stores 16
+// and stays valid. Called after every other verdict, so a refused create keeps its own.
+function validateCreateStorable(data, error){
+    if(!error && !this.util.storesInIntegerColumn(data['END_BLOCK'], '0', U64_MAX))
+        error = 'invalid: END_BLOCK (format)';
+    if(!error && !this.util.storesInIntegerColumn(data['MAX_SELECTIONS'], '0', U16_MAX))
+        error = 'invalid: MAX_SELECTIONS (format)';
+    if(!error && !this.util.isNull(data['MIN_VOTERS']) && !this.util.storesInIntegerColumn(data['MIN_VOTERS'], '0', U64_MAX))
+        error = 'invalid: MIN_VOTERS (format)';
+    if(!error && data['IS_BINDING'] && !this.util.isNull(data['CALLBACK_DELAY_BLOCKS']) &&
+       !this.util.storesInIntegerColumn(parseInt(data['CALLBACK_DELAY_BLOCKS']), '0', U64_MAX))
+        error = 'invalid: CALLBACK_DELAY_BLOCKS (format)';
+    return error;
+}
+
 module.exports = {
     settlementExactAt, exceedsEscrowDecimals, ESCROW_DECIMALS,
     validateCreateSource, validateCreatePollRules, validateCreateThresholds, validateCreateDeposit,
-    validateBallotPoll, parseBallotSelections
+    validateBallotPoll, parseBallotSelections, validateCreateStorable
 };
