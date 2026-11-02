@@ -14,7 +14,7 @@
  *
  * ISSUE edit rules: fields a set lock freezes, the DESCRIPTION length, the CALLBACK
  * fields once supply is distributed, the ALLOW/BLOCK lists, the mint-window recency
- * checks, the MEMO rules, and a CALLBACK_BLOCK the tokens row can store.
+ * checks, the MEMO rules, and a CALLBACK_BLOCK and mint window the tokens row can store.
  *
  * Each function runs with `this` bound to the Issue handler (./index.js calls each as
  * fn.call(this, ctx)) and reads and writes the shared context.
@@ -154,4 +154,22 @@ function validateStoredCallbackBlock(ctx){
         ctx.error = 'invalid: CALLBACK_BLOCK (format)';
 }
 
-module.exports = { validateLockedEdits, validateCallbackAndListFields, validateMintWindowAndMemo, validateStoredCallbackBlock };
+// The tokens row a valid ISSUE writes binds MINT_START_BLOCK and MINT_STOP_BLOCK as carried
+// whenever isNumeric accepts them (db/tokens/token_writer.js), into BIGINT UNSIGNED columns. A
+// hexadecimal, binary or octal literal the column's range holds passes isValidAmountFormat
+// wherever the amount-representability rule is not yet armed, and every mint-window rule
+// above reads it as a number, so a strict session refused the bind and every otherwise valid
+// ISSUE carrying one halted the block; none is in any history. A literal reading zero is
+// bound as written too and halted the same way. Where the representability rule is armed it
+// already refused these spellings earlier with this same text. A refused ISSUE stores these
+// fields only in VARCHAR issues columns, so this runs last, like the CALLBACK_BLOCK check, and
+// a refused ISSUE keeps its own verdict. A literal past the range is nulled by normalization,
+// stores as 0 and keeps its verdict.
+function validateStoredMintWindow(ctx){
+    for(let name of ['MINT_START_BLOCK', 'MINT_STOP_BLOCK']){
+        if(!ctx.error && this.util.keepsPrefixedSpelling(ctx.data[name], this.config['INTEGER_FIELDS'][name]))
+            ctx.error = 'invalid: ' + name + ' (format)';
+    }
+}
+
+module.exports = { validateLockedEdits, validateCallbackAndListFields, validateMintWindowAndMemo, validateStoredCallbackBlock, validateStoredMintWindow };
