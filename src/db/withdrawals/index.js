@@ -23,7 +23,8 @@ module.exports = {
 
     // Create record in `withdrawals` table
     async createWithdrawal(data){
-        data             = this.normalizeDataValues(data);
+        // A refused row's prefixed CONTRACT_ACTION_INDEX stores NULL (see nullRefusedPrefixedFields)
+        data             = this.nullRefusedPrefixedFields(this.normalizeDataValues(data), ['CONTRACT_ACTION_INDEX']);
         let status_id    = await this.createStatus(data['STATUS']);
         let source_id    = await this.getAddressId(data['SOURCE']);
         let tick_id      = await this.createTicker(data['TICK']);

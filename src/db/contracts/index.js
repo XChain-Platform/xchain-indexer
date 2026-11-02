@@ -214,7 +214,8 @@ module.exports = {
 
     // Create record in `contract_executions` table
     async createContractExecution(data){
-        data             = this.normalizeDataValues(data);
+        // A refused EXECUTE's prefixed contract index stores NULL (see nullRefusedPrefixedFields)
+        data             = this.nullRefusedPrefixedFields(this.normalizeDataValues(data), ['CONTRACT_INDEX']);
         let status_id    = await this.createStatus(data['STATUS']);
         let caller_id    = await this.getAddressId(data['CALLER']);
         let action_index = data['ACTION_INDEX'];
