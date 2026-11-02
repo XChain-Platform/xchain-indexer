@@ -335,17 +335,6 @@
       "list share halt vocabulary pins exactly the ten identity-valued halt reasons",
       "list share halt vocabulary pins frozen leg ordinals"
     ],
-    "05f5cfc9bcc38064": [
-      "File action handler @regression @tier3 calls createFile on the indexerDb",
-      "File action handler @regression @tier3 calls mapper.createMappings after parse",
-      "File action handler @regression @tier3 creates a valid file record",
-      "File action handler @regression @tier3 creates a valid file with no memo",
-      "File action handler @regression @tier3 rejects NAME exceeding MAX_FILE_NAME_LENGTH",
-      "File action handler @regression @tier3 rejects TITLE exceeding MAX_FILE_TITLE_LENGTH",
-      "File action handler @regression @tier3 rejects TYPE exceeding MAX_FILE_TYPE_LENGTH",
-      "File action handler @regression @tier3 rejects unknown format version",
-      "File action handler @regression @tier3 rejects when SOURCE is sleeping"
-    ],
     "06011ae797920feb": [
       "PRICE price-range flag day @regression @tier3 the posture this node ships arms regtest from genesis so the oracle venue exercises the armed rule",
       "PRICE price-range flag day @regression @tier3 the posture this node ships arms testnet at its instant and not one second earlier",
@@ -10374,6 +10363,13 @@
       "BET action handler @regression @tier2 place: oracle self-bet -> invalid: SOURCE (oracle may not bet own feed)",
       "BET action handler @regression @tier2 place: unknown feed -> invalid: FEED_ACTION_INDEX (unknown)"
     ],
+    "8895e16a2f7ee6e1": [
+      "Database.createStatus() column fit @regression @tier1 counts a 4-byte character as one of the 250 characters",
+      "Database.createStatus() column fit @regression @tier1 returns the same id for the same long verdict on a second call",
+      "Database.createStatus() column fit @regression @tier1 stores a verdict carrying a 4-byte character with U+FFFD in its place",
+      "Database.createStatus() column fit @regression @tier1 stores a verdict longer than the column as its first 250 characters and returns its id",
+      "Database.createStatus() column fit @regression @tier1 stores a verdict that already fits unchanged"
+    ],
     "88979a43d8107259": [
       "providerMinStakeHistory @regression @tier1 meetsProviderFloor a floor of 0 admits a zero weight but still rejects garbage",
       "providerMinStakeHistory @regression @tier1 meetsProviderFloor excludes an unusable weight rather than reading it as 0",
@@ -17229,6 +17225,20 @@
       "Tick name boundary tests @regression @tier3 STR-12: TICK starting with period is invalid",
       "Tick name boundary tests @regression @tier3 STR-13: TICK ending with period is invalid"
     ],
+    "dd77f1fa0161d001": [
+      "File action handler @regression @tier3 calls createFile on the indexerDb",
+      "File action handler @regression @tier3 calls mapper.createMappings after parse",
+      "File action handler @regression @tier3 creates a valid file record",
+      "File action handler @regression @tier3 creates a valid file with no memo",
+      "File action handler @regression @tier3 keeps a TYPE with a BMP non-ASCII character valid",
+      "File action handler @regression @tier3 keeps an ASCII text/plain TYPE valid",
+      "File action handler @regression @tier3 rejects NAME exceeding MAX_FILE_NAME_LENGTH",
+      "File action handler @regression @tier3 rejects TITLE exceeding MAX_FILE_TITLE_LENGTH",
+      "File action handler @regression @tier3 rejects TYPE exceeding MAX_FILE_TYPE_LENGTH",
+      "File action handler @regression @tier3 rejects TYPE with a character above U+FFFF as invalid: TYPE (format) and stores no type",
+      "File action handler @regression @tier3 rejects unknown format version",
+      "File action handler @regression @tier3 rejects when SOURCE is sleeping"
+    ],
     "ddae2554907c33d6": [
       "hub push outbox: one transactional writer @regression runs the outbox INSERT on the transaction connection, never the pool",
       "hub push outbox: one transactional writer @regression sees a pooled outbox writer when one exists (negative control)",
@@ -19807,8 +19817,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1593,
-      "titleCount": 15336,
+      "fileCount": 1594,
+      "titleCount": 15344,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -19980,7 +19990,7 @@
         "test/unit/actions/contract/execute_slash_ledger_consolidation.test.js": "5cc340e05ad6f3cf",
         "test/unit/actions/contract/file.test.js": "76315680c635cd41",
         "test/unit/actions/contract/file.test/compression.test.js": "cacd28f85b0344c2",
-        "test/unit/actions/contract/file.test/record_fields.test.js": "05f5cfc9bcc38064",
+        "test/unit/actions/contract/file.test/record_fields.test.js": "dd77f1fa0161d001",
         "test/unit/actions/contract/link.test.js": "1998457cfbe911ef",
         "test/unit/actions/contract/list.test.js": "3223b1235b72dcb9",
         "test/unit/actions/contract/list.test/create_format_helpers.test.js": "a9ab9687877f0cc4",
@@ -20763,6 +20773,7 @@
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/index_memos_collation.test.js": "352eae82238cdd57",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
+        "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/adversarial_compact_id.test.js": "359bcfb442706852",
         "test/unit/db/ledger/adversarial_compact_id_handler.test.js": "9b346c96ac848481",
@@ -21783,8 +21794,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1219,
-      "titleCount": 12136,
+      "fileCount": 1220,
+      "titleCount": 12144,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -21976,7 +21987,7 @@
         "test/unit/actions/contract/execute_slash_ledger_consolidation.test.js": "5cc340e05ad6f3cf",
         "test/unit/actions/contract/file.test.js": "76315680c635cd41",
         "test/unit/actions/contract/file.test/compression.test.js": "cacd28f85b0344c2",
-        "test/unit/actions/contract/file.test/record_fields.test.js": "05f5cfc9bcc38064",
+        "test/unit/actions/contract/file.test/record_fields.test.js": "dd77f1fa0161d001",
         "test/unit/actions/contract/link.test.js": "1998457cfbe911ef",
         "test/unit/actions/contract/list.test.js": "3223b1235b72dcb9",
         "test/unit/actions/contract/list.test/create_format_helpers.test.js": "a9ab9687877f0cc4",
@@ -22533,6 +22544,7 @@
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/index_memos_collation.test.js": "352eae82238cdd57",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
+        "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
         "test/unit/db/ledger/contract_permissions_persist.test.js": "d3332bf4be722dbe",
@@ -23008,8 +23020,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 636,
-      "titleCount": 6548,
+      "fileCount": 637,
+      "titleCount": 6553,
       "files": {
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
@@ -23329,6 +23341,7 @@
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
+        "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
         "test/unit/db/ledger/contract_permissions_persist.test.js": "d3332bf4be722dbe",
         "test/unit/db/ledger/db_create_contract_meta.test.js": "2779d8bd39470b0c",
@@ -23650,8 +23663,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1219,
-      "titleCount": 12136,
+      "fileCount": 1220,
+      "titleCount": 12144,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23843,7 +23856,7 @@
         "test/unit/actions/contract/execute_slash_ledger_consolidation.test.js": "5cc340e05ad6f3cf",
         "test/unit/actions/contract/file.test.js": "76315680c635cd41",
         "test/unit/actions/contract/file.test/compression.test.js": "cacd28f85b0344c2",
-        "test/unit/actions/contract/file.test/record_fields.test.js": "05f5cfc9bcc38064",
+        "test/unit/actions/contract/file.test/record_fields.test.js": "dd77f1fa0161d001",
         "test/unit/actions/contract/link.test.js": "1998457cfbe911ef",
         "test/unit/actions/contract/list.test.js": "3223b1235b72dcb9",
         "test/unit/actions/contract/list.test/create_format_helpers.test.js": "a9ab9687877f0cc4",
@@ -24400,6 +24413,7 @@
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/index_tables/index_memos_collation.test.js": "352eae82238cdd57",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
+        "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
         "test/unit/db/ledger/address_preferences_format_scope.test.js": "5a21ede8e87c8039",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
         "test/unit/db/ledger/contract_permissions_persist.test.js": "d3332bf4be722dbe",
