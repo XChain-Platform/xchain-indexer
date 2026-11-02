@@ -23,6 +23,7 @@
 
 const { getLogger } = require('../../observability/index.js');
 const { fitColumnText } = require('../column_text.js');
+const { refusedResponseColumns, refusedBatchWindow } = require('./refused_rows.js');
 
 // attests.redundancy is TINYINT UNSIGNED and attests.deadline_block BIGINT UNSIGNED. A valid
 // request holds a provider-allowed redundancy and a deadline inside the provider window,
@@ -54,13 +55,20 @@ const CALLBACK_METHOD_CHARS = 64;
 const FEE_AMOUNT_CHARS      = 60;
 const TEXT_MAX_BYTES        = 65535;
 
+// TEXT capacity measured as the server measures a bind: excess trailing spaces are cut with a
+// warning, so a value past the column only by them stored truncated and still binds unchanged.
+function exceedsText(value){
+    return value !== null && value !== undefined &&
+           Buffer.byteLength(String(value).replace(/ +$/, ''), 'utf8') > TEXT_MAX_BYTES;
+}
+
 function refusedRequestText(cols){
     let params = cols.callback_params;
     return {
         request_id:      fitColumnText(cols.request_id, REQUEST_ID_CHARS, true),
         provider_id:     fitColumnText(cols.provider_id ?? '', PROVIDER_ID_CHARS, false),
         callback_method: fitColumnText(cols.callback_method, CALLBACK_METHOD_CHARS, false),
-        callback_params: (params !== null && Buffer.byteLength(String(params), 'utf8') > TEXT_MAX_BYTES) ? null : params,
+        callback_params: exceedsText(params) ? null : params,
         fee_amount:      fitColumnText(cols.fee_amount, FEE_AMOUNT_CHARS, false)
     };
 }
@@ -180,6 +188,10 @@ module.exports = {
         let meta             = data['META'] || null;
         let signatures       = data['VALIDATOR_SIGNATURES'] || null;
         let block_index      = data['BLOCK_INDEX'];
+        // A refused row binds its unbounded wire fitted to the columns (refused_rows.js).
+        if(data['STATUS'] !== 'valid')
+            ({ request_id, provider_id, response_status, meta } =
+                refusedResponseColumns({ request_id, provider_id, response_status, meta }));
 
         let query  = "SELECT action_index FROM attests WHERE action_index=? LIMIT 1";
         let exists = false;
@@ -249,6 +261,10 @@ module.exports = {
         let total_chunks     = num(data['TOTAL_CHUNKS']);
         let chunk_index      = num(data['CHUNK_INDEX']);
         let chunk_b64        = str(data['CHUNK_B64']);
+        // A refused head binds a window or anchor past its column at the bound (refused_rows.js).
+        if(data['STATUS'] !== 'valid')
+            ({ window_start, window_end, btc_block_height } =
+                refusedBatchWindow(this.util, { window_start, window_end, btc_block_height }));
 
         let results = await this.doQuery("SELECT action_index FROM attests WHERE action_index=? LIMIT 1", [action_index]);
         if(results.length > 0){

@@ -42,6 +42,19 @@ module.exports = {
         return rows.length > 0 ? rows[0] : null;
     },
 
+    // Whether createAttestationRequest (row_writers.js) would write a row for this v0, by the
+    // same two reads in the same order: a row already at this action_index is updated in place,
+    // and otherwise a v0 row of any status already holding the lower-cased request_id makes the
+    // writer skip the insert. Strict, because the answer is a verdict input: a DB fault rolls
+    // the block back and retries it rather than reading as "no row".
+    async attestationRequestRowWrites(requestId, actionIndex){
+        let at = await this.doQueryStrict("SELECT action_index FROM attests WHERE action_index=? LIMIT 1", [actionIndex]);
+        if(at.length > 0) return true;
+        let prior = await this.doQueryStrict("SELECT action_index FROM attests WHERE request_id=? AND version=0 LIMIT 1",
+            [String(requestId || '').toLowerCase()]);
+        return prior.length === 0;
+    },
+
     // Per-block ATTEST v0 admission counts, for the spec §11.1 caps
     // (attest_request_cap_activation.js). Returns { total, byContract }: admitted v0
     // requests EARLIER IN THIS BLOCK, and how many of those came from `contractIndex`.

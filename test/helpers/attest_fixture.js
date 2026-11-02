@@ -68,6 +68,8 @@ function addAttestationDbStubs(db) {
     db.getAttestationRequestById         = sinon.stub().resolves(null);
     db.hasCapability                     = sinon.stub().resolves(true);
     db.createAttestationResponse         = sinon.stub().resolves();
+    // No prior v0 holds the id, so the request writer would write the row.
+    db.attestationRequestRowWrites       = sinon.stub().resolves(true);
     db.incrementAttestationValidatorStat = sinon.stub().resolves();
     db.updateAttestationRequestStatus    = sinon.stub().resolves();
     db.setAttestationResponseCallbackIndex = sinon.stub().resolves();
