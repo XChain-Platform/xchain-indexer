@@ -64,7 +64,20 @@ describe('JSON-RPC input boundaries @regression @tier1', function () {
         }
         assert.strictEqual(runMiddleware(jsonRpcBatchGuard, [good, good]).passed, true);
         assert.strictEqual(runMiddleware(jsonRpcBatchGuard, good).passed, true);
-        assert.strictEqual(runMiddleware(jsonRpcBatchGuard, []).passed, true);
+    });
+
+    it('rejects an empty batch and id-less invalid elements instead of letting the router answer 200 []', function () {
+        const good = { jsonrpc: '2.0', id: 2, method: 'getpricebatches', params: {} };
+        for (const body of [[], [{}], [good, {}], [{ id: 1 }]]) {
+            const r = runMiddleware(jsonRpcBatchGuard, body);
+            assert.strictEqual(r.passed, false, JSON.stringify(body));
+            assert.strictEqual(r.status, 400);
+            assert.strictEqual(r.payload.jsonrpc, '2.0');
+            assert.strictEqual(r.payload.id, null);
+            assert.strictEqual(r.payload.error.code, -32600);
+        }
+        assert.strictEqual(runMiddleware(jsonRpcBatchGuard, [good]).passed, true);
+        assert.strictEqual(runMiddleware(jsonRpcBatchGuard, good).passed, true);
     });
 
     it('turns non-object params into a stable error without invoking a handler', async function () {

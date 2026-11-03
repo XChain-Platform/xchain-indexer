@@ -43,14 +43,23 @@ function isRpcObject(v){
     return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
+// An id-less element is a JSON-RPC notification the router answers with nothing,
+// so a batch of only those (or {}) would come back as 200 []. Require the
+// request shape the spec names: an object with a string method (the router
+// itself answers a wrong jsonrpc version with an envelope that carries the id).
+function isRpcRequest(v){
+    return isRpcObject(v) && typeof v.method === 'string';
+}
+
 function jsonRpcBatchGuard(req, res, next){
-    // A null body or a batch element that is not an object would make the router
-    // throw while reading its id, so reject it here as structured JSON.
-    if(req.body === null || (Array.isArray(req.body) && !req.body.every(isRpcObject))){
+    // A null body, an empty batch, or a batch element that is not a request object
+    // would make the router throw or answer 200 [], so reject it here as
+    // structured JSON.
+    if(req.body === null || (Array.isArray(req.body) && (req.body.length === 0 || !req.body.every(isRpcRequest)))){
         return res.status(400).json({
             jsonrpc: '2.0',
             id: null,
-            error: { code: -32600, message: 'Invalid Request: each batch element must be an object' }
+            error: { code: -32600, message: 'Invalid Request: a batch must be a non-empty array of request objects' }
         });
     }
     // Bound batch fan-out before the router dispatches any element.
