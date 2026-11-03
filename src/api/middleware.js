@@ -134,7 +134,15 @@ function installSecurityLayers(app, { CONFIG_ENV }){
         windowMs: 60 * 1000,
         limit: parseInt(CONFIG_ENV.INDEXER_RATE_LIMIT_RPM) || 600,
         standardHeaders: true,
-        legacyHeaders: false
+        legacyHeaders: false,
+        // The default refusal is a text/html string. Answer with the same JSON-RPC
+        // envelope as every other refusal; the limiter has already set the
+        // Retry-After and RateLimit-* headers before calling the handler.
+        handler: (req, res, next, options) => res.status(options.statusCode).json({
+            jsonrpc: '2.0',
+            error: { code: -32600, message: 'Too many requests, please try again later.' },
+            id: null
+        })
     }));
 
     // Allow JSON requests. inflate: false makes body-parser answer 415 to any
