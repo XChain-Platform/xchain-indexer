@@ -14,8 +14,8 @@
  *
  * XChain Indexer - the HTTP middleware stack.
  *
- * Mounts, in this order: Helmet, the JSON body parser, CORS, the per-IP rate
- * limit, the default-off observability layer with the poll-freshness gauge, and
+ * Mounts, in this order: Helmet, CORS, the per-IP rate limit, the JSON body
+ * parser, the default-off observability layer with the poll-freshness gauge, and
  * the API-key gate. Everything read from the environment arrives through the
  * apiContext() object src/api.js builds at boot.
  *
@@ -67,7 +67,7 @@ function jsonRpcBatchGuard(req, res, next){
 }
 
 // The whole stack, in mount order. The gate goes last so a gated call is refused
-// only after the security headers, the body parse and the rate limit have run.
+// only after the security headers, the rate limit and the body parse have run.
 function installMiddleware(app, ctx){
     installSecurityLayers(app, ctx);
     installObservabilityLayers(app, ctx);
@@ -105,12 +105,6 @@ function installSecurityLayers(app, { CONFIG_ENV }){
     // Use Helmet to increase security
     app.use(helmet());
 
-    // Allow JSON requests. inflate: false makes body-parser answer 415 to any
-    // Content-Encoding body without running a decompressor, so the Brotli and gzip
-    // decoders of the Node runtime are never reachable from a request body.
-    app.use(bodyParser.json({ inflate: false }));
-    app.use(jsonRpcBatchGuard);
-
     // Allow CORS (restricted to the configured allowlist, defaults to localhost).
     // CORS_ORIGIN is comma-separated, not a single origin: handing `cors` the raw
     // string makes it echo that string verbatim to every caller, a multi-value
@@ -121,7 +115,9 @@ function installSecurityLayers(app, { CONFIG_ENV }){
         methods: ['POST']
     }));
 
-    // Per-IP rate limit, generous by default (the real callers are a handful of
+    // Per-IP rate limit, mounted ahead of the body parser so a malformed (400) or
+    // oversize (413) POST is counted and eventually refused like any other request,
+    // generous by default (the real callers are a handful of
     // hub/explorer processes). Bounds an anonymous flood against GET /status and
     // the ungated JSON-RPC read methods, both of which cost pooled DB round-trips
     // per hit, so the perimeter assumption is no longer the only guard.
@@ -131,6 +127,12 @@ function installSecurityLayers(app, { CONFIG_ENV }){
         standardHeaders: true,
         legacyHeaders: false
     }));
+
+    // Allow JSON requests. inflate: false makes body-parser answer 415 to any
+    // Content-Encoding body without running a decompressor, so the Brotli and gzip
+    // decoders of the Node runtime are never reachable from a request body.
+    app.use(bodyParser.json({ inflate: false }));
+    app.use(jsonRpcBatchGuard);
 }
 
 function installObservabilityLayers(app, { indexer, CONFIG_ENV, INDEXER_NETWORK }){
