@@ -6581,18 +6581,6 @@
       "the grammar-constrained raw wire columns hold a 4-byte character @regression the ingest writers survive a 4-byte character recordDeployChunk: a chunk of that source (deploy_chunks.code_part)",
       "the grammar-constrained raw wire columns hold a 4-byte character @regression the ingest writers survive a 4-byte character sanity: the strict-server stub rejects a 4-byte character on a utf8mb3 column"
     ],
-    "53618595d1e401a1": [
-      "JSON-RPC input boundaries @regression @tier1 binds betting list limits as SQL parameters",
-      "JSON-RPC input boundaries @regression @tier1 bounds a batch before any element is dispatched",
-      "JSON-RPC input boundaries @regression @tier1 opens keyless gated methods only for the boolean true escape hatch",
-      "JSON-RPC input boundaries @regression @tier1 passes a field the handler does not read through to the handler, so a newer caller is still served",
-      "JSON-RPC input boundaries @regression @tier1 rejects a malformed batch element or null body as structured JSON before dispatch",
-      "JSON-RPC input boundaries @regression @tier1 rejects exponent, negative, fractional and unsafe row indexes before a DB call",
-      "JSON-RPC input boundaries @regression @tier1 rejects malformed limits and incomplete cursors instead of silently changing the query",
-      "JSON-RPC input boundaries @regression @tier1 treats non-string method names as malformed without crashing the auth gate",
-      "JSON-RPC input boundaries @regression @tier1 turns non-object params into a stable error without invoking a handler",
-      "JSON-RPC input boundaries @regression @tier1 validates batch element parameters independently"
-    ],
     "53655c2e28eca03d": [
       "LIST address reference activation @regression @tier1 collapses a reference and its full address to one edit row",
       "LIST address reference activation @regression @tier1 does not resolve canonical references for token and union lists",
@@ -7558,6 +7546,19 @@
       "Stake handler delegated signing key gate off @regression @tier2 accepts a new claim when the delegation claim gate is off",
       "Stake handler delegated signing key gate off @regression @tier2 accepts a same-source top-up when the delegation claim gate is off",
       "Stake handler delegated signing key gate off @regression @tier2 preserves the existing stake collision verdict when the gate is off"
+    ],
+    "5fb3f812d2fa87cc": [
+      "JSON-RPC input boundaries @regression @tier1 binds betting list limits as SQL parameters",
+      "JSON-RPC input boundaries @regression @tier1 bounds a batch before any element is dispatched",
+      "JSON-RPC input boundaries @regression @tier1 opens keyless gated methods only for the boolean true escape hatch",
+      "JSON-RPC input boundaries @regression @tier1 passes a field the handler does not read through to the handler, so a newer caller is still served",
+      "JSON-RPC input boundaries @regression @tier1 rejects a malformed batch element or null body as structured JSON before dispatch",
+      "JSON-RPC input boundaries @regression @tier1 rejects an empty batch and id-less invalid elements instead of letting the router answer 200 []",
+      "JSON-RPC input boundaries @regression @tier1 rejects exponent, negative, fractional and unsafe row indexes before a DB call",
+      "JSON-RPC input boundaries @regression @tier1 rejects malformed limits and incomplete cursors instead of silently changing the query",
+      "JSON-RPC input boundaries @regression @tier1 treats non-string method names as malformed without crashing the auth gate",
+      "JSON-RPC input boundaries @regression @tier1 turns non-object params into a stable error without invoking a handler",
+      "JSON-RPC input boundaries @regression @tier1 validates batch element parameters independently"
     ],
     "5fd61225b4760c51": [
       "tipBlockTime() converts numeric-string block times to numbers",
@@ -11715,6 +11716,12 @@
       "the admission map rides the on-chain price wire one slot per round (rows 17 and 26) the on-chain batch action, driven through the real parser a batch below the activation is on exactly the same road, so nothing regressed",
       "the admission map rides the on-chain price wire one slot per round (rows 17 and 26) the on-chain batch action, driven through the real parser below the activation there is no slot: a trailing field still INVALIDATES the batch",
       "the admission map rides the on-chain price wire one slot per round (rows 17 and 26) the on-chain batch action, driven through the real parser the canonical uses legacy bytes in both directions of the version seam"
+    ],
+    "90fde496df437e1e": [
+      "createMemo clips by code points clips a longer memo at 250 code points without splitting a pair",
+      "createMemo clips by code points keeps 250 supplementary code points, not 125",
+      "createMemo clips by code points keeps a 250 code point memo ending in a pair whole",
+      "createMemo clips by code points leaves an ASCII memo of 250 units unchanged and null as null"
     ],
     "910e33d9591666d2": [
       "list share apply metadata wiring keeps today's create leg and skips metadata reads below the gate",
@@ -17630,6 +17637,10 @@
       "capability-snapshot reorg burial @regression @tier1 shared snapshot_reorg_buffer module the canonical buffer is the 6-block BTC confirmation depth the hub buries by",
       "capability-snapshot reorg burial @regression @tier1 the response verifier no longer claims it \"byte-matches the hub\" for the snapshot height"
     ],
+    "dd09e4445df1623c": [
+      "rate-limit refusal carries the JSON-RPC envelope answers an over-limit malformed body with the same JSON 429",
+      "rate-limit refusal carries the JSON-RPC envelope answers the first over-limit valid POST with a JSON 429"
+    ],
     "dd4520637c14e94b": [
       "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 is unarmed on mainnet, armed on testnet at its instant and active from regtest genesis",
       "protocol_changes/STAKE_SNAPSHOT_DECIMAL_STRINGS row @regression @tier1 registers the 0.2.0 row and both network constants"
@@ -19045,6 +19056,23 @@
       "mirror-twin BIGINT signedness conformance @regression sanity: every declared twin exists on both sides (list is not vacuous)",
       "mirror-twin BIGINT signedness conformance @regression state_checkpoints: every shared BIGINT column matches the hub UNSIGNED declaration"
     ],
+    "eeef1863c598b3d8": [
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 anchor action flags a supplementary chain or network as unmatchable, and leaves ASCII keys untouched",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 anchor action getanchoraction answers not anchored for a supplementary chain or network, like the ASCII control",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetFeedRows with a supplementary source answers [] like the ASCII control, without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetFeedRows with a supplementary status answers [] like the ASCII control, without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetRows with a supplementary source answers [] without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetRows with a supplementary status answers [] without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getbetfeeds answers the empty page, not a lookup failure",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings still binds a supplementary tick, since index_tickers is utf8mb4",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 cross-chain offer book getOpenCrossChainOffers with a supplementary to_coin answers the empty book without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 cross-chain offer book getopencrosschainorders answers an empty book, not a lookup failure",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary fiatCode answers the ASCII control shape without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary giveCoin answers the ASCII control shape without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary giveTick answers the ASCII control shape without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary oracleAddress answers the ASCII control shape without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote the ASCII control answers no effective oracle price"
+    ],
     "ef1265310a539530": [
       "fresh and migrated schema convergence against a real MariaDB @tier3 converges after replaying every migration through the operator CLI",
       "fresh and migrated schema convergence against a real MariaDB @tier3 converges along the boot path: reconcile, boot migrations, operator CLI, next boot",
@@ -19813,6 +19841,22 @@
       "attest_response_canonical: hub/indexer twin produces byte-identical canonicals to the hub copy across both eras",
       "attest_response_canonical: hub/indexer twin rejects the same spellings as the hub copy"
     ],
+    "f99914cbc0d2a609": [
+      "ISSUE mint block columns fit their VARCHAR(15) @regression MINT_START_BLOCK 1.8446744073709551615e19 on a valid action is refused with a length verdict",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression MINT_START_BLOCK 18446744073709551615 on a valid action is refused with a length verdict",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression MINT_START_BLOCK 18446744073709551615.4 on a valid action is refused with a length verdict",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression MINT_START_BLOCK of exactly 15 characters is accepted and stored unchanged",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression MINT_STOP_BLOCK 1.8446744073709551615e19 on a valid action is refused with a length verdict",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression MINT_STOP_BLOCK 18446744073709551615 on a valid action is refused with a length verdict",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression MINT_STOP_BLOCK 18446744073709551615.4 on a valid action is refused with a length verdict",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression MINT_STOP_BLOCK of exactly 15 characters is accepted and stored unchanged",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression mint_start_block 1.8446744073709551615e19 on a refused row is clipped so the insert cannot throw 1406",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression mint_start_block 18446744073709551615 on a refused row is clipped so the insert cannot throw 1406",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression mint_start_block 18446744073709551615.4 on a refused row is clipped so the insert cannot throw 1406",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression mint_stop_block 1.8446744073709551615e19 on a refused row is clipped so the insert cannot throw 1406",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression mint_stop_block 18446744073709551615 on a refused row is clipped so the insert cannot throw 1406",
+      "ISSUE mint block columns fit their VARCHAR(15) @regression mint_stop_block 18446744073709551615.4 on a refused row is clipped so the insert cannot throw 1406"
+    ],
     "f9b440bdcd327076": [
       "migration live-schema MODIFY guard: row format gate @regression @tier1 also refuses Redundant row format",
       "migration live-schema MODIFY guard: row format gate @regression @tier1 passes Compact when the column is not fully indexed",
@@ -20292,13 +20336,15 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1604,
-      "titleCount": 15704,
+      "fileCount": 1608,
+      "titleCount": 15740,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
+        "test/regression/api/rate_limit_json_envelope.test.js": "dd09e4445df1623c",
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
+        "test/regression/index_memo_code_point_clip.test.js": "90fde496df437e1e",
         "test/regression/integer_range_verdicts.test.js": "69f404ad0cbfd834",
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -20690,6 +20736,7 @@
         "test/unit/actions/token/issue.test/distribution_probe_collected.test.js": "8cffad06854c547e",
         "test/unit/actions/token/issue.test/edit_formats_and_lists.test.js": "c4b143a4fd63fe51",
         "test/unit/actions/token/issue.test/field_validations.test.js": "a6f81e8b11562709",
+        "test/unit/actions/token/issue.test/mint_block_column_fit.test.js": "f99914cbc0d2a609",
         "test/unit/actions/token/issue.test/mint_supply_cap.test.js": "9f70ca955e7b59ab",
         "test/unit/actions/token/issue.test/policy_list_detach.test.js": "f3be88258d140fb7",
         "test/unit/actions/token/issue.test/supply_and_locks.test.js": "2ba6badbcc60323f",
@@ -20858,7 +20905,7 @@
         "test/unit/api/rpc/getsharedlist.test.js": "9b17e07ece10663a",
         "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
-        "test/unit/api/rpc/input_bounds.test.js": "53618595d1e401a1",
+        "test/unit/api/rpc/input_bounds.test.js": "5fb3f812d2fa87cc",
         "test/unit/api/rpc/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
@@ -21362,6 +21409,7 @@
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
+        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "eeef1863c598b3d8",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/cross_chain_snapshot_golden.test.js": "0cb9a34b3a919984",
@@ -22279,8 +22327,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1229,
-      "titleCount": 12463,
+      "fileCount": 1231,
+      "titleCount": 12493,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22674,6 +22722,7 @@
         "test/unit/actions/token/issue.test/bridged_copy_detach.test.js": "03ce4f3a725593dd",
         "test/unit/actions/token/issue.test/edit_formats_and_lists.test.js": "c4b143a4fd63fe51",
         "test/unit/actions/token/issue.test/field_validations.test.js": "a6f81e8b11562709",
+        "test/unit/actions/token/issue.test/mint_block_column_fit.test.js": "f99914cbc0d2a609",
         "test/unit/actions/token/issue.test/mint_supply_cap.test.js": "9f70ca955e7b59ab",
         "test/unit/actions/token/issue.test/policy_list_detach.test.js": "f3be88258d140fb7",
         "test/unit/actions/token/issue.test/supply_and_locks.test.js": "2ba6badbcc60323f",
@@ -22785,7 +22834,7 @@
         "test/unit/api/rpc/getsharedlist.test.js": "a36f5937569a51c5",
         "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
-        "test/unit/api/rpc/input_bounds.test.js": "53618595d1e401a1",
+        "test/unit/api/rpc/input_bounds.test.js": "5fb3f812d2fa87cc",
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
         "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "1a49868c7c9dc670",
@@ -23121,6 +23170,7 @@
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
+        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "eeef1863c598b3d8",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
@@ -23514,8 +23564,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 644,
-      "titleCount": 6828,
+      "fileCount": 645,
+      "titleCount": 6844,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -23684,7 +23734,7 @@
         "test/unit/api/rpc/getsharedlist.test.js": "a36f5937569a51c5",
         "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
-        "test/unit/api/rpc/input_bounds.test.js": "53618595d1e401a1",
+        "test/unit/api/rpc/input_bounds.test.js": "5fb3f812d2fa87cc",
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
         "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "1a49868c7c9dc670",
@@ -23909,6 +23959,7 @@
         "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
+        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "eeef1863c598b3d8",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
@@ -24164,8 +24215,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1229,
-      "titleCount": 12463,
+      "fileCount": 1231,
+      "titleCount": 12493,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24559,6 +24610,7 @@
         "test/unit/actions/token/issue.test/bridged_copy_detach.test.js": "03ce4f3a725593dd",
         "test/unit/actions/token/issue.test/edit_formats_and_lists.test.js": "c4b143a4fd63fe51",
         "test/unit/actions/token/issue.test/field_validations.test.js": "a6f81e8b11562709",
+        "test/unit/actions/token/issue.test/mint_block_column_fit.test.js": "f99914cbc0d2a609",
         "test/unit/actions/token/issue.test/mint_supply_cap.test.js": "9f70ca955e7b59ab",
         "test/unit/actions/token/issue.test/policy_list_detach.test.js": "f3be88258d140fb7",
         "test/unit/actions/token/issue.test/supply_and_locks.test.js": "2ba6badbcc60323f",
@@ -24670,7 +24722,7 @@
         "test/unit/api/rpc/getsharedlist.test.js": "a36f5937569a51c5",
         "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
-        "test/unit/api/rpc/input_bounds.test.js": "53618595d1e401a1",
+        "test/unit/api/rpc/input_bounds.test.js": "5fb3f812d2fa87cc",
         "test/unit/api/rpc/open_reads.test.js": "b54d44cb897061d2",
         "test/unit/api/rpc/params.test.js": "c3eb1449e5ae65e6",
         "test/unit/api/rpc/price_anchor_rollcall_reorg.test.js": "1a49868c7c9dc670",
@@ -25006,6 +25058,7 @@
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
+        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "eeef1863c598b3d8",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
