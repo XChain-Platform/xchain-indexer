@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
+const { fitsUtf8mb3 } = require('../../db/utf8mb3.js');
 
 const hasOwn = (object, property) => Object.prototype.hasOwnProperty.call(object, property);
 
@@ -114,6 +115,11 @@ function oracleFeeQuoteRpc({ indexer }){
                 return { error: 'oracleAddress, giveTick and fiatCode are required' };
             if(!indexer.indexerDb || !indexer.util)
                 return { error: 'indexer not ready' };
+            // oracle_prices is utf8mb3, so a key holding a character above U+FFFF names no
+            // oracle row: answer what an unknown ASCII key gets, without the bind that would
+            // throw errno 1267 (Illegal mix of collations). The consensus readers stay as is.
+            if(![oracleAddress, giveCoin, giveTick, fiatCode].every(v => v == null || fitsUtf8mb3(v)))
+                return { valid: false, error: 'invalid: ORACLE_ADDRESS (no effective oracle price)' };
             try {
                 let db = timeMemoIsolatedApiView(indexer.indexerDb);
                 let ts = Number(blockTime);

@@ -33,6 +33,7 @@
 // the bundle-section family inside it; both live beside the tables they name, in
 // src/db/anchor_sql.js, and reach every caller through the entry's re-export.
 const { CHECKPOINT_VERSIONS, CHECKPOINT_SECTION_VERSIONS } = require('../../../db/anchor_sql.js');
+const { fitsUtf8mb3 } = require('../../../db/utf8mb3.js');
 
 // A DOGE txid as the hub announces it (XANC_V0_DONE.txid / XANC_FINALIZED.txid).
 const TXID_RE = /^[0-9a-fA-F]{64}$/;
@@ -40,6 +41,11 @@ const TXID_RE = /^[0-9a-fA-F]{64}$/;
 // Validate the getanchoraction request shape. Returns
 // {ok:true, block_index, checkpoint_seq, txid, version} on success (txid/version
 // null when not supplied), or {ok:false, error} otherwise.
+//
+// A success also carries `unmatchable: true` when chain or network holds a character
+// above U+FFFF. anchor_actions is utf8mb3, so no row can carry such a key and the answer
+// is "not anchored"; the caller skips the query, which would otherwise throw errno 1267
+// (Illegal mix of collations). The key is absent for every key the table can hold.
 //
 // `txid` and `version` are OPTIONAL narrowing filters added for the hub's
 // anchor-gossip gate: without them this RPC answers "is THIS CHECKPOINT anchored
@@ -67,7 +73,9 @@ function validateAnchorActionParams({ chain, network, block_index, checkpoint_se
             return { ok: false, error: 'version must be one of ' + CHECKPOINT_VERSIONS.join(', ') };
         wantVersion = ver;
     }
-    return { ok: true, block_index: bi, checkpoint_seq: cs, txid: wantTxid, version: wantVersion };
+    let v = { ok: true, block_index: bi, checkpoint_seq: cs, txid: wantTxid, version: wantVersion };
+    if (!fitsUtf8mb3(chain) || !fitsUtf8mb3(network)) v.unmatchable = true;
+    return v;
 }
 
 // Pick the anchor row a caller asked for from the candidate set. `rows` must be

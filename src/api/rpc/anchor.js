@@ -61,7 +61,9 @@ function anchorActionRpc({ indexer }){
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
-                let rows   = await db.doQuery(anchorActionQuery.ANCHOR_ACTIONS_SQL,
+                // An unmatchable key cannot name any utf8mb3 row, so it answers "not
+                // anchored" without the bind that would throw errno 1267.
+                let rows   = v.unmatchable ? [] : await db.doQuery(anchorActionQuery.ANCHOR_ACTIONS_SQL,
                     [chain, network, v.block_index, v.checkpoint_seq, ...anchorActionQuery.CHECKPOINT_VERSIONS]);
                 let row    = anchorActionQuery.selectAnchorRow(rows, { txid: v.txid, version: v.version });
                 return anchorActionQuery.buildAnchorActionResponse(indexer.config, latest, row,
