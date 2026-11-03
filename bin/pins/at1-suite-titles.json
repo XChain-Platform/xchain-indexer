@@ -13256,6 +13256,11 @@
       "EQUIV price canonical (WI-2 bump 2) the EQUIV key is XORACLE|<btc_height>|0 (gate keys on the BTC block height, #4232)",
       "EQUIV price canonical (WI-2 bump 2) unknown network \u2192 OFF (bare JSON, safe default)"
     ],
+    "a3333fb64c0bae72": [
+      "api body parsing runs behind the rate limiter counts and eventually refuses malformed-JSON POSTs",
+      "api body parsing runs behind the rate limiter counts and eventually refuses oversize POSTs, with RateLimit headers on the 413",
+      "api body parsing runs behind the rate limiter still parses and routes a well-formed call"
+    ],
     "a36f5937569a51c5": [
       "JSON-RPC list share reads @regression @tier1 changes metadata without changing root membership after a later rename",
       "JSON-RPC list share reads @regression @tier1 hashes an empty membership as MEMBERS|0 and reports tick-list type 1",
@@ -20287,9 +20292,10 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1603,
-      "titleCount": 15701,
+      "fileCount": 1604,
+      "titleCount": 15704,
       "files": {
+        "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
