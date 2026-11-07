@@ -21,7 +21,8 @@
  *
  ********************************************************************/
 
-// The bridge proof reason comes from the one place that raises it, so an exact-match test here cannot drift.
+// Define health-matched reasons once and import them at each block-loop raise site.
+// Keep the bridge proof reason at its consensus owner.
 const { BRIDGE_PROOF_BARRIER } = require('../consensus/bridge_proof_client/stall.js');
 const PRICE_LANDING_BARRIER = 'price_landing_barrier';
 const ROLLCALL_PROOF_REASON = 'rollcall_proof_unavailable';
@@ -111,12 +112,18 @@ function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClear
     return (now - windowStart) > graceFor(stallReason, graceMs, priceLandingGraceMs, proofWaitGraceMs);
 }
 
-// True when the current stall is nothing but a wait for WALL CLOCK to reach a
-// future-stamped block. stallClearsAt is set only by the time-keyed barriers, and only
-// to (block_time + watermark grace); a value still ahead of `now` therefore means the
-// block at the head of the queue is stamped in the future and no amount of local health
-// can make it processable sooner. Consensus forbids committing it, so this is the
-// indexer working exactly as designed, not degradation.
+// Identify a stall that only waits for WALL CLOCK to reach a future-stamped block.
+// Let stallClearsAt name the first wall-clock instant its time-keyed barrier can open,
+// or remain null when no such instant is available.
+//
+// Compute most instants as block_time plus that barrier's watermark grace.
+// Compute the anchor-attest instant from min(block_time, horizonBound) plus grace.
+//
+// Compute the price-landing instant from block_time plus one second with no grace.
+//
+// Treat a value still ahead of `now` as a future head block that local health cannot make
+// processable sooner. Consensus forbids committing it, so this is correct operation, not
+// degradation.
 //
 // It is a steady state, not a blip: a BTC-testnet4 miner stamping every block ~20 min
 // ahead rides the 2-hour future-time cap forever, so lag PINS at ~6 blocks and each block
@@ -270,6 +277,9 @@ function barrierCeilingExceeded(hold, ceilingMs, now){
 }
 
 module.exports = {
+    PRICE_LANDING_BARRIER,
+    ROLLCALL_PROOF_REASON,
+    CAPABILITY_PROOF_REASON,
     RETROACTIVE_REPLAY_NEEDS_GO,
     RETROACTIVE_REPLAY_DIVERGED,
     TRAIN_ACTIVATION_HALT_PREFIX,

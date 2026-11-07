@@ -217,7 +217,7 @@ function installObservability(app, opts = {}) {
 
     const httpRequests = registry.counter({
         name: 'http_requests_total',
-        help: 'HTTP requests handled, by method, route and status class',
+        help: 'HTTP requests handled, by method, route and status code',
         labelNames: ['method', 'route', 'status']
     });
     const httpDuration = registry.histogram({

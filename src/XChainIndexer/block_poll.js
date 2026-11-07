@@ -148,8 +148,9 @@ module.exports = {
         // lines. A no-op when nothing is stalled; see noteBarrierHold.
         this.noteBarrierHold(this.util.isNull(lastIndexerBlock) ? null : Number(lastIndexerBlock) + 1);
 
-        // Set flag to indicate fully synced and listening for block
-        if(!this.synced && !this.util.bclt(lastIndexerBlock, lastDecoderBlock)){
+        // Treat an unknown decoder tip as unsynced; empty and failed reads both return null.
+        if(!this.synced && !this.util.isNull(lastDecoderBlock) &&
+           !this.util.bclt(lastIndexerBlock, lastDecoderBlock)){
             this.synced = true;
             getLogger().info('Listening for blocks...');
         }

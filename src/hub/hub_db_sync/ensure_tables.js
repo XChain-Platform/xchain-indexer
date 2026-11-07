@@ -169,7 +169,7 @@ function parseDeclaredColumns(sql) {
     for (const raw of parts) {
         const line = raw.trim();
         if (!line) continue;
-        if (/^(PRIMARY|UNIQUE|INDEX|KEY|CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)) continue;
+        if (/^(PRIMARY|UNIQUE|INDEX|KEY|FULLTEXT|SPATIAL|CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)) continue;
         const tokens = line.split(/\s+/);
         if (tokens.length < 2) continue;
         const name     = tokens[0].replace(/`/g, '');

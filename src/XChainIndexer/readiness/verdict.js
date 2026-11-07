@@ -67,8 +67,8 @@ function nextBehindSince(previous, behind, now, lastBlockCommittedAt){
 }
 
 // The readiness verdict. Every input is a plain value so the rule is testable without
-// a block loop. Returns { ready, reasons, behind, noCommitForMs, chainLagKnown }
-// where reasons is the ordered list of every condition that holds (empty when ready):
+// a block loop. Returns { ready, reasons, behind, noCommitForMs, behindNoCommitForMs,
+// chainTipStaleForMs, chainLagKnown }, where reasons lists every condition that holds:
 //   indexer_db_unreachable - the committed height cannot be read.
 //   wedged                 - the liveness wedge (stallClass 'wedged').
 //   poll_silent            - the block-poll loop has stopped iterating.

@@ -226,20 +226,25 @@ async function mintGroupRows(indexerDb, groupRows, m){
 }
 
 // Mint one logical-reward group from every copy of each of its tuples
-// (anchor_reward_derive/copy_selection.js). Returns whether any tuple was minted.
+// (anchor_reward_derive/copy_selection.js). Track verified tuples separately so the
+// existing reconcile still runs when a verified tuple cannot write its reward row.
 async function mintGroupCopies(indexerDb, groupRows, m){
     let anyWritten = false;
+    let needsReconcile = false;
     for(let copies of copySelection.copiesByTuple(groupRows)){
-        let minted = await copySelection.mintTuple(copies, {
+        let selected = await copySelection.mintTuple(copies, {
             indexerDb, gatesActive: rowGatesActive, verifyAttestation,
             mint: Object.assign({}, m, { amount: familyAmount(copies[0]) }),
         });
-        if(minted){
-            observeDerive(minted, m.blockIndex);
-            anyWritten = true;
+        if(selected){
+            needsReconcile = true;
+            if(selected.written){
+                observeDerive(selected.row, m.blockIndex);
+                anyWritten = true;
+            }
         }
     }
-    return anyWritten;
+    return { anyWritten, needsReconcile };
 }
 
 // Derive all matured, not-yet-derived anchor/archive rewards from the mirrored
@@ -290,10 +295,14 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof, protoco
     let derived = 0;
     let mint = { blockIndex, proof, minConfirmations, protocolChanges };
     for(let [, groupRows] of groups){
-        let anyWritten = selectCopies
-            ? await mintGroupCopies(indexerDb, groupRows, mint)
-            : await mintGroupRows(indexerDb, groupRows, mint);
-        if(anyWritten){
+        let outcome;
+        if(selectCopies){
+            outcome = await mintGroupCopies(indexerDb, groupRows, mint);
+        } else {
+            let anyWritten = await mintGroupRows(indexerDb, groupRows, mint);
+            outcome = { anyWritten, needsReconcile: anyWritten };
+        }
+        if(outcome.needsReconcile){
             let first = groupRows[0];
             // Reconcile the single smallest-pubkey winner. The reconcile-log block_index is the
             // CURRENT BTC block, so a reorg of it restores collapsed losers (RB-ANCHOR). No ANCHOR
@@ -304,6 +313,8 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof, protoco
             await indexerDb.reconcileAnchorRewardWinner(
                 Number(first.round_reference), String(first.reward_type), Number(blockIndex), null,
                 arKey.rewardRoundQualifier(first.reward_type, first.snapshot_block));
+        }
+        if(outcome.anyWritten){
             derived++;
         }
     }

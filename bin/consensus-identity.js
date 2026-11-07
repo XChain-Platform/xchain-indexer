@@ -118,7 +118,7 @@
  *                                                     side lacks being a
  *                                                     MISMATCH; a pin block
  *                                                     missing network or a
- *                                                     cross-repo value, or a
+ *                                                     required identity value or a
  *                                                     pin block or
  *                                                     flat reading taken under
  *                                                     another regtest arming
@@ -301,7 +301,10 @@ function armingRefusal(where, moved) {
         + 'take both readings under the same environment');
 }
 
-// The network and the three cross-repo values, which a pin block must hold as strings to be compared at all.
+// Require network, the two cross-repo digests (consensus_rules_digest and gates_field_hash),
+// and repo-local carrier_logic_digest.
+// Keep gates_field, the comparable signed key list behind gates_field_hash, optional for
+// pin-block comparison.
 const REQUIRED_BLOCK_FIELDS = ['network', 'consensus_rules_digest', 'gates_field_hash', 'carrier_logic_digest'];
 
 // The block of a two-block pin whose whole arming env equals this run's (a block with no env was taken bare).

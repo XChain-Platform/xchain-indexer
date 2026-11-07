@@ -24,6 +24,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../observability/index.js');
+const { PRICE_LANDING_BARRIER } = require('./stall_health.js');
 
 module.exports = {
 
@@ -175,7 +176,7 @@ module.exports = {
                 await this.hubDbSync.waitForPriceLandingSync(blockToParse, blockTime, this.priceSyncTimeoutMs);
             } catch(err){
                 getLogger().warn('Deferring block ' + blockToParse + ' (price landing): ', err);
-                this.stallReason = 'price_landing_barrier';
+                this.stallReason = PRICE_LANDING_BARRIER;
                 this.stallClearsAt = this.landingClearsAt(blockToParse, blockTime);
                 return true;
             }

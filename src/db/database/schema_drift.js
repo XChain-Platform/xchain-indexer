@@ -156,7 +156,7 @@ module.exports = {
             let line = raw.replace(/--[^\n\r]*/g, '').trim();
             if(!line) continue;
             // Skip constraint/index/key lines - column definitions only
-            if(/^(PRIMARY|UNIQUE|INDEX|KEY|CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)) continue;
+            if(/^(PRIMARY|UNIQUE|INDEX|KEY|FULLTEXT|SPATIAL|CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)) continue;
             const tokens = line.split(/\s+/);
             if(tokens.length < 2) continue;
             const name = tokens[0].replace(/`/g, '');

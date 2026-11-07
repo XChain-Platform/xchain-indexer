@@ -31,10 +31,15 @@ describe('Database._migrationMode() @regression @tier1', function () {
 
     it('reads mode=auto from the header tag', function () {
         assert.strictEqual(modeOf('-- xchain:migration mode=auto\nALTER TABLE x ADD COLUMN y INT;'), 'auto');
+        assert.strictEqual(modeOf('-- xchain:migration mode=auto mode=auto\nSELECT 1;'), 'auto');
+        assert.strictEqual(modeOf('-- xchain:migration mode=auto\n-- see the mode=manual sibling\nSELECT 1;'), 'auto');
     });
 
     it('reads mode=manual from the header tag', function () {
         assert.strictEqual(modeOf('-- xchain:migration mode=manual\nDROP INDEX z ON x;'), 'manual');
+        assert.strictEqual(modeOf('-- xchain:migration mode=manual (COPY rebuild, not mode=auto)\nSELECT 1;'), 'manual');
+        assert.strictEqual(modeOf('-- xchain:migration mode=auto mode=manual\nSELECT 1;'), 'manual');
+        assert.strictEqual(modeOf('-- xchain:migration mode=auto\n-- xchain:migration mode=manual\nSELECT 1;'), 'manual');
     });
 
     it('defaults to manual when no tag is present (never auto-runs unknown DDL)', function () {
@@ -89,13 +94,17 @@ describe('committed migrations declare intent @regression @tier1', function () {
             // and the declared intent agree, so a tag the runner cannot see (e.g. below the first
             // SQL statement) fails CI instead of default-landing as `manual` while looking tagged
             // (the dead-tag gap this test exists to catch).
-            const anywhere = raw.match(/--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
-            assert.ok(anywhere,
+            const declaredModes = [...raw.matchAll(/^\s*--\s*xchain:migration\b([^\n]*)$/gim)]
+                .flatMap((header) => [...header[1].matchAll(/\bmode\s*=\s*([A-Za-z]+)\b/gi)])
+                .map((token) => token[1].toLowerCase());
+            assert.ok(declaredModes.length > 0,
                 file + ' has no explicit mode tag. Every migration must declare intent so a ' +
                 'destructive change can never silently auto-run at startup. Add a first line ' +
                 '(or place it anywhere in the leading comment prologue): ' +
                 '`-- xchain:migration mode=auto` (additive + idempotent) or `mode=manual` (gated).');
-            const declared = anywhere[1].toLowerCase();
+            assert.strictEqual(declaredModes.length, 1,
+                file + ' must carry exactly one mode token across its xchain:migration header lines.');
+            const declared = declaredModes[0];
             assert.strictEqual(modeOf(raw), declared,
                 file + ' declares mode=' + declared + ' but _migrationMode reads it as ' + modeOf(raw) +
                 ' - the tag sits where the runner cannot see it (it must be in the leading comment ' +

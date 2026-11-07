@@ -51,6 +51,7 @@ describe('public VOTE binding dry-run refusal', () => {
         assert.strictEqual(out.blockIndex, 900);
         assert.strictEqual(out.blockTime, 1700000000);
         assert.strictEqual(out.xchainFee, null);
+        assert.strictEqual(out.legs, null);
         assert.strictEqual(out.nativeFeeOwed, null);
         assert.strictEqual(out.coinPaymentsOwed, null);
         assert.strictEqual(ctx.calls.handler, 1);

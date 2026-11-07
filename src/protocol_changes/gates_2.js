@@ -304,12 +304,12 @@ addGate('protocol/constants.CROSS_SETTLE_MAX_PER_BLOCK', 'constant', 25);
 // DESTINATION CHAIN per block. Overflow carries forward in (snapshot_block,
 // transfer_id) order and is never dropped, the XCALL and CROSS_SETTLE discipline.
 //
-// UNGATED, unlike CROSS_SETTLE_MAX_PER_BLOCK above, and the difference is not a
-// preference: that cap re-sliced history a chain had already indexed, so it needed
-// its own flag day. This one ships INSIDE XCHAIN_BRIDGE_ACTIVATION. No chain has
-// ever applied an XBRIDGE settle leg below that height, so there is no history for
-// the cap to reinterpret and a second activation read would only add a way for the
-// two heights to disagree.
+// Unlike CROSS_SETTLE_MAX_PER_BLOCK above, this cap needs no separate gate.
+// CROSS_SETTLE keeps its gate even though the registry arms it at genesis on every
+// network. This cap ships INSIDE XCHAIN_BRIDGE_ACTIVATION, and no chain has ever
+// applied an XBRIDGE settle leg below that height. There is no bridge history for
+// the cap to reinterpret, and a second activation read would add a way for the two
+// heights to disagree.
 addGate('protocol/constants.XBRIDGE_MAX_PER_BLOCK', 'constant', 25);
 
 // ── Token-policy inheritance (xchain-token-bridge-policy spec, D22, R2) ─────

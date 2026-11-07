@@ -233,10 +233,9 @@ module.exports = {
         // default and never auto-applied. Anchoring to the comment prologue keeps the
         // body-buried protection (the scan stops at the first non-comment, non-blank
         // line, so no data literal or trailing prose can be seen) while accommodating
-        // any length of leading comment banner. Kept byte-for-byte in step with the
-        // sibling runner at xchain-decoder/src/db/migration_statements.js:migrationMode, and
-        // the xchain-node deploy guard mirrors the same scan, tag regex and default at
-        // src/services/migration_precondition_service/migration_scan.js:migrationMode.
+        // any length of leading comment banner. Keep this parser aligned with
+        // xchain-decoder/src/db/migration_statements.js, xchain-node/src/services/
+        // migration_precondition_service/migration_scan.js, and xchain-hub/src/db/schema/sql_migration_files.js.
         const lines    = String(raw).split('\n');
         const prologue = [];
         for(const line of lines){
@@ -244,8 +243,14 @@ module.exports = {
             if(trimmed === '' || trimmed.startsWith('--')){ prologue.push(line); continue; }
             break;   // first non-blank, non-comment line ends the prologue
         }
-        const m = prologue.join('\n').match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
-        return m ? m[1].toLowerCase() : 'manual';
+        const modes = [];
+        for(const line of prologue){
+            const header = /^\s*--\s*xchain:migration\b(.*)$/i.exec(line);
+            if(!header) continue;
+            for(const token of header[1].matchAll(/\bmode\s*=\s*([A-Za-z]+)\b/gi))
+                modes.push(token[1].toLowerCase());
+        }
+        return modes.length > 0 && modes.every(mode => mode === 'auto') ? 'auto' : 'manual';
     },
 
     // Destructive-DDL scan for the auto-apply path. Given a migration file's

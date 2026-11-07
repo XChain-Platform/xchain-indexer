@@ -63,7 +63,8 @@ function copiesByTuple(rows){
 // Mint one tuple from its sorted copies. `c` carries the checks the derive pass applies to a
 // row (gatesActive, verifyAttestation), the db handle and the mint context mintProvenRow takes,
 // including the block's protocolChanges registry for the legacy reward pin verdict.
-// Returns the minted copy, or null when the tuple pays nothing; throws
+// Returns the verified copy and whether its reward row was written, or null when no copy
+// verifies; throws
 // AnchorProofUnavailableError when no copy proves and one is still undecided.
 async function mintTuple(copies, c){
     let undecided = null;
@@ -72,8 +73,8 @@ async function mintTuple(copies, c){
         if(!await c.verifyAttestation(c.indexerDb, row)) continue;
         let verdict = await proveRow(row, c.mint);
         if(verdict === 'verified'){
-            await mintRow(c.indexerDb, row, c.mint);
-            return row;
+            let written = await mintRow(c.indexerDb, row, c.mint);
+            return { row, written: written === true };
         }
         if(verdict === 'unknown' && undecided === null) undecided = row;
     }

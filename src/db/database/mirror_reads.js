@@ -189,9 +189,11 @@ module.exports = {
 
     // Archive heads at one match_batch_seq authored by one address, modeled on
     // getMaxArchiveBatchSeqByAuthor's author joins, keyed by seq instead of aggregated to a max.
-    // Consensus input: Anchor.parseFold's v3 fold re-issue guard (checkFoldArchiveReissue ->
-    // archiveReissueRefusal) rejects a fold on a 'conflict' over these rows, so changing the
-    // row set (version, status or author filter) moves fold verdicts and needs a flag day.
+    // Feed both archive re-issue guards through archiveReissueRefusal: Anchor.parseFold's v3
+    // checkFoldArchiveReissue and parseArchiveHead's v1 checkHeadArchiveReissue.
+    // Gate the v1 path with ARCHIVE_V1_REISSUE_REFUSAL_ACTIVATION.
+    // Treat a row-set change (version, status or author filter) as moving both fold and v1
+    // head verdicts, requiring a flag day that covers both paths.
     async getArchiveHeadsByAuthorAndSeq(author, batchSeq){
         let rows = await this.doQuery(
             `SELECT a.batch_crc32, a.match_count, s.status

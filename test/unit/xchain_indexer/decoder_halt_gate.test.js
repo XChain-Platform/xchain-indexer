@@ -103,6 +103,23 @@ describe('the poll pass stops advancing while the decoder reports a durable REOR
         const { ix, calls } = makeIndexer({ halted: false });
         await ix.pollDecoderOnce({}, 50);
         assert.strictEqual(calls.catchUpToDecoder, 1);
+
+        // Keep an unknown tip unsynced, while preserving the known level-tip transition.
+        const unknown = makeIndexer({ halted: false }).ix;
+        unknown.synced = false;
+        unknown.readPollCursors = async () => ({ lastProcessedReorgId: null, unprocessedReorgs: [],
+                                                lastDecoderBlock: null, lastIndexerBlock: 70 });
+        unknown.catchUpToDecoder = async () => ({ lastIndexerBlock: 70, lastDecoderBlock: null });
+        await unknown.pollDecoderOnce({}, 50);
+        assert.strictEqual(unknown.synced, false);
+
+        const level = makeIndexer({ halted: false }).ix;
+        level.synced = false;
+        level.readPollCursors = async () => ({ lastProcessedReorgId: null, unprocessedReorgs: [],
+                                              lastDecoderBlock: 70, lastIndexerBlock: 70 });
+        level.catchUpToDecoder = async () => ({ lastIndexerBlock: 70, lastDecoderBlock: 70 });
+        await level.pollDecoderOnce({}, 50);
+        assert.strictEqual(level.synced, true);
     });
 });
 

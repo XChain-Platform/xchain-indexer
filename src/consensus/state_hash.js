@@ -142,10 +142,15 @@
  * state hash depends on that block's mutated rows alone.
  *
  * DEGRADING ON OLDER SCHEMAS. A class whose table or column does not exist yet
- * (errno 1146 or 1054) contributes an empty array instead of failing the block,
- * so a node that has not run a later migration still computes a hash. Any other
- * numeric errno is rethrown, and an error with no numeric errno is swallowed,
- * which is the behaviour the monolithic module had before it was split.
+ * (errno 1146 or 1054) contributes an empty array instead of failing the block.
+ *
+ * Let a node that has not run a later migration still compute a hash.
+ *
+ * Rethrow every other error, including one with no numeric errno.
+ * Stop the block on a connection, transaction-fence or plain Error.
+ *
+ * Never hash such a fault as an empty class on one node.
+ * Keep this rule in state_hash/tolerant_query.js.
  *
  * RULES FOR CHANGING THIS MODULE. A new class needs a gate in activation.js, a
  * collector in the matching section module, an entry in the composition below and

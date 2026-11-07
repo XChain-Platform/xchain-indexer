@@ -180,7 +180,10 @@ try {
 
 // VM boot gates and their diagnostics, pure so each is unit-testable (actions_class/vm_runtime.js).
 const vmRuntime = require('./actions_class/vm_runtime.js');
-const { assertVmRuntimeLoadable, assertConsensusRuntime, assertVmConsensusEpoch, assertConsensusDependencies } = vmRuntime;
+const { assertVmRuntimeLoadable, assertConsensusRuntime, assertVmConsensusEpoch,
+    assertConsensusDependencies, logHostPlatformNotice } = vmRuntime;
+const { getLogger } = require('../observability/index.js');
+let hostPlatformNoticeLogged = false;
 
 // Actions.prototype methods kept beside this loader, one file per concern, mixed in below
 // the class the way db/index.js assembles Database from its table-family mixins.
@@ -273,6 +276,10 @@ class Actions {
 
         // Consensus-runtime gate: fail CLOSED on an off-pin engine.
         assertConsensusRuntime(XChainVM);
+        if(!hostPlatformNoticeLogged){
+            hostPlatformNoticeLogged = true;
+            logHostPlatformNotice(getLogger());
+        }
 
         // VM, staking, PRICE, attestation, ANCHOR, NODEPROOF, ROLLCALL, cross-chain call and
         // bridge handler instances, wired only once the VM above is loaded and gated.
@@ -341,6 +348,8 @@ Object.assign(Actions, {
     // Pure consensus-runtime gate, exported so its fail-closed contract is unit-testable
     // without a real off-pin engine.
     assertConsensusRuntime: assertConsensusRuntime,
+    classifyHostPlatform:   vmRuntime.classifyHostPlatform,
+    logHostPlatformNotice:  logHostPlatformNotice,
     // Pure VM-epoch boot gate and the one copy of the epoch it expects, exported for the same reason.
     assertVmConsensusEpoch:        assertVmConsensusEpoch,
     EXPECTED_VM_CONSENSUS_VERSION: vmRuntime.EXPECTED_VM_CONSENSUS_VERSION,

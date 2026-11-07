@@ -329,8 +329,8 @@ module.exports.assertConsensusVersionPin = assertConsensusVersionPin;
 // UNARMED mainnet sentinel for UNCAPPED_MAX_SUPPLY_ZERO, exported so the suite can assert
 // the gate is still waiting on the operator's flag day rather than armed at a guessed value.
 module.exports.UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME;
-// UNARMED mainnet sentinel for the CROSS_SETTLE cap, exported for the same reason: the suite asserts the
-// CROSS_SETTLE cap is still waiting on the operator's anchor, never armed at a guess.
+// Mainnet CROSS_SETTLE cap arm, exported so the suite pins the genesis value
+// established by the registry source instead of allowing it to drift.
 module.exports.CROSS_SETTLE_CAP_MAINNET_TIME = CROSS_SETTLE_CAP_MAINNET_TIME;
 // UNARMED mainnet sentinel for the per-subcommand root discriminator, exported for the same
 // reason: the suite asserts this consensus-preimage change is still waiting on the operator's

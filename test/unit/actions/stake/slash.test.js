@@ -181,6 +181,11 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
             // Conservation: bounty + treasury == burned (never mints, never loses).
             assert.strictEqual(Number(indexer.util.bcadd(s.bounty, s.treasury, 8)), 1000);
             assert.strictEqual(typeof s.bounty, 'string');   // ledger sees plain strings, not BigNumbers
+
+            const tiny = handler.bountyTreasurySplit('cross_chain', '0.000001');
+            assert.strictEqual(tiny.bounty, '0.00000005');
+            assert.strictEqual(tiny.treasury, '0.00000095');
+            assert.strictEqual(indexer.util.bcstr(indexer.util.bcadd(tiny.bounty, tiny.treasury, 8)), '0.000001');
         });
 
         it('clamps the bounty to BOUNTY_CAP', function () {
@@ -211,6 +216,11 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
             assert.strictEqual(Number(s.bounty), 50);    // floor wins over the 25 the bps would give
             assert.strictEqual(Number(s.treasury), 450); // remainder burned (no TREASURY_ADDRESS)
             assert.strictEqual(s.treasuryAddr, null);
+
+            withSlashConfig({ BOUNTY_BPS: 500, BOUNTY_FLOOR: '1' });
+            const tinyRemainder = handler.bountyTreasurySplit('cross_chain', '1.00000005');
+            assert.strictEqual(tinyRemainder.bounty, '1');
+            assert.strictEqual(tinyRemainder.treasury, '0.00000005');
         });
     });
 });

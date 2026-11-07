@@ -259,6 +259,20 @@ function registerColumnParsingTests() {
             ['batch_block_time', true, true],
             ['round_number', true, false]
         ]);
+        const indexed = [
+            'CREATE TABLE t (',
+            '  a TEXT,',
+            '  b TEXT,',
+            '  fulltext_score INT NULL,',
+            '  shape GEOMETRY NOT NULL,',
+            '  FULLTEXT KEY ft (a, b),',
+            '  FULLTEXT INDEX ft2 (a),',
+            '  FULLTEXT ft3 (b),',
+            '  SPATIAL INDEX sp (shape)',
+            ') ENGINE=InnoDB;'
+        ].join('\n');
+        assert.deepStrictEqual(parseDeclaredColumns(indexed).map((c) => c.name),
+            ['a', 'b', 'fulltext_score', 'shape']);
     });
 }
 

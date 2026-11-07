@@ -65,6 +65,8 @@ const SYNC_SRC = fs.readFileSync(SYNC_ENTRY, 'utf8') + '\n' +
 // rather than a rename that slides through.
 const { stallReasonSites, countStallReasonAssignments } = require('../../../helpers/stall_reason_sites.js');
 const { BRIDGE_PROOF_BARRIER } = require('../../../../src/consensus/bridge_proof_client/stall.js');
+const { PRICE_LANDING_BARRIER, ROLLCALL_PROOF_REASON,
+        CAPABILITY_PROOF_REASON } = require('../../../../src/XChainIndexer/stall_health.js');
 const IMPORTED_REASONS = { REMOTE_TOKEN_RETRY_STALL_REASON, BRIDGE_PROOF_BARRIER };
 function graceWiring() {
     const pairs = [];
@@ -153,6 +155,14 @@ const EXPECTED = [
 describe('barrier stallClearsAt grace-field mapping @regression', function () {
 
     it('each barrier keys stallClearsAt on its own grace field', function () {
+        assert.deepStrictEqual([PRICE_LANDING_BARRIER, ROLLCALL_PROOF_REASON, CAPABILITY_PROOF_REASON],
+            ['price_landing_barrier', 'rollcall_proof_unavailable', 'capability_proof_unavailable'],
+            'published stall reason words are a wire contract with external consumers');
+        assert.strictEqual((INDEXER_SRC.match(/\bconst\s+(?:PRICE_LANDING_BARRIER|ROLLCALL_PROOF_REASON|CAPABILITY_PROOF_REASON)\s*=\s*'[^']+';/g) || []).length, 3,
+            'each health-matched stall reason must have one declaration');
+        assert.doesNotMatch(INDEXER_SRC,
+            /this\.stallReason\s*=\s*'(?:price_landing_barrier|rollcall_proof_unavailable|capability_proof_unavailable)'/,
+            'raise sites must import the reason that health matches');
         assert.strictEqual(stallReasonSites(INDEXER_SRC, IMPORTED_REASONS).length,
             countStallReasonAssignments(INDEXER_SRC),
             'a non-null stallReason assignment is outside the scan; extend stall_reason_sites.js to read it');

@@ -25,6 +25,8 @@
  ********************************************************************/
 
 const assert = require('assert');
+const { toIndexerConfig } = require('../../../src/coins/to_indexer_config.js');
+const { hubConfigMethods } = require('../../../src/XChainIndexer/hub_config.js');
 
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
@@ -109,8 +111,8 @@ const GOLDEN_VALIDATOR_QUERY_LIMIT = 1000;
 // unlike the GAS_* pair, they are NOT identical across chains, so the golden is
 // PER-CHAIN.
 //
-// ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY and STAKING stay off the
-// hub config overlay's live-poll list. Polling them live is a soft-fork hazard: federation nodes
+// Every golden consensus key stays off the hub config overlay's live-poll list.
+// Polling one live is a soft-fork hazard: federation nodes
 // observe a committed hub change at different block heights, so a live push would stamp
 // divergent activation_block / expiration-fee rows for the SAME on-chain tx. They are
 // treated like GAS_*: node-local, changeable only via a coordinated upgrade gated on an
@@ -140,10 +142,26 @@ const GOLDEN_STAKING_PER_CHAIN = {
     LTC:  { ACTIVATION_DELAY_BLOCKS: 24, COOLDOWN_BLOCKS: 4032 },
     DOGE: { ACTIVATION_DELAY_BLOCKS: 60, COOLDOWN_BLOCKS: 10080 }
 };
-// Consensus params that must NOT be live-polled by the hub config overlay; doing so races
-// the federation into a soft fork. The behavioural test below asserts the overlay ignores
-// hub attempts to change them.
-const NON_POLLED_CONSENSUS_PARAMS = ['ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY', 'STAKING'];
+function frozenConsensusConfig(coin){
+    const config = toIndexerConfig(coin, 'regtest');
+    return {
+        GAS_PRICE: config.GAS_PRICE,
+        GAS_SCHEDULE: config.GAS_SCHEDULE,
+        VALIDATOR_QUERY_LIMIT: config.VALIDATOR_QUERY_LIMIT,
+        ...Object.fromEntries(Object.keys(GOLDEN_FEE_PARAMS_SHARED).map(key => [key, config[key]])),
+        ...Object.fromEntries(Object.keys(GOLDEN_FEE_PARAMS_PER_CHAIN[coin]).map(key => [key, config[key]])),
+        STAKING: config.STAKING
+    };
+}
+
+function divergentHubValue(value){
+    if(typeof value === 'number') return value + 1;
+    if(typeof value === 'string') return value + '-hub';
+    if(Array.isArray(value)) return value.map(divergentHubValue);
+    if(value && typeof value === 'object')
+        return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, divergentHubValue(entry)]));
+    throw new TypeError('consensus golden has an unsupported value type');
+}
 
 describe('consensus parameters are frozen (track 8 guard) @regression', function(){
     it('GAS_SCHEDULE + GAS_PRICE equal the golden on every chain (identical across BTC/LTC/DOGE)', function(){
@@ -184,46 +202,22 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
 
 describe('consensus parameters are frozen (track 8 guard) @regression', function(){
     it('hub config overlay does NOT live-poll consensus params (soft-fork guard)', function(){
-        // The overlay (mergeHubParams) must ignore hub-pushed values for any param that
-        // feeds block-hashed state. If a future edit re-adds one of NON_POLLED_CONSENSUS_PARAMS
-        // to the SCALAR_PARAMS/BLOB_PARAMS poll lists, the local consensus value below would be
-        // overwritten by the divergent hub value and this reddens.
-        //
-        // Explicit timeout, not the file's own: this is the first require of
-        // XChainIndexer.js in the process, which pulls in xchain-vm (isolated-vm's
-        // native binding load + the bundled VM's own module graph), not a DB pool
-        // (db.js's createPool is lazy and does no I/O at require time, measured
-        // separately at ~50ms). Measured cold on 2026-09-12: 1463ms on the very
-        // first require of a fresh shell, 283-593ms once the OS file cache is warm.
-        // That first-require variance sits close enough to mocha's bare 2000ms
-        // default (this file's own .mocharc.yml timeout of 5000ms does not apply
-        // when the file is run standalone with --no-config) to flake on a slower
-        // or more loaded CI runner; mocha times out a synchronous test exceeding
-        // its budget same as an async one. Widen only this case's budget rather
-        // than the whole suite's, so a genuine hang here still reddens.
-        this.timeout(10000);
-        let XChainIndexer;
-        try { XChainIndexer = require('../../../src/XChainIndexer.js'); }
-        catch(e){ this.skip(); return; } // heavy deps (db/vm) absent in standalone CI
-        const stub = { config: {
-            COIN: 'BTC', NETWORK: 'regtest',
-            EXPIRATION_FEE_PER_DAY: '0.00547945',
-            STAKING: { ACTIVATION_DELAY_BLOCKS: 6, COOLDOWN_BLOCKS: 1000 }
-        }};
-        // Hub commits divergent values for every consensus param this finding covers.
-        // Full-name-keyed, the way the hub actually serves its configs tree. A ticker-keyed
-        // tree here would make this guard pass for the wrong reason: the overlay would find
-        // nothing to apply rather than deliberately refusing to apply it.
-        const hubAttempt = { bitcoin: { regtest: { 'xchain-indexer': {
-            EXPIRATION_FEE_PER_DAY: '9.99999999',
-            ACTIVATION_DELAY_BLOCKS: 999,
-            STAKING: { ACTIVATION_DELAY_BLOCKS: 999, COOLDOWN_BLOCKS: 1 }
-        }}}};
-        XChainIndexer.prototype.mergeHubParams.call(stub, hubAttempt);
-        assert.strictEqual(stub.config.EXPIRATION_FEE_PER_DAY, '0.00547945', 'EXPIRATION_FEE_PER_DAY was live-polled');
-        assert.strictEqual(stub.config.STAKING.ACTIVATION_DELAY_BLOCKS, 6, 'STAKING.ACTIVATION_DELAY_BLOCKS was live-polled');
-        assert.strictEqual(stub.config.STAKING.COOLDOWN_BLOCKS, 1000, 'STAKING.COOLDOWN_BLOCKS was live-polled');
+        // Drive every golden through the lightweight overlay so standalone lanes cannot skip the guard.
+        const localConsensus = frozenConsensusConfig('BTC');
+        const stub = { config: { COIN: 'BTC', NETWORK: 'regtest', ...localConsensus } };
+        const snapshot = JSON.parse(JSON.stringify(stub.config));
+        const hubParams = Object.fromEntries(Object.entries(localConsensus)
+            .map(([key, value]) => [key, divergentHubValue(value)]));
+        hubParams.ACTIVATION_DELAY_BLOCKS = 999;
+        hubParams.COOLDOWN_BLOCKS = 1;
+        const hubAttempt = { bitcoin: { regtest: { 'xchain-indexer': hubParams } } };
+
+        hubConfigMethods.mergeHubParams.call(stub, hubAttempt);
+        for(const key of Object.keys(localConsensus))
+            assert.deepStrictEqual(stub.config[key], snapshot[key], key + ' was live-polled');
         assert.strictEqual(stub.config.ACTIVATION_DELAY_BLOCKS, undefined, 'top-level ACTIVATION_DELAY_BLOCKS was live-polled');
+        assert.strictEqual(stub.config.COOLDOWN_BLOCKS, undefined, 'top-level COOLDOWN_BLOCKS was live-polled');
+        assert.deepStrictEqual(stub.config, snapshot, 'a consensus param was live-polled');
     });
 
     it('the consensus-critical math libraries are pinned to the frozen versions (decimal.js + mathjs)', function(){

@@ -31,7 +31,7 @@ const {
     REMOTE_TOKEN_RETRY_STALL_REASON
 } = require('../actions/cross_chain_remote_token.js');
 const { capabilityReadHeld } = require('../consensus/capability_snapshot_proof/held_read.js');
-const CAPABILITY_PROOF_REASON = 'capability_proof_unavailable';
+const { CAPABILITY_PROOF_REASON } = require('./stall_health.js');
 const CAPABILITY_PROOF_POLL_MS = 250;
 
 module.exports = {

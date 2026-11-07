@@ -23,6 +23,7 @@ const AnchorRecovery   = require('../../../bin/recovery.js');
 const checkpointSource = require('../../../src/consensus/bridge_proof_client/checkpoint_source.js');
 const gateRegistry     = require('../../../src/consensus/gate_registry');
 const eq               = require('../../../src/consensus/equivocation_header.js');
+const CHECKPOINT_VECTORS = require('../../fixtures/checkpoint_canonical_vectors.json');
 
 const CKPT_KEY     = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
 const STATE_ROOT   = 'D4'.repeat(32);
@@ -59,6 +60,12 @@ describe('recovery checkpointCanonical: parity with the gated checkpoint family 
         const roundId = 'BTC|regtest|500|7';
         assert.strictEqual(actual,
             eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, frozenBase('regtest', 100) + SUFFIX));
+        for (const vector of CHECKPOINT_VECTORS.cases) {
+            for (const build of [AnchorRecovery.checkpointCanonicalForTest, checkpointSource.checkpointCanonical]) {
+                if (vector.throws) assert.throws(() => build(vector.checkpoint), undefined, vector.name);
+                else assert.strictEqual(build(vector.checkpoint), vector.expected, vector.name);
+            }
+        }
     });
 
     it('below the flag day, roots present: the rootless hub form, which the mirrored-row rebuild extends', function () {

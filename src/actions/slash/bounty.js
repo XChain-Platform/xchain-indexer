@@ -48,10 +48,10 @@ function bountyTreasurySplit(config, util, capability, burned){
     if(!Number.isFinite(bps) || bps < 0) bps = 0;
     if(bps > 10000) bps = 10000;
 
-    // bc* return mathjs BigNumbers → String() so the ledger sees plain amount strings
-    // (the convention everywhere else, e.g. STAKE's debits).
+    // Render bc* results as plain decimal text so every downstream consumer sees
+    // canonical amounts rather than exponent notation.
     let bounty = (bps > 0)
-        ? String(util.bcdiv(util.bcmul(total, String(bps), 8), '10000', 8))
+        ? util.bcstr(util.bcdiv(util.bcmul(total, String(bps), 8), '10000', 8))
         : '0';
     // FLOOR: guarantee a minimum payout so a submitter always clears the (BTC-tx + protocol)
     // submission cost, even on a bond at MIN_STAKE. Applied before the cap; the final clamp
@@ -67,7 +67,7 @@ function bountyTreasurySplit(config, util, capability, burned){
     if(util.bcgt(bounty, total))
         bounty = total;
 
-    let treasury     = String(util.bcsub(total, bounty, 8));
+    let treasury     = util.bcstr(util.bcsub(total, bounty, 8));
     let treasuryAddr = cfg['TREASURY_ADDRESS'] ? String(cfg['TREASURY_ADDRESS']) : null;  // null = BURN
     return { bounty: bounty, treasury: treasury, treasuryAddr: treasuryAddr };
 }

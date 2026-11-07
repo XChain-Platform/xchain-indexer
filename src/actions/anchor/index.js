@@ -171,9 +171,8 @@ class Anchor {
         this.formats[3] = 'VERSION|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT|...|ARCHIVE_COUNT|...|PUBLISHER|ATTEST_SIG_COUNT|...';
     }
 
-    // Canonical signing string: MUST byte-match the hub's
-    // StateCheckpointEngine.canonicalCheckpoint (+ the archive extension for v1)
-    // and the SDK CheckpointVerifier.
+    // Match the hub checkpoint bytes for every row admitted to an ANCHOR bundle.
+    // Preserve FORMAT 0's unconditional roots and absent SUPERSEDE leg below.
     canonical(d){
         let base = ['XCHECKPOINT', d['CHAIN'], d['NETWORK'], String(d['BLOCK_INDEX_CHECKPOINTED']),
                     d['BLOCK_HASH'], d['LEDGER_HASH'], d['ACTIONS_HASH'], d['CONTRACT_HASH'],
@@ -208,6 +207,9 @@ class Anchor {
             // Fail-closed if it ever breaks: the hub signed such a row rootless, so every
             // section signature fails and the all-or-nothing verdict takes the whole bundle down. It never
             // adopts unsigned roots.
+            //
+            // Omit SUPERSEDE because the v0 wire carries neither supersession field.
+            // Rely on the hub bundle and fold guards to exclude superseding rows.
             //
             // `d` is ONE section, rebuilt with the header NETWORK and with SNAPSHOT_BLOCK =
             // its own SECTION_SNAPSHOT_BLOCK, the block its signatures were produced over.

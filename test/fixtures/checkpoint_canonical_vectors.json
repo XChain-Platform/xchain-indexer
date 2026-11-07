@@ -1,0 +1,69 @@
+{
+  "description": "Authoritative XCHECKPOINT signing-string vectors shared by every checkpoint builder.",
+  "notes": [
+    "Regtest activates checkpoint commitment, supersession, and EQUIV at height zero.",
+    "The ANCHOR v0 section builder is excluded because its wire intentionally carries no supersession fields."
+  ],
+  "cases": [
+    {
+      "name": "plain rooted regtest checkpoint",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "regtest",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 480,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2
+      },
+      "expected": "EQUIV|XCHECKPOINT|BTC|regtest|500|7|0||XCHECKPOINT|BTC|regtest|500|bh|lh|ah|ch|7|480|d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4|1|e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5|2"
+    },
+    {
+      "name": "superseding rooted regtest checkpoint",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "regtest",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 480,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2,
+        "supersedes_from": "400",
+        "rules_digest": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB"
+      },
+      "expected": "EQUIV|XCHECKPOINT|BTC|regtest|500|7|0||XCHECKPOINT|BTC|regtest|500|bh|lh|ah|ch|7|480|d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4|1|e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5|2|SUPERSEDE|400|abababababababababababababababababababababababababababababababab"
+    },
+    {
+      "name": "incomplete supersession fields are rejected",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "regtest",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 480,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2,
+        "supersedes_from": 400
+      },
+      "throws": true
+    }
+  ]
+}

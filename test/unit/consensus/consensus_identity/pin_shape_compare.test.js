@@ -15,7 +15,7 @@
  *
  * bin/consensus-identity.js --compare against a pin that lacks fields. A field
  * either side lacks is a MISMATCH (exit 1), and a two-block pin block without
- * the network or a cross-repo value is refused (exit 2), so an empty or
+ * the network or a required identity value is refused (exit 2), so an empty or
  * half-written block can never compare nothing and pass. Also covers the
  * regenerator appending the fields a block lacks, which keeps the committed
  * pin complete. Driven as a real child process with a closed environment.

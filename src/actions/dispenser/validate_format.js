@@ -66,8 +66,8 @@ module.exports = {
         }
 
         // A balance dispenser must hand out something. Empty or "0" GIVE_AMOUNT
-        // passed every check above (the format rule at 184 only runs when the field
-        // is present, and the block above binds only GIVE_OWNERSHIP=1), and opened a
+        // passed every check above (the GIVE_AMOUNT format check only runs when
+        // the field is present, and the block above binds only GIVE_OWNERSHIP=1), and opened a
         // dispenser that settles buyer payments as VALID fills crediting nothing:
         // every downstream guard reads a non-positive GIVE_AMOUNT as "ownership
         // dispenser" and skips (dispense.js giveAmountIsPositive clamp, the

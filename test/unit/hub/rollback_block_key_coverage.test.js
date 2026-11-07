@@ -38,7 +38,7 @@ function declaredColumns(table){
     for(const raw of body[1].split('\n')){
         const line = raw.trim();
         if(!line) continue;
-        if(/^(PRIMARY|UNIQUE|INDEX|KEY|CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)) continue;
+        if(/^(PRIMARY|UNIQUE|INDEX|KEY|FULLTEXT|SPATIAL|CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)) continue;
         const m = /^`?([A-Za-z_][A-Za-z0-9_]*)`?\s+/.exec(line);
         if(m) cols.add(m[1].toLowerCase());
     }
