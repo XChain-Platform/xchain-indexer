@@ -210,7 +210,7 @@ module.exports = {
             // height the mirror is about to lose.
             if (drain.fullTable || drain.floorStart)
                 await this.reconcileForeignPriceRounds(drain.servedPriceKeys, drain.priceKeysComplete, drain.maxServedRound,
-                                                       drain.floorStart ? drain.priceFloor : 0);
+                                                       drain.floorStart ? drain.priceFloor : 0, drain.minServedRound);
             if (!(await this.replayDrainedPriceEvents())) return false;
             await this.refreshPriceSyncHeight();
         }

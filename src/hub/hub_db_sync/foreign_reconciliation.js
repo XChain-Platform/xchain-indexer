@@ -153,12 +153,44 @@ module.exports = {
     //
     // Delete rather than mark: unlike a match, a price round has no status consensus
     // treats as a tombstone (a 'skipped' row IS a legitimate hub row), and the hub's own
-    // row for that key re-arrives on the next drain if it exists. Local `skipped` rows are
-    // left alone: no consensus read sees them, and the upsert converges them in place.
-    async reconcileForeignPriceRounds(servedKeys, keysComplete, maxServedRound, floorTs) {
+    // row for that key re-arrives on the next drain if it exists.
+    //
+    // Local `skipped` rows are judged by one narrower rule. No consensus read sees them, and
+    // the upsert converges any key a later page addresses, which covers every round at or
+    // above the hub's lowest. Below it nothing ever arrives: a rebuilt hub whose rounds
+    // start higher strands the previous hub's skipped placeholders there for good, and the
+    // mirror grows to several times the hub while serving rounds the hub does not hold. So
+    // a drain from zero, which saw the hub's lowest round, removes local skipped rows below
+    // it. That needs no key set, so it holds when the finalized set overflowed its cap.
+    async reconcileForeignPriceRounds(servedKeys, keysComplete, maxServedRound, floorTs, minServedRound) {
         if (!servedKeys) return;
         let stale = await this.staleForeignPriceRoundIds(servedKeys, keysComplete, maxServedRound, floorTs);
-        if (stale === null || stale.length === 0) return;
+        if (stale === null) return;
+        let staleSkipped = await this.staleSkippedPriceRoundIds(floorTs, minServedRound);
+        if (staleSkipped.length > 0) await this.deleteForeignPriceRows(staleSkipped, 'skipped');
+        if (stale.length === 0) return;
+        await this.deleteForeignPriceRows(stale, 'finalized');
+        await this.refreshPriceSyncHeight();
+    },
+
+    // Local skipped rows below the lowest round a drain from zero served. Empty when the
+    // drain started at the mirror floor (it never saw the hub's oldest rows), served
+    // nothing, or the read failed.
+    async staleSkippedPriceRoundIds(floorTs, minServedRound) {
+        if (Number(floorTs) > 0 || minServedRound === null || minServedRound === undefined) return [];
+        let floorRound = Number(minServedRound);
+        if (!Number.isFinite(floorRound)) return [];
+        try {
+            let locals = await this.hubDb.doQuery(
+                "SELECT id FROM price_snapshots WHERE status = 'skipped' AND round_number < ?", [floorRound]);
+            return (locals || []).map(r => Number(r.id)).filter(Number.isFinite);
+        } catch (e) {
+            getLogger().warn('HubDbSync: skipped price round reconciliation skipped (read failed):', e);
+            return [];
+        }
+    },
+
+    async deleteForeignPriceRows(stale, status) {
         // Chunked so one oversized IN list can never blow the statement limit.
         for (let i = 0; i < stale.length; i += 500) {
             let chunk = stale.slice(i, i + 500);
@@ -170,10 +202,10 @@ module.exports = {
                 return;
             }
         }
-        getLogger().warn('HubDbSync: removed ' + stale.length + ' finalized price_snapshots row(s) this hub does ' +
-            'not hold (a repointed or rebuilt hub leaves the previous one\'s rounds behind, and the newest ' +
-            'round_number wins every price read); the mirror now holds only what this hub serves');
-        await this.refreshPriceSyncHeight();
+        getLogger().warn('HubDbSync: removed ' + stale.length + ' ' + status + ' price_snapshots row(s) this hub ' +
+            'does not hold (a repointed or rebuilt hub leaves the previous one\'s rounds behind' +
+            (status === 'finalized' ? ', and the newest round_number wins every price read' : '') +
+            '); the mirror now holds only what this hub serves');
     },
 
     // A hub rebuild can reuse checkpoint_seq for a different signed lineage. The ordinary

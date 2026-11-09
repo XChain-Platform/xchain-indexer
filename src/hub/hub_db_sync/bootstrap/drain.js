@@ -215,6 +215,7 @@ module.exports = {
             servedPriceKeys:   (table === 'price_snapshots') ? new Set() : null,
             priceKeysComplete: true,
             maxServedRound:    0,
+            minServedRound:    null,   // lowest round served, any status (recordServedRow)
             // capability_snapshots only: the same problem as price_snapshots, arrived at by the
             // same route. Its snapshot endpoint is UNFILTERED too (hub api.js: SELECT * ...
             // WHERE id > ?), so a complete re-page is the hub's whole table; it carries no
