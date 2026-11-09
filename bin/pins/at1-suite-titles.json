@@ -18131,19 +18131,6 @@
       "rollcall signer request validation rejects invalid epoch and maximum block times",
       "rollcall signer request validation rejects non-array key inputs"
     ],
-    "e2dd68fbffb9df1b": [
-      "HubDbSync price mirror repoint @regression @tier2 clears a stale finalized row at a round this hub holds as skipped",
-      "HubDbSync price mirror repoint @regression @tier2 clears the mirror when the hub serves an empty table (a rebuilt hub)",
-      "HubDbSync price mirror repoint @regression @tier2 clears the previous hub rounds a repoint leaves behind",
-      "HubDbSync price mirror repoint @regression @tier2 falls back to the round ceiling when the served-key set overflows its cap",
-      "HubDbSync price mirror repoint @regression @tier2 keeps bootstrapping when the reconciliation read itself fails",
-      "HubDbSync price mirror repoint @regression @tier2 leaves local skipped rows alone",
-      "HubDbSync price mirror repoint @regression @tier2 leaves the price height at the current hub rather than the retired one",
-      "HubDbSync price mirror repoint @regression @tier2 never reconciles a PARTIAL drain",
-      "HubDbSync price mirror repoint @regression @tier2 never reconciles a table that is not price_snapshots",
-      "HubDbSync price mirror repoint @regression @tier2 refuses to delete when no served key matches, which is a key-derivation fault",
-      "HubDbSync price mirror repoint @regression @tier2 touches nothing when the mirror already holds exactly what the hub serves"
-    ],
     "e2f8842a152f0b7d": [
       "12 Randomized action sequences preserve ledger invariants @tier3 holds every invariant after every block (5 runs \u00d7 10 blocks)",
       "12 Randomized action sequences preserve ledger invariants @tier3 replays a pinned seed (regression anchor for the generator itself)"
@@ -18197,6 +18184,24 @@
       "bridge_settle: proof acquisition after terminal guards refuses a non-quorate due in leg without fetching a proof",
       "bridge_settle: proof acquisition after terminal guards refuses an already settled row without calling its proof fetcher",
       "bridge_settle: proof acquisition after terminal guards still defers a quorate due in leg when no checkpoint is held"
+    ],
+    "e3df56894365b6c2": [
+      "HubDbSync price mirror repoint @regression @tier2 clears a stale finalized row at a round this hub holds as skipped",
+      "HubDbSync price mirror repoint @regression @tier2 clears the mirror when the hub serves an empty table (a rebuilt hub)",
+      "HubDbSync price mirror repoint @regression @tier2 clears the previous hub rounds a repoint leaves behind",
+      "HubDbSync price mirror repoint @regression @tier2 falls back to the round ceiling when the served-key set overflows its cap",
+      "HubDbSync price mirror repoint @regression @tier2 keeps bootstrapping when the reconciliation read itself fails",
+      "HubDbSync price mirror repoint @regression @tier2 leaves local skipped rows alone",
+      "HubDbSync price mirror repoint @regression @tier2 leaves the price height at the current hub rather than the retired one",
+      "HubDbSync price mirror repoint @regression @tier2 never reconciles a PARTIAL drain",
+      "HubDbSync price mirror repoint @regression @tier2 never reconciles a table that is not price_snapshots",
+      "HubDbSync price mirror repoint @regression @tier2 refuses to delete when no served key matches, which is a key-derivation fault",
+      "HubDbSync price mirror repoint @regression @tier2 touches nothing when the mirror already holds exactly what the hub serves",
+      "HubDbSync price mirror repoint: prior-lineage skipped rounds @regression @tier2 clears skipped rows below the lowest round a complete re-page served",
+      "HubDbSync price mirror repoint: prior-lineage skipped rounds @regression @tier2 removes a below-floor skipped row through the overflow fallback",
+      "HubDbSync price mirror repoint: skipped rounds stay without proof @regression @tier2 leaves skipped rows alone after a floor-started re-page",
+      "HubDbSync price mirror repoint: skipped rounds stay without proof @regression @tier2 leaves skipped rows alone when the drain served no rows to fix a floor",
+      "HubDbSync price mirror repoint: skipped rounds stay without proof @regression @tier2 leaves skipped rows alone when the finalized pass refused"
     ],
     "e3e7ffb0929fda49": [
       "capability snapshot proof startup pin refusal allows a valid _NEXT pin with a decimal safe integer _FROM",
@@ -20337,7 +20342,7 @@
   "scripts": {
     "test": {
       "fileCount": 1608,
-      "titleCount": 15740,
+      "titleCount": 15745,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/rate_limit_json_envelope.test.js": "dd09e4445df1623c",
@@ -21545,7 +21550,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "db44a08889a20bc8",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
-        "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e2dd68fbffb9df1b",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e3df56894365b6c2",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
         "test/unit/hub/hub_db_sync/hub_db_sync_schema_version_missing.test.js": "73d2a2e5a45a3b49",
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "3229eeb94a9d1b78",
@@ -22328,7 +22333,7 @@
     },
     "test:regression": {
       "fileCount": 1231,
-      "titleCount": 12493,
+      "titleCount": 12498,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23266,7 +23271,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "db44a08889a20bc8",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
-        "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e2dd68fbffb9df1b",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e3df56894365b6c2",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "3229eeb94a9d1b78",
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
@@ -24216,7 +24221,7 @@
     },
     "test:regression:full": {
       "fileCount": 1231,
-      "titleCount": 12493,
+      "titleCount": 12498,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25154,7 +25159,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "db44a08889a20bc8",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
-        "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e2dd68fbffb9df1b",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e3df56894365b6c2",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "3229eeb94a9d1b78",
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
