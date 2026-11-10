@@ -12,7 +12,7 @@ const http    = require('http')
 const express = require('express')
 const sinon   = require('sinon')
 const observability = require('../../../src/observability/index.js')
-const { installMiddleware, rpcErrorHandler } = require('../../../src/api/middleware.js')
+const { installMiddleware, rpcErrorHandler, JSON_BODY_LIMIT_BYTES } = require('../../../src/api/middleware.js')
 const { fakeIndexer } = require('../../unit/api/rpc/helpers/fake_indexer.js')
 
 const PREFLIGHT_PARAMS_CEILING = 390000
@@ -62,8 +62,10 @@ describe('indexer JSON body limit matches the explorer preflight ceiling', () =>
         assert.strictEqual((await post(port, actionBody(PREFLIGHT_PARAMS_CEILING))).status, 200)
     })
 
-    it('still refuses a 2 MB body with 413', async () => {
-        assert.strictEqual((await post(port, actionBody(2 * 1024 * 1024))).status, 413)
+    // The ceiling sits above the worst JSON-escaped legal payload (see
+    // JSON_BODY_LIMIT_BYTES), so the oversize probe is sized from it, not a fixed MB.
+    it('still refuses a body above the JSON body ceiling with 413', async () => {
+        assert.strictEqual((await post(port, actionBody(JSON_BODY_LIMIT_BYTES + 64 * 1024))).status, 413)
     })
 
     it('still answers 415 to a Content-Encoding body', async () => {
