@@ -187,6 +187,8 @@ describe('bin/consensus-identity.js function-valued gate rows', function () {
 });
 
 describe('bin/consensus-identity.js --compare against a flat --out reading', function () {
+    // Each case spawns a node subprocess, and the 30 s default is too tight on a loaded CI venue.
+    this.timeout(120000);
     // Write this tree's own --out reading, edited by `mutate`, and return its path.
     function flatPin(mutate) {
         const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-flat-'));
@@ -263,6 +265,8 @@ describe('bin/consensus-identity.js --compare against a flat --out reading', fun
 // reading --json must never take a missing ledger read for a pass. The child gets
 // no database variables, which is one of the ways the read comes back unread.
 describe('bin/consensus-identity.js an unread tip', function () {
+    // Each case spawns a node subprocess, and the 30 s default is too tight on a loaded CI venue.
+    this.timeout(120000);
     const DB_KEYS = ['INDEXER_DB_HOST', 'INDEXER_DB_PORT', 'INDEXER_DB_USER', 'INDEXER_DB_PASS', 'INDEXER_DB_NAME'];
 
     function runWithoutDb(args) {

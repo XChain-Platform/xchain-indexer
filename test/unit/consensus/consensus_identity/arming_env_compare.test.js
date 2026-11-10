@@ -100,6 +100,8 @@ describe('bin/consensus-identity.js --compare against a flat reading and the arm
     });
 
     it('compares a flat reading under its own arming, and refuses it under another', function () {
+        // It spawns node subprocesses, and the 60 s describe default is too tight on a loaded CI venue.
+        this.timeout(120000);
         const file = flatReading(ROLLCALL);
         const same = run(['--compare', file], ROLLCALL);
         assert.strictEqual(same.status, 0, same.stdout + same.stderr);

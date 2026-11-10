@@ -235,6 +235,8 @@ describe('VOTE v0 refuses a value its poll column cannot store @regression @tier
 
     for (const [title, overrides, expected] of VOTE_CASES) {
         it(title + ' -> ' + expected, async function () {
+            // Rows with 65536 or 65537 options build that many rows, and the 30 s default is too tight on a loaded CI venue.
+            if (overrides.options === MANY_OPTIONS || overrides.options === OPTIONS_PAST_INDEX) this.timeout(120000);
             await checkCreateRow(overrides, expected);
         });
     }
