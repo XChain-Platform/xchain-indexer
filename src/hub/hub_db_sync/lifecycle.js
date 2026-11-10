@@ -187,6 +187,11 @@ module.exports = {
         // closed, or while a table is owed the re-page that runs its reconciliation passes.
         if (this._wsEpoch !== drainEpoch || failover.uncaughtUpBlocks(this) || this.repageOwedTables().length > 0) return false;
         this._bootstrapDrained = true;
+        // The one line that marks the gated routes open; without it an operator cannot tell
+        // a finished drain from a silent one.
+        getLogger().info('HubDbSync: bootstrap drained: ' + marks.length + ' table(s) complete, oldest table mark ' +
+            Math.min.apply(null, marks) + (this._pollMode ? ' (poll mode, watermark frozen)' : '') +
+            '; the mirror is serving');
         this._failoverPendingDrain = false;
         // A clean full drain proves the hub's schema_version matched (a mismatch parks the
         // bootstrap). A live schema refusal also owes every table a re-page (handleRowEvent),

@@ -192,6 +192,12 @@ module.exports = {
 
     async deleteForeignPriceRows(stale, status) {
         // Chunked so one oversized IN list can never blow the statement limit.
+        // A prior hub lineage can leave millions of rows here, which is minutes of DELETEs
+        // inside the bootstrap. Report on the drain reporter's cadence so the pass is never
+        // silent, and count each chunk as bootstrap progress so the stall detector and the
+        // resync hold ceiling see a working delete rather than a wedged drain.
+        let startedAt = Date.now();
+        let lastReportAt = startedAt;
         for (let i = 0; i < stale.length; i += 500) {
             let chunk = stale.slice(i, i + 500);
             try {
@@ -200,6 +206,19 @@ module.exports = {
             } catch (e) {
                 getLogger().warn('HubDbSync: price round reconciliation failed for a chunk:', e);
                 return;
+            }
+            let now = Date.now();
+            if (this._bootstrapping) {
+                this._bootstrapLastProgressAt = now;
+                this._bootstrapProgressTicks = (Number(this._bootstrapProgressTicks) || 0) + 1;
+            }
+            let done = i + chunk.length;
+            if (this.bootstrapProgressMs > 0 && done < stale.length &&
+                (now - lastReportAt) >= this.bootstrapProgressMs) {
+                lastReportAt = now;
+                getLogger().info('HubDbSync: removing ' + status + ' price_snapshots rows this hub does not hold: ' +
+                    done + ' of ' + stale.length + ' deleted, ' +
+                    Math.max(1, Math.round((now - startedAt) / 1000)) + 's elapsed');
             }
         }
         getLogger().warn('HubDbSync: removed ' + stale.length + ' ' + status + ' price_snapshots row(s) this hub ' +
