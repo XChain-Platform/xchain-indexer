@@ -39,6 +39,15 @@ const { apiKeyGate } = require('./auth_gate');
 
 const JSON_RPC_MAX_BATCH = 100;
 
+// Wire-size ceiling for a JSON request body. The explorer's preflight and
+// feequote proxy forward up to 390,000 characters of params (the protocol
+// envelope payload ceiling). JSON escaping inflates that on the wire: a
+// newline, quote, backslash or tab doubles, and any other control character
+// becomes a 6-byte \u00XX escape. The worst legal case is 390,000 * 6 =
+// 2,340,000 bytes plus the JSON-RPC wrapper, so the limit sits above that and
+// the indexer, not the HTTP hop, gives the verdict on every legal action.
+const JSON_BODY_LIMIT_BYTES = 2.5 * 1024 * 1024;
+
 function isRpcObject(v){
     return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
@@ -151,10 +160,10 @@ function installSecurityLayers(app, { CONFIG_ENV }){
     //
     // The limit must sit above the largest action the explorer's preflight and
     // feequote proxy forward (390,000 characters of params, mirroring the
-    // protocol envelope payload ceiling) plus the JSON wrapper, so no HTTP hop
-    // refuses an action the indexer would have judged. Anything larger is still
-    // refused with 413.
-    app.use(bodyParser.json({ inflate: false, limit: '512kb' }));
+    // protocol envelope payload ceiling) AS JSON-ESCAPED on the wire, plus the
+    // wrapper, so no HTTP hop refuses an action the indexer would have judged.
+    // See JSON_BODY_LIMIT_BYTES. Anything larger is still refused with 413.
+    app.use(bodyParser.json({ inflate: false, limit: JSON_BODY_LIMIT_BYTES }));
     app.use(jsonRpcBatchGuard);
 }
 
@@ -180,4 +189,4 @@ function installObservabilityLayers(app, { indexer, CONFIG_ENV, INDEXER_NETWORK 
     installIndexerMetrics(observability, indexer);
 }
 
-module.exports = { installMiddleware, rpcErrorHandler, jsonRpcBatchGuard, JSON_RPC_MAX_BATCH };
+module.exports = { installMiddleware, rpcErrorHandler, jsonRpcBatchGuard, JSON_RPC_MAX_BATCH, JSON_BODY_LIMIT_BYTES };
