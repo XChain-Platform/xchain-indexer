@@ -232,6 +232,32 @@ describe('the block loop rides out a database outage instead of exiting @regress
 });
 
 describe('isDbOutageError names only database outages', function () {
+    function stmtTimeout() {
+        return Object.assign(new Error('(conn:1, no: 1969, SQLState: 70100) Query execution was interrupted (max_statement_time exceeded)'),
+            { name: 'SqlError', errno: 1969, sqlState: '70100' });
+    }
+
+    it('treats a max_statement_time abort (errno 1969 or text only) as a retryable outage', function () {
+        assert.strictEqual(isDbOutageError(stmtTimeout()), true);
+        assert.strictEqual(isDbOutageError(new Error(String(stmtTimeout().message))), true);
+        assert.strictEqual(isDbOutageError(new Error('beginTransaction error=' + String(stmtTimeout()))), true);
+    });
+
+    it('the block loop rides out a statement timeout and runs a further pass', async function () {
+        const realExit = process.exit; let exits = 0; process.exit = () => { exits++; };
+        try {
+            const { calls, run } = makeLoop([stmtTimeout(), 'ok']);
+            await run();
+            assert.strictEqual(calls.passes, 2);
+            assert.strictEqual(exits, 0);
+        } finally { process.exit = realExit; }
+    });
+
+    it('control: access denied (1045) stays fatal', function () {
+        const e = Object.assign(new Error('(conn:1, no: 1045, SQLState: 28000) Access denied'), { name: 'SqlError', errno: 1045 });
+        assert.strictEqual(isDbOutageError(e), false);
+    });
+
     it('matches driver, socket, wrapped, cause-chained and breaker errors', function () {
         assert.ok(isDbOutageError(poolTimeout()));
         assert.ok(isDbOutageError(connRefused()));
