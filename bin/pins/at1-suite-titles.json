@@ -552,6 +552,11 @@
       "policy barrier: content shortcut scoped by the follower stamp window @regression @tier1 opens once the newest stamp covers the whole stamp spread",
       "policy barrier: content shortcut scoped by the follower stamp window @regression @tier1 opens the content shortcut only on a drained connection"
     ],
+    "0948e1b1e33bcc60": [
+      "HubDbSync ready frame during a socketless bootstrap pass @regression @tier1 does not drop the new connection's bootstrap; the pass re-pages the owed tables and certifies",
+      "HubDbSync ready frame during a socketless bootstrap pass @regression @tier1 leaves a pass with no mid-pass ready frame unchanged: one drain per table, certified, no retry",
+      "HubDbSync ready frame during a socketless bootstrap pass @regression @tier1 still ends partial and retries when the pass cannot drain, even with a rerun requested"
+    ],
     "094a3c4326457ea4": [
       "Address action handler @regression @tier3 accepts DISPENSER_PREFERENCE=1",
       "Address action handler @regression @tier3 accepts DISPENSER_PREFERENCE=2",
@@ -8120,6 +8125,27 @@
       "SLEEP LOCK_SLEEP guard and the policy-inheritance exemption @regression @consensus still refuses it on mainnet, so the guard is not a regtest-only rule",
       "SLEEP LOCK_SLEEP guard and the policy-inheritance exemption @regression @consensus still refuses the indefinite shape, which is the freeze the guard exists to stop"
     ],
+    "672fb570f601c9ad": [
+      "isDbOutageError names only database outages control: access denied (1045) stays fatal",
+      "isDbOutageError names only database outages does not classify a pool timeout caused by access denied as an outage",
+      "isDbOutageError names only database outages does not classify a wrapped pool timeout whose text names access denied as an outage",
+      "isDbOutageError names only database outages does not classify hub or tracker socket failures as database outages",
+      "isDbOutageError names only database outages does not match a logic or SQL error",
+      "isDbOutageError names only database outages matches driver, socket, wrapped, cause-chained and breaker errors",
+      "isDbOutageError names only database outages the block loop rides out a statement timeout and runs a further pass",
+      "isDbOutageError names only database outages treats a max_statement_time abort (errno 1969 or text only) as a retryable outage",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 caps the backoff so the heartbeat keeps stamping through a long outage",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: a non-database error still rejects the loop, so the fatal path is intact",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage past the give-up window rejects for the supervisor restart",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage with a transaction left open on indexerDb still rejects",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 exits the loop on stop during an outage without one more backoff sleep",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 keeps running through pool timeouts and a refused connection, then resumes",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 marks replay witness and marker appends as restart-only work",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 names the driver errno of a wrapped beginTransaction pool timeout in the outage class",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 rejects a lost database socket after a reorg rollback begins",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 rides out a lost database socket before rollback or replay writes begin",
+      "the block loop rides out a database outage instead of exiting @regression @tier1 treats the wrapped beginTransaction form and the circuit breaker refusal as an outage"
+    ],
     "675a27b3aab7eb99": [
       "Decoder->indexer DB read contract @regression @tier1 every column getDecoderBlockData() reads exists in the decoder production schema",
       "Decoder->indexer DB read contract @regression @tier1 getDecoderBlockData() executes against the real schema and returns the normalized shape",
@@ -9043,14 +9069,6 @@
       "mirror_admission_activation: the legacy-row rule @regression binds a stamped row by height alone, ignoring the clock entirely",
       "mirror_admission_activation: the legacy-row rule @regression fails closed on an unreadable height or an unreadable clock"
     ],
-    "71aeb96f5d0192d4": [
-      "HubDbSync per-connection drain positions @regression @tier1 a bootstrap pages from its wire position with no MAX(id) cursor read",
-      "HubDbSync per-connection drain positions @regression @tier1 advances only after a row is handled and leaves a failed row retryable",
-      "HubDbSync per-connection drain positions @regression @tier1 resets a position above max_ids and purges nothing",
-      "HubDbSync per-connection drain positions @regression @tier1 resets on every reconnect to an older hub that omits hub_instance_id",
-      "HubDbSync per-connection drain positions @regression @tier1 retains positions only when the ready frame names the same hub instance",
-      "HubDbSync per-connection drain positions @regression @tier1 starts every table at zero without reading local MAX(id)"
-    ],
     "71bf81156e7d6e58": [
       "deriveAnchorRewards per-row mint loop, pinned against the mint_row wiring @regression @tier1 counts a group once and reconciles once when its first row mints falsy and its second mints truthy",
       "deriveAnchorRewards per-row mint loop, pinned against the mint_row wiring @regression @tier1 derives nothing and never reconciles when every mint call fails",
@@ -9162,6 +9180,11 @@
       "quote surfaces : the mainnet launch gate @regression @tier1 runs the handler for a mainnet SEND at the launch time",
       "quote surfaces : the mainnet launch gate @regression @tier1 runs the handler for a pre-launch validator PRICE v0 on mainnet",
       "quote surfaces : the mainnet launch gate @regression @tier1 runs the handler on regtest whatever the block time"
+    ],
+    "73697f88e126cd40": [
+      "hub mirror drain on a hub-paced page @regression @tier1 a resync over a drain that never progressed still forgets the floor and the instance",
+      "hub mirror drain on a hub-paced page @regression @tier1 forces the resync once the page passes its age cap, and keeps the floor of a drain that progressed",
+      "hub mirror drain on a hub-paced page @regression @tier1 spares a drain whose page is in flight past a short ceiling but under the page-age cap"
     ],
     "73755c9a0427e7f1": [
       "ATTEST hub-mirror response applier @regression @tier3 \u00a74.1 applier pass (utility.processAttestationResponses) does not touch the mirror at all when nothing is pending locally",
@@ -9412,6 +9435,12 @@
       "Dispenser divergence metrics (observability) @regression @tier2 metrics module recordExpirationEdit tags a lengthened window",
       "Dispenser divergence metrics (observability) @regression @tier2 metrics module recordExpirationEdit tags a shortened window",
       "Dispenser divergence metrics (observability) @regression @tier2 metrics module recordRejectedDispense tags the reason"
+    ],
+    "76791c0dac4ca9f7": [
+      "JSON body limit vs JSON-escaped legal payloads accepts 380,000 chars of newline text (about 570 KB on the wire)",
+      "JSON body limit vs JSON-escaped legal payloads accepts 380,000 chars of quote text",
+      "JSON body limit vs JSON-escaped legal payloads accepts 390,000 control characters (about 2.34 MB on the wire)",
+      "JSON body limit vs JSON-escaped legal payloads still refuses a body above the ceiling with the clean 413 refusal"
     ],
     "76968d4ca40a2816": [
       "Price v2 (PRICE batch) @regression @tier3 strict parameter length BELOW the admission height a trailing field is left unread and the batch stays valid, as v0.20.0 judged it",
@@ -12000,6 +12029,12 @@
       "bridge_settle: policy selection excludes ticks with no copy before the cap @regression armed: re-admits a row once its copy exists, by token row or by a due lock in-leg",
       "bridge_settle: policy selection excludes ticks with no copy before the cap @regression unarmed: the five carried no-copy rows still fill the cap, as before"
     ],
+    "92271c169965fc3a": [
+      "indexer JSON body limit matches the explorer preflight ceiling accepts a 150,000-char params body",
+      "indexer JSON body limit matches the explorer preflight ceiling accepts a params body at the preflight ceiling",
+      "indexer JSON body limit matches the explorer preflight ceiling still answers 415 to a Content-Encoding body",
+      "indexer JSON body limit matches the explorer preflight ceiling still refuses a body above the JSON body ceiling with 413"
+    ],
     "9227d0e83b5535c1": [
       "protocol-change registry is prototype-free @regression @tier1 addChange uniqueness is not confused by an inherited member accepts a change whose name collides with a prototype member",
       "protocol-change registry is prototype-free @regression @tier1 every network, since the gate fields are what NaN out resolves no prototype member on mainnet",
@@ -12178,23 +12213,6 @@
       "bin/count_u64_above_2p53 scan issues SELECT statements only",
       "bin/count_u64_above_2p53 scan keeps a wire column at zero and a non-wire column at two with the exact maximum",
       "bin/count_u64_above_2p53 the exit verdict is 1 only when a count is non-zero"
-    ],
-    "955cc0bcd2a6239f": [
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 announces a drain the hub says is bigger than one page",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 batches retained bounded rows without changing ordered upsert results",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 builds the batched statement from the same source as the per-row statement",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch anything but price_snapshots",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch rows whose mirrored columns differ",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch when the rows carry no status column",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 emits ONE statement per chunk instead of one per row",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 emits one statement per default-sized batch of a downloaded page",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 falls back to per-row applies when the batched statement does not land",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 honours the batching off switch",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 mirrors exactly what the per-row path mirrors",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 reports a progress counter while a long drain is running",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 stays silent on a drain that finishes inside the progress interval",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 still stops the page at the first unappliable row",
-      "HubDbSync price bootstrap throughput and progress @regression @tier2 uses the fail-loud write seam for the atomic page statement"
     ],
     "95778e56f402428b": [
       "stateCommitment: DbNodeStore.putMany SQL shape @regression an empty batch issues no statement at all",
@@ -13355,24 +13373,6 @@
       "EQUIV DEX canonical (WI-2 bump 2) at/above the flag-day (regtest) \u2192 header-wrapped with VIEW=finalizing_view",
       "EQUIV DEX canonical (WI-2 bump 2) below the flag-days (mainnet) \u2192 bare XMATCH bytes (regression-safe)",
       "EQUIV DEX canonical (WI-2 bump 2) matches buildEquivCanonical(XDEX, match_id, view, raw)"
-    ],
-    "a57290c9b830e1fa": [
-      "isDbOutageError names only database outages does not classify a pool timeout caused by access denied as an outage",
-      "isDbOutageError names only database outages does not classify a wrapped pool timeout whose text names access denied as an outage",
-      "isDbOutageError names only database outages does not classify hub or tracker socket failures as database outages",
-      "isDbOutageError names only database outages does not match a logic or SQL error",
-      "isDbOutageError names only database outages matches driver, socket, wrapped, cause-chained and breaker errors",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 caps the backoff so the heartbeat keeps stamping through a long outage",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 control: a non-database error still rejects the loop, so the fatal path is intact",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage past the give-up window rejects for the supervisor restart",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 control: an outage with a transaction left open on indexerDb still rejects",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 exits the loop on stop during an outage without one more backoff sleep",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 keeps running through pool timeouts and a refused connection, then resumes",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 marks replay witness and marker appends as restart-only work",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 names the driver errno of a wrapped beginTransaction pool timeout in the outage class",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 rejects a lost database socket after a reorg rollback begins",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 rides out a lost database socket before rollback or replay writes begin",
-      "the block loop rides out a database outage instead of exiting @regression @tier1 treats the wrapped beginTransaction form and the circuit breaker refusal as an outage"
     ],
     "a5d6a21bff731e18": [
       "protocol_changes VM lint destructure row is active on regtest at genesis, unarmed on every mainnet chain and armed on each testnet chain",
@@ -16606,6 +16606,17 @@
       "dropRefRowsFromFirst uses the lowest ref seq regardless of input order",
       "policy ref settle reasons exist with distinct text"
     ],
+    "cd60b7cf534fec7b": [
+      "HubDbSync per-connection drain positions @regression @tier1 a bootstrap pages from its wire position with no MAX(id) cursor read",
+      "HubDbSync per-connection drain positions @regression @tier1 advances only after a row is handled and leaves a failed row retryable",
+      "HubDbSync per-connection drain positions @regression @tier1 resets a position above max_ids and purges nothing",
+      "HubDbSync per-connection drain positions @regression @tier1 resets on every reconnect to an older hub that omits hub_instance_id",
+      "HubDbSync per-connection drain positions @regression @tier1 retains positions only when the ready frame names the same hub instance",
+      "HubDbSync per-connection drain positions @regression @tier1 starts every table at zero without reading local MAX(id)",
+      "HubDbSync same-connection position above a stale ready ceiling @regression @tier1 a second pass on the same socket resumes from its position, not from id 0",
+      "HubDbSync same-connection position above a stale ready ceiling @regression @tier1 still resets a position some other writer set on this connection",
+      "HubDbSync same-connection position above a stale ready ceiling @regression @tier1 still resets the same position once the connection that read it is gone"
+    ],
     "cd82da214987858b": [
       "Rollback.runRollbackTransaction keeps the step error when the rollback also fails control: a clean rollback still rethrows the step error and logs no rollback fault",
       "Rollback.runRollbackTransaction keeps the step error when the rollback also fails rethrows the step error, logs the rollback fault and clears the reorg marker"
@@ -16782,6 +16793,26 @@
       "15 \u2013 SDK<->indexer fee-fragment parity @regression @tier1 isValidAmountFormat() fractional-cap parity decimals=8 amount=1.2.3.4 -> false (both)",
       "15 \u2013 SDK<->indexer fee-fragment parity @regression @tier1 isValidAmountFormat() fractional-cap parity decimals=8 amount=1.5 -> true (both)",
       "15 \u2013 SDK<->indexer fee-fragment parity @regression @tier1 isValidAmountFormat() fractional-cap parity decimals=8 amount=100 -> true (both)"
+    ],
+    "d1d0413669ffac21": [
+      "HubDbSync drain progress switched off @regression @tier2 stays silent with bootstrapProgressMs = 0",
+      "HubDbSync drain progress while a page is in flight @regression @tier2 clears the timer when the drain ends or fails and logs nothing afterwards",
+      "HubDbSync drain progress while a page is in flight @regression @tier2 logs progress at least every 2 x interval while a slow page is pending",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 announces a drain the hub says is bigger than one page",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 batches retained bounded rows without changing ordered upsert results",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 builds the batched statement from the same source as the per-row statement",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch anything but price_snapshots",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch rows whose mirrored columns differ",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 declines to batch when the rows carry no status column",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 emits ONE statement per chunk instead of one per row",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 emits one statement per default-sized batch of a downloaded page",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 falls back to per-row applies when the batched statement does not land",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 honours the batching off switch",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 mirrors exactly what the per-row path mirrors",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 reports a progress counter while a long drain is running",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 stays silent on a drain that finishes inside the progress interval",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 still stops the page at the first unappliable row",
+      "HubDbSync price bootstrap throughput and progress @regression @tier2 uses the fail-loud write seam for the atomic page statement"
     ],
     "d2042aa3438cc5fe": [
       "Dispense action handler @regression @tier2 multiple matching dispensers: createDispense called for each",
@@ -20342,21 +20373,15 @@
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amount is a plain 8dp decimal STRING",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amounts sum to exactly what the pool was drained by",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the v0 FIAT path records its fill price too"
-    ],
-    "ffb8ab1584a23316": [
-      "indexer JSON body limit matches the explorer preflight ceiling accepts a 150,000-char params body",
-      "indexer JSON body limit matches the explorer preflight ceiling accepts a params body at the preflight ceiling",
-      "indexer JSON body limit matches the explorer preflight ceiling still answers 415 to a Content-Encoding body",
-      "indexer JSON body limit matches the explorer preflight ceiling still refuses a 2 MB body with 413"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 1610,
-      "titleCount": 15752,
+      "fileCount": 1613,
+      "titleCount": 15771,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
-        "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "ffb8ab1584a23316",
+        "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
         "test/regression/api/rate_limit_json_envelope.test.js": "dd09e4445df1623c",
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -20902,6 +20927,7 @@
         "test/unit/api/health/shutdown.test.js": "9f1e3a4773262edd",
         "test/unit/api/health/stall_fields.test.js": "b1a0c1f65e4c6d25",
         "test/unit/api/health/sync_fields.test.js": "e577317d4b06903c",
+        "test/unit/api/json_body_limit_escape_inflation.test.js": "76791c0dac4ca9f7",
         "test/unit/api/json_error_handler.test.js": "0c2efe9b63c9aecf",
         "test/unit/api/reads/api_bridge_reads.test.js": "d5091677642a6150",
         "test/unit/api/reads/api_token_policy_reads.test.js": "2420626fd805ab93",
@@ -21472,6 +21498,7 @@
         "test/unit/hub/admission_height_consumer.test.js": "e2a7b232a7e59267",
         "test/unit/hub/barrier_hold_ceiling.test.js": "20bbbe770a4ba79f",
         "test/unit/hub/barrier_hold_ceiling.test/drain_progress_across_windows.test.js": "208b9ec6705487e4",
+        "test/unit/hub/barrier_hold_ceiling.test/hub_paced_page.test.js": "73697f88e126cd40",
         "test/unit/hub/barrier_hold_ceiling.test/indexer_reaction.test.js": "cbe019ced7ee08e9",
         "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js": "e8f38215ae3e6079",
         "test/unit/hub/client/hub_client_response_settle.test.js": "e79ac0050019ab3e",
@@ -21541,7 +21568,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_capability_snapshot_repoint.test.js": "2f13529a5c36e37e",
         "test/unit/hub/hub_db_sync/hub_db_sync_capability_snapshot_testnet_corroboration.test.js": "45acd3764dc7d108",
         "test/unit/hub/hub_db_sync/hub_db_sync_content_keyed_apply.test.js": "fd58c31990531541",
-        "test/unit/hub/hub_db_sync/hub_db_sync_drain_position.test.js": "71aeb96f5d0192d4",
+        "test/unit/hub/hub_db_sync/hub_db_sync_drain_position.test.js": "cd60b7cf534fec7b",
         "test/unit/hub/hub_db_sync/hub_db_sync_failover_triggers.test.js": "75ed853984addf6f",
         "test/unit/hub/hub_db_sync/hub_db_sync_failover_triggers.test/all_hubs_not_caught_up.test.js": "e9c3f47b50704d38",
         "test/unit/hub/hub_db_sync/hub_db_sync_failover_triggers.test/move_policy.test.js": "7ab91094136cac6a",
@@ -21561,7 +21588,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_pollmode_watermark.test.js": "79cbf784dc4c07c4",
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "db44a08889a20bc8",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
-        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "d1d0413669ffac21",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e3df56894365b6c2",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test/delete_progress.test.js": "b4a74a6aab07c3ad",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
@@ -21572,6 +21599,7 @@
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "81a917dd5d925a14",
+        "test/unit/hub/hub_db_sync/reconnect_repage/mid_pass_ready_frame.test.js": "0948e1b1e33bcc60",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/retraction_fence_columns.test.js": "521ffb32e51656bb",
         "test/unit/hub/hub_db_sync/snapshot_barrier_admission_height.test.js": "c3a9a6f506a2d4be",
@@ -21940,7 +21968,7 @@
         "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1",
         "test/unit/xchain_indexer/abandon_block_rollback_failure.test.js": "e6d68acf0746746c",
         "test/unit/xchain_indexer/apply_pending_reorgs.test.js": "1c8358d37961f103",
-        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "a57290c9b830e1fa",
+        "test/unit/xchain_indexer/block_loop_db_outage.test.js": "672fb570f601c9ad",
         "test/unit/xchain_indexer/block_parse.test/block_time_sentinel_guard.test.js": "365999ba7f66f31d",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
@@ -22345,8 +22373,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1232,
-      "titleCount": 12501,
+      "fileCount": 1234,
+      "titleCount": 12513,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23226,6 +23254,7 @@
         "test/unit/hub/admission_height_consumer.test.js": "e2a7b232a7e59267",
         "test/unit/hub/barrier_hold_ceiling.test.js": "20bbbe770a4ba79f",
         "test/unit/hub/barrier_hold_ceiling.test/drain_progress_across_windows.test.js": "208b9ec6705487e4",
+        "test/unit/hub/barrier_hold_ceiling.test/hub_paced_page.test.js": "73697f88e126cd40",
         "test/unit/hub/barrier_hold_ceiling.test/indexer_reaction.test.js": "cbe019ced7ee08e9",
         "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js": "e8f38215ae3e6079",
         "test/unit/hub/hash_coverage.test.js": "74513e474bce99e9",
@@ -23274,7 +23303,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_capability_snapshot_repoint.test.js": "2f13529a5c36e37e",
         "test/unit/hub/hub_db_sync/hub_db_sync_capability_snapshot_testnet_corroboration.test.js": "45acd3764dc7d108",
         "test/unit/hub/hub_db_sync/hub_db_sync_content_keyed_apply.test.js": "fd58c31990531541",
-        "test/unit/hub/hub_db_sync/hub_db_sync_drain_position.test.js": "71aeb96f5d0192d4",
+        "test/unit/hub/hub_db_sync/hub_db_sync_drain_position.test.js": "cd60b7cf534fec7b",
         "test/unit/hub/hub_db_sync/hub_db_sync_grace_resolver.test.js": "67aa489c17b8ecfe",
         "test/unit/hub/hub_db_sync/hub_db_sync_list_share_barrier.test/methods.test.js": "82f0954fea12d994",
         "test/unit/hub/hub_db_sync/hub_db_sync_list_share_barrier.test/wiring.test.js": "51054d5d5d5d46dd",
@@ -23283,7 +23312,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_pollmode_watermark.test.js": "79cbf784dc4c07c4",
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "db44a08889a20bc8",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
-        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "d1d0413669ffac21",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e3df56894365b6c2",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test/delete_progress.test.js": "b4a74a6aab07c3ad",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
@@ -23293,6 +23322,7 @@
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "81a917dd5d925a14",
+        "test/unit/hub/hub_db_sync/reconnect_repage/mid_pass_ready_frame.test.js": "0948e1b1e33bcc60",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
         "test/unit/hub/hub_db_sync/validity_read_tables.test.js": "816d9a465e12ae5b",
@@ -23583,8 +23613,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 645,
-      "titleCount": 6844,
+      "fileCount": 647,
+      "titleCount": 6853,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24009,6 +24039,7 @@
         "test/unit/hub/admission_height_consumer.test.js": "e2a7b232a7e59267",
         "test/unit/hub/barrier_hold_ceiling.test.js": "20bbbe770a4ba79f",
         "test/unit/hub/barrier_hold_ceiling.test/drain_progress_across_windows.test.js": "208b9ec6705487e4",
+        "test/unit/hub/barrier_hold_ceiling.test/hub_paced_page.test.js": "73697f88e126cd40",
         "test/unit/hub/barrier_hold_ceiling.test/indexer_reaction.test.js": "cbe019ced7ee08e9",
         "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js": "e8f38215ae3e6079",
         "test/unit/hub/hub_db_sync/barriers/attestation_copies_nonfatal.test.js": "ec54ef7f5a98eeeb",
@@ -24038,7 +24069,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_bridge_mirror.test/retractions_and_graces.test.js": "313d731a81ddd233",
         "test/unit/hub/hub_db_sync/hub_db_sync_bridge_mirror.test/schema_shapes.test.js": "2b4abedb79b40a38",
         "test/unit/hub/hub_db_sync/hub_db_sync_content_keyed_apply.test.js": "fd58c31990531541",
-        "test/unit/hub/hub_db_sync/hub_db_sync_drain_position.test.js": "71aeb96f5d0192d4",
+        "test/unit/hub/hub_db_sync/hub_db_sync_drain_position.test.js": "cd60b7cf534fec7b",
         "test/unit/hub/hub_db_sync/hub_db_sync_grace_resolver.test.js": "67aa489c17b8ecfe",
         "test/unit/hub/hub_db_sync/hub_db_sync_list_share_barrier.test/methods.test.js": "82f0954fea12d994",
         "test/unit/hub/hub_db_sync/hub_db_sync_list_share_barrier.test/wiring.test.js": "51054d5d5d5d46dd",
@@ -24050,6 +24081,7 @@
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "81a917dd5d925a14",
+        "test/unit/hub/hub_db_sync/reconnect_repage/mid_pass_ready_frame.test.js": "0948e1b1e33bcc60",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
         "test/unit/hub/hub_db_sync/validity_read_tables.test.js": "816d9a465e12ae5b",
@@ -24234,8 +24266,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1232,
-      "titleCount": 12501,
+      "fileCount": 1234,
+      "titleCount": 12513,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25115,6 +25147,7 @@
         "test/unit/hub/admission_height_consumer.test.js": "e2a7b232a7e59267",
         "test/unit/hub/barrier_hold_ceiling.test.js": "20bbbe770a4ba79f",
         "test/unit/hub/barrier_hold_ceiling.test/drain_progress_across_windows.test.js": "208b9ec6705487e4",
+        "test/unit/hub/barrier_hold_ceiling.test/hub_paced_page.test.js": "73697f88e126cd40",
         "test/unit/hub/barrier_hold_ceiling.test/indexer_reaction.test.js": "cbe019ced7ee08e9",
         "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js": "e8f38215ae3e6079",
         "test/unit/hub/hash_coverage.test.js": "74513e474bce99e9",
@@ -25163,7 +25196,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_capability_snapshot_repoint.test.js": "2f13529a5c36e37e",
         "test/unit/hub/hub_db_sync/hub_db_sync_capability_snapshot_testnet_corroboration.test.js": "45acd3764dc7d108",
         "test/unit/hub/hub_db_sync/hub_db_sync_content_keyed_apply.test.js": "fd58c31990531541",
-        "test/unit/hub/hub_db_sync/hub_db_sync_drain_position.test.js": "71aeb96f5d0192d4",
+        "test/unit/hub/hub_db_sync/hub_db_sync_drain_position.test.js": "cd60b7cf534fec7b",
         "test/unit/hub/hub_db_sync/hub_db_sync_grace_resolver.test.js": "67aa489c17b8ecfe",
         "test/unit/hub/hub_db_sync/hub_db_sync_list_share_barrier.test/methods.test.js": "82f0954fea12d994",
         "test/unit/hub/hub_db_sync/hub_db_sync_list_share_barrier.test/wiring.test.js": "51054d5d5d5d46dd",
@@ -25172,7 +25205,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_pollmode_watermark.test.js": "79cbf784dc4c07c4",
         "test/unit/hub/hub_db_sync/hub_db_sync_pre_rail_barrier.test.js": "db44a08889a20bc8",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
-        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "d1d0413669ffac21",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e3df56894365b6c2",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test/delete_progress.test.js": "b4a74a6aab07c3ad",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
@@ -25182,6 +25215,7 @@
         "test/unit/hub/hub_db_sync/reconnect_repage/attest_table_certificate.test.js": "44791ae00989c1cd",
         "test/unit/hub/hub_db_sync/reconnect_repage/checkpoint_mirror_reconcile.test.js": "f55d2c328deda0f0",
         "test/unit/hub/hub_db_sync/reconnect_repage/floor_start.test.js": "81a917dd5d925a14",
+        "test/unit/hub/hub_db_sync/reconnect_repage/mid_pass_ready_frame.test.js": "0948e1b1e33bcc60",
         "test/unit/hub/hub_db_sync/reconnect_repage/reconnect_repage.test.js": "298aa4ba8cf7060c",
         "test/unit/hub/hub_db_sync/state_checkpoints_reset_resume.test.js": "09b36d1e26137022",
         "test/unit/hub/hub_db_sync/validity_read_tables.test.js": "816d9a465e12ae5b",
