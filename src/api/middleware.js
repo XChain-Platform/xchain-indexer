@@ -148,7 +148,13 @@ function installSecurityLayers(app, { CONFIG_ENV }){
     // Allow JSON requests. inflate: false makes body-parser answer 415 to any
     // Content-Encoding body without running a decompressor, so the Brotli and gzip
     // decoders of the Node runtime are never reachable from a request body.
-    app.use(bodyParser.json({ inflate: false }));
+    //
+    // The limit must sit above the largest action the explorer's preflight and
+    // feequote proxy forward (390,000 characters of params, mirroring the
+    // protocol envelope payload ceiling) plus the JSON wrapper, so no HTTP hop
+    // refuses an action the indexer would have judged. Anything larger is still
+    // refused with 413.
+    app.use(bodyParser.json({ inflate: false, limit: '512kb' }));
     app.use(jsonRpcBatchGuard);
 }
 

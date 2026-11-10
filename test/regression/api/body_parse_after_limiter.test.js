@@ -58,7 +58,7 @@ describe('api body parsing runs behind the rate limiter', () => {
     })
 
     it('counts and eventually refuses oversize POSTs, with RateLimit headers on the 413', async () => {
-        const big = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'x', params: ['a'.repeat(150 * 1024)] })
+        const big = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'x', params: ['a'.repeat(600 * 1024)] })
         const res = []
         for(let i = 0; i < LIMIT + 1; i++) res.push(await post(port, big))
         for(const r of res.slice(0, LIMIT)) assert.strictEqual(r.status, 413)
