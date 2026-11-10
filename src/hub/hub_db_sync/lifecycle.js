@@ -112,30 +112,58 @@ module.exports = {
     // load-bearing in WS mode: there is no poll loop while the socket is healthy,
     // so without it one failed table freezes the watermark at 0 until a reconnect,
     // which a stable connection never makes.
+    //
+    // A call that finds a pass running is never dropped: it is recorded, and a pass that
+    // ends partial with one recorded runs again at once. A socket whose ready frame lands
+    // mid-pass (a retry pass that started with no socket open) re-marks the tables it owes
+    // a re-page without any epoch change, so the running pass cannot settle them; its own
+    // re-run is what drains them on the new connection, not the slow retry.
     async bootstrapAll() {
-        if (this._bootstrapping) return;                     // reconnect + retry timer may overlap
+        if (this._bootstrapping) {                           // reconnect + retry timer may overlap
+            this._bootstrapRerunRequested = true;
+            return;
+        }
         if (failover.uncaughtUpBlocks(this)) return failover.rejectUncaughtUpReadyFrame(this);
         this._bootstrapping = true;
         this.pauseWatermarkStall('bootstrap');
-        this._bootstrapLastProgressAt = Date.now();
-        const drainEpoch = this._wsEpoch;
-        const selectorRevision = this._selectorRevision;
         try {
-            this._pendingBootstrapHeights = null;
-            let drained = await this.drainEveryTable();
-            // A disconnect leaves a delivery gap that only the replacement
-            // connection's own drain can close. Results started on the prior
-            // connection cannot certify its replacement.
-            const sameConnection = this._wsEpoch === drainEpoch &&
-                this._selectorRevision === selectorRevision;
-            if (drained.allDrained && drained.marks.length > 0 && sameConnection)
-                this.certifyFullDrain(drained.marks, drainEpoch);
-            else if (this.running) this.scheduleBootstrapRetry(sameConnection ? drained.undrained : ['the hub connection changed']);
+            let undrained;
+            for (;;) {
+                this._bootstrapRerunRequested = false;
+                this._bootstrapLastProgressAt = Date.now();
+                undrained = await this.bootstrapPass();
+                if (undrained === null || !this._bootstrapRerunRequested || !this.running) break;
+                // The recorded call would have met this gate first; meet it on its behalf.
+                if (failover.uncaughtUpBlocks(this)) {
+                    failover.rejectUncaughtUpReadyFrame(this);
+                    break;
+                }
+            }
+            if (undrained !== null && this.running) this.scheduleBootstrapRetry(undrained);
         } finally {
             this._bootstrapping = false;
             this._bootstrapLastProgressAt = null;
             this.resumeWatermarkStall('bootstrap');
         }
+    },
+
+    // One drain of every table and its verdict: null when nothing is left to retry (the
+    // pass certified, or the certification boundary refused it), else what held the gate.
+    async bootstrapPass() {
+        const drainEpoch = this._wsEpoch;
+        const selectorRevision = this._selectorRevision;
+        this._pendingBootstrapHeights = null;
+        let drained = await this.drainEveryTable();
+        // A disconnect leaves a delivery gap that only the replacement
+        // connection's own drain can close. Results started on the prior
+        // connection cannot certify its replacement.
+        const sameConnection = this._wsEpoch === drainEpoch &&
+            this._selectorRevision === selectorRevision;
+        if (drained.allDrained && drained.marks.length > 0 && sameConnection) {
+            this.certifyFullDrain(drained.marks, drainEpoch);
+            return null;
+        }
+        return sameConnection ? drained.undrained : ['the hub connection changed'];
     },
 
     // Drain every mirrored table once, in the order below, and report the per-table
