@@ -131,6 +131,7 @@ module.exports = {
             for (;;) {
                 this._bootstrapRerunRequested = false;
                 this._bootstrapLastProgressAt = Date.now();
+                this._bootstrapPassTicks = Number(this._bootstrapProgressTicks) || 0;   // see driveResync
                 undrained = await this.bootstrapPass();
                 if (undrained === null || !this._bootstrapRerunRequested || !this.running) break;
                 // The recorded call would have met this gate first; meet it on its behalf.
@@ -143,6 +144,7 @@ module.exports = {
         } finally {
             this._bootstrapping = false;
             this._bootstrapLastProgressAt = null;
+            this._bootstrapPassTicks = null;
             this.resumeWatermarkStall('bootstrap');
         }
     },
@@ -365,6 +367,7 @@ module.exports = {
         if (!this.enabled || !this.running) return false;
         if (!Number.isFinite(this.barrierHoldCeilingMs) || this.barrierHoldCeilingMs <= 0) return false;
         const now = Date.now();
+        if (this.bootstrapPageSpared(now)) return false;     // a slow page, inside its age cap
         if (this._bootstrapping && Number.isFinite(this._bootstrapLastProgressAt) &&
             (now - this._bootstrapLastProgressAt) < this.barrierHoldCeilingMs) return false;
         if (this._lastResyncRequestAt && (now - this._lastResyncRequestAt) < this.barrierHoldCeilingMs) return false;
@@ -380,7 +383,11 @@ module.exports = {
     driveResync(reason) {
         this.forcedResyncCount++;
         getLogger().warn('HubDbSync: forcing a mirror resync (' + String(reason || 'barrier hold ceiling reached') + ')');
-        this.forgetPositionsForResync();
+        // A bootstrap whose pass moved the progress counter was draining, so the price
+        // re-page floor it would restart from is kept rather than paged again from id 0.
+        const drainProgressed = this._bootstrapping === true && Number.isFinite(this._bootstrapPassTicks) &&
+            (Number(this._bootstrapProgressTicks) || 0) > this._bootstrapPassTicks;
+        this.forgetPositionsForResync(drainProgressed);
         if (this.ws) {
             // terminate() over close(): a half-open socket may never complete a closing
             // handshake, and the 'close' handler runs either way to schedule the reconnect.

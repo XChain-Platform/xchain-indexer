@@ -61,10 +61,17 @@ module.exports = {
     // which on its own keeps the positions of a same-instance hub, so forget the instance
     // and the positions, and owe every table a page from zero so a direct re-bootstrap
     // without a socket starts from zero as well.
-    forgetPositionsForResync() {
-        this._lastHubInstanceId = null;
+    //
+    // keepFloor is set when the resync replaces a bootstrap that was still making progress:
+    // the hub was slow, not the mirror wrong, so the price re-page keeps its floor start and
+    // the instance it was recorded under. A ready frame from another instance still clears
+    // both (adoptReadyFrame), and every other table still re-pages from zero.
+    forgetPositionsForResync(keepFloor) {
+        if (keepFloor !== true) {
+            this._lastHubInstanceId = null;
+            this._priceRepageFloor = null;
+        }
         this._drainPositions = Object.create(null);
-        this._priceRepageFloor = null;
         this.markRepageOwed(MIRRORED_TABLES);
     },
 

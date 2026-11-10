@@ -42,6 +42,12 @@ const SNAPSHOT_RETRY_MAX_MS  = 30000;
 const SNAPSHOT_RETRY_BUDGET_MS = 120000;
 const DRAIN_ABORTED = Symbol('drain-aborted');
 
+// The longest one page may legitimately stay in flight before it counts as wedged: a
+// fetch whose last in-place retry starts just inside the retry budget, after the longest
+// retry wait, and then runs to the request deadline (httpDeadlineMs, added per instance).
+// The same bound covers the flush of a page that arrived.
+const BOOTSTRAP_PAGE_AGE_BASE_MS = SNAPSHOT_RETRY_BUDGET_MS + SNAPSHOT_RETRY_MAX_MS;
+
 // Retry failures that can clear without changing the request. Authentication and input
 // errors need operator or caller changes, so retrying those would only hide the fault.
 function isRetryableSnapshotError(error) {
@@ -358,7 +364,20 @@ module.exports = {
             return await this.pageTableDrainPages(drain);
         } finally {
             if (timer) clearInterval(timer);
+            this._bootstrapPageSince = null;
         }
+    },
+
+    // True while a bootstrap page fetch, or the flush of a page that arrived, has been in
+    // flight for less than the page-age cap. The hold ceiling times row progress, which
+    // only moves when rows are handled, so a hub-paced page that outlasts a short ceiling
+    // read as a stall and the forced resync threw the drain away. Past the cap the page
+    // is wedged, not slow, and the ceiling forces recovery as before.
+    bootstrapPageSpared(now) {
+        if (!this._bootstrapping || !Number.isFinite(this._bootstrapPageSince)) return false;
+        let deadlineMs = Number(this.httpDeadlineMs);
+        let capMs = BOOTSTRAP_PAGE_AGE_BASE_MS + (Number.isFinite(deadlineMs) && deadlineMs > 0 ? deadlineMs : 0);
+        return (now - this._bootstrapPageSince) < capMs;
     },
 
     // One page with its retry loop. Returns DRAIN_ABORTED when stop() or a new connection
@@ -396,6 +415,7 @@ module.exports = {
             if (drain.connectionEpoch !== this._wsEpoch ||
                 drain.selectorRevision !== this._selectorRevision) return false;
             let path = '/hub-db/snapshot/' + table + '?since_id=' + drain.lastId + '&limit=' + PAGE_LIMIT;
+            this._bootstrapPageSince = Date.now();           // page age, see bootstrapPageSpared
             let result = await this.fetchSnapshotPage(drain, path);
             if (result === DRAIN_ABORTED) return false;
             if (drain.connectionEpoch !== this._wsEpoch ||
@@ -408,6 +428,7 @@ module.exports = {
 
             drain.pagesFetched++;
             this._bootstrapProgressTicks = (Number(this._bootstrapProgressTicks) || 0) + 1;
+            this._bootstrapPageSince = Date.now();           // the flush is timed on its own
             for (let row of result.rows) {
                 drain.fetched++;
                 drain.pending.push({ row: row });
