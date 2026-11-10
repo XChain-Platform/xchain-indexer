@@ -95,6 +95,11 @@ module.exports = {
         if (Number.isFinite(rowId) && rowId > drain.lastId) {
             drain.lastId = rowId;
             this._drainPositions[drain.table] = rowId;
+            // Remember which connection read this id. The hub keeps appending after its ready
+            // frame, so a position read on the live connection may sit above that frame's
+            // max_ids and is still inside the hub's id space (see restartCursorAboveHubCeiling).
+            if (!this._drainPositionReads) this._drainPositionReads = Object.create(null);
+            this._drainPositionReads[drain.table] = { wireId: rowId, epoch: drain.connectionEpoch };
         }
         if (this._bootstrapping) {
             this._bootstrapLastProgressAt = Date.now();

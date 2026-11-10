@@ -165,17 +165,33 @@ module.exports = {
         return (typeof ceiling === 'number' && Number.isInteger(ceiling) && ceiling >= 0) ? ceiling : NaN;
     },
 
-    // A position above the source's advertised ceiling cannot belong to its current id
-    // space. Reset the position only. Content-keyed local rows remain valid and no id-space
-    // observation authorizes deleting them.
+    // A position carried from an earlier connection that sits above the source's advertised
+    // ceiling cannot belong to its current id space. Reset the position only. Content-keyed
+    // local rows remain valid and no id-space observation authorizes deleting them.
+    //
+    // A position this same connection read is exempt. The ready frame's max_ids is a
+    // snapshot taken at subscribe time and the hub keeps appending (price rounds arrive
+    // about once a second), so a drain on the live socket routinely ends above it. Judging
+    // that position against the stale snapshot threw away the floor and re-paged the whole
+    // price table from id 0 on every later pass of the same connection.
     async restartCursorAboveHubCeiling(table, scope, lastId, readyCeiling) {
-        if (lastId > 0 && Number.isFinite(readyCeiling) && lastId > readyCeiling) {
+        if (lastId > 0 && Number.isFinite(readyCeiling) && lastId > readyCeiling &&
+            !this.positionReadOnThisConnection(table, lastId)) {
             getLogger().warn('HubDbSync: ' + table + ' drain position ' + lastId +
                 ' sits above the hub ceiling ' + readyCeiling + '; re-paging from 0');
             this._drainPositions[table] = 0;
             return 0;
         }
         return lastId;
+    },
+
+    // True only when the current position is exactly the id a drain on the current socket
+    // last read for this table. Any other writer of the position, or any reconnect since
+    // (the epoch bumps on every close), leaves the ceiling check in force.
+    positionReadOnThisConnection(table, lastId) {
+        let read = this._drainPositionReads ? this._drainPositionReads[table] : undefined;
+        return !!read && read.wireId === lastId &&
+            typeof read.epoch === 'number' && read.epoch === this._wsEpoch;
     },
 
     // The drain's shared accounting: the page counters, the served-row sets the
