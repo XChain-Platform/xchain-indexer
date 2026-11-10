@@ -40,6 +40,7 @@ const SNAPSHOT_RETRY_MAX_MS  = 30000;
 // (HUB_SYNC_WATERMARK_STALL_S), so a hub that stays down falls back to the scheduled
 // bootstrap retry instead of tripping a forced resync of every mirrored table.
 const SNAPSHOT_RETRY_BUDGET_MS = 120000;
+const DRAIN_ABORTED = Symbol('drain-aborted');
 
 // Retry failures that can clear without changing the request. Authentication and input
 // errors need operator or caller changes, so retrying those would only hide the fault.
@@ -323,7 +324,49 @@ module.exports = {
     // or a schema version this build does not mirror), which the caller reports as "not
     // drained" before anything is logged as bootstrapped; true otherwise, with the drain's
     // counters saying how far it got.
+    //
+    // A heartbeat timer runs for the whole loop: reportDrainProgress is otherwise reached only
+    // from the flush after a page lands, so a slow page fetch, a retry wait or a slow apply
+    // left the drain silent for far longer than the progress interval. The timer ticks at
+    // half the interval and the throttle inside reportDrainProgress keeps the cadence, so no
+    // gap exceeds 1.5 x bootstrapProgressMs.
     async pageTableDrain(drain) {
+        let timer = null;
+        if (this.bootstrapProgressMs > 0) {
+            timer = setInterval(() => {
+                try { this.reportDrainProgress(drain); } catch (e) { /* logging never fails a drain */ }
+            }, Math.max(1, Math.ceil(this.bootstrapProgressMs / 2)));
+            if (timer && typeof timer.unref === 'function') timer.unref();
+        }
+        try {
+            return await this.pageTableDrainPages(drain);
+        } finally {
+            if (timer) clearInterval(timer);
+        }
+    },
+
+    // One page with its retry loop. Returns DRAIN_ABORTED when stop() or a new connection
+    // ended the drain while the page was in flight.
+    async fetchSnapshotPage(drain, path) {
+        let retryStartedMs = Date.now();
+        for (let attempt = 0; ; attempt++) {
+            try {
+                return await this.httpGet(path);
+            } catch (error) {
+                // stop() and a new connection both end this drain; a poll-mode stop changes
+                // no epoch, so the running flag is checked too.
+                if (this.running === false || drain.connectionEpoch !== this._wsEpoch ||
+                    drain.selectorRevision !== this._selectorRevision) return DRAIN_ABORTED;
+                if (!isRetryableSnapshotError(error) ||
+                    Date.now() - retryStartedMs >= SNAPSHOT_RETRY_BUDGET_MS) throw error;
+                await this.waitForSnapshotRetry(error, attempt, drain.table, drain.lastId);
+                if (this.running === false || drain.connectionEpoch !== this._wsEpoch ||
+                    drain.selectorRevision !== this._selectorRevision) return DRAIN_ABORTED;
+            }
+        }
+    },
+
+    async pageTableDrainPages(drain) {
         let table = drain.table;
         // One line up front for a table big enough to take a while, so a cold start shows
         // the drain BEGINNING rather than only its result. The counter above then reports
@@ -337,24 +380,8 @@ module.exports = {
             if (drain.connectionEpoch !== this._wsEpoch ||
                 drain.selectorRevision !== this._selectorRevision) return false;
             let path = '/hub-db/snapshot/' + table + '?since_id=' + drain.lastId + '&limit=' + PAGE_LIMIT;
-            let result;
-            let retryStartedMs = Date.now();
-            for (let attempt = 0; ; attempt++) {
-                try {
-                    result = await this.httpGet(path);
-                    break;
-                } catch (error) {
-                    // stop() and a new connection both end this drain; a poll-mode stop changes
-                    // no epoch, so the running flag is checked too.
-                    if (this.running === false || drain.connectionEpoch !== this._wsEpoch ||
-                        drain.selectorRevision !== this._selectorRevision) return false;
-                    if (!isRetryableSnapshotError(error) ||
-                        Date.now() - retryStartedMs >= SNAPSHOT_RETRY_BUDGET_MS) throw error;
-                    await this.waitForSnapshotRetry(error, attempt, table, drain.lastId);
-                    if (this.running === false || drain.connectionEpoch !== this._wsEpoch ||
-                        drain.selectorRevision !== this._selectorRevision) return false;
-                }
-            }
+            let result = await this.fetchSnapshotPage(drain, path);
+            if (result === DRAIN_ABORTED) return false;
             if (drain.connectionEpoch !== this._wsEpoch ||
                 drain.selectorRevision !== this._selectorRevision) return false;
             if (!result || !Array.isArray(result.rows)) {
