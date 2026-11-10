@@ -14437,6 +14437,11 @@
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 MINT with DESTINATION credits the destination address, not source",
       "ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1 token with 8 decimals stores and retrieves fractional amounts correctly"
     ],
+    "b4a74a6aab07c3ad": [
+      "HubDbSync drain certification is logged @regression @tier2 logs exactly one drain-complete line when the mirror certifies its drain",
+      "HubDbSync price mirror: a long skipped-row delete stays observable @regression @tier2 logs delete progress at least every two minutes and the summary once",
+      "HubDbSync price mirror: a long skipped-row delete stays observable @regression @tier2 stays silent for a delete that finishes inside one reporter interval"
+    ],
     "b4ab10fde0a94fac": [
       "Chaos: Watchdog Timeout WD-01: resolves normally when promise completes before timeout",
       "Chaos: Watchdog Timeout WD-02: rejects with timeout error when promise exceeds timeout",
@@ -20337,14 +20342,21 @@
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amount is a plain 8dp decimal STRING",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amounts sum to exactly what the pool was drained by",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the v0 FIAT path records its fill price too"
+    ],
+    "ffb8ab1584a23316": [
+      "indexer JSON body limit matches the explorer preflight ceiling accepts a 150,000-char params body",
+      "indexer JSON body limit matches the explorer preflight ceiling accepts a params body at the preflight ceiling",
+      "indexer JSON body limit matches the explorer preflight ceiling still answers 415 to a Content-Encoding body",
+      "indexer JSON body limit matches the explorer preflight ceiling still refuses a 2 MB body with 413"
     ]
   },
   "scripts": {
     "test": {
-      "fileCount": 1608,
-      "titleCount": 15745,
+      "fileCount": 1610,
+      "titleCount": 15752,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
+        "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "ffb8ab1584a23316",
         "test/regression/api/rate_limit_json_envelope.test.js": "dd09e4445df1623c",
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -21551,6 +21563,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e3df56894365b6c2",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test/delete_progress.test.js": "b4a74a6aab07c3ad",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
         "test/unit/hub/hub_db_sync/hub_db_sync_schema_version_missing.test.js": "73d2a2e5a45a3b49",
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "3229eeb94a9d1b78",
@@ -22332,8 +22345,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1231,
-      "titleCount": 12498,
+      "fileCount": 1232,
+      "titleCount": 12501,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23272,6 +23285,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e3df56894365b6c2",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test/delete_progress.test.js": "b4a74a6aab07c3ad",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "3229eeb94a9d1b78",
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
@@ -24220,8 +24234,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1231,
-      "titleCount": 12498,
+      "fileCount": 1232,
+      "titleCount": 12501,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25160,6 +25174,7 @@
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_bound.test.js": "6b282b2b0ef031a4",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_bootstrap_progress.test.js": "955cc0bcd2a6239f",
         "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test.js": "e3df56894365b6c2",
+        "test/unit/hub/hub_db_sync/hub_db_sync_price_repoint.test/delete_progress.test.js": "b4a74a6aab07c3ad",
         "test/unit/hub/hub_db_sync/hub_db_sync_quiet_oracle_barrier.test.js": "c3979935aee5ef7e",
         "test/unit/hub/hub_db_sync/hub_db_sync_watchdog_transport.test.js": "3229eeb94a9d1b78",
         "test/unit/hub/hub_db_sync/hub_db_sync_watermark_stall_recovery.test.js": "510467ff3bd18997",
