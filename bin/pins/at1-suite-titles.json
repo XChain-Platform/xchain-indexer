@@ -8225,6 +8225,22 @@
       "Sleep @regression @tier3 record creation mapper.createMappings called after parse",
       "Sleep @regression @tier3 record creation unknown format version \u2192 invalid"
     ],
+    "66122e266cb932cc": [
+      "FILE multipart routing accepts an existing manifest with a different hash",
+      "FILE multipart routing accepts when no existing manifest is present",
+      "FILE multipart routing exports the manifest and part wire formats exactly",
+      "FILE multipart routing preserves an incoming error on an unknown route",
+      "FILE multipart routing preserves an incoming error over a duplicate manifest",
+      "FILE multipart routing rejects a duplicate manifest for the same file hash",
+      "FILE multipart routing rejects unknown format 3",
+      "FILE multipart routing rejects unknown format null",
+      "FILE multipart routing routes format 0 as legacy above activation",
+      "FILE multipart routing routes format 0 as legacy below activation",
+      "FILE multipart routing routes format 1 above activation",
+      "FILE multipart routing routes format 1 below activation",
+      "FILE multipart routing routes format 2 above activation",
+      "FILE multipart routing routes format 2 below activation"
+    ],
     "662f4b652a7fa471": [
       "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect B2: the parent lookup interns nothing on its own reports the parent-unknown verdict identically with the flag on and off",
       "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect B2: the parent lookup interns nothing on its own still resolves an EXISTING parent through the suppressed lookup, so valid children are unaffected",
@@ -20763,6 +20779,7 @@
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
+        "test/unit/actions/file_multipart_route.test.js": "66122e266cb932cc",
         "test/unit/actions/file_multipart_validate.test.js": "53c18091185cb3af",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/issue/settle_owner_history.test.js": "087297546f0ad980",
