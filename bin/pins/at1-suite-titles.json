@@ -6703,6 +6703,25 @@
       "Tier 1 - processTransaction crash safety @tier1 with fuzzed tx data strings survives unknown action strings",
       "Tier 1 - processTransaction crash safety @tier1 with fuzzed tx data strings survives well-formed tx with random data field"
     ],
+    "53c18091185cb3af": [
+      "FILE multipart field validation accepts a valid manifest and returns its canonical integer fields",
+      "FILE multipart field validation accepts a valid part at index zero",
+      "FILE multipart field validation accepts an absent, null, or zero-length manifest RAW_DATA",
+      "FILE multipart field validation accepts both PART_INDEX bounds including zero",
+      "FILE multipart field validation accepts both TOTAL_BYTES bounds",
+      "FILE multipart field validation accepts both TOTAL_PARTS bounds",
+      "FILE multipart field validation gives every malformed PART_INDEX its range verdict",
+      "FILE multipart field validation gives every malformed manifest integer its range verdict",
+      "FILE multipart field validation keeps manifest failures in FILE_HASH, TOTAL_PARTS, TOTAL_BYTES, RAW_DATA order",
+      "FILE multipart field validation keeps part failures in FILE_HASH, PART_INDEX, RAW_DATA order",
+      "FILE multipart field validation preserves an earlier verdict",
+      "FILE multipart field validation rejects PART_INDEX below and above its bounds",
+      "FILE multipart field validation rejects TOTAL_BYTES below and above its bounds",
+      "FILE multipart field validation rejects TOTAL_PARTS below and above its bounds",
+      "FILE multipart field validation rejects a FILE_HASH that is not exactly 64 lowercase hex characters",
+      "FILE multipart field validation rejects a manifest carrying non-empty RAW_DATA",
+      "FILE multipart field validation rejects an absent, null, or zero-length part RAW_DATA"
+    ],
     "54022d406d76bdb8": [
       "Database.createValidatorReward() @regression @tier1 carries the archive reward snapshot_block through as its round_qualifier",
       "Database.createValidatorReward() @regression @tier1 persists the materialization block when the caller passes one, and NULL otherwise",
@@ -20528,8 +20547,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1631,
-      "titleCount": 15882,
+      "fileCount": 1632,
+      "titleCount": 15899,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -20744,6 +20763,7 @@
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
+        "test/unit/actions/file_multipart_validate.test.js": "53c18091185cb3af",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/issue/settle_owner_history.test.js": "087297546f0ad980",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
