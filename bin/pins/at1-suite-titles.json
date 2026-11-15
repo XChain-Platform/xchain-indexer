@@ -17493,6 +17493,16 @@
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the parser finds migration MODIFY clauses (retype guard is not vacuous)",
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the parser finds migration-added columns (guard is not vacuous)"
     ],
+    "d7af709ec3d67e56": [
+      "FILE multipart batch validation accepts a lone manifest beside a version 2 MESSAGE",
+      "FILE multipart batch validation accepts a manifest with no SIBLING_ACTIONS",
+      "FILE multipart batch validation accepts a version 0 FILE in a BATCH beside another FILE",
+      "FILE multipart batch validation accepts an unbatched version 2 part",
+      "FILE multipart batch validation preserves an incoming error before either multipart batch verdict",
+      "FILE multipart batch validation rejects a version 1 manifest beside another FILE",
+      "FILE multipart batch validation rejects a version 2 part in a BATCH even when its position is null",
+      "FILE multipart batch validation treats a BATCH_POSITION of zero as present"
+    ],
     "d7dd66c300ddeafd": [
       "Message action handler @regression @tier3 accepts ENCRYPTION_METHOD=1 (ECDH)",
       "Message action handler @regression @tier3 accepts ENCRYPTION_METHOD=2 (AES)",
@@ -20547,8 +20557,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1632,
-      "titleCount": 15899,
+      "fileCount": 1633,
+      "titleCount": 15907,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -20763,6 +20773,7 @@
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
+        "test/unit/actions/file_multipart_batch.test.js": "d7af709ec3d67e56",
         "test/unit/actions/file_multipart_validate.test.js": "53c18091185cb3af",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/issue/settle_owner_history.test.js": "087297546f0ad980",

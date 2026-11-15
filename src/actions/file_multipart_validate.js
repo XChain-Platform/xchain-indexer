@@ -48,4 +48,19 @@ function validateMultipartFields(data, error, limits) {
     return { error, totalParts, totalBytes, partIndex };
 }
 
-module.exports = { validateMultipartFields };
+function checkMultipartBatch(data, error) {
+    if (error) return error;
+
+    if (String(data['VERSION']) === '2' &&
+        Object.prototype.hasOwnProperty.call(data, 'BATCH_POSITION'))
+        return 'invalid: VERSION (batch)';
+
+    const siblings = Array.isArray(data['SIBLING_ACTIONS']) ? data['SIBLING_ACTIONS'] : [];
+    const fileCount = siblings.filter((sibling) => sibling.action === 'FILE').length;
+    if (String(data['VERSION']) === '1' && fileCount > 1)
+        return 'invalid: FILE_HASH (batch)';
+
+    return error;
+}
+
+module.exports = { validateMultipartFields, checkMultipartBatch };
