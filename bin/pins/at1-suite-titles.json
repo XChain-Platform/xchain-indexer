@@ -5761,6 +5761,17 @@
       "AnchorRecovery list snapshots @regression @tier2 restores a legacy archive with no list_snapshots exactly as before",
       "AnchorRecovery list snapshots @regression @tier2 restores quorum-signed full and delta rows byte for byte"
     ],
+    "4952d6cf78701508": [
+      "FILE multipart assembly verdict @regression @tier1 ignores positions at or above total_parts",
+      "FILE multipart assembly verdict @regression @tier1 keeps the lowest action index for a duplicate position",
+      "FILE multipart assembly verdict @regression @tier1 matches the documentation vector: digest mismatch",
+      "FILE multipart assembly verdict @regression @tier1 matches the documentation vector: final one-byte slice rebalanced",
+      "FILE multipart assembly verdict @regression @tier1 matches the documentation vector: three-part deflate-raw",
+      "FILE multipart assembly verdict @regression @tier1 matches the documentation vector: two-part raw",
+      "FILE multipart assembly verdict @regression @tier1 returns mismatch when the byte lengths do not sum to total_bytes",
+      "FILE multipart assembly verdict @regression @tier1 returns null when the manifest is absent",
+      "FILE multipart assembly verdict @regression @tier1 returns null while an in-range position is missing"
+    ],
     "4982ff3988e6d5f9": [
       "UNBIND exact wire value rule @regression ADDRESS format 1 (v1) treats only wire string 1 as unbind",
       "UNBIND exact wire value rule @regression ISSUE format 6 (v6) treats only wire string 1 as unbind"
@@ -20528,8 +20539,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1631,
-      "titleCount": 15882,
+      "fileCount": 1632,
+      "titleCount": 15891,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -20744,6 +20755,7 @@
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
+        "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/issue/settle_owner_history.test.js": "087297546f0ad980",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
@@ -22542,8 +22554,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1248,
-      "titleCount": 12600,
+      "fileCount": 1249,
+      "titleCount": 12609,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22769,6 +22781,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
         "test/unit/actions/list_wire/union_read_bounds.test.js": "841a2b8658cd319e",
@@ -23796,8 +23809,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 652,
-      "titleCount": 6890,
+      "fileCount": 653,
+      "titleCount": 6899,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -23864,6 +23877,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/market/dispense_payment_tally_scale.test.js": "2b43cec5c7ef3f91",
         "test/unit/actions/market/dispenser.test/supplementary_get_address.test.js": "e61d439e6f2e1f69",
@@ -24454,8 +24468,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1248,
-      "titleCount": 12600,
+      "fileCount": 1249,
+      "titleCount": 12609,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24681,6 +24695,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
         "test/unit/actions/list_wire/union_read_bounds.test.js": "841a2b8658cd319e",

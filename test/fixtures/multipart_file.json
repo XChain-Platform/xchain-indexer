@@ -1,0 +1,100 @@
+{
+  "vectors": [
+    {
+      "name": "two-part raw",
+      "COMPRESSION": "",
+      "original_hex": "6d756c7469706172742072617720766563746f72",
+      "parts": [
+        {
+          "PART_INDEX": 0,
+          "hex": "6d756c746970617274",
+          "digest": "8172978f4154919d2c6680671d8417514522d4ae5f9171931390a69ef68ad3fc"
+        },
+        {
+          "PART_INDEX": 1,
+          "hex": "2072617720766563746f72",
+          "digest": "34570c20975b553f979ce41439d435b2e5c7433b705101bf4ecbfa715cfba38d"
+        }
+      ],
+      "FILE_HASH": "94d17c51c075eff21c1553f699074c8a136b2e2b87d9bd9b10dfe9d4c2fa6827",
+      "TOTAL_PARTS": 2,
+      "TOTAL_BYTES": 20,
+      "expected": "complete"
+    },
+    {
+      "name": "three-part deflate-raw",
+      "COMPRESSION": "1",
+      "original_hex": "58436861696e206d756c746970617274206465666c6174652d72617720766563746f722e2058436861696e206d756c746970617274206465666c6174652d72617720766563746f722e2058436861696e206d756c746970617274206465666c6174652d72617720766563746f722e2058436861696e206d756c746970617274206465666c6174652d72617720766563746f722e2058436861696e206d756c746970617274206465666c6174652d72617720766563746f722e2058436861696e206d756c746970617274206465666c6174652d72617720766563746f722e2058436861696e206d756c746970617274206465666c6174652d72617720766563746f722e2058436861696e206d756c746970617274206465666c6174652d72617720766563746f722e20",
+      "parts": [
+        {
+          "PART_INDEX": 0,
+          "hex": "8b70ce48cccc53c82dcd29c92c",
+          "digest": "f46f7724f1028e69253f5daee51b00aa08ce5b55892b857d83e45f67bf0488ad"
+        },
+        {
+          "PART_INDEX": 1,
+          "hex": "482c2a5148494dcb492c49d52d",
+          "digest": "8bb89db575cf7edac06be2c31c2c93a6529ce19423299b178828352281ee5236"
+        },
+        {
+          "PART_INDEX": 2,
+          "hex": "4a2c57284b4d2ec92fd2538818550400",
+          "digest": "b6be5ae250d88d73dab2e8140e858f362eac0177e455051cd279d950b7bc675f"
+        }
+      ],
+      "FILE_HASH": "7adda13ae9aad7f72f34fa6450a8a0ef75be945e1bd5d4e93934a856a4f51dac",
+      "TOTAL_PARTS": 3,
+      "TOTAL_BYTES": 42,
+      "expected": "complete"
+    },
+    {
+      "name": "digest mismatch",
+      "COMPRESSION": "",
+      "parts": [
+        {
+          "PART_INDEX": 0,
+          "hex": "6d69736d617463682d",
+          "digest": "24ecc3e729be1943456c84c004c47d5cad99202f356e0fb483b4ba7ceb49cae8"
+        },
+        {
+          "PART_INDEX": 1,
+          "hex": "6578706563746565",
+          "digest": "41c93e7d7565a5084f9bdfe52477c2bf51ff2ac9d1a0c7d5d56a1fdfb3eb689d"
+        }
+      ],
+      "FILE_HASH": "023359fd0527dded204b9aa3dda9a5b4b2c07706ad88ce7edbf4f257323f09bb",
+      "TOTAL_PARTS": 2,
+      "TOTAL_BYTES": 17,
+      "actual_file_hash": "7fd32629e7dae8075942c7f70cce978d03268def48b7921a586af8dcb1ee92f0",
+      "expected": "mismatch"
+    },
+    {
+      "name": "final one-byte slice rebalanced",
+      "COMPRESSION": "",
+      "carrier_ceiling": 4,
+      "naive_part_lengths": [4, 4, 1],
+      "original_hex": "313233343536373839",
+      "parts": [
+        {
+          "PART_INDEX": 0,
+          "hex": "31323334",
+          "digest": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
+        },
+        {
+          "PART_INDEX": 1,
+          "hex": "353637",
+          "digest": "97a6d21df7c51e8289ac1a8c026aaac143e15aa1957f54f42e30d8f8a85c3a55"
+        },
+        {
+          "PART_INDEX": 2,
+          "hex": "3839",
+          "digest": "cd70bea023f752a0564abb6ed08d42c1440f2e33e29914e55e0be1595e24f45a"
+        }
+      ],
+      "FILE_HASH": "e1fd7542c04788dcd722a68a66c59561605456df0b447267918bb8724f6cd1cc",
+      "TOTAL_PARTS": 3,
+      "TOTAL_BYTES": 9,
+      "expected": "complete"
+    }
+  ]
+}
