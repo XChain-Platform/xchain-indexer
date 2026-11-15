@@ -75,7 +75,9 @@ module.exports = {
     },
 
     // Set deactivation_block for the ALREADY-ACTIVE contract_stakes rows matching (target, pubkey, tick).
-    // Used by createContractUnstake to start the cooldown on a staker's active (target, tick) rows.
+    // Used by UNSTAKE v1 (actions/unstake/index.js sweepContractStake, valid path only, after
+    // createContractUnstake writes the contract_unstakes row) to start the cooldown on a staker's
+    // active (target, tick) rows.
     // Same load-bearing `currentBlock` filter as setStakeDeactivationByPubkey: a pending-activation
     // top-up (activation_block > currentBlock) is excluded from the unstake amount, so deactivating it
     // here would orphan its tokens (cooldown sweep never refunds it). It stays active until a later UNSTAKE.

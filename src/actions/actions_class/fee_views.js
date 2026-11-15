@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
+const { isUsableFeeDestination } = require('../../config/fee_destination.js');
 const { normalizeQuoteRequest, batchRequestWire, isIncompleteDryRun } = require('./quote_answers.js');
 
 // Which database the fee schedule's price read came out of. Resolved exactly the way
@@ -72,7 +73,7 @@ module.exports = {
 
         let coin           = this.config['COIN'];
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
-        let nativeEnabled  = !!(feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
+        let nativeEnabled  = isUsableFeeDestination(feeDestination);
 
         let run = await this.dryRunAction({
             action, params, source, feeOutputs, rawData,
@@ -144,7 +145,7 @@ module.exports = {
     async getFeeSchedule(){
         let coin           = this.config['COIN'];
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
-        let enabled        = !!(feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
+        let enabled        = isUsableFeeDestination(feeDestination);
         let blockIndex     = await this.indexerDb.getLatestBlockIndex();
         let maxPriceAgeSeconds = maxPriceAgeSecondsAt(
             this.config, this.config['NETWORK'], coin, blockIndex);

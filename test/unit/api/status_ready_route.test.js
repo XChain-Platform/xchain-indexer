@@ -190,6 +190,24 @@ describe('GET /status and GET /ready on faults a restart cannot clear', function
         assert.strictEqual((await get(port, '/ready')).status, 503);
     });
 
+    it('keeps the behind episode through a stale tip read while the decoder sits level', async function(){
+        let ix = stubIndexer({ indexerBlock: 900, decoderBlock: 900, nodeHeight: 905 });
+        let episodeAt = Date.now() - 11 * MIN;
+        ix.lastBlockCommittedAt = Date.now() - 30 * MIN;
+        ix.readyBehindSince = episodeAt;
+        let staleSince = Date.now() - 2 * MIN;
+        ix.readChainTip = async () => ({ height: null, source: null, at: staleSince - ix.chainTipTtlMs,
+                                        stale: true, staleSince: staleSince });
+        await serve(ix);
+        assert.strictEqual((await get(port, '/ready')).status, 200);
+        assert.strictEqual(ix.readyBehindSince, episodeAt, 'an unknown tip is not a caught-up tip');
+        ix.readChainTip = async () => ({ height: 905, source: 'utxo_tracker', at: Date.now(),
+                                        stale: false, staleSince: null });
+        let ready = await get(port, '/ready');
+        assert.strictEqual(ready.status, 503);
+        assert.deepStrictEqual(ready.body.notReadyReasons, ['behind_tip_no_commit']);
+    });
+
     it('reports a held block that survived a restart: /status 200, /ready 503 past the ceiling', async function(){
         let ix = stubIndexer({ indexerBlock: 1000, decoderBlock: 4800 });
         let now = Date.now();

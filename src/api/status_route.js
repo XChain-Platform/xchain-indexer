@@ -32,7 +32,7 @@ const { hubConsensusHashFields } = require('./health/hub_fields');
 // the route is handed, so a stub class in a test still gets the real rule.
 const { barrierHoldMs, barrierCeilingExceeded, publishedStallClass } = require('../XChainIndexer/stall_health.js');
 const { attributedStallReason, trainActivationReport } = require('./health/stall_fields');
-const { blocksBehind, nextBehindSince, readinessVerdict } = require('../XChainIndexer/readiness/verdict.js');
+const { episodeBehind, nextBehindSince, readinessVerdict } = require('../XChainIndexer/readiness/verdict.js');
 
 // The coin node tip for chainLag, or the empty shape when the indexer cannot read one
 // (no tracker configured, or a stub without the method). Never throws.
@@ -59,7 +59,7 @@ function readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexer
     let decoderLag = (decoderBlock != null && indexerBlock != null) ? decoderBlock - indexerBlock : null;
     let chainLag   = (Number.isFinite(tip.height) && indexerBlock != null) ? tip.height - indexerBlock : null;
     let verdictChainLag = tip.stale === true ? null : chainLag;
-    let behind = blocksBehind(decoderLag, verdictChainLag);
+    let behind = episodeBehind(decoderLag, chainLag, tip.stale === true);
     indexer.readyBehindSince = nextBehindSince(indexer.readyBehindSince, behind, now,
                                                 indexer.lastBlockCommittedAt);
     let pollSilent = (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false;

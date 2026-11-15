@@ -172,7 +172,7 @@ module.exports = {
     // (relayOrigin is false there, and a BTC responsible set is never empty by
     // construction). Gated on block TIME, not height, because the rule must flip on
     // LTC and DOGE whose local heights sit millions of blocks above any BTC-derived
-    // threshold; see the ATTEST_RELAY_ORIGIN note in protocol_changes.js.
+    // threshold; see the ATTEST_RELAY_ORIGIN note in src/protocol_changes/changes_2.js.
     async isRelayOriginRequest(data, error){
         let relayOrigin = false;
         if(!error && this.config['COIN'] !== HOME_CHAIN)

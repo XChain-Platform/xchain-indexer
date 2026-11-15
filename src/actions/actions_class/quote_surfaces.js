@@ -25,6 +25,7 @@
 // Pure parts of the dry-run engine and both public read-only surfaces, given the instance explicitly.
 const dryRunSupport = require('./dry_run_support.js');
 const quoteAnswers  = require('./quote_answers.js');
+const { isUsableFeeDestination, usableFeeDestination } = require('../../config/fee_destination.js');
 const { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome } = dryRunSupport;
 const { launchGateAdmits, rollbackPreservingError, NOT_ADMITTED_BEFORE_LAUNCH } = dryRunSupport;
 const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, feeQuoteNoVerdict, isIncompleteDryRun, dryRunVerdictQuote } = quoteAnswers;
@@ -242,7 +243,7 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     let base = feeQuoteBase(this, action, feeDestination);
 
     // Native-coin fees are off unless a real FEE_DESTINATION is configured.
-    if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
+    if(!isUsableFeeDestination(feeDestination))
         return Object.assign(base, { supported: false, valid: false, error: 'native coin fee not enabled (no FEE_DESTINATION configured)' });
 
     // Single classification path (classifyFeeQuoteAction) shared with the conformance test;
@@ -353,8 +354,7 @@ function batchProbeForbiddenSubAction(policy, params){
 // verdict is only truthful when that mode matches the payer's real transaction.
 async function computePreflight(policy, { action, params, source, feeMode }){
     let coin           = this.config['COIN'];
-    let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
-    let probeDest      = (feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') ? feeDestination : null;
+    let probeDest      = usableFeeDestination(this.config);
     let feeTick        = this.config['GAS'];
     let resolvedMode   = resolvePreflightFeeMode(this, feeMode, probeDest);
     let rawAction      = action, rawParams = params;

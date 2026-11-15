@@ -22,6 +22,7 @@
 
 const deploy = require('../deploy/index.js');
 const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
+const { usableFeeDestination } = require('../../config/fee_destination.js');
 
 // The zero-fee answer priceFeeQuote returns when there is no protocol fee to price.
 function zeroFeeQuote(base){
@@ -118,8 +119,7 @@ module.exports = {
     // Quote side only (the pre-flight's default fee mode and refusal wording): nothing
     // consensus-bearing reads this.
     nativeFeeMandatory(){
-        let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
-        if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') return false;
+        if(!usableFeeDestination(this.config)) return false;
         return this.config['COIN'] !== 'BTC';
     },
 

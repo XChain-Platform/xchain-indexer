@@ -90,3 +90,43 @@ describe('migration live-schema MODIFY guard: omitted charset and collation @reg
             'VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci'), '');
     });
 });
+
+describe('migration live-schema MODIFY guard: named charset and collation @regression @tier1', function () {
+    const binary = text('varchar(64)', 'utf8mb4', 'utf8mb4_bin', 'utf8_general_ci');
+
+    it('refuses a MODIFY that names the charset but lets a binary collation fall to its default', function () {
+        assert.match(lossOf(binary, 'VARCHAR(128) CHARACTER SET utf8mb4'),
+            /omits COLLATE \(utf8mb4_bin -> the utf8mb4 default\)/);
+        assert.match(lossOf(binary, 'VARCHAR(128) CHARSET utf8mb4 NOT NULL'), /omits COLLATE/);
+        assert.match(lossOf(text('varchar(256)', 'utf8mb3', 'utf8_bin', 'utf8_general_ci'),
+            'VARCHAR(256) CHARACTER SET utf8mb4'), /omits COLLATE \(utf8mb3_bin -> the utf8mb4 default\)/);
+        assert.match(lossOf(text('varchar(250)', 'utf8mb4', 'utf8mb4_nopad_bin', 'utf8mb4_general_ci'),
+            'VARCHAR(250) CHARACTER SET utf8mb4 NOT NULL'), /omits COLLATE/);
+    });
+
+    it('refuses an explicit COLLATE that coarsens or otherwise changes the live collation', function () {
+        assert.match(lossOf(binary, 'VARCHAR(128) COLLATE utf8mb4_general_ci'),
+            /changes the collation \(utf8mb4_bin -> utf8mb4_general_ci\)/);
+        assert.match(lossOf(binary, 'VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'), /changes the collation/);
+        assert.match(lossOf(text('varchar(250)', 'utf8mb4', 'utf8mb4_general_ci', 'utf8mb4_general_ci'),
+            'VARCHAR(250) COLLATE utf8mb4_nopad_bin'), /changes the collation/);
+    });
+
+    it('leaves a case-insensitive column to the charset default whatever the server version names it', function () {
+        for (const live of ['utf8mb4_general_ci', 'utf8mb4_uca1400_ai_ci', 'utf8mb3_general_ci']) {
+            assert.strictEqual(lossOf(text('varchar(250)', live.split('_')[0], live, 'utf8_general_ci'),
+                'VARCHAR(500) CHARACTER SET utf8mb4'), '', live);
+        }
+    });
+
+    it('passes a restated collation and a widen that keeps the collation and changes only the charset', function () {
+        assert.strictEqual(lossOf(binary, 'VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin'), '');
+        assert.strictEqual(lossOf(binary, "VARCHAR(128) COLLATE utf8mb4_bin COMMENT 'COLLATE utf8mb4_general_ci'"), '');
+        assert.strictEqual(lossOf(text('varchar(256)', 'utf8mb3', 'utf8_bin', 'utf8_general_ci'),
+            'VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin'), '');
+        assert.strictEqual(lossOf(text('varchar(250)', 'utf8mb3', 'utf8_general_ci', 'utf8_general_ci'),
+            'VARCHAR(250) CHARACTER SET utf8mb4'), '');
+        assert.strictEqual(lossOf(text('mediumtext', 'utf8mb3', 'utf8_general_ci', 'utf8_general_ci'),
+            'MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci'), '');
+    });
+});

@@ -186,18 +186,18 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
             const fetchImpl = async (url) => {
                 urls.push(String(url));
                 return { ok: true, json: async () => (String(url).includes('/checkpoints/range')
-                    ? { checkpoints: [{ block_index: 42, network: 'regtest', snapshot_block: N,
+                    ? { checkpoints: [{ block_index: N, network: 'regtest', snapshot_block: N,
                                         state_root: '0'.repeat(64), validator_signatures: [] }] }
                     : { proof: {} }) };
             };
             const out = await light.followForward({
                 explorerUrl: 'http://explorer.invalid',
-                trustedCheckpoint: { block_index: 41, network: 'regtest', state_root: '0'.repeat(64) },
-                toHeight: 42,
+                trustedCheckpoint: { block_index: BURIED, network: 'regtest', state_root: '1'.repeat(64) },
+                toHeight: N,
                 btcCoin: 'BTC',
                 fetchImpl,
             });
-            assert.strictEqual(out.reason, 'VALIDATOR_SET_UNVERIFIED@42',
+            assert.strictEqual(out.reason, 'VALIDATOR_SET_UNVERIFIED@' + N,
                 'the stubbed proof must fail verification AFTER the set height is requested');
             const proofUrl = urls.find(u => u.includes('/proof/validator-set'));
             assert.ok(proofUrl, 'followForward must request a validator-set proof');

@@ -125,8 +125,8 @@ module.exports = {
 
     // Re-NULL deactivation_block stamps that orphaned UNSTAKE / DELEGATE-revoke
     // actions wrote IN PLACE on surviving parent stake/delegation rows. Each
-    // forward handler (createUnstake, the DELEGATE-revoke path,
-    // createContractUnstake, the contract-revoke path) marks an ALREADY-ACTIVE
+    // forward handler (UNSTAKE v0 sweepCapabilityStake, the DELEGATE-revoke path,
+    // UNSTAKE v1 sweepContractStake, the contract-revoke path) marks an ALREADY-ACTIVE
     // parent row (created by a much earlier STAKE/DELEGATE in a surviving block)
     // with deactivation_block = actionBlock + activationDelay. The bulk delete
     // below removes the orphaned action row but cannot undo that in-place UPDATE,

@@ -247,6 +247,24 @@ function narrowedType(rawLive, rawNext, opts){
 // A collation name as the server compares it: MariaDB 10.6+ reports utf8 as utf8mb3.
 const collationKey = (name) => (name == null || name === '' ? null : String(name).toLowerCase().replace(/^utf8_/, 'utf8mb3_'));
 
+// The collation without its charset prefix, so utf8mb3_bin and utf8mb4_bin compare equal.
+const collationSuffix = (key) => key.split('_').slice(1).join('_');
+
+// The loss when a text MODIFY that names a charset lands on another collation than the live
+// column's. Only the charset half may differ, and the charset rule judges that half. With no
+// COLLATE the server applies the charset's default, which varies by server version but is never
+// binary, so only a binary live collation is known to be lost.
+function namedCollationLoss(liveCollation, bare){
+    const named = /\bCOLLATE\s+(\w+)/i.exec(bare);
+    if(named){
+        const next = collationKey(named[1]);
+        return collationSuffix(next) === collationSuffix(liveCollation) ? null
+            : 'changes the collation (' + liveCollation + ' -> ' + next + ')';
+    }
+    return /(?:^|_)bin$/.test(liveCollation)
+        ? 'omits COLLATE (' + liveCollation + ' -> the ' + declaredCharset(bare) + ' default)' : null;
+}
+
 // Every loss one MODIFY would cause against the live column row; empty when it is safe.
 // `opts` carries the unsigned-retype probe verdict (unsignedRetypeSafe, liveMin).
 function losses(live, definition, opts = {}){
@@ -282,6 +300,10 @@ function losses(live, definition, opts = {}){
        liveCollation !== tableCollation){
         const what = liveCollation.split('_')[0] === tableCollation.split('_')[0] ? 'omits COLLATE' : 'omits CHARACTER SET';
         out.push(what + ' (' + liveCollation + ' -> table default ' + tableCollation + ')');
+    }
+    if(liveSet && nextSet && nextType && TEXTUAL.has(nextType.name) && liveCollation){
+        const changed = namedCollationLoss(liveCollation, bare);
+        if(changed) out.push(changed);
     }
     return out;
 }

@@ -66,6 +66,15 @@ function nextBehindSince(previous, behind, now, lastBlockCommittedAt){
     return (!validPrevious || committedAfter) ? now : previous;
 }
 
+// The lag that drives nextBehindSince. A stale chain tip is unknown, not caught up: a
+// positive decoder lag is still a known lower bound, but a decoder level with the
+// indexer says nothing about the chain, so it keeps the episode instead of ending it.
+function episodeBehind(decoderLag, chainLag, chainTipStale){
+    if(chainTipStale === true)
+        return (Number.isFinite(decoderLag) && decoderLag > 0) ? decoderLag : null;
+    return blocksBehind(decoderLag, chainLag);
+}
+
 // The readiness verdict. Every input is a plain value so the rule is testable without
 // a block loop. Returns { ready, reasons, behind, noCommitForMs, behindNoCommitForMs,
 // chainTipStaleForMs, chainLagKnown }, where reasons lists every condition that holds:
@@ -141,5 +150,5 @@ function resolveReadyNoCommitMs(raw){
 }
 
 module.exports = { READY_NO_COMMIT_DEFAULT_MS, CHAIN_TIP_TTL_DEFAULT_MS, CHAIN_TIP_TIMEOUT_DEFAULT_MS,
-                   blocksBehind, nextBehindSince, readinessVerdict, resolvePositiveIntMs,
+                   blocksBehind, episodeBehind, nextBehindSince, readinessVerdict, resolvePositiveIntMs,
                    resolveReadyNoCommitMs };

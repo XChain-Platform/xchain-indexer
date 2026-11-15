@@ -81,7 +81,8 @@ module.exports = {
     },
 
     // Set deactivation_block for the ALREADY-ACTIVE stake rows owned by the given pubkey.
-    // Used by createUnstake to mark when a pubkey's stake (original + activated top-ups) should be
+    // Used by UNSTAKE v0 (actions/unstake/index.js sweepCapabilityStake, valid path only) to mark
+    // when a pubkey's stake (original + activated top-ups) should be
     // removed from the active set. The `currentBlock` filter (activation_block <= currentBlock) is
     // load-bearing: the unstake AMOUNT is summed from active rows only (getActiveStakeByPubkey), so a
     // pending-activation top-up (activation_block > currentBlock) must NOT be deactivated here - it

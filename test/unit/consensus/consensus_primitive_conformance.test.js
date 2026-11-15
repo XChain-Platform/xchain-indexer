@@ -27,8 +27,8 @@
 //   2. IDENTITY  - the local copy is byte-identical to the xchain-documentation copy.
 // (1) catches a logic change that happens to pass the local unit suite; (2)
 // catches ANY edit to one copy that was not propagated to the others. When the
-// sibling xchain-documentation repo is not checked out (standalone deploy), skip
-// rather than fail, matching the existing cross-repo guard convention.
+// sibling xchain-documentation repo is absent or refused by siblingCheckout(),
+// the guards skip unless XCHAIN_REQUIRE_SIBLINGS=1 makes coverage mandatory.
 
 const assert = require('assert');
 const fs     = require('fs');
@@ -42,7 +42,8 @@ const LOCAL_DIR = path.join(__dirname, '..', '..', '..', 'src');
 // sets XCHAIN_DOCS_DIR to wherever it checked the sibling out, because actions/checkout
 // cannot write a path above the job workspace (the dev/bin/ci-all.sh sibling layout is
 // one level above each repo). Fall back to that sibling layout for local + dev runs.
-// When neither resolves (standalone deploy), the guards below skip rather than fail.
+// When neither resolves, the guards skip unless XCHAIN_REQUIRE_SIBLINGS=1 makes
+// sibling coverage mandatory, in which case they fail.
 const DOCS_DIR  = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '..', '..', '..', '..', 'xchain-documentation');
 const CANON_DIR = path.join(DOCS_DIR, 'protocol', 'reference-impl');
 const VEC_DIR   = path.join(DOCS_DIR, 'protocol', 'test-vectors');

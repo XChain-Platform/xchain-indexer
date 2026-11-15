@@ -24,7 +24,7 @@
 
 const assert = require('assert');
 
-const { readinessVerdict, blocksBehind, nextBehindSince, resolvePositiveIntMs, resolveReadyNoCommitMs,
+const { readinessVerdict, blocksBehind, episodeBehind, nextBehindSince, resolvePositiveIntMs, resolveReadyNoCommitMs,
         READY_NO_COMMIT_DEFAULT_MS, CHAIN_TIP_TTL_DEFAULT_MS,
         CHAIN_TIP_TIMEOUT_DEFAULT_MS } = require('../../../src/XChainIndexer/readiness/verdict.js');
 const XChainIndexer = require('../../../src/XChainIndexer.js');
@@ -115,6 +115,23 @@ describe('readinessVerdict()', function(){
         assert.strictEqual(nextBehindSince(NOW - MIN, null, NOW, null), NOW - MIN);
         assert.strictEqual(nextBehindSince(NOW - MIN, 0, NOW, null), null);
         assert.strictEqual(nextBehindSince(NOW - MIN, 1, NOW, NOW - 1000), NOW);
+    });
+
+    it('treats a stale chain tip as unknown for the behind episode, not as caught up', function(){
+        assert.strictEqual(episodeBehind(0, null, true), null);
+        assert.strictEqual(episodeBehind(0, 5, true), null);
+        assert.strictEqual(episodeBehind(3, null, true), 3);
+        assert.strictEqual(episodeBehind(null, null, true), null);
+        assert.strictEqual(episodeBehind(0, 5, false), 5);
+        assert.strictEqual(episodeBehind(0, 0, false), 0);
+        assert.strictEqual(episodeBehind(0, null, false), 0);
+        let since = NOW - 11 * MIN;
+        let lastCommit = NOW - 20 * MIN;
+        since = nextBehindSince(since, episodeBehind(0, null, true), NOW - 5 * MIN, lastCommit);
+        assert.strictEqual(since, NOW - 11 * MIN);
+        since = nextBehindSince(since, episodeBehind(0, 5, false), NOW, lastCommit);
+        assert.deepStrictEqual(readinessVerdict(clean({ behindSince: since, chainLag: 5, decoderLag: 0,
+            lastBlockCommittedAt: lastCommit })).reasons, ['behind_tip_no_commit']);
     });
 
     it('reports an aged configured chain tip only after the no-commit window', function(){
