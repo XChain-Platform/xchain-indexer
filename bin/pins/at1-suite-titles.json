@@ -17113,6 +17113,19 @@
       "Provider deadline-window overlay parity (VM injection) @regression @tier2 DEPLOY injects the CONFIGURED deadline windows into the VM",
       "Provider deadline-window overlay parity (VM injection) @regression @tier2 EXECUTE injects the CONFIGURED deadline windows into the VM"
     ],
+    "d436c418fcaf9eaf": [
+      "FILE multipart completion write decision accepts an action index equal to the greatest piece action index",
+      "FILE multipart completion write decision does not mutate any input object",
+      "FILE multipart completion write decision rejects a non-null verdict when the group has no manifest",
+      "FILE multipart completion write decision rejects an action index below any part action index",
+      "FILE multipart completion write decision rejects an action index below the manifest action index",
+      "FILE multipart completion write decision returns null for a non-terminal verdict",
+      "FILE multipart completion write decision returns null for a null verdict",
+      "FILE multipart completion write decision returns null when the existing completion is a mismatch",
+      "FILE multipart completion write decision returns null when the existing completion is complete",
+      "FILE multipart completion write decision returns the completion row for a complete assembly",
+      "FILE multipart completion write decision returns the completion row for a mismatched assembly"
+    ],
     "d448ca271f35d379": [
       "terminal XCALL resolved_block @regression @tier1 stamps completion with the processing BLOCK_INDEX, not the request block",
       "terminal XCALL resolved_block @regression @tier1 stamps expiry with the processing BLOCK_INDEX, not the request block"
@@ -20547,8 +20560,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1632,
-      "titleCount": 15899,
+      "fileCount": 1633,
+      "titleCount": 15910,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -20763,6 +20776,7 @@
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
+        "test/unit/actions/file_multipart_decision.test.js": "d436c418fcaf9eaf",
         "test/unit/actions/file_multipart_validate.test.js": "53c18091185cb3af",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/issue/settle_owner_history.test.js": "087297546f0ad980",
