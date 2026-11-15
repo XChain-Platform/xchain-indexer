@@ -72,11 +72,10 @@ module.exports = {
             // block rolls back and retries. See finding #898.
             results = await this.doQueryStrict(query, [block_index]);
         } catch(e){
-            // Infrastructure faults (lock-wait timeout, connection loss - any errno other than
-            // the benign missing-table/column 1146/1054) must reach the fail-loud gate. A failed
+            // Infrastructure faults, including missing schema, must reach the fail-loud gate. A failed
             // lookup is NEVER memoized, so the retry re-queries against a healthy DB.
             rethrowIfInfraFault(e);
-            // Benign older-schema gap only: treat as an unresolvable block_time, uncached.
+            // Errno-less contract-shaped failures stay an unresolvable block_time, uncached.
             return false;
         }
         // A missing decoder row is unresolvable too, so it stays unmemoized: a retry after

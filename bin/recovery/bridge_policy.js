@@ -15,10 +15,14 @@
 'use strict';
 
 const bridgeSettle = require('../../src/consensus/bridge_settle.js');
+const gateRegistry = require('../../src/consensus/gate_registry.js');
+const membership = require('../../src/consensus/bridge_settle/policy_membership.js');
 const swq = require('../../src/consensus/stake_weighted_quorum.js');
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const STATUSES = new Set(['finalized', 'retracted']);
+const LIST_SHARE_PRODUCER_GATE =
+    'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION';
 
 function fail(kind, id, reason){
     throw new Error(kind + ' ' + String(id || '').substring(0, 16) + '... ' + reason);
@@ -68,12 +72,19 @@ function validatePolicy(row, network){
     if(!(row.sleeping === 0 || row.sleeping === 1))
         fail('policy snapshot', row.snapshot_id, 'has malformed sleeping');
 
-    let allow = bridgeSettle.parseMembership(row.allow_list);
-    let block = bridgeSettle.parseMembership(row.block_list);
-    if(allow === false || block === false || !bridgeSettle.verifyMembershipOrder(allow) ||
-       !bridgeSettle.verifyMembershipOrder(block))
+    let allowParsed = membership.parseMembershipOrRef(row.allow_list);
+    let blockParsed = membership.parseMembershipOrRef(row.block_list);
+    if(allowParsed === false || blockParsed === false)
         fail('policy snapshot', row.snapshot_id, 'has malformed or unordered membership list');
-    if(bridgeSettle.policyHash(allow, block, !!row.sleeping) !== row.policy_hash)
+    let allow = Object.prototype.hasOwnProperty.call(allowParsed, 'list') ? allowParsed.list : null;
+    let block = Object.prototype.hasOwnProperty.call(blockParsed, 'list') ? blockParsed.list : null;
+    let refs = { allow: allowParsed.ref || null, block: blockParsed.ref || null };
+    if((refs.allow || refs.block) && !gateRegistry.activeAt(
+        LIST_SHARE_PRODUCER_GATE, row.network, 'BTC', Number(row.snapshot_block), null))
+        fail('policy snapshot', row.snapshot_id, 'carries a shared-list ref below the producer gate');
+    if(!membership.verifyMembershipOrder(allow) || !membership.verifyMembershipOrder(block))
+        fail('policy snapshot', row.snapshot_id, 'has malformed or unordered membership list');
+    if(membership.policyHash(allow, block, !!row.sleeping, refs) !== row.policy_hash)
         fail('policy snapshot', row.snapshot_id, 'policy_hash does not match membership lists');
 }
 
@@ -104,6 +115,22 @@ async function writeBridge(db, row){
     let existing = await db.doQuery(
         'SELECT transfer_id FROM bridge_transfers WHERE transfer_id = ? LIMIT 1', [row.transfer_id]);
     if(existing && existing.length > 0){
+        // The hub revives a retracted transfer in place with the new round's signed content
+        // (insertBridgeTransfer), re-archives it on the status change, and the live mirror
+        // takes the same columns (BRIDGE_REVIVE_COLUMNS). A status-only update here kept
+        // the first batch's effective_time and snapshot_block, which gate when and in what
+        // order a transfer settles, so a recovery-fed node credited at a different block
+        // than a mirror-fed one. Only the archived revive columns move; a retraction never
+        // rewrites content on the hub, so it stays status-only.
+        if(row.status === 'finalized'){
+            await db.doQuery(
+                `UPDATE bridge_transfers SET status = ?, validator_signatures = ?, finalizing_view = ?,
+                     effective_time = ?, snapshot_block = ?
+                 WHERE transfer_id = ?`,
+                [row.status, row.validator_signatures, Number(row.finalizing_view) || 0,
+                 Number(row.effective_time), Number(row.snapshot_block), row.transfer_id]);
+            return;
+        }
         await db.doQuery('UPDATE bridge_transfers SET status = ? WHERE transfer_id = ?',
                          [row.status, row.transfer_id]);
         return;
@@ -162,4 +189,4 @@ async function writeArchive(db, archive, report){
     }
 }
 
-module.exports = { verifyArchive, writeArchive };
+module.exports = { validatePolicy, verifyArchive, writeArchive };

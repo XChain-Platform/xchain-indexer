@@ -183,8 +183,9 @@ function validateStakeAmount(data, tickTokenInfo, error){
 }
 
 /**
- * Top-up vs. new: if (target, pubkey, tick) already has an active row,
- * it MUST be owned by the same SOURCE (otherwise reject pubkey-collision).
+ * Top-up vs. new: if (target, pubkey, tick) already has a valid row, whether or not it is still
+ * active, it MUST be owned by the same SOURCE (otherwise reject pubkey-collision). The first
+ * valid staker keeps the key; only a DELEGATE rotation rewriting a live row's key moves a row off it.
  *
  * @param {Object}      data  - the action row; reads TARGET_CONTRACT_INDEX, SIGNING_PUBKEY, TICK, SOURCE
  * @param {string|null} error - the verdict so far

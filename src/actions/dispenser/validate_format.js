@@ -70,7 +70,7 @@ module.exports = {
         // the field is present, and the block above binds only GIVE_OWNERSHIP=1), and opened a
         // dispenser that settles buyer payments as VALID fills crediting nothing:
         // every downstream guard reads a non-positive GIVE_AMOUNT as "ownership
-        // dispenser" and skips (dispense.js giveAmountIsPositive clamp, the
+        // dispenser" and skips (dispense/pricing.js giveAmountIsPositive clamp, the
         // bcgt(GIVE_AMOUNT,0) credit/escrow branch), while the auto-close threshold
         // is that same non-positive value, so it never closes and keeps absorbing
         // payments. GIVE_ESCROW is deliberately NOT constrained here: an empty

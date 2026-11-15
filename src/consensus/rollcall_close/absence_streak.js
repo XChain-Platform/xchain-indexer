@@ -70,10 +70,13 @@ async function measureAbsences(indexerDb, epochHeight, closeBlock, sortedSources
     let lookback = await indexerDb.getRolledRollcallEpochs(epochHeight, rca.ROLLCALL_STREAK_LOOKBACK);
     let evictedSources = [];
     let absenceRows    = [];
+    let epochHeights   = lookback.map((r) => parseInt(r.epoch_height));
+    let absencesBySource = absentSources.length > 0
+        ? await indexerDb.getRollcallAbsenceEpochsForSources(absentSources, epochHeights)
+        : new Map();
 
     for(let source of absentSources){
-        let priorAbsences = new Set(
-            await indexerDb.getRollcallAbsenceEpochsForSource(source, lookback.map((r) => parseInt(r.epoch_height))));
+        let priorAbsences = new Set(absencesBySource.get(source) || []);
 
         let streak = sourceStreak(source, lookback, priorAbsences, epochHeight);
 

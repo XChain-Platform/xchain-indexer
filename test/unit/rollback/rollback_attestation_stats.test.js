@@ -86,8 +86,8 @@ function initializeFixture() {
     // the rest). pkA appears on two ok responses (earns 2, last block 90); pkC
     // earned none post-rollback (its only signatures were orphaned).
     okResponses = [
-        { provider_id: PROV, validator_signatures: JSON.stringify([{ pubkey: pkA, sig: 'ab'.repeat(64) }]), block_index: 90 },
-        { provider_id: PROV, validator_signatures: JSON.stringify([{ pubkey: pkA, sig: 'cd'.repeat(64) }]), block_index: 88 },
+        { request_id: 'ok-1', provider_id: PROV, validator_signatures: JSON.stringify([{ pubkey: pkA, sig: 'ab'.repeat(64) }]), block_index: 90 },
+        { request_id: 'ok-2', provider_id: PROV, validator_signatures: JSON.stringify([{ pubkey: pkA, sig: 'cd'.repeat(64) }]), block_index: 88 },
     ];
 
     // Surviving requests that WOULD have expired in a replay to N-1: deadline
@@ -192,6 +192,30 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         // exactly as a from-genesis replay would never have created it.
         assert.ok(!(`${pkC}|${PROV}` in result),
             'pkC had no surviving ledger rows and must not be reinserted');
+    });
+
+    it('logs and skips unparseable validator signatures', async function () {
+        okResponses.push({ request_id: 'bad-json', provider_id: PROV,
+            validator_signatures: '{not-json', block_index: 87 });
+        const errors = [];
+        const originalError = console.error;
+        console.error = (message) => errors.push(String(message));
+        try { await rollback.recomputeAttestationValidatorStats(N); }
+        finally { console.error = originalError; }
+        assert.strictEqual(dump()[`${pkA}|${PROV}`].fulfilled_count, 2);
+        assert.ok(errors.some(line => /bad-json/.test(line) && /malformed validator_signatures/.test(line)));
+    });
+
+    it('logs and skips validator signatures that are valid non-array JSON', async function () {
+        okResponses.push({ request_id: 'bad-shape', provider_id: PROV,
+            validator_signatures: '{}', block_index: 86 });
+        const errors = [];
+        const originalError = console.error;
+        console.error = (message) => errors.push(String(message));
+        try { await rollback.recomputeAttestationValidatorStats(N); }
+        finally { console.error = originalError; }
+        assert.strictEqual(dump()[`${pkA}|${PROV}`].fulfilled_count, 2);
+        assert.ok(errors.some(line => /bad-shape/.test(line) && /non-array validator_signatures/.test(line)));
     });
 
     it('matches an independent fresh aggregation computed from the same sources', async function () {

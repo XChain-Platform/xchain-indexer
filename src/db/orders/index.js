@@ -41,7 +41,7 @@ module.exports = Object.assign({
         let data = emptyMarketData();
         // Get the time right now and the time 24 hours ago
         let time_now  = block_time,
-            time_24hr = this.util.bcsub(time_now, 86400);
+            time_24hr = this.util.bcsub(time_now, 86400, 0);
         // Set the last time this info was updated to now
         data.last_updated = time_now;
         // A side's tick id as `markets` keys it. orders/order_matches store NULL where

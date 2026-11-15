@@ -20,6 +20,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../../src/hub/hub_db_sync.js');
+const priceBarriers = require('../../../../../src/XChainIndexer/price_barriers.js');
 const mirrorBarriers = require('../../../../../src/XChainIndexer/mirror_barriers.js');
 const blockCommit = require('../../../../../src/XChainIndexer/block_commit.js');
 const Rollback = require('../../../../../src/rollback/index.js');
@@ -142,6 +143,7 @@ async function heldReadFailsClosedAndWaits() {
     assert.strictEqual(await indexer.deferOnSnapshotSync(LTC_BLOCK, 1700000000), true);
     assert.strictEqual(indexer.stallReason, 'capability_proof_unavailable');
     assert.strictEqual(indexer.stallClearsAt, null);
+    assert.strictEqual(indexer.capabilityProofBarrierSkipped, false);
     assert.strictEqual(sync.waitForSnapshotSync.callCount, 1, 'presence is not checked while deferred');
 
     // A later block is not held by this block's read.
@@ -168,6 +170,27 @@ async function retryReleasesOnProof() {
     assert.strictEqual(indexer.stallReason, null);
 }
 
+async function priceFamilyDefersDisarmCapabilityCheck() {
+    const cases = [
+        ['deferOnPriceSync', 'BTC', 'waitForPriceSyncHeight'],
+        ['deferOnPriceSync', 'LTC', 'waitForPriceSyncTime'],
+        ['deferOnPriceLandingSync', 'LTC', 'waitForPriceLandingSync'],
+        ['deferOnOracleSync', 'LTC', 'waitForOracleSyncTimestamp']
+    ];
+    for(const [method, coin, wait] of cases){
+        const hubDbSync = { [wait]: async () => { throw new Error('defer'); } };
+        const indexer = Object.assign({
+            hubDbSync,
+            config: { COIN: coin },
+            priceSyncTimeoutMs: 1,
+            capabilityProofBarrierSkipped: true,
+            barrierClearsAtHeightAware: () => null
+        }, priceBarriers, { landingClearsAt: () => null });
+        assert.strictEqual(await indexer[method](10, 1700000000, true), true);
+        assert.strictEqual(indexer.capabilityProofBarrierSkipped, false, method + ' must disarm the check');
+    }
+}
+
 async function offBlockReadsUnpoliced() {
     const sync = makeSync();
     const indexer = makeIndexer(sync);
@@ -189,6 +212,7 @@ function commitClearsHeldRead() {
 }
 
 describe('capability proof barrier scoped to the snapshot a block reads @regression @tier1', function () {
+    before(priceFamilyDefersDisarmCapabilityCheck);
     it('capabilityReadHeld matches the held (snapshot_block, capability) only', heldReadMatchesKey);
     it('a block passes an unproven frontier snapshot it does not read', passesUnreadFrontier);
     it('a block that reads the held snapshot fails closed and its retry waits for the proof', heldReadFailsClosedAndWaits);

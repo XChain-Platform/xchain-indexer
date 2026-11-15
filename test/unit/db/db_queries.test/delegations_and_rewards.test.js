@@ -132,6 +132,19 @@ describe('Database.getContractStakeOwner() @regression @tier1', function () {
         sinon.stub(db, 'getPubkeyId').resolves(null);
         assert.strictEqual(await db.getContractStakeOwner(1, 'pk', 'TICK'), null);
     });
+
+    it('reads the first valid row with no activation, deactivation or amount filter', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(3);
+        sinon.stub(db, 'getTickerId').resolves(5);
+        sinon.stub(db, 'getStatusId').resolves(1);
+        const dq = sinon.stub(db, 'doQuery').resolves([{ source_id: '42' }]);
+        assert.strictEqual(await db.getContractStakeOwner(7, 'PK', 'TICK'), 42);
+        const sql = String(dq.firstCall.args[0]);
+        assert.ok(/status_id=\?/.test(sql) && /ORDER BY action_index ASC LIMIT 1/.test(sql));
+        assert.ok(!/activation_block|deactivation_block|amount/.test(sql), 'a released row still owns the key: ' + sql);
+        assert.deepStrictEqual(dq.firstCall.args[1], [7, 3, 5, 1]);
+    });
 });
 
 // ---------------------------------------------------------------------------

@@ -175,7 +175,6 @@ function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock,
     // A halted decoder's tip is frozen, so an indexer level with it is not synced: it
     // is level with a chain that stopped. isSynced keeps its decoder-parity meaning
     // otherwise, and atProcessableTip follows it.
-    let halted = indexer.decoderReorgHalted === true;
     let gateHeld = indexer.decoderReorgHalted === true || indexer.decoderReorgHalted === null;
     let synced = indexer.isSynced() && !gateHeld;
     return {

@@ -102,6 +102,13 @@ describe('snapshot barrier scope filter, admission height versus effective time'
             const { sync } = makeSync(ctx.HubDbSync, late);
             assert.strictEqual(await sync.snapshotSyncSatisfied(T, B), true);
         });
+
+        it('keeps the non-finite block-time shortcut below activation', async function () {
+            const { sync, mirror } = makeSync(ctx.HubDbSync, { matches: [], calls: [] });
+            assert.strictEqual(await sync.waitForSnapshotSync(NaN, 10, B), true);
+            assert.strictEqual(mirror.queries.length, 0);
+            assert.strictEqual(sync._snapshotWaiters.length, 0);
+        });
     });
 
     describe('armed (activation at height 0)', function () {
@@ -127,6 +134,13 @@ describe('snapshot barrier scope filter, admission height versus effective time'
             assert.strictEqual(await sync.snapshotSyncSatisfied(T, B), false);
             assert.strictEqual(await sync.snapshotSyncSatisfied(100, B), true,
                 'a legacy row after t(B) is out of scope');
+        });
+
+        it('fails closed on a non-finite block time once admission is active', async function () {
+            const { sync, mirror } = makeSync(ctx.HubDbSync, legacy);
+            assert.strictEqual(await sync.snapshotSyncSatisfied(NaN, B), false);
+            assert.strictEqual(mirror.queries.length, 0, 'invalid input must fail before any SQL is bound');
+            await assert.rejects(sync.waitForSnapshotSync(NaN, 10, B), /snapshot sync barrier timed out/);
         });
 
         it("an unreadable height reads as inert: the legacy time filter, not a coerced height", async function () {

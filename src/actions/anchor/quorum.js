@@ -20,6 +20,7 @@
 
 const ed25519 = require('../../consensus/ed25519.js');
 const swq     = require('../../consensus/stake_weighted_quorum.js');
+const countQuorum = require('./count_quorum.js');
 const archivePublish = require('../../consensus/archive_publish_set.js');
 
 function archiveCapability(snapshotBlock, network){
@@ -76,7 +77,7 @@ async function verifyHeadQuorum(handler, data, sigs, error, capability = null){
             }
             let quorumMet = weighted
                 ? swq.meetsStakeThreshold(validators, validSigners)
-                : (validSigners.length >= ((oracleN <= 1) ? 1 : Math.max(2 * Math.floor((oracleN - 1) / 3) + 1, Math.ceil((oracleN + 1) / 2))));
+                : countQuorum.meetsCountThreshold(oracleN, validSigners.length);
             if(!quorumMet)
                 error = 'invalid: insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + oracleN + ')');
         }
@@ -140,7 +141,7 @@ async function verifySections(handler, data, sections, oracleSetFor, error){
             }
             let quorumMet = set.weighted
                 ? swq.meetsStakeThreshold(set.validators, validSigners)
-                : (validSigners.length >= ((set.oracleN <= 1) ? 1 : Math.max(2 * Math.floor((set.oracleN - 1) / 3) + 1, Math.ceil((set.oracleN + 1) / 2))));
+                : countQuorum.meetsCountThreshold(set.oracleN, validSigners.length);
             if(!quorumMet){
                 error = 'invalid: SECTION ' + s.SECTION_INDEX + ' insufficient ' +
                         (set.weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + set.oracleN + ')');

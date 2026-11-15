@@ -30,7 +30,7 @@ const { getLogger } = require('../../observability/index.js');
 // can confirm the announced NEW hash is what its own node serves at the reorg
 // height, but nothing today proves the announced OLD hash was ever canonical
 // there, so one Byzantine validator can drive a fake-reorg rollback with a
-// fabricated oldHash. db.js's getReorgsSince() keeps only the deepest
+// fabricated oldHash. getReorgsSince() in db/events keeps only the deepest
 // block_index and drops the hashes, so this is a separate read.
 //
 // Pass block_index + block_hash to ask the precise question: "did you orphan
@@ -54,16 +54,22 @@ function reorgHistoryRpc({ indexer }){
                 // "decoder halted, history frozen". Best-effort: a probe fault falls back to the
                 // indexer's last-known flag rather than failing the whole read.
                 let decoderReorgHalted;
+                let decoderReorgHaltUnverified = false;
                 try {
                     // Route through the same apiView db (pool-direct, never the block tx connection).
                     let probe = await db.isReorgHalted();
                     decoderReorgHalted = !!(probe && probe.halted);
                 } catch (probeErr) {
-                    decoderReorgHalted = !!indexer.decoderReorgHalted;
+                    // Null means no probe has ever read the marker: report it as halted
+                    // (fail closed, like /status) and flag it unverified so a reader can
+                    // tell "could not read" from a confirmed halt.
+                    decoderReorgHaltUnverified = indexer.decoderReorgHalted === null ||
+                                                 indexer.decoderReorgHalted === undefined;
+                    decoderReorgHalted = indexer.decoderReorgHalted !== false;
                 }
                 return reorgHistoryQuery.buildReorgHistoryResponse(rows,
                     { block_index: v.block_index, block_hash: v.block_hash },
-                    { decoderReorgHalted });
+                    { decoderReorgHalted, decoderReorgHaltUnverified });
             } catch (err) {
                 getLogger().error('getreorghistory error:', err);
                 return { error: 'failed to look up reorg history' };

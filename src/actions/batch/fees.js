@@ -145,10 +145,11 @@ function nominalIssueFee(tick, unified){
 //
 // The EXPIRATION POSITION is read out of the HANDLER'S OWN format string rather than
 // hardcoded (it is index 10 for ORDER/SWAP and 13 for DISPENSER today), through the same
-// actions/index.js seam - setActionParamHandler - that already exists to say which handlers have
-// a fixed positional layout. A format string that gains or loses a field therefore moves
-// this pre-check with it instead of silently mispricing. If the seam is absent (a partial
-// test double, an older Actions), the answer is null: unpriceable, no collapse.
+// setActionParamHandler seam (actions_class/address_pre_pass.js, mixed into Actions.prototype
+// by actions/index.js) that already exists to say which handlers have a fixed positional
+// layout. A format string that gains or loses a field therefore moves this pre-check with
+// it instead of silently mispricing. If the seam is absent (a partial test double, an older
+// Actions), the answer is null: unpriceable, no collapse.
 //
 // Never throws, for the same reason every other helper in this handler does not: a crash here
 // would halt block processing, and the safe fallback is null, which is the pre-flag verdict.

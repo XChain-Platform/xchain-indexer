@@ -27,7 +27,8 @@ CREATE TABLE prices (
     sig_count           SMALLINT UNSIGNED,                -- number of PBFT signatures (NULL on a v2 row; see sigs_json)
     sigs_json           TEXT,                             -- JSON array [{pubkey, sig}, ...]; carries the BATCH signature set on a v2 row
     -- v2 fields (validator BATCH snapshot: one signed action carrying an hourly
-    -- window of full round bodies). NULL on a v0/v1 row.
+    -- window of full round bodies). NULL on a v0/v1 row. Their position (after sigs_json, in
+    -- this order) is pinned by test/unit/migration/sql_schema_column_parity.test.js.
     batch_first_round   BIGINT UNSIGNED,                  -- FIRST_ROUND of the batch window (v2 only; NULL on a v0/v1 row)
     batch_last_round    BIGINT UNSIGNED,                  -- LAST_ROUND of the batch window (v2 only; NULL on a v0/v1 row)
     round_count         SMALLINT UNSIGNED,                -- number of rounds carried by this batch (v2 only)

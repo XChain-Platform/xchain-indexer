@@ -42,6 +42,10 @@ module.exports = {
         try {
             return await this.doQueryStrict(query, params);
         } catch (e) {
+            // This bulk read serves an API report and never selects a consensus
+            // verdict. Preserve the older-schema empty result locally while the
+            // shared forward-path guard remains fail-loud.
+            if(e && (e.errno === 1146 || e.errno === 1054)) return [];
             rethrowIfInfraFault(e);
             return [];
         }

@@ -26,6 +26,7 @@ const { getLogger } = require('../../observability/index.js');
 const gateRegistry = require('../../consensus/gate_registry.js');
 const { prelaunchAdmits } = require('../../consensus/gates/mainnet_launch_gate.js');
 const { prelaunchInput } = require('../../XChainIndexer/block_admission.js');
+const { foldLegVerdicts } = require('../send/leg_verdicts.js');
 
 // The verdict for a transaction the mainnet launch gate refuses: the chain never processes it.
 const NOT_ADMITTED_BEFORE_LAUNCH = 'invalid: not admitted before mainnet launch ' +
@@ -68,7 +69,8 @@ function syntheticDryRunTx(actions, { action, params, source, feeOutputs, probeF
         txOutputs = [{ address: probeFeeDestination, value: '21000000.00000000' }];
 
     // Synthetic transaction mirroring what the decoder feeds processTransaction. The tx_hash
-    // is unique + clearly marked; it and any handler writes vanish on rollback.
+    // is unique + clearly marked; it and any handler writes vanish on rollback. The decoder
+    // hardcodes transaction fee to 0, which also keeps data['FEE'] identical here.
     return {
         data:          (typeof rawData === 'string') ? rawData : [action].concat(params).join('|'),
         source:        source,
@@ -78,7 +80,7 @@ function syntheticDryRunTx(actions, { action, params, source, feeOutputs, probeF
         vout:          0,
         block_index:   blockIndex,
         block_time:    blockTime,
-        fee:           null,
+        fee:           0,
         source_pubkey: null,
         tx_outputs:    txOutputs,
         raw_data:      null,
@@ -141,12 +143,12 @@ function quietAbandonedRun(dryRunProcessing){
 // otherwise it carries the first refused leg's own status, so every consumer that keys on the
 // status string (isGuardInertError, the fee quote) still sees a real chain verdict. `legs`
 // lists each leg in settle order so a composer can see which will settle.
-function applyLegVerdicts(resultData, verdict){
+function applyLegVerdicts(resultData, verdict, isGuardInert){
     let legs = resultData ? resultData['PROBE_LEG_VERDICTS'] : null;
-    if(!Array.isArray(legs) || legs.length === 0) return;
-    verdict.legs = legs.map((leg) => Object.assign({}, leg));
-    let refused = legs.find((leg) => leg.status !== 'valid');
-    if(refused) verdict.status = refused.status;
+    let folded = foldLegVerdicts(legs, isGuardInert);
+    if(!folded) return;
+    verdict.legs = folded.legs;
+    verdict.status = folded.status;
 }
 
 // Read the handler's verdict, staged fee and probe disclosures off a finished run into
@@ -163,7 +165,8 @@ async function readDryRunVerdict(actions, resultData, verdict){
     verdict.status = primary
         ? primary.status
         : ((resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null);
-    if(!batched && !primary) applyLegVerdicts(resultData, verdict);
+    if(!batched && !primary)
+        applyLegVerdicts(resultData, verdict, (status) => actions.util.isGuardInertError(status));
     // Extract the handler-computed fee while the transaction is still open (the row
     // vanishes on rollback). `amount` is XCHAIN-denominated in every payment mode.
     let actionIndex = primary

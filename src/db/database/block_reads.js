@@ -36,13 +36,6 @@ const ar = require('../../consensus/gates/anchor_reward_gate.js');
 
 module.exports = {
 
-    // Get EVERY decoder reorg event newer than the one the indexer last processed, oldest
-    // first, each as {id, block_index} where block_index is that event's deepest (lowest)
-    // orphaned block. A single-newest-event reader would drop the older, deeper reorg when
-    // two reorgs land between indexer iterations and the newer one is shallower, leaving
-    // orphaned rows below the rollback point.
-    // Processing the full set (and rolling back to the minimum block across it) closes that
-    // gap. afterId is the decoder event id from getLastProcessedReorgId (null = none yet).
     // Stable hash of a decoder REORG event's `data` payload, used as the reorg-marker witness
     // (#2735). sha256 hex; null/undefined data hashes the empty string so a missing payload has a
     // deterministic witness rather than throwing.

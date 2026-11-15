@@ -26,8 +26,8 @@ const { readAirdropLegs } = require('../airdrop/legs');
 
 const AIRDROP_LEG_WEIGHT_GATE = 'batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION';
 
-// Normalize a sub-action the same way the top-level dispatcher (actions/index.js)
-// does: rewrite ACTION aliases, then (when params are given) inject the
+// Normalize a sub-action like normalizeTransactionAction in actions_class/transaction.js:
+// rewrite ACTION aliases, then (when params are given) inject the
 // implied legacy VERSION 0 for BTNS-style ISSUE/MINT/SEND params so FORMAT
 // derivation sees a version field. Mutates params in place; returns the
 // canonical ACTION name. Callers only invoke this at/after the

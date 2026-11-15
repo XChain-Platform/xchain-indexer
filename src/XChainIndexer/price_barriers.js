@@ -31,13 +31,14 @@ module.exports = {
     markPriceSyncHold(){
         this.stallReason = 'price_sync_barrier';
         this.stallClearsAt = null;
+        this.capabilityProofBarrierSkipped = false;
     },
 
     // The mirror sync barriers in block-loop order. Each returns true when it DEFERRED the
     // block (stallReason set, no transaction open); the first defer ends the chain and the
     // loop retries the block on its next pass.
     async deferOnSyncBarriers(blockToParse, blockTime, blockTransactions, anchorHorizonBound){
-        // Only blocks that can actually READ the mirror take these waits.
+        // mayReadPrice gates only the price, price-landing and oracle members below.
         // The hub finalizes one price round per 600s, the same cadence as a BTC
         // block, so a tip block is essentially never covered by a round anchored at
         // or after it and burns the full timeout every time. A block that reads no
@@ -48,6 +49,7 @@ module.exports = {
         // caught fail-closed at the read itself by db.assertPriceBarrierNotSkipped().
         // Safe without a flag day because a skipped barrier changes no hashed value,
         // only whether this node paused first.
+        // The remaining members take no price predicate and run on every block.
         let mayReadPrice = this.evaluatePriceBarrier(blockToParse, blockTransactions);
         return await this.deferOnPriceSync(blockToParse, blockTime, mayReadPrice)
             || await this.deferOnPriceLandingSync(blockToParse, blockTime, mayReadPrice)
@@ -94,7 +96,9 @@ module.exports = {
     // it is a node-local WAIT decision, never persisted or hashed, so a reindex
     // (mirror far ahead of the tip) opens it immediately and replays byte-identically
     // (see the HUB_SYNC_WATERMARK_GRACE_S note in hub/hub_db_sync/watermark_config.js on
-    // why barriers need no activation gate). It cannot freeze a quiet chain either:
+    // why grace-value changes need no activation gate). A barrier may still mirror its
+    // reader's activation gate, provided the two gates remain equal; list-share,
+    // price-landing and remote-token do so deliberately. It cannot freeze a quiet chain either:
     // priceTimeSyncSatisfied's second case opens on the hub's stream watermark, so
     // a chain with no rounds yet, or sitting in a round gap, proceeds once the hub
     // confirms it has sent everything through this instant. Only a genuinely-behind
@@ -158,6 +162,7 @@ module.exports = {
                 // that instant so a future-stamped block is not reported as a wedge
                 // while the wait is expected and self-clearing.
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'priceWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -169,7 +174,8 @@ module.exports = {
     // that says so arrives from the hub after the round. Wait until every landing chain other
     // than this one has published a landed time past this block's time, so every round the
     // block can read already carries its stamp. Opens on the landed map alone; below the
-    // gate, or with sync disabled, it is a no-op.
+    // gate, or with sync disabled, it is a no-op. price_landing.test.js pins this gate to
+    // landedSelection in db/prices/landed_selection.js.
     async deferOnPriceLandingSync(blockToParse, blockTime, mayReadPrice){
         if(this.hubDbSync && mayReadPrice){
             try {
@@ -178,6 +184,7 @@ module.exports = {
                 getLogger().warn('Deferring block ' + blockToParse + ' (price landing): ', err);
                 this.stallReason = PRICE_LANDING_BARRIER;
                 this.stallClearsAt = this.landingClearsAt(blockToParse, blockTime);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
@@ -219,6 +226,7 @@ module.exports = {
                 getLogger().warn('Deferring block ' + blockToParse + ' (oracle sync): ', err);
                 this.stallReason = 'oracle_sync_barrier';
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'oracleWatermarkGraceS', blockToParse);
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }

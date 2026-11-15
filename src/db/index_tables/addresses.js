@@ -247,9 +247,10 @@ module.exports = {
 const newAddressIds = {
 
     async assignInBlock(db, address, blockIndex){
-        // Block-processing context: assign a deterministic dense id and stamp the
-        // block, so the id is reorg-reproducible and ^<id> resolves identically on
-        // every node. Ids are assigned in caller order; for the fixed-layout actions,
+        // Open-transaction context, for a real block or a dry-run rolled back afterwards:
+        // assign a deterministic dense id and stamp the block, so the id is
+        // reorg-reproducible and ^<id> resolves identically on every node. Ids are
+        // assigned in caller order; for the fixed-layout actions,
         // Actions.assignActionAddressIds registers the new wire-field addresses FIRST, in
         // byte-sorted VALUE order, and every other action keeps its handler's fixed order.
         // INSERT IGNORE keeps this race-safe against the UNIQUE address index (a
@@ -270,9 +271,9 @@ const newAddressIds = {
     },
 
     async insertOutOfBand(db, address){
-        // Outside block processing (API read paths, recovery seed): keep the legacy
-        // AUTO_INCREMENT path with a NULL block_index. These ids are not assigned
-        // during consensus block processing, so they are not part of the
+        // No open DB transaction (API read paths, recovery seed): keep the legacy
+        // AUTO_INCREMENT path with a NULL block_index. Dry-runs open a transaction and use
+        // assignInBlock instead. These ids are not part of the
         // deterministic/rollback-tracked set. If this fires AFTER deterministic
         // indexing has begun it would bump MAX(id) and offset the dense counter, so
         // warn loudly: it must never happen during the indexing lifetime (#5052).

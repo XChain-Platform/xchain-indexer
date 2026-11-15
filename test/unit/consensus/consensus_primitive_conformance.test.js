@@ -77,6 +77,18 @@ function meets(c){ return swq.meetsStakeThreshold(vecValidators(c), c.signers); 
 describe('consensus-primitive conformance: canonical vectors @regression', function(){
     before(function(){ if(!quorumVec || !equivVec){ if(process.env.XCHAIN_REQUIRE_SIBLINGS==='1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but consensus test-vectors not found (' + (VEC_CHECKOUT.reason || 'sibling xchain-documentation missing') + ')'); this.skip(); } });
 
+    it('every quorum/equiv vector group is a non-empty list', function(){
+        const groups = {
+            'stake_weighted_quorum.meetsStakeThreshold': quorumVec.meetsStakeThreshold,
+            'stake_weighted_quorum.totalStake': quorumVec.totalStake,
+            'equivocation_header.equivKey': equivVec.equivKey,
+            'equivocation_header.equivPrefix': equivVec.equivPrefix,
+            'equivocation_header.buildEquivCanonical': equivVec.buildEquivCanonical,
+        };
+        for(const [name, vectors] of Object.entries(groups))
+            assert.ok(Array.isArray(vectors) && vectors.length > 0, name + ' is missing or empty');
+    });
+
     describe('stake_weighted_quorum.meetsStakeThreshold', function(){
         (quorumVec ? quorumVec.meetsStakeThreshold : []).forEach(function(c){
             it(c.name, function(){ assert.strictEqual(meets(c), c.expected); });

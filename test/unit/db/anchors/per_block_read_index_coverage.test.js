@@ -1,6 +1,16 @@
-'use strict';
-
 /*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
  *
  * Two reads that run once per block must have an index that serves their
  * predicate, or each block re-reads the whole table. On the shared regtest
@@ -18,6 +28,8 @@
  * that moves its predicate onto an unindexed column fails here too.
  *
  ********************************************************************/
+
+'use strict';
 
 const assert = require('assert');
 const fs     = require('fs');

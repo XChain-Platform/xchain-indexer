@@ -37,7 +37,7 @@ CREATE TABLE markets (
     -- Which coin each side settles in (id of record in index_coins). A side whose
     -- tickN_id is 0 has no token: it IS this coin, and the API labels it from here.
     -- Declared last, and their migration anchors them here: moving them mid-table
-    -- reorders an aged database against a fresh one (sql-schema-column-parity).
+    -- reorders an aged database against a fresh one (test/unit/migration/sql_schema_column_parity.test.js).
     coin1_id           BIGINT UNSIGNED NOT NULL DEFAULT 0,
     coin2_id           BIGINT UNSIGNED NOT NULL DEFAULT 0
 ) ENGINE=InnoDB CHARSET=utf8 COLLATE=utf8_general_ci;

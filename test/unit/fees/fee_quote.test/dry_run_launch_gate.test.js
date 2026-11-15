@@ -31,7 +31,7 @@ const FEE_DESTINATION = '1CounterpartyXXXXXXXXXXXXXXXUWLpVr';
 // A dry-run context on `network` whose tip block carries `tipTime`; it counts handler runs.
 function makeCtx(network, tipTime){
     let util  = new Utility();
-    let calls = { handler: 0, begin: 0, rollback: 0 };
+    let calls = { handler: 0, begin: 0, rollback: 0, latestBlock: 0, blockTime: 0 };
     let ctx = {
         util,
         config: Object.assign({}, util.config, { NETWORK: network, COIN: 'BTC',
@@ -39,8 +39,8 @@ function makeCtx(network, tipTime){
         actionAliases: {},
         calls,
         indexerDb: {
-            getLatestBlockIndex: async () => 100,
-            getBlockTime:        async () => tipTime,
+            getLatestBlockIndex: async () => { calls.latestBlock++; return 100; },
+            getBlockTime:        async () => { calls.blockTime++; return tipTime; },
             beginTransaction:    async () => { calls.begin++; },
             rollbackTransaction: async () => { calls.rollback++; },
             currentTxEpoch:      () => 0,
@@ -99,10 +99,18 @@ describe('quote surfaces : the mainnet launch gate @regression @tier1', function
 
     it('refuses a pre-launch mainnet fee-exempt quote instead of answering valid', async function () {
         const ctx = makeCtx('mainnet', LAUNCH - 600);
-        const quote = await Actions.prototype.computeFeeQuote.call(ctx,
-            { action: 'COINPAY', params: ['0', '42'], source: SOURCE });
-        assert.strictEqual(quote.valid, false);
-        assert.strictEqual(quote.error, NOT_ADMITTED_BEFORE_LAUNCH);
+        for (const request of [
+            { action: 'COINPAY', params: ['0', '42'], source: SOURCE },
+            { action: 'DEPLOY', params: ['0', 'eA==', '500000', ''], source: SOURCE },
+            { action: 'EXECUTE', params: ['0', 'contract', 'method'], source: SOURCE }
+        ]) {
+            const quote = await Actions.prototype.computeFeeQuote.call(ctx, request);
+            assert.strictEqual(quote.valid, false, request.action);
+            assert.strictEqual(quote.error, NOT_ADMITTED_BEFORE_LAUNCH, request.action);
+            assert.notStrictEqual(quote.staticQuote, true, request.action + ' must not look payable');
+        }
+        assert.strictEqual(ctx.calls.latestBlock, 3, 'each gate decision must read the latest block');
+        assert.strictEqual(ctx.calls.blockTime, 3, 'each gate decision must read the tip time');
     });
 
     it('answers a fee-exempt quote as before on regtest', async function () {
@@ -111,5 +119,18 @@ describe('quote surfaces : the mainnet launch gate @regression @tier1', function
             { action: 'COINPAY', params: ['0', '42'], source: SOURCE });
         assert.strictEqual(quote.valid, true);
         assert.strictEqual(quote.feeExempt, true);
+    });
+
+    it('does not read launch state for denied non-static mainnet quotes', async function () {
+        for (const action of ['BATCH', 'XEXEC', 'DEPLOY|0']) {
+            const ctx = makeCtx('mainnet', LAUNCH);
+            ctx.staticFeeQuote = Actions.prototype.staticFeeQuote;
+            ctx.nativeFeeMandatory = () => false;
+            const quote = await Actions.prototype.computeFeeQuote.call(ctx,
+                { action, params: ['0'], source: SOURCE });
+            assert.strictEqual(quote.supported, false, action);
+            assert.strictEqual(ctx.calls.latestBlock, 0, action + ' read the latest block');
+            assert.strictEqual(ctx.calls.blockTime, 0, action + ' read the tip time');
+        }
     });
 });

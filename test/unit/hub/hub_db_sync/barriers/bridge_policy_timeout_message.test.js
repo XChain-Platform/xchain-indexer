@@ -51,6 +51,14 @@ describe('bridge barrier timeout message', function () {
             'bridge sync barrier timed out after 1ms waiting for block_time 5000' +
             ' (bridge mirror at 1234)');
     });
+
+    it('does not let a non-finite time bypass an active height barrier', async function () {
+        await assert.rejects(makeSync(true).waitForBridgeSync(NaN, 1, 800),
+            /bridge sync barrier timed out/);
+        const inert = makeSync(false);
+        assert.strictEqual(await inert.waitForBridgeSync(NaN, 1, 800), null);
+        assert.strictEqual(inert._bridgeWaiters.length, 0);
+    });
 });
 
 async function policyTimeoutMessage(sync) {
@@ -79,5 +87,13 @@ describe('policy barrier timeout message', function () {
         assert.strictEqual(message,
             'policy sync barrier timed out after 1ms waiting for block_time 5000' +
             ' (policy mirror at 1234)');
+    });
+
+    it('does not let a non-finite time bypass an active height barrier', async function () {
+        await assert.rejects(makeSync(true).waitForPolicySync(NaN, 1, 800),
+            /policy sync barrier timed out/);
+        const inert = makeSync(false);
+        assert.strictEqual(await inert.waitForPolicySync(NaN, 1, 800), null);
+        assert.strictEqual(inert._policyWaiters.length, 0);
     });
 });

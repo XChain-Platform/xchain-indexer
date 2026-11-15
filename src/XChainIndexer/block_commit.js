@@ -99,7 +99,7 @@ module.exports = {
         // value. The hub only wants the live tip. Only push within
         // CHAIN_TIP_PUSH_MAX_LAG blocks of the decoder tip (lastDecoderBlock here is
         // the prior iteration's value, i.e. at most one block stale, which is fine).
-        if(!this.util.bcgt(this.util.bcsub(lastDecoderBlock, blockToParse), this.config['CHAIN_TIP_PUSH_MAX_LAG'])){
+        if(!this.util.bcgt(this.util.bcsub(lastDecoderBlock, blockToParse, 0), this.config['CHAIN_TIP_PUSH_MAX_LAG'])){
             // The chain identity rides the tip push that already exists rather than
             // a new RPC. Resolved here (not only at startup) because a chain that
             // was re-genesised has no block 1 to read when this process boots; the

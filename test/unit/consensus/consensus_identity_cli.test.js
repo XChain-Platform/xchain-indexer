@@ -131,7 +131,7 @@ describe('bin/consensus-identity.js argument validation', function () {
         const res = run(['--phantom-write', output]);
         assert.strictEqual(res.status, 2);
         assert.strictEqual(res.stdout, '');
-        assert.strictEqual(res.stderr, 'unknown flag: --phantom-write\n');
+        assert.strictEqual(res.stderr, 'consensus-identity: unknown flag: --phantom-write\n');
         assert.strictEqual(fs.existsSync(output), false);
     });
 
@@ -139,14 +139,14 @@ describe('bin/consensus-identity.js argument validation', function () {
         const res = run(['ignored.json']);
         assert.strictEqual(res.status, 2);
         assert.strictEqual(res.stdout, '');
-        assert.strictEqual(res.stderr, 'unknown flag: ignored.json\n');
+        assert.strictEqual(res.stderr, 'consensus-identity: unknown flag: ignored.json\n');
     });
 
     it('refuses a value option whose value is missing', function () {
         const res = run(['--out']);
         assert.strictEqual(res.status, 2);
         assert.strictEqual(res.stdout, '');
-        assert.strictEqual(res.stderr, '--out requires a value\n');
+        assert.strictEqual(res.stderr, 'consensus-identity: --out requires a value\n');
     });
 
     it('implements the hub-compatible --out JSON write', function () {
@@ -157,6 +157,16 @@ describe('bin/consensus-identity.js argument validation', function () {
         assert.strictEqual(res.status, 0, res.stderr);
         assert.strictEqual(res.stderr, '');
         assert.deepStrictEqual(JSON.parse(fs.readFileSync(output, 'utf8')), JSON.parse(res.stdout));
+    });
+
+    it('documents every long flag parseArgs accepts', function () {
+        const res = run(['--help']);
+        assert.strictEqual(res.status, 0, res.stderr);
+        const source = fs.readFileSync(BIN, 'utf8');
+        const parseBody = source.slice(source.indexOf('function parseArgs'), source.indexOf('async function main'));
+        const flags = Array.from(parseBody.matchAll(/arg === '(--[^']+)'/g), (match) => match[1]);
+        for (const flag of flags) assert.ok(res.stdout.includes(flag), `--help omits ${flag}`);
+        assert.ok(res.stdout.includes('XC_ROLLCALL_REGTEST_ACTIVATION=armed'), 'help ended before its final example');
     });
 });
 
@@ -255,6 +265,7 @@ describe('bin/consensus-identity.js --compare against a flat --out reading', fun
         for (const body of bodies) {
             const res = run(['--compare', pinFile(body)]);
             assert.strictEqual(res.status, 2, JSON.stringify(body) + res.stdout + res.stderr);
+            assert.match(res.stderr, /^consensus-identity: /);
             assert.strictEqual(res.stderr.trim().split('\n').length, 1, res.stderr);
             assert.ok(!res.stderr.includes('Cannot convert'), res.stderr);
         }
@@ -314,7 +325,7 @@ describe('bin/consensus-identity.js --at-block height', function () {
                 assert.strictEqual(res.status, 2, JSON.stringify(raw) + ' ' + extra.join(' '));
                 assert.strictEqual(res.stdout, '');
                 assert.strictEqual(res.stderr,
-                    `--at-block requires a non-negative integer height, got ${JSON.stringify(raw)}\n`);
+                    `consensus-identity: --at-block requires a non-negative integer height, got ${JSON.stringify(raw)}\n`);
             }
         }
     });

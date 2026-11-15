@@ -126,10 +126,11 @@ class File {
         // Print status message
         getLogger().info("\t FILE : " + data['NAME'] + ' : ' + data['TYPE'] + ' : ' + (isGated ? ('GATE=' + data['GATE_TICKER'] + ' : ') : '') + data['STATUS']);
 
-        // Persisted for every version; gated_files (below) is written only for valid v1 gated files
+        // Persisted for every FILE action; gated_files is written only for valid
+        // gated files (format 0 with a non-empty GATE_TICKER).
         await this.indexerDb.createFile(data);
 
-        // For valid v1 gated files, also persist the gating metadata so
+        // For valid gated files, also persist the gating metadata so
         // sends of GATE_TICKER can be enforced and wallets can look up the key.
         if(isGated && status === 'valid')
             await this.indexerDb.createGatedFile(data);
@@ -191,7 +192,7 @@ class File {
 
         // Validate the gated-content fields, but only when this FILE is actually gated
         if(!error && isGated){
-            // ENCRYPTION_METHOD must be 1 (AES-256-GCM) in v1
+            // ENCRYPTION_METHOD 1 (AES-256-GCM) is the only defined method.
             if(Number(data['ENCRYPTION_METHOD']) !== 1)
                 error = 'invalid: ENCRYPTION_METHOD (must be 1)';
 

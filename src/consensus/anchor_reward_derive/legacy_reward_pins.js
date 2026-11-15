@@ -25,20 +25,13 @@ function tupleKey(tuple){
     return JSON.stringify(parts.map((p) => String(p)));
 }
 
-// Reads the default pin file. A missing file means no pins.
+// Reads the consensus pin file. Missing or unreadable data must fail closed.
 function loadDefaultPins(filePath = DEFAULT_PINS_PATH){
-    let raw;
-    try {
-        raw = fs.readFileSync(filePath, 'utf8');
-    } catch(error) {
-        if(error && error.code === 'ENOENT'){ return []; }
-        throw error;
-    }
+    let raw = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(raw);
 }
 
-function loadLegacyRewardPins(pins){
-    let list = pins === undefined ? loadDefaultPins() : pins;
+function buildPinSet(list, requireNonEmpty){
     if(!Array.isArray(list)){
         throw new TypeError('legacy reward pins must be an array');
     }
@@ -50,6 +43,9 @@ function loadLegacyRewardPins(pins){
         }
         keys.add(key);
     }
+    if(requireNonEmpty && keys.size === 0){
+        throw new TypeError('default legacy reward pins must not be empty');
+    }
     return {
         size: keys.size,
         isPinned(tuple){
@@ -59,8 +55,20 @@ function loadLegacyRewardPins(pins){
     };
 }
 
+function buildDefaultPins(filePath = DEFAULT_PINS_PATH){
+    return buildPinSet(loadDefaultPins(filePath), true);
+}
+
+// Load consensus data when the module is required, before block processing starts.
+const DEFAULT_PINS = buildDefaultPins();
+
+function loadLegacyRewardPins(pins){
+    return pins === undefined ? DEFAULT_PINS : buildPinSet(pins, false);
+}
+
 function isLegacyRewardPinned(tuple, pins){
     return loadLegacyRewardPins(pins).isPinned(tuple);
 }
 
-module.exports = { DEFAULT_PINS_PATH, loadDefaultPins, loadLegacyRewardPins, isLegacyRewardPinned, tupleKey };
+module.exports = { DEFAULT_PINS_PATH, buildDefaultPins, loadDefaultPins,
+    loadLegacyRewardPins, isLegacyRewardPinned, tupleKey };

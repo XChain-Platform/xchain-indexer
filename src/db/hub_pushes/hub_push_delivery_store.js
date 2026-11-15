@@ -95,7 +95,7 @@ class HubPushDeliveryStore {
 
     async attempt(row, candidates){
         let parsed = await this.queue.parseHubPushPayload(row);
-        if(parsed === null) return;
+        if(parsed === null) return false;
 
         let deliveredTo = await this.getDeliveredTo(row.id);
         let firstError = null;
@@ -104,7 +104,7 @@ class HubPushDeliveryStore {
             try {
                 let delivered = await this.queue.deliverHubPush(
                     row, parsed.payload, this.clientForAddress(address));
-                if(!delivered) return;
+                if(!delivered) return false;
                 await this.markDelivered(row.id, address);
                 deliveredTo.add(address);
                 getLogger().info('HubPushQueue: delivered ' + row.push_type + ' row ' + row.id +
@@ -117,12 +117,13 @@ class HubPushDeliveryStore {
 
         if(candidates.every(address => deliveredTo.has(address))){
             await this.indexerDb.markHubPushDelivered(row.id);
-            return;
+            return true;
         }
         if(firstError){
             let attemptNo = (Number(row.attempts) || 0) + 1;
             await this.queue.recordHubPushFailure(row, firstError, attemptNo);
         }
+        return false;
     }
 }
 

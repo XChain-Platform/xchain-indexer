@@ -223,9 +223,10 @@ const CHANGES = [
     // TICK, giving that name a dense ticker id; a later 'ISSUE ^<id>' then resolves a
     // name with no token row and lands valid, creating a token through the id form. At/
     // above the flag a caret TICK that resolves to no existing token is 'invalid: TICK
-    // (unknown)'; an owner's caret edit of an existing token is untouched. UNARMED on
-    // every network until the operator sizes the instant from the read-only per-chain
-    // count of tokens created through a caret TICK; regtest arms at genesis.
+    // (unknown)'; an owner's caret edit of an existing token is untouched. Unarmed on
+    // mainnet until the operator sizes the instant from the read-only per-chain count
+    // of tokens created through a caret TICK; armed on testnet at the instant in its row
+    // (2026-10-22T13:00Z, the v0.26.2 cut); active from genesis on regtest.
     ['ISSUE_CARET_TICK_NO_CREATE', '0.2.0', UNARMED, 1792674000, 0, 0, 0, 0],
 ];
 

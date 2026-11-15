@@ -46,7 +46,7 @@ function isAuditedClear(payload){
 module.exports = {
 
     // The getreorghistory page: recent decoder REORG events above `sinceId`. Newest-first,
-    // the opposite of getReorgsSince above, because a caller checking whether a RECENT reorg
+    // the opposite of getReorgsSince below, because a caller checking whether a RECENT reorg
     // happened must see the relevant rows before `limit` truncates the page. `id` is the
     // decoder's monotonic events id, and the limit is bounded upstream so a peer can never
     // make this node serialize an unbounded events scan.
@@ -58,6 +58,14 @@ module.exports = {
             [sinceId, limit]);
     },
 
+    // Get EVERY decoder reorg event newer than the one the indexer last processed, oldest
+    // first, each as {id, block_index} where block_index is that event's deepest (lowest)
+    // orphaned block. A single-newest-event reader would drop the older, deeper reorg when
+    // two reorgs land between indexer iterations and the newer one is shallower, leaving
+    // orphaned rows below the rollback point.
+    // Processing the full set (and rolling back to the minimum block across it) closes that
+    // gap. afterId is the decoder event id from getLastProcessedReorgId (null = none yet).
+    //
     // `cursorWitness` (optional #2735): { time, hash } captured for the cursor's decoder REORG
     // event when the marker was recorded. Any non-null afterId gets the cursor-row existence
     // check (and the over-cursor guard on an empty read); a witness adds the time/hash match.

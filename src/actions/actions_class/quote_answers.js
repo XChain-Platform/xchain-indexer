@@ -110,6 +110,11 @@ function feeQuoteNoVerdict(base, run){
         error: 'fee quote produced no verdict (the dry-run did not finish: ' + run.error + '); retry shortly' });
 }
 
+// Any incomplete run has no verdict, including a read-back failure after STATUS was copied.
+function isIncompleteDryRun(run){
+    return !!(run && run.error && (run.status == null || /^handler threw:/.test(run.error)));
+}
+
 // The quote a finished dry-run answers WITHOUT pricing, or null when the verdict is valid
 // and the fee should be priced.
 function dryRunVerdictQuote(actions, base, run, action){
@@ -310,6 +315,7 @@ module.exports = {
     exemptFeeQuote,
     feeQuoteLockBusy,
     feeQuoteNoVerdict,
+    isIncompleteDryRun,
     dryRunVerdictQuote,
     resolvePreflightFeeMode,
     preflightGateAnswer,

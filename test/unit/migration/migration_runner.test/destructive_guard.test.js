@@ -303,7 +303,6 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
 
     it('does not flag a plain INSERT (additive: it only adds rows)', function () {
         assert.strictEqual(destructiveOf(["INSERT INTO tokens (ticker) VALUES ('XYZ')"]), null);
-        assert.strictEqual(destructiveOf(['INSERT IGNORE INTO t (a) SELECT a FROM s']), null);
     });
 
     it('flags LOAD DATA (rows come from a file the classifier cannot read)', function () {

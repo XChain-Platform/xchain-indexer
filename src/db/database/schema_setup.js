@@ -34,6 +34,7 @@ const { migrationChecksum } = require('../migration/checksum_verdict.js');
 const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 const { getLogger } = require('../../observability/index.js');
 const { recordShapeDrift } = require('../shared.js');
+const { isTableDefinitionFile, tableNameOf } = require('./schema/table_files.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -43,7 +44,7 @@ const Database = require('../index.js');
 async function declaredTableExistence(self, db, tableFiles){
     let exists = new Map();
     for(const file of tableFiles){
-        let table = file.substring(0, file.indexOf('.sql'));
+        let table = tableNameOf(file);
         try {
             let results = await db.query("SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",[self.dbName, table]);
             exists.set(file, results.length > 0);
@@ -83,7 +84,7 @@ async function recordUndeclaredTables(self, db, tableFiles){
         getLogger().warn('Undeclared-table check skipped for ' + self.dbName + ': ' + e.message);
         return;
     }
-    const declared = tableFiles.map(f => f.substring(0, f.indexOf('.sql')));
+    const declared = tableFiles.map(tableNameOf);
     for(const name of undeclaredLiveTables(Array.from(rows || [], r => r.name), declared))
         recordShapeDrift(self.schemaShapeDrift, name, 'tables', ['undeclared table']);
 }
@@ -176,7 +177,7 @@ module.exports = {
         this.schemaShapeDrift = new Map();
         // Read which declared tables exist before creating any, so a fresh install is known
         // up front rather than inferred from a create loop that may not finish.
-        let tableFiles = files.filter(f => f.indexOf('.sql') !== -1);
+        let tableFiles = files.filter(isTableDefinitionFile);
         let exists     = await declaredTableExistence(this, db, tableFiles);
         if(!exists) return false;
         // Fresh install (no declared table yet): seed the ledger FIRST, atomically. A kill or a
@@ -186,7 +187,7 @@ module.exports = {
             await this.recordFreshSchemaMigrations(db);
         // Loop through SQL files
         for (file of tableFiles){
-            let table   = file.substring(0, file.indexOf('.sql'));
+            let table   = tableNameOf(file);
             checked++;
             try {
                 if(exists.get(file)){

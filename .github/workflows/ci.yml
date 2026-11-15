@@ -290,7 +290,7 @@ jobs:
           repository: XChain-Platform/xchain-sdk
           # Release/hotfix follow the sibling branch; master follows master.
           # Develop and ordinary PRs use the exact reviewed handler-map snapshot.
-          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || ((github.ref == 'refs/heads/master' || github.base_ref == 'master') && 'master' || '3d6c5223c4d9adc88267afdd82eebd7d94e817bc') }}
+          ref: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || ((github.ref == 'refs/heads/master' || github.base_ref == 'master') && 'master' || '5ff8d569e400b83f0d904d13fce6c4604635ce30') }}
           ssh-key: ${{ secrets.XCHAIN_SDK_DEPLOY_KEY }}
           path: xchain-sdk
 
@@ -347,3 +347,24 @@ jobs:
 
       - name: Coverage thresholds (c8 --check-coverage)
         run: npm run coverage:check
+
+  # Migration immutability pin against the develop merge-base. The unit test
+  # runs git-free and exempts an unpinned file that sorts after the newest pin,
+  # so only this compare fails a migration that reached develop without its pin.
+  # Full history is needed for the merge-base; an explicit --base makes an
+  # unresolvable base a failure here instead of a skipped warning.
+  migration-pin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.23.4"
+
+      - name: Migration pin against the develop merge-base
+        run: node bin/lib/migration_residue_pin.js --base origin/develop

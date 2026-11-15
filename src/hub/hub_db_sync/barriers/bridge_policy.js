@@ -162,7 +162,9 @@ module.exports = {
     // against a stale transfer mirror.
     waitForBridgeSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
-        if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.bridgeSyncTimestamp);
+        if (!this.enabled) return Promise.resolve(this.bridgeSyncTimestamp);
+        if (!Number.isFinite(blockTime) && !this.admissionActiveAt(blockHeight))
+            return Promise.resolve(this.bridgeSyncTimestamp);
         if (this.bridgeSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.bridgeSyncTimestamp);
 
         let ms = parseInt(timeoutMs);
@@ -296,7 +298,9 @@ module.exports = {
     // a token policy against a stale snapshot mirror.
     waitForPolicySync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
-        if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.policySyncTimestamp);
+        if (!this.enabled) return Promise.resolve(this.policySyncTimestamp);
+        if (!Number.isFinite(blockTime) && !this.admissionActiveAt(blockHeight))
+            return Promise.resolve(this.policySyncTimestamp);
         if (this.policySyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.policySyncTimestamp);
 
         let ms = parseInt(timeoutMs);

@@ -17,17 +17,20 @@ const { getLogger } = require('../observability/index.js');
  *
  * The indexer derives dispenser state from the full DISPENSER lifecycle:
  * create (format 0), cancel (format 1) and edit (format 2, which can change
- * EXPIRATION). The upstream decoder only tracks creates, so once a dispenser
- * is cancelled or re-dated by an edit, the decoder can keep proposing DISPENSE
+ * EXPIRATION), and closes a dispenser inside DISPENSE itself when it sells out
+ * ('empty') or reaches the fill cap ('max_dispenses_reached'). The upstream
+ * decoder only tracks creates, so once a dispenser is cancelled, re-dated by an
+ * edit or closed by a DISPENSE, the decoder can keep proposing DISPENSE
  * triggers for a dispenser the indexer no longer considers open. Those triggers
  * match nothing here and are dropped.
  *
- * This module counts, per block and cumulatively, the three events that size
+ * This module counts, per block and cumulatively, the events that size
  * that gap:
  *   - cancels applied,
  *   - EXPIRATION edits (shortened vs lengthened),
  *   - DISPENSE triggers dropped because the target dispenser was already
- *     cancelled or expired.
+ *     closed, bucketed by its terminal status (cancelled, expired, empty,
+ *     max_dispenses_reached).
  *
  * It is measurement only: it performs no database writes, influences no
  * validation or state-transition outcome, and its counters never feed block
@@ -46,6 +49,8 @@ function emptyCounts(){
         editsLengthened:   0,
         rejectedCancelled: 0,
         rejectedExpired:   0,
+        rejectedEmpty:     0,
+        rejectedMaxDispenses: 0,
     };
 }
 
@@ -94,12 +99,15 @@ class DispenserDivergenceMetrics {
     }
 
     // A DISPENSE trigger matched no open dispenser because the dispenser at the
-    // paid address was already cancelled or expired. `reason` is 'cancelled' or
-    // 'expired'. Observational only: the trigger is still dropped as before.
+    // paid address was already closed. `reason` is the dispenser's terminal status:
+    // 'cancelled', 'expired', 'empty' or 'max_dispenses_reached'. Observational only:
+    // the trigger is still dropped as before.
     recordRejectedDispense(coin, block_index, address, action_index, reason){
         this.track(block_index);
         if(reason === 'cancelled') this.bump('rejectedCancelled');
         else if(reason === 'expired') this.bump('rejectedExpired');
+        else if(reason === 'empty') this.bump('rejectedEmpty');
+        else if(reason === 'max_dispenses_reached') this.bump('rejectedMaxDispenses');
         getLogger().info('\t DISPENSER_DIVERGENCE : DISPENSE_REJECTED : ' + coin +
                     ' addr=' + address + ' dispenser=' + action_index +
                     ' reason=' + reason + ' block=' + block_index);
@@ -111,14 +119,17 @@ class DispenserDivergenceMetrics {
         let b = this.block;
         let t = this.totals;
         // Only emit when the finished block actually saw divergence activity.
-        if(b.cancels || b.edits || b.rejectedCancelled || b.rejectedExpired){
+        if(b.cancels || b.edits || b.rejectedCancelled || b.rejectedExpired ||
+           b.rejectedEmpty || b.rejectedMaxDispenses){
             getLogger().info('\t DISPENSER_DIVERGENCE : SUMMARY block=' + this.currentBlock +
                         ' cancels=' + b.cancels +
                         ' edits=' + b.edits + '(short=' + b.editsShortened + ',long=' + b.editsLengthened + ')' +
-                        ' rejected(cancelled=' + b.rejectedCancelled + ',expired=' + b.rejectedExpired + ')' +
+                        ' rejected(cancelled=' + b.rejectedCancelled + ',expired=' + b.rejectedExpired +
+                            ',empty=' + b.rejectedEmpty + ',max_dispenses=' + b.rejectedMaxDispenses + ')' +
                         ' | totals cancels=' + t.cancels +
                         ' edits=' + t.edits + '(short=' + t.editsShortened + ',long=' + t.editsLengthened + ')' +
-                        ' rejected(cancelled=' + t.rejectedCancelled + ',expired=' + t.rejectedExpired + ')');
+                        ' rejected(cancelled=' + t.rejectedCancelled + ',expired=' + t.rejectedExpired +
+                            ',empty=' + t.rejectedEmpty + ',max_dispenses=' + t.rejectedMaxDispenses + ')');
         }
         this.block = emptyCounts();
     }

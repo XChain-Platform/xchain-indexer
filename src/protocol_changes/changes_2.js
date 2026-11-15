@@ -180,7 +180,7 @@ module.exports = [
     ['DISPENSER_CLOSE_PER_UNIT', '0.2.0',1786060800,0,0,0,0,0],
 
     // Mode B (user PRICE v1 oracle) dispenser settlement prices one TOKEN, not
-    // one FILL. Below this activation actions/dispense.js takes the affordable
+    // one FILL. Below this activation actions/dispense/pricing_paths.js takes the affordable
     // token count straight from utility.reverseOraclePriceMatch and uses it as
     // the FILL multiplier, then credits multiplier x GIVE_AMOUNT tokens, so a
     // dispenser giving N tokens per fill sold every token at 1/N of the price

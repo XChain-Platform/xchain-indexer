@@ -130,16 +130,6 @@ function validateArchiveAnchorParams({ chain, network, block_index, checkpoint_s
              batch_crc32: batch_crc32.toLowerCase(), match_count: mc, author: wantAuthor };
 }
 
-// Pick the archive head a caller asked for from an ARCHIVE_ANCHOR_BY_CONTENT_SQL
-// result. Rows arrive action_index ASC, so with no author filter the EARLIEST head
-// wins, the same canonical-head rule getAnchorV1ByBatchSeq and ARCHIVE_HEAD_AUTHOR_SQL
-// use (a later copy of a batch never supersedes the row that first published it).
-// A supplied author narrows to that publisher's own head; a row whose author could
-// not be resolved (source null) compares unequal and is skipped, which is fail-closed
-// (the caller sees "absent" and publishes, rather than adopting a head it cannot
-// attribute). Address comparison is exact, not case-folded: base58/bech32 addresses
-// are case-significant in the first form and canonically lowercase in the second, so
-// folding could equate two different addresses.
 function sameStoredSignatures(left, right) {
     return left.validator_signatures != null && right.validator_signatures != null &&
         String(left.validator_signatures) === String(right.validator_signatures);
@@ -162,6 +152,16 @@ function deriveFoldWrapper(rows, archive) {
     });
 }
 
+// Pick the archive head a caller asked for from an ARCHIVE_ANCHOR_BY_CONTENT_SQL
+// result. Rows arrive action_index ASC, so with no author filter the EARLIEST head
+// wins, the same canonical-head rule getAnchorV1ByBatchSeq and ARCHIVE_HEAD_AUTHOR_SQL
+// use (a later copy of a batch never supersedes the row that first published it).
+// A supplied author narrows to that publisher's own head; a row whose author could
+// not be resolved (source null) compares unequal and is skipped, which is fail-closed
+// (the caller sees "absent" and publishes, rather than adopting a head it cannot
+// attribute). Address comparison is exact, not case-folded: base58/bech32 addresses
+// are case-significant in the first form and canonically lowercase in the second, so
+// folding could equate two different addresses.
 function selectArchiveHeadRow(rows, filter) {
     let f = filter || {};
     let allRows = Array.isArray(rows) ? rows : [];

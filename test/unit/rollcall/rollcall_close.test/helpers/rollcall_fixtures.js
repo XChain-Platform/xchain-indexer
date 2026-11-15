@@ -93,7 +93,9 @@ function stubDb(over){
         async insertRollcallAbsences(rows){ this.writes.absences.push(...rows); return rows.length; },
         async insertRollcallGates(e, c, rows){ this.writes.gates.push({ e, c, rows }); return rows.length; },
         async getRolledRollcallEpochs(){ return this.rolledEpochs; },
-        async getRollcallAbsenceEpochsForSource(src){ return this.absencesBySource[src] || []; },
+        async getRollcallAbsenceEpochsForSources(sources){
+            return new Map(sources.map((src) => [src, this.absencesBySource[src] || []]));
+        },
         sweepCalls: [],
         async getSweepableStakeBySource(src, blk, includePending){
             this.sweepCalls.push({ src, blk, includePending });

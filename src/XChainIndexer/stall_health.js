@@ -42,12 +42,8 @@ function isOperatorActionHold(stallReason){
     return word === RETROACTIVE_REPLAY_NEEDS_GO || word === RETROACTIVE_REPLAY_DIVERGED;
 }
 
-// The no-progress window a stall is judged against. The price-landing barrier waits on
-// the OTHER landing chains' published landed times, which move on their own cadence, so
-// it carries its own window (priceLandingGraceMs) instead of the generic stall grace.
-// The roll-call and capability proof waits carry proofWaitGraceMs, sized above the hold
-// ceiling so they publish *_proof_wait, then *_proof_stuck, before the one restart.
-// Any other reason, or an unusable window, falls back to graceMs.
+// Use dedicated price-landing and proof-wait grace windows when valid.
+// Every other reason falls back to the generic stall grace.
 function graceFor(stallReason, graceMs, priceLandingGraceMs, proofWaitGraceMs){
     if(stallReason === PRICE_LANDING_BARRIER && Number.isFinite(priceLandingGraceMs) && priceLandingGraceMs > 0)
         return priceLandingGraceMs;
@@ -65,42 +61,8 @@ function resolveProofWaitGraceMs(graceMs, barrierHoldCeilingMs){
     return Math.max(2 * ceilingMs, graceMs);
 }
 
-// Discriminate a genuinely WEDGED indexer from one that is merely deferring the
-// newest block behind a sync barrier that is itself advancing. A set stallReason
-// alone is not a wedge: a BTC-mainnet indexer's price mirror sits perpetually ~1
-// block behind the decoder tip, so the height-keyed price-sync barrier defers the
-// newest block on almost every poll (stallReason='price_sync_barrier') even though
-// the counter advances every few seconds as the mirror publishes each round.
-// Used by api.js's /status HTTP-code contract so the xchain-node
-// container healthcheck only reports unhealthy on a real stall. `lastBlockCommittedAt`
-// and `now` are epoch-ms; graceMs is the no-progress window a stall must exceed.
-// A stall with no committed block yet (lastBlockCommittedAt == null) is NOT wedged:
-// a slow initial catch-up must never trip the container restart loop.
-//
-// `stallClearsAtMs` is the wall-clock instant a time-keyed barrier can FIRST
-// be satisfied, or null when the stall has no such instant. A block stamped in the
-// future (Bitcoin permits ~2h ahead of median-time-past, and miner clocks routinely run
-// minutes fast) cannot have its eligible price-round set finalized until that time
-// arrives, so the barrier waits and NO block commits for the whole skew. Against a 120s
-// grace that reads as wedged within two minutes, and the indexer reports 503/unhealthy
-// over a perfectly valid block, fleet-wide and simultaneously, with a restart achieving
-// nothing because the barrier re-arms on the same block. While the instant is still in
-// the future the wait is expected and self-clearing, so it is not a wedge. Once wall
-// clock passes it and the stall persists, the mirror really is stuck and the normal
-// grace-window verdict applies again. This is a HEALTH verdict only: it changes no
-// hashed value and no barrier waits any differently for it.
-//
-// `barrierHoldSinceMs` is the instant the current block first began waiting behind its
-// barrier (the hold record's `since`), or null when no hold is recorded. The no-progress
-// window starts at the LATER of the last commit and that instant. Measuring from the last
-// commit alone makes a slow chain flap: with ~20 minute blocks nearly every barrier wait
-// begins more than the grace after the previous commit, so a healthy indexer read wedged
-// (503, container unhealthy) the moment its wait began. A barrier held past the grace with
-// no progress still reads wedged, because the hold instant stops moving while it persists.
-//
-// `proofWaitGraceMs` is the roll-call and capability proof waits' own window (see graceFor).
-// Past it the 503 buys one autoheal restart per episode, which can clear in-memory proof
-// state (capability holds, the overflow flag, a cached failed manifest-hash read).
+// A stall wedges only after its reason-specific grace, measured from the later
+// of the last commit and hold start. Future-clearable and non-restartable waits do not.
 function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null, proofWaitGraceMs = null){
     if(!stallReason) return false;
     if(stallReason === BRIDGE_PROOF_BARRIER) return false;
@@ -112,51 +74,16 @@ function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClear
     return (now - windowStart) > graceFor(stallReason, graceMs, priceLandingGraceMs, proofWaitGraceMs);
 }
 
-// Identify a stall that only waits for WALL CLOCK to reach a future-stamped block.
-// Let stallClearsAt name the first wall-clock instant its time-keyed barrier can open,
-// or remain null when no such instant is available.
-//
-// Compute most instants as block_time plus that barrier's watermark grace.
-// Compute the anchor-attest instant from min(block_time, horizonBound) plus grace.
-//
-// Compute the price-landing instant from block_time plus one second with no grace.
-//
-// Treat a value still ahead of `now` as a future head block that local health cannot make
-// processable sooner. Consensus forbids committing it, so this is correct operation, not
-// degradation.
-//
-// It is a steady state, not a blip: a BTC-testnet4 miner stamping every block ~20 min
-// ahead rides the 2-hour future-time cap forever, so lag PINS at ~6 blocks and each block
-// commits (in milliseconds) the instant its stamp arrives. Reported distinctly so a
-// monitor and the next ops session read "waiting out miner clock skew" instead of the
-// fault that `degraded:true` + `isSynced:false` + a named stallReason otherwise spell.
-// HEALTH REPORTING ONLY: hashes nothing, and no barrier waits any differently for it.
+// A stall with a finite clear instant still ahead of now is a healthy
+// future-block wait, not degraded health.
 function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
     if(!stallReason) return false;
     if(!Number.isFinite(stallClearsAtMs)) return false;
     return now < stallClearsAtMs;
 }
 
-// One machine-readable verdict on the block counter, so a probe reads a single field
-// rather than joining stallReason/degraded/stallClearsAt itself (and drawing the wrong
-// conclusion when the answer is the healthy future-stamp wait). Values:
-//   'none'              - advancing normally, no stall.
-//   'future_block_wait' - waiting out a future-stamped block; healthy and self-clearing,
-//                         with stallClearsAt naming the instant it can first move.
-//   'bridge_proof_wait' - waiting for a quorum-established bridge checkpoint or proof;
-//                         never graded wedged, and it builds no barrier hold.
-//   'train_activation_halt' - halted at a rule-set boundary until the node is updated;
-//                             never graded wedged because a restart cannot clear it.
-//   'operator_action_hold' - held until an operator records replay approval or completes
-//                            a rewitness; never wedged because a restart cannot clear it.
-//   'price_landing_wait' - waiting on the other landing chains' landed times, judged
-//                         against its own priceLandingGraceMs; wedged once that passes.
-//   'barrier_defer'     - a real barrier defer (mirror behind, host fault), still
-//                         advancing inside the grace window. The roll-call and capability
-//                         proof waits read this inside proofWaitGraceMs.
-//   'wedged'            - stalled with no commit for longer than the grace window.
-// 'future_block_wait' and 'wedged' cannot collide: stallWedged() already declines to
-// wedge a stall whose clear instant is still ahead.
+// Collapse health inputs to one mutually exclusive class for status probes.
+// Future waits, proof waits, safety holds, active defers, and wedges stay distinct.
 function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null, proofWaitGraceMs = null){
     if(!stallReason) return 'none';
     if(stallReason === BRIDGE_PROOF_BARRIER) return 'bridge_proof_wait';
@@ -169,25 +96,8 @@ function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClea
     return 'barrier_defer';
 }
 
-// The stall class the status surfaces publish: stallClassOf's verdict, refined for the
-// stalls that otherwise read as something milder.
-//   'upstream_halted'     - the paired decoder carries a live REORG_HALT marker and the
-//                           indexer has no stall of its own. It has caught up to the
-//                           decoder's frozen tip, so without this it reads 'none'.
-//   'rollcall_proof_wait' - a roll call epoch is deferred because the Dogecoin side
-//                           cannot yet prove who signed. It clears when that visibility
-//                           returns, not on a clock, so like bridge_proof_wait it is a
-//                           wait rather than a mirror-barrier defer.
-//   'rollcall_proof_stuck' - the same wait once the block's hold has passed its ceiling.
-//   'capability_proof_wait' - a mirrored capability snapshot row is held because its
-//                           checkpoint proof cannot be verified yet. It clears when a
-//                           retry verifies the proof, not on a clock.
-//   'capability_proof_stuck' - the same wait once the block's hold has passed its ceiling.
-// A 'wedged' verdict is never refined away: the liveness contract (the /status 503 and
-// what autoheal reads) is stallWedged() alone, and this function changes none of it. The
-// proof waits wedge only past proofWaitGraceMs, above the ceiling, so in one process
-// lifetime they run *_proof_wait, then *_proof_stuck (/ready 503), then 'wedged'.
-// HEALTH REPORTING ONLY: hashes nothing and gates no wait.
+// Refine published upstream and proof-wait classes without weakening 'wedged'.
+// Proof waits become stuck at the hold ceiling and wedge only after their grace.
 function publishedStallClass(baseClass, stallReason, { decoderReorgHalted = false, ceilingExceeded = false } = {}){
     if(baseClass === 'wedged') return baseClass;
     if(!stallReason && decoderReorgHalted) return 'upstream_halted';
@@ -198,46 +108,14 @@ function publishedStallClass(baseClass, stallReason, { decoderReorgHalted = fals
     return baseClass;
 }
 
-// True when the indexer has committed every block consensus currently PERMITS it to
-// commit: either it is level with the decoder tip (isSynced), or the only thing between
-// it and the tip is a future-stamped block it must legally wait out. `isSynced` keeps its
-// literal decoder-tip-parity meaning for existing consumers; this is the "functionally
-// caught up" signal an operator actually wants, and it is the field to read before
-// concluding a non-zero lag means the indexer is behind.
+// The processable tip is reached at decoder-tip parity or while only a
+// future-stamped block remains unavailable.
 function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
     return !!isSynced || waitingOnFutureBlock(stallReason, stallClearsAtMs, now);
 }
 
-// ── Mirror-barrier hold: how long ONE block has been stuck behind the hub-mirror
-// barriers, and whether that has passed the named ceiling.
-//
-// Every hub-mirror barrier bounds a single ATTEMPT (HUB_PRICE_SYNC_TIMEOUT_MS) and then
-// defers, and the block loop retries the same block with an identical fresh wait. Those
-// per-attempt bounds compose into no bound at all: a mirror whose stream watermark has
-// stopped advancing holds a block forever while each individual log line reads like an
-// ordinary, self-clearing defer. What that looks like from outside is a metronome, a few
-// blocks released whenever the watermark happens to jump, and a throughput ceiling below
-// chain pace. So the hold is measured across retries, keyed on the BLOCK rather than the
-// reason (a block that cycles between two barriers is still one stuck block), and it has
-// a named ceiling.
-//
-// nextBarrierHold folds one poll-loop observation into the hold record and is pure, so
-// the whole rule is testable without a block loop. It returns the new record, or null
-// when there is no hold to carry.
-//
-// Six things reset it, and each is a case where the mirror wait is NOT open-ended:
-//   - no stall reason at all (the loop is advancing),
-//   - a different block at the head of the queue (the previous one committed),
-//   - a future-stamped block (waitingOnFutureBlock). That wait already has its own named
-//     bound, the block's own timestamp, it is consensus working as designed, and no
-//     mirror action can shorten it by one second. Accumulating it here would fire the
-//     ceiling on the healthiest case there is.
-//   - a bridge proof wait. It clears on a quorum checkpoint or origin endpoint, so a
-//     hub-mirror resync cannot shorten it either.
-//   - a train activation halt. Only updating the node to a build with the required rule
-//     set clears it, so the ceiling would name a barrier or host fault that is not there.
-//   - an operator-action replay hold. A go row or a successful rewitness clears it, so a
-//     hub-mirror resync cannot shorten it.
+// Track one block's mirror-barrier hold across retries and reason changes.
+// Reset for progress, future waits, proof waits, activation halts, and operator holds.
 function nextBarrierHold(prev, block, stallReason, stallClearsAtMs, now){
     if(!stallReason || block == null) return null;
     if(stallReason === BRIDGE_PROOF_BARRIER) return null;
@@ -249,15 +127,9 @@ function nextBarrierHold(prev, block, stallReason, stallClearsAtMs, now){
     return { block: block, reason: stallReason, since: now, notified: false };
 }
 
-// True for the stall reasons named as hub-mirror barriers. The '_barrier' suffix is the
-// contract: every mirror-barrier defer site sets a reason ending in it (the full set is
-// read off the source by the barrier_mapping and barrier_hold_ceiling tests), and the
-// host faults and the other proof waits deliberately do not (vm_executor_unavailable,
-// anchor_reward_proof_unavailable, rollcall_proof_unavailable,
-// capability_proof_unavailable, list_share_halt). The bridge proof wait
-// also ends in '_barrier', and it opts out in nextBarrierHold before the hold-ceiling
-// remedy can request a mirror resync. Tests the leading word only, so a reason that
-// carries prose (parse_exception, train_activation_halt) never forces a resync.
+// Match '_barrier' on the leading word; nextBarrierHold excludes bridge proof waits.
+// list_share_snapshot_barrier is raised outside the defer chain and deliberately
+// remains resync-able because its snapshot is not mirrored yet.
 function isMirrorBarrierReason(stallReason){
     return typeof stallReason === 'string' && /_barrier$/.test(stallReason.trim().split(/[\s:]/)[0]);
 }

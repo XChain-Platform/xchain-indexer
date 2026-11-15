@@ -446,5 +446,9 @@
   "2026-10-25-state-checkpoints-supersede-columns.sql": {
     "residue": "06681f5ff2b3d4aafdd01b6157477be6fc390a33c7436d566e40bf867108bd6e",
     "sha256": "16080b370d93d9278e363b026d64b2add4b79a4b1d3da03c36289b0a89a75265"
+  },
+  "2026-11-01-index-memos-binary-collation.sql": {
+    "residue": "ae6f1986990b27bf2d658a8c1f687a123c662fb47df0e9efa823d801988b08f2",
+    "sha256": "eaed44bbbf96e096fb63773d00d59cd6e45782fbad117feba20187c28445d783"
   }
 }

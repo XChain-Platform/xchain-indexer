@@ -198,6 +198,18 @@ function callRows(calls, sql, params) {
 function bridgePolicyRows(bridges, policies, sql, params) {
     if (sql.startsWith('SELECT transfer_id FROM bridge_transfers'))
         return bridges.filter(r => r.transfer_id === params[0]).map(r => ({ transfer_id: r.transfer_id }));
+    // The revive statement also starts with the status-only prefix, so it is matched first.
+    if (sql.startsWith('UPDATE bridge_transfers SET status') && sql.includes('validator_signatures = ?')) {
+        for (let row of bridges) {
+            if (row.transfer_id !== params[5]) continue;
+            row.status = params[0];
+            row.validator_signatures = params[1];
+            row.finalizing_view = params[2];
+            row.effective_time = params[3];
+            row.snapshot_block = params[4];
+        }
+        return [];
+    }
     if (sql.startsWith('UPDATE bridge_transfers SET status')) {
         for (let row of bridges) if (row.transfer_id === params[1]) row.status = params[0];
         return [];

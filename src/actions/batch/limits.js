@@ -218,8 +218,9 @@ function installFanOutWeights(){
 // weight-30 seat already permits, whichever piece completes the group, and a
 // non-completing carrier is not over-charged for work it never does.
 // A format-drift objection to the discount does not hold up: the format is
-// read with the SAME util.getFormatVersion(params[0]) call the dispatcher (actions/index.js)
-// uses to set data['FORMAT'], one shared derivation rather than a second one, and
+// read with the SAME util.getFormatVersion(params[0]) call processTransaction in
+// actions_class/transaction.js uses before buildActionData sets data['FORMAT'], one shared
+// derivation rather than a second one, and
 // DEPLOY is outside normalizeSubAction's legacy VERSION injection so params[0] is
 // always the explicit version field. The asymmetry still binds for the change itself:
 // lowering a weight is a loosening (it can only accept more), and mainnet is ARMED

@@ -42,8 +42,8 @@ class Dispenser_Expire {
         // getDispenserEdits' ALLOW_LIST / BLOCK_LIST activation compare; omitted it
         // coerced to 0 and the compare silently read false, leaving this path with the
         // list overlay never applied. Behavior-neutral today (nothing below reads those
-        // two fields) and set on every dispatch (utility.js processExpirations); see the
-        // fuller note in dispenser_close.js.
+        // two fields) and set on every dispatch (utility/block_passes.js processExpirations); see the
+        // fuller note in dispenser_close/index.js.
         let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['ACTION_INDEX'], data['BLOCK_TIME'], data['BLOCK_INDEX']);
 
         // Only proceed if we have a valid dispenser

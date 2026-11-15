@@ -16,8 +16,8 @@
 #
 # bin/ci-full.sh: run EVERY tier this repo's GitHub CI runs, in one process.
 #
-# .github/workflows/ci.yml fans this repo out as five parallel jobs (ci,
-# integration, perf-regression, drift-guards, coverage). The pre-push venue
+# .github/workflows/ci.yml fans this repo out as six parallel jobs (ci,
+# integration, perf-regression, drift-guards, coverage, migration-pin). The pre-push venue
 # gate used to run only `npm run ci`, so a push could gate green locally and
 # then go red on GitHub on a job the gate never ran (2026-08-15: exactly that,
 # on three repos at once). This script IS the local twin of the workflow: every
@@ -278,6 +278,12 @@ run_tier "drift: pre-flight <-> handler gate" sdk_preflight_drift_check
 
 # --- job: coverage ---------------------------------------------------------
 run_tier "coverage ratchet (coverage:check)" env XCHAIN_REQUIRE_SIBLINGS=1 npm run coverage:check
+
+# --- job: migration-pin ----------------------------------------------------
+# GitHub passes an explicit --base so an unresolvable base fails there; a venue
+# checkout may carry no develop ref, so this twin takes the default base and the
+# pin tool skips the merge-base compare with a warning when none resolves.
+run_tier "migration pin (merge-base compare)" node bin/lib/migration_residue_pin.js
 
 echo
 # >>> ci-tier summary (generated) >>>

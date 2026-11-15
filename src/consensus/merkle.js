@@ -17,10 +17,13 @@
  * Pure, deterministic, DB-free cryptographic primitives for the additive state
  * commitment (balance/state SMT), the per-block content Merkle root, and the
  * fixed top-level state root. Everything here is CONSENSUS-CRITICAL once the
- * §6 flag-day activates. The indexer producer lives in src/state_commitment/,
- * with its database integration in src/db/actions.js. The xchain-sync follower
- * consumes its twin through src/client/block_hasher.js, while the audit tree is
- * retained at src/server/merkle_tree.js. They MUST compute byte-identical roots.
+ * §6 flag-day activates. The xchain-indexer producer (src/state_commitment/,
+ * with its database integration in src/db/actions.js) and the xchain-sync
+ * follower MUST compute byte-identical roots from this file. The follower's
+ * consumers are src/state_commitment/index.js, src/escrow_leaf_subtree.js,
+ * src/contract_state_subtree.js and src/client/sync.js. xchain-sync's
+ * src/client/block_hasher.js is a twin of the indexer's block-hash code in
+ * src/db/actions.js; it does not load this file.
  *
  * BYTE-ALIGNED TWINS: the consensus modules carried by xchain-explorer and
  * xchain-sdk support client-side verification. Keep the shared primitives
@@ -28,10 +31,12 @@
  * scenario guard them. Do not introduce wall-clock, locale, or float dependence:
  * SHA-256 over explicit byte layouts only.
  *
- * Hardening (vs the follower's legacy unsigned audit tree): RFC 6962-style
- * domain separation on leaves (0x00) and internal nodes (0x01), a distinct
- * empty-leaf constant (0x02), fixed-shape trees (no Bitcoin duplicate-last for
- * odd layers). See spec §2.6, §3.1.
+ * Hardening (vs xchain-sync's legacy audit tree in
+ * src/server/merkle_tree.js, which backs only the transparency log, is not
+ * second-preimage safe, and is deliberately not root-compatible with this
+ * file): RFC 6962-style domain separation on leaves (0x00) and internal nodes
+ * (0x01), a distinct empty-leaf constant (0x02), fixed-shape trees (no Bitcoin
+ * duplicate-last for odd layers). See spec §2.6, §3.1.
  *
  ********************************************************************/
 

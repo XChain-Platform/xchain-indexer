@@ -21,7 +21,7 @@
  ********************************************************************/
 
 const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
-const { normalizeQuoteRequest, batchRequestWire } = require('./quote_answers.js');
+const { normalizeQuoteRequest, batchRequestWire, isIncompleteDryRun } = require('./quote_answers.js');
 
 // Which database the fee schedule's price read came out of. Resolved exactly the way
 // util.getFeeOraclePrices resolves it, so the disclosure cannot drift from the
@@ -80,6 +80,16 @@ module.exports = {
             timeoutMs: this.config['BLOCK_PROCESS_TIMEOUT'],
             label: 'feequotedryrun ' + (action || '')
         });
+
+        if(isIncompleteDryRun(run))
+            return {
+                supported: true, dryRun: true, action, coin, feeDestination,
+                blockIndex: run.blockIndex, blockTime: run.blockTime,
+                valid: null, noVerdict: true, retryable: true, status: null,
+                error: 'dry-run produced no verdict (the dry-run did not finish: ' + run.error + '); retry shortly',
+                xchainFee: null, requiredFeeNative: null, requiredFeeSatsExact: null,
+                feeSupported: false
+            };
 
         let valid  = (run.status === 'valid');
         let result = {

@@ -16,6 +16,8 @@
 
 const bridgeSettle = require('../../src/consensus/bridge_settle.js');
 const listCanonical = require('../../src/consensus/list_share_settle/canonical.js');
+const { screenListMeta } = require('../../src/consensus/list_share_settle/screen.js');
+const { isListMetaActive } = require('../../src/consensus/gates/list_meta_gate.js');
 const swq = require('../../src/consensus/stake_weighted_quorum.js');
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -59,6 +61,9 @@ function validateListSnapshot(row, network){
         fail(id, 'has malformed validator_signatures');
     if(typeof row.added !== 'string' || typeof row.removed !== 'string')
         fail(id, 'has malformed membership lists');
+
+    let meta = screenListMeta(row, isListMetaActive(row.snapshot_block, row.network) === true);
+    if(meta.halt) fail(id, 'has malformed list metadata (' + meta.detail + ')');
 
     let added = bridgeSettle.parseMembership(row.added);
     let removed = bridgeSettle.parseMembership(row.removed);
@@ -105,15 +110,18 @@ async function writeListSnapshot(db, row){
             (id, snapshot_id, snapshot_block, network, home_chain, home_list_index,
              list_type, seq, kind, origin_block, members_hash, added, removed,
              admit_block_btc, admit_block_ltc, admit_block_doge, finalizing_view,
-             validator_signatures, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             validator_signatures, status, name, description, meta_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [Number(row.id), row.snapshot_id, Number(row.snapshot_block), row.network,
          row.home_chain, Number(row.home_list_index), Number(row.list_type), Number(row.seq),
          row.kind, Number(row.origin_block), row.members_hash, row.added, row.removed,
          row.admit_block_btc == null ? null : Number(row.admit_block_btc),
          row.admit_block_ltc == null ? null : Number(row.admit_block_ltc),
          row.admit_block_doge == null ? null : Number(row.admit_block_doge),
-         Number(row.finalizing_view) || 0, row.validator_signatures, row.status]);
+         Number(row.finalizing_view) || 0, row.validator_signatures, row.status,
+         row.name == null ? null : row.name,
+         row.description == null ? null : row.description,
+         row.meta_hash == null ? null : row.meta_hash]);
 }
 
 async function writeArchive(db, archive, report){

@@ -23,6 +23,7 @@ const eq     = require('../../src/consensus/equivocation_header.js');
 const ed25519 = require('../../src/consensus/ed25519.js');
 const gateRegistry = require('../../src/consensus/gate_registry');
 const bridgeSettle = require('../../src/consensus/bridge_settle.js');
+const policyMembership = require('../../src/consensus/bridge_settle/policy_membership.js');
 const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
 const CHECKPOINT_COMMITMENT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
 
@@ -381,9 +382,13 @@ function rawPolicy(snapshot_id, overrides) {
         finalizing_view: 0, status: 'finalized'
     }, overrides || {});
     if (!Object.prototype.hasOwnProperty.call(overrides || {}, 'policy_hash')) {
-        let allow = bridgeSettle.parseMembership(row.allow_list);
-        let block = bridgeSettle.parseMembership(row.block_list);
-        row.policy_hash = bridgeSettle.policyHash(allow, block, !!row.sleeping);
+        let allowParsed = policyMembership.parseMembershipOrRef(row.allow_list);
+        let blockParsed = policyMembership.parseMembershipOrRef(row.block_list);
+        let allow = Object.prototype.hasOwnProperty.call(allowParsed, 'list') ? allowParsed.list : null;
+        let block = Object.prototype.hasOwnProperty.call(blockParsed, 'list') ? blockParsed.list : null;
+        row.policy_hash = policyMembership.policyHash(allow, block, !!row.sleeping, {
+            allow: allowParsed.ref || null, block: blockParsed.ref || null
+        });
     }
     return row;
 }

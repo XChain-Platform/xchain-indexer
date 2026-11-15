@@ -1,3 +1,13 @@
+// Copyright © 2025–2026 Dankest, LLC
+// Based on XChain Platform by Dankest, LLC – https://dankest.llc
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// This file is part of XChain Platform. Licensed under the GNU Affero
+// General Public License v3.0 or later; see LICENSE.md. A commercial
+// license (without AGPL source-disclosure terms) is available -
+// contact legal@dankest.llc.
+
 'use strict';
 
 const gateRegistry = require('../../consensus/gate_registry');
@@ -90,11 +100,15 @@ module.exports = {
             return error;
 
         let merged = new Set();
-        if(!data['IS_GENESIS']){
+        if(!data['IS_GENESIS'] && list.length <= LIST_UNION_MAX_MEMBERS){
+            mergeMembers:
             for(let member of list){
                 let items = await this.indexerDb.getList(member, data['BLOCK_INDEX']);
-                for(let item of items)
+                for(let item of items){
                     merged.add(item);
+                    if(merged.size > LIST_SHARE_MAX_MEMBERS)
+                        break mergeMembers;
+                }
             }
         }
 

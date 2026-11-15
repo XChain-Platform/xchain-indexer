@@ -16,6 +16,7 @@ const sinon = require('sinon');
 const { createMockIndexer } = require('../../../fixtures/mocks');
 
 const Rollback = require('../../../../src/rollback/index.js');
+const purgeSql = require('../../../../src/db/rollback/purge.js');
 
 // Part of the Rollback suite whose entry is test/unit/rollback.test.js: what aborts
 // and what commits the reorg transaction, namely the errno-gated recovery-reward
@@ -88,6 +89,24 @@ describe('Rollback @regression @tier3', function () {
         await rollback.rollback(100);
         assert.ok(indexer.indexerDb.commitTransaction.calledOnce, 'schema-gap swallow must still commit');
         assert.ok(indexer.indexerDb.rollbackTransaction.notCalled);
+    });
+
+    it('re-arm: a missing table after the probe UPDATE propagates', async function () {
+        const noTable = Object.assign(new Error('index_addresses missing'), { errno: 1146 });
+        const db = { doQuery: sinon.stub(), applyPendingRewardsForAddress: sinon.stub() };
+        db.doQuery.onFirstCall().resolves({ affectedRows: 1 });
+        db.doQuery.onSecondCall().rejects(noTable);
+        await assert.rejects(() => purgeSql.rearmRecoveryRewards(db, 100, 100), /index_addresses missing/);
+        assert.ok(db.applyPendingRewardsForAddress.notCalled);
+    });
+
+    it('re-arm: a missing column during survivor re-apply propagates', async function () {
+        const noColumn = Object.assign(new Error('validator_rewards column missing'), { errno: 1054 });
+        const db = { doQuery: sinon.stub(), applyPendingRewardsForAddress: sinon.stub().rejects(noColumn) };
+        db.doQuery.onFirstCall().resolves({ affectedRows: 1 });
+        db.doQuery.onSecondCall().resolves([{ source_address: 'addr1', source_id: 7 }]);
+        await assert.rejects(() => purgeSql.rearmRecoveryRewards(db, 100, 100), /column missing/);
+        assert.ok(db.applyPendingRewardsForAddress.calledOnce);
     });
 });
 

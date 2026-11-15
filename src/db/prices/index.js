@@ -27,7 +27,7 @@ const oracleVmSnapshot = require('./oracle_vm_snapshot.js');
 const { isOraclePreloadAdmissionActive, oraclePreloadBound,
         ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN } = require('./oracle_preload_causality_gate.js');
 const { landedBoundClause } = require('./landed_bound.js');
-const gateRegistry = require('../../consensus/gate_registry');
+const { landedSelection } = require('./landed_selection.js');
 const { getLogger } = require('../../observability/index.js');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
@@ -86,21 +86,6 @@ function admitBoundFor(config, blockHeight, opts){
     return b.sql === '' ? null : b;
 }
 
-// Whether the landed-batch bound binds at blockHeight, and whether in its strict form: the
-// one reading getLatestPrice and the bounded FIAT read share.
-function landedSelection(config, blockHeight){
-    let landedActive = gateRegistry.activeAt('price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION',
-        config['NETWORK'], config['COIN'], blockHeight, null);
-    let landingSets = gateRegistry.get('price_fee_batch_landed_activation.PRICE_LANDING_CHAINS');
-    let landingSet  = Object.prototype.hasOwnProperty.call(landingSets, config['NETWORK'])
-        ? landingSets[config['NETWORK']] : [];
-    let ownCoin     = String(config['COIN'] || '').trim().toUpperCase();
-    let landedStrict = landedActive && landingSet.includes(ownCoin) &&
-        gateRegistry.activeAt('price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION',
-            config['NETWORK'], config['COIN'], blockHeight, null);
-    return { landedActive, landedStrict };
-}
-
 // The clause and bindings that fix the rounds a FIAT settlement read sees at block B to what
 // chain data names (dispenser_fiat_pricing_activation): reference_block <= B on the reference
 // chain, as the fee read's height branch and the VM preload bind it there; the signed admission
@@ -126,7 +111,11 @@ function fiatReadBound(config, bound){
 
 module.exports = Object.assign({
 
+    // Operator freshness tooling needs the newest finalized batch held by this mirror, so this
+    // read is deliberately uncapped. It is not a consensus input; a consensus caller needs a
+    // block-capped read. The barrier assertion is a no-op outside block processing.
     async getMaxBatchBlockTime(){
+        this.assertPriceBarrierNotSkipped('getMaxBatchBlockTime');
         const rows = await this.doQueryStrict(
             `SELECT MAX(batch_block_time) AS max_batch_block_time
              FROM price_snapshots

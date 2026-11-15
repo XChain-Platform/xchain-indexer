@@ -75,6 +75,7 @@ async function processListSharePass(ctx){
 }
 
 module.exports = {
+    consumerActive,
     processListSharePass,
     applyListShareSnapshot: apply.applyListShareSnapshot,
     listShareCanonical: canonical.listShareCanonical,

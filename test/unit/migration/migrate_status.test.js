@@ -142,8 +142,9 @@ function registerStatusOutputTests() {
         const output = printed(cli.logStub);
         const report = JSON.parse(output.slice(output.indexOf('{')));
         assert.deepStrictEqual(Object.keys(report),
-            ['database', 'total', 'applied', 'pending', 'changed', 'migrations', 'orphaned']);
+            ['database', 'total', 'applied', 'pending', 'changed', 'migrations', 'orphaned', 'backdated']);
         assert.deepStrictEqual(report.orphaned, []);
+        assert.deepStrictEqual(report.backdated, []);
         assert.strictEqual(report.database, 'indexer_test');
         assert.strictEqual(report.total, fake.files.length);
         assert.strictEqual(report.applied, fake.files.length - 2);

@@ -248,8 +248,13 @@ function initTransportState(sync, options) {
     // only the pre-ready seed and the fallback for older hubs that omit the field.
     sync._lastHeartbeatAt = null;
     sync._watchdogTimer = null;
-    sync.watermarkIntervalMs = parseInt(options.watermarkIntervalMs || readEnvNow('HUB_SYNC_WATERMARK_INTERVAL_MS') || '10000');
+    // An explicit option is the caller's own number. The env value takes the same finite check
+    // and floor/ceiling clamp as an interval the hub advertises, so a malformed or oversized
+    // setting cannot turn the pre-ready watchdog into a busy loop or switch it off.
+    sync.watermarkIntervalMs = options.watermarkIntervalMs ? parseInt(options.watermarkIntervalMs) : 10000;
     sync.watermarkTimeoutMs = sync.watermarkIntervalMs * 3;
+    if (!options.watermarkIntervalMs)
+        sync.adoptHubWatermarkInterval(readEnvNow('HUB_SYNC_WATERMARK_INTERVAL_MS'));
 }
 
 function initStallDetectorState(sync, options) {

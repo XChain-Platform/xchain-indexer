@@ -125,6 +125,16 @@ module.exports = {
     // ceiling fires is not a consensus input, so it must not affect the token. gasUsed is
     // already clamped to the ceiling on every path, so the fee stays fork-safe; the raw
     // out_of_gas-vs-timeout detail is preserved (un-hashed) in contract_executions.error_message.
+    //
+    // Scope of that guarantee: it covers the out_of_gas-vs-timeout race only. It does NOT
+    // cover the success-vs-timeout race. An execution that finishes just under the
+    // wall-clock budget on a fast host commits its state changes and real gasUsed, while
+    // the same execution on a slower or busier host times out and commits nothing with gas
+    // clamped. That race is closed only when metering exhausts the gas ceiling well inside
+    // CONSENSUS_MAX_WALL_MS on every network that executes contracts. On a network whose
+    // string-receiver meter is not armed (xchain-vm src/index/string_receiver_meter.js),
+    // String trimLeft/trimRight and Number.parseInt/parseFloat can run for tens of seconds
+    // against the budget, so the condition does not hold there.
     // reverted (contract-controlled) and failed (deterministic runtime throw) stay distinct;
     // they are not host-timing races.
     //

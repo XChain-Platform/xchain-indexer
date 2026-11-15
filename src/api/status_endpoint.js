@@ -79,13 +79,16 @@ async function statusSnapshot(indexer, XChainIndexer){
 // in-memory counter nor advertises an uncommitted one.
 //
 // GET /ready answers the same body with the READINESS verdict as its status code:
-// 503 while `ready` is false (a halted decoder, a barrier hold past its ceiling, no
-// commit for readyNoCommitMs while behind a known tip, or any liveness fault). It is
-// a separate route because those faults survive a restart: the container healthcheck
-// polls /status and autoheal restarts on its 503, so folding them in there would
-// restart-loop the container. Point monitors and load balancers at /ready, not
-// the container healthcheck. chainLagKnown is a non-gating signal that the verdict
-// could see the coin node tip; chainTipAt shows the age of the last successful read.
+// 503 whenever readinessVerdict() reports any reason. The reasons and their meanings
+// are listed above readinessVerdict in ../XChainIndexer/readiness/verdict.js. Only
+// indexer_db_unreachable and wedged also trip the /status 503 through `unhealthy` in
+// statusSnapshot; every other reason, including poll_silent, is readiness-only. Those
+// reasons stay off /status because the container healthcheck polls it and autoheal
+// restarts on 503. Some faults survive a restart, while for others, such as one slow
+// poll iteration held across barriers, a restart is the wrong response. Point monitors
+// and load balancers at /ready, not the container healthcheck. chainLagKnown is a
+// non-gating signal that the verdict could see the coin node tip; chainTipAt shows the
+// age of the last successful read.
 function mountStatusRoute(app, { indexer, XChainIndexer }){
     app.get('/status', async (req, res) => {
         let snap = await statusSnapshot(indexer, XChainIndexer);

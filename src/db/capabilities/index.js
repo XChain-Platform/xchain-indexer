@@ -144,6 +144,11 @@ module.exports = {
     // that key: idx_cap_block can win the cost estimate, but it does not carry the
     // requested order and makes MariaDB filesort the whole matching snapshot before
     // applying LIMIT. uq_cap_snap can stop after the bounded ordered prefix.
+    //
+    // The ORDER BY runs under the table collation (utf8_general_ci), which folds case, and no
+    // binary collation is pinned here on purpose: a pin would change row order, and the FORCE
+    // INDEX scan above relies on the index order. A consumer must therefore never take its
+    // consensus output from row position; it picks explicitly, as relayFeePayoutAddress does.
     async getCapabilitySnapshotWeights(capability, snapshotBlock){
         this.assertCapabilityProofNotHeld('getCapabilitySnapshotWeights', capability, snapshotBlock);
         let limit = validatorQueryLimit(this.config);

@@ -271,7 +271,8 @@ describe('stateCommitment: missing prior root falls back to full recompute (item
 //
 // Own mock (not makeRootsMockDb) because this scenario needs escrow_leaf_journal
 // routing the prior-root suite has no use for. BTC:regtest is the only chain the
-// escrow leaf is armed on (state_subtree_activation.js, block 11200), so the
+// escrow leaf is armed on (the state_subtree_activation.ESCROW_LOCKED_LEAF_ACTIVATION
+// row in src/consensus/gate_registry/shared_rows_4.js, block 11200), so the
 // arming boundary is 11200 with 11199 below it.
 function makeArmingMockDb({ priorRows, liveJournalRows }){
     const nodes = new Map();

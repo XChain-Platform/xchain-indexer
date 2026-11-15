@@ -264,6 +264,10 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             assert.strictEqual(vm[gate], pc.VM_BANNED_ASYNC_MAINNET_TIME,
                 'xchain-vm ' + gate + ' != indexer VM_BANNED_ASYNC mainnet_time; update both repos in lockstep (one-sided edit forks the fleet at the flag-day)');
         }
+        const lintRow = pc.get('protocol_changes.changes.VM_LINT_HARDENING');
+        assert.ok(lintRow, 'indexer VM_LINT_HARDENING row must be registered');
+        assert.strictEqual(vm.VM_LINT_HARDENING_GATE_BLOCK_TIME, lintRow.mainnet_time,
+            'xchain-vm VM_LINT_HARDENING gate != indexer VM_LINT_HARDENING mainnet_time');
     });
 
     it('the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network', function(){

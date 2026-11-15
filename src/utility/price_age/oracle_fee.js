@@ -120,7 +120,7 @@ module.exports = {
     // Kept as the same product Counterparty computes, just with the cancellation applied:
     //
     // That per-dispense premise is what SETTLEMENT does only at/above
-    // DISPENSER_ORACLE_PER_TOKEN_PRICE. Below it, dispense.js spent the published price
+    // DISPENSER_ORACLE_PER_TOKEN_PRICE. Below it, dispense/pricing_paths.js spent the published price
     // as the price of one whole FILL, so the fee an oracle was paid and the proceeds the
     // dispenser could actually take in differed by a factor of giveAmount. This
     // function is unchanged either side of that flag day: per-token is the canonical

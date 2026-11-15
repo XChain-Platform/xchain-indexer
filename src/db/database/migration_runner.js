@@ -33,7 +33,7 @@ const { getLogger } = require('../../observability/index.js');
 const { CONFIG_ENV } = require('../../config.js');
 // Object-level half of the backdating guard: plain functions over statement lists, so
 // they are required directly rather than installed on the prototype.
-const { reorderVerdict, describeReorder } = require('./migration_reorder.js');
+const { backdatingVerdict, describeReorder } = require('./migration_reorder.js');
 const { assertNoLiveColumnLoss } = require('./migration_live_schema_guard.js');
 const { assertUniqueKeyWitness } = require('./migration_guards/key_witness.js');
 const { assertNoDeclaredKeyDrop } = require('./migration_guards/declared_key_drop.js');
@@ -275,31 +275,18 @@ async function gateUnappliedMigration(self, conn, file, checksum, mode, result, 
     return false;
 }
 
-// The already-applied migrations a pending file sorts before. Missing files stay
-// unattributable so the verdict fails closed.
-function jumpedMigrations(self, dir, file, appliedByName){
-    const out = [];
-    for(const name of appliedByName.keys()){
-        const n = String(name);
-        if(!/^\d{4}-\d{2}-\d{2}-/.test(n) || n <= String(file)) continue;
-        let statements = null;
-        try { statements = self.splitSqlStatements(fs.readFileSync(path.join(dir, n), 'utf8')); }
-        catch(_){ statements = null; }
-        out.push({ file: n, statements });
-    }
-    return out.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
-}
-
 // The backdating guard for an auto file (see the note where migrateFile calls it).
 // The lexical check opens the question; object attribution determines whether applying
 // in the new position can actually leave a different schema.
 function guardBackdatedFrontier(self, ctx, file, raw, appliedByName){
     const { dir, includeManual, result } = ctx;
-    const frontier = Database.backdatedFrontierViolation(file, appliedByName.keys());
-    if(!frontier) return;
-
-    const jumped  = jumpedMigrations(self, dir, file, appliedByName);
-    const verdict = reorderVerdict({ file, statements: self.splitSqlStatements(raw) }, jumped);
+    const analysis = backdatingVerdict({
+        file, raw, appliedNames: appliedByName.keys(),
+        readApplied: name => fs.readFileSync(path.join(dir, name), 'utf8'),
+        split: sql => self.splitSqlStatements(sql),
+    });
+    if(!analysis) return;
+    const { frontier, jumpedCount, verdict } = analysis;
     result.reordered.push({
         file, frontier,
         divergent: verdict.divergent,
@@ -310,7 +297,7 @@ function guardBackdatedFrontier(self, ctx, file, raw, appliedByName){
 
     if(!verdict.divergent){
         getLogger().info('runMigrations: out-of-order but PROVABLY HARMLESS: ' + file +
-            ' sorts before already-applied ' + frontier + ', yet ' + describeReorder(verdict, jumped.length) +
+            ' sorts before already-applied ' + frontier + ', yet ' + describeReorder(verdict, jumpedCount) +
             ' Applying at this position. Rename it past ' + frontier +
             ' (with a Database.MIGRATION_LEDGER_RENAMES entry, since the fleet has it under this name) to clear the out-of-order state.');
         return;
@@ -318,7 +305,7 @@ function guardBackdatedFrontier(self, ctx, file, raw, appliedByName){
 
     const msg = 'runMigrations: ' + file + ' is dated BEFORE already-applied migration ' + frontier +
         ', so it would run in a different position here than on a fresh database and diverge the schema: ' +
-        describeReorder(verdict, jumped.length) + ' Rename it with a date after ' + frontier + '.';
+        describeReorder(verdict, jumpedCount) + ' Rename it with a date after ' + frontier + '.';
     // Same dual-mode contract as the checksum guard above: the operator
     // path and opt-in strict mode fail closed, passive startup logs and
     // proceeds so a backdated commit cannot black-start the fleet.

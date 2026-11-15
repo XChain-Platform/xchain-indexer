@@ -318,7 +318,7 @@ class Utility {
         // while bcsub("false") would throw and wedge block processing.
         if(!Number.isFinite(Number(block_time)) || block_time === false || block_time === null)
             return;
-        let time_24hr = this.bcsub(String(block_time), '86400');
+        let time_24hr = this.bcsub(String(block_time), '86400', 0);
         let stale = await db.getStaleMarkets(time_24hr, Utility.MARKET_STALE_SWEEP_BATCH, block_index);
         for(let row of stale){
             let data = await db.getMarketInfo(row.id, block_time);

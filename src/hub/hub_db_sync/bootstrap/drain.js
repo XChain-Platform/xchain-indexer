@@ -36,16 +36,13 @@ const PAGE_LIMIT = 10000;
 const MAX_PAGES  = 1000;                             // runaway backstop (10M rows)
 const SNAPSHOT_RETRY_BASE_MS = 1000;
 const SNAPSHOT_RETRY_MAX_MS  = 30000;
-// In-place retries of one page give up well inside the 180 s watermark stall window
-// (HUB_SYNC_WATERMARK_STALL_S), so a hub that stays down falls back to the scheduled
-// bootstrap retry instead of tripping a forced resync of every mirrored table.
+// Retry one page for two minutes, then yield to scheduled bootstrap before
+// watermark-stall recovery forces a full resync.
 const SNAPSHOT_RETRY_BUDGET_MS = 120000;
 const DRAIN_ABORTED = Symbol('drain-aborted');
 
-// The longest one page may legitimately stay in flight before it counts as wedged: a
-// fetch whose last in-place retry starts just inside the retry budget, after the longest
-// retry wait, and then runs to the request deadline (httpDeadlineMs, added per instance).
-// The same bound covers the flush of a page that arrived.
+// The page-age cap covers retry budget, maximum backoff, request deadline,
+// and the flush of a page that arrived.
 const BOOTSTRAP_PAGE_AGE_BASE_MS = SNAPSHOT_RETRY_BUDGET_MS + SNAPSHOT_RETRY_MAX_MS;
 
 // Retry failures that can clear without changing the request. Authentication and input
@@ -57,13 +54,8 @@ function isRetryableSnapshotError(error) {
 
 module.exports = {
 
-    // Bootstrap: fetch a full snapshot of the table from the hub and apply it.
-    // If the hub supplied max_ids in the ready message, runs a supplemental
-    // catch-up fetch for any IDs between the snapshot ceiling and hub_ready_max_id
-    // that may have arrived while the REST round-trip was in flight.
-    // Returns the snapshot response's stream watermark when this table fully
-    // drained (page not full, every row applied), or null otherwise; the caller
-    // (bootstrapAll) only advances the global watermark once every table drains.
+    // Drain and apply one table, including rows appended through its ready ceiling.
+    // Return its watermark only after a short final page with no apply errors.
     async bootstrapTable(table) {
         let connectionEpoch = this._wsEpoch;
         let selectorRevision = this._selectorRevision;
@@ -105,18 +97,11 @@ module.exports = {
         return drain.watermark !== null ? drain.watermark : 0;
     },
 
-    // Open one table's drain: prime the column cache, prove the network scope and clear
-    // what falls outside it, resolve the cursor, and build the accounting the page loop
-    // and every pass after it share. Null when the table is not ready, which the caller
-    // reports as "not drained" so bootstrapAll retries.
+    // Prime schema and network scope, resolve the wire cursor, and build shared
+    // drain accounting. Return null until the table is ready.
     async openTableDrain(table) {
-        // Prime (and validate) the local column cache once, up front. If the mirror
-        // table does not exist yet, localColumns throws (it refuses to cache an empty
-        // column set); bail as "not drained" so bootstrapAll schedules a retry once
-        // the indexer's verifyTables() has created it. Doing this here (rather than
-        // letting each row fail in applyRow) avoids a SHOW COLUMNS storm + a misleading
-        // "bootstrapped N rows" log when the whole page silently no-ops. Self-heals the
-        // cold-start race without a process restart.
+        // Prime the column cache before fetching; a missing table stays undrained
+        // for bootstrapAll to retry after schema creation.
         try {
             await this.localColumns(table);
         } catch (e) {
@@ -124,10 +109,8 @@ module.exports = {
             return null;
         }
 
-        // Clear anything the mirror holds for a network other than the one it serves,
-        // BEFORE the cursor below is read from it, and keep the resolved scope for every
-        // id read in this bootstrap. Null scope means the scope could not be proven, and
-        // then nothing is deleted and every read stays unscoped (see mirrorNetworkScope).
+        // Purge rows outside a proven network scope before resolving the cursor.
+        // An unproven scope leaves deletion and subsequent reads unscoped.
         let scope = await this.mirrorNetworkScope(table);
         if (scope) await this.purgeForeignNetworkRows(table, scope);
 
@@ -138,22 +121,13 @@ module.exports = {
         return drain;
     },
 
-    // Where the page loop starts reading. The position is the highest wire id read from
-    // this connection, never a local mirror id. It lives in process memory only, so a
-    // restarted indexer (or a failover, see resetForMove) pages every table from id 0 even
-    // over an intact mirror DB. That is kept on purpose for capability_snapshots: a held
-    // row is stepped over by the cursor and lives only in the in-memory hold map, so only a
-    // page from 0 re-serves it after a restart; and the page from 0 is what lets the
-    // reconciliation pass judge the mirror. The page itself is cheap; re-proving rows
-    // already mirrored was the cost, and judgeUnmirroredCapabilityRow skips them.
+    // Resume from the highest wire id read on this connection, never a local id.
+    // Positions stay memory-only so reconnects re-page held rows and reconcile from zero.
     async resolveDrainCursor(table, scope) {
         let lastId = Number(this._drainPositions[table]);
         if (!Number.isFinite(lastId) || lastId < 0) lastId = 0;
-        // Retractions are absent from this endpoint, so only a re-page from zero can prove
-        // which matches the hub currently serves. An incremental page cannot distinguish a
-        // retracted old match from one below its cursor. A table owed a re-page (a new
-        // connection, a forced resync, a refused live row) starts from zero for the same
-        // reason: the change it may have missed sits below the stored position.
+        // Re-page matches and any table with an owed re-page from zero because
+        // omitted or refused changes may sit below the current cursor.
         if (table === 'cross_chain_matches' || this.repageOwedSeq(table) !== undefined) {
             lastId = 0;
             this._drainPositions[table] = 0;
@@ -171,15 +145,9 @@ module.exports = {
         return (typeof ceiling === 'number' && Number.isInteger(ceiling) && ceiling >= 0) ? ceiling : NaN;
     },
 
-    // A position carried from an earlier connection that sits above the source's advertised
-    // ceiling cannot belong to its current id space. Reset the position only. Content-keyed
-    // local rows remain valid and no id-space observation authorizes deleting them.
-    //
-    // A position this same connection read is exempt. The ready frame's max_ids is a
-    // snapshot taken at subscribe time and the hub keeps appending (price rounds arrive
-    // about once a second), so a drain on the live socket routinely ends above it. Judging
-    // that position against the stale snapshot threw away the floor and re-paged the whole
-    // price table from id 0 on every later pass of the same connection.
+    // Reset a prior connection's cursor when it exceeds the source's ready ceiling.
+    // Keep content rows, and exempt positions read on this connection because the
+    // ready ceiling is only a subscription-time snapshot.
     async restartCursorAboveHubCeiling(table, scope, lastId, readyCeiling) {
         if (lastId > 0 && Number.isFinite(readyCeiling) && lastId > readyCeiling &&
             !this.positionReadOnThisConnection(table, lastId)) {
@@ -200,10 +168,8 @@ module.exports = {
             typeof read.epoch === 'number' && read.epoch === this._wsEpoch;
     },
 
-    // The drain's shared accounting: the page counters, the served-row sets the
-    // reconciliation passes read, and the progress reporter's clock. One object, so the
-    // flush and every pass after the last page read and advance the same state the loop
-    // does, exactly as the closures they replaced did.
+    // Build the counters, served-key sets, and progress clock shared by the
+    // page loop, flush, and reconciliation passes.
     async newDrainAccounting(table, scope, cursor) {
         let drain = {
             table: table, scope: scope,
@@ -213,62 +179,36 @@ module.exports = {
             fullTable: cursor.lastId === 0,
             // The owed mark this drain was opened under; only that mark may be settled by it.
             repageSeq: this.repageOwedSeq(table),
-            // Page until a SHORT page. The previous single-fetch version treated any
-            // full page as "not drained" and never fetched the rest. On a hub table
-            // larger than one page (prod price_snapshots: 13k+ rounds) the drain was
-            // structurally impossible, so the heartbeat gate never opened and the
-            // stream watermark froze at 0 (the 2026-06-11 tip-deferral incident).
+            // Continue until a short page; a full page proves more rows may remain.
             applied: 0, applyErrors: 0, lastPageCount: 0, watermark: null,
-            // cross_chain_matches only: the ODKU converges every mutation the hub can SERVE, but
-            // the bootstrap endpoint filters `status <> 'retracted'` (hub api.js), so a match the
-            // hub retracted while this mirror was disconnected is simply ABSENT from every page -
-            // there is no row to converge against, and the stale local copy keeps settling
-            // forever. Collect what the full re-page did serve so the reconciliation pass below
-            // can close that half of #3211.
+            // Matches omit retractions from snapshot pages; collect served ids so a
+            // complete re-page can mark stale local copies retracted.
             servedMatchIds: (table === 'cross_chain_matches') ? new Set() : null,
             matchDrainHubUrl: (table === 'cross_chain_matches') ? this.hubUrl : null,
-            // price_snapshots only: the same problem with the opposite cause. Its snapshot
-            // endpoint is UNFILTERED (hub api.js: SELECT * ... WHERE id > ?), so a complete
-            // re-page is the hub's whole table, which makes "the hub does not hold this round
-            // as finalized" provable from the drain alone. Nothing else can prove it here: the
-            // table carries no `network` column, so mirrorNetworkScope returns null and BOTH
-            // purges above are structurally unreachable for it. Collect the finalized
-            // (round_number, coin_pair) keys the hub actually served so the pass below can
-            // clear what it did not. See reconcileForeignPriceRounds.
+            // Price snapshots have an unfiltered feed and no network column; collect
+            // served finalized keys so a complete drain can remove foreign rows.
             servedPriceKeys:   (table === 'price_snapshots') ? new Set() : null,
             priceKeysComplete: true,
             maxServedRound:    0,
             minServedRound:    null,   // lowest round served, any status (recordServedRow)
-            // capability_snapshots only: the same problem as price_snapshots, arrived at by the
-            // same route. Its snapshot endpoint is UNFILTERED too (hub api.js: SELECT * ...
-            // WHERE id > ?), so a complete re-page is the hub's whole table; it carries no
-            // `network` column, so mirrorNetworkScope returns null and BOTH purges above are
-            // structurally unreachable for it. Collect the natural keys the hub
-            // actually served so the pass after the drain can clear what it did not, and record
-            // where the local id space stood BEFORE this drain so that pass can only ever judge
-            // rows that predate it. See reconcileForeignCapabilitySnapshots.
+            // Capability snapshots also have an unfiltered feed and no network column;
+            // collect served keys and judge only rows predating this drain.
             servedSnapshotKeys:    (table === 'capability_snapshots') ? new Set() : null,
             snapshotKeysComplete:  true,
             maxServedSnapshotBlock: 0,
         };
         drain.matchPreDrainRows = (table === 'cross_chain_matches')
             ? await this.snapshotFinalizedMatches() : null;
-        // The local ids are AUTO_INCREMENT and locally assigned (applyRow strips the wire
-        // id), so a row inserted while this drain runs - a live WS event, or this drain's own
-        // apply - necessarily carries an id above this mark. Reading it here, before the first
-        // page is applied, is what lets the reconciliation exempt those rows without needing a
-        // buffer like the price path's.
+        // Capture the local id ceiling before page application so reconciliation
+        // exempts rows inserted while this drain is running.
         drain.snapshotPreDrainMaxId = (table === 'capability_snapshots') ? await this.localMaxId(table, scope) : 0;
         await this.newOracleReconcileState(drain, scope);
         this.newDrainProgress(drain);
         return drain;
     },
 
-    // Progress counter. `fetched` counts every row the hub served this drain, which is
-    // the number that has to be seen moving on a cold start even where `applied` lags
-    // behind it. The hub states its own MAX(id) per table in the subscription ready
-    // message, so where that is known the line also carries how far through the id
-    // space this drain has reached.
+    // Initialize progress; fetched counts every served row so cold-start progress
+    // remains visible while application lags.
     newDrainProgress(drain) {
         drain.fetched        = 0;
         drain.pagesFetched   = 0;
@@ -278,11 +218,8 @@ module.exports = {
         drain.pending        = [];
     },
 
-    // price_snapshots only: the bootstrap bound. `priceHorizon` is the block
-    // time of the oldest block this consumer can still process, 0 when no bound applies.
-    // `priceFloor` is how far below it this drain reaches. Rows older than the floor are
-    // SERVED (so every warrant that rests on the drain having seen the hub's whole table
-    // - the reconciliation below above all - is untouched) but not APPLIED.
+    // Bound applied price history below the oldest processable block time.
+    // Older rows remain served for complete-drain reconciliation but are not applied.
     async newPriceBoundState(drain) {
         let priceHorizon = (drain.table === 'price_snapshots') ? await this.resolvePriceMirrorHorizon() : 0;
         drain.priceHorizon = priceHorizon;
@@ -293,17 +230,9 @@ module.exports = {
         drain.preHorizonServed   = (priceHorizon > 0) ? new Set() : null;
         drain.preHorizonRetained = (priceHorizon > 0) ? new Set() : null;
         drain.priceSkipped       = 0;
-        // Per-PAIR predecessor retention. The two sets above are keyed on round_number with
-        // every coin_pair pooled, which is the right shape for getPriceAtRound's round window
-        // and the wrong one for getPrice: db.getOracleDataForVM builds `prices` from a per-pair
-        // MAX(round_number) join with NO time filter, so a pair whose newest finalized row sits
-        // below the floor is present on a full mirror and absent from a bounded one, for the
-        // same block. At/after the stale-round visibility height that difference is VM-visible
-        // (full mirror: {price:null, roundNumber, timestamp, stale:true}; bounded mirror: no
-        // entry at all, so getPrice answers null), and a contract branching on it commits
-        // divergent state. So hold each pair's newest bound-out FINALIZED row and apply it
-        // after the drain when that pair kept nothing else - the pair's latest-price answer
-        // then matches a full mirror's, which is the reference behavior here.
+        // Hold each pair's newest finalized row below the floor, then apply it only
+        // if no newer row for that pair was retained. This preserves full-mirror
+        // latest-price results for bounded mirrors.
         drain.pricePairHeld    = (priceHorizon > 0) ? new Map() : null;
         drain.pricePairCovered = (priceHorizon > 0) ? new Set() : null;
     },
@@ -342,16 +271,8 @@ module.exports = {
         });
     },
 
-    // The page loop. Returns false when a page could not be judged at all (no rows array,
-    // or a schema version this build does not mirror), which the caller reports as "not
-    // drained" before anything is logged as bootstrapped; true otherwise, with the drain's
-    // counters saying how far it got.
-    //
-    // A heartbeat timer runs for the whole loop: reportDrainProgress is otherwise reached only
-    // from the flush after a page lands, so a slow page fetch, a retry wait or a slow apply
-    // left the drain silent for far longer than the progress interval. The timer ticks at
-    // half the interval and the throttle inside reportDrainProgress keeps the cadence, so no
-    // gap exceeds 1.5 x bootstrapProgressMs.
+    // Page with a heartbeat across fetch, retry, and flush. Return false when a
+    // page cannot be judged; otherwise counters record how far the drain reached.
     async pageTableDrain(drain) {
         let timer = null;
         if (this.bootstrapProgressMs > 0) {
@@ -368,11 +289,8 @@ module.exports = {
         }
     },
 
-    // True while a bootstrap page fetch, or the flush of a page that arrived, has been in
-    // flight for less than the page-age cap. The hold ceiling times row progress, which
-    // only moves when rows are handled, so a hub-paced page that outlasts a short ceiling
-    // read as a stall and the forced resync threw the drain away. Past the cap the page
-    // is wedged, not slow, and the ceiling forces recovery as before.
+    // Spare an active fetch or flush until its page-age cap; after that, the
+    // barrier hold may treat it as wedged and force recovery.
     bootstrapPageSpared(now) {
         if (!this._bootstrapping || !Number.isFinite(this._bootstrapPageSince)) return false;
         let deadlineMs = Number(this.httpDeadlineMs);
@@ -443,11 +361,8 @@ module.exports = {
             // The LAST page's watermark is the hub's most recent "complete through ts"
             // statement covering everything fetched so far.
             if (Number.isFinite(Number(result.watermark))) drain.watermark = Number(result.watermark);
-            // The height watermark rides every snapshot page too, immediately after `count`.
-            // Stashed rather than installed: like the seconds watermark it is only true of a
-            // mirror that has FULLY drained, and bootstrapAll owns that verdict. Without a
-            // carrier here a poll-mode or reconnecting mirror would never establish a
-            // baseline at all and would defer every block forever above the activation.
+            // Stash page heights until bootstrapAll proves every table fully drained;
+            // poll and reconnect modes still need this pending baseline.
             const pageHeights = sanitizeHeights(result.heights);
             if (pageHeights !== null) {
                 drain.heights = pageHeights;
@@ -459,10 +374,8 @@ module.exports = {
         return true;
     },
 
-    // A page with no rows array leaves the table undrained and the heartbeat gate shut, so
-    // say which table and what came back. A hub that predates a mirrored table answers its
-    // snapshot route through the pathless JSON-RPC router with HTTP 200 and an error body;
-    // unnamed, that stalled a regtest indexer for ten hours behind a log about other tables.
+    // Report rowless page shape and table explicitly; the table stays undrained
+    // whether the response is an error body or another unexpected envelope.
     reportRowlessPage(table, path, result) {
         let shape;
         let hint = '';
@@ -482,12 +395,8 @@ module.exports = {
     // The two handshakes every snapshot page passes before a row of it is applied. False
     // refuses the page (and the drain) on a schema version this build does not mirror.
     async acceptSnapshotPage(table, result) {
-        // Schema-version handshake: the hub stamps each snapshot page with its
-        // mirror schema_version. A mismatch means the hub's row shape differs from
-        // what this indexer was built for, so applying these rows could drop a
-        // consensus-relevant column and fork the ledger. Fail closed: return "not
-        // drained" without applying, so bootstrapAll retries and the barrier stays
-        // shut, deferring blocks rather than settling against mismatched mirror data.
+        // Fail closed before applying a page whose mirror schema version differs;
+        // bootstrap retries while barriers remain shut.
         if (!hasExpectedSchemaVersion(result.schema_version)) {
             getLogger().error('HubDbSync: hub snapshot schema_version ' + schemaVersionLabel(result.schema_version) +
                 ' != local ' + HUB_SCHEMA_VERSION + ' for ' + table +
@@ -495,12 +404,8 @@ module.exports = {
             return false;
         }
 
-        // Chain-identity handshake, before a single row of this page is applied. The
-        // CROSS_CHAIN_TABLES snapshot envelopes carry the hub's own btc_chain_id (the
-        // block-1 hash of the Bitcoin chain its indexer pushes tips from), which is how
-        // a consumer with no Bitcoin chain of its own - a DOGE or LTC indexer, the
-        // explorer's display mirror - learns which chain to fence on. A Bitcoin indexer
-        // has already set the id 'local' and setExpectedBtcChainId ignores this.
+        // Adopt the hub's Bitcoin chain identity for cross-chain tables before
+        // applying rows; a Bitcoin indexer's local identity remains authoritative.
         if (CROSS_CHAIN_TABLES.indexOf(table) !== -1)
             await this.setExpectedBtcChainId(result.btc_chain_id, 'hub');
         return true;

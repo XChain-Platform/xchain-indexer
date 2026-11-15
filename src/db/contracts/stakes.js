@@ -159,8 +159,11 @@ module.exports = {
         };
     },
 
-    // Check whether the (target, source) combination already owns an active stake for (pubkey, tick).
-    // Used by STAKE v3 to detect "new vs. top-up" - top-up requires the existing stake be owned by the same source.
+    // The source that first recorded a valid contract_stakes row for (target, pubkey, tick), or null.
+    // The read has no activation_block or deactivation_block filter and no balance test, so a pending,
+    // fully unstaked or slashed row still names its source: the first valid staker keeps the key on
+    // that (target, tick); only a DELEGATE rotation rewriting a live row's signing_pubkey_id moves a row off it.
+    // STAKE v3 compares this with SOURCE to tell a top-up from a pubkey collision.
     async getContractStakeOwner(targetContractIndex, pubkey, tick){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null) return null;

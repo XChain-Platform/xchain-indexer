@@ -72,13 +72,27 @@ function coerceMirrorValue(v, columnType) {
 //     every consensus read (all of them filter status = 'finalized') stops seeing it.
 //   - 'skipped' never touches an existing row, so a late or replayed placeholder
 //     cannot demote a finalized or disputed round.
+//
+// push_generation is the reorg FENCE, not ordinary content: it is held out of the status
+// gate and only ever moves UP, the rule the cross_chain_calls and oracle_prices upserts
+// apply. Assigned inside the gate, a stale finalized page (a per-connection re-page, or the
+// re-page after this node's own rollback) carrying a LOWER generation lowered the fence, and
+// the fenced retraction (DELETE ... WHERE push_generation <= gen) then matched a round
+// re-published ABOVE that fence and deleted it. The content columns and the status keep the
+// status-only gate on purpose: a disputed re-emit carries the hub row's generation, which
+// can sit below the mirror's, and it must still land. The fence applies only when the
+// delivered row carries the column.
 // At rowCount 1 it is the statement applyRow issues.
 function priceUpsertSql(cols, rowCount) {
     cols = cols.filter(c => c !== 'id');
-    let updatable = cols.filter(c => c !== 'id' && c !== 'round_number' && c !== 'coin_pair' && c !== 'status');
+    let fence = cols.includes('push_generation');
+    let updatable = cols.filter(c => c !== 'id' && c !== 'round_number' && c !== 'coin_pair' && c !== 'status'
+                                     && c !== 'push_generation');
     let takesRow = "VALUES(status) IN ('finalized', 'disputed')";
     let sets = updatable.map(c => '`' + c + '` = IF(' + takesRow + ', VALUES(`' + c + '`), `' + c + '`)');
     sets.push('status = IF(' + takesRow + ', VALUES(status), status)');
+    if (fence)
+        sets.push('`push_generation` = GREATEST(COALESCE(`push_generation`, 0), COALESCE(VALUES(`push_generation`), 0))');
     let tuple = '(' + cols.map(() => '?').join(', ') + ')';
     let tuples = [];
     for (let i = 0; i < rowCount; i++) tuples.push(tuple);

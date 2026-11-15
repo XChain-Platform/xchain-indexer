@@ -44,6 +44,8 @@
 -- Spec: xchain-documentation/protocol/actions/ANCHOR.md
 DROP TABLE IF EXISTS anchor_actions;
 CREATE TABLE anchor_actions (
+    -- section_index sits right after action_index; test/unit/migration/sql_schema_column_parity.test.js
+    -- compares that position with the migration path.
     action_index         BIGINT UNSIGNED NOT NULL,        -- FK to actions (the ANCHOR action that wrote this row)
     section_index        TINYINT UNSIGNED NOT NULL DEFAULT 0, -- 0-based per-chain section of a v0 bundle, in wire order; always 0 for the single-body versions
     version              TINYINT UNSIGNED NOT NULL,       -- 0=checkpoint bundle section, 1=archive head (checkpoint+archive+publisher tail), 2=continuation

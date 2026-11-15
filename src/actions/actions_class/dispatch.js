@@ -136,9 +136,12 @@ module.exports = {
         // a real rejection, for an action the chain accepts. That refused the taker side of
         // the whole CoinPay lane in every wallet that pre-flights (measured 2026-07-29 on LTC
         // regtest). Captured here rather than in the two handlers so one rule covers both, and
-        // scoped per transaction by processTransaction above. These two actions are never
-        // top-level: the decoder cannot produce them, and the public fee quote classifies them
-        // 'exempt' (FEE_QUOTE_EXEMPT in actions/index.js), so it answers without a dry-run.
+        // scoped per transaction by processTransaction above. list.js rematchMarkets also
+        // dispatches these actions from planListRematch; its step data must retain the LIST's
+        // STATUS and ACTION_INDEX so this snapshot still describes the quoted LIST. These two
+        // actions are never top-level: the decoder cannot produce them, and the public fee quote
+        // classifies them 'exempt' (FEE_QUOTE_EXEMPT in actions/index.js), so it answers without
+        // a dry-run.
         if((action == 'ORDER_MATCH' || action == 'SWAP_MATCH') && data && this._primaryVerdict == null)
             this._primaryVerdict = { status: data['STATUS'], actionIndex: data['ACTION_INDEX'] };
 

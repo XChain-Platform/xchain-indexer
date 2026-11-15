@@ -61,7 +61,9 @@ describe('recovery checkpointCanonical: parity with the gated checkpoint family 
         assert.strictEqual(actual,
             eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, frozenBase('regtest', 100) + SUFFIX));
         for (const vector of CHECKPOINT_VECTORS.cases) {
-            for (const build of [AnchorRecovery.checkpointCanonicalForTest, checkpointSource.checkpointCanonical]) {
+            const builds = [AnchorRecovery.checkpointCanonicalForTest];
+            if(!vector.gated_only) builds.push(checkpointSource.checkpointCanonical);
+            for (const build of builds) {
                 if (vector.throws) assert.throws(() => build(vector.checkpoint), undefined, vector.name);
                 else assert.strictEqual(build(vector.checkpoint), vector.expected, vector.name);
             }

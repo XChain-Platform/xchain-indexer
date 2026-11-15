@@ -27,7 +27,7 @@ const dryRunSupport = require('./dry_run_support.js');
 const quoteAnswers  = require('./quote_answers.js');
 const { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome } = dryRunSupport;
 const { launchGateAdmits, rollbackPreservingError, NOT_ADMITTED_BEFORE_LAUNCH } = dryRunSupport;
-const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, feeQuoteNoVerdict, dryRunVerdictQuote } = quoteAnswers;
+const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, feeQuoteNoVerdict, isIncompleteDryRun, dryRunVerdictQuote } = quoteAnswers;
 const { malformedActionAnswer } = quoteAnswers;
 const { resolvePreflightFeeMode, preflightGateAnswer, preflightLockBusy, preflightNoVerdict, preflightResult } = quoteAnswers;
 
@@ -209,6 +209,16 @@ async function staticFeeQuote(policy, base, action, params, feeOutputSats){
     return quote;
 }
 
+// Static and exempt answers skip dryRunAction, so apply the block loop's launch gate here.
+async function mainnetLaunchRefusal(actions, base, action, params, source){
+    if(actions.config['NETWORK'] !== 'mainnet') return null;
+    let tipTime = await actions.indexerDb.getBlockTime(await actions.indexerDb.getLatestBlockIndex());
+    let tx = { data: [action].concat(params).join('|'), source: source, block_time: tipTime };
+    return launchGateAdmits(actions, tx)
+        ? null
+        : Object.assign(base, { valid: false, error: NOT_ADMITTED_BEFORE_LAUNCH });
+}
+
 // Read-only native-coin fee pre-flight (the public `feequote` JSON-RPC). Phase 2: runs the
 // REAL action handler in a forced-rollback dry-run (dryRunAction), so validity is
 // authoritative for any quotable action: class-A failures (fee sizing, oracle price) AND
@@ -239,18 +249,14 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     // it re-applies the same trim/uppercase/de-alias normalization (idempotent on the already
     // normalized `action` above) and preserves deny-before-exempt ordering.
     let feeClass = policy.classifyFeeQuoteAction(action);
+    if((feeClass === 'denied' && policy.FEE_QUOTE_STATIC.has(action)) || feeClass === 'exempt'){
+        let launchRefusal = await mainnetLaunchRefusal(this, base, action, params, source);
+        if(launchRefusal) return launchRefusal;
+    }
     if(feeClass === 'denied')
         return await this.staticFeeQuote(base, action, params, feeOutputSats);
-    if(feeClass === 'exempt'){
-        // Refuse a fee-exempt action the mainnet launch gate drops: no fee is not an admission.
-        if(this.config['NETWORK'] === 'mainnet'){
-            let tipTime = await this.indexerDb.getBlockTime(await this.indexerDb.getLatestBlockIndex());
-            let tx = { data: [action].concat(params).join('|'), source: source, block_time: tipTime };
-            if(!launchGateAdmits(this, tx))
-                return Object.assign(base, { valid: false, error: NOT_ADMITTED_BEFORE_LAUNCH });
-        }
+    if(feeClass === 'exempt')
         return exemptFeeQuote(base, action);
-    }
 
     let maxPending = parseInt(policy.CONFIG_ENV.INDEXER_FEEQUOTE_MAX_PENDING, 10) || 8;
     if((this._feeQuotePending || 0) >= maxPending)
@@ -286,8 +292,7 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     } finally {
         this._feeQuotePending--;
     }
-    // Any incomplete run has no verdict, including a read-back failure after STATUS was copied.
-    if(run.error && (run.status == null || /^handler threw:/.test(run.error)))
+    if(isIncompleteDryRun(run))
         return feeQuoteNoVerdict(base, run);
 
     base.blockIndex = run.blockIndex;
@@ -408,8 +413,8 @@ async function computePreflight(policy, { action, params, source, feeMode }){
         this._feeQuotePending--;
     }
 
-    // Any incomplete run has no verdict and is never memoized, even with a partial STATUS.
-    if(run.error && (run.status == null || /^handler threw:/.test(run.error)))
+    // An incomplete run is never memoized, even with a partial STATUS.
+    if(isIncompleteDryRun(run))
         return preflightNoVerdict(base, run);
 
     let result = preflightResult(this, base, run, resolvedMode, feeTick);

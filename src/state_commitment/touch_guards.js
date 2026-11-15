@@ -26,7 +26,7 @@
 const M = require('../consensus/merkle.js');
 const { getLogger } = require('../observability/index.js');
 const { canonicalAmountOf, leafOrNull } = require('./leaf_values.js');
-const { getNetBalance, ledgerKeysForBlock } = require('../db/state_commitment/ledger_reads.js');
+const { getNetBalances, ledgerKeysForBlock } = require('../db/state_commitment/ledger_reads.js');
 const { readEnvNow } = require('../config.js'); // per call, never a load-time snapshot: a running node flips these guards
 
 // ---- Touched-set guard ------------------------------------------------------
@@ -139,10 +139,11 @@ async function enforceTouchedSet(db, blockIndex, touched, ledgerKeys){
 // as-of-height net, which is what makes an in-block assertion both cheap and
 // exact where an after-the-fact one is neither.
 //
-// Cost: one descent per moved key, and the net re-read is deferred until a leaf
-// is actually found absent, so a healthy block pays no extra history scan. The
-// measured shape on BTC regtest is 1972 moved keys over 1516 healthy
-// ledger-changing blocks (~1.3 per block) with zero false positives.
+// Cost: one descent per moved key. The net re-read is deferred until a leaf is
+// actually found absent, then batched across all such keys through
+// getNetBalances (one statement per 500 keys). A healthy block pays no extra
+// history scan. The measured shape on BTC regtest is 1972 moved keys over 1516
+// healthy ledger-changing blocks (~1.3 per block) with zero false positives.
 //
 // Value equality (leaf == leafHash(net)) is deliberately NOT asserted: it would
 // cost an O(history) net scan per moved key on every block to re-check a value
@@ -152,12 +153,19 @@ async function assertCommittedLeaves(db, smt, chain, network, blockIndex, balanc
     const expected = ledgerKeys || await ledgerKeysForBlock(db, blockIndex);
     if(!expected.size) return;
 
-    const absent = [];
+    const candidates = [];
     for(const entry of expected){
         const [address, tick] = entry.split('\t');
         const proof = await smt.prove(balancesRootHex, M.balanceKey(chain, network, address, tick));
         if(proof.leaf_value != null) continue;               // the leaf landed
-        const net = await getNetBalance(db, address, tick);
+        candidates.push([address, tick]);
+    }
+    if(!candidates.length) return;
+
+    const nets = await getNetBalances(db, candidates);
+    const absent = [];
+    for(const [address, tick] of candidates){
+        const net = nets.get(address + '\t' + tick);
         if(leafOrNull(net) == null) continue;                // net-zero: no leaf by design
         absent.push([address, tick, canonicalAmountOf(net)]);
     }

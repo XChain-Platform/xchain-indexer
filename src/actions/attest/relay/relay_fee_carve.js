@@ -26,6 +26,29 @@ const { HOME_CHAIN } = require('../constants.js');
 
 const RELAY_FEE_KEY = 'attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION';
 
+// ASCII-only upper-casing, so the comparison below never depends on the runtime's
+// locale or Unicode tables.
+function foldAscii(value){
+    return String(value).replace(/[a-z]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 32));
+}
+
+// One payout source per key, chosen in code rather than by row position. The mirror
+// table is read under a case-folding collation (utf8_general_ci), which sorts a key's
+// sources by their upper-cased text. This comparator applies that same order to ASCII
+// address text (fold, then raw text), so the pick is a pure function of the row set
+// and does not depend on how a node's database orders the rows. Switching it to
+// binary order changes which source is paid and needs its own activation height.
+function firstSourceRow(candidates){
+    let best = null;
+    for(const row of candidates){
+        if(best === null){ best = row; continue; }
+        const a = foldAscii(row.source === null || row.source === undefined ? '' : row.source);
+        const b = foldAscii(best.source === null || best.source === undefined ? '' : best.source);
+        if(a < b || (a === b && String(row.source) < String(best.source))) best = row;
+    }
+    return best;
+}
+
 async function relayFeeLegAllowance(handler, coin, data, capNative, feeCap){
     let maxAge = maxPriceAgeSecondsAt(
         handler.config, handler.config['NETWORK'], coin, data['BLOCK_INDEX']);
@@ -73,7 +96,8 @@ module.exports = {
         let rows = await this.indexerDb.getCapabilitySnapshotWeights('cross_chain', resolvedBlock);
         if(!Array.isArray(rows) || rows.truncated) return null;
         let wanted = String(payeePubkey).toLowerCase();
-        let match = rows.find(row => row && String(row.pubkey).toLowerCase() === wanted);
+        let match = firstSourceRow(
+            rows.filter(row => row && String(row.pubkey).toLowerCase() === wanted));
         if(!match || match.source === null || match.source === undefined) return null;
         return this.util.crossChainReencodeAddress(
             String(match.source), HOME_CHAIN, this.config['COIN'], this.config['NETWORK']);

@@ -111,12 +111,12 @@ module.exports = {
         if(this.util.isNull(lastIndexerBlock)){
             firstDecoderBlock = await this.decoderDb.getBlockIndex('decoder', 'first');
             if(!this.util.isNull(firstDecoderBlock))
-                lastIndexerBlock = this.util.bcsub(firstDecoderBlock,1);
+                lastIndexerBlock = this.util.bcsub(firstDecoderBlock,1, 0);
         }
 
         // Print out status message about where parsing is resuming
         if(this.synced === false && !this.util.isNull(lastIndexerBlock)){
-            let startBlock = this.util.bcadd(lastIndexerBlock,1)
+            let startBlock = this.util.bcadd(lastIndexerBlock,1, 0)
             if(this.util.bclt(startBlock, lastDecoderBlock))
                 getLogger().info('Resuming block parsing at block ' + startBlock + '...');
         }

@@ -86,9 +86,6 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
     });
 
     it('a semicolon inside a -- comment is not a statement terminator', async function () {
-        // Statement bodies must not contain quoted semicolons (the split on ';'
-        // is naive there, same as indexer db.js createTable); the guarantee
-        // under test is comment prose only, which is what bit attests.sql.
         const dir = makeSqlDir({
             't.sql': '-- header prose; with a semicolon\nCREATE TABLE t (id INT);'
         });
@@ -97,6 +94,70 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
         const creates = calls.filter((s) => !/^SHOW TABLES/.test(s));
         assert.strictEqual(creates.length, 1, 'comment semicolons must not split statements');
         assert.match(creates[0], /CREATE TABLE t/);
+    });
+
+    it('matches the indexer splitter for comments and escaped literals', async function () {
+        const dir = makeSqlDir({
+            'a.sql': '# note; still a comment\nCREATE TABLE a (id INT);',
+            'b.sql': "/* prose; isn't SQL */\nCREATE TABLE b (id INT);",
+            'c.sql': "CREATE TABLE c (note VARCHAR(32) DEFAULT 'it\\'s; fine');\nCREATE INDEX c_note ON c (note);",
+        });
+        const calls = [];
+        await ensureTables({ doQuery: async (sql) => { calls.push(sql); return []; } }, dir);
+        const statements = calls.filter((sql) => !/^(SHOW TABLES|SELECT @@)/.test(sql));
+        assert.strictEqual(statements.length, 4);
+        assert.match(statements[0], /CREATE TABLE a/);
+        assert.match(statements[1], /\/\* prose; isn't SQL \*\/\s*CREATE TABLE b/);
+        assert.match(statements[2], /DEFAULT 'it\\'s; fine'/);
+        assert.match(statements[3], /^CREATE INDEX c_note/);
+    });
+
+    describe('backslash handling follows the server sql_mode', function () {
+        // A trailing backslash closes the literal under NO_BACKSLASH_ESCAPES and
+        // escapes the quote otherwise, so the two modes split the same text apart.
+        const TWIN = "CREATE TABLE d (n VARCHAR(8) DEFAULT 'a\\');\nCREATE INDEX d_n ON d (n);";
+
+        async function run(mode, files) {
+            const dir = makeSqlDir(files);
+            const calls = [];
+            const doQuery = async (sql) => {
+                calls.push(sql);
+                return /^SELECT @@SESSION\.sql_mode/.test(sql) ? [{ sql_mode: mode }] : [];
+            };
+            await ensureTables({ doQuery }, dir);
+            return calls;
+        }
+
+        it('splits after a trailing backslash when NO_BACKSLASH_ESCAPES is set', async function () {
+            const calls = await run('STRICT_TRANS_TABLES,NO_BACKSLASH_ESCAPES', { 'd.sql': TWIN });
+            const statements = calls.filter((sql) => !/^(SHOW TABLES|SELECT @@)/.test(sql));
+            assert.strictEqual(statements.length, 2);
+            assert.match(statements[1], /^CREATE INDEX d_n/);
+        });
+
+        it('keeps the escaped quote inside the literal when the mode omits the flag', async function () {
+            const calls = await run('STRICT_TRANS_TABLES', { 'd.sql': TWIN });
+            const statements = calls.filter((sql) => !/^(SHOW TABLES|SELECT @@)/.test(sql));
+            assert.strictEqual(statements.length, 1);
+        });
+
+        it('reads the mode only for a twin file that holds a backslash', async function () {
+            const calls = await run('', { 'a.sql': 'CREATE TABLE a (id INT);' });
+            assert.strictEqual(calls.filter((sql) => /^SELECT @@/.test(sql)).length, 0);
+        });
+
+        it('falls back to backslash escapes when the mode cannot be read', async function () {
+            const dir = makeSqlDir({ 'd.sql': TWIN });
+            const calls = [];
+            const doQuery = async (sql) => {
+                calls.push(sql);
+                if (/^SELECT @@/.test(sql)) throw new Error('probe refused');
+                return [];
+            };
+            await ensureTables({ doQuery }, dir);
+            const statements = calls.filter((sql) => !/^(SHOW TABLES|SELECT @@)/.test(sql));
+            assert.strictEqual(statements.length, 1);
+        });
     });
 });
 

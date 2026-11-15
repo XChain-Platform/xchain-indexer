@@ -266,9 +266,19 @@ describe('JSON-RPC reorg history family @regression @tier1', function () {
 
     it('falls back to the indexer\'s last-known halt flag when the probe faults', async function () {
         const decoderView = recordingView({ getReorgEventsSince: [], isReorgHalted: () => { throw new Error('probe'); } });
-        const rpc = buildReorgHistoryRpc({ indexer: fakeIndexer({ decoderView, decoderReorgHalted: null }) });
-        const res = await rpc.getreorghistory({});
-        assert.strictEqual(res.decoderReorgHalted, false);
+        const probe = async (decoderReorgHalted) => buildReorgHistoryRpc({ indexer: fakeIndexer({ decoderView, decoderReorgHalted }) })
+            .getreorghistory({});
+        // no probe has ever read the marker: published as halted and flagged unverified
+        const unread = await probe(null);
+        assert.strictEqual(unread.decoderReorgHalted, true);
+        assert.strictEqual(unread.decoderReorgHaltUnverified, true);
+        // a confirmed last-known state is carried over unchanged and is not unverified
+        const clear = await probe(false);
+        assert.strictEqual(clear.decoderReorgHalted, false);
+        assert.strictEqual(clear.decoderReorgHaltUnverified, false);
+        const halted = await probe(true);
+        assert.strictEqual(halted.decoderReorgHalted, true);
+        assert.strictEqual(halted.decoderReorgHaltUnverified, false);
     });
 
     it('validates, refuses without the decoder database and reports a throw', async function () {

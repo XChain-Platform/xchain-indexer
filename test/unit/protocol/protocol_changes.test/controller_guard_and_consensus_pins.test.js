@@ -48,9 +48,10 @@ describe('ProtocolChanges @regression @tier3', function () {
     // wrong mainnet flag-day, regtest/testnet flipped off genesis, or the version bumped past
     // the shipping node) makes a controller-layer node and a non-controller node settle the
     // SAME guarded action differently → ledger + per-block contract_hash → federation
-    // checkpoint, forking on the first guarded action. utility.js invokeController calls the
-    // REAL isEnabled() at the single shared chokepoint, so this block guards the registration
-    // that gate depends on. Keep in lockstep with protocol_changes.js.
+    // checkpoint, forking on the first guarded action. invokeController in
+    // src/utility/controller_guard.js calls the REAL isEnabled() at the single shared
+    // chokepoint, so this block guards the registration that gate depends on. Keep in
+    // lockstep with protocol_changes.js.
     describe('CONTROLLER_GUARD activation gate (consensus)', function () {
         const MAINNET_FLAG_DAY = 1786060800; // 2026-08-07 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 

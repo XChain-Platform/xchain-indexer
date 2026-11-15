@@ -45,6 +45,7 @@ const DecoderSeeder = require('../../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../../setup/indexer-launcher');
 const { seedGas } = require('../../setup/gas-seeder');
 const { assertStateInvariants } = require('../../setup/state-invariants');
+const helpers = require('../../setup/assertion-helpers');
 const { readHashChain, assertHashChainsEqual, assertIndexerDbsEquivalent }
     = require('../../setup/equivalence');
 
@@ -54,6 +55,7 @@ const ADDR3 = 'mvuKWKvgzrkxh8QgNZ91vMBZUKN5BFYmo3';
 
 const T0  = 1700000000;
 const BLK = 600;
+const T_FAR_FUTURE = T0 + 86400 * 30;
 
 // A small self-contained corpus: token issue, mints, a send, then two blocks
 // (106, 107) that we will rollback and re-apply identically. The re-applied
@@ -75,12 +77,41 @@ function replayedBlocks() {
         { block: 105, time: T0 + BLK * 5, txs: [{ source: ADDR1, data: 'DESTROY|0|RPLY|20|burning tokens' }] },
     ];
 }
-const TOTAL_BLOCKS = 1 /* gas preamble */ + 4 /* base */ + 2 /* replayed */;
+function escrowBaseCorpus() {
+    return [
+        { block: 100, time: T0, txs: [{ source: ADDR1, data: 'ISSUE|0|ESCA|1000000|1000|0|escrow replay A' }] },
+        { block: 101, time: T0 + BLK, txs: [{ source: ADDR2, data: 'ISSUE|0|ESCB|1000000|1000|0|escrow replay B' }] },
+        { block: 102, time: T0 + BLK * 2, txs: [
+            { source: ADDR1, data: 'MINT|0|ESCA|800' },
+            { source: ADDR2, data: 'MINT|0|ESCB|400' },
+        ] },
+        { block: 103, time: T0 + BLK * 3, txs: [
+            { source: ADDR1, destination: ADDR2, data: 'SEND|0|ESCA|20|' + ADDR2 },
+            { source: ADDR2, destination: ADDR1, data: 'SEND|0|ESCB|40|' + ADDR1 },
+            { source: ADDR3, data: 'ADDRESS|0|||2|' },
+        ] },
+    ];
+}
 
-async function seedGasAndBase(seeder) {
-    await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
-    for (const b of baseCorpus()) await seeder.seedBlock(b.block, b.time, b.txs);
-    for (const b of replayedBlocks()) await seeder.seedBlock(b.block, b.time, b.txs);
+// The rolled-back range carries the escrow-bearing actions: a matched ORDER
+// pair, a DISPENSER and the SEND that triggers a DISPENSE. Every address and
+// ticker it names already sits in the base corpus, so the replay adds no new
+// dedup entities and the content-mode comparison stays sound. DELEGATE is not
+// seeded here: the decoder seeder has no stake or delegation setup, and the
+// delegation reorg scenario writes those rows through the Database layer.
+function escrowReplayedBlocks() {
+    return [
+        { block: 104, time: T0 + BLK * 4, txs: [
+            { source: ADDR1, data: 'ORDER|0|BTC|ESCA|10|0|BTC|ESCB|20|0|' + ADDR1 + '|' + T_FAR_FUTURE + '|||' },
+            { source: ADDR2, data: 'ORDER|0|BTC|ESCB|20|0|BTC|ESCA|10|0|' + ADDR2 + '|' + T_FAR_FUTURE + '|||' },
+        ] },
+        { block: 105, time: T0 + BLK * 5, txs: [
+            { source: ADDR1, data: 'DISPENSER|0|BTC|ESCA|10|0|50|BTC|ESCB|1|' + ADDR3 + '||||' + T_FAR_FUTURE + '|||' },
+        ] },
+        { block: 106, time: T0 + BLK * 6, txs: [
+            { source: ADDR2, destination: ADDR3, data: 'SEND|0|ESCB|1|' + ADDR3 + '|' },
+        ] },
+    ];
 }
 
 /** Delete decoder blocks >= blockIndex (same pattern as scenarios 05 / 13). */
@@ -103,22 +134,32 @@ async function runNodeB() {
         await destroyIndexer(nodeB);
     }
 }
-async function testRollbackReplayIdempotency() {
-    const seeder = new DecoderSeeder(decoderQuery);
-    await seedGasAndBase(seeder);
 
-    // Node A applies the full chain (100..105) live.
+// Equivalence also holds when an escrow action fails to parse, so the case
+// first proves on the survivor that the escrow rows exist.
+async function assertEscrowRows() {
+    assert.strictEqual(await helpers.countRows(indexerQuery, 'orders'), 2, 'expected both escrow orders');
+    assert.ok(await helpers.countRows(indexerQuery, 'order_matches') >= 1, 'expected a settled order match');
+    assert.strictEqual(await helpers.countRows(indexerQuery, 'dispensers'), 1, 'expected the escrow dispenser');
+    assert.ok(await helpers.countRows(indexerQuery, 'dispenses') >= 1, 'expected a triggered dispense');
+}
+
+async function runRollbackReplayCase(base, replayed, assertApplied) {
+    const seeder = new DecoderSeeder(decoderQuery);
+    await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
+    for (const b of base) await seeder.seedBlock(b.block, b.time, b.txs);
+    for (const b of replayed) await seeder.seedBlock(b.block, b.time, b.txs);
+
     let nodeA = await initIndexer();
     const processedA = await processBlocks(nodeA);
     await destroyIndexer(nodeA);
-    assert.strictEqual(processedA, TOTAL_BLOCKS);
+    assert.strictEqual(processedA, 1 + base.length + replayed.length);
+    if (assertApplied) await assertApplied();
 
-    // Reorg at 104: orphan blocks 104 and 105, then re-seed the IDENTICAL
-    // block data as the replacement chain. processBlocks detects the reorg,
-    // rolls back 104/105, and re-applies the same blocks verbatim.
-    await seeder.seedReorgEvent([104, 105]);
-    await deleteDecoderBlocksFrom(104);
-    for (const b of replayedBlocks()) await seeder.seedBlock(b.block, b.time, b.txs);
+    const firstReplayBlock = replayed[0].block;
+    await seeder.seedReorgEvent(replayed.map(block => block.block));
+    await deleteDecoderBlocksFrom(firstReplayBlock);
+    for (const b of replayed) await seeder.seedBlock(b.block, b.time, b.txs);
 
     nodeA = await initIndexer();
     const replayedA = await processBlocks(nodeA);
@@ -126,22 +167,26 @@ async function testRollbackReplayIdempotency() {
     // Bind the replay count: equivalence alone also holds when NO reorg is
     // processed, since a chain that was never rolled back still matches a
     // fresh resync of the same decoder rows.
-    assert.strictEqual(replayedA, replayedBlocks().length,
-        'expected the reorg to roll back and re-apply ' + replayedBlocks().length +
+    assert.strictEqual(replayedA, replayed.length,
+        'expected the reorg to roll back and re-apply ' + replayed.length +
         ' block(s); ' + replayedA + ' were re-applied');
+    if (assertApplied) await assertApplied();
 
-    // Node B fresh-parses the identical final chain from genesis (a resync).
     const chainB = await runNodeB();
     const chainA = await readHashChain(indexerQuery);
-
-    // The consensus commitment (resolved hash chain) must be byte-identical,
-    // and the whole DB equivalent in content mode (id high-water marks and
-    // never-deleted index_* residue normalized).
     assertHashChainsEqual(chainA, chainB, 'rollback-survivor', 'fresh-replay');
     await assertIndexerDbsEquivalent(indexerQuery, indexerBQuery,
         { mode: 'content', labelA: 'rollback-survivor', labelB: 'fresh-replay' });
     await assertStateInvariants(indexerQuery);
     await assertStateInvariants(indexerBQuery);
+}
+
+async function testRollbackReplayIdempotency() {
+    await runRollbackReplayCase(baseCorpus(), replayedBlocks());
+}
+
+async function testEscrowRollbackReplayIdempotency() {
+    await runRollbackReplayCase(escrowBaseCorpus(), escrowReplayedBlocks(), assertEscrowRows);
 }
 describe('16 – Rollback replay idempotency @regression @tier3', function () {
     this.timeout(180000);
@@ -166,4 +211,5 @@ describe('16 – Rollback replay idempotency @regression @tier3', function () {
     });
 
     it('apply -> rollback -> re-apply the SAME blocks equals a fresh from-genesis replay (content mode)', testRollbackReplayIdempotency);
+    it('escrow actions survive rollback replay exactly like a fresh resync', testEscrowRollbackReplayIdempotency);
 });

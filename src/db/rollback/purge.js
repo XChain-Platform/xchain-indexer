@@ -124,37 +124,34 @@ module.exports = {
 
     // Re-arm the recovery staging rows above the floor and re-apply every survivor.
     async rearmRecoveryRewards(db, rearmFloor, block_index){
+        let rearm;
         try {
-            let rearm = await db.doQuery(
+            rearm = await db.doQuery(
                 `UPDATE recovery_pending_rewards
                     SET applied=0, source_id=NULL, applied_block=NULL
                   WHERE applied=1 AND block_index >= ?`, [rearmFloor]);
-            if(rearm && rearm.affectedRows)
-                db._recoveryPendingChecked = false;
-            let survivors = await db.doQuery(
-                `SELECT DISTINCT rpr.source_address AS source_address, ia.id AS source_id
-                   FROM recovery_pending_rewards rpr
-                   JOIN index_addresses ia ON ia.address = rpr.source_address
-                  WHERE rpr.applied=0`);
-            // Re-materialize at the reorg point B (block_index): the survivor's reward
-            // earn-block may be < B, so stamp applied_block = B as the forward-window key
-            // xchain-sync streams it by (its earn-block sits below the post-reorg window).
-            // A row whose ORIGINAL derive height is still ahead of B is left staged by the
-            // apply path's due gate and lands again when the replay reaches that height,
-            // which is the same block a live node re-derives it at.
-            for(let s of (survivors || []))
-                await db.applyPendingRewardsForAddress(s.source_address, s.source_id, block_index);
         } catch(e){
-            // Swallow ONLY the schema-gap case: recovery_pending_rewards absent on a
-            // non-recovery stack (errno 1146 missing table / 1054 missing column), where
-            // nothing was staged to re-arm. Every other fault (lock-wait timeout, deadlock,
-            // killed connection) must propagate to the outer catch so the whole reorg
-            // transaction rolls back and is retried, instead of commitTransaction()
-            // persisting a half-re-armed recovery_pending_rewards/validator_rewards set
-            // (which forks SUM(validator_rewards) at the next COLLECT). Mirrors the
-            // narrow errno gates in xchain-sync's ClientApplier.
+            // Only the probe UPDATE tolerates a schema gap on a non-recovery stack.
+            // Every later fault must abort the transaction so a half-re-armed set
+            // cannot commit.
             if(!(e && (e.errno === 1146 || e.errno === 1054))) throw e;
+            return;
         }
+        if(rearm && rearm.affectedRows)
+            db._recoveryPendingChecked = false;
+        let survivors = await db.doQuery(
+            `SELECT DISTINCT rpr.source_address AS source_address, ia.id AS source_id
+               FROM recovery_pending_rewards rpr
+               JOIN index_addresses ia ON ia.address = rpr.source_address
+              WHERE rpr.applied=0`);
+        // Re-materialize at the reorg point B (block_index): the survivor's reward
+        // earn-block may be < B, so stamp applied_block = B as the forward-window key
+        // xchain-sync streams it by (its earn-block sits below the post-reorg window).
+        // A row whose ORIGINAL derive height is still ahead of B is left staged by the
+        // apply path's due gate and lands again when the replay reaches that height,
+        // which is the same block a live node re-derives it at.
+        for(let s of (survivors || []))
+            await db.applyPendingRewardsForAddress(s.source_address, s.source_id, block_index);
     },
 
 };

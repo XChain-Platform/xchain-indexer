@@ -25,6 +25,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../../fixtures/mocks');
 const Send = require('../../../src/actions/send/index.js');
+const batchProbe = require('../../../src/actions/batch/probe.js');
 const { readDryRunVerdict, dryRunOutcome } = require('../../../src/actions/actions_class/dry_run_support.js');
 const { preflightResult } = require('../../../src/actions/actions_class/quote_answers.js');
 const {
@@ -48,6 +49,12 @@ async function preflight(params, { probe = true } = {}){
     const run = dryRunOutcome(100, 1000, verdict, null, null);
     const answer = preflightResult(actionsCtx, {}, run, 'xchain', 'XCHAIN');
     return { data, run, answer };
+}
+
+function batchVerdict(legs, status = 'valid'){
+    const data = { STATUS: status, PROBE_LEG_VERDICTS: legs, PROBE_SUB_VERDICTS: [] };
+    batchProbe.recordSubVerdict.call({ util: actionsCtx.util }, data, 'SEND', 0, null);
+    return data['PROBE_SUB_VERDICTS'][0];
 }
 
 // The rows the handler wrote, one per leg, in settle order. Copied at call time: each leg
@@ -104,6 +111,14 @@ describe('SEND pre-flight answers for every leg of a multi-send @regression @tie
         assert.deepStrictEqual(sendRows(), [
             { destination: DEST2, status: REFUSED },
             { destination: DESTINATION, status: 'valid' }]);
+
+        const sub = batchVerdict(data['PROBE_LEG_VERDICTS']);
+        assert.strictEqual(sub.status, REFUSED, 'BATCH must not report only the last leg');
+        assert.deepStrictEqual(sub.legs.map((l) => [l.destination, l.status]),
+            [[DEST2, REFUSED], [DESTINATION, 'valid']]);
+        assert.deepStrictEqual(batchVerdict(undefined),
+            { position: 0, action: 'SEND', status: 'valid', refused: null },
+            'a following command must not inherit the prior legs');
     });
 
     it('the answer does not depend on leg order', async function () {
@@ -111,6 +126,14 @@ describe('SEND pre-flight answers for every leg of a multi-send @regression @tie
         assert.strictEqual(run.status, REFUSED);
         assert.strictEqual(answer.valid, false);
         assert.deepStrictEqual(answer.legs.map((l) => l.status), ['valid', REFUSED]);
+        assert.strictEqual(batchVerdict(answer.legs).status, REFUSED);
+
+        const inert = 'invalid: FEE_QUOTE_CONTROLLER_UNSUPPORTED (contract 9)';
+        const ranked = batchVerdict([{ status: inert }, { status: REFUSED }]);
+        assert.strictEqual(ranked.status, REFUSED, 'an unjudged leg must not hide a real refusal');
+        const unjudged = batchVerdict([{ status: inert }]);
+        assert.strictEqual(unjudged.status, null);
+        assert.ok(unjudged.refused);
     });
 });
 

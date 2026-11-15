@@ -193,6 +193,9 @@ describe('reorg-history-query: buildReorgHistoryResponse()', function () {
         assert.strictEqual(r.matched, true);
         assert.strictEqual(r.count, 1);
         assert.strictEqual(r.decoderReorgHalted, true);
+        // the unverified companion defaults false and reflects opts
+        assert.strictEqual(buildReorgHistoryResponse([], {}).decoderReorgHaltUnverified, false);
+        assert.strictEqual(buildReorgHistoryResponse([], {}, { decoderReorgHaltUnverified: true }).decoderReorgHaltUnverified, true);
     });
 });
 

@@ -33,7 +33,7 @@ const SUB = require('../consensus/gates/state_subtree_gate.js');
 //
 // `extraSubRoots` is the forward-compatible carrier for ownership_root /
 // tokens_root / contract_state_root and MUST be the output of
-// state_subtree_activation.gateSubRoots(), never a caller's raw candidates: the
+// state_subtree_gate.gateSubRoots(), never a caller's raw candidates: the
 // gate is what keeps an un-armed slot EMPTY. It is null today (every slot inert),
 // and merkle.stateRoot() maps a null/absent/empty-root slot to the identical
 // EMPTY_SMT_ROOT leaf, so this is byte-identical to the old two-argument

@@ -19,6 +19,7 @@ const zlib = require('zlib');
 const AnchorRecovery = require('../../../bin/recovery.js');
 const listShare = require('../../../src/consensus/list_share_settle.js');
 const { deriveListSnapshotId } = require('../../../src/consensus/list_share_settle/canonical.js');
+const { listMetaHash } = require('../../../src/consensus/list_share_hash.js');
 const lifecycle = require('../../../src/hub/table_lifecycle.js');
 const {
     makeKeypair, signHex, buildBatch, rawMatch, crc32Hex, SNAPSHOT_BLOCK
@@ -30,7 +31,7 @@ const LIST_KEYS = [
     'home_list_index', 'list_type', 'seq', 'kind', 'origin_block',
     'members_hash', 'added', 'removed', 'admit_block_btc',
     'admit_block_ltc', 'admit_block_doge', 'finalizing_view',
-    'validator_signatures', 'status'
+    'validator_signatures', 'status', 'name', 'description', 'meta_hash'
 ];
 const quiet = { log: () => {}, util };
 
@@ -59,7 +60,10 @@ function rawList(seq, overrides){
         admit_block_ltc: 4905000 + seq,
         admit_block_doge: 68000010 + seq,
         finalizing_view: seq - 1,
-        status: 'finalized'
+        status: 'finalized',
+        name: null,
+        description: null,
+        meta_hash: ''
     }, overrides || {});
     row.snapshot_id = deriveListSnapshotId(
         row.network, row.home_chain, row.home_list_index, row.seq, row.snapshot_block);
@@ -140,7 +144,11 @@ describe('AnchorRecovery list snapshots @regression @tier2', function () {
     });
 
     it('restores quorum-signed full and delta rows byte for byte', async function () {
-        let rows = [rawList(1), rawList(2)];
+        let name = 'Alpha list';
+        let description = 'Members of alpha';
+        let rows = [rawList(1, {
+            name, description, meta_hash: listMetaHash(name, description)
+        }), rawList(2)];
         let batch = archiveWithLists(0, rows);
         let expected = rows.map(row => signList(row, crossKeys));
         let db = listMemDb([batch.v1], batch.v2s);

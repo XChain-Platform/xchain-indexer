@@ -27,17 +27,21 @@ const fs   = require('fs');
 const path = require('path');
 const { getLogger } = require('../../observability/index.js');
 
-// Remove SQL `--` line comments while respecting quoted strings, so a ';'
-// appearing inside comment prose is never mistaken for a statement terminator.
-// Faithful copy of the indexer src/db/index.js stripSqlLineComments logic; lives here so
-// ensureTables() stays self-contained in the vendored client.
-function stripSqlLineComments(sql) {
+// A backslash escapes the next character inside '...' and "..." only while sql_mode
+// omits NO_BACKSLASH_ESCAPES; backslashEscapes carries that server setting.
+function opensBackslashEscape(str, i, quote, backslashEscapes) {
+    return backslashEscapes && str[i] === '\\' && quote !== '`' && i + 1 < str.length;
+}
+
+// Remove SQL line comments while preserving quoted strings and block comments.
+function stripSqlLineComments(sql, backslashEscapes = true) {
     let out = '';
     let quote = null;
     for (let i = 0; i < sql.length; i++) {
         const ch = sql[i];
         if (quote) {
             out += ch;
+            if (opensBackslashEscape(sql, i, quote, backslashEscapes)) { out += sql[++i]; continue; }
             if (ch === quote) {
                 if (sql[i + 1] === quote) { out += sql[++i]; }
                 else { quote = null; }
@@ -45,7 +49,14 @@ function stripSqlLineComments(sql) {
             continue;
         }
         if (ch === "'" || ch === '"' || ch === '`') { quote = ch; out += ch; continue; }
-        if (ch === '-' && sql[i + 1] === '-') {
+        if (ch === '/' && sql[i + 1] === '*') {
+            const end = sql.indexOf('*/', i + 2);
+            if (end === -1) { out += sql.slice(i); break; }
+            out += sql.slice(i, end + 2);
+            i = end + 1;
+            continue;
+        }
+        if ((ch === '-' && sql[i + 1] === '-') || ch === '#') {
             while (i < sql.length && sql[i] !== '\n') { i++; }
             if (i < sql.length) { out += '\n'; }
             continue;
@@ -55,13 +66,9 @@ function stripSqlLineComments(sql) {
     return out;
 }
 
-// Quote-aware SQL statement splitter. Strips `--` line comments, then breaks on
-// ';' only outside quoted strings, so a ';' inside a string literal never tears a
-// statement into invalid fragments. Faithful copy of the indexer src/db/index.js
-// splitSqlStatements logic; lives here so ensureTables() stays self-contained in
-// the vendored client.
-function splitSqlStatements(sql) {
-    const stripped = stripSqlLineComments(sql);
+// Quote-aware SQL statement splitter with the same comment and escape model.
+function splitSqlStatements(sql, backslashEscapes = true) {
+    const stripped = stripSqlLineComments(sql, backslashEscapes);
     const statements = [];
     let current = '';
     let quote = null;
@@ -69,6 +76,7 @@ function splitSqlStatements(sql) {
         const ch = stripped[i];
         if (quote) {
             current += ch;
+            if (opensBackslashEscape(stripped, i, quote, backslashEscapes)) { current += stripped[++i]; continue; }
             if (ch === quote) {
                 if (stripped[i + 1] === quote) { current += stripped[++i]; }
                 else { quote = null; }
@@ -76,6 +84,13 @@ function splitSqlStatements(sql) {
             continue;
         }
         if (ch === "'" || ch === '"' || ch === '`') { quote = ch; current += ch; continue; }
+        if (ch === '/' && stripped[i + 1] === '*') {
+            const end = stripped.indexOf('*/', i + 2);
+            if (end === -1) { current += stripped.slice(i); break; }
+            current += stripped.slice(i, end + 2);
+            i = end + 1;
+            continue;
+        }
         if (ch === ';') { statements.push(current); current = ''; continue; }
         current += ch;
     }
@@ -88,8 +103,8 @@ function splitSqlStatements(sql) {
 // table (cols)`. Column names are lowercased with prefix widths stripped for the live
 // comparison; `cols` keeps the declared text for the ADD. PRIMARY KEY and FULLTEXT are
 // left to the CREATE TABLE that made the table.
-function parseDeclaredIndexes(sql, table) {
-    const stripped = stripSqlLineComments(sql);
+function parseDeclaredIndexes(sql, table, backslashEscapes = true) {
+    const stripped = stripSqlLineComments(sql, backslashEscapes);
     const declared = [];
     const seen = new Set();
     const push = (unique, name, colsText) => {
@@ -129,8 +144,8 @@ function parseDeclaredIndexes(sql, table) {
 // rail, 2 s per read per indexer). Satisfied by name OR by ordered column set, never
 // DROPs, and every failure is logged and skipped: an index is a speed matter and must
 // never crash-loop the consumer that is applying rows.
-async function reconcileDeclaredIndexes(dbConn, table, data) {
-    const declared = parseDeclaredIndexes(data, table);
+async function reconcileDeclaredIndexes(dbConn, table, data, backslashEscapes = true) {
+    const declared = parseDeclaredIndexes(data, table, backslashEscapes);
     if (declared.length === 0) return;
     const rows = await dbConn.doQuery(
         'SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SEQ_IN_INDEX FROM information_schema.statistics '
@@ -160,8 +175,8 @@ async function reconcileDeclaredIndexes(dbConn, table, data) {
 
 // Parse declared columns in source order, retaining the full definition so an
 // added column keeps its declared DEFAULT.
-function parseDeclaredColumns(sql) {
-    const stripped = stripSqlLineComments(sql);
+function parseDeclaredColumns(sql, backslashEscapes = true) {
+    const stripped = stripSqlLineComments(sql, backslashEscapes);
     const m = stripped.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?\S+\s*\(([\s\S]+?)\)\s*ENGINE/i);
     if (!m) return null;
     const parts = m[1].split(/,(?![^()]*\))/g);
@@ -182,8 +197,8 @@ function parseDeclaredColumns(sql) {
 
 // Add missing columns using their declared definitions and source positions.
 // Existing columns are never modified or dropped.
-async function reconcileDeclaredColumns(dbConn, table, data) {
-    const declared = parseDeclaredColumns(data);
+async function reconcileDeclaredColumns(dbConn, table, data, backslashEscapes = true) {
+    const declared = parseDeclaredColumns(data, backslashEscapes);
     if (!declared) return;
     const rows = await dbConn.doQuery(
         'SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?', [table]);
@@ -213,6 +228,19 @@ async function reconcileDeclaredColumns(dbConn, table, data) {
     }
 }
 
+// Whether the server treats a backslash in a quoted string as an escape. Read only for a
+// twin file that holds a backslash, so the common boot issues no extra statement; an
+// unreadable mode falls back to the server default, escapes on.
+async function backslashEscapesActive(dbConn) {
+    try {
+        const rows = await dbConn.doQuery('SELECT @@SESSION.sql_mode AS sql_mode');
+        const mode = rows && rows[0] ? String(rows[0].sql_mode || '') : '';
+        return !mode.split(',').some((flag) => flag.trim().toUpperCase() === 'NO_BACKSLASH_ESCAPES');
+    } catch (err) {
+        return true;
+    }
+}
+
 // Create the mirror tables from the vendored SQL twin files in sqlDir, for
 // consumers that (unlike the indexer, whose verifyTables() owns its schema)
 // have no table-creation machinery of their own, e.g. the explorer's embedded
@@ -230,7 +258,8 @@ async function ensureTables(dbConn, sqlDir) {
     for (const file of files) {
         const table   = file.slice(0, -'.sql'.length);
         const data    = fs.readFileSync(path.join(sqlDir, file), 'utf8');
-        const queries = splitSqlStatements(data);
+        const escapes = data.includes('\\') ? await backslashEscapesActive(dbConn) : true;
+        const queries = splitSqlStatements(data, escapes);
         let lastErr = null;
         let done = false;
         for (let attempt = 1; attempt <= MAX_ATTEMPTS && !done; attempt++) {
@@ -246,8 +275,8 @@ async function ensureTables(dbConn, sqlDir) {
                 if (existing && existing.length > 0) {
                     // Reconcile columns before indexes because a declared index may
                     // reference a column added in this pass.
-                    await reconcileDeclaredColumns(dbConn, table, data);
-                    await reconcileDeclaredIndexes(dbConn, table, data);
+                    await reconcileDeclaredColumns(dbConn, table, data, escapes);
+                    await reconcileDeclaredIndexes(dbConn, table, data, escapes);
                     done = true;
                     break;
                 }

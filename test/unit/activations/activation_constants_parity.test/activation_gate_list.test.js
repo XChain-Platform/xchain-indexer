@@ -14,8 +14,8 @@
  * derived from the activation modules on disk instead of trusted as hand-maintained. Every
  * gate carrier under src/ must be a module test/helpers/gate_modules.js knows, and every
  * stem it maps must either be pinned by a GATES row of the entry (or of its live-network part)
- * or be named below with the reason it has no canonical map, so a new module that nobody
- * listed fails here.
+ * or be named below with the reason it has no canonical map or a dedicated canon suite,
+ * so a new module that nobody listed fails here.
  *
  ********************************************************************/
 
@@ -39,24 +39,26 @@ const NOT_CARRIERS = new Set([
 
 // Carrier stems with no map in the canonical constants.js, so no parity row can exist.
 const NO_CANONICAL_MAP = new Set([
-    'amount_representability_activation',
     'archive_rollback_author_scope_activation',
     'capability_min_stake_history',
     'caret_ref_strict_activation',
     'dispense_payment_tally_scale_activation',
     'dispenser_send_amount_compare_activation',
-    'equivocation_header',
     'ledger_amount_precision_activation',
     'oracle_preload_causality_activation',
     'price_scale_activation',
-    'price_zero_validity_activation',
     'slash_grid_activation',
     'stake_weight_collation_activation',
-    'stake_weighted_quorum',
     'stateHash',
-    'state_commitment_activation',
     'state_subtree_activation',
     'swq_source_cap_activation',
+]);
+
+// These stems do have a canonical map, but their own suites pin it directly.
+const PINNED_BY_DEDICATED_SUITE = new Map([
+    ['equivocation_header', 'unit/consensus/equivocation/equivocation_header.test.js'],
+    ['stake_weighted_quorum', 'unit/consensus/stake_weighted_quorum.test.js'],
+    ['state_commitment_activation', 'unit/state_commitment/state_commitment.test.js'],
 ]);
 
 function walk(dir, out) {
@@ -98,7 +100,8 @@ describe('activation-gate list is derived from the modules on disk @regression',
     it('every mapped stem has a GATES row in the parity entry or a stated reason it has none', function () {
         const pinned = pinnedStems();
         assert.ok(pinned.size >= 30, 'the GATES rows could not be read out of the entry, found ' + pinned.size);
-        const unlisted = [...mapped.values()].filter(stem => !pinned.has(stem) && !NO_CANONICAL_MAP.has(stem));
+        const unlisted = [...mapped.values()].filter(stem =>
+            !pinned.has(stem) && !NO_CANONICAL_MAP.has(stem) && !PINNED_BY_DEDICATED_SUITE.has(stem));
         assert.deepStrictEqual(unlisted, [],
             'activation modules with no parity row: ' + unlisted.join(', '));
     });
@@ -106,7 +109,20 @@ describe('activation-gate list is derived from the modules on disk @regression',
     it('no exemption names a stem that is pinned or no longer mapped', function () {
         const pinned = pinnedStems();
         const stems = new Set(mapped.values());
-        const stale = [...NO_CANONICAL_MAP].filter(stem => pinned.has(stem) || !stems.has(stem));
-        assert.deepStrictEqual(stale, [], 'stale NO_CANONICAL_MAP entries: ' + stale.join(', '));
+        const exemptions = [...NO_CANONICAL_MAP, ...PINNED_BY_DEDICATED_SUITE.keys()];
+        const stale = exemptions.filter(stem => pinned.has(stem) || !stems.has(stem));
+        const overlap = [...NO_CANONICAL_MAP].filter(stem => PINNED_BY_DEDICATED_SUITE.has(stem));
+        assert.deepStrictEqual(stale, [], 'stale activation parity exemptions: ' + stale.join(', '));
+        assert.deepStrictEqual(overlap, [], 'activation parity exemptions appear in both sets: ' + overlap.join(', '));
+    });
+
+    it('every dedicated canon suite exists and loads protocol/constants.js', function () {
+        const testRoot = path.resolve(__dirname, '..', '..', '..');
+        for (const [stem, rel] of PINNED_BY_DEDICATED_SUITE) {
+            const file = path.join(testRoot, rel);
+            assert.ok(fs.existsSync(file), stem + ' dedicated canon suite is missing at ' + file);
+            assert.ok(fs.readFileSync(file, 'utf8').includes('protocol/constants.js'),
+                stem + ' dedicated suite no longer loads protocol/constants.js');
+        }
     });
 });

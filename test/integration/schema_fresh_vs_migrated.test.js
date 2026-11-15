@@ -46,6 +46,7 @@ const MIGRATIONS_DIR = path.join(SQL_DIR, 'migrations');
 const COLUMN_BASELINE = require('../fixtures/schema-baseline-origin.json').baseline;
 const INDEX_BASELINE = require('../fixtures/schema-index-baseline-origin.json').baseline;
 const LITERAL_ORIGIN = require('../fixtures/schema-literal-origin.json').literals;
+const TAIL_ORIGIN = require('../fixtures/schema-tail-origin.json').tails;
 const SQL_LITERAL = /'(?:''|\\.|[^'\\])*'/g;
 const ORIGIN_PRIMARY_KEYS = {
     anchor_actions: ['action_index'],
@@ -83,11 +84,11 @@ function testIndexer() {
     };
 }
 
-function currentTableTail(table) {
-    const raw = fs.readFileSync(path.join(SQL_DIR, table + '.sql'), 'utf8');
-    const match = /\)\s*(ENGINE\s*=\s*[^;]+)/i.exec(raw);
-    assert.ok(match, table + '.sql must declare an ENGINE tail');
-    return match[1].trim();
+// The pre-ledger table tail comes from the pinned origin anchor, never from today's definition:
+// reading today's would give the aged and fresh installs one tail by construction.
+function originTableTail(table) {
+    assert.ok(TAIL_ORIGIN[table], 'schema-tail-origin.json does not carry the tail of ' + table);
+    return TAIL_ORIGIN[table];
 }
 
 // Restore the origin-era literal case the column anchor folded away, by position, from the
@@ -137,7 +138,7 @@ function agedCreateSql(table) {
             clauses.push((index.unique ? 'UNIQUE ' : '') + 'KEY `' + index.name + '` (' + columnList + ')');
         }
     }
-    return 'CREATE TABLE `' + table + '` (\n  ' + clauses.join(',\n  ') + '\n) ' + currentTableTail(table);
+    return 'CREATE TABLE `' + table + '` (\n  ' + clauses.join(',\n  ') + '\n) ' + originTableTail(table);
 }
 
 async function createAgedSchema(conn) {

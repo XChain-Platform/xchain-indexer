@@ -103,8 +103,9 @@ module.exports = {
     // addresses an action introduces. See the call site in processAction and the
     // consensus note in src/consensus/address_ref_fields.js.
     async assignActionAddressIds(action, params, data, error){
-        // Only assign during block processing: createAddress only does explicit-counter
-        // (deterministic) assignment inside a transaction. Outside one this is a no-op.
+        // Assign whenever a DB transaction is open, during block processing or a rolled-back
+        // dry-run, so both paths use the same deterministic explicit-counter assignment.
+        // Without an open transaction createAddress uses AUTO_INCREMENT, so this is a no-op.
         if(this.indexerDb.transactionConnection == null)
             return;
         // Skip pre-handler-rejected actions (unknown / not-yet-activated). Such an
@@ -142,7 +143,8 @@ module.exports = {
         // blockIndex to this.indexerDb.blockIndex (= blockToParse), the same source
         // createActionIndex uses to stamp SOURCE, so every id created in a block lands under
         // one block_index value and the rollback "WHERE block_index >= ?" delete cannot split
-        // a block's ids. data['BLOCK_INDEX'] equals it today; warn loudly if it ever diverges.
+        // a block's ids. A dry-run sets indexerDb.blockIndex to its synthetic block_index, so
+        // the same invariant holds there. Warn loudly if data['BLOCK_INDEX'] ever diverges.
         if(data['BLOCK_INDEX'] != this.indexerDb.blockIndex)
             getLogger().warn('Index id invariant: action BLOCK_INDEX (' + data['BLOCK_INDEX'] +
                 ') != indexer blockIndex (' + this.indexerDb.blockIndex + '); stamping from indexer blockIndex.');

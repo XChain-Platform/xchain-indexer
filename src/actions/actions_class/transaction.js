@@ -72,8 +72,8 @@ function buildActionData(tx, action, format, coin, isGenesis){
     data['TX_OUTPUTS']       = tx.tx_outputs || []; // Full native-coin output set (fee detection)
     data['IS_GENESIS']       = isGenesis === true;  // synthetic genesis bootstrap action (genesis.js)
     // Guard-inert marker for the public feequote and preflight dry-runs: when set, a controller
-    // guard refuses at the invokeController chokepoint instead of entering the VM (utility.js),
-    // so neither unauthenticated endpoint can run caller-influenced contract code while
+    // guard refuses at invokeController in src/utility/controller_guard.js instead of entering
+    // the VM, so neither unauthenticated endpoint can run caller-influenced contract code while
     // holding the block-loop mutex. Sourced from tx.guard_inert, which only the synthetic tx of
     // computeFeeQuote and computePreflight carries; ALWAYS false for real decoded transactions.
     data['GUARD_INERT']      = tx.guard_inert === true;

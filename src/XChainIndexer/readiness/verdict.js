@@ -72,8 +72,10 @@ function nextBehindSince(previous, behind, now, lastBlockCommittedAt){
 //   indexer_db_unreachable - the committed height cannot be read.
 //   wedged                 - the liveness wedge (stallClass 'wedged').
 //   poll_silent            - the block-poll loop has stopped iterating.
-//   decoder_reorg_halt     - the paired decoder carries a live REORG_HALT marker, so
-//                            nothing past the halted height will ever arrive.
+//   decoder_reorg_halt     - the paired decoder carries a live REORG_HALT marker, or
+//                            no halt probe has completed a read yet. The latter fails
+//                            closed and is identified by the response's unverified
+//                            stallReason while decoderReorgHalted remains false.
 //   barrier_ceiling_exceeded - one block has been held behind a barrier for longer
 //                            than its named ceiling.
 //   behind_tip_no_commit   - behind a known tip for noCommitMs without a commit.
@@ -81,6 +83,8 @@ function nextBehindSince(previous, behind, now, lastBlockCommittedAt){
 //                            readiness window, so current state is unverified.
 // A future-stamped block wait is never behind_tip_no_commit: consensus forbids
 // committing that block yet, so the indexer holds everything it may hold.
+// That exemption does not cover chain_tip_stale: waiting on block time says nothing
+// about whether the configured tip source is reachable.
 function readinessVerdict(input){
     let {
         now, indexerDbUnreachable, wedged, pollSilent, decoderReorgHalted,
@@ -113,7 +117,7 @@ function readinessVerdict(input){
        && Number.isFinite(noCommitMs) && noCommitMs > 0
        && behindNoCommitForMs != null && behindNoCommitForMs > noCommitMs)
         reasons.push('behind_tip_no_commit');
-    if(chainTipStale && !waitingOnFutureBlock
+    if(chainTipStale
        && Number.isFinite(noCommitMs) && noCommitMs > 0
        && chainTipStaleForMs != null && chainTipStaleForMs > noCommitMs)
         reasons.push('chain_tip_stale');

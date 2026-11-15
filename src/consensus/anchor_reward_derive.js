@@ -54,6 +54,7 @@
 
 const ed25519 = require('./ed25519.js');
 const swq     = require('./stake_weighted_quorum.js');
+const countQuorum = require('../actions/anchor/count_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ar      = require('./gates/anchor_reward_gate.js');
 const gateRegistry = require('./gate_registry.js');
@@ -149,7 +150,7 @@ async function verifyAttestation(indexerDb, row){
     }
     return weighted
         ? swq.meetsStakeThreshold(validators, attSigners)
-        : (attSigners.length >= ((oracleN <= 1) ? 1 : Math.max(2 * Math.floor((oracleN - 1) / 3) + 1, Math.ceil((oracleN + 1) / 2))));
+        : countQuorum.meetsCountThreshold(oracleN, attSigners.length);
 }
 
 // The flag-days a mirrored row must be past before it may mint, each read at the

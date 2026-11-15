@@ -51,7 +51,7 @@ module.exports = [
     // so an unresolvable caret id or a malformed literal was interned into the IMMUTABLE
     // contracts.slash_destination; every later slash then routed stake to an unspendable
     // address (permanent money loss). After activation the resolved destination is checked
-    // with isCryptoAddress (mirroring mint.js / issue.js / dispenser.js). The 'BURN' sentinel
+    // with isCryptoAddress (mirroring mint.js / issue.js / dispenser/validate.js). The 'BURN' sentinel
     // and the default-to-BURN path are exempt (they resolve to the trusted configured burn
     // address). Gated as its own consensus rule because rejecting a DEPLOY that historically
     // committed 'valid' changes both the acceptance verdict AND the contract_hash

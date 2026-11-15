@@ -193,18 +193,31 @@ function logBalanceDiffs(address_id, differences){
 }
 
 async function writeBalances(db, address_id, balances){
+    const chunkSize = 500;
+    let upserts = [];
+    let deletes = [];
     for(let tick_id in balances){
         let balance = balances[tick_id];
-        let query;
-        let args;
-        if(balance==0){
-            query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
-            args = [address_id, tick_id];
-        } else {
-            balance = db.util.bcstr(balance);
-            query = "INSERT INTO balances (tick_id, address_id, amount) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE amount = VALUES(amount)";
-            args = [tick_id, address_id, balance];
-        }
-        await db.doQuery(query, args);
+        if(balance==0)
+            deletes.push(tick_id);
+        else
+            upserts.push([tick_id, address_id, db.util.bcstr(balance)]);
+    }
+    for(let offset=0; offset<upserts.length; offset+=chunkSize){
+        let chunk = upserts.slice(offset, offset + chunkSize);
+        let values = chunk.map(() => '(?, ?, ?)').join(',');
+        await db.doQuery(
+            'INSERT INTO balances (tick_id, address_id, amount) VALUES ' + values +
+            ' ON DUPLICATE KEY UPDATE amount = VALUES(amount)',
+            chunk.flat()
+        );
+    }
+    for(let offset=0; offset<deletes.length; offset+=chunkSize){
+        let chunk = deletes.slice(offset, offset + chunkSize);
+        await db.doQuery(
+            'DELETE FROM balances WHERE address_id=? AND tick_id IN (' +
+            chunk.map(() => '?').join(',') + ')',
+            [address_id].concat(chunk)
+        );
     }
 }

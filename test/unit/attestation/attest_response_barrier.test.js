@@ -90,6 +90,18 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
         sync.advanceWatermark(1000 + sync.attestResponseWatermarkGraceS - 1);
         assert.strictEqual(sync._attestResponseWaiters.length, 1, 'a short advance must not release the block');
     });
+
+    it('does not let a non-finite time bypass an active height barrier', async function () {
+        const active = makeSync().sync;
+        sinon.stub(active, 'admissionActiveAt').returns(true);
+        await assert.rejects(active.waitForAttestationResponseSync(NaN, 10, 800),
+            /attestation response mirror barrier timed out/);
+        const inert = makeSync().sync;
+        sinon.stub(inert, 'admissionActiveAt').returns(false);
+        assert.strictEqual(await inert.waitForAttestationResponseSync(NaN, 10, 800), inert.streamWatermark);
+        assert.strictEqual(inert._attestResponseWaiters.length, 0);
+        sinon.restore();
+    });
 });
 
 describe('HubDbSync attestation-response barrier @regression @tier1', function () {

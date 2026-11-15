@@ -67,7 +67,8 @@ module.exports = {
         blockTime = Number(blockTime);
         const admission = this.admissionActiveAt(blockHeight);
         if (!admission && !Number.isFinite(blockTime)) return true;
-        if (admission && !Number.isFinite(Number(blockHeight))) return false;   // fail closed
+        if (admission && (!Number.isFinite(Number(blockHeight)) || !Number.isFinite(blockTime)))
+            return false;                                      // fail closed
         try {
             // The scope clause and its bindings, one per table alias. Below the activation
             // this is the byte-identical `effective_time <= ?` the barrier has always used.
@@ -110,8 +111,7 @@ module.exports = {
     // the hub's own DDL spelling. Built from the coin rather than interpolated from anything
     // that reaches this process over the wire, exactly like RETRACTION_COLUMNS above: a column
     // name is never taken from a frame. The columns themselves arrive with the indexer's dated
-    // admission migration; nothing reads them below the activation, which is every network in
-    // this train.
+    // admission migration; nothing reads them below the activation height.
     admitColumn() {
         const chain = this.admissionChain();
         return 'admit_block_' + (chain === null ? 'btc' : chain.toLowerCase());
@@ -137,7 +137,8 @@ module.exports = {
     // snapshot is missing. Resolves immediately when sync is disabled or already satisfied.
     async waitForSnapshotSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
-        if (!this.enabled || !Number.isFinite(blockTime)) return true;
+        if (!this.enabled) return true;
+        if (!Number.isFinite(blockTime) && !this.admissionActiveAt(blockHeight)) return true;
         if (await this.snapshotSyncSatisfied(blockTime, blockHeight)) return true;
 
         let ms = parseInt(timeoutMs);

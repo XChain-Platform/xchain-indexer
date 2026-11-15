@@ -106,12 +106,18 @@ describe('alterTableForDrift(): column-order convergence @regression', function 
         // An aged attest_validator_stats: every column except the surrogate id.
         const h = makeReconciler(['validator_pubkey', 'provider_id', 'fulfilled_count',
                                   'missed_count', 'slashed_count', 'quality_score', 'last_updated_block']);
-        await h.run('attest_validator_stats.sql');
+        const warns = [];
+        const originalWarn = console.warn;
+        console.warn = (message) => warns.push(String(message));
+        try { await h.run('attest_validator_stats.sql'); }
+        finally { console.warn = originalWarn; }
         const added = alters(h.queries).filter(q => /ADD COLUMN/i.test(q));
         assert.deepStrictEqual(added.filter(q => /ADD COLUMN\s+`?id`?\b/i.test(q)), [],
             'alterTableForDrift must not add attest_validator_stats.id: it parses as NOT NULL ' +
             'with no DEFAULT, so the dated migration is the only path that carries it to an aged ' +
             'DB. An ADD here means the migration prose and the squash guidance resting on this ' +
             'skip are now wrong.');
+        assert.ok(warns.some(line => /attest_validator_stats\.id/.test(line) && /NOT NULL with no DEFAULT/.test(line)),
+            'the skipped column must emit the loud warning promised by alterTableForDrift');
     });
 });

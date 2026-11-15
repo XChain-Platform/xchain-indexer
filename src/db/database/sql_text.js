@@ -32,6 +32,7 @@ const { getLogger } = require('../../observability/index.js');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { opensBackslashEscape } = require('../shared.js');
+const { tableNameOf } = require('./schema/table_files.js');
 
 module.exports = {
 
@@ -144,7 +145,7 @@ module.exports = {
     async createTable(file){
         const dir     = path.join(__dirname, '..', '..', 'sql');
         const data    = fs.readFileSync(dir + '/' + file, "utf8");
-        const table   = file.substring(0, file.indexOf('.sql'));
+        const table   = tableNameOf(file);
         // Quote-aware split into statements. A ';' inside a comment (prose
         // punctuation in a header block) or inside a string literal must not be
         // treated as a statement terminator - that truncates the statement into a

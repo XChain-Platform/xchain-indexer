@@ -21,6 +21,7 @@ const {
     sourceStreak,
     measureAbsences
 } = require('../../../../src/consensus/rollcall_close/absence_streak.js');
+const rollcallReads = require('../../../../src/db/rollcalls/index.js');
 
 function row(epochHeight, sources){
     return {
@@ -38,9 +39,9 @@ function stubDb(lookback, absencesBySource){
             this.lookbackCalls.push([epochHeight, limit]);
             return lookback;
         },
-        async getRollcallAbsenceEpochsForSource(source, epochHeights){
-            this.absenceCalls.push([source, epochHeights]);
-            return absencesBySource[source] || [];
+        async getRollcallAbsenceEpochsForSources(sources, epochHeights){
+            this.absenceCalls.push([sources, epochHeights]);
+            return new Map(sources.map((source) => [source, absencesBySource[source] || []]));
         },
         async insertRollcallAbsences(rows){
             this.inserts.push(rows);
@@ -118,14 +119,30 @@ describe('measureAbsences', function () {
 
         assert.deepStrictEqual(result, { absentSources: ['alpha', 'beta'], evictedSources: ['alpha'] });
         assert.deepStrictEqual(db.lookbackCalls, [[30, rca.ROLLCALL_STREAK_LOOKBACK]]);
-        assert.deepStrictEqual(db.absenceCalls, [
-            ['alpha', [30, 20]],
-            ['beta', [30, 20]]
-        ]);
+        assert.deepStrictEqual(db.absenceCalls, [[['alpha', 'beta'], [30, 20]]]);
         assert.deepStrictEqual(db.inserts, [[
             { epoch_height: 30, source: 'alpha', close_block: 42, evicted: true },
             { epoch_height: 30, source: 'beta', close_block: 42, evicted: false }
         ]]);
+        let calls = [];
+        let readDb = {
+            async getAddressId(source){ return { alpha: 4, beta: 7, missing: null }[source]; },
+            async doQuery(query, args){
+                calls.push([query, args]);
+                return [
+                    { source_id: 7, epoch_height: '20' },
+                    { source_id: 4, epoch_height: '30' },
+                    { source_id: 4, epoch_height: '20' }
+                ];
+            }
+        };
+        let grouped = await rollcallReads.getRollcallAbsenceEpochsForSources.call(
+            readDb, ['alpha', 'missing', 'beta'], [30, '20', 'bad']
+        );
+        assert.deepStrictEqual([...grouped], [
+            ['alpha', [30, 20]], ['missing', []], ['beta', [20]]
+        ]);
+        assert.deepStrictEqual(calls[0][1], [4, 7, 30, 20]);
     });
 
     it('does not insert when every pinned source is present', async function () {
@@ -137,5 +154,13 @@ describe('measureAbsences', function () {
         assert.deepStrictEqual(result, { absentSources: [], evictedSources: [] });
         assert.deepStrictEqual(db.absenceCalls, []);
         assert.deepStrictEqual(db.inserts, []);
+        let noQueryDb = {
+            async getAddressId(){ throw new Error('address lookup should not run'); },
+            async doQuery(){ throw new Error('query should not run'); }
+        };
+        let empty = await rollcallReads.getRollcallAbsenceEpochsForSources.call(
+            noQueryDb, ['alpha'], ['bad']
+        );
+        assert.deepStrictEqual([...empty], []);
     });
 });

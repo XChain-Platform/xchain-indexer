@@ -15,7 +15,7 @@
 'use strict';
 
 const { listMembershipHash, listMetaHash } = require('../../consensus/list_share_hash.js');
-const { getSharedLists, getListOwner } = require('../../db/lists/sharing.js');
+const { getSharedListDetails } = require('../../db/lists/sharing.js');
 const { getLogger } = require('../../observability/index.js');
 const { qualifyTickMembers } = require('./list_share/list_share_tick_members.js');
 
@@ -77,16 +77,13 @@ async function getSharedListsRpc(indexer, params){
 
     try {
         let db = indexer.indexerDb.apiView();
-        let rows = await getSharedLists(db);
-        return await Promise.all(rows.map(async row => {
-            let meta = await db.getListMeta(row.root_index, null);
-            return {
-                root_index:        row.root_index,
-                name:              meta?.name ?? null,
-                owner:             await getListOwner(db, row.root_index),
-                share_block:       row.share_block,
-                share_action_index: row.share_action_index
-            };
+        let rows = await getSharedListDetails(db);
+        return rows.map(row => ({
+            root_index:         row.root_index,
+            name:               row.name ?? null,
+            owner:              row.owner ?? null,
+            share_block:        row.share_block,
+            share_action_index: row.share_action_index
         }));
     } catch (err) {
         getLogger().error('getsharedlists error:', err);

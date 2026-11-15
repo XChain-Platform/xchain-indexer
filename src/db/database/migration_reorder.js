@@ -37,6 +37,7 @@
 'use strict';
 
 const { stripBlockComments } = require('./migration_live_schema_guard.js');
+const { backdatedFrontierViolation } = require('./migration_registry.js');
 
 // A table identifier: backtick-quoted or bare, optionally schema-qualified. The capture
 // is the table part, so `XChain_Indexer`.`tokens` and tokens both yield tokens.
@@ -186,6 +187,27 @@ function reorderVerdict(pending, jumped){
     };
 }
 
+function backdatingVerdict({ file, raw, appliedNames, readApplied, split }){
+    const names = [...(appliedNames || [])];
+    const frontier = backdatedFrontierViolation(file, names);
+    if(!frontier) return null;
+    const jumped = [];
+    for(const name of names){
+        const applied = String(name);
+        if(!/^\d{4}-\d{2}-\d{2}-/.test(applied) || applied <= String(file)) continue;
+        let statements = null;
+        try { statements = split(readApplied(applied)); }
+        catch(_){ statements = null; }
+        jumped.push({ file: applied, statements });
+    }
+    jumped.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+    return {
+        frontier,
+        jumpedCount: jumped.length,
+        verdict: reorderVerdict({ file, statements: split(raw) }, jumped),
+    };
+}
+
 // The operator-facing half of the verdict: which objects are at stake, named. An
 // operator reading a boot log has no way to act on "review manually", so every branch
 // here ends in a concrete table list or a concrete statement.
@@ -217,5 +239,6 @@ module.exports = {
     statementTables,
     migrationTouchedTables,
     reorderVerdict,
+    backdatingVerdict,
     describeReorder,
 };

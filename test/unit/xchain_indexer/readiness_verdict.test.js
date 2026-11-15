@@ -28,6 +28,7 @@ const { readinessVerdict, blocksBehind, nextBehindSince, resolvePositiveIntMs, r
         READY_NO_COMMIT_DEFAULT_MS, CHAIN_TIP_TTL_DEFAULT_MS,
         CHAIN_TIP_TIMEOUT_DEFAULT_MS } = require('../../../src/XChainIndexer/readiness/verdict.js');
 const XChainIndexer = require('../../../src/XChainIndexer.js');
+const { resolveBarrierTiming } = require('../../../src/XChainIndexer/instance_state.js');
 const { publishedStallClass } = require('../../../src/XChainIndexer/stall_health.js');
 const UtxoTracker = require('../../../src/chain/utxo_tracker.js');
 
@@ -126,9 +127,9 @@ describe('readinessVerdict()', function(){
             lastBlockCommittedAt: NOW - 1000
         })).ready, false);
         assert.deepStrictEqual(readinessVerdict(stale).reasons, ['chain_tip_stale']);
-        assert.strictEqual(readinessVerdict(Object.assign(stale, {
+        assert.deepStrictEqual(readinessVerdict(Object.assign(stale, {
             waitingOnFutureBlock: true
-        })).ready, true);
+        })).reasons, ['chain_tip_stale']);
     });
 
     it('resolves the no-commit window, falling back on unusable values', function(){
@@ -139,6 +140,14 @@ describe('readinessVerdict()', function(){
         for(const raw of [undefined, null, '', 'abc', '15s', '0', '-5', '1.5', 'NaN'])
             assert.strictEqual(resolvePositiveIntMs(raw, 1234), 1234);
         assert.strictEqual(resolvePositiveIntMs('20000', 1234), 20000);
+
+        let defaults = { priceSyncTimeoutMs: 60000, healthStallGraceMs: 120000, pollSilentMs: 240000 };
+        assert.deepStrictEqual(resolveBarrierTiming({ HUB_PRICE_SYNC_TIMEOUT_MS: 'abc' }), defaults);
+        assert.deepStrictEqual(resolveBarrierTiming({ INDEXER_HEALTH_STALL_GRACE_MS: '120s',
+                                                      INDEXER_POLL_SILENT_MS: 'abc' }), defaults);
+        assert.deepStrictEqual(resolveBarrierTiming({ HUB_PRICE_SYNC_TIMEOUT_MS: '90000' }), {
+            priceSyncTimeoutMs: 90000, healthStallGraceMs: 180000, pollSilentMs: 360000
+        });
     });
 
     it('resolves chain tip timings as positive integers with safe defaults', function(){
@@ -185,6 +194,13 @@ describe('XChainIndexer readiness state and readChainTip()', function(){
         let indexer = new XChainIndexer();
         indexer.utxoTracker = { enabled: true, getSyncStatus: async () => ({ node_height: -1 }) };
         assert.strictEqual((await indexer.readChainTip()).height, null);
+        for(let sync of [null, {}, { node_height: null }, { node_height: '' }, { node_height: false }]){
+            let unknown = new XChainIndexer();
+            unknown.utxoTracker = { enabled: true, getSyncStatus: async () => sync };
+            assert.strictEqual((await unknown.readChainTip()).height, null);
+            assert.strictEqual(unknown.chainTip, null);
+            assert.strictEqual(unknown.chainTipAt, null);
+        }
         indexer.chainTip = 700;
         indexer._chainTipCheckedAt = 0;
         indexer.utxoTracker = { enabled: true, getSyncStatus: async () => { throw new Error('ECONNREFUSED'); } };
@@ -209,6 +225,17 @@ describe('XChainIndexer readiness state and readChainTip()', function(){
         assert.strictEqual(fresh.height, 700);
         assert.strictEqual(fresh.stale, false);
 
+        for(let flag of ['node_height_stale', 'node_rpc_stale']){
+            indexer.chainTipAt = NOW - 2 * MIN;
+            indexer._chainTipCheckedAt = 0;
+            indexer.utxoTracker = { enabled: true, getSyncStatus: async () => ({ node_height: 100, [flag]: true }) };
+            stale = await indexer.readChainTip(NOW);
+            assert.strictEqual(indexer.chainTip, 700);
+            assert.strictEqual(indexer.chainTipAt, NOW - 2 * MIN);
+            assert.strictEqual(stale.stale, true);
+        }
+
+        indexer.chainTipAt = NOW - 30000;
         indexer.utxoTracker.enabled = false;
         assert.deepStrictEqual(await indexer.readChainTip(NOW), {
             height: null, source: null, at: NOW - 30000, stale: null, staleSince: null

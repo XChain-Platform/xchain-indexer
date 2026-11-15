@@ -127,12 +127,16 @@ describe('Database.updateAddressBalance @unit @regression', function () {
         await db.updateAddressBalance('addr1', false);
 
         const queries = db.doQuery.args.map(a => a[0]);
-        assert.strictEqual(db.doQuery.callCount, 3, 'exactly one DML per tick_id');
+        assert.strictEqual(db.doQuery.callCount, 2, 'one batched upsert and one batched delete');
         assert.ok(!queries.some(q => /SELECT/i.test(q)), 'no SELECT probes');
         const upserts = queries.filter(q => /ON DUPLICATE KEY UPDATE/i.test(q));
         const deletes  = queries.filter(q => /DELETE FROM balances/i.test(q));
-        assert.strictEqual(upserts.length, 2, 'two UPSERTs for tick 1 and 3');
+        assert.strictEqual(upserts.length, 1, 'one UPSERT for ticks 1 and 3');
         assert.strictEqual(deletes.length,  1, 'one DELETE for tick 2');
+        assert.deepStrictEqual(db.doQuery.firstCall.args[1], [
+            '1', 1, '100', '3', 1, '250'
+        ]);
+        assert.deepStrictEqual(db.doQuery.secondCall.args[1], [1, '2']);
     });
 
     it('rollback: deletes old_balances entries absent from recomputed balances', async function () {

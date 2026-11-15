@@ -22,6 +22,8 @@
  *
  ********************************************************************/
 
+const { foldLegVerdicts } = require('../send/leg_verdicts.js');
+
 // Seed the probe-local collectors on `data`; returns whether this run is the probe.
 function seedProbeCollectors(data){
     // Public BATCH pre-flight collectors (spec row 46). data['FEE_PROBE'] is set ONLY
@@ -33,7 +35,7 @@ function seedProbeCollectors(data){
     // field clear there would otherwise delete them before the second command ran.
     //
     //   PROBE_SUB_VERDICTS - each dispatched sub-command's own verdict, in list order.
-    //                        A row is {status, refused}: a status the probe really got,
+    //                        A row is {status, refused, legs?}: a status the probe really got,
     //                        or status null plus a `refused` note for the two things the
     //                        probe declines to answer (a VM sub-action it never
     //                        dispatches, and a controller guard it never enters).
@@ -55,7 +57,9 @@ function seedProbeCollectors(data){
 // Record the verdict the sub-command just dispatched left in data['STATUS'], or, when it set
 // off a match, the verdict processAction snapshotted before the match overwrote that field.
 function recordSubVerdict(data, action, batchPosition, matchSnapshot){
-    let raw       = matchSnapshot ? matchSnapshot.status : data['STATUS'];
+    let folded = matchSnapshot ? null : foldLegVerdicts(data['PROBE_LEG_VERDICTS'],
+        (status) => this.util.isGuardInertError(status));
+    let raw       = matchSnapshot ? matchSnapshot.status : (folded ? folded.status : data['STATUS']);
     let subStatus = (raw === undefined) ? null : raw;
     // A sub-command whose bound controller's guard the probe declines to enter is
     // UNJUDGED, not rejected. The refusal arrives here as an ordinary
@@ -69,12 +73,14 @@ function recordSubVerdict(data, action, batchPosition, matchSnapshot){
     // refusal in batch/index.js's dispatch loop (status null + a `refused` note), so it takes the same road,
     // and the note names the controller so the composer knows what to do next.
     let inert = this.util.isGuardInertError(subStatus);
-    data['PROBE_SUB_VERDICTS'].push({
+    let row = {
         position: batchPosition,
         action:   action,
         status:   inert ? null : subStatus,
         refused:  inert ? this.util.describeGuardInert(subStatus) : null
-    });
+    };
+    if(folded) row.legs = folded.legs;
+    data['PROBE_SUB_VERDICTS'].push(row);
 }
 
 module.exports = { seedProbeCollectors, recordSubVerdict };

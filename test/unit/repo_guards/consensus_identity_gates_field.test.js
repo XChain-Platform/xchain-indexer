@@ -17,6 +17,7 @@ const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 
 const { codeIdentity } = require('../../../bin/consensus-identity.js');
+const { diffGates } = require('../../../src/consensus_rules_digest.js');
 const { siblingCheckout } = require('../../helpers/sibling_checkout.js');
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
@@ -25,6 +26,17 @@ const PIN = path.join(REPO, 'bin', 'pins', 'at1-consensus-identity.json');
 const SHARED_ROWS = path.join(REPO, 'src', 'protocol_changes', 'shared_rows_5.js');
 const HUB_SHARED_ROWS = 'src/consensus/gate_registry/shared_rows_5.js';
 const HUB_PIN = 'bin/pins/at1-consensus-identity.json';
+
+function assertSharedRulesMatch(indexerBlock, hubPin) {
+    assert.ok(hubPin.env && typeof hubPin.env === 'object',
+        'hub pin has no env block, so it cannot be shown to be a bare reading');
+    assert.deepStrictEqual(Object.keys(hubPin.env).filter((key) => hubPin.env[key] !== null), [],
+        'hub pin was not taken bare; cannot compare it to the indexer bare_checkout reading');
+    assert.deepStrictEqual(diffGates(indexerBlock.consensus_rules_gates, hubPin.consensus_rules_gates), [],
+        'shared gates whose pinned values differ between indexer and hub');
+    assert.strictEqual(indexerBlock.consensus_rules_digest, hubPin.consensus_rules_digest,
+        'pinned consensus_rules_digest differs between indexer bare_checkout and hub');
+}
 
 function hubFileAtCommit(hubRoot, commit, file) {
     return execFileSync('git', ['-C', hubRoot, 'show', commit + ':' + file], {
@@ -222,6 +234,12 @@ describe('consensus identity GATES field and pin comparison', function () {
             : hubFileAtCommit(hubRoot, pin.hub_shared_rows_commit, HUB_PIN));
         assert.deepStrictEqual(fs.readFileSync(SHARED_ROWS), hubRows);
         assert.strictEqual(codeIdentity('regtest').gates_field_hash, hubPin.gates_field_hash);
+        assertSharedRulesMatch(pin.bare_checkout, hubPin);
+
+        const moved = JSON.parse(JSON.stringify(pin.bare_checkout));
+        const key = Object.keys(moved.consensus_rules_gates)[0];
+        moved.consensus_rules_gates[key] = 'negative-control';
+        assert.throws(() => assertSharedRulesMatch(moved, hubPin), /shared gates whose pinned values differ/);
     });
 
     it('exits zero against the committed pin', function () {

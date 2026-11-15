@@ -57,7 +57,7 @@ module.exports = {
     // This chain's admission column on the mirrored cross-chain tables, `admit_block_<c>` in
     // the hub's own DDL spelling, built from the configured coin and never from anything read
     // off the wire. The columns arrive with the indexer's dated admission migration; nothing
-    // reads them below the activation, which is every network in this train.
+    // reads them below the activation height.
     admitColumn(){
         return 'admit_block_' + String(this.config['COIN'] || '').toLowerCase();
     },

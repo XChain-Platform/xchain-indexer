@@ -29,6 +29,7 @@
 const fs      = require('fs');
 const path    = require('path');
 const { getLogger } = require('../../observability/index.js');
+const { tableNameOf } = require('./schema/table_files.js');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { isAutoDedupAllowed, recordShapeDrift } = require('../shared.js');
@@ -182,7 +183,7 @@ module.exports = {
         try {
             const dir      = path.join(__dirname, '..', '..', 'sql');
             const data     = fs.readFileSync(dir + '/' + file, "utf8");
-            const table    = file.substring(0, file.indexOf('.sql'));
+            const table    = tableNameOf(file);
             const expected = this.parseExpectedIndexes(data, table);
             // The live read happens even with nothing to re-add: the undeclared-index
             // detector at the bottom runs on every table, and a table whose keys are all

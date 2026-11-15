@@ -194,8 +194,8 @@ class XChainIndexer {
         if(this.hubPushQueue) this.hubPushQueue.stop();
     }
 
-    // Whether this chain binds mirrored rows by admission height at block B. Inert on every
-    // network in this train, in which case every sync barrier behaves exactly as it does now.
+    // Whether this chain binds mirrored rows by admission height at block B. Activation heights
+    // are pinned in shared_rows_2.js; below activation every sync barrier keeps its clock form.
     mirrorAdmissionActiveAt(blockHeight){
         if(blockHeight === null || blockHeight === undefined) return false;
         return isMirrorAdmissionConsumerActive(this.config['COIN'], this.config['NETWORK'], blockHeight);

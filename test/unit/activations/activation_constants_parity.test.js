@@ -39,9 +39,7 @@
  * full test title is unchanged, and every block carries the hook, so a strict run on an
  * absent or refused checkout still fails rather than skipping.
  */
-
 'use strict';
-
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
@@ -135,6 +133,7 @@ const GATES = [
     // the node. A one-sided edit forks fee validity between a hub-connected node and a
     // chain-only node at the boundary, which is the divergence the gate exists to close.
     ['price_fee_batch_landed_activation',    'PRICE_FEE_BATCH_LANDED_ACTIVATION'],
+    ['price_zero_validity_activation',       'PRICE_ZERO_VALIDITY_ACTIVATION'],
     // The PLATFORM TRAIN gate, keyed by platform version
     // rather than by feature. A one-sided edit here is worse than a one-sided feature-gate
     // edit: this map is what decides whether a node HALTS at a train boundary or applies
@@ -249,7 +248,6 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         assert.throws(() => resolveCanonSource(false, true), /XCHAIN_REQUIRE_SIBLINGS=1/);
         assert.strictEqual(resolveCanonSource(true, true).status, 'checked');
     });
-
     // A refused checkout is present but untrusted, so the skip and the strict failure must carry
     // the verdict's reason rather than the absent-checkout wording, which would send a reader
     // looking for a file that is sitting right there.
@@ -260,7 +258,6 @@ describe('activation-gate constant parity to canonical constants.js @regression'
             (e) => e.message === 'XCHAIN_REQUIRE_SIBLINGS=1 but ' + refusal);
         assert.strictEqual(resolveCanonSource(true, true, refusal).status, 'checked');
     });
-
     // The coverage floor. Every parity case below is skipped without the sibling, and each
     // one resolves its constant by string, so a renamed module or export would otherwise
     // surface only as a green run. This case runs either way and fails on both.

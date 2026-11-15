@@ -106,6 +106,11 @@
  *                                                     non-negative integer is
  *                                                     refused (exit 2)
  *   node bin/consensus-identity.js --network testnet  default regtest
+ *   node bin/consensus-identity.js --chain LTC        coin config for the state
+ *                                                     read: BTC, LTC or DOGE;
+ *                                                     default BTC
+ *   node bin/consensus-identity.js --db <name>        database for the state read,
+ *                                                     overriding INDEXER_DB_NAME
  *   node bin/consensus-identity.js --assert-no-absent exit 1 if any shared gate
  *                                                     reads the absent sentinel;
  *                                                     a missing registry row is
@@ -125,6 +130,7 @@
  *                                                     environment is refused
  *                                                     (exit 2)
  *   node bin/consensus-identity.js --out <file>       write the identity as JSON
+ *   node bin/consensus-identity.js --help             print this usage banner
  *
  *   XC_ROLLCALL_REGTEST_ACTIVATION=armed XC_ROLLCALL_GATES_REGTEST_ACTIVATION=armed \
  *     node bin/consensus-identity.js
@@ -196,9 +202,9 @@ function codeIdentity(network) {
     const gates = projectGates(rules.gates);
     const armedMapV2 = computeArmedMapFingerprintV2();
     const gatesField = knownGateKeys().join(',');
-    // The shape of the measurement, beside the number it produced. A digest taken over a
-    // list in which some gate read ABSENT is a different question answered, and nothing
-    // about the hash itself says so: 87637dfa and 26ba9cce are equally plausible on sight.
+    // A missing shared gate never reaches this line: loadGateValue throws naming
+    // the key and the tool exits 2 with no pin. Keep absent_gates as a backstop for
+    // the ABSENT peer-diff sentinel the rules module no longer emits.
     const absent = Object.keys(gates).filter(k => gates[k] === ABSENT).sort();
     return {
         network,
@@ -521,9 +527,8 @@ async function main() {
     if (opts.stateHash) identity.tip = await readStateHash(opts);
 
     // Checked before either output branch, so --json, --out and the human summary
-    // all carry the same exit code: matching the hub's --assert-no-absent, the check
-    // a restructure that moves a gate carrier out from under this build has to
-    // survive, not just the ability to print a lower resolved count.
+    // all carry the same exit code, matching the hub's --assert-no-absent. This is
+    // a backstop: a moved gate carrier already exits 2 inside codeIdentity().
     if (opts.assertNoAbsent && identity.absent_gates.length) {
         console.error(`ABSENT GATES (${identity.absent_gates.length}): the digest is over a rules set `
             + 'this build has lost:');
@@ -566,8 +571,8 @@ async function main() {
     console.log(`gates_field_hash:              ${identity.gates_field_hash}`);
     console.log(`  shared gates:                ${identity.gate_key_count - identity.absent_gates.length} resolved, `
                 + `${identity.absent_gates.length} absent`);
-    // Named, not just counted: an absent gate is a legitimate reading of a build that
-    // lacks the carrier, so the reader has to be able to tell that from a wrong one.
+    // Named for parity with the hub readout. This build never emits ABSENT: a missing
+    // carrier is an exit-2 refusal naming the key, not an absent row here.
     for (const key of identity.absent_gates) {
         console.log(`    absent:                    ${key}`);
     }
@@ -586,7 +591,8 @@ async function main() {
 
 if (require.main === module) {
     main().catch((e) => {
-        console.error(e instanceof CliUsageError ? e.message : `consensus-identity: ${e.message}`);
+        // Shared with the hub copy: exit 2 and one prefixed stderr line.
+        console.error(`consensus-identity: ${e.message}`);
         process.exitCode = 2;
     });
 }

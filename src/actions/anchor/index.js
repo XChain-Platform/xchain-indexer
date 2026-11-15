@@ -32,7 +32,7 @@
  * recovery re-verifies from the ARCHIVED snapshots, so chain-parse
  * recovery never depends on the mirror.
  *
- * Spec: xchain-documentation/protocol/actions/ANCHOR.md
+ * Spec: xchain-documentation/protocol/actions/anchor.md
  *
  * FORMATS:
  *   v0 - the per-network checkpoint BUNDLE: one header, SECTION_COUNT per-chain

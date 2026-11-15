@@ -142,13 +142,13 @@ const EXPECTED = [
     ['snapshot_sync_barrier',           null,                          'null'],          // presence, not wall clock
     // Read-scoped: deferOnHeldCapabilityRead sits after deferOnSnapshotSync in the source.
     ['capability_proof_unavailable',    null,                          'null'],          // proof verification, not wall clock
-    // Host faults, not mirror barriers: none of them has a clock instant to name, and a
-    // grace field appearing on one would be a category error rather than a drift.
+    // None has a clock instant to name, so a grace field would be a category error.
+    // Most are host faults; the two '_barrier' rows are exceptions noted inline.
     ['vm_executor_unavailable',         null,                          'null'],
     ['anchor_reward_proof_unavailable', null,                          'null'],
-    ['bridge_proof_barrier',            null,                          'null'],
+    ['bridge_proof_barrier',            null,                          'null'],          // proof wait opted out of resync
     ['rollcall_proof_unavailable',      null,                          'null'],
-    ['list_share_snapshot_barrier',     null,                          'null'],
+    ['list_share_snapshot_barrier',     null,                          'null'],          // absent mirror snapshot; resync-able
     ['list_share_halt',                 null,                          'null'],
     ['parse_exception:',                null,                          'null']          // repeated parse failure, by prefix
 ];

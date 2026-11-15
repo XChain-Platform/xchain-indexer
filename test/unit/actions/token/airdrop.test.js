@@ -289,6 +289,15 @@ describe('Airdrop @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], undefined);
             assert.ok(indexer.mapper.createMappings.calledOnce, 'the action is still mapped');
         });
+
+        it('pins the leg counts short params read per FORMAT', function () {
+            assert.strictEqual(handler.readAirdropLegs(['9', 'TEST', '1', '1'], 9).length, 0, 'unknown FORMAT reads no legs');
+            assert.strictEqual(handler.readAirdropLegs(['0'], 0).length, 1, 'FORMAT 0 reads one leg whatever the length');
+            assert.strictEqual(handler.readAirdropLegs(['2', 'TEST', '5'], 2).length, 1, 'FORMAT 2 truncated tail group is a leg');
+            assert.deepStrictEqual(handler.readAirdropLegs(['2', 'TEST', '5'], 2)[0], ['TEST', '5', undefined, null]);
+            assert.strictEqual(handler.readAirdropLegs(['3', 'TEST', '5', '1'], 3).length, 1, 'FORMAT 3 truncated tail group is a leg');
+            assert.strictEqual(handler.readAirdropLegs(['2'], 2).length, 0, 'FORMAT 2 with no group reads none');
+        });
     });
 
     // ─── Format 2 (Multi-Airdrop Full) ───────────────────────────────

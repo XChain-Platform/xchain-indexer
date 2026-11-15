@@ -332,14 +332,13 @@ module.exports.UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME = UNCAPPED_MAX_SUPPLY_ZERO_
 // Mainnet CROSS_SETTLE cap arm, exported so the suite pins the genesis value
 // established by the registry source instead of allowing it to drift.
 module.exports.CROSS_SETTLE_CAP_MAINNET_TIME = CROSS_SETTLE_CAP_MAINNET_TIME;
-// UNARMED mainnet sentinel for the per-subcommand root discriminator, exported for the same
-// reason: the suite asserts this consensus-preimage change is still waiting on the operator's
-// flag day rather than armed at a guessed instant.
+// Genesis-armed (0) mainnet value for the per-subcommand root discriminator,
+// exported so the suite can pin the operator's 2026-09-09 genesis-arm ruling.
 module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_TIME;
-// UNARMED mainnet sentinel + ARMED testnet instant for the ISSUE mint-window
-// re-parameterization fix, exported so the suite can assert mainnet is still waiting on
-// the operator's flag day and that the testnet arm is the ratified 1787961600
-// (2026-08-29T00:00:00Z) instant rather than a retroactive or drifted value.
+// Genesis-armed (0) mainnet value + ARMED testnet instant for the ISSUE
+// mint-window re-parameterization fix, exported so the suite can pin the
+// operator's 2026-09-09 mainnet ruling and the ratified 1787961600
+// (2026-08-29T00:00:00Z) testnet instant.
 module.exports.ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME;
 module.exports.ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME;
 // Genesis-active mainnet arm + ARMED testnet instant for deferred chunked-DEPLOY assembly,

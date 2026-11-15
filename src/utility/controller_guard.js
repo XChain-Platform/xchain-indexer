@@ -137,8 +137,13 @@ module.exports = {
     // Returns { error, guardFee, payoutLegs }:
     //   - error      : non-null = DENY (caller leaves status as 'invalid: '+error, writes no ledger)
     //   - guardFee   : GAS to debit from SOURCE when the action proceeds (metered guard gas)
-    //   - payoutLegs : reserved for the at-create royalty/fee split (null here)
-    // No controller, an unmapped class, or a self guard-of-guard emission → { null, 0, null }.
+    //   - payoutLegs : the allowing guard's validated royalty/fee split, [{to, bps}] from
+    //                  parseGuardPayoutLegs (actions/execute/controller_guard.js), or null when
+    //                  the guard returns none. Only the ORDER_CREATE and SWAP_CREATE handlers
+    //                  persist it (as PAYOUT_LEGS, applied at match by applyProceedsSplit);
+    //                  every other caller ignores it.
+    // No controller, an unmapped class, a self guard-of-guard emission, a deny, insufficient
+    // guard gas, a GUARD_INERT probe, or a call below the CONTROLLER_GUARD flag day → payoutLegs null.
     async maybeRunControllerGuard(actions, db, opts){
         let none = { error: null, guardFee: 0, payoutLegs: null };
         let data = opts.data;

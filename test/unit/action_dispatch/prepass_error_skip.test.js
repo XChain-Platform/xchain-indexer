@@ -40,11 +40,11 @@ const SRC_ADDR  = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef'; // valid regtest p2pkh
 const NEW_DEST  = 'n4VQ5YdHf7hLQ2gWQYYrcxoE5B7nWuDFNF'; // fresh valid regtest p2pkh (no id yet)
 
 // Build an Actions instance whose indexerDb records every createAddress call. A
-// non-null transactionConnection puts the pre-pass in its block-processing mode.
+// non-null transactionConnection puts the pre-pass in its open-transaction mode.
 function makeActions() {
     const created = [];
     const indexerDb = {
-        transactionConnection: {},          // in a block transaction
+        transactionConnection: {},          // in a block or rolled-back dry-run transaction
         blockIndex:            100,
         getAddressId:          async () => null,   // every candidate is "new"
         createAddress:         async (addr) => { created.push(addr); return created.length; }

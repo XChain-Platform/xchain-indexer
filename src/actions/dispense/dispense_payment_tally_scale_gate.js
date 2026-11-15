@@ -14,7 +14,7 @@
  *
  * Token-payment dispense tally scale.
  *
- * THE DEFECT. actions/dispense.js keeps the non-batch payment tally at 8 dp:
+ * THE DEFECT. actions/dispense/pricing.js keeps the non-batch payment tally at 8 dp:
  * `available` is bcsub(COIN_AMOUNT, consumed, 8), a fill's charge is
  * bcmul(multiplier, unitCoinCost, 8), and the pool accumulates at 8 dp. That
  * scale is right for a native-coin payment and wrong for a token-triggered

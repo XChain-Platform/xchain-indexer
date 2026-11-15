@@ -52,10 +52,10 @@ class Dispenser_Close {
         // (nothing below reads ALLOW_LIST or BLOCK_LIST, and EXPIRATION overlays
         // unconditionally; GIVE_ESCROW never overlays and stays the create-time value,
         // with refills counted by getDispenserAmountRemaining/GIVE_REMAINING instead);
-        // passed so the object matches what dispense.js and
-        // dispenser.js get, and so a future reader of the list fields here is not handed
+        // passed so the object matches what dispense/ and
+        // dispenser/ get, and so a future reader of the list fields here is not handed
         // a stale view by a NaN-as-zero compare. Every dispatch path sets BLOCK_TIME
-        // (utility.js processCancellations, both dispense.js auto-closes).
+        // (utility/block_passes.js processCancellations, both dispense/settle.js auto-closes).
         let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['DISPENSER_ACTION_INDEX'], data['BLOCK_TIME'], data['BLOCK_INDEX']);
 
         // Only proceed if we have a valid dispenser

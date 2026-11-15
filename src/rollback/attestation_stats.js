@@ -33,6 +33,7 @@ const pmsh      = require('../attestation/providerMinStakeHistory.js');
 const rgf       = require('../actions/attest/gates/rollcall_gates_filter.js');
 const { parsePinnedResponsibleSet } = require('../actions/attest/responsible_set.js');
 const statsSql  = require('../db/rollback/attestation_stats.js');
+const { getLogger } = require('../observability/index.js');
 
 module.exports = {
 
@@ -103,9 +104,17 @@ module.exports = {
     async countFulfilledSignatures(affectedProviders, providerPlaceholders, ensure){
         let okResponses = await statsSql.readOkResponses(this.indexerDb, affectedProviders, providerPlaceholders);
         for(let row of okResponses){
-            let sigs = [];
-            try { sigs = JSON.parse(row.validator_signatures) || []; }
-            catch(_) { sigs = []; }
+            let sigs;
+            try { sigs = JSON.parse(row.validator_signatures); }
+            catch(_) {
+                getLogger().error('Rollback: attest_validator_stats recompute skipped malformed validator_signatures for request ' + row.request_id + ', provider ' + row.provider_id + ', block ' + row.block_index);
+                continue;
+            }
+            if(sigs === null) sigs = [];
+            if(!Array.isArray(sigs)){
+                getLogger().error('Rollback: attest_validator_stats recompute skipped non-array validator_signatures for request ' + row.request_id + ', provider ' + row.provider_id + ', block ' + row.block_index);
+                continue;
+            }
             let provider = String(row.provider_id);
             let block    = Number(row.block_index) || 0;
             for(let sig of sigs){

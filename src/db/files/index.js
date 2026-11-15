@@ -110,11 +110,6 @@ module.exports = {
         return r[0].raw_data;
     },
 
-    // Return the set of distinct KEY_HASH values across all currently-active
-    // gated FILE v1 actions for a given token. Used by the SEND processor
-    // to determine whether a transfer requires a paired MESSAGE handoff.
-    // A pack of N files contributes one entry. Returns [] if the token has
-    // no gated content.
     // PC-29: the gated PACKS for a token, with each pack's effective threshold.
     //
     // A pack is (publisher_address, gate_ticker, key_hash): files that share one key
@@ -163,6 +158,10 @@ module.exports = {
         }));
     },
 
+    // Return distinct KEY_HASH values across currently-valid gated FILE actions.
+    // This legacy helper is not pack-scoped because it ignores publisher_address;
+    // getGatedPackThresholds performs the SEND threshold check. Returns [] when
+    // the token has no gated content.
     async getActiveGatedKeyHashes(tick){
         // Active = status maps to 'valid' (the canonical accepted status id).
         let q = `SELECT DISTINCT gf.key_hash

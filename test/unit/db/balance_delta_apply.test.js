@@ -59,6 +59,25 @@ describe('balance delta application modes @regression @tier1', function () {
         assert.strictEqual(db.getAddressTableBalances.callCount, 0);
         assert.strictEqual(upsertAmount(db), '14');
         assert.ok(db._balanceDelta.has(22));
+        const batched = balanceDb('off', {}, {
+            11: '14', 12: '8', 13: '3e-8', 14: '0', 15: 0
+        }, null);
+        await batched.updateAddressBalance(22, false);
+        assert.strictEqual(batched.doQuery.callCount, 2);
+        assert.match(batched.doQuery.firstCall.args[0], /VALUES \(\?, \?, \?\),\(\?, \?, \?\),\(\?, \?, \?\)/);
+        assert.deepStrictEqual(batched.doQuery.firstCall.args[1], [
+            '11', 22, '14', '12', 22, '8', '13', 22, '0.00000003'
+        ]);
+        assert.match(batched.doQuery.secondCall.args[0], /tick_id IN \(\?,\?\)/);
+        assert.deepStrictEqual(batched.doQuery.secondCall.args[1], [22, '14', '15']);
+        let summed = {};
+        for(let i=0; i<501; i++)
+            summed[1000 + i] = String(i + 1);
+        const chunked = balanceDb('off', {}, summed, null);
+        await chunked.updateAddressBalance(22, false);
+        assert.strictEqual(chunked.doQuery.callCount, 2);
+        assert.strictEqual(chunked.doQuery.firstCall.args[1].length, 1500);
+        assert.deepStrictEqual(chunked.doQuery.secondCall.args[1], ['1500', 22, '501']);
     });
 
     it('on applies the pending delta without reading ledger history', async function () {

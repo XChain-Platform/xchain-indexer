@@ -104,6 +104,16 @@ describe('bulk decoder protocol-time read', function () {
         assert.strictEqual((calls[0].sql.match(/UNION ALL/g) || []).length, 1);
         assert.strictEqual((calls[0].sql.match(/LIMIT 12/g) || []).length, 2);
         assert.deepStrictEqual(calls[0].params, [20, 20, 20, 30, 30, 30]);
+
+        self.doQueryStrict = async () => {
+            throw Object.assign(new Error('older schema'), { errno: 1146 });
+        };
+        assert.deepStrictEqual(await timeWindowsMixin.getStoredBlockTimeWindows.call(self, [20], 11), []);
+        self.doQueryStrict = async () => {
+            throw Object.assign(new Error('deadlock'), { errno: 1213 });
+        };
+        await assert.rejects(
+            () => timeWindowsMixin.getStoredBlockTimeWindows.call(self, [20], 11), /deadlock/);
     });
 
     it('computes each testnet median from the bulk rows in memory', async function () {

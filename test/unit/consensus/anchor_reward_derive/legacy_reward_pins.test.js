@@ -14,7 +14,7 @@
 
 const assert = require('assert');
 const path = require('path');
-const { loadLegacyRewardPins, isLegacyRewardPinned, loadDefaultPins } =
+const { buildDefaultPins, loadLegacyRewardPins, isLegacyRewardPinned, loadDefaultPins } =
     require('../../../../src/consensus/anchor_reward_derive/legacy_reward_pins.js');
 
 const FIXTURE = [
@@ -71,6 +71,14 @@ describe('legacy_reward_pins', function(){
     });
 
     it('treats a missing default file as no pins', function(){
-        assert.deepStrictEqual(loadDefaultPins(path.join(__dirname, 'no_such_pins.json')), []);
+        assert.throws(
+            () => loadDefaultPins(path.join(__dirname, 'no_such_pins.json')),
+            (error) => error && error.code === 'ENOENT');
+    });
+
+    it('loads and validates the non-empty default pin set once', function(){
+        const pins = buildDefaultPins();
+        assert.strictEqual(pins.size, 3);
+        assert.strictEqual(loadLegacyRewardPins(undefined).size, 3);
     });
 });

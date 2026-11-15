@@ -220,7 +220,7 @@ module.exports = {
                     edit.expiration  = exactU64(row.expiration);
                 // Determine if the list edits are active or not
                 let delayStart = await dispenserDelayStart(this, row, useProtocolTime);
-                let active = delayStart !== false && this.util.bcgt(block_time, this.util.bcadd(delayStart, this.config['DISPENSER_LIST_DELAY']));
+                let active = delayStart !== false && this.util.bcgt(block_time, this.util.bcadd(delayStart, this.config['DISPENSER_LIST_DELAY'], 0));
                 if(active){
                     if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list))   
                         edit.allow_list  = exactU64(row.allow_list);
@@ -254,7 +254,7 @@ module.exports = {
     // A refill resets the dispense count (Counterparty parity), so only dispenses
     // recorded after the last refill's action_index count toward MAX_DISPENSES; no
     // refill -> all valid dispenses (since 0). The just-settled dispense is already
-    // persisted when dispense.js calls this, so the returned count includes it.
+    // persisted when dispense/settle.js calls this, so the returned count includes it.
     async getDispenserDispenseCount(action_index){
         let refillQ = `SELECT MAX(e.action_index) AS r
                        FROM dispenser_edits e
@@ -308,7 +308,7 @@ module.exports = {
                 if(!delayByBlock.has(blockKey))
                     delayByBlock.set(blockKey, await dispenserDelayStart(this, row, useProtocolTime));
                 let delayStart = delayByBlock.get(blockKey);
-                if(delayStart !== false && this.util.bcgt(block_time, this.util.bcadd(delayStart, this.config['DISPENSER_CLOSE_DELAY'])))
+                if(delayStart !== false && this.util.bcgt(block_time, this.util.bcadd(delayStart, this.config['DISPENSER_CLOSE_DELAY'], 0)))
                     cancels.push(Number(row.action_index));
             }
         }

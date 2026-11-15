@@ -32,7 +32,8 @@ const AddressRetry = require('./hub_push_queue/address_retry.js');
  * transaction that writes the `prices` row, and the row is dropped only once the
  * hub has accepted it. Delivery is attempted live post-commit; a row that was not
  * delivered live (push failure, hub outage, or a crash in that window) survives
- * for this poller. It drains that table on a fixed interval,
+ * for this poller. It drains one batch per pass and continues quickly while
+ * full batches are delivered,
  * re-sending each row with exponential backoff until the hub accepts it (the
  * hub's pushpriceround / pushoracleprice / pushpricebatch / pushattestbatch
  * handlers dedupe, so a replay the hub already has returns cleanly). A
@@ -70,6 +71,9 @@ class HubPushQueue {
 
         // How often the poller wakes to drain due rows.
         this.intervalMs    = opts.intervalMs    || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_INTERVAL_MS) || 30000;
+        // A full successful batch gets a short event-loop gap before the next batch.
+        // Setting this equal to intervalMs restores the old fixed cadence.
+        this.continueDelayMs = opts.continueDelayMs || parseInt(CONFIG_ENV.HUB_PUSH_DRAIN_CONTINUE_MS) || 250;
         // Backoff schedule: wait grows as base * 2^(attempts-1), capped at max.
         this.baseBackoffMs = opts.baseBackoffMs || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_BASE_MS)     || 30000;
         this.maxBackoffMs  = opts.maxBackoffMs  || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_MAX_MS)      || 600000;  // 10 min cap
@@ -90,6 +94,8 @@ class HubPushQueue {
         this._lastPruneMs = 0;
 
         this.timer    = null;
+        this._running = false;
+        this._generation = 0;
         this.draining = false;
         // Wall clock before which no drain runs, set when the hub answers 429.
         // A throttled push is the ONE failure the hub never judged: it did not see the
@@ -122,22 +128,36 @@ class HubPushQueue {
     }
     resume(){ this.paused = false; }
 
-    // Begin draining on an interval. No-op when no hub is configured; in that
+    // Begin draining on a self-rescheduling timer. No-op when no hub is configured; in that
     // case the PRICE handlers never enqueue, so there is nothing to drain.
     start(){
-        if(this.timer) return;
+        if(this._running) return;
         if(!this.hubClient || !this.hubClient.enabled){
             getLogger().info('HubPushQueue: no hub configured, retry queue idle');
             return;
         }
-        this.timer = setInterval(() => this.drainAndLog(), this.intervalMs);
+        this._running = true;
+        this._generation++;
+        this._scheduleDrain(this.intervalMs, this._generation);
+        getLogger().info('HubPushQueue: started (interval ' + this.intervalMs + 'ms, continuation ' +
+            this.continueDelayMs + 'ms, max ' + this.maxAttempts + ' attempts)');
+    }
+
+    // Each start() owns one generation. A drain still settling after stop() and a later
+    // start() belongs to the older generation and must not re-arm beside the new chain.
+    _scheduleDrain(delayMs, generation){
+        this.timer = setTimeout(async () => {
+            const result = await this.drainAndLog().catch(() => undefined);
+            if(!this._running || generation !== this._generation) return;
+            this._scheduleDrain(result && result.more ? this.continueDelayMs : this.intervalMs, generation);
+        }, delayMs);
         // Never keep the process alive on the timer alone.
         if(this.timer.unref) this.timer.unref();
-        getLogger().info('HubPushQueue: started (interval ' + this.intervalMs + 'ms, max ' + this.maxAttempts + ' attempts)');
     }
 
     stop(){
-        if(this.timer){ clearInterval(this.timer); this.timer = null; }
+        this._running = false;
+        if(this.timer){ clearTimeout(this.timer); this.timer = null; }
     }
 
     // One timer tick. The cause goes into the message string itself: the logger's second
@@ -189,14 +209,20 @@ class HubPushQueue {
             });
             if(!rows || rows.length === 0) return;
             let now = Date.now();
+            let allDelivered = rows.length === this.batchSize;
             for(let row of rows){
-                if(!await this.hubPushDeliveries.isDueAfterMove(row, rows, now)) continue;
-                await this.attempt(row);
+                if(!await this.hubPushDeliveries.isDueAfterMove(row, rows, now)){
+                    allDelivered = false;
+                    continue;
+                }
+                if(!await this.attempt(row)) allDelivered = false;
                 // A 429 stops the batch where it stands. The remaining rows are still
                 // pending and still due, so the next tick past the hold picks them up
                 // unchanged; pushing them now would only deepen the throttle.
                 if(this._throttledUntilMs && Date.now() < this._throttledUntilMs) break;
             }
+            if(allDelivered && !(this._throttledUntilMs && Date.now() < this._throttledUntilMs))
+                return { more: true };
         } finally {
             this.draining = false;
             this._drainDone = null;
@@ -410,17 +436,19 @@ class HubPushQueue {
         if(candidates.length > 0) return await this.hubPushDeliveries.attempt(row, candidates);
 
         let parsed = await this.parseHubPushPayload(row);
-        if(parsed === null) return;
+        if(parsed === null) return false;
 
         let attemptNo = (Number(row.attempts) || 0) + 1;
         try {
             let delivered = await this.deliverHubPush(row, parsed.payload);
-            if(!delivered) return;
+            if(!delivered) return false;
             // Success (or a hub-side dedupe of a row it already has); drop it.
             await this.indexerDb.markHubPushDelivered(row.id);
             getLogger().info('HubPushQueue: delivered ' + row.push_type + ' row ' + row.id + ' (attempt ' + attemptNo + ')');
+            return true;
         } catch (err){
             await this.recordHubPushFailure(row, err, attemptNo);
+            return false;
         }
     }
 }

@@ -220,7 +220,7 @@ module.exports = {
         // nearby double, corrupting a value that then flows into consensus math.
         // Mirror the encoder's parseSatoshiAmount fail-fast: throw loudly rather
         // than return a lossy integer (covers the rawTokens/rawMultiplier unit
-        // math at :1964/:1991, and dispense.js's GIVE_REMAINING clamp, which is
+        // math at :1964/:1991, and dispense/pricing.js's GIVE_REMAINING clamp, which is
         // reached only when capacity is already below an in-range multiplier).
         // Every dispenser FILL count uses bcfloorSaturating instead: those ratios
         // are attacker-reachable, and a throw on the block-processing path wedges
@@ -249,7 +249,7 @@ module.exports = {
     // be issued with up to MAX_TOKEN_DECIMALS (18), and the token-SEND trigger
     // channel puts an attacker-chosen SEND amount in COIN_AMOUNT
     // (processDispenserSends), so a 1e-18 price against a ~0.01 SEND clears 2^53-1
-    // for two cheap transactions. dispense.js's non-FIAT branch saturates for that
+    // for two cheap transactions. dispense/pricing_paths.js's non-FIAT branch saturates for that
     // reason.
     //
     // Throwing there is worse than saturating. A throw on the block-processing

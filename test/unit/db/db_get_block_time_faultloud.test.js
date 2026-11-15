@@ -23,7 +23,7 @@
  * the fail-loud catch at protocol_changes.js:583 never firing because nothing threw.
  *
  * The fix routes the read through doQueryStrict and rethrows infrastructure faults
- * (rethrowIfInfraFault: any errno other than the benign missing-table/column 1146/1054),
+ * (rethrowIfInfraFault: every numeric errno, including missing schema),
  * while preserving the `false` sentinel for a genuinely-missing block and NEVER memoizing a
  * failed lookup. These tests pin all four behaviours.
  */
@@ -95,8 +95,8 @@ describe('getBlockTime() fail-loud fault handling (#898)', function () {
         stub.onFirstCall().rejects(faultWith(1146));
         stub.onSecondCall().resolves([{ block_time: 1700000100 }]);
 
-        assert.strictEqual(await db.getRawBlockTime(500), false);
-        // Not cached: the retry re-queries rather than serving the false sentinel.
+        await assert.rejects(() => db.getRawBlockTime(500), /injected db fault/);
+        // Not cached: a repaired schema is re-read on retry.
         assert.strictEqual(await db.getRawBlockTime(500), 1700000100);
         assert.strictEqual(stub.callCount, 2);
     });

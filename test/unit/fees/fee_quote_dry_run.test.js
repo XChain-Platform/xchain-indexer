@@ -75,6 +75,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         assert.deepStrictEqual(calls.order, ['begin', 'process', 'getFeeRecord:55', 'rollback'],
             'fee row read after the handler, before rollback');
         assert.strictEqual(calls.processed.data, 'ISSUE|0|NEWTOK|1000', 'action string reassembled');
+        assert.strictEqual(calls.processed.fee, 0, 'synthetic fee matches the decoder input');
         assert.ok(String(calls.processed.tx_hash).startsWith('DRYRUN-'), 'tx_hash marked DRYRUN');
         assert.strictEqual(calls.processed.block_index, 100, 'synthetic tx anchored at tip');
         // Height-gated db reads see the synthetic height, and the boot-time null comes back
@@ -207,6 +208,17 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         assert.match(r.error, /handler threw: fee read exploded/);
         assert.strictEqual(r.xchainFee, null, 'an incomplete read-back cannot claim the action is free');
         assert.strictEqual(calls.rollback, 1, 'the failed read-back still releases the transaction');
+
+        ctx.priceFeeQuote = async () => { throw new Error('an incomplete run must not be priced'); };
+        const raw = await ctx.computeFeeQuoteDryRun.call(ctx, {
+            action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'src1'
+        });
+        assert.strictEqual(raw.valid, null, 'the raw surface must not turn the partial status into true');
+        assert.strictEqual(raw.noVerdict, true);
+        assert.strictEqual(raw.retryable, true);
+        assert.strictEqual(raw.status, null);
+        assert.match(raw.error, /fee read exploded/);
+        assert.strictEqual(raw.xchainFee, null);
     });
 });
 
@@ -316,7 +328,9 @@ describe('computeFeeQuoteDryRun (raw regtest surface)', () => {
         let { ctx, calls } = makeCtx({ processHangs: true, prices: BTC_PRICES });
         ctx.config['BLOCK_PROCESS_TIMEOUT'] = 50;   // tiny so the watchdog fires fast
         let r = await ctx.computeFeeQuoteDryRun.call(ctx, { action: 'ISSUE', params: ['0', 'X'], source: 'src1' });
-        assert.strictEqual(r.valid, false);
+        assert.strictEqual(r.valid, null, 'a timed-out run produced no chain verdict');
+        assert.strictEqual(r.noVerdict, true);
+        assert.strictEqual(r.retryable, true);
         assert.ok(/timeout|exceeded/i.test(r.error), r.error);
         assert.strictEqual(calls.rollback, 1);
     });

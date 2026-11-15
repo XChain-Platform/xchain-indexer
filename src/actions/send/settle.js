@@ -26,9 +26,9 @@ const { getLogger } = require('../../observability/index.js');
 // 'valid' for a multi-send whose earlier legs the chain refuses (or 'invalid' for one whose
 // earlier legs settle). FEE_PROBE is true only on the synthetic transaction the public quote
 // surfaces build (actions_class/transaction.js copies it off tx.fee_probe), so this key never
-// exists on a decoded transaction and no consensus value moves. Inside a BATCH the
-// per-sub-command key clear drops it, and the batch answers per sub-command instead (see
-// readDryRunVerdict in actions_class/dry_run_support.js).
+// exists on a decoded transaction and no consensus value moves. Inside a BATCH,
+// batch/probe.js folds the legs into the sub-command verdict before the key clear drops them;
+// standalone and BATCH paths share send/leg_verdicts.js.
 function recordProbeLegVerdict(data, send, status){
     if(data['FEE_PROBE'] !== true) return;
     if(!Array.isArray(data['PROBE_LEG_VERDICTS'])) data['PROBE_LEG_VERDICTS'] = [];
@@ -112,7 +112,7 @@ module.exports = {
         // controller guardFee is burned as a GAS debit with no offsetting credit (above);
         // tokens.supply (GAS) must be recomputed from the ledger or the per-block sanityCheck
         // (ledger == supply == balances) trips and halts the indexer. Mirrors the other
-        // guarded handlers (order.js/swap.js/dispenser.js) and execute.js.
+        // guarded handlers (order.js/swap.js/dispenser/settle.js) and execute.js.
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 
