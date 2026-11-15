@@ -9959,6 +9959,11 @@
       "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 below the gate a base pair resolves its snapshot block from the request row",
       "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 registers a row unarmed on mainnet, armed on testnet, and genesis-active on regtest"
     ],
+    "7afd8ea98fb973cf": [
+      "protocol_changes FILE_MULTIPART row @regression @tier1 is dark on mainnet, activates at the testnet instant, and is active at regtest genesis",
+      "protocol_changes FILE_MULTIPART row @regression @tier1 is the final part 5 row with the specified activation table",
+      "protocol_changes FILE_MULTIPART row @regression @tier1 publishes both multipart caps through registry copies"
+    ],
     "7b26338ac8262f8c": [
       "anchor archive fold-term gate BTC reward derivation does not terminate the bundle family",
       "anchor archive fold-term gate BTC reward derivation keeps a pre-fold archive reward eligible when only the term is active",
@@ -20547,8 +20552,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1632,
-      "titleCount": 15899,
+      "fileCount": 1633,
+      "titleCount": 15902,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21954,6 +21959,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
@@ -22562,8 +22568,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1248,
-      "titleCount": 12600,
+      "fileCount": 1249,
+      "titleCount": 12603,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23644,6 +23650,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
@@ -23816,8 +23823,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 652,
-      "titleCount": 6890,
+      "fileCount": 653,
+      "titleCount": 6893,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24376,6 +24383,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
@@ -24474,8 +24482,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1248,
-      "titleCount": 12600,
+      "fileCount": 1249,
+      "titleCount": 12603,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25556,6 +25564,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",

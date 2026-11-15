@@ -63,6 +63,7 @@ const {
     STRING_RECEIVER_METER_TESTNET_TIME,
     TOSTRING_SIZE_METER_MAINNET_TIME,
     TOSTRING_SIZE_METER_TESTNET_TIME,
+    FILE_MULTIPART_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -228,6 +229,8 @@ const CHANGES = [
     // of tokens created through a caret TICK; armed on testnet at the instant in its row
     // (2026-10-22T13:00Z, the v0.26.2 cut); active from genesis on regtest.
     ['ISSUE_CARET_TICK_NO_CREATE', '0.2.0', UNARMED, 1792674000, 0, 0, 0, 0],
+    ['FILE_MULTIPART', '0.2.0', UNARMED, FILE_MULTIPART_TESTNET_TIME,
+        regtestTimeOverride('FILE_MULTIPART_REGTEST_TIME'), 0, 0, 0],
 ];
 
 module.exports = CHANGES;
