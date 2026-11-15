@@ -129,7 +129,7 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
 // xchain_bridge_activation
 // XCHAIN_BRIDGE_ACTIVATION: the height on the chain being parsed at/above which XBRIDGE is
 // legal. Below it a broadcast v0 or v1 is 'invalid: XBRIDGE before activation' (the
-// per-feature shape the ANCHOR handler uses; the central 'invalid: ACTION is not yet activated' only
+// per-feature shape anchor.js uses; the central 'invalid: ACTION is not yet activated' only
 // fires on software that predates the action) and no v2 is ever injected, so pre-activation
 // block hashes are unchanged on every chain.
 //

@@ -41,13 +41,13 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 // landed in. It has always keyed that scope on `c.block_index`, and that column
 // is NEVER populated on a v2 row: `block_index` carries BLOCK_INDEX_CHECKPOINTED
 // (the checkpointed height on the OTHER chain, see anchor_actions.sql), which is
-// assigned only in actions/anchor/index.js `parseCheckpoint`; `parseContinuation` never sets
+// assigned only in anchor.js `_parseCheckpoint`; `_parseContinuation` never sets
 // it, and db.js binds the column NULL when the key is absent. `NULL BETWEEN x AND
 // y` is never true, so the class has selected ZERO rows on every node since it
 // landed, on every network. The completing chunk's real height is
 // `block_index_doge` (the DOGE block the ANCHOR action landed in, NOT NULL by
 // schema), the same height the class is being scoped to, and the same distinction
-// actions/anchor/index.js `archiveAuthorScope` already draws.
+// anchor.js `_archiveAuthorScope` already draws.
 //
 // Repairing the key CHANGES THE PREIMAGE the moment a stamped batch exists: a
 // node on the repaired predicate hashes the parent row, a node on the broken one
