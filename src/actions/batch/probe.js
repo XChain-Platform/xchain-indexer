@@ -24,6 +24,9 @@
 
 const { foldLegVerdicts } = require('../send/leg_verdicts.js');
 
+const DISPENSE_UNJUDGED_NOTE =
+    'payment-triggered DISPENSE is not judged on the public pre-flight (the pre-flight transaction pays no dispenser address)';
+
 // Seed the probe-local collectors on `data`; returns whether this run is the probe.
 function seedProbeCollectors(data){
     // Public BATCH pre-flight collectors (spec row 46). data['FEE_PROBE'] is set ONLY
@@ -36,9 +39,9 @@ function seedProbeCollectors(data){
     //
     //   PROBE_SUB_VERDICTS - each dispatched sub-command's own verdict, in list order.
     //                        A row is {status, refused, legs?}: a status the probe really got,
-    //                        or status null plus a `refused` note for the two things the
-    //                        probe declines to answer (a VM sub-action it never
-    //                        dispatches, and a controller guard it never enters).
+    //                        or status null plus a `refused` note when the probe declines
+    //                        to dispatch a VM action, enter a controller guard, or judge a
+    //                        payment-triggered DISPENSE without a destination.
     //   PROBE_ORACLE_FEES  - per-oracle fees owed, filled in by chargeOracleUsageFee
     //                        (dispenser/validate_format.js).
     //
@@ -73,11 +76,14 @@ function recordSubVerdict(data, action, batchPosition, matchSnapshot){
     // refusal in batch/index.js's dispatch loop (status null + a `refused` note), so it takes the same road,
     // and the note names the controller so the composer knows what to do next.
     let inert = this.util.isGuardInertError(subStatus);
+    let dispenseUnjudged = subStatus === null && action === 'DISPENSE' &&
+                            data['COIN_DESTINATION'] == null;
     let row = {
         position: batchPosition,
         action:   action,
         status:   inert ? null : subStatus,
-        refused:  inert ? this.util.describeGuardInert(subStatus) : null
+        refused:  inert ? this.util.describeGuardInert(subStatus)
+                        : (dispenseUnjudged ? DISPENSE_UNJUDGED_NOTE : null)
     };
     if(folded) row.legs = folded.legs;
     data['PROBE_SUB_VERDICTS'].push(row);

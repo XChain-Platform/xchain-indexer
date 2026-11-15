@@ -34,7 +34,7 @@ function normalizeQuoteRequest(aliases, action, params){
             action = aliases[alias];
     }
     if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
-    params = params.map(v => String(v).trim());
+    params = params.map(v => (v == null ? '' : String(v)).trim());
     return { action, params };
 }
 
@@ -44,7 +44,7 @@ function normalizeQuoteRequest(aliases, action, params){
 // params dispatch has already trimmed, uppercased and de-aliased.
 function batchRequestWire(action, rawAction, rawParams){
     if(action !== 'BATCH') return null;
-    let tail = Array.isArray(rawParams) ? rawParams.map(String).join('|')
+    let tail = Array.isArray(rawParams) ? rawParams.map(v => v == null ? '' : String(v)).join('|')
                                         : String(rawParams == null ? '' : rawParams);
     return String(rawAction == null ? '' : rawAction) + '|' + tail;
 }

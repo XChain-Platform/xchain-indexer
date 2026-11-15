@@ -30,7 +30,7 @@ module.exports = {
     // Reset an anchor archive batch's parent (a v1 head, or a v3 fold archive row) status that an
     // orphaned final chunk flipped to 'invalid_archive' IN PLACE on a surviving row. A
     // chunked archive batch spans multiple blocks: a head in an early block, then v2
-    // continuation chunks in later blocks. When the LAST v2 chunk lands, anchor.js
+    // continuation chunks in later blocks. When the LAST v2 chunk lands, actions/anchor/reassembly.js
     // reassembles the blob and, on a CRC mismatch against the parent's signed
     // batch_crc32, stamps the parent 'invalid_archive' via a direct UPDATE on the
     // parent row (created in an EARLIER block, so it survives the bulk delete below).
@@ -43,7 +43,7 @@ module.exports = {
     // which read the ARCHIVE_HEAD_VERSIONS set at status 'valid'/'unverified'), not a
     // consensus fork.
     //
-    // Reset to 'unverified', the conservative re-verification state (anchor.js stores
+    // Reset to 'unverified', the conservative re-verification state (actions/anchor/quorum.js stores
     // a v1 'unverified' whenever its signer snapshot isn't locally mirrored, and
     // recovery re-verifies such rows from the archived snapshots), so a parent that was
     // 'valid' before the flip is re-promoted by recovery rather than left wrongly

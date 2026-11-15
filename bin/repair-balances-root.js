@@ -40,15 +40,15 @@
  *
  * SAFETY. Dry run by default. Refuses mainnet outright unless --allow-mainnet is
  * passed as well as --apply, because on mainnet this rewrites a value validators
- * have signed over and that is an operator decision, not a script's. Refuses if
- * the chain moves underneath it (the tip is re-read after the rebuild and must
- * match), and refuses when there is nothing to repair.
+ * have signed over and that is an operator decision, not a script's. Apply only
+ * with the indexer process stopped. The tool refuses a non-tip --block,
+ * rechecks that tip in the write transaction, and refuses no-op work.
  *
  * Credentials come from the service environment exactly as the benches read
  * them: never from the command line, never printed.
  *
  *   node bin/repair-balances-root.js --db <name> --chain BTC --network regtest
- *   node bin/repair-balances-root.js --db <name> --chain BTC --network regtest --apply
+ *   node bin/repair-balances-root.js --db <name> --chain BTC --network regtest --apply --indexer-stopped
  *
  ********************************************************************/
 
@@ -62,15 +62,16 @@ const SC  = require(path.join(SRC, 'state_commitment', 'index.js'));
 const SUB = require(path.join(SRC, 'consensus', 'gates', 'state_subtree_gate.js'));
 
 function parseArgs(){
-    const a = process.argv.slice(2), o = { apply: false, allowMainnet: false, block: null };
+    const a = process.argv.slice(2), o = { apply: false, allowMainnet: false, indexerStopped: false, block: null };
     for(let i = 0; i < a.length; i++){
         switch(a[i]){
             case '--db':            o.db = a[++i]; break;
             case '--chain':         o.chain = a[++i]; break;
             case '--network':       o.network = a[++i]; break;
-            case '--block':         o.block = Number(a[++i]); break;
+            case '--block':         o.block = parseBlock(a[++i]); break;
             case '--apply':         o.apply = true; break;
             case '--allow-mainnet': o.allowMainnet = true; break;
+            case '--indexer-stopped': o.indexerStopped = true; break;
             case '--help': case '-h':
                 console.log(require('fs').readFileSync(__filename, 'utf8').split('*/')[0]);
                 process.exit(0);
@@ -81,13 +82,13 @@ function parseArgs(){
     if(!o.chain || !o.network){ console.error('--chain and --network are required'); process.exit(64); }
     return o;
 }
-
 (async () => {
     const opts = parseArgs();
-
+    if(opts.apply && !opts.indexerStopped){ console.error('refusing: stop the indexer process, then re-run --apply with --indexer-stopped'); process.exit(3); }
     const Database = require(path.join(SRC, 'db'));
     const config   = require(path.join(SRC, 'config.js'));
     const Utility  = require(path.join(SRC, 'utility.js'));
+    const Target   = require('../src/state_commitment/repair_balances_target.js');
     const cfg  = config.getConfig(opts.chain, opts.network);
     const util = new Utility(cfg);
     const db   = new Database(process.env.INDEXER_DB_HOST, process.env.INDEXER_DB_PORT,
@@ -101,19 +102,32 @@ function parseArgs(){
         process.exit(3);
     }
 
-    async function tipRow(){
+    async function tipRow(forUpdate){
         const rows = await db.doQueryStrict(
             'SELECT block_index, balances_root, stakes_root, state_root, block_merkle_root, contract_state_root ' +
-            'FROM state_tree_roots WHERE chain=? AND network=? ' +
-            (opts.block == null ? 'ORDER BY block_index DESC LIMIT 1' : 'AND block_index=? LIMIT 1'),
-            opts.block == null ? [opts.chain, opts.network] : [opts.chain, opts.network, opts.block]);
+            'FROM state_tree_roots WHERE chain=? AND network=? ORDER BY block_index DESC LIMIT 1' +
+            (forUpdate ? ' FOR UPDATE' : ''),
+            [opts.chain, opts.network]);
+        return rows.length ? rows[0] : null;
+    }
+
+    async function rowAt(height){
+        const rows = await db.doQueryStrict(
+            'SELECT block_index, balances_root, state_root FROM state_tree_roots ' +
+            'WHERE chain=? AND network=? AND block_index=? LIMIT 1',
+            [opts.chain, opts.network, height]);
         return rows.length ? rows[0] : null;
     }
 
     const before = await tipRow();
     if(!before){
         console.error('no state_tree_roots row for ' + opts.chain + '/' + opts.network +
-                      (opts.block == null ? ' (state commitment never armed here?)' : ' at block ' + opts.block));
+                      ' (state commitment never armed here?)');
+        process.exit(2);
+    }
+    const targetError = Target.requestedTipError(opts.block, before.block_index);
+    if(targetError){
+        console.error('refusing: ' + targetError);
         process.exit(2);
     }
     const height = Number(before.block_index);
@@ -163,33 +177,38 @@ function parseArgs(){
         console.log('# DRY RUN: nothing was written to state_tree_roots.');
         console.log('# (SMT nodes for the rebuilt tree WERE persisted; that is additive and');
         console.log('#  copy-on-write, and it is what makes the repaired root provable.)');
-        console.log('# Re-run with --apply to update block ' + height + '.');
+        console.log('# Stop the indexer, then re-run with --apply --indexer-stopped to update block ' + height + '.');
         if(db.close) await db.close();
         process.exit(0);
     }
 
-    // The chain must not have moved: a repaired root written to a height that is
-    // no longer the tip would be threaded from by a block that already threaded
-    // from the old value, which forks this node against itself.
-    const after = await tipRow();
-    if(!after || Number(after.block_index) !== height || after.balances_root !== before.balances_root){
-        console.error('refusing: the chain moved under the rebuild (tip was ' + height +
-                      ', now ' + (after && after.block_index) + '). Re-run on a quiet chain.');
-        process.exit(5);
-    }
-
     await db.beginTransaction();
     try {
-        await db.doQueryStrict(
-            'UPDATE state_tree_roots SET balances_root=?, state_root=? WHERE chain=? AND network=? AND block_index=?',
-            [rebuilt, stateRoot, opts.chain, opts.network, height]);
+        // With block processing stopped, lock and recheck the real tip before
+        // the conditional write to catch any other concurrent database change.
+        const after = await tipRow(true);
+        if(!Target.tipUnchanged(before, after)){
+            await db.rollbackTransaction();
+            console.error('refusing: the chain moved under the rebuild (tip was ' + height +
+                          ', now ' + (after && after.block_index) + '). Re-run on a quiet chain.');
+            process.exit(5);
+        }
+        const update = await db.doQueryStrict(
+            'UPDATE state_tree_roots SET balances_root=?, state_root=? ' +
+            'WHERE chain=? AND network=? AND block_index=? AND balances_root=?',
+            [rebuilt, stateRoot, opts.chain, opts.network, height, before.balances_root]);
+        if(!update || Number(update.affectedRows) !== 1){
+            await db.rollbackTransaction();
+            console.error('refusing: the repair target changed before the conditional update');
+            process.exit(5);
+        }
         await db.commitTransaction();
     } catch(e){
         await db.rollbackTransaction();
         throw e;
     }
 
-    const verify = await tipRow();
+    const verify = await rowAt(height);
     const ok = verify && verify.balances_root === rebuilt && verify.state_root === stateRoot;
     console.log('#');
     console.log('# APPLIED at block ' + height + ': ' + (ok ? 'verified' : 'VERIFY FAILED'));
@@ -198,3 +217,12 @@ function parseArgs(){
     if(db.close) await db.close();
     process.exit(ok ? 0 : 6);
 })().catch(e => { console.error(e); process.exit(1); });
+
+function parseBlock(raw){
+    const block = Number(raw);
+    if(raw == null || !Number.isSafeInteger(block) || block < 0){
+        console.error('--block needs a non-negative integer');
+        process.exit(64);
+    }
+    return block;
+}

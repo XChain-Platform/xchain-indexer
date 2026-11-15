@@ -44,7 +44,7 @@ module.exports = {
         if(firstActionIndex !== null){
             // Intern 'unverified' FIRST (IDX-1). The UPDATE below resolves its target id via
             // `JOIN index_statuses us ON us.status = 'unverified'`, but a normally hub-connected
-            // node never writes 'unverified' forward (anchor.js only stores it when no
+            // node never writes 'unverified' forward (actions/anchor/quorum.js only stores it when no
             // oracle_publish snapshot is mirrored), so that row is usually absent and the JOIN
             // matches nothing, silently no-oping the reset and leaving the parent wedged at
             // 'invalid_archive'. createStatus interns it (INSERT IGNORE) so the JOIN is

@@ -34,9 +34,9 @@
 
 const crypto = require('crypto');
 
-// Vendored single source of truth: ../protocol/constants.js
+// Registry-backed values from ../../protocol/constants.js
 // (MAX_DEPLOY_CHUNKS / MAX_DEPLOYCHUNK_PART_BYTES); kept in lockstep with the SDK
-// validator + splitter by the cross-service regression suite.
+// validator and splitter by the cross-service regression suite.
 const PROTO = require('../../protocol/constants.js');
 const MAX_DEPLOY_CHUNKS         = PROTO.MAX_DEPLOY_CHUNKS;
 const MAX_DEPLOYCHUNK_PART_BYTES = PROTO.MAX_DEPLOYCHUNK_PART_BYTES;

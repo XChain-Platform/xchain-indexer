@@ -59,7 +59,7 @@
  * (src/protocol_changes/shared_rows_4.js), both read in ./validate.js and keyed on the
  * block_index of the chain being parsed.
  * Below the gate a broadcast is 'invalid: XBRIDGE before activation' (the per-feature
- * shape anchor.js uses) and no settle leg is ever injected, so pre-activation block hashes
+ * shape the ANCHOR handler uses) and no settle leg is ever injected, so pre-activation block hashes
  * are unchanged on every chain.
  *
  * Two closures do NOT gate on either activation and hold on every non-BTC chain from the
@@ -108,7 +108,7 @@ class XBridge {
 
     /**
      * The default handler entry. actions/index.js dispatches every parsed XBRIDGE here, exactly
-     * as it dispatches SEND to send.js and ANCHOR to anchor.js:
+     * as it dispatches SEND to send.js and ANCHOR to src/actions/anchor/:
      *
      *     if(action=='XBRIDGE')  await this.actionXbridge.parse(params, data, error);
      *

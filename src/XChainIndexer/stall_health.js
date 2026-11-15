@@ -61,8 +61,9 @@ function resolveProofWaitGraceMs(graceMs, barrierHoldCeilingMs){
     return Math.max(2 * ceilingMs, graceMs);
 }
 
-// A stall wedges only after its reason-specific grace, measured from the later
-// of the last commit and hold start. Future-clearable and non-restartable waits do not.
+// A stall wedges only after its reason-specific grace, measured from the latest
+// progress boundary: the last commit, hold start, or future-wait clear instant.
+// Future-clearable and non-restartable waits do not wedge.
 function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null, proofWaitGraceMs = null){
     if(!stallReason) return false;
     if(stallReason === BRIDGE_PROOF_BARRIER) return false;
@@ -71,6 +72,7 @@ function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClear
     if(lastBlockCommittedAt == null) return false;
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
     let windowStart = Number.isFinite(barrierHoldSinceMs) ? Math.max(lastBlockCommittedAt, barrierHoldSinceMs) : lastBlockCommittedAt;
+    if(Number.isFinite(stallClearsAtMs)) windowStart = Math.max(windowStart, stallClearsAtMs);
     return (now - windowStart) > graceFor(stallReason, graceMs, priceLandingGraceMs, proofWaitGraceMs);
 }
 

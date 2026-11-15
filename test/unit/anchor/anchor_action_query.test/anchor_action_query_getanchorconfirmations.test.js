@@ -211,6 +211,15 @@ describe('anchor-action-query: getanchorconfirmations', function () {
                 validateAnchorConfirmationsParams({ txid: 'a'.repeat(64), after_action_index: 0 }).after, 0);
             assert.strictEqual(
                 validateAnchorConfirmationsParams({ txid: 'a'.repeat(64), after_action_index: 41 }).after, 41);
+            assert.strictEqual(
+                validateAnchorConfirmationsParams({ txid: 'a'.repeat(64), after_action_index: '41' }).after, 41);
+        });
+
+        it('refuses non-canonical and unsafe cursor values', function () {
+            for (const bad of ['01', true, '1e3', 9007199254740994])
+                assert.strictEqual(
+                    validateAnchorConfirmationsParams({ txid: 'a'.repeat(64), after_action_index: bad }).ok, false,
+                    'cursor ' + String(bad) + ' must be refused');
         });
 
         it('refuses a junk cursor rather than silently restarting the walk at page one', function () {

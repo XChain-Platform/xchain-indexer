@@ -49,10 +49,11 @@ function advanceFields(indexer, now){
                               failures: indexer.dbOutage.failures,
                               lastErrorClass: indexer.dbOutage.lastErrorClass
                           } : null,
-        // NOTE degraded stays true during the healthy future-stamped-block wait as well,
-        // deliberately: the monitor rules key on `degraded === false` for the wedge case, so
-        // flipping it there would turn a healthy wait into a crit. waitingOnFutureBlock and
-        // stallClass below are how the two are told apart.
+        // NOTE degraded is a legacy field (stalled && !wedged). It is false both when
+        // nothing is stalled and when the stall is wedged, so it is not a wedge signal.
+        // It stays true through a healthy future-block wait for the dashboard fallback
+        // used by payloads without stallClass. Wedge, restart and refusal decisions must
+        // key on stallClass === 'wedged'; waitingOnFutureBlock distinguishes the wait.
         degraded:         !!indexer.stallReason
                             && !stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                             indexer.healthStallGraceMs, now, indexer.stallClearsAt,

@@ -25,6 +25,7 @@
 'use strict';
 
 const { buildInjectedExecContext, SYNTH_TAGS } = require('../../consensus/exec_context.js');
+const { callbackParamsOf } = require('../callback_params.js');
 const { getLogger } = require('../../observability/index.js');
 
 // Callback ceiling: read from the gas schedule so it stays in sync with
@@ -48,15 +49,7 @@ function callbackGasCeiling(){
 // (call_id, target_chain, status, return_payload) and the developer's own
 // CALLBACK_PARAMS follow it.
 function callbackActionParams(request, resultStatus, resultPayload){
-    let callbackParams = [];
-    if(request.callback_params_json){
-        try {
-            let parsed = JSON.parse(request.callback_params_json);
-            if(Array.isArray(parsed)) callbackParams = parsed;
-        } catch(_){
-            callbackParams = [];
-        }
-    }
+    let callbackParams = callbackParamsOf(request, 'XCALL callback');
 
     let callbackArgs = [
         request.call_id,

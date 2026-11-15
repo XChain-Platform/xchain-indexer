@@ -311,14 +311,13 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
 // Wire-string pre-scan for the BATCH pre-flight: the FIRST sub-command the probe path must
 // refuse to dispatch, or null when every sub-command is safe to run.
 //
-// Reproduces the batch handler's own command split exactly (batch/validate.js readCommands):
-// `TX_DATA.split(';')`, then strip the `BATCH|<format>|` prefix off element 0, then take
-// `split('|')[0]` - so the names scanned here are the names that loop will dispatch. Two
-// deliberate asymmetries, both in the REFUSING direction: this trims and de-aliases
-// unconditionally (batch/sub_command.js normalizeSubAction only de-aliases at/after
-// BATCH_SUBACTION_NORMALIZATION), and an unrecognized FORMAT leaves the prefix
-// unstripped so element 0 reads as `BATCH`, which is itself forbidden. It can therefore
-// refuse a batch the loop would have found harmless, and never the reverse.
+// Best-effort pre-filter over the normalized, per-element-trimmed params. It uses the same
+// split shape as batch/validate.js readCommands, but that handler splits the caller's raw
+// wire. Padding around the version can therefore make its prefix strip miss while this one
+// matches, so either side can read a different first command. This scan also trims and
+// de-aliases unconditionally (batch/sub_command.js normalizeSubAction only de-aliases
+// at/after BATCH_SUBACTION_NORMALIZATION), while an unrecognized FORMAT leaves the prefix
+// unstripped and reads element 0 as the forbidden `BATCH`.
 //
 // This runs BEFORE the dry-run takes the block-loop mutex, so a batch carrying a VM
 // sub-action costs the node one string scan rather than a transaction. It is NOT the

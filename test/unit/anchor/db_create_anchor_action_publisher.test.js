@@ -77,7 +77,7 @@ describe('createAnchorAction publisher tail', function () {
 
     it('v7: persists PUBLISHER and the pre-serialized PUBLISHER_ATTESTATIONS JSON string', async function () {
         const db = makeDb();
-        const pre = JSON.stringify(ATT); // anchor.js pre-serializes, same as VALIDATOR_SIGNATURES
+        const pre = JSON.stringify(ATT); // src/actions/anchor/ pre-serializes, same as VALIDATOR_SIGNATURES
         const { args } = await runCreate(db, {
             ACTION_INDEX: 2, FORMAT: 7, SECTION_INDEX: 1, STATUS: 'valid', BLOCK_INDEX: 101,
             PUBLISHER: PUB, PUBLISHER_ATTESTATIONS: pre

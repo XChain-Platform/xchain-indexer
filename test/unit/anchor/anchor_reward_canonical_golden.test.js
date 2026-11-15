@@ -17,7 +17,7 @@
  *
  * The same signed string is built in three independent places:
  *   1. xchain-hub/src/anchor/publisher.js  attestationCanonical / archiveAttestationCanonical
- *   2. xchain-indexer/src/actions/anchor.js    Anchor.prototype.rewardCanonical  (DOGE wire-parse side)
+ *   2. xchain-indexer/src/actions/anchor/index.js    rewardCanonical  (DOGE wire-parse side)
  *   3. xchain-indexer/src/consensus/anchor_reward_derive.js  rewardCanonical(row)           (BTC mirror re-derivation)
  *
  * Copies 1 and 2 are byte-compared against each other and against these same
@@ -118,7 +118,7 @@ describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regre
     });
 
     it('the bundle canonical byte-matches the DOGE parse-side builder for the same tuple', function () {
-        // Copy 2 of 3 (actions/anchor.js) rebuilt over the same tuple. These two are the
+        // Copy 2 of 3 (actions/anchor/index.js) rebuilt over the same tuple. These two are the
         // pair that must agree or the BTC-side re-verification never matches the DOGE-side
         // attestation and the reward silently never derives, fleet-wide.
         const Anchor = require('../../../src/actions/anchor/index.js');
@@ -161,7 +161,7 @@ describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regre
 describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regression @tier1', function () {
     // Load-bearing: the mirror copy in src/consensus/anchor_reward_derive.js takes the chain
     // VERBATIM out of reward_type (`String(row.reward_type).slice('anchor_'.length)`),
-    // while Anchor.prototype.rewardCanonical in src/actions/anchor.js upper-cases
+    // while rewardCanonical in src/actions/anchor/index.js upper-cases
     // d.CHAIN. The two produce the same signed string only for as long as every mirrored
     // row carries an uppercase chain; reward_type lives in a utf8_general_ci column, so a
     // mixed-case row would compare equal there and still fork the canonical here. If that

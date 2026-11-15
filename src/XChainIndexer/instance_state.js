@@ -181,6 +181,9 @@ function initBarrierTiming(indexer){
     // barrier, or null when nothing is held. Folded by nextBarrierHold() once per
     // poll-loop pass and cleared on every successful commit.
     indexer.barrierHold = null;
+    // Remember a future wait's clear instant for this block until it commits. Some
+    // barrier retries drop the live stallClearsAt value as soon as the instant passes.
+    indexer.futureWaitClearsAt = null;
     // Count of ceiling crossings since boot, surfaced on /health so a fleet sweep can
     // see that a mirror needed re-driving without reading container logs.
     indexer.barrierCeilingHits = 0;

@@ -76,7 +76,7 @@ function resolveFieldSlot(util, engineTag, contentA, contentB, publisherPairGate
         // The CHECKPOINT engine tag carries TWO content families: the checkpoint
         // root canonical (XCHECKPOINT|...) and the reward-attestation canonical
         // (XANCPUB|scope|seq|snapshot_block|publisher|amount, both the per-chain and
-        // archive legs; see anchor.js rewardCanonical). Dispatch the field index on the
+        // archive legs; see src/actions/anchor/index.js rewardCanonical). Dispatch the field index on the
         // content's leading token; both messages must agree on the family (a matched
         // field across DIFFERENT layouts proves nothing about a shared slot).
         if(engineTag === eq.ENGINE_TAGS.CHECKPOINT){

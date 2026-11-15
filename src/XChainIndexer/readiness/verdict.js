@@ -91,14 +91,16 @@ function episodeBehind(decoderLag, chainLag, chainTipStale){
 //   chain_tip_stale        - the configured tip source has stayed stale for a full
 //                            readiness window, so current state is unverified.
 // A future-stamped block wait is never behind_tip_no_commit: consensus forbids
-// committing that block yet, so the indexer holds everything it may hold.
+// committing that block yet, so the indexer holds everything it may hold. Its
+// clear instant also starts a fresh readiness window once the wait has lapsed.
 // That exemption does not cover chain_tip_stale: waiting on block time says nothing
 // about whether the configured tip source is reachable.
 function readinessVerdict(input){
     let {
         now, indexerDbUnreachable, wedged, pollSilent, decoderReorgHalted,
         barrierCeilingExceeded, decoderLag, chainLag, chainTipStale, chainTipStaleSince,
-        waitingOnFutureBlock, lastBlockCommittedAt, startedAt, behindSince, noCommitMs
+        waitingOnFutureBlock, futureWaitClearsAt, lastBlockCommittedAt, startedAt,
+        behindSince, noCommitMs
     } = input || {};
     let reasons = [];
     if(indexerDbUnreachable) reasons.push('indexer_db_unreachable');
@@ -117,6 +119,8 @@ function readinessVerdict(input){
     let behindWindowAt = Number.isFinite(behindSince) && behindSince > 0
         ? Math.max(progressAt || 0, behindSince)
         : progressAt;
+    if(Number.isFinite(futureWaitClearsAt) && futureWaitClearsAt > 0)
+        behindWindowAt = Math.max(behindWindowAt || 0, futureWaitClearsAt);
     let behindNoCommitForMs = (behindWindowAt != null && Number.isFinite(now))
         ? Math.max(0, now - behindWindowAt)
         : null;

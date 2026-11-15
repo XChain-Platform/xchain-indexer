@@ -295,11 +295,11 @@ module.exports = {
 
     // The archive-head anchor that started an
     // archive batch (status irrelevant - chunk geometry checks belong to the caller).
-    // match_batch_seq is NOT unique: the replay guard in anchor.js parseCheckpoint accepts
+    // match_batch_seq is NOT unique: checkReplayGuards in actions/anchor/archive/archive_head.js accepts
     // an EQUAL MATCH_BATCH_SEQ ('never below the recorded max; equal is allowed'), so a
     // permissionless re-broadcast or failover double-publish stores a SECOND head row for
     // the same batch. The returned parent feeds a consensus-visible geometry/CRC verdict in
-    // anchor.js parseContinuation (TOTAL_CHUNKS gate + batch_crc32 reassembly, which stamps
+    // actions/anchor/reassembly.js and archive/archive_verdict.js (TOTAL_CHUNKS gate + batch_crc32 reassembly, which stamp
     // setAnchorArchiveStatus(parent.action_index,'invalid_archive')), so the pick MUST be a
     // deterministic total order or two honest nodes select different parents and persist
     // divergent anchor_actions status fleet-wide. ORDER BY action_index ASC picks the EARLIEST

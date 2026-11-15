@@ -30,8 +30,8 @@ const GAS_CEILING = 1000000;
 // (DEPLOY_DEFERRED_ASSEMBLY): its rows exist at its own action, but the contract is
 // deployed later, by the action that completes the group. Written once and NEVER mutated -
 // a status flip would be an in-place mutation needing bespoke rollback and a hash rule.
-// db.js repeats this literal in the pending-assembler lookup, the same way the seven
-// CODE_HASH verdict strings are repeated across deploy.js and deploy_chunk.js.
+// The pending-assembler lookup in src/db/contracts/index.js binds this constant as a
+// query parameter, so its reader cannot drift from the writer.
 const PENDING_ASSEMBLY_STATUS = 'pending: CODE_HASH (awaiting chunks)';
 
 module.exports = { GAS_CEILING, PENDING_ASSEMBLY_STATUS };

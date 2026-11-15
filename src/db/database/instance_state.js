@@ -151,16 +151,19 @@ function initReadMemos(self){
 
 // The transaction mutex, the watchdog-fence epoch and the connection circuit breaker.
 function initTransactionState(self){
-    // Serializes DB transactions across the block-processing loop, the reorg rollback
-    // path, and the read-only feequote dry-run (Actions.computeFeeQuoteDryRun). The
-    // indexer's own paths are single-threaded and never contend, so the lock is always
-    // free for them; it only matters when an API-path dry-run opens a forced-rollback
-    // transaction that would otherwise collide with live block processing on the shared
-    // transactionConnection. Simple non-reentrant async mutex: beginTransaction acquires,
-    // commit/rollback release. Held only during active processing (barrier stalls happen
-    // before beginTransaction), so it never blocks on a stalled indexer - but it IS held
-    // for the whole of a block's processing, so a waiter behind a slow block waits that
-    // long. Public read-only callers therefore bound the wait (, acquireTxLock).
+    // Serializes DB transactions across the block-processing loop, reorg rollback, the
+    // state-retention sweep (background_jobs.js runExclusive), and the forced-rollback
+    // dry-run engine (Actions.dryRunAction in actions_class/quote_surfaces.js). Its callers
+    // are public computeFeeQuote and computePreflight plus regtest-only
+    // computeFeeQuoteDryRun in actions_class/fee_views.js. The block loop and rollback do
+    // not contend with each other; the lock prevents a dry-run or retention sweep from
+    // colliding with live block processing on the shared transactionConnection. Simple
+    // non-reentrant async mutex: beginTransaction acquires, commit/rollback release. Held
+    // only during active processing (barrier stalls happen before beginTransaction), but
+    // held for a whole block, so a waiter behind a slow block waits that long.
+    // computeFeeQuote and computePreflight bound this wait with acquireTimeoutMs, forwarded
+    // by transaction_queries.js to acquireTxLock in connections.js; regtest-only
+    // feequotedryrun waits unbounded.
     self._txLock = { locked: false, queue: [] };
 
     // Watchdog-fence epoch (M-16). Monotonic counter identifying the current DB

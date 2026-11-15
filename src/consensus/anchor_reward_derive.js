@@ -30,8 +30,8 @@
  *
  * The mirror is transport, not trust: this pass re-verifies each row's XANCPUB signatures
  * against the BTC indexer's own locally-computed oracle_publish set at snapshot_block (the same
- * set + weighting anchor.js uses on DOGE), rebuilds the reward canonical byte-identically to
- * anchor.js.rewardCanonical / the hub's StateAnchorPublisher, and only then materializes
+ * set + weighting src/actions/anchor/index.js uses on DOGE), rebuilds the reward canonical byte-identically to
+ * src/actions/anchor/index.js rewardCanonical / the hub's StateAnchorPublisher, and only then materializes
  * validator_rewards at block_index = snapshot_block. A forged or short-quorum row credits
  * nothing. Idempotent and reorg-safe: the reward upserts on (reward_type, round_reference,
  * round_qualifier) - the qualifier being snapshot_block for the archive leg, whose
@@ -76,7 +76,7 @@ const ANCHOR_REWARD_COPY_SELECTION =
     'anchor_reward_copy_selection_activation.ANCHOR_REWARD_COPY_SELECTION_ACTIVATION';
 
 // Rebuild the XANCPUB canonical for a mirrored attestation row. MUST byte-match
-// anchor.js.rewardCanonical (DOGE parse side) and the hub's publisher canonical, or the
+// src/actions/anchor/index.js rewardCanonical (DOGE parse side) and the hub's publisher canonical, or the
 // re-verified quorum would never match and the reward would silently never derive.
 function rewardCanonical(row){
     let network        = String(row.network);
@@ -96,7 +96,7 @@ function rewardCanonical(row){
         // Bundle leg (v0): ONE reward per per-network bundle. round_reference IS the
         // snapshot block, so field 2 and field 3 repeat it; the six-field positional
         // layout is kept so slash.js reads snapshot_block at index 3 for every XANCPUB
-        // family. MUST byte-match anchor.js.rewardCanonical's v0 branch and the hub's
+        // family. MUST byte-match src/actions/anchor/index.js rewardCanonical's v0 branch and the hub's
         // bundle attestation canonical.
         let base = ['XANCPUB', 'anchor_bundle', roundReference,
                     String(snapshotBlock), publisher, ar.ANCHOR_REWARD_AMOUNT].join('|');
@@ -120,7 +120,7 @@ function rewardCanonical(row){
 
 // Verify a mirrored row's XANCPUB attestation against the local oracle_publish set at
 // snapshot_block. Returns true iff the 2f+1 (or stake-weighted) quorum is met AND the
-// publisher is itself a member of that set. Mirrors anchor.js's v0/v1 attestation check
+// publisher is itself a member of that set. Mirrors src/actions/anchor/index.js's v0/v1 attestation check
 // (verify-then-mark-seen; stake-weighted at/above STAKE_WEIGHTED_QUORUM, else count).
 async function verifyAttestation(indexerDb, row){
     let snapshotBlock = Number(row.snapshot_block);
