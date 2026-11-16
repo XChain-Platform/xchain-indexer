@@ -206,7 +206,6 @@ function registerInvalidListReadErrors(){
         for(const block of [-1, 1.5, '01', 'x', null, Number.MAX_SAFE_INTEGER + 1])
             assert.deepStrictEqual(await rpc.getlistat({ list_index: 1, block }),
                 { error: 'block must be a non-negative integer' });
-        assert.deepStrictEqual(await rpc.getlistat(null), { error: 'list_index must be a positive integer' });
     });
 }
 

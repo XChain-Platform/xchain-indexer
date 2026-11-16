@@ -29,6 +29,7 @@ const { getLogger } = require('../../../observability/index.js');
 // ANCHOR_ROW_LIMIT is the hard per-response row cap, shared with the SQL that fetches
 // one row past it as a truncation probe; both live in src/db/anchor_sql.js.
 const { ANCHOR_ROW_LIMIT } = require('../../../db/anchor_sql.js');
+const rpcParams = require('../../../api/rpc/params.js');
 // The txid shape and the version normalizer are defined with the getanchoraction leg;
 // sharing them keeps the two reads from drifting on either.
 const { TXID_RE, normalizeVersion } = require('./action_query.js');
@@ -90,17 +91,11 @@ const { TXID_RE, normalizeVersion } = require('./action_query.js');
 function validateAnchorConfirmationsParams({ txid, after_action_index }) {
     if (typeof txid !== 'string' || !TXID_RE.test(txid))
         return { ok: false, error: 'txid must be a 64-character hex string' };
-    let after = null;
-    if (after_action_index !== undefined && after_action_index !== null) {
-        // Typed before it is numbered: a bare Number() call reads [] as 0 and true as 1, so
-        // the two shapes most likely to arrive from a buggy caller would both validate.
-        let n = (typeof after_action_index === 'number') ? after_action_index
-              : (typeof after_action_index === 'string' && /^\d+$/.test(after_action_index)) ? Number(after_action_index)
-              : NaN;
-        if (!Number.isInteger(n) || n < 0)
-            return { ok: false, error: 'after_action_index must be a non-negative integer' };
-        after = n;
-    }
+    let parsed = rpcParams.optionalInteger(after_action_index,
+        { name: 'after_action_index', min: 0 });
+    if (parsed.error)
+        return { ok: false, error: 'after_action_index must be a non-negative integer' };
+    let after = parsed.value == null ? null : parsed.value;
     return { ok: true, txid: txid.toLowerCase(), after };
 }
 

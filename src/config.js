@@ -44,9 +44,9 @@ const { resolveBalanceDeltaMode } = require('./config/balance_delta_mode.js');
 
 // TICK of the protocol gas token (config['GAS']). This value is consensus: it
 // names the token debited for capability STAKE, VOTE deposits/escrows, and
-// contract gas billing. Vendored single source of truth: ./protocol/constants.js
-// (byte-identical to xchain-documentation/protocol/constants.js, GAS_TICK); the
-// cross-service drift guard asserts this and the SDK co-signer's mirror equal it.
+// contract gas billing. The registry-backed value comes from
+// ./protocol/constants.js and stays in value parity with the canonical declaration;
+// the cross-service drift guard asserts this and the SDK co-signer's mirror equal it.
 const GAS_TICK = require('./protocol/constants.js').GAS_TICK;
 
 // Every environment variable this service reads outside this file, captured

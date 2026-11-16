@@ -300,8 +300,9 @@ describe('attest_response_sync_barrier defer site @regression @tier1', function 
         assert.strictEqual(
             stallClassOf('attest_response_sync_barrier', NOW - 900000, 120000, NOW, NOW + 960000),
             'future_block_wait');
+        // Grace restarts at the clear instant, so the wait cleared longer ago than the grace.
         assert.strictEqual(
-            stallClassOf('attest_response_sync_barrier', NOW - 900000, 120000, NOW, NOW - 1),
+            stallClassOf('attest_response_sync_barrier', NOW - 900000, 120000, NOW, NOW - 120001),
             'wedged');
     });
 });

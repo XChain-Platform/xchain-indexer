@@ -27,7 +27,7 @@
 const { HUB_SYNC_WATERMARK_GRACE_S, HUB_SYNC_BARRIER_HOLD_CEILING_S } = require('../hub/hub_db_sync.js');
 const { blockMayReadPrice } = require('../chain/price_read_predicate.js');
 const { nextBarrierHold, isMirrorBarrierReason, barrierHoldMs,
-        barrierCeilingExceeded } = require('./stall_health.js');
+        barrierCeilingExceeded, waitingOnFutureBlock } = require('./stall_health.js');
 const { getLogger } = require('../observability/index.js');
 
 module.exports = {
@@ -137,6 +137,11 @@ module.exports = {
     // Returns the hold in ms (0 when nothing is held), for the caller and for tests.
     noteBarrierHold(blockToParse, now = Date.now()){
         this.stallBlock = this.stallReason ? blockToParse : null;
+        if(waitingOnFutureBlock(this.stallReason, this.stallClearsAt, now))
+            this.futureWaitClearsAt = { block: blockToParse, at: this.stallClearsAt };
+        else if(!this.stallReason || !this.futureWaitClearsAt
+                || this.futureWaitClearsAt.block !== blockToParse)
+            this.futureWaitClearsAt = null;
         let prev = this.barrierHold;
         this.barrierHold = nextBarrierHold(prev, blockToParse, this.stallReason, this.stallClearsAt, now);
         let hold = this.barrierHold;

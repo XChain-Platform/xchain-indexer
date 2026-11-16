@@ -174,13 +174,13 @@ class AnchorRecovery {
         // Restrict to the SAME statuses every other reader of anchor_actions accepts
         // (getArchiveReplayWatermarks / getMaxAnchorCheckpointSeq: archive-head or
         // checkpoint-bearing versions AND status IN ('valid','unverified')). anchor_actions stores
-        // a row for EVERY parsed ANCHOR, valid or not (anchor.js records the verdict in STATUS
+        // a row for EVERY parsed ANCHOR, valid or not (src/actions/anchor/ records the verdict in STATUS
         // rather than dropping the row), so without
         // this join recovery replayed batches the on-chain parse recorded as invalid - e.g.
         // 'insufficient valid signatures' or a stale CHECKPOINT_SEQ / MATCH_BATCH_SEQ replay -
         // into cross_chain_matches / cross_chain_calls that a normally-synced indexer never
         // derived, diverging a recovery-fed node from a mirror-fed one. The INNER JOIN also drops
-        // any row with a NULL status_id, which every production row resolves (anchor.js defaults
+        // any row with a NULL status_id, which every production row resolves (src/actions/anchor/ defaults
         // STATUS to 'valid'); do NOT loosen this to a LEFT JOIN accepting NULL, which reopens the hole.
         // match_batch_seq is NOT unique: the parseCheckpoint replay guard admits an EQUAL
         // MATCH_BATCH_SEQ (a permissionless re-broadcast or failover double-publish stores a
@@ -1237,7 +1237,7 @@ class AnchorRecovery {
 
     // ── Canonicals (byte-identical to their producers) ──────────────────────────
 
-    // Hub StateCheckpointEngine canonical + the v1 archive extension (anchor.js).
+    // Hub StateCheckpointEngine canonical + the v1 archive extension (src/actions/anchor/).
     // v1 ROUND_ID appends batch_seq (distinct from the v0 per-block key, so each batch in a block signs its own round);
     // gated on the BTC snapshot_block + network, VIEW=0. Must byte-match anchor.canonical.
     rawCheckpointCanonical(cp){
@@ -1374,7 +1374,7 @@ class AnchorRecovery {
             let pk = String(s.pubkey).toLowerCase();
             if(seen.has(pk) || !qualified.has(pk)) continue;
             if(!ed25519.verify(canonical, String(s.sig), pk)) continue;
-            // Mark seen only AFTER the signature verifies, matching anchor.js and the
+            // Mark seen only AFTER the signature verifies, matching src/actions/anchor/ and the
             // hub/SDK verifiers: marking on first encounter lets a garbage-then-valid
             // pair for one qualified validator suppress the real signature and fail
             // recovery of an on-chain-valid batch (order-dependent quorum under-count).

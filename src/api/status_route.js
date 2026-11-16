@@ -65,6 +65,10 @@ function readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexer
     let pollSilent = (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false;
     let holdMs     = barrierHoldMs(indexer.barrierHold, now);
     let exceeded   = barrierCeilingExceeded(indexer.barrierHold, indexer.barrierHoldCeilingMs, now);
+    let futureWaitClearsAt = Number.isFinite(indexer.stallClearsAt) ? indexer.stallClearsAt : null;
+    let rememberedWait = indexer.futureWaitClearsAt;
+    if(rememberedWait && rememberedWait.block === indexer.stallBlock && Number.isFinite(rememberedWait.at))
+        futureWaitClearsAt = Math.max(futureWaitClearsAt || 0, rememberedWait.at);
     let readiness  = readinessVerdict({
         now:                    now,
         indexerDbUnreachable:   !!indexerDbUnreachable,
@@ -77,6 +81,7 @@ function readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexer
         chainTipStale:          tip.stale === true,
         chainTipStaleSince:     tip.staleSince,
         waitingOnFutureBlock:   !!verdict.futureWait,
+        futureWaitClearsAt:     futureWaitClearsAt,
         lastBlockCommittedAt:   indexer.lastBlockCommittedAt,
         startedAt:              indexer.startedAt,
         behindSince:            indexer.readyBehindSince,
@@ -209,10 +214,11 @@ function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock,
         // true when a sync barrier is deferring blocks but the counter is still
         // advancing (healthy-degraded, stays 200); distinct from a wedge, which is
         // stalled AND making no progress inside the grace window (503).
-        // NOTE it stays true during the future-stamped-block wait too, deliberately:
-        // consumers keyed on `degraded === false` treat that as the wedge case, so
-        // flipping it would UPGRADE a healthy wait to a critical alert. Read
-        // waitingOnFutureBlock / stallClass to tell the two apart.
+        // NOTE degraded is a legacy field: false both when nothing is stalled and when
+        // the stall is wedged, so it is not a wedge signal. It stays true through a
+        // healthy future-block wait for the dashboard fallback used by payloads without
+        // stallClass. Wedge, restart and refusal decisions must key on
+        // stallClass === 'wedged'; waitingOnFutureBlock distinguishes the wait.
         degraded:     stalled && !wedged,
         // true when the stall is only a wait for wall clock to reach a future-stamped
         // block (stallClearsAt still ahead). Healthy and self-clearing: the indexer has

@@ -56,7 +56,7 @@ async function verifyDispatchQuorum(c){
         if(!snapPubkeys.has(pk)) continue;
         if(!ed25519.verify(canonical, sig, pk)) continue;
         // Mark seen only AFTER the signature verifies, matching the hub
-        // finalizer and the SDK/explorer/sync verifiers (and anchor.js):
+        // finalizer and the SDK/explorer/sync verifiers (and src/actions/anchor/):
         // marking on first encounter lets a garbage-then-valid pair for one
         // qualified validator suppress the real signature (order-dependent
         // quorum under-count, failing a quorate injection closed).

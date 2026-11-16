@@ -14,18 +14,18 @@
  *
  * XChain Protocol: Canonical Size Limits
  *
- * Single documented source of truth for the protocol-level size caps
- * that more than one service enforces independently. These values had
+ * Registry-backed view of the protocol constants the indexer enforces.
+ * The canonical declarations live in xchain-documentation/protocol/constants.js.
+ * These values had
  * drifted apart before (services each re-declared their own copy and
  * applied it to subtly different quantities), which produced a class of
  * silent-failure bugs where one service accepted data another rejected.
  *
- * Plain CommonJS, zero dependencies; require()-able from any service,
- * tool, or test. Each service keeps its own local copy of these values
- * so it stays self-contained for deployment (the services ship as
- * independent containers and do not share a node_modules tree); the
- * cross-service regression suite asserts every local copy equals the
- * value declared here, so the limits can never silently diverge again.
+ * gate_registry copy() resolves every export from an addGate row under
+ * src/protocol_changes/, and bin/pins/at1-consensus-identity.json hash-pins
+ * those values. Tests enforce value parity with the canonical declarations
+ * and the SDK and VM views. This file is not a byte copy, so a value change
+ * must update its registry row and pin rather than copy the canonical file.
  *
  ********************************************************************/
 

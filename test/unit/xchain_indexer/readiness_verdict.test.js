@@ -78,6 +78,13 @@ describe('readinessVerdict()', function(){
         let v = readinessVerdict(clean({ decoderLag: 6, waitingOnFutureBlock: true,
                                          lastBlockCommittedAt: NOW - 30 * MIN }));
         assert.strictEqual(v.ready, true);
+        let justLapsed = clean({ decoderLag: 6, waitingOnFutureBlock: false,
+                                 lastBlockCommittedAt: NOW - 30 * MIN,
+                                 behindSince: NOW - 29 * MIN,
+                                 futureWaitClearsAt: NOW - 5000 });
+        assert.strictEqual(readinessVerdict(justLapsed).ready, true);
+        justLapsed.futureWaitClearsAt = NOW - 11 * MIN;
+        assert.deepStrictEqual(readinessVerdict(justLapsed).reasons, ['behind_tip_no_commit']);
     });
 
     it('carries every liveness fault as a readiness fault', function(){

@@ -57,7 +57,7 @@
 const crypto = require('crypto');
 const util = require('util');
 const { Registry, collectDefaultMetrics, DEFAULT_DURATION_BUCKETS } = require('./metrics');
-const { createLogShipper, readLogEnv } = require('./logShipper');
+const { createLogShipper, readLogEnv, toBool } = require('./logShipper');
 
 // Process-wide handles. A service is one process loading exactly one vendored
 // copy of this module, so module scope is the right scope: a globalThis key
@@ -90,11 +90,6 @@ const UNMATCHED_ROUTE_LABEL_CAP = 20;
 const _unmatchedRouteLabels = new Set();
 
 const CONSOLE_METHODS = { log: 'info', info: 'info', warn: 'warn', error: 'error', debug: 'debug' };
-
-function toBool(v, fallback = false) {
-    if (v === undefined || v === null || v === '') return fallback;
-    return /^(1|true|yes|on)$/i.test(String(v));
-}
 
 function readObservabilityEnv(env = process.env) {
     const enabled = toBool(env.METRICS_ENABLED, false);

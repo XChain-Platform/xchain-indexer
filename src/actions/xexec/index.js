@@ -63,8 +63,8 @@ const runTarget      = require('./run_target.js');
 const retire         = require('./retire.js');
 // Return payloads are mirrored to every indexer AND ANCHOR-archived on DOGE,
 // so they are hard-capped. Oversize yields status 'payload_too_large' with an
-// empty payload (deterministic truncation rule). Vendored single source of
-// truth: ../protocol/constants.js (XCALL_MAX_RETURN_BYTES).
+// empty payload (deterministic truncation rule). The registry-backed value is
+// read from ../../protocol/constants.js (XCALL_MAX_RETURN_BYTES).
 const XCALL_MAX_RETURN_BYTES = require('../../protocol/constants.js').XCALL_MAX_RETURN_BYTES;
 
 class Xexec {

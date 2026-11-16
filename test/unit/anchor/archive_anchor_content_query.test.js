@@ -99,6 +99,23 @@ describe('archive-anchor content query: validateArchiveAnchorParams() @regressio
         assert.strictEqual(ok({ checkpoint_seq: 1.5 }).ok, false);
     });
 
+    it('rejects coercible and unsafe integer content keys', function () {
+        const invalid = [true, false, '', [], [5], null, '1e3', '0x10', '01', ' 1', 9007199254740994];
+        for (const field of ['block_index', 'checkpoint_seq', 'match_count']) {
+            for (const value of invalid)
+                assert.strictEqual(ok({ [field]: value }).ok, false,
+                    field + ' accepted ' + JSON.stringify(value));
+        }
+    });
+
+    it('accepts canonical integer content keys through the safe-integer boundary', function () {
+        for (const field of ['block_index', 'checkpoint_seq', 'match_count']) {
+            for (const value of [0, '0', '850000', Number.MAX_SAFE_INTEGER])
+                assert.strictEqual(ok({ [field]: value }).ok, true,
+                    field + ' rejected ' + String(value));
+        }
+    });
+
     it('carries an optional author through, and rejects a non-string one', function () {
         assert.strictEqual(ok({ author: 'Dpub1' }).author, 'Dpub1');
         assert.strictEqual(ok({ author: '' }).author, null);

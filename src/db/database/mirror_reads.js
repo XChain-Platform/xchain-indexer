@@ -34,6 +34,7 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, ARCHIVE_ANCHOR_B
 const { archiveOrphanGeometryActive } =
     require('../../actions/anchor/anchor_action_query/archive_query.js');
 const { archiveHeadPickPredicate, foldArchiveHeadFloor } = require('../anchors/archive_head_pick.js');
+const { fitsUtf8mb3 } = require('../utf8mb3.js');
 
 module.exports = {
 
@@ -150,7 +151,13 @@ module.exports = {
     // Status is NOT filtered here for the reason ARCHIVE_CHUNK_SET_SQL is not
     // status-filtered either: a mirrored and an unmirrored node store the same head
     // under different statuses, and the caller applies its own verdict.
+    //
+    // anchor_actions.chain and .network are utf8mb3, so a key holding a supplementary-plane
+    // character names no stored row and is answered absent without the bind that would
+    // throw errno 1267. The author is compared in memory below, never bound here.
     async getArchiveAnchorByContent(chain, network, block_index, checkpoint_seq, batch_crc32, match_count, author){
+        if(!fitsUtf8mb3(chain) || !fitsUtf8mb3(network))
+            return { head: null, chunks: [] };
         let rows = await this.doQuery(ARCHIVE_ANCHOR_BY_CONTENT_SQL,
             [chain, network, Number(block_index), Number(checkpoint_seq),
              String(batch_crc32).toLowerCase(), Number(match_count)]);
@@ -171,7 +178,11 @@ module.exports = {
     // Return the highest archive batch sequence this publisher has spent, at any status.
     // Chunk parent resolution (getAnchorV1ByBatchSeq) picks the author's earliest head
     // for a seq whatever its status, so a seq held only by an invalid head is still taken.
+    // index_addresses.address is utf8mb3, so an author holding a supplementary-plane character
+    // has spent no sequence and is answered null without the bind that would throw errno 1267.
     async getMaxArchiveBatchSeqByAuthor(author){
+        if(!fitsUtf8mb3(author))
+            return null;
         let network = this.config && this.config['NETWORK'];
         let headPredicate = archiveHeadPickPredicate('a')
             .replace('?', String(foldArchiveHeadFloor(network, 'DOGE')));

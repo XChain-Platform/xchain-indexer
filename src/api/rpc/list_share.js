@@ -18,17 +18,7 @@ const { listMembershipHash, listMetaHash } = require('../../consensus/list_share
 const { getSharedListDetails } = require('../../db/lists/sharing.js');
 const { getLogger } = require('../../observability/index.js');
 const { qualifyTickMembers } = require('./list_share/list_share_tick_members.js');
-
-const CANONICAL_NON_NEGATIVE_INTEGER = /^(0|[1-9][0-9]*)$/;
-
-function integerParam(value, positive){
-    if(typeof value === 'string'){
-        if(!CANONICAL_NON_NEGATIVE_INTEGER.test(value)) return null;
-        value = Number(value);
-    }
-    if(!Number.isSafeInteger(value) || value < 0 || (positive && value === 0)) return null;
-    return value;
-}
+const rpcParams = require('./params.js');
 
 function listMetaAnswer(meta){
     const name = meta?.name ?? null;
@@ -39,28 +29,24 @@ function listMetaAnswer(meta){
 async function getListAtRpc(indexer, params){
     if(!indexer.indexerDb)
         return { error: 'indexer database not ready' };
-    if(params === null || typeof params !== 'object')
-        return { error: 'list_index must be a positive integer' };
-    let listIndex = integerParam(params.list_index, true);
-    if(listIndex === null)
-        return { error: 'list_index must be a positive integer' };
-    let block = integerParam(params.block, false);
-    if(block === null)
-        return { error: 'block must be a non-negative integer' };
+    let listIndex = rpcParams.integer(params.list_index, { name: 'list_index', min: 1 });
+    if(listIndex.error) return { error: listIndex.error };
+    let block = rpcParams.integer(params.block, { name: 'block', min: 0 });
+    if(block.error) return { error: block.error };
 
     try {
         let db = indexer.indexerDb.apiView();
-        let rootIndex = await db.getListRootIndex(listIndex, null, block);
-        let type = await db.getListType(rootIndex, block);
+        let rootIndex = await db.getListRootIndex(listIndex.value, null, block.value);
+        let type = await db.getListType(rootIndex, block.value);
         if(type === false)
             return { error: 'list not found' };
-        let members = await db.getListAtBlock(rootIndex, block);
+        let members = await db.getListAtBlock(rootIndex, block.value);
         if(members === null)
             return { error: 'list reference rejected' };
         if(type === 1)
             members = await qualifyTickMembers(db, members,
                 indexer.config['COIN'], indexer.config['COINS']);
-        let meta = listMetaAnswer(await db.getListMeta(rootIndex, block));
+        let meta = listMetaAnswer(await db.getListMeta(rootIndex, block.value));
         return { type, members, hash: listMembershipHash(members), ...meta };
     } catch (err) {
         getLogger().error('getlistat error:', err);
@@ -71,8 +57,7 @@ async function getListAtRpc(indexer, params){
 async function getSharedListsRpc(indexer, params){
     if(!indexer.indexerDb)
         return { error: 'indexer database not ready' };
-    if(params === null || typeof params !== 'object' ||
-       params.network !== indexer.config['NETWORK'])
+    if(params.network !== indexer.config['NETWORK'])
         return { error: 'network does not match this indexer' };
 
     try {

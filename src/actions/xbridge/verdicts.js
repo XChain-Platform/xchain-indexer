@@ -63,7 +63,7 @@ const VERDICTS = Object.freeze({
     // XBRIDGE's own literal, NOT the 'invalid: ACTION (BTC only)' the stake, delegate, unstake,
     // collect and slash handlers write. Both are frozen consensus strings: never harmonize either.
     BTC_ONLY:            'invalid: XBRIDGE (BTC only)',               // v0 broadcast on any chain other than BTC
-    V1_NOT_ON_BTC:       'invalid: XBRIDGE v1 is not valid on BTC',   // v1 broadcast on BTC (the inverse-chain shape anchor.js uses)
+    V1_NOT_ON_BTC:       'invalid: XBRIDGE v1 is not valid on BTC',   // v1 broadcast on BTC (the inverse-chain shape the ANCHOR handler uses)
     V2_SYSTEM_INJECTED:  'invalid: XBRIDGE v2 is system-injected',    // a BROADCAST v2 on any chain, as a broadcast XCALL v2 is refused
     V5_SYSTEM_INJECTED:  'invalid: XBRIDGE v5 is system-injected',    // a BROADCAST v5 on any chain, the v2 rule carried to the general formats
 

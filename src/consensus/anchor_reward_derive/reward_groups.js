@@ -22,7 +22,7 @@ const arKey = require('../../actions/anchor/anchor_reward_key.js');
 // Group by the logical reward (reward_type, round_reference, round_qualifier): every
 // attesting publisher for a round must be inserted BEFORE reconcile, so a failover
 // double-publish collapses to the smallest-pubkey winner (identical to the DOGE on-chain
-// path anchor.js drives).
+// path src/actions/anchor/ drives).
 //
 // The qualifier is in the key because for 'anchor_archive' the pair (reward_type,
 // round_reference) does NOT name one logical reward: round_reference is MATCH_BATCH_SEQ,

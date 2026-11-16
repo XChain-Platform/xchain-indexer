@@ -26,6 +26,7 @@
 'use strict';
 
 const gateRegistry = require('../../../consensus/gate_registry.js');
+const rpcParams = require('../../../api/rpc/params.js');
 
 const ARCHIVE_ORPHAN_GEOMETRY_GATE =
     'archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION';
@@ -112,22 +113,22 @@ function validateArchiveAnchorParams({ chain, network, block_index, checkpoint_s
         return { ok: true, author, author_only: true };
     if (typeof chain !== 'string' || !chain || typeof network !== 'string' || !network)
         return { ok: false, error: 'chain and network are required strings' };
-    let bi = Number(block_index);
-    let cs = Number(checkpoint_seq);
-    if (!Number.isInteger(bi) || bi < 0 || !Number.isInteger(cs) || cs < 0)
+    let bi = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+    let cs = rpcParams.integer(checkpoint_seq, { name: 'checkpoint_seq', min: 0 });
+    if (bi.error || cs.error)
         return { ok: false, error: 'block_index and checkpoint_seq must be non-negative integers' };
     if (typeof batch_crc32 !== 'string' || !ARCHIVE_CRC_RE.test(batch_crc32.toLowerCase()))
         return { ok: false, error: 'batch_crc32 must be an 8-character hex string' };
-    let mc = Number(match_count);
-    if (!Number.isInteger(mc) || mc < 0)
+    let mc = rpcParams.integer(match_count, { name: 'match_count', min: 0 });
+    if (mc.error)
         return { ok: false, error: 'match_count must be a non-negative integer' };
     let wantAuthor = null;
     if (author !== undefined && author !== null && author !== '') {
         if (typeof author !== 'string') return { ok: false, error: 'author must be a string address' };
         wantAuthor = author;
     }
-    return { ok: true, block_index: bi, checkpoint_seq: cs,
-             batch_crc32: batch_crc32.toLowerCase(), match_count: mc, author: wantAuthor };
+    return { ok: true, block_index: bi.value, checkpoint_seq: cs.value,
+             batch_crc32: batch_crc32.toLowerCase(), match_count: mc.value, author: wantAuthor };
 }
 
 function sameStoredSignatures(left, right) {

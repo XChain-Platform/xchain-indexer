@@ -25,6 +25,7 @@ const path    = require('path');
 // The state-key binary collation flag day is a registry row read by literal key (W5),
 // keyed '<COIN>:<network>' so the coin goes with the height.
 const gateRegistry = require('../../consensus/gate_registry');
+const { PENDING_ASSEMBLY_STATUS } = require('../../actions/deploy/constants.js');
 const STATE_KEY_COLLATION_KEY = 'state_key_collation_activation.STATE_KEY_COLLATION_ACTIVATION';
 const U64_MAX = '18446744073709551615';   // BIGINT UNSIGNED
 
@@ -144,11 +145,11 @@ module.exports = {
                      INNER JOIN contract_executions ce ON (ce.action_index=c.action_index)
                      INNER JOIN index_statuses s ON (s.id=c.status_id)
                      WHERE c.source_id=? AND c.code_hash=? AND c.action_index < ?
-                       AND s.status='pending: CODE_HASH (awaiting chunks)'
+                       AND s.status=?
                        AND NOT EXISTS (SELECT 1 FROM contract_executions x WHERE x.assembler_action_index=c.action_index)
                      ORDER BY c.action_index ASC
                      LIMIT 1`;
-        let results = await this.doQuery(query, [source_id, codeHash, beforeActionIndex]);
+        let results = await this.doQuery(query, [source_id, codeHash, beforeActionIndex, PENDING_ASSEMBLY_STATUS]);
         return results.length > 0 ? results[0] : null;
     },
 

@@ -15,23 +15,16 @@
 'use strict';
 
 const HOME_CHAINS = new Set(['BTC', 'LTC', 'DOGE']);
-const CANONICAL_POSITIVE_INTEGER = /^[1-9][0-9]*$/;
+const rpcParams = require('../params.js');
 
 function parseSharedListParams(params){
     if(params === null || typeof params !== 'object' || !HOME_CHAINS.has(params.home_chain))
         return { error: 'home_chain must be BTC, LTC or DOGE' };
 
-    let listIndex = params.list_index;
-    if(typeof listIndex === 'string'){
-        if(!CANONICAL_POSITIVE_INTEGER.test(listIndex))
-            return { error: 'list_index must be a positive integer' };
-        listIndex = Number(listIndex);
-    }
+    let listIndex = rpcParams.integer(params.list_index, { name: 'list_index', min: 1 });
+    if(listIndex.error) return { error: listIndex.error };
 
-    if(!Number.isSafeInteger(listIndex) || listIndex <= 0)
-        return { error: 'list_index must be a positive integer' };
-
-    return { home_chain: params.home_chain, list_index: listIndex };
+    return { home_chain: params.home_chain, list_index: listIndex.value };
 }
 
 function sharedListRecord({ home_chain, home_list_index, local_list_index, seq, origin_block, members }){

@@ -78,9 +78,11 @@ describe('stallWedged() future-stamped-block deadline', function () {
     });
 
     it('once wall clock reaches the instant, the ordinary grace verdict applies again', function () {
-        // the deadline has passed and the stall persists: the mirror really is stuck
-        assert.strictEqual(stallWedged('price_sync_barrier', LONG_STALL, GRACE, NOW, NOW), true);
-        assert.strictEqual(stallWedged('price_sync_barrier', LONG_STALL, GRACE, NOW, NOW - 1), true);
+        // The instant is a progress boundary. A stall must persist for a full grace
+        // after it becomes processable before it is a real wedge.
+        assert.strictEqual(stallWedged('price_sync_barrier', LONG_STALL, GRACE, NOW, NOW), false);
+        assert.strictEqual(stallWedged('price_sync_barrier', LONG_STALL, GRACE, NOW, NOW - 1), false);
+        assert.strictEqual(stallWedged('price_sync_barrier', LONG_STALL, GRACE, NOW, NOW - GRACE - 1), true);
     });
 
     it('the deadline suppresses the WEDGE only, never invents one', function () {
@@ -170,8 +172,10 @@ describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', functio
 
         it('a real wedge still classifies as wedged', function () {
             assert.strictEqual(stallClassOf('vm_executor_unavailable', LONG_STALL, GRACE, NOW, null), 'wedged');
-            // and once the clear instant has passed and the stall persists
-            assert.strictEqual(stallClassOf('anchor_attest_barrier', LONG_STALL, GRACE, NOW, NOW - 1), 'wedged');
+            assert.strictEqual(stallClassOf('anchor_attest_barrier', LONG_STALL, GRACE, NOW, NOW - 1),
+                               'barrier_defer');
+            assert.strictEqual(stallClassOf('anchor_attest_barrier', LONG_STALL, GRACE, NOW,
+                                             NOW - GRACE - 1), 'wedged');
         });
 
         // Keyed on the reason the proof client actually raises, so a respelling on either

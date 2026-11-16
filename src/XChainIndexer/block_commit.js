@@ -141,6 +141,7 @@ module.exports = {
         // advancing-but-barrier-deferring indexer from a wedged one.
         this.stallReason = null;
         this.stallClearsAt = null;              // the stall is over, so is its deadline
+        this.futureWaitClearsAt = null;
         this.lastBlockCommittedAt = Date.now();
         // Whatever this block was held behind, it is not held any more. Cleared here
         // as well as by nextBarrierHold's block-changed reset so a commit ends the

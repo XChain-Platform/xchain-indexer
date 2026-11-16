@@ -142,7 +142,7 @@ async function seedArchive(dogeDb) {
     const { v1, v2s } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { rewards: [reward] });
     // recovery.run() joins index_statuses and restricts to status IN ('valid','unverified'), so the
     // seeded v1 MUST carry a real status_id (a NULL status_id is dropped by the INNER JOIN, which is
-    // a fixture defect, not a reason to loosen the query). anchor.js defaults a clean parse to 'valid'.
+    // a fixture defect, not a reason to loosen the query). src/actions/anchor/ defaults a clean parse to 'valid'.
     const validStatusId = await dogeDb.createStatus('valid');
     // Every anchor row also needs its `actions` row: a v2 continuation chunk is
     // now authenticated by matching the archive head's AUTHOR, resolved through

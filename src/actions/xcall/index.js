@@ -49,10 +49,10 @@ const swq     = require('../../consensus/stake_weighted_quorum.js');
 const eq      = require('../../consensus/equivocation_header.js');
 const ah      = require('../../consensus/gates/mirror_admission_gate.js');
 
-// Vendored from ../protocol/constants.js (byte-identical to xchain-documentation/
-// protocol/constants.js; same convention as the VM_MAX_CALL_DEPTH /
-// VM_MIN_CALL_GAS mirrors in execute.js). The VM enforces these at emit time;
-// this handler re-validates host-side (defense in depth).
+// Registry-backed values from ../../protocol/constants.js, kept in value parity
+// with the canonical declarations and the VM call limits used by execute.js.
+// The VM enforces these at emit time; this handler re-validates host-side as
+// defense in depth.
 const PROTO = require('../../protocol/constants.js');
 // Handler parts. Each is called with this handler as the receiver, so the rows
 // written and their order do not depend on which file the code sits in.
@@ -239,7 +239,7 @@ class Xcall {
             if(!snapPubkeys.has(pk)) continue;
             if(!ed25519.verify(canonical, sig, pk)) continue;
             // Mark seen only AFTER the signature verifies, matching the hub
-            // finalizer and the SDK/explorer/sync verifiers (and anchor.js):
+            // finalizer and the SDK/explorer/sync verifiers (and src/actions/anchor/):
             // marking on first encounter lets a garbage-then-valid pair for one
             // qualified validator suppress the real signature (order-dependent
             // quorum under-count, flipping a quorate result verdict closed).

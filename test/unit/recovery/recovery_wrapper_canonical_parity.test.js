@@ -18,7 +18,7 @@
 //
 // This test derives its expectation two OTHER ways instead:
 //   1. A frozen 14-segment string literal, independent of any production code.
-//   2. Anchor.canonical (src/actions/anchor.js) with FORMAT=1, the rootless
+//   2. Anchor.canonical (src/actions/anchor/index.js) with FORMAT=1, the rootless
 //      archive form, which is the OTHER real producer of the shared first-10
 //      "XCHECKPOINT" base segments (the hub / SDK / explorer all byte-match it).
 //

@@ -24,6 +24,14 @@ const { getLogger } = require('../../observability/index.js');
 const { fitsUtf8mb3 } = require('../../db/utf8mb3.js');
 
 const hasOwn = (object, property) => Object.prototype.hasOwnProperty.call(object, property);
+const PARAMS_TYPE_ERROR = 'params must be a pipe-delimited string or an array of strings, numbers, booleans or null';
+
+function invalidQuoteParams(params){
+    let primitive = value => value == null || ['string', 'number', 'boolean'].includes(typeof value);
+    if(primitive(params)) return null;
+    if(Array.isArray(params) && params.every(primitive)) return null;
+    return { error: PARAMS_TYPE_ERROR };
+}
 
 // A fee quote may still be resolving the tip time when rollback clears the block loop's
 // memos. Fail closed unless the API view owns distinct memo objects, otherwise the late
@@ -70,6 +78,8 @@ function feeQuoteRpc({ indexer }){
         async feequote({action, params, source, feeOutputSats}){
             if(!action || typeof action !== 'string')
                 return { error: 'action is required' };
+            let paramsError = invalidQuoteParams(params);
+            if(paramsError) return paramsError;
             if(!indexer.indexerDb || !indexer.actions)
                 return { error: 'indexer not ready' };
             try {
@@ -180,6 +190,8 @@ function preflightRpc({ indexer }){
         async preflight({action, params, source, feeMode}){
             if(!action || typeof action !== 'string')
                 return { error: 'action is required' };
+            let paramsError = invalidQuoteParams(params);
+            if(paramsError) return paramsError;
             if(!indexer.indexerDb || !indexer.actions)
                 return { error: 'indexer not ready' };
             try {
@@ -199,6 +211,8 @@ function preflightRpc({ indexer }){
         async feequotedryrun({action, params, source, feeOutputs}){
             if(!action || typeof action !== 'string')
                 return { error: 'action is required' };
+            let paramsError = invalidQuoteParams(params);
+            if(paramsError) return paramsError;
             if(!indexer.indexerDb || !indexer.actions)
                 return { error: 'indexer not ready' };
             try {

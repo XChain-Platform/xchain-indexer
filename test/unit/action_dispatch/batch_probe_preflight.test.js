@@ -124,6 +124,19 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
             assert.strictEqual(calls.dryRuns, 3, 'wires that differ only in padding never share a memo entry');
         });
 
+        it('keeps the normalized pre-scan distinct from the raw-wire dispatch guard', function () {
+            let { ctx } = makeCtx();
+            let normalized = ['0', 'SEND', '0', 'JDOG', '1', 'addr1'];
+            assert.strictEqual(ctx.batchProbeForbiddenSubAction(normalized), null);
+
+            // Match batch/validate.js readCommands: the raw padded prefix is not stripped.
+            let commands = 'BATCH| 0|SEND|0|JDOG|1|addr1'.split(';');
+            commands[0] = commands[0].replace('BATCH|0|', '');
+            let dispatchedName = commands[0].split('|')[0];
+            assert.strictEqual(dispatchedName, 'BATCH');
+            assert.strictEqual(Actions.isBatchProbeForbiddenSubAction(dispatchedName), true);
+        });
+
         it('refuses a batch carrying a VM sub-command WITHOUT taking the mutex', async function () {
             for(const sub of ['DEPLOY|0|code', 'EXECUTE|0|1|f', 'XEXEC|0|1', 'BATCH|0|SEND|0|J|1|a',
                               'ATTEST|1|1|x', 'VOTE|2|7', 'XCALL|0|1|f']){

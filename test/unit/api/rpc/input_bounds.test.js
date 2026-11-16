@@ -89,6 +89,8 @@ describe('JSON-RPC input boundaries @regression @tier1', function () {
         });
         assert.deepStrictEqual(await controller.getactivevalidators(null), { error: 'params must be an object' });
         assert.deepStrictEqual(await controller.getactivevalidators(['0']), { error: 'params must be an object' });
+        assert.deepStrictEqual(await controller.getlistat(null), { error: 'params must be an object' });
+        assert.deepStrictEqual(await controller.getsharedlists(null), { error: 'params must be an object' });
     });
 
     it('validates batch element parameters independently', async function () {

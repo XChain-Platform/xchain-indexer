@@ -168,7 +168,7 @@ class NodeProof {
                 if(!eligible.has(s.pubkey)) continue;
                 if(!ed25519.verify(canonical, s.sig, s.pubkey)) continue;
                 // Mark seen only AFTER the signature verifies, matching the hub
-                // finalizer and the SDK/explorer/sync verifiers (and anchor.js):
+                // finalizer and the SDK/explorer/sync verifiers (and src/actions/anchor/):
                 // marking on first encounter lets a garbage-then-valid pair for
                 // one eligible verifier suppress the real signature
                 // (order-dependent quorum under-count, fails quorate proofs closed).

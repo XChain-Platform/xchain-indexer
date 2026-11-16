@@ -15,7 +15,8 @@
 'use strict';
 
 // The read lookups behind getbetfeeds, getbets, getopencrosschainorders,
-// getanchoraction and oraclefeequote compare caller text against utf8mb3 columns.
+// getanchoraction, getarchiveanchor, getrelayedattestation_requests, getbridgeescrowproof
+// and oraclefeequote compare caller text against utf8mb3 columns.
 // MariaDB refuses a utf8mb4 parameter holding a character above U+FFFF there with
 // errno 1267 (Illegal mix of collations), so each lookup must answer the empty or
 // absent result an unknown ASCII value gets, without binding the value at all.
@@ -32,6 +33,9 @@ const { buildOrdersRpc } = require('../../../src/api/rpc/orders.js');
 const { validateAnchorActionParams } = require('../../../src/actions/anchor/anchor_action_query');
 const { buildAnchorRpc } = require('../../../src/api/rpc/anchor.js');
 const { buildFeesRpc } = require('../../../src/api/rpc/fees.js');
+const { buildAttestationRpc } = require('../../../src/api/rpc/attest/attestation.js');
+const { buildBridgeRpc } = require('../../../src/api/rpc/bridge.js');
+const escrowFixture = require('../api/reads/helpers/escrow_proof_origin.js');
 
 const EMOJI = 'a😀';
 
@@ -209,10 +213,121 @@ function oracleFeeQuoteSuite(){
         });
     }
 }
+function archiveAnchorSuite(){
+    const KEY = { chain: 'BTC', network: 'regtest', block_index: 1, checkpoint_seq: 1,
+                  batch_crc32: 'deadbeef', match_count: 3 };
+
+    function archiveRpc(db){
+        db.getLatestBlockIndex = sinon.stub().resolves(5);
+        return buildAnchorRpc({ indexer: { config: db.config, indexerDb: { apiView: () => db } } });
+    }
+
+    for(let key of ['chain', 'network']){
+        it('getarchiveanchor with a supplementary ' + key + ' answers the ASCII control shape without querying', async function () {
+            const control = strictDb();
+            let ascii = await archiveRpc(control).getarchiveanchor(KEY);
+            assert.strictEqual(ascii.error, undefined, String(ascii.error));
+            sinon.assert.calledOnce(control.doQuery);
+
+            const db = strictDb();
+            let res = await archiveRpc(db).getarchiveanchor(Object.assign({}, KEY, { [key]: EMOJI }));
+            assert.strictEqual(res.error, undefined, key + ': ' + res.error);
+            assert.deepStrictEqual(res, ascii, key);
+            sinon.assert.notCalled(db.doQuery);
+        });
+    }
+
+    it('getArchiveAnchorByContent answers an absent head and no chunks for a supplementary key', async function () {
+        const db = strictDb();
+        let found = await db.getArchiveAnchorByContent(EMOJI, 'regtest', 1, 1, 'deadbeef', 3, null);
+        assert.deepStrictEqual(found, { head: null, chunks: [] });
+        sinon.assert.notCalled(db.doQuery);
+    });
+
+    it('getarchiveanchor by author answers not found for a supplementary author, like the ASCII control', async function () {
+        const control = strictDb();
+        let ascii = await archiveRpc(control).getarchiveanchor({ author: 'unknownaddr' });
+        assert.deepStrictEqual(ascii, { exists: false, match_batch_seq: null });
+        sinon.assert.calledOnce(control.doQuery);
+
+        const db = strictDb();
+        let res = await archiveRpc(db).getarchiveanchor({ author: EMOJI });
+        assert.deepStrictEqual(res, ascii);
+        sinon.assert.notCalled(db.doQuery);
+    });
+}
+
+function relayedRequestSuite(){
+    it('getRelayedAttestationRequests with a supplementary request_id answers [] without querying', async function () {
+        const control = strictDb();
+        assert.deepStrictEqual(await control.getRelayedAttestationRequests('BTC', 'unknownid', 10, null), []);
+        sinon.assert.calledWith(control.doQuery, sinon.match(/FROM attests req/));
+
+        const db = strictDb();
+        assert.deepStrictEqual(await db.getRelayedAttestationRequests('BTC', EMOJI, 10, null), []);
+        sinon.assert.notCalled(db.doQuery);
+    });
+
+    it('getrelayedattestation_requests answers the empty page, not a lookup failure', async function () {
+        const db = strictDb();
+        db.getLatestBlockIndex = sinon.stub().resolves(5);
+        const rpc = buildAttestationRpc({ indexer: { config: db.config, indexerDb: { apiView: () => db } } });
+        let res = await rpc.getrelayedattestation_requests({ request_id: EMOJI });
+        assert.deepStrictEqual(res, { latest_block_index: 5, count: 0, requests: [] });
+        sinon.assert.notCalled(db.doQuery);
+    });
+}
+
+function escrowProofSuite(){
+    const { ESCROW_ADDR, TICK, HEIGHT } = escrowFixture;
+    const SUPPLEMENTARY = /[\u{10000}-\u{10FFFF}]/u;
+
+    // The fixture answers the ledger read with a fixed balance; a ledger read for an address
+    // outside the table holds no rows, and a supplementary bind fails as it does on MariaDB.
+    async function node(){
+        const { db } = await escrowFixture.originNode({ signedBalance: '12.5' });
+        db.doQueryStrict.withArgs(sinon.match(/INNER JOIN index_addresses/), sinon.match(a => a.some(
+            v => typeof v === 'string' && SUPPLEMENTARY.test(v)))).callsFake(async function(){
+            let err = new Error('Illegal mix of collations');
+            err.errno = 1267;
+            throw err;
+        });
+        return db;
+    }
+
+    it('getBridgeEscrowProof answers a zero-balance absence proof for a supplementary address without binding it', async function () {
+        const db = await node();
+        let envelope = await db.getBridgeEscrowProof('a😀', TICK, HEIGHT);
+        assert.ok(envelope && !envelope.error, JSON.stringify(envelope));
+        assert.strictEqual(envelope.balance, '0');
+        assert.ok(Array.isArray(envelope.balance_proof.siblings));
+        let ledgerReads = db.doQueryStrict.getCalls().filter(c => /INNER JOIN index_addresses/.test(c.args[0]));
+        assert.strictEqual(ledgerReads.length, 0);
+    });
+
+    it('getbridgeescrowproof relays the envelope, not a failure, for a supplementary address', async function () {
+        const db = await node();
+        const rpc = buildBridgeRpc({ indexer: { indexerDb: { apiView: () => db } } });
+        let res = await rpc.getbridgeescrowproof({ address: EMOJI, tick: TICK, block_index: HEIGHT });
+        assert.strictEqual(res.error, undefined, String(res.error));
+        assert.strictEqual(res.address, EMOJI);
+        assert.strictEqual(res.balance, '0');
+    });
+
+    it('the escrow address still reads the ledger and proves its balance', async function () {
+        const db = await node();
+        let envelope = await db.getBridgeEscrowProof(ESCROW_ADDR, TICK, HEIGHT);
+        assert.strictEqual(envelope.balance, '12.5');
+    });
+}
+
 
 describe('utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1', function () {
     describe('bet listings', betListingSuite);
     describe('cross-chain offer book', offerBookSuite);
     describe('anchor action', anchorActionSuite);
     describe('oracle fee quote', oracleFeeQuoteSuite);
+    describe('archive anchor', archiveAnchorSuite);
+    describe('relayed attestation requests', relayedRequestSuite);
+    describe('bridge escrow proof', escrowProofSuite);
 });

@@ -22,7 +22,7 @@
  * overrides applied, internal $-descriptors stripped) for consumers to adapt.
  *
  * consensusHash(tick, network) returns the sha256 of the consensus-critical
- * subset (network byte-prefixes, addresses, fee math, gas schedule, staking),
+ * fields selected by consensusSubset() below, the authoritative field list and
  * the value the per-service content-pin verifies against. Genesis pins are
  * deliberately excluded here because genesis.js already fail-closes on them,
  * and chainGenesisHash (the node's own block-0 hash) is excluded because it

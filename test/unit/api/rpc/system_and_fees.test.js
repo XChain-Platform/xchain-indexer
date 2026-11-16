@@ -172,11 +172,11 @@ describe('JSON-RPC fee family @regression @tier1', function () {
             computeFeeQuoteDryRun: sinon.stub().resolves({ valid: false })
         };
         const rpc = buildFeesRpc({ indexer: indexerWithActions(actions), ENABLE_DRYRUN: true });
-        assert.deepStrictEqual(await rpc.feequote({ action: 'SEND', params: {}, source: 'a', feeOutputSats: 1 }), { valid: true, fee: '1' });
-        assert.deepStrictEqual(actions.computeFeeQuote.firstCall.args[0], { action: 'SEND', params: {}, source: 'a', feeOutputSats: 1 });
-        assert.deepStrictEqual(await rpc.preflight({ action: 'SEND', params: {}, source: 'a', feeMode: 'native' }), { valid: true, supported: true });
+        assert.deepStrictEqual(await rpc.feequote({ action: 'SEND', params: '0|T|1|d', source: 'a', feeOutputSats: 1 }), { valid: true, fee: '1' });
+        assert.deepStrictEqual(actions.computeFeeQuote.firstCall.args[0], { action: 'SEND', params: '0|T|1|d', source: 'a', feeOutputSats: 1 });
+        assert.deepStrictEqual(await rpc.preflight({ action: 'SEND', params: '0|T|1|d', source: 'a', feeMode: 'native' }), { valid: true, supported: true });
         assert.deepStrictEqual(await rpc.feeschedule(), { schedule: [] });
-        assert.deepStrictEqual(await rpc.feequotedryrun({ action: 'SEND', params: {}, source: 'a', feeOutputs: [] }), { valid: false });
+        assert.deepStrictEqual(await rpc.feequotedryrun({ action: 'SEND', params: '0|T|1|d', source: 'a', feeOutputs: [] }), { valid: false });
     });
 
     it('validates the action name and readiness before touching the engine', async function () {
