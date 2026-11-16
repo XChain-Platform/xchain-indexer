@@ -67,6 +67,10 @@ const NET_BALANCES_CHUNK = 500;
 // byte-identical to the single-key read, including whatever collation folding the
 // index tables apply. Returns a Map of address<TAB>tick to the minimal-decimal net; a
 // key with no ledger rows is '0', exactly as getNetBalance reports it.
+
+// Turn the subquery cache off: it keys each sum under the connection collation, so
+// stored keys that fold together ('ABC' and 'abc') would share one sum and make the
+// root order-dependent. Keys are deduped, so the cache saved nothing.
 async function getNetBalances(db, keys){
     const wanted = [];
     const seen = new Set();
@@ -86,7 +90,8 @@ async function getNetBalances(db, keys){
                            : 'SELECT ' + i + ', ?, ?';
         }).join(' UNION ALL ');
         const rows = await db.doQueryStrict(
-            `SELECT k.i AS i,
+            `SET STATEMENT optimizer_switch='subquery_cache=off' FOR
+             SELECT k.i AS i,
                 (SELECT COALESCE(SUM(CAST(c.amount AS DECIMAL(60,18))),0) FROM credits c
                     INNER JOIN index_addresses a ON a.id=c.address_id
                     INNER JOIN index_tickers   t ON t.id=c.tick_id
