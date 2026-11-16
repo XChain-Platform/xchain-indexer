@@ -454,5 +454,13 @@
   "2026-11-15-file-multipart-tables.sql": {
     "residue": "21e8afdea15ab7d69653701ae9fd690944a08f86e6adddd17cb6142e931012d5",
     "sha256": "2022b41c5d9c58ce2ff377de162b2b6d882eb97ad92a1dfad0e93d2aef361e61"
+  },
+  "2026-11-16-mappings-actions-address-history-idx.sql": {
+    "residue": "fa34b6340969b073d6fddb220f900c629e8bb012af0be641fb078cc3bb24eed1",
+    "sha256": "a5a454e6bc11fb707356328020f075575de2b20dc1ead52872b7e52353b501cd"
+  },
+  "2026-11-16-price-snapshots-pair-status-ts-index.sql": {
+    "residue": "56a12d4724932fa66b849254f65391ab7ecb27ff893883a57a6297ee6a1d4b91",
+    "sha256": "93cf661631ce347c713d2dbadd4d9c6da14dc7fd69c3fcdd4a72cf9bd8b695b4"
   }
 }

@@ -27,3 +27,4 @@ CREATE TABLE mappings_actions (
 CREATE        INDEX action_index      ON mappings_actions (action_index);
 CREATE        INDEX type_id           ON mappings_actions (type_id);
 CREATE        INDEX id                ON mappings_actions (id);
+CREATE        INDEX mappings_type_id_action ON mappings_actions (type_id, id, action_index);
