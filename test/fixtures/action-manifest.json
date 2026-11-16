@@ -226,7 +226,7 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
-      "userEncodableVersions": [0],
+      "userEncodableVersions": [0, 1, 2],
       "explorerRender": true,
       "walletForm": true
     },
