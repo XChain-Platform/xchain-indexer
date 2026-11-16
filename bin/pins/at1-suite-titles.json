@@ -17300,6 +17300,27 @@
       "middleware stack (src/api/middleware.js) @regression @tier1 leaves /metrics unregistered while METRICS_ENABLED is off",
       "middleware stack (src/api/middleware.js) @regression @tier1 mounts helmet, the JSON body parser, CORS from the parsed allowlist and the rate limit headers"
     ],
+    "da04a374c96a6868": [
+      "FILE multipart completion duplicate manifest @regression @tier1 binds the row to the lowest action index manifest",
+      "FILE multipart completion duplicate part @regression @tier1 uses the part with the lowest action index",
+      "FILE multipart completion foreign source @regression @tier1 does not assemble another source parts",
+      "FILE multipart completion high position @regression @tier1 ignores a position at the manifest part count",
+      "FILE multipart completion in reverse order @regression @tier1 completes documentation vector digest mismatch",
+      "FILE multipart completion in reverse order @regression @tier1 completes documentation vector final one-byte slice rebalanced",
+      "FILE multipart completion in reverse order @regression @tier1 completes documentation vector three-part deflate-raw",
+      "FILE multipart completion in reverse order @regression @tier1 completes documentation vector two-part raw",
+      "FILE multipart completion invalid piece hook @regression @tier1 does not run after an invalid part is stored",
+      "FILE multipart completion manifest first @regression @tier1 completes documentation vector digest mismatch",
+      "FILE multipart completion manifest first @regression @tier1 completes documentation vector final one-byte slice rebalanced",
+      "FILE multipart completion manifest first @regression @tier1 completes documentation vector three-part deflate-raw",
+      "FILE multipart completion manifest first @regression @tier1 completes documentation vector two-part raw",
+      "FILE multipart completion mismatch @regression @tier1 writes mismatch when the winning digest is wrong",
+      "FILE multipart completion missing part @regression @tier1 does not read or write a completion",
+      "FILE multipart completion one write @regression @tier1 keeps the first terminal result",
+      "FILE multipart completion rollback replay @regression @tier1 re-completes after rollback below the last part",
+      "FILE multipart completion valid piece hook @regression @tier1 runs after a valid manifest is stored",
+      "FILE multipart completion valid piece hook @regression @tier1 runs after a valid part is stored"
+    ],
     "da3771c61bf790fc": [
       "ACTION manifest conformance: indexer-written action names @regression a rename write the manifest category does not list is reported",
       "ACTION manifest conformance: indexer-written action names @regression every action name the indexer writes has a manifest entry",
@@ -20673,8 +20694,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1642,
-      "titleCount": 16005,
+      "fileCount": 1643,
+      "titleCount": 16024,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -20891,6 +20912,7 @@
         "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
         "test/unit/actions/file_multipart_batch.test.js": "d7af709ec3d67e56",
         "test/unit/actions/file_multipart_column_stub.test.js": "ca0d74321fad9e88",
+        "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
         "test/unit/actions/file_multipart_decision.test.js": "d436c418fcaf9eaf",
         "test/unit/actions/file_multipart_pieces.test.js": "5ea9fd3cee7a612a",
         "test/unit/actions/file_multipart_route.test.js": "66122e266cb932cc",
@@ -22698,8 +22720,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1251,
-      "titleCount": 12630,
+      "fileCount": 1252,
+      "titleCount": 12649,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22925,6 +22947,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
@@ -23955,8 +23978,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 655,
-      "titleCount": 6920,
+      "fileCount": 656,
+      "titleCount": 6939,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24023,6 +24046,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/market/dispense_payment_tally_scale.test.js": "2b43cec5c7ef3f91",
@@ -24616,8 +24640,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1251,
-      "titleCount": 12630,
+      "fileCount": 1252,
+      "titleCount": 12649,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24843,6 +24867,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
