@@ -16,7 +16,13 @@
 
 'use strict';
 
+process.env.INDEXER_COIN = 'BTC';
+process.env.INDEXER_NETWORK = 'regtest';
+
 const assert = require('assert');
+const sinon = require('sinon');
+const { createMockIndexer } = require('../../../fixtures/mocks');
+const Rollback = require('../../../../src/rollback/index.js');
 const blockReadsMixin = require('../../../../src/db/database/block_reads.js');
 const readPhase = require('../../../../src/rollback/read_phase.js');
 const { retractedLandingClocks } = require('../../../../src/rollback/landing_clock.js');
@@ -63,8 +69,38 @@ async function rebuildsTheForwardClock() {
     assert.deepStrictEqual(calls, [[[130, 125], 11]], 'one bulk read for every landing block');
 }
 
+// Through a whole rollback: the clock read off the landing block reaches the durable
+// price_retraction row and the live pushpricereorg call.
+async function stagesTheClockOnTheRetraction() {
+    const times = chain(1700000000, 100, 140);
+    const sent = await decoderOver(times, 'testnet').protocolTimeForStoredBlock(130);
+    const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(),
+        retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves(),
+        retractBridgeRange: sinon.stub().resolves() };
+    const idx = createMockIndexer({ hubClient });
+    idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+    Object.assign(idx.indexerDb, indexerViewOver(times, 'testnet'));
+    const rb = new Rollback(idx);
+    idx.util.resetLists();
+    idx.indexerDb.doQuery.callsFake(async (sql) => {
+        sql = String(sql);
+        if (/last_action_index/.test(sql)) return [{ last_action_index: 75 }];
+        if (/^SELECT\s+a\.action_index\s+FROM\s+actions a/.test(sql)) return [{ action_index: 50 }];
+        if (/FROM prices p/.test(sql) && /batch_first_round/.test(sql))
+            return [{ action_index: 52, batch_first_round: 200, batch_last_round: 201, block_index: 130 }];
+        return [];
+    });
+    await rb.rollback(100);
+    const want = [{ first_round: 200, last_round: 201, block_time: sent }];
+    const staged = idx.indexerDb.enqueueHubPushTx.getCalls().find(c => c.args[0] === 'price_retraction').args[1];
+    assert.deepStrictEqual(staged.batches, want);
+    assert.deepStrictEqual(hubClient.retractPriceRange.firstCall.args[4], want);
+}
+
 describe('Rollback retracted PRICE batch landing clock @regression', function () {
+    afterEach(function () { sinon.restore(); });
     it('rebuilds the exact clock the forward pass sent, which is not the raw stamp on a median-time network', rebuildsTheForwardClock);
+    it('stages the rebuilt clock on the durable price retraction and the live delivery', stagesTheClockOnTheRetraction);
 
     it('does not read the decoder, whose rows at the rolled-back heights already belong to the replacement chain', async function () {
         const old = chain(1700000000, 100, 140);

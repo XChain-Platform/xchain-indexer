@@ -36,7 +36,7 @@ const capabilityProof = require('../../consensus/capability_snapshot_proof/verif
 const { getLogger } = require('../../observability/index.js');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
-const { requireStakeWeight, normalizeStakeAmount, usesCapabilitySnapshot } = require('../shared.js');
+const { requireStakeWeight, normalizeStakeAmount, capabilityConfig, usesCapabilitySnapshot } = require('../shared.js');
 
 const { createHeldLog } = require('../../consensus/capability_snapshot_proof/held_log.js');
 // Logs, once a minute per row, why a mirror-resolved row is still held.
@@ -126,8 +126,7 @@ module.exports = {
         // never come from different sources; see usesCapabilitySnapshot.
         if(usesCapabilitySnapshot(this.config, capability))
             return await this.getCapabilitySnapshotWeights(capability, blockIndex);
-        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
-        let capConfig = caps[capability];
+        let capConfig = capabilityConfig(this.config, capability);
         if(!capConfig) return [];
         // Caller-supplied threshold (the hub's authoritative, signed/governance-
         // anchored MIN_STAKE) is honoured VERBATIM, identically to
@@ -317,9 +316,8 @@ module.exports = {
     // signals config drift during a capability rollout and must surface as an error
     // rather than an empty set that looks identical to "no qualified validators".
     isCapabilityConfigured(capability){
-        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         if(capability === 'archive_publish') capability = 'oracle_publish';
-        return !!caps[capability];
+        return !!capabilityConfig(this.config, capability);
     },
 
 };

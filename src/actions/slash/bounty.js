@@ -22,6 +22,8 @@
  *
  ********************************************************************/
 
+const { capabilityConfig } = require('../../db/shared.js');
+
 // Bounty/treasury split for a burned bond. Governance-configured. The submitter's
 // bounty = clamp(BOUNTY_BPS·burned, BOUNTY_FLOOR, BOUNTY_CAP), never exceeding the bond; the
 // remainder goes to TREASURY_ADDRESS, or is BURNED when unset. Config shape:
@@ -40,8 +42,8 @@ function bountyTreasurySplit(config, util, capability, burned){
     if(capability === 'config'){
         cfg = config['CONFIG_SLASH'] || {};
     } else {
-        let caps = (config['STAKING'] && config['STAKING']['CAPABILITIES']) ? config['STAKING']['CAPABILITIES'] : {};
-        cfg = (caps[capability] && caps[capability]['SLASH']) ? caps[capability]['SLASH'] : {};
+        let capCfg = capabilityConfig(config, capability);
+        cfg = (capCfg && capCfg['SLASH']) ? capCfg['SLASH'] : {};
     }
 
     let bps = Number(cfg['BOUNTY_BPS'] || 0);

@@ -212,6 +212,16 @@ function usesCapabilitySnapshot(config, capability){
            capability === 'archive_publish';
 }
 
+// Return only explicitly configured capabilities. Caller-controlled names must not
+// resolve inherited Object.prototype members such as constructor or toString.
+function capabilityConfig(config, capability){
+    if(typeof capability !== 'string') return null;
+    let staking = config && config['STAKING'];
+    let caps = staking && staking['CAPABILITIES'];
+    if(!caps || !Object.prototype.hasOwnProperty.call(caps, capability)) return null;
+    return caps[capability];
+}
+
 // True when str[i] opens a backslash escape inside the currently open quoted span.
 //
 // MariaDB/MySQL honour `\<char>` inside `'` and `"` string literals by default, so a
@@ -276,6 +286,7 @@ module.exports = {
     txEpochStore,
     BLOCK_HASH_VERSION,
     CANONICAL_CARET_ID,
+    capabilityConfig,
     usesCapabilitySnapshot,
     opensBackslashEscape,
 };

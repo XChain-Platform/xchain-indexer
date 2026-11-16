@@ -23,7 +23,7 @@
 
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
-const { usesCapabilitySnapshot } = require('../shared.js');
+const { capabilityConfig, usesCapabilitySnapshot } = require('../shared.js');
 
 const gateRegistry = require('../../consensus/gate_registry');
 const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
@@ -145,8 +145,7 @@ module.exports = {
         // this node would reach a quorum verdict no other node reaches.
         if(usesCapabilitySnapshot(this.config, capability))
             return await this.getCapabilitySnapshotCount(capability, blockIndex);
-        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
-        let capConfig = caps[capability];
+        let capConfig = capabilityConfig(this.config, capability);
         if(!capConfig) return 0;
         // A caller-supplied threshold (the hub's authoritative MIN_STAKE) is
         // honoured VERBATIM (see getValidatorsByCapability). The local floor is
@@ -305,8 +304,7 @@ module.exports = {
         // path (snapshot_block is BTC-anchored); see usesCapabilitySnapshot.
         if(usesCapabilitySnapshot(this.config, capability))
             return await this.getCapabilitySnapshotValidators(capability, blockIndex);
-        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
-        let capConfig = caps[capability];
+        let capConfig = capabilityConfig(this.config, capability);
         if(!capConfig) return [];
         // A caller-supplied threshold (the hub passes its own authoritative,
         // signed/governance-anchored MIN_STAKE) is honoured VERBATIM on both the

@@ -1159,6 +1159,15 @@
     "11ba414b73ec82b8": [
       "recovery stub checkpoint columns @regression @tier1 maps state_checkpoints INSERT values by their named columns"
     ],
+    "11bf3ff84fbe3d03": [
+      "consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1 every pair names a registry row the callers read (a renamed key would compare nothing)",
+      "consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1 vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION equals xchain-vm PKG3_SANDBOX_ACTIVATION at every mainnet coin key",
+      "consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1 vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION matches xchain-vm activation on mainnet, testnet and regtest",
+      "consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1 vm_exec_lint_activation.VM_EXEC_LINT_ACTIVATION equals xchain-vm EXEC_LINT_ACTIVATION at every mainnet coin key",
+      "consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1 vm_exec_lint_activation.VM_EXEC_LINT_ACTIVATION matches xchain-vm activation on mainnet, testnet and regtest",
+      "consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1 vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION equals xchain-vm LINT_GLOBAL_ALIAS_ACTIVATION at every mainnet coin key",
+      "consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1 vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION matches xchain-vm activation on mainnet, testnet and regtest"
+    ],
     "11f1e52cf591cb04": [
       "protocol_changes: amounts, price, and contracts regtest overlay @regression @tier1 leaves committed values in place when every variable is refused",
       "protocol_changes: amounts, price, and contracts regtest overlay @regression @tier1 leaves the four committed regtest values unchanged when all variables are unset",
@@ -1996,6 +2005,24 @@
       "HubPushQueue selector retries clears old-hub backoff before fetching due rows after a move",
       "HubPushQueue selector retries delivers an undelivered row to the current hub and resets its attempts after a move",
       "HubPushQueue selector retries does not move the selector after a push connection error"
+    ],
+    "194fbf7f17f98a3d": [
+      "Database.getContractState() adversarial keys @regression @tier1 falls back to the raw string when state_value is not valid JSON",
+      "Database.getContractState() adversarial keys @regression @tier1 returns a null-prototype object (no inherited Object.prototype)",
+      "Database.getContractState() adversarial keys @regression @tier1 round-trips a \"__proto__\" OBJECT key without reassigning the prototype",
+      "Database.getContractState() adversarial keys @regression @tier1 round-trips a \"__proto__\" string key as an own property (not the proto setter)",
+      "Database.getContractState() adversarial keys @regression @tier1 round-trips a \"constructor\" key",
+      "Database.getRawBlockTime() memoization @regression @tier1 does not serve a stale value after the block_index advances then returns",
+      "Database.getRawBlockTime() memoization @regression @tier1 queries the DB on the first call for a block_index",
+      "Database.getRawBlockTime() memoization @regression @tier1 re-queries when block_index changes (last-block-wins, cache does not grow unbounded)",
+      "Database.getRawBlockTime() memoization @regression @tier1 rethrows an infrastructure fault instead of returning false, and does not cache it",
+      "Database.getRawBlockTime() memoization @regression @tier1 returns false when the block row is not found (unchanged from unmemoized behavior)",
+      "Database.getRawBlockTime() memoization @regression @tier1 returns the identical value on cached calls as the original query",
+      "Database.getRawBlockTime() memoization @regression @tier1 serves repeated calls for the same block_index from cache (no extra query)",
+      "Database.isCapabilityConfigured() @regression @tier1 returns false for a capability absent from the config",
+      "Database.isCapabilityConfigured() @regression @tier1 returns false for inherited Object.prototype names",
+      "Database.isCapabilityConfigured() @regression @tier1 returns false when STAKING.CAPABILITIES is missing entirely",
+      "Database.isCapabilityConfigured() @regression @tier1 returns true for a configured capability"
     ],
     "1976f46663d49963": [
       "live hub push delivery settles through the delivered_to fan-out @regression @tier1 block push: a pinned node still drops the row on the first success (control)",
@@ -5550,23 +5577,6 @@
       "deriveAnchorRewards late-derive observation wiring @regression @tier1 records each minted row with the loop block and mirror maturity",
       "deriveAnchorRewards late-derive observation wiring @regression @tier1 still returns and reconciles when late-derive observation throws"
     ],
-    "45fe9dcc4acaec7b": [
-      "Database.getContractState() adversarial keys @regression @tier1 falls back to the raw string when state_value is not valid JSON",
-      "Database.getContractState() adversarial keys @regression @tier1 returns a null-prototype object (no inherited Object.prototype)",
-      "Database.getContractState() adversarial keys @regression @tier1 round-trips a \"__proto__\" OBJECT key without reassigning the prototype",
-      "Database.getContractState() adversarial keys @regression @tier1 round-trips a \"__proto__\" string key as an own property (not the proto setter)",
-      "Database.getContractState() adversarial keys @regression @tier1 round-trips a \"constructor\" key",
-      "Database.getRawBlockTime() memoization @regression @tier1 does not serve a stale value after the block_index advances then returns",
-      "Database.getRawBlockTime() memoization @regression @tier1 queries the DB on the first call for a block_index",
-      "Database.getRawBlockTime() memoization @regression @tier1 re-queries when block_index changes (last-block-wins, cache does not grow unbounded)",
-      "Database.getRawBlockTime() memoization @regression @tier1 rethrows an infrastructure fault instead of returning false, and does not cache it",
-      "Database.getRawBlockTime() memoization @regression @tier1 returns false when the block row is not found (unchanged from unmemoized behavior)",
-      "Database.getRawBlockTime() memoization @regression @tier1 returns the identical value on cached calls as the original query",
-      "Database.getRawBlockTime() memoization @regression @tier1 serves repeated calls for the same block_index from cache (no extra query)",
-      "Database.isCapabilityConfigured() @regression @tier1 returns false for a capability absent from the config",
-      "Database.isCapabilityConfigured() @regression @tier1 returns false when STAKING.CAPABILITIES is missing entirely",
-      "Database.isCapabilityConfigured() @regression @tier1 returns true for a configured capability"
-    ],
     "4640ed78651b4c0e": [
       "compat gate: startup-required tables builds the missing tables through db.createTable, skipping live and skipped ones",
       "compat gate: startup-required tables covers every table named in each assert*TablesPresent REQUIRED list",
@@ -7798,6 +7808,13 @@
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) rejects when a signature does not verify",
       "Attest cross-chain relay (ATTEST v3/v4) @regression @tier3 ATTEST v3 (relay request) rejects when the cross_chain snapshot is empty (fails closed)"
     ],
+    "5e89e3b8e33ba178": [
+      "capability reads refuse Object.prototype member names @regression @tier1 answers the unconfigured result from all four DB reads without touching storage",
+      "capability reads refuse Object.prototype member names @regression @tier1 bountyTreasurySplit reads only a capability config the object owns",
+      "capability reads refuse Object.prototype member names @regression @tier1 getcapabilityvalidators and getstakeweightsbycapability report the name as not configured",
+      "capability reads refuse Object.prototype member names @regression @tier1 still answers a configured capability from storage",
+      "capability reads refuse Object.prototype member names @regression @tier1 the RPC still serves a configured capability through the same wiring"
+    ],
     "5e93fa420238108c": [
       "Database.getContractStakeRotationOrigin @regression @tier1 binds the slot and current key and reads the journal in replay order",
       "Database.getContractStakeRotationOrigin @regression @tier1 keeps the first origin and the last matching delegation through later rotations",
@@ -9799,6 +9816,34 @@
       "JSON body limit vs JSON-escaped legal payloads accepts 390,000 control characters (about 2.34 MB on the wire)",
       "JSON body limit vs JSON-escaped legal payloads still refuses a body above the ceiling with the clean 413 refusal"
     ],
+    "7689fed033a0952f": [
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 anchor action flags a supplementary chain or network as unmatchable, and leaves ASCII keys untouched",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 anchor action getanchoraction answers not anchored for a supplementary chain or network, like the ASCII control",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 archive anchor getArchiveAnchorByContent answers an absent head and no chunks for a supplementary key",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 archive anchor getarchiveanchor by author answers not found for a supplementary author, like the ASCII control",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 archive anchor getarchiveanchor with a supplementary chain answers the ASCII control shape without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 archive anchor getarchiveanchor with a supplementary network answers the ASCII control shape without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetFeedRows with a supplementary source answers [] like the ASCII control, without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetFeedRows with a supplementary status answers [] like the ASCII control, without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetRows with a supplementary source answers [] without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetRows with a supplementary status answers [] without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getbetfeeds answers the empty page, not a lookup failure",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings still binds a supplementary tick, since index_tickers is utf8mb4",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bridge escrow proof getBridgeEscrowProof answers a zero-balance absence proof for a supplementary address without binding it",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bridge escrow proof getbridgeescrowproof relays the envelope, not a failure, for a supplementary address",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bridge escrow proof the escrow address still reads the ledger and proves its balance",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 cross-chain offer book getOpenCrossChainOffers with a supplementary to_coin answers the empty book without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 cross-chain offer book getopencrosschainorders answers an empty book, not a lookup failure",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary fiatCode answers the ASCII control shape without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary giveCoin answers the ASCII control shape without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary giveTick answers the ASCII control shape without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary oracleAddress answers the ASCII control shape without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote parameter parsing parses blockTime canonically and refuses coercible values before quoting",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote parameter parsing refuses non-string and over-length lookup keys before quoting",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote the ASCII control answers no effective oracle price",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 relayed attestation requests getRelayedAttestationRequests with a supplementary request_id answers [] without querying",
+      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 relayed attestation requests getrelayedattestation_requests answers the empty page, not a lookup failure"
+    ],
     "76968d4ca40a2816": [
       "Price v2 (PRICE batch) @regression @tier3 strict parameter length BELOW the admission height a trailing field is left unread and the batch stays valid, as v0.20.0 judged it",
       "Price v2 (PRICE batch) @regression @tier3 strict parameter length a batch missing its final field (short, not long) still invalidates as it always has",
@@ -11295,6 +11340,14 @@
     ],
     "8a8d0afa6dccfafa": [
       "state_hash class 6 projection for archive MATCH_COUNT carries the flagged head only on the armed side"
+    ],
+    "8aa0f943b97471d9": [
+      "Rollback retracted PRICE batch landing clock @regression does not read the decoder, whose rows at the rolled-back heights already belong to the replacement chain",
+      "Rollback retracted PRICE batch landing clock @regression omits every clock when the read fails or nothing names a landing block",
+      "Rollback retracted PRICE batch landing clock @regression omits the clock when any row of the median window is missing",
+      "Rollback retracted PRICE batch landing clock @regression rebuilds the exact clock the forward pass sent, which is not the raw stamp on a median-time network",
+      "Rollback retracted PRICE batch landing clock @regression sends the raw stamp on a raw-time network, reading only the landing rows",
+      "Rollback retracted PRICE batch landing clock @regression stages the rebuilt clock on the durable price retraction and the live delivery"
     ],
     "8ab62ec19ab03a3c": [
       "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 arms from genesis on a value of 0 instead of treating it as unarmed",
@@ -13381,9 +13434,6 @@
     "a2418791374bf31e": [
       "Order_Match action handler @regression @tier2 breaks after the taker exhausts its GET side",
       "Order_Match action handler @regression @tier2 breaks after the taker exhausts its GIVE side"
-    ],
-    "a28902a7c4dd4771": [
-      "16 \u2013 Rollback replay idempotency @regression @tier3 apply -> rollback -> re-apply the SAME blocks equals a fresh from-genesis replay (content mode)"
     ],
     "a2b660081ba3da15": [
       "Block Discovery and Sync @regression @tier3 action_indexes are strictly monotonically increasing across blocks",
@@ -17863,12 +17913,6 @@
       "subtree node store single rows selects child hashes by node hash and returns the query result",
       "subtree node store single rows uses chunks of 128 rows"
     ],
-    "e0d21a7b4e18e9e2": [
-      "consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1 every pair names a registry row the callers read (a renamed key would compare nothing)",
-      "consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1 vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION equals xchain-vm PKG3_SANDBOX_ACTIVATION at every mainnet coin key",
-      "consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1 vm_exec_lint_activation.VM_EXEC_LINT_ACTIVATION equals xchain-vm EXEC_LINT_ACTIVATION at every mainnet coin key",
-      "consensus/vm_lint_rows_match_vm: each VM lint row equals its xchain-vm twin @regression @tier1 vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION equals xchain-vm LINT_GLOBAL_ALIAS_ACTIVATION at every mainnet coin key"
-    ],
     "e0d973ff4aec540d": [
       "ATTEST batch wire: the admission-era row field set @regression @tier2 at the activation a batch carrying the field reassembles it and signs it",
       "ATTEST batch wire: the admission-era row field set @regression @tier2 at the activation a batch whose rows lack the field is refused ROW_FIELD admit_block_btc",
@@ -20648,32 +20692,6 @@
       "ATTEST callback batch position activation @regression @tier3 gate on copies BATCH_POSITION and separates callback root discriminators",
       "ATTEST callback batch position activation @regression @tier3 relay mirror keeps the gated BATCH_POSITION identical to the direct callback"
     ],
-    "fe861a87e6f60fc7": [
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 anchor action flags a supplementary chain or network as unmatchable, and leaves ASCII keys untouched",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 anchor action getanchoraction answers not anchored for a supplementary chain or network, like the ASCII control",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 archive anchor getArchiveAnchorByContent answers an absent head and no chunks for a supplementary key",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 archive anchor getarchiveanchor by author answers not found for a supplementary author, like the ASCII control",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 archive anchor getarchiveanchor with a supplementary chain answers the ASCII control shape without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 archive anchor getarchiveanchor with a supplementary network answers the ASCII control shape without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetFeedRows with a supplementary source answers [] like the ASCII control, without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetFeedRows with a supplementary status answers [] like the ASCII control, without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetRows with a supplementary source answers [] without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getBetRows with a supplementary status answers [] without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings getbetfeeds answers the empty page, not a lookup failure",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bet listings still binds a supplementary tick, since index_tickers is utf8mb4",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bridge escrow proof getBridgeEscrowProof answers a zero-balance absence proof for a supplementary address without binding it",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bridge escrow proof getbridgeescrowproof relays the envelope, not a failure, for a supplementary address",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 bridge escrow proof the escrow address still reads the ledger and proves its balance",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 cross-chain offer book getOpenCrossChainOffers with a supplementary to_coin answers the empty book without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 cross-chain offer book getopencrosschainorders answers an empty book, not a lookup failure",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary fiatCode answers the ASCII control shape without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary giveCoin answers the ASCII control shape without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary giveTick answers the ASCII control shape without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote a supplementary oracleAddress answers the ASCII control shape without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 oracle fee quote the ASCII control answers no effective oracle price",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 relayed attestation requests getRelayedAttestationRequests with a supplementary request_id answers [] without querying",
-      "utf8mb3 read RPC lookups answer empty for supplementary text @regression @tier1 relayed attestation requests getrelayedattestation_requests answers the empty page, not a lookup failure"
-    ],
     "fe8f001bb389e37d": [
       "armed_map/vm_gate_coverage: every public VM gate is classified classifies every exported activation and gate time exactly once",
       "armed_map/vm_gate_coverage: every public VM gate is classified pins every alias through its canonical VM mirror",
@@ -20782,8 +20800,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1652,
-      "titleCount": 16094,
+      "fileCount": 1654,
+      "titleCount": 16111,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21646,7 +21664,7 @@
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
-        "test/unit/consensus/vm_lint_rows_match_vm.test.js": "e0d21a7b4e18e9e2",
+        "test/unit/consensus/vm_lint_rows_match_vm.test.js": "11bf3ff84fbe3d03",
         "test/unit/contract_state_subtree.test.js": "8340f62c3bf4e723",
         "test/unit/contract_state_subtree.test/contract_state_root_arming_boundary.test.js": "1e2917ef8e99fd7f",
         "test/unit/contract_state_subtree.test/contract_state_root_frozen_row.test.js": "3498ab5bdacfbd7d",
@@ -21714,12 +21732,13 @@
         "test/unit/db/database/exact_u64.test.js": "c171a686246e7883",
         "test/unit/db/database/u64_pool_typecast.test.js": "467278efba55c298",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
+        "test/unit/db/db.test/capability_prototype_names.test.js": "5e89e3b8e33ba178",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
         "test/unit/db/db.test/get_block_index.test.js": "6acb53eca64ed20e",
         "test/unit/db/db.test/reorg_identity.test.js": "2394b1e6a050e4c7",
         "test/unit/db/db.test/validator_capabilities.test.js": "fc5d6e4ae9cfb50a",
-        "test/unit/db/db.test/vm_contract_state_and_block_time.test.js": "45fe9dcc4acaec7b",
+        "test/unit/db/db.test/vm_contract_state_and_block_time.test.js": "194fbf7f17f98a3d",
         "test/unit/db/db.test/write_decoder_and_mappings.test.js": "08e91cd626092760",
         "test/unit/db/db_close.test.js": "80307529ff55d738",
         "test/unit/db/db_federation_query_hardening.test.js": "9439caedd177239e",
@@ -21878,7 +21897,7 @@
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
-        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "fe861a87e6f60fc7",
+        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "7689fed033a0952f",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/cross_chain_snapshot_golden.test.js": "0cb9a34b3a919984",
@@ -22304,6 +22323,7 @@
         "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
         "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "a7b9a30696b4da72",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
+        "test/unit/rollback/rollback.test/retracted_price_landing_clock.test.js": "8aa0f943b97471d9",
         "test/unit/rollback/rollback.test/transaction_and_rearm.test.js": "d7221b552cd11441",
         "test/unit/rollback/rollback_archive_author_scope.test.js": "e9e0aa249fa308f0",
         "test/unit/rollback/rollback_attest_batch_head_reset.test.js": "2a0df26fd3c8d653",
@@ -22572,7 +22592,7 @@
     },
     "test:integration": {
       "fileCount": 73,
-      "titleCount": 446,
+      "titleCount": 447,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
@@ -22643,7 +22663,7 @@
         "test/integration/scenarios/parity/14_multi_chain_parity.test.js": "a6ca6c165d689dc7",
         "test/integration/scenarios/parity/15_sdk_parity.test.js": "d1a4d043f6a13f27",
         "test/integration/scenarios/parity/15_vm_balance_reader.test.js": "f4d512605040b459",
-        "test/integration/scenarios/parity/16_rollback_replay_idempotency.test.js": "a28902a7c4dd4771",
+        "test/integration/scenarios/parity/16_rollback_replay_idempotency.test.js": "871d9e7c77cd730c",
         "test/integration/scenarios/parity/18_fullnode_reward_determinism.test.js": "c2c55cee18ad3b7e",
         "test/integration/schema_fresh_vs_migrated.test.js": "ef1265310a539530",
         "test/integration/schema_isolation.test.js": "7f87cdd50704d954"
@@ -22651,7 +22671,7 @@
     },
     "test:integration:ci": {
       "fileCount": 73,
-      "titleCount": 446,
+      "titleCount": 447,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
@@ -22722,7 +22742,7 @@
         "test/integration/scenarios/parity/14_multi_chain_parity.test.js": "a6ca6c165d689dc7",
         "test/integration/scenarios/parity/15_sdk_parity.test.js": "d1a4d043f6a13f27",
         "test/integration/scenarios/parity/15_vm_balance_reader.test.js": "f4d512605040b459",
-        "test/integration/scenarios/parity/16_rollback_replay_idempotency.test.js": "a28902a7c4dd4771",
+        "test/integration/scenarios/parity/16_rollback_replay_idempotency.test.js": "871d9e7c77cd730c",
         "test/integration/scenarios/parity/18_fullnode_reward_determinism.test.js": "c2c55cee18ad3b7e",
         "test/integration/schema_fresh_vs_migrated.test.js": "ef1265310a539530",
         "test/integration/schema_isolation.test.js": "7f87cdd50704d954"
@@ -22817,8 +22837,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1260,
-      "titleCount": 12711,
+      "fileCount": 1262,
+      "titleCount": 12728,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23484,7 +23504,7 @@
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
-        "test/unit/consensus/vm_lint_rows_match_vm.test.js": "e0d21a7b4e18e9e2",
+        "test/unit/consensus/vm_lint_rows_match_vm.test.js": "11bf3ff84fbe3d03",
         "test/unit/contract_state_subtree.test.js": "8340f62c3bf4e723",
         "test/unit/contract_state_subtree.test/contract_state_root_arming_boundary.test.js": "1e2917ef8e99fd7f",
         "test/unit/contract_state_subtree.test/contract_state_root_frozen_row.test.js": "3498ab5bdacfbd7d",
@@ -23538,12 +23558,13 @@
         "test/unit/db/closed_dispenser_lookup.test.js": "2079b10f2327b97b",
         "test/unit/db/database/u64_pool_typecast.test.js": "467278efba55c298",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
+        "test/unit/db/db.test/capability_prototype_names.test.js": "5e89e3b8e33ba178",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
         "test/unit/db/db.test/get_block_index.test.js": "6acb53eca64ed20e",
         "test/unit/db/db.test/reorg_identity.test.js": "2394b1e6a050e4c7",
         "test/unit/db/db.test/validator_capabilities.test.js": "fc5d6e4ae9cfb50a",
-        "test/unit/db/db.test/vm_contract_state_and_block_time.test.js": "45fe9dcc4acaec7b",
+        "test/unit/db/db.test/vm_contract_state_and_block_time.test.js": "194fbf7f17f98a3d",
         "test/unit/db/db.test/write_decoder_and_mappings.test.js": "08e91cd626092760",
         "test/unit/db/db_federation_query_hardening.test.js": "9439caedd177239e",
         "test/unit/db/db_get_block_hashes_idindependence.test.js": "33ad0789078ca418",
@@ -23673,7 +23694,7 @@
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
-        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "fe861a87e6f60fc7",
+        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "7689fed033a0952f",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
@@ -23983,6 +24004,7 @@
         "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
         "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "a7b9a30696b4da72",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
+        "test/unit/rollback/rollback.test/retracted_price_landing_clock.test.js": "8aa0f943b97471d9",
         "test/unit/rollback/rollback.test/transaction_and_rearm.test.js": "d7221b552cd11441",
         "test/unit/rollback/rollback_archive_author_scope.test.js": "e9e0aa249fa308f0",
         "test/unit/rollback/rollback_attest_batch_head_reset.test.js": "2a0df26fd3c8d653",
@@ -24083,8 +24105,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 663,
-      "titleCount": 6994,
+      "fileCount": 664,
+      "titleCount": 7005,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24343,7 +24365,7 @@
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
-        "test/unit/consensus/vm_lint_rows_match_vm.test.js": "e0d21a7b4e18e9e2",
+        "test/unit/consensus/vm_lint_rows_match_vm.test.js": "11bf3ff84fbe3d03",
         "test/unit/contracts/contract_meta_text.test.js": "c660c73606f39ac4",
         "test/unit/contracts/controller_enforcement.test/custody_guard_withdraw.test.js": "432f2275f96736af",
         "test/unit/contracts/controller_guard_call_depth.test.js": "9e539754d3054c30",
@@ -24375,12 +24397,13 @@
         "test/unit/db/closed_dispenser_lookup.test.js": "2079b10f2327b97b",
         "test/unit/db/database/u64_pool_typecast.test.js": "467278efba55c298",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
+        "test/unit/db/db.test/capability_prototype_names.test.js": "5e89e3b8e33ba178",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
         "test/unit/db/db.test/get_block_index.test.js": "6acb53eca64ed20e",
         "test/unit/db/db.test/reorg_identity.test.js": "2394b1e6a050e4c7",
         "test/unit/db/db.test/validator_capabilities.test.js": "fc5d6e4ae9cfb50a",
-        "test/unit/db/db.test/vm_contract_state_and_block_time.test.js": "45fe9dcc4acaec7b",
+        "test/unit/db/db.test/vm_contract_state_and_block_time.test.js": "194fbf7f17f98a3d",
         "test/unit/db/db.test/write_decoder_and_mappings.test.js": "08e91cd626092760",
         "test/unit/db/db_federation_query_hardening.test.js": "9439caedd177239e",
         "test/unit/db/db_get_block_hashes_idindependence.test.js": "33ad0789078ca418",
@@ -24488,7 +24511,7 @@
         "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
-        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "fe861a87e6f60fc7",
+        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "7689fed033a0952f",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
@@ -24752,8 +24775,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1260,
-      "titleCount": 12711,
+      "fileCount": 1262,
+      "titleCount": 12728,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25419,7 +25442,7 @@
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/parity.test.js": "f28f4fd6949fe068",
-        "test/unit/consensus/vm_lint_rows_match_vm.test.js": "e0d21a7b4e18e9e2",
+        "test/unit/consensus/vm_lint_rows_match_vm.test.js": "11bf3ff84fbe3d03",
         "test/unit/contract_state_subtree.test.js": "8340f62c3bf4e723",
         "test/unit/contract_state_subtree.test/contract_state_root_arming_boundary.test.js": "1e2917ef8e99fd7f",
         "test/unit/contract_state_subtree.test/contract_state_root_frozen_row.test.js": "3498ab5bdacfbd7d",
@@ -25473,12 +25496,13 @@
         "test/unit/db/closed_dispenser_lookup.test.js": "2079b10f2327b97b",
         "test/unit/db/database/u64_pool_typecast.test.js": "467278efba55c298",
         "test/unit/db/db.test.js": "89abb8c8ab0b6fc6",
+        "test/unit/db/db.test/capability_prototype_names.test.js": "5e89e3b8e33ba178",
         "test/unit/db/db.test/continued_normalization.test.js": "3b9048a10470f805",
         "test/unit/db/db.test/execution_text_clip.test.js": "ea0a32519488ba6a",
         "test/unit/db/db.test/get_block_index.test.js": "6acb53eca64ed20e",
         "test/unit/db/db.test/reorg_identity.test.js": "2394b1e6a050e4c7",
         "test/unit/db/db.test/validator_capabilities.test.js": "fc5d6e4ae9cfb50a",
-        "test/unit/db/db.test/vm_contract_state_and_block_time.test.js": "45fe9dcc4acaec7b",
+        "test/unit/db/db.test/vm_contract_state_and_block_time.test.js": "194fbf7f17f98a3d",
         "test/unit/db/db.test/write_decoder_and_mappings.test.js": "08e91cd626092760",
         "test/unit/db/db_federation_query_hardening.test.js": "9439caedd177239e",
         "test/unit/db/db_get_block_hashes_idindependence.test.js": "33ad0789078ca418",
@@ -25608,7 +25632,7 @@
         "test/unit/db/update_address_balance.test.js": "861b33b0ed92612c",
         "test/unit/db/update_tokens_index_id_concurrency.test.js": "157a12acb2f83ae1",
         "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
-        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "fe861a87e6f60fc7",
+        "test/unit/db/utf8mb3_read_rpc_lookups.test.js": "7689fed033a0952f",
         "test/unit/db/vm_snapshot/cross_block_cache_wiring.test.js": "b9742e252f175ed5",
         "test/unit/db/vm_snapshot/cross_block_snapshot_cache.test.js": "8c1a2b86359acf1e",
         "test/unit/db/vm_snapshot/forward_block_reuse.test.js": "bf8511ddb1fa04d3",
@@ -25918,6 +25942,7 @@
         "test/unit/rollback/rollback.test/hub_retractions.test.js": "d31d4945ce62dc79",
         "test/unit/rollback/rollback.test/maturity_escrow_release_reversal.test.js": "a7b9a30696b4da72",
         "test/unit/rollback/rollback.test/maturity_reversal.test.js": "84b586d3bd6d3e90",
+        "test/unit/rollback/rollback.test/retracted_price_landing_clock.test.js": "8aa0f943b97471d9",
         "test/unit/rollback/rollback.test/transaction_and_rearm.test.js": "d7221b552cd11441",
         "test/unit/rollback/rollback_archive_author_scope.test.js": "e9e0aa249fa308f0",
         "test/unit/rollback/rollback_attest_batch_head_reset.test.js": "2a0df26fd3c8d653",
