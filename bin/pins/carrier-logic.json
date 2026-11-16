@@ -127,7 +127,7 @@
     },
     "protocol/constants": {
       "path": "src/protocol/constants.js",
-      "hash": "d6aa3dfd9859b8bb9f7197eaab17f0a23d54947f99108045b61e0c45b947b1b9",
+      "hash": "0dbef708b8fa6018bc54801aa23f40bf48ed8b4ac266c4401cfcbce7b6edc29c",
       "twins": []
     },
     "protocol_changes": {
@@ -2254,6 +2254,13 @@
       "to": "0e122379d3090a0b70dc6983592f9b4254e36adcaec682305c3390e1b04d7d61",
       "reason": "checkpoint_supersede_activation appended to SHARED_GATES",
       "date": "2026-10-25"
+    },
+    {
+      "id": "protocol/constants",
+      "from": "d6aa3dfd9859b8bb9f7197eaab17f0a23d54947f99108045b61e0c45b947b1b9",
+      "to": "0dbef708b8fa6018bc54801aa23f40bf48ed8b4ac266c4401cfcbce7b6edc29c",
+      "reason": "MTF-2 multi-part file caps",
+      "date": "2026-11-15"
     }
   ]
 }

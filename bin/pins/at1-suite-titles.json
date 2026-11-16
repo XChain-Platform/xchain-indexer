@@ -5761,17 +5761,6 @@
       "AnchorRecovery list snapshots @regression @tier2 restores a legacy archive with no list_snapshots exactly as before",
       "AnchorRecovery list snapshots @regression @tier2 restores quorum-signed full and delta rows byte for byte"
     ],
-    "4952d6cf78701508": [
-      "FILE multipart assembly verdict @regression @tier1 ignores positions at or above total_parts",
-      "FILE multipart assembly verdict @regression @tier1 keeps the lowest action index for a duplicate position",
-      "FILE multipart assembly verdict @regression @tier1 matches the documentation vector: digest mismatch",
-      "FILE multipart assembly verdict @regression @tier1 matches the documentation vector: final one-byte slice rebalanced",
-      "FILE multipart assembly verdict @regression @tier1 matches the documentation vector: three-part deflate-raw",
-      "FILE multipart assembly verdict @regression @tier1 matches the documentation vector: two-part raw",
-      "FILE multipart assembly verdict @regression @tier1 returns mismatch when the byte lengths do not sum to total_bytes",
-      "FILE multipart assembly verdict @regression @tier1 returns null when the manifest is absent",
-      "FILE multipart assembly verdict @regression @tier1 returns null while an in-range position is missing"
-    ],
     "4982ff3988e6d5f9": [
       "UNBIND exact wire value rule @regression ADDRESS format 1 (v1) treats only wire string 1 as unbind",
       "UNBIND exact wire value rule @regression ISSUE format 6 (v6) treats only wire string 1 as unbind"
@@ -6713,6 +6702,25 @@
       "Tier 1 - processTransaction crash safety @tier1 with fuzzed tx data strings survives mutated data strings",
       "Tier 1 - processTransaction crash safety @tier1 with fuzzed tx data strings survives unknown action strings",
       "Tier 1 - processTransaction crash safety @tier1 with fuzzed tx data strings survives well-formed tx with random data field"
+    ],
+    "53c18091185cb3af": [
+      "FILE multipart field validation accepts a valid manifest and returns its canonical integer fields",
+      "FILE multipart field validation accepts a valid part at index zero",
+      "FILE multipart field validation accepts an absent, null, or zero-length manifest RAW_DATA",
+      "FILE multipart field validation accepts both PART_INDEX bounds including zero",
+      "FILE multipart field validation accepts both TOTAL_BYTES bounds",
+      "FILE multipart field validation accepts both TOTAL_PARTS bounds",
+      "FILE multipart field validation gives every malformed PART_INDEX its range verdict",
+      "FILE multipart field validation gives every malformed manifest integer its range verdict",
+      "FILE multipart field validation keeps manifest failures in FILE_HASH, TOTAL_PARTS, TOTAL_BYTES, RAW_DATA order",
+      "FILE multipart field validation keeps part failures in FILE_HASH, PART_INDEX, RAW_DATA order",
+      "FILE multipart field validation preserves an earlier verdict",
+      "FILE multipart field validation rejects PART_INDEX below and above its bounds",
+      "FILE multipart field validation rejects TOTAL_BYTES below and above its bounds",
+      "FILE multipart field validation rejects TOTAL_PARTS below and above its bounds",
+      "FILE multipart field validation rejects a FILE_HASH that is not exactly 64 lowercase hex characters",
+      "FILE multipart field validation rejects a manifest carrying non-empty RAW_DATA",
+      "FILE multipart field validation rejects an absent, null, or zero-length part RAW_DATA"
     ],
     "54022d406d76bdb8": [
       "Database.createValidatorReward() @regression @tier1 carries the archive reward snapshot_block through as its round_qualifier",
@@ -9950,6 +9958,11 @@
       "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 at the gate a relay pair still resolves under cross_chain",
       "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 below the gate a base pair resolves its snapshot block from the request row",
       "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 registers a row unarmed on mainnet, armed on testnet, and genesis-active on regtest"
+    ],
+    "7afd8ea98fb973cf": [
+      "protocol_changes FILE_MULTIPART row @regression @tier1 is dark on mainnet, activates at the testnet instant, and is active at regtest genesis",
+      "protocol_changes FILE_MULTIPART row @regression @tier1 is the final part 5 row with the specified activation table",
+      "protocol_changes FILE_MULTIPART row @regression @tier1 publishes both multipart caps through registry copies"
     ],
     "7b26338ac8262f8c": [
       "anchor archive fold-term gate BTC reward derivation does not terminate the bundle family",
@@ -20539,8 +20552,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1632,
-      "titleCount": 15891,
+      "fileCount": 1633,
+      "titleCount": 15902,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -20755,7 +20768,7 @@
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
-        "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
+        "test/unit/actions/file_multipart_validate.test.js": "53c18091185cb3af",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/issue/settle_owner_history.test.js": "087297546f0ad980",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
@@ -21946,6 +21959,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
@@ -22555,7 +22569,7 @@
     },
     "test:regression": {
       "fileCount": 1249,
-      "titleCount": 12609,
+      "titleCount": 12603,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22781,7 +22795,6 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
-        "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
         "test/unit/actions/list_wire/union_read_bounds.test.js": "841a2b8658cd319e",
@@ -23637,6 +23650,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
@@ -23810,7 +23824,7 @@
     },
     "test:regression:fast": {
       "fileCount": 653,
-      "titleCount": 6899,
+      "titleCount": 6893,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -23877,7 +23891,6 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
-        "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/market/dispense_payment_tally_scale.test.js": "2b43cec5c7ef3f91",
         "test/unit/actions/market/dispenser.test/supplementary_get_address.test.js": "e61d439e6f2e1f69",
@@ -24370,6 +24383,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
@@ -24469,7 +24483,7 @@
     },
     "test:regression:full": {
       "fileCount": 1249,
-      "titleCount": 12609,
+      "titleCount": 12603,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24695,7 +24709,6 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
-        "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
         "test/unit/actions/list_wire/union_read_bounds.test.js": "841a2b8658cd319e",
@@ -25551,6 +25564,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
