@@ -17169,6 +17169,18 @@
       "bridge_settle: the XBRIDGE settle pass one settlement per SOURCE LEG (the ledger of record refusal) refuses a second OUT-leg row naming a burn this chain already released for",
       "bridge_settle: the XBRIDGE settle pass one settlement per SOURCE LEG (the ledger of record refusal) still applies a second row naming a DIFFERENT lock on the same chain"
     ],
+    "d4e14977e7e3514b": [
+      "FILE multipart storage helpers partDigestOf hashes exactly the bytes in a Uint8Array view",
+      "FILE multipart storage helpers partDigestOf hashes exactly the fixed Buffer bytes",
+      "FILE multipart storage helpers partDigestOf returns the empty digest for absent, null, and zero-length bytes",
+      "FILE multipart storage helpers partDigestOf throws instead of hashing a string as text",
+      "FILE multipart storage helpers sanitizeMultipartRow keeps the INT UNSIGNED maximum and replaces the next value",
+      "FILE multipart storage helpers sanitizeMultipartRow keeps the wire fields of a valid manifest",
+      "FILE multipart storage helpers sanitizeMultipartRow keeps the wire fields of a valid part",
+      "FILE multipart storage helpers sanitizeMultipartRow replaces a malformed or uppercase hash",
+      "FILE multipart storage helpers sanitizeMultipartRow replaces leading-zero and non-numeric integer spellings",
+      "FILE multipart storage helpers sanitizeMultipartRow uses storage-safe placeholders for absent fields"
+    ],
     "d4ec762692d1bdc6": [
       "BATCH composition limit boundary tests @regression @tier3 BAT-01: BATCH with single sub-action is valid and calls processAction once",
       "BATCH composition limit boundary tests @regression @tier3 BAT-02: BATCH with 1 MINT and 1 ISSUE is valid (each at their per-type limit)",
@@ -17492,16 +17504,6 @@
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the parser finds definition columns in source order",
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the parser finds migration MODIFY clauses (retype guard is not vacuous)",
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the parser finds migration-added columns (guard is not vacuous)"
-    ],
-    "d7af709ec3d67e56": [
-      "FILE multipart batch validation accepts a lone manifest beside a version 2 MESSAGE",
-      "FILE multipart batch validation accepts a manifest with no SIBLING_ACTIONS",
-      "FILE multipart batch validation accepts a version 0 FILE in a BATCH beside another FILE",
-      "FILE multipart batch validation accepts an unbatched version 2 part",
-      "FILE multipart batch validation preserves an incoming error before either multipart batch verdict",
-      "FILE multipart batch validation rejects a version 1 manifest beside another FILE",
-      "FILE multipart batch validation rejects a version 2 part in a BATCH even when its position is null",
-      "FILE multipart batch validation treats a BATCH_POSITION of zero as present"
     ],
     "d7dd66c300ddeafd": [
       "Message action handler @regression @tier3 accepts ENCRYPTION_METHOD=1 (ECDH)",
@@ -20558,7 +20560,7 @@
   "scripts": {
     "test": {
       "fileCount": 1633,
-      "titleCount": 15907,
+      "titleCount": 15909,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -20773,7 +20775,7 @@
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
-        "test/unit/actions/file_multipart_batch.test.js": "d7af709ec3d67e56",
+        "test/unit/actions/file_multipart_store.test.js": "d4e14977e7e3514b",
         "test/unit/actions/file_multipart_validate.test.js": "53c18091185cb3af",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/issue/settle_owner_history.test.js": "087297546f0ad980",
