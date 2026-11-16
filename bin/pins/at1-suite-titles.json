@@ -16467,6 +16467,20 @@
       "09 Fee Spike (mempool backlog drain) keeps per-transaction cost growing no faster than the ledger",
       "09 Fee Spike (mempool backlog drain) leaves quiet blocks no slower than the ledger growth explains"
     ],
+    "d01a64b6df952a73": [
+      "FILE gated multipart batch integration @regression @tier1 joins a manifest and MESSAGE v2 without leaking FILE fields into the message",
+      "FILE multipart activation routing @regression @tier1 registers and stores a manifest and a part above activation",
+      "FILE multipart activation routing @regression @tier1 sends versions 1 and 2 through the unchanged version 0 refusal path below activation",
+      "FILE multipart batch refusals @regression @tier1 rejects a duplicate valid manifest from the same source",
+      "FILE multipart batch refusals @regression @tier1 rejects a manifest beside a second FILE",
+      "FILE multipart batch refusals @regression @tier1 rejects a part whenever BATCH_POSITION is an own property",
+      "FILE multipart part identity @regression @tier1 stores only a part row and leaves its FILE action index invalid",
+      "FILE multipart refusal integration @regression @tier1 applies multipart checks after the sleeping SOURCE refusal",
+      "FILE multipart refusal integration @regression @tier1 stores every manifest field refusal with its exact verdict",
+      "FILE multipart refusal integration @regression @tier1 stores every part field refusal with its exact verdict",
+      "FILE multipart storage sanitising @regression @tier1 fits invalid manifest fields to the strict table columns",
+      "FILE multipart storage sanitising @regression @tier1 fits invalid part fields and hashes the raw bytes exactly"
+    ],
     "d0251082e34791fc": [
       "archive stamp journal rollback restore @regression @tier1 keeps the journal null below the gate and falls back to unverified",
       "archive stamp journal rollback restore @regression @tier1 leaves a v3 chain section row stamped",
@@ -20661,8 +20675,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1641,
-      "titleCount": 15995,
+      "fileCount": 1642,
+      "titleCount": 16007,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -20880,6 +20894,7 @@
         "test/unit/actions/file_multipart_batch.test.js": "d7af709ec3d67e56",
         "test/unit/actions/file_multipart_column_stub.test.js": "ca0d74321fad9e88",
         "test/unit/actions/file_multipart_decision.test.js": "d436c418fcaf9eaf",
+        "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
         "test/unit/actions/file_multipart_route.test.js": "66122e266cb932cc",
         "test/unit/actions/file_multipart_store.test.js": "d4e14977e7e3514b",
         "test/unit/actions/file_multipart_validate.test.js": "53c18091185cb3af",
@@ -22685,8 +22700,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1251,
-      "titleCount": 12630,
+      "fileCount": 1252,
+      "titleCount": 12642,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22912,6 +22927,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
@@ -23942,8 +23958,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 655,
-      "titleCount": 6920,
+      "fileCount": 656,
+      "titleCount": 6932,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24010,6 +24026,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/market/dispense_payment_tally_scale.test.js": "2b43cec5c7ef3f91",
@@ -24603,8 +24620,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1251,
-      "titleCount": 12630,
+      "fileCount": 1252,
+      "titleCount": 12642,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24830,6 +24847,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",

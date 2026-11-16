@@ -43,10 +43,26 @@
 // Wire bound on GATE_MIN_AMOUNT (matches the SDK validator and the
 // gated_files.gate_min_amount column width), and the fixed comparison scale the
 // wallet uses. Vendored byte-identical from xchain-documentation/protocol/constants.js.
-const { THRESHOLD_SCALE } = require('../protocol/constants.js');
+const {
+    THRESHOLD_SCALE,
+    MULTIPART_FILE_MAX_PARTS,
+    MULTIPART_FILE_MAX_BYTES,
+} = require('../protocol/constants.js');
 const { getLogger } = require('../observability/index.js');
 const { fitsUtf8mb3 } = require('../db/utf8mb3.js');
+const {
+    MANIFEST_FORMAT,
+    PART_FORMAT,
+    multipartRoute,
+    duplicateManifestVerdict,
+} = require('./file_multipart_route.js');
+const { validateMultipartFields, checkMultipartBatch } = require('./file_multipart_validate.js');
+const { partDigestOf, sanitizeMultipartRow } = require('./file_multipart_store.js');
 const GATE_MIN_AMOUNT_MAX_LENGTH = 40;
+const MULTIPART_LIMITS = {
+    maxParts: MULTIPART_FILE_MAX_PARTS,
+    maxBytes: MULTIPART_FILE_MAX_BYTES,
+};
 
 class File {
 
@@ -83,72 +99,90 @@ class File {
         // garbage forever, even after the upgrade. The action string is already
         // preserved verbatim, so a column would only invite the parsed-at-ingest trap.
         this.formats[0] = 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION';
+        this.formats[1] = MANIFEST_FORMAT;
+        this.formats[2] = PART_FORMAT;
 
     }
 
     // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // Example payloads by FORMAT version:
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
-        // Validate that format is known
         let format = data['FORMAT'];
-        if(!error && (format===null || this.formats[format] === undefined ))
-            error = 'invalid: VERSION (unknown)';
-
-        // Parse PARAMS using given VERSION format and update transaction data object
+        let enabled = false;
+        if(format === 1 || format === 2)
+            enabled = await this.actions.protocolChanges.isEnabled('FILE_MULTIPART', data['BLOCK_INDEX']);
+        const routed = multipartRoute(format, enabled, error);
+        error = routed.error;
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
+        if(routed.route === 'part')
+            return this.parsePart(data, error);
+        return this.parseFile(data, error, routed.route === 'manifest');
+    }
 
-        error = await this.validateFields(data, error);
+    async parsePart(data, error){
+        error = await this.validateSource(data, error);
+        error = this.validateMultipart(data, error);
+        const status = error || 'valid';
+        data['STATUS'] = status;
+        const digest = partDigestOf(data['RAW_DATA']);
+        const stored = Object.assign({}, data, sanitizeMultipartRow(data), {
+            BYTE_LENGTH: digest.byteLength,
+            PART_DIGEST: digest.partDigest,
+        });
+        getLogger().info("\t FILE PART : " + stored['FILE_HASH'] + ' : ' + status);
+        await this.indexerDb.createPart(stored);
+        this.util.addAddressTicker(data['SOURCE']);
+    }
 
-        // Gated content validations (optional fields appended to format 0)
-
+    async parseFile(data, error, isManifest){
+        error = await this.validateSource(data, error);
+        if(isManifest)
+            error = await this.validateManifest(data, error);
+        error = this.validateLegacyFields(data, error);
         let isGated = (!this.util.isNull(data['GATE_TICKER']) && String(data['GATE_TICKER']).length > 0);
-
         error = await this.validateGatedContent(data, isGated, error);
-
-        // A threshold with no gate is meaningless and must not be storable: it would
-        // sit in gated_files with no gate_ticker to weigh a balance against. Rejected
-        // rather than ignored, for the same immutability reason as above.
         if(!error && !isGated && !this.util.isNull(data['GATE_MIN_AMOUNT']) &&
            String(data['GATE_MIN_AMOUNT']).length > 0)
             error = 'invalid: GATE_MIN_AMOUNT';
-
-        // Determine final status
-        let status = (error) ? error : 'valid';
+        let status = error || 'valid';
         data['STATUS'] = status;
-
-        // Print status message
         getLogger().info("\t FILE : " + data['NAME'] + ' : ' + data['TYPE'] + ' : ' + (isGated ? ('GATE=' + data['GATE_TICKER'] + ' : ') : '') + data['STATUS']);
-
-        // Persisted for every FILE action; gated_files is written only for valid
-        // gated files (format 0 with a non-empty GATE_TICKER).
         await this.indexerDb.createFile(data);
-
-        // For valid gated files, also persist the gating metadata so
-        // sends of GATE_TICKER can be enforced and wallets can look up the key.
         if(isGated && status === 'valid')
             await this.indexerDb.createGatedFile(data);
-
-        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);
-
-        // Create action mappings
         await this.mapper.createMappings(data);
+        if(isManifest)
+            await this.indexerDb.createManifest(Object.assign({}, data, sanitizeMultipartRow(data)));
+    }
 
+    async validateManifest(data, error){
+        error = this.validateMultipart(data, error);
+        if(!error){
+            const group = await this.indexerDb.getGroup(data['SOURCE'], data['FILE_HASH']);
+            error = duplicateManifestVerdict(error, group.manifest, data['FILE_HASH']);
+        }
+        return error;
+    }
+
+    validateMultipart(data, error){
+        error = validateMultipartFields(data, error, MULTIPART_LIMITS).error;
+        return checkMultipartBatch(data, error);
+    }
+
+    async validateSource(data, error){
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+            error = 'invalid: SOURCE (sleeping)';
+        return error;
     }
 
     // General Validations
     async validateFields(data, error){
+        error = await this.validateSource(data, error);
+        return this.validateLegacyFields(data, error);
+    }
 
-        // Verify SOURCE is not sleeping
-        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
-            error = 'invalid: SOURCE (sleeping)';
+    validateLegacyFields(data, error){
 
         // Verify NAME is shorter than MAX_FILE_NAME_LENGTH
         if(!error && String(data['NAME']).length > this.config['MAX_FILE_NAME_LENGTH'])
