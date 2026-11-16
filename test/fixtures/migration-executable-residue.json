@@ -450,5 +450,9 @@
   "2026-11-01-index-memos-binary-collation.sql": {
     "residue": "ae6f1986990b27bf2d658a8c1f687a123c662fb47df0e9efa823d801988b08f2",
     "sha256": "eaed44bbbf96e096fb63773d00d59cd6e45782fbad117feba20187c28445d783"
+  },
+  "2026-11-15-file-multipart-tables.sql": {
+    "residue": "21e8afdea15ab7d69653701ae9fd690944a08f86e6adddd17cb6142e931012d5",
+    "sha256": "2022b41c5d9c58ce2ff377de162b2b6d882eb97ad92a1dfad0e93d2aef361e61"
   }
 }
