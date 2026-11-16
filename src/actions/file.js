@@ -148,8 +148,10 @@ class File {
         data['STATUS'] = status;
         getLogger().info("\t FILE : " + data['NAME'] + ' : ' + data['TYPE'] + ' : ' + (isGated ? ('GATE=' + data['GATE_TICKER'] + ' : ') : '') + data['STATUS']);
         await this.indexerDb.createFile(data);
-        if(isGated && status === 'valid')
-            await this.indexerDb.createGatedFile(data);
+        if(isGated && status === 'valid'){
+            const gatedData = isManifest ? Object.assign({}, data, { RAW_DATA: null }) : data;
+            await this.indexerDb.createGatedFile(gatedData);
+        }
         this.util.addAddressTicker(data['SOURCE']);
         await this.mapper.createMappings(data);
         if(isManifest)

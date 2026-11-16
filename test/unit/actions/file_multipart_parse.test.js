@@ -258,7 +258,7 @@ describe('FILE gated multipart batch integration @regression @tier1', function()
         assert.strictEqual(data['STATUS'], 'valid');
         assert.ok(built.indexer.indexerDb.createManifest.calledOnce);
         assert.ok(built.indexer.indexerDb.createGatedFile.calledOnce);
-        assert.strictEqual(built.indexer.indexerDb.createGatedFile.firstCall.args[0]['RAW_DATA'], undefined);
+        assert.strictEqual(built.indexer.indexerDb.createGatedFile.firstCall.args[0]['RAW_DATA'], null);
         for(const key of ['FILE_HASH', 'TOTAL_PARTS', 'TOTAL_BYTES', 'GATE_TICKER', 'KEY_HASH'])
             assert.ok(!built.seenMessageKeys.includes(key), key + ' leaked into MESSAGE');
         assert.ok(built.indexer.indexerDb.createMessage.calledOnce);
