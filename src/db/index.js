@@ -178,6 +178,7 @@ const MIXIN_FILES = [
     './events/index.js',
     './fees/index.js',
     './files/index.js',
+    './files/multipart.js',
     './full_node_verifications/index.js',
     './hub_pushes/index.js',
     './index_tables/index.js',
