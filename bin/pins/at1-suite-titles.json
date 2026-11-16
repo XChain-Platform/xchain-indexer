@@ -2791,6 +2791,24 @@
       "Attest (ATTEST) @regression @tier3 v1: response accepts a v1 signed by the deterministic responsible set",
       "Attest (ATTEST) @regression @tier3 v1: response rejects a v1 signed by a capable-but-not-responsible validator coalition"
     ],
+    "24c9deca9282a392": [
+      "FILE multipart runner completion replay @regression @tier1 reads the existing completion and writes nothing",
+      "FILE multipart runner documentation vectors in reverse order @regression @tier1 completes digest mismatch",
+      "FILE multipart runner documentation vectors in reverse order @regression @tier1 completes final one-byte slice rebalanced",
+      "FILE multipart runner documentation vectors in reverse order @regression @tier1 completes three-part deflate-raw",
+      "FILE multipart runner documentation vectors in reverse order @regression @tier1 completes two-part raw",
+      "FILE multipart runner documentation vectors manifest first @regression @tier1 completes digest mismatch",
+      "FILE multipart runner documentation vectors manifest first @regression @tier1 completes final one-byte slice rebalanced",
+      "FILE multipart runner documentation vectors manifest first @regression @tier1 completes three-part deflate-raw",
+      "FILE multipart runner documentation vectors manifest first @regression @tier1 completes two-part raw",
+      "FILE multipart runner duplicate manifest @regression @tier1 completes once against the lowest action-index manifest",
+      "FILE multipart runner duplicate part @regression @tier1 keeps one completion from the lowest action-index part",
+      "FILE multipart runner foreign source @regression @tier1 does not assemble parts from another source",
+      "FILE multipart runner high position @regression @tier1 ignores a part position above the manifest range",
+      "FILE multipart runner missing part @regression @tier1 returns before the completion read",
+      "FILE multipart runner rollback replay @regression @tier1 re-completes after purging below the last part",
+      "FILE multipart runner terminal mismatch @regression @tier1 keeps the first mismatch terminal when a valid duplicate arrives"
+    ],
     "24db8fd13c2a120f": [
       "utf8mb4 inventory sync to xchain-sync exits 1 from --check on a stale copy and 0 after --write",
       "utf8mb4 inventory sync to xchain-sync marks the canonical file as the canonical inventory",
@@ -9396,6 +9414,12 @@
       "markets: the rollback collector agrees with the block path @regression @tier1 exempts the sentinel from the dangling-ticker sweep",
       "markets: the rollback collector agrees with the block path @regression @tier1 keeps the token/native pair the block path keeps, under the same key",
       "markets: the rollback collector agrees with the block path @regression @tier1 probes order survival NULL-aware, so a live token/native market is not swept as a zombie"
+    ],
+    "71832ac9263a1830": [
+      "multipart I/O completion reads @regression @tier1 returns null from one query when no completion exists",
+      "multipart I/O completion reads @regression @tier1 returns the first completion using one parameterized query",
+      "multipart I/O completion writes @regression @tier1 maps lowercase keys without mutating the input row",
+      "multipart I/O group reads @regression @tier1 passes the source and file hash through to the database"
     ],
     "718b1a8900dc316c": [
       "mirror_admission_activation: canonical version seam @regression encodes a present map for an armed row",
@@ -20687,8 +20711,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1643,
-      "titleCount": 16017,
+      "fileCount": 1645,
+      "titleCount": 16037,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -20909,6 +20933,7 @@
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
         "test/unit/actions/file_multipart_pieces.test.js": "5ea9fd3cee7a612a",
         "test/unit/actions/file_multipart_route.test.js": "66122e266cb932cc",
+        "test/unit/actions/file_multipart_runner.test.js": "24c9deca9282a392",
         "test/unit/actions/file_multipart_store.test.js": "d4e14977e7e3514b",
         "test/unit/actions/file_multipart_validate.test.js": "53c18091185cb3af",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
@@ -21668,6 +21693,7 @@
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/files_multipart.test.js": "d20fc266679397b0",
+        "test/unit/db/files_multipart_io.test.js": "71832ac9263a1830",
         "test/unit/db/index_tables/index_memos_collation.test.js": "352eae82238cdd57",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
@@ -22713,8 +22739,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1252,
-      "titleCount": 12642,
+      "fileCount": 1254,
+      "titleCount": 12662,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -22941,6 +22967,7 @@
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
+        "test/unit/actions/file_multipart_runner.test.js": "24c9deca9282a392",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
@@ -23475,6 +23502,7 @@
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/files_multipart.test.js": "d20fc266679397b0",
+        "test/unit/db/files_multipart_io.test.js": "71832ac9263a1830",
         "test/unit/db/index_tables/index_memos_collation.test.js": "352eae82238cdd57",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
@@ -23971,8 +23999,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 656,
-      "titleCount": 6932,
+      "fileCount": 658,
+      "titleCount": 6952,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24040,6 +24068,7 @@
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
+        "test/unit/actions/file_multipart_runner.test.js": "24c9deca9282a392",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/market/dispense_payment_tally_scale.test.js": "2b43cec5c7ef3f91",
@@ -24302,6 +24331,7 @@
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/files_multipart.test.js": "d20fc266679397b0",
+        "test/unit/db/files_multipart_io.test.js": "71832ac9263a1830",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
@@ -24633,8 +24663,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1252,
-      "titleCount": 12642,
+      "fileCount": 1254,
+      "titleCount": 12662,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24861,6 +24891,7 @@
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
+        "test/unit/actions/file_multipart_runner.test.js": "24c9deca9282a392",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/list_reference_consumers.test.js": "6db7be8d38f236ff",
@@ -25395,6 +25426,7 @@
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/files_multipart.test.js": "d20fc266679397b0",
+        "test/unit/db/files_multipart_io.test.js": "71832ac9263a1830",
         "test/unit/db/index_tables/index_memos_collation.test.js": "352eae82238cdd57",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
