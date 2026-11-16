@@ -9385,6 +9385,12 @@
       "markets: the rollback collector agrees with the block path @regression @tier1 keeps the token/native pair the block path keeps, under the same key",
       "markets: the rollback collector agrees with the block path @regression @tier1 probes order survival NULL-aware, so a live token/native market is not swept as a zombie"
     ],
+    "71832ac9263a1830": [
+      "multipart I/O completion reads @regression @tier1 returns null from one query when no completion exists",
+      "multipart I/O completion reads @regression @tier1 returns the first completion using one parameterized query",
+      "multipart I/O completion writes @regression @tier1 maps lowercase keys without mutating the input row",
+      "multipart I/O group reads @regression @tier1 passes the source and file hash through to the database"
+    ],
     "718b1a8900dc316c": [
       "mirror_admission_activation: canonical version seam @regression encodes a present map for an armed row",
       "mirror_admission_activation: canonical version seam @regression uses legacy canonical bytes for an armed row with no map",
@@ -20661,8 +20667,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1641,
-      "titleCount": 15995,
+      "fileCount": 1642,
+      "titleCount": 15999,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21640,6 +21646,7 @@
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/files_multipart.test.js": "d20fc266679397b0",
+        "test/unit/db/files_multipart_io.test.js": "71832ac9263a1830",
         "test/unit/db/index_tables/index_memos_collation.test.js": "352eae82238cdd57",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
@@ -22685,8 +22692,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1251,
-      "titleCount": 12630,
+      "fileCount": 1252,
+      "titleCount": 12634,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23446,6 +23453,7 @@
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/files_multipart.test.js": "d20fc266679397b0",
+        "test/unit/db/files_multipart_io.test.js": "71832ac9263a1830",
         "test/unit/db/index_tables/index_memos_collation.test.js": "352eae82238cdd57",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
@@ -23942,8 +23950,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 655,
-      "titleCount": 6920,
+      "fileCount": 656,
+      "titleCount": 6924,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24272,6 +24280,7 @@
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/files_multipart.test.js": "d20fc266679397b0",
+        "test/unit/db/files_multipart_io.test.js": "71832ac9263a1830",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
         "test/unit/db/ledger/caret_ref_strict.test.js": "4a54311a8a308df1",
@@ -24603,8 +24612,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1251,
-      "titleCount": 12630,
+      "fileCount": 1252,
+      "titleCount": 12634,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25364,6 +25373,7 @@
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/files_multipart.test.js": "d20fc266679397b0",
+        "test/unit/db/files_multipart_io.test.js": "71832ac9263a1830",
         "test/unit/db/index_tables/index_memos_collation.test.js": "352eae82238cdd57",
         "test/unit/db/index_tables/status_action_id_cache.test.js": "1e1170b8eaa24c88",
         "test/unit/db/index_tables/status_column_fit.test.js": "8895e16a2f7ee6e1",
