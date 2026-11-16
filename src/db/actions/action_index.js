@@ -37,7 +37,7 @@ const STATUS_TABLES = new Set([
     'contract_executions', 'contract_stakes', 'contract_unstakes', 'contracts', 'delegations',
     'deploy_chunks', 'deposits', 'destroys', 'dispenser_cancels', 'dispenser_closes',
     'dispenser_edits', 'dispenser_expires', 'dispenser_statuses', 'dispensers', 'dispenses',
-    'dividends', 'fees', 'files', 'gated_files', 'issues', 'links', 'list_edits', 'list_metas',
+    'dividends', 'fees', 'file_manifests', 'file_parts', 'files', 'gated_files', 'issues', 'links', 'list_edits', 'list_metas',
     'lists', 'messages', 'mints', 'order_cancels', 'order_edits', 'order_expires',
     'order_matches', 'order_statuses', 'orders', 'poll_results', 'polls', 'prices',
     'reward_claims', 'sends', 'sleeps', 'stake_key_revocations', 'stakes', 'swap_cancels',
