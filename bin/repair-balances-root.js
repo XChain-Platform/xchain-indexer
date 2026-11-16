@@ -41,8 +41,10 @@
  * SAFETY. Dry run by default. Refuses mainnet outright unless --allow-mainnet is
  * passed as well as --apply, because on mainnet this rewrites a value validators
  * have signed over and that is an operator decision, not a script's. Apply only
- * with the indexer process stopped. The tool refuses a non-tip --block,
- * rechecks that tip in the write transaction, and refuses no-op work.
+ * with the indexer process stopped, since a running indexer can write past the
+ * tip this tool repairs. The tool refuses a non-tip --block, rechecks that tip in
+ * the write transaction so a chain that moves underneath it is refused, and
+ * refuses no-op work.
  *
  * Credentials come from the service environment exactly as the benches read
  * them: never from the command line, never printed.
