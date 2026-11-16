@@ -216,3 +216,6 @@ addGate('same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION
     testnet: UNARMED,
     regtest: 0,
 });
+
+addGate('protocol/constants.MULTIPART_FILE_MAX_PARTS', 'constant', 32);
+addGate('protocol/constants.MULTIPART_FILE_MAX_BYTES', 'constant', 12000000);
