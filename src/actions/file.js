@@ -58,6 +58,7 @@ const {
 } = require('./file_multipart_route.js');
 const { validateMultipartFields, checkMultipartBatch } = require('./file_multipart_validate.js');
 const { partDigestOf, sanitizeMultipartRow } = require('./file_multipart_store.js');
+const { completeMultipart } = require('./file_multipart.js');
 const GATE_MIN_AMOUNT_MAX_LENGTH = 40;
 const MULTIPART_LIMITS = {
     maxParts: MULTIPART_FILE_MAX_PARTS,
@@ -132,6 +133,8 @@ class File {
         getLogger().info("\t FILE PART : " + stored['FILE_HASH'] + ' : ' + status);
         await this.indexerDb.createPart(stored);
         this.util.addAddressTicker(data['SOURCE']);
+        if(status === 'valid')
+            await completeMultipart(this.indexerDb, stored);
     }
 
     async parseFile(data, error, isManifest){
@@ -154,8 +157,12 @@ class File {
         }
         this.util.addAddressTicker(data['SOURCE']);
         await this.mapper.createMappings(data);
-        if(isManifest)
-            await this.indexerDb.createManifest(Object.assign({}, data, sanitizeMultipartRow(data)));
+        if(isManifest){
+            const stored = Object.assign({}, data, sanitizeMultipartRow(data));
+            await this.indexerDb.createManifest(stored);
+            if(status === 'valid')
+                await completeMultipart(this.indexerDb, stored);
+        }
     }
 
     async validateManifest(data, error){
