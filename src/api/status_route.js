@@ -15,10 +15,10 @@
  * XChain Indexer - GET /status parts
  *
  * The decoder tip read, the hub mirror snapshot, the clock-derived stall
- * verdict and the response body of the plain REST status endpoint. The route
- * itself stays in src/api.js: it owns the committed-only indexer height read,
- * the in-flight block and the 503 decision, and calls these in the order the
- * route always evaluated them.
+ * verdict and the response body of the plain REST status endpoint. The routes
+ * live in status_endpoint.js, where statusSnapshot() owns the committed-only
+ * indexer height read, the in-flight block and the 503 decision. GET /status
+ * and GET /ready are both served from that snapshot; src/api.js only mounts it.
  *
  * XChainIndexer is passed in rather than required: src/api.js loads it by its
  * own request path, and these parts use exactly the class it loaded.

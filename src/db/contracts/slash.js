@@ -98,9 +98,11 @@ module.exports = {
     // slashContractStake reduces contract_stakes/contract_unstakes.amount IN PLACE on
     // rows created in earlier (surviving) blocks; the generic rollback delete cannot
     // revert that. This row captures `prev_amount` - the row's EXACT amount string
-    // before the debit - so rollback.js can copy it back verbatim (string copy, no
-    // arithmetic → byte-identical on source + replica, and identical to a from-genesis
-    // replay where the slash was never re-mined). `amount` is the per-row delta (audit).
+    // before the debit - so restoreContractSlashAmounts in
+    // src/rollback/in_place_flips.js and src/db/rollback/stake_restores.js can copy it
+    // back verbatim (string copy, no arithmetic → byte-identical on source + replica,
+    // and identical to a from-genesis replay where the slash was never re-mined).
+    // `amount` is the per-row delta (audit).
     async createContractSlashDebit(executionIndex, slashPosition, targetTable, stakeActionIndex, prevAmount, amount, blockIndex){
         let query = `INSERT INTO contract_slash_debits
                         (execution_index, slash_position, target_table, stake_action_index,
@@ -158,7 +160,8 @@ const slashPasses = {
             // unit the row never held; at exact precision the identity is unconditional.
             if(gridOn) take = db.util.bcstr(db.util.bcsub(rowAmt, newAmt, deductDec));
             await db.doQuery('UPDATE contract_stakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
-            // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
+            // Record the debit for restoreContractSlashAmounts in
+            // src/rollback/in_place_flips.js and src/db/rollback/stake_restores.js.
             await db.createContractSlashDebit(executionIndex, slashPosition, 'contract_stakes', row.action_index, rowAmt, take, blockIndex);
             addRelease(row.source_address, take);
             remaining = db.util.bcsub(remaining, take, deductDec);
@@ -192,7 +195,8 @@ const slashPasses = {
             // arithmetic, so they carry the identical conservation hole without it.
             if(gridOn) take = db.util.bcstr(db.util.bcsub(rowAmt, newAmt, deductDec));
             await db.doQuery('UPDATE contract_unstakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
-            // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
+            // Record the debit for restoreContractSlashAmounts in
+            // src/rollback/in_place_flips.js and src/db/rollback/stake_restores.js.
             await db.createContractSlashDebit(executionIndex, slashPosition, 'contract_unstakes', row.action_index, rowAmt, take, blockIndex);
             addRelease(row.source_address, take);
             remaining = db.util.bcsub(remaining, take, deductDec);

@@ -258,16 +258,19 @@ module.exports = {
 
     // The round window of every valid PRICE batch in the rolled-back action range, read
     // strict for the same reason as the ATTEST read below: an empty answer from a fault
-    // would silently drop the hub's landing-clock reset.
+    // would silently drop the hub's landing-clock reset. The landing block_index names the
+    // block whose clock the batch push sent; a LEFT JOIN so a missing actions row costs only
+    // the clock, never the window.
     async readRetractedPriceBatchRows(view, firstActionIndex){
-        let query = `SELECT action_index, batch_first_round, batch_last_round
-                     FROM prices
-                     WHERE version = 0
-                       AND validation_status = 'valid'
-                       AND batch_first_round IS NOT NULL
-                       AND batch_last_round IS NOT NULL
-                       AND action_index >= ?
-                     ORDER BY action_index ASC`;
+        let query = `SELECT p.action_index, p.batch_first_round, p.batch_last_round, a.block_index AS block_index
+                     FROM prices p
+                     LEFT JOIN actions a ON a.action_index = p.action_index
+                     WHERE p.version = 0
+                       AND p.validation_status = 'valid'
+                       AND p.batch_first_round IS NOT NULL
+                       AND p.batch_last_round IS NOT NULL
+                       AND p.action_index >= ?
+                     ORDER BY p.action_index ASC`;
         return await view.doQueryStrict(query, [firstActionIndex]);
     },
 

@@ -172,33 +172,31 @@ function anchorActionSuite(){
 }
 
 
+const NO_PRICE = { valid: false, error: 'invalid: ORACLE_ADDRESS (no effective oracle price)' };
+const ORACLE_QUOTE_BASE = { oracleAddress: 'unknownaddr', giveCoin: 'BTC', giveTick: 'XCP', fiatCode: 'USD', giveEscrow: '1' };
+
+function feesRpc(db){
+    const view = Object.create(db);
+    view._blockTimeCache = new Map();
+    const indexerDb = { apiView: () => view };
+    const util = {
+        quoteOracleFee: sinon.spy(async function(ts, d){
+            let rows = await db.doQueryStrict('SELECT 1 FROM oracle_prices',
+                [d.ORACLE_ADDRESS, d.GIVE_COIN, d.GIVE_TICK, d.FIAT_CODE]);
+            return rows.length ? { valid: true } : { valid: false, error: NO_PRICE.error };
+        }),
+    };
+    db.getLatestBlockIndex = sinon.stub().resolves(5);
+    db.getBlockTime        = sinon.stub().resolves(1700000000);
+    return { rpc: buildFeesRpc({ indexer: { indexerDb, util, config: { COIN: 'BTC' } } }), util };
+}
+
 function oracleFeeQuoteSuite(){
-    const NO_PRICE = { valid: false, error: 'invalid: ORACLE_ADDRESS (no effective oracle price)' };
-
-    // A quoter that binds the four keys the way the oracle_prices read does, so an
-    // unguarded supplementary key reaches the collation failure.
-    function feesRpc(db){
-        const view = Object.create(db);
-        view._blockTimeCache = new Map();
-        const indexerDb = { apiView: () => view };
-        const util = {
-            quoteOracleFee: sinon.spy(async function(ts, d){
-                let rows = await db.doQueryStrict('SELECT 1 FROM oracle_prices',
-                    [d.ORACLE_ADDRESS, d.GIVE_COIN, d.GIVE_TICK, d.FIAT_CODE]);
-                return rows.length ? { valid: true } : { valid: false, error: NO_PRICE.error };
-            }),
-        };
-        db.getLatestBlockIndex = sinon.stub().resolves(5);
-        db.getBlockTime        = sinon.stub().resolves(1700000000);
-        return { rpc: buildFeesRpc({ indexer: { indexerDb, util, config: { COIN: 'BTC' } } }), util };
-    }
-
-    const BASE = { oracleAddress: 'unknownaddr', giveCoin: 'BTC', giveTick: 'XCP', fiatCode: 'USD', giveEscrow: '1' };
 
     it('the ASCII control answers no effective oracle price', async function () {
         const db = strictDb();
         const { rpc } = feesRpc(db);
-        assert.deepStrictEqual(await rpc.oraclefeequote(BASE), NO_PRICE);
+        assert.deepStrictEqual(await rpc.oraclefeequote(ORACLE_QUOTE_BASE), NO_PRICE);
         sinon.assert.calledOnce(db.doQueryStrict);
     });
 
@@ -206,12 +204,43 @@ function oracleFeeQuoteSuite(){
         it('a supplementary ' + key + ' answers the ASCII control shape without querying', async function () {
             const db = strictDb();
             const { rpc, util } = feesRpc(db);
-            let res = await rpc.oraclefeequote(Object.assign({}, BASE, { [key]: EMOJI }));
+            let res = await rpc.oraclefeequote(Object.assign({}, ORACLE_QUOTE_BASE, { [key]: EMOJI }));
             assert.deepStrictEqual(res, NO_PRICE, key + ': ' + JSON.stringify(res));
             sinon.assert.notCalled(db.doQueryStrict);
             sinon.assert.notCalled(util.quoteOracleFee);
         });
     }
+
+}
+
+function oracleFeeQuoteParamsSuite(){
+    it('refuses non-string and over-length lookup keys before quoting', async function () {
+        const limits = { oracleAddress: 100, giveCoin: 10, giveTick: 250, fiatCode: 10, getCoin: 10 };
+        for(const [key, limit] of Object.entries(limits)){
+            for(const value of [['a', 'b'], {}, 5, 'x'.repeat(limit + 1)]){
+                const db = strictDb();
+                const { rpc, util } = feesRpc(db);
+                let res = await rpc.oraclefeequote(Object.assign({}, ORACLE_QUOTE_BASE, { [key]: value }));
+                assert.ok(res.error, key + ': ' + JSON.stringify(value));
+                sinon.assert.notCalled(db.doQueryStrict);
+                sinon.assert.notCalled(util.quoteOracleFee);
+            }
+        }
+    });
+
+    it('parses blockTime canonically and refuses coercible values before quoting', async function () {
+        for(const value of ['1e3', '0x10', ' 5 ', 1.5, true, 0, -1, Number.MAX_SAFE_INTEGER + 1]){
+            const db = strictDb();
+            const { rpc, util } = feesRpc(db);
+            assert.ok((await rpc.oraclefeequote(Object.assign({}, ORACLE_QUOTE_BASE, { blockTime: value }))).error);
+            sinon.assert.notCalled(db.doQueryStrict);
+            sinon.assert.notCalled(util.quoteOracleFee);
+        }
+        const db = strictDb();
+        const { rpc, util } = feesRpc(db);
+        await rpc.oraclefeequote(Object.assign({}, ORACLE_QUOTE_BASE, { blockTime: '1700000000' }));
+        assert.strictEqual(util.quoteOracleFee.firstCall.args[0], 1700000000);
+    });
 }
 function archiveAnchorSuite(){
     const KEY = { chain: 'BTC', network: 'regtest', block_index: 1, checkpoint_seq: 1,
@@ -327,6 +356,7 @@ describe('utf8mb3 read RPC lookups answer empty for supplementary text @regressi
     describe('cross-chain offer book', offerBookSuite);
     describe('anchor action', anchorActionSuite);
     describe('oracle fee quote', oracleFeeQuoteSuite);
+    describe('oracle fee quote parameter parsing', oracleFeeQuoteParamsSuite);
     describe('archive anchor', archiveAnchorSuite);
     describe('relayed attestation requests', relayedRequestSuite);
     describe('bridge escrow proof', escrowProofSuite);

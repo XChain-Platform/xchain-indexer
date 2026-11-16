@@ -252,9 +252,10 @@ class HubClient {
     // retractionGeneration (optional): the rollback's PRE-bump push generation. Both the live and
     // deferred retractions carry it so the hub fences the delete to push_generation <= it,
     // leaving a row re-published at a recycled action_index (higher generation) intact.
-    // batches (optional): [{first_round, last_round}] of each PRICE batch the reorg rolled
-    // back, so the hub clears the landing clock on every round of it, not only on rounds
-    // it stored from the batch itself. Omitted when there are none.
+    // batches (optional): [{first_round, last_round, block_time?}] of each PRICE batch the
+    // reorg rolled back, so the hub clears that landing's clock on every round of it, not
+    // only on rounds it stored from the batch itself. block_time is the clock the batch
+    // push sent, omitted when it cannot be rebuilt exactly. Omitted when there are none.
     async retractPriceRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration, batches){
         if(!this.enabled) return;
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };

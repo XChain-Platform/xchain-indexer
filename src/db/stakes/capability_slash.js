@@ -97,8 +97,9 @@ async function burnCooldownUnstakeRows(pass, totalSlashed){
 module.exports = {
 
     // Burn an equivocating validator's ENTIRE capability bond (active `stakes` + cooldown-
-    // locked `unstakes`), recording each in-place reduction in capability_slash_debits so a
-    // reorg restores the pre-slash amounts verbatim (see rollback.js).
+    // locked `unstakes`), recording each in-place reduction in capability_slash_debits so
+    // restoreCapabilitySlashAmounts in src/rollback/in_place_flips.js and
+    // src/db/rollback/stake_restores.js can restore the pre-slash amounts verbatim.
     //
     // Returns { total, releases }, the same shape as slashContractStake and for the same
     // reason: the bond sits in the staker's ESCROW and the caller releases it there before

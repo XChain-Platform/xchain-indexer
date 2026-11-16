@@ -56,6 +56,7 @@ describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
         assert.ok(/ceiling/i.test(String(err.firstCall.args[0])), 'the crossing must be named in the log');
         assert.ok(String(err.firstCall.args[0]).includes('attest_response_sync_barrier'),
             'the log must name the barrier that is holding the block');
+        assert.ok(/Requesting hub-mirror recovery/.test(String(err.firstCall.args[0])));
     });
 
     // The announcement is once per block, but the remedy keeps being asked for: HubDbSync
@@ -149,12 +150,20 @@ describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
         note.call(ix, 900, NOW);
         assert.doesNotThrow(() => note.call(ix, 900, NOW + 900000));
         assert.strictEqual(ix.barrierCeilingHits, 1);
+        assert.deepStrictEqual(ix.resyncCalls, []);
+        assert.ok(/no hub-mirror resync/i.test(String(err.firstCall.args[0])));
+        assert.ok(!/Requesting hub-mirror recovery/.test(String(err.firstCall.args[0])));
     });
 
     it('tolerates no mirror at all', function () {
         const ix = wire(makeIndexer(900000));
+        ix.stallReason = 'call_presence_barrier';
         ix.hubDbSync = null;
         note.call(ix, 900, NOW);
         assert.doesNotThrow(() => note.call(ix, 900, NOW + 900000));
+        assert.strictEqual(ix.barrierCeilingHits, 1);
+        assert.deepStrictEqual(ix.resyncCalls, []);
+        assert.ok(/no hub-mirror resync/i.test(String(err.firstCall.args[0])));
+        assert.ok(!/Requesting hub-mirror recovery/.test(String(err.firstCall.args[0])));
     });
 });

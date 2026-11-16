@@ -22,6 +22,7 @@
 
 const { getLogger } = require('../../observability/index.js');
 const { fitsUtf8mb3 } = require('../../db/utf8mb3.js');
+const rpcParams = require('./params.js');
 
 const hasOwn = (object, property) => Object.prototype.hasOwnProperty.call(object, property);
 const PARAMS_TYPE_ERROR = 'params must be a pipe-delimited string or an array of strings, numbers, booleans or null';
@@ -118,33 +119,54 @@ function feeQuoteRpc({ indexer }){
 // Body: { oracleAddress, giveCoin, giveTick, fiatCode, getCoin, giveEscrow, blockTime? }
 // blockTime defaults to the indexer's current tip time; a caller quoting for a
 // specific block may pass one.
+function parseOracleFeeQuoteParams(values){
+    let parsed = {};
+    for(const [name, maxLength, required] of [
+        ['oracleAddress', 100, true], ['giveCoin', 10, false],
+        ['giveTick', 250, true], ['fiatCode', 10, true], ['getCoin', 10, false],
+    ]){
+        let result = rpcParams.string(values[name], { name, maxLength, required });
+        if(result.error) return result;
+        parsed[name] = result.value;
+    }
+    let blockTime = rpcParams.optionalInteger(values.blockTime, { name: 'blockTime', min: 1 });
+    if(blockTime.error) return blockTime;
+    parsed.blockTime = blockTime.value;
+    return { value: parsed };
+}
+
 function oracleFeeQuoteRpc({ indexer }){
     return {
         async oraclefeequote({oracleAddress, giveCoin, giveTick, fiatCode, getCoin, giveEscrow, blockTime}){
             if(!oracleAddress || !giveTick || !fiatCode)
                 return { error: 'oracleAddress, giveTick and fiatCode are required' };
+            let parsedResult = parseOracleFeeQuoteParams({ oracleAddress, giveCoin, giveTick,
+                                                           fiatCode, getCoin, blockTime });
+            if(parsedResult.error) return parsedResult;
+            let parsed = parsedResult.value;
             if(!indexer.indexerDb || !indexer.util)
                 return { error: 'indexer not ready' };
             // oracle_prices is utf8mb3, so a key holding a character above U+FFFF names no
             // oracle row: answer what an unknown ASCII key gets, without the bind that would
             // throw errno 1267 (Illegal mix of collations). The consensus readers stay as is.
-            if(![oracleAddress, giveCoin, giveTick, fiatCode].every(v => v == null || fitsUtf8mb3(v)))
+            if(![parsed.oracleAddress, parsed.giveCoin, parsed.giveTick, parsed.fiatCode]
+                .every(v => v == null || fitsUtf8mb3(v)))
                 return { valid: false, error: 'invalid: ORACLE_ADDRESS (no effective oracle price)' };
             try {
                 let db = timeMemoIsolatedApiView(indexer.indexerDb);
-                let ts = Number(blockTime);
-                if(!Number.isFinite(ts) || ts <= 0){
+                let ts = parsed.blockTime;
+                if(ts === undefined || ts === null){
                     let tip = await db.getLatestBlockIndex();
                     ts = Number(await db.getBlockTime(tip)) || 0;
                 }
                 if(!Number.isFinite(ts) || ts <= 0)
                     return { error: 'no indexed block to quote against' };
                 let quote = await indexer.util.quoteOracleFee(ts, {
-                    ORACLE_ADDRESS: oracleAddress,
-                    GIVE_COIN:      giveCoin || indexer.config['COIN'],
-                    GIVE_TICK:      giveTick,
-                    FIAT_CODE:      fiatCode,
-                    GET_COIN:       getCoin  || indexer.config['COIN'],
+                    ORACLE_ADDRESS: parsed.oracleAddress,
+                    GIVE_COIN:      parsed.giveCoin || indexer.config['COIN'],
+                    GIVE_TICK:      parsed.giveTick,
+                    FIAT_CODE:      parsed.fiatCode,
+                    GET_COIN:       parsed.getCoin  || indexer.config['COIN'],
                     GIVE_ESCROW:    giveEscrow,
                 }, db);
                 if(!quote.valid)
@@ -154,7 +176,7 @@ function oracleFeeQuoteRpc({ indexer }){
                                     indexer.util.bcmul(quote.expectedFee, '100000000', 0), 0);
                 return {
                     valid:             true,
-                    oracleAddress:     oracleAddress,
+                    oracleAddress:     parsed.oracleAddress,
                     blockTime:         ts,
                     requiredFeeNative: native,
                     requiredFeeSats:   Number(satsExact),
@@ -162,7 +184,7 @@ function oracleFeeQuoteRpc({ indexer }){
                     belowDust:         !!quote.belowDust,
                     note:              quote.belowDust
                         ? 'fee is below the dust threshold; no output required'
-                        : 'add a native-coin output of at least this amount to ' + oracleAddress
+                        : 'add a native-coin output of at least this amount to ' + parsed.oracleAddress
                 };
             } catch (err) {
                 getLogger().error('oraclefeequote error:', err);

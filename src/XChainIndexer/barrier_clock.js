@@ -154,6 +154,8 @@ module.exports = {
         // a pointless reconnect. The hold and its ceiling still apply to those: naming how
         // long a block has been stuck is worth having whatever is holding it.
         let mirrorBarrier = isMirrorBarrierReason(hold.reason);
+        let canResync = mirrorBarrier && !!this.hubDbSync &&
+                        typeof this.hubDbSync.requestResync === 'function';
 
         // Announce the crossing ONCE per held block, then keep re-driving the mirror on the
         // ceiling cadence: requestResync() throttles itself on the same value, so calling it
@@ -165,12 +167,15 @@ module.exports = {
                 hold.reason + ' for ' + Math.round(barrierHoldMs(hold, now) / 1000) + 's, past the ' +
                 Math.round(this.barrierHoldCeilingMs / 1000) + 's ceiling (HUB_SYNC_BARRIER_HOLD_CEILING_S, default ' +
                 HUB_SYNC_BARRIER_HOLD_CEILING_S + 's). The block is still deferring, which is correct. ' +
-                (mirrorBarrier
+                (canResync
                     ? 'Requesting hub-mirror recovery: a stream watermark that stops advancing holds every ' +
                       'one of these barriers open-endedly. An active drain may finish while it keeps making progress.'
+                    : mirrorBarrier
+                    ? 'No hub-mirror resync is being requested: this node reads the hub DB directly or its ' +
+                      'mirror cannot resync; check the hub DB feed.'
                     : 'Not a hub-mirror barrier, so no resync is forced; this is a host fault to investigate.'));
         }
-        if(mirrorBarrier && this.hubDbSync && typeof this.hubDbSync.requestResync === 'function')
+        if(canResync)
             this.hubDbSync.requestResync('block ' + blockToParse + ' held at ' + hold.reason +
                                          ' past the ' + Math.round(this.barrierHoldCeilingMs / 1000) + 's ceiling');
         return barrierHoldMs(hold, now);
