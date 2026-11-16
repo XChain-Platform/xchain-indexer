@@ -9959,11 +9959,6 @@
       "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 below the gate a base pair resolves its snapshot block from the request row",
       "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 registers a row unarmed on mainnet, armed on testnet, and genesis-active on regtest"
     ],
-    "7afd8ea98fb973cf": [
-      "protocol_changes FILE_MULTIPART row @regression @tier1 is dark on mainnet, activates at the testnet instant, and is active at regtest genesis",
-      "protocol_changes FILE_MULTIPART row @regression @tier1 is the final part 5 row with the specified activation table",
-      "protocol_changes FILE_MULTIPART row @regression @tier1 publishes both multipart caps through registry copies"
-    ],
     "7b26338ac8262f8c": [
       "anchor archive fold-term gate BTC reward derivation does not terminate the bundle family",
       "anchor archive fold-term gate BTC reward derivation keeps a pre-fold archive reward eligible when only the term is active",
@@ -17498,6 +17493,16 @@
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the parser finds migration MODIFY clauses (retype guard is not vacuous)",
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the parser finds migration-added columns (guard is not vacuous)"
     ],
+    "d7af709ec3d67e56": [
+      "FILE multipart batch validation accepts a lone manifest beside a version 2 MESSAGE",
+      "FILE multipart batch validation accepts a manifest with no SIBLING_ACTIONS",
+      "FILE multipart batch validation accepts a version 0 FILE in a BATCH beside another FILE",
+      "FILE multipart batch validation accepts an unbatched version 2 part",
+      "FILE multipart batch validation preserves an incoming error before either multipart batch verdict",
+      "FILE multipart batch validation rejects a version 1 manifest beside another FILE",
+      "FILE multipart batch validation rejects a version 2 part in a BATCH even when its position is null",
+      "FILE multipart batch validation treats a BATCH_POSITION of zero as present"
+    ],
     "d7dd66c300ddeafd": [
       "Message action handler @regression @tier3 accepts ENCRYPTION_METHOD=1 (ECDH)",
       "Message action handler @regression @tier3 accepts ENCRYPTION_METHOD=2 (AES)",
@@ -20553,7 +20558,7 @@
   "scripts": {
     "test": {
       "fileCount": 1633,
-      "titleCount": 15902,
+      "titleCount": 15907,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -20768,6 +20773,7 @@
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
+        "test/unit/actions/file_multipart_batch.test.js": "d7af709ec3d67e56",
         "test/unit/actions/file_multipart_validate.test.js": "53c18091185cb3af",
         "test/unit/actions/gas_ceiling_parity.test.js": "e2b041d502050259",
         "test/unit/actions/issue/settle_owner_history.test.js": "087297546f0ad980",
@@ -21959,7 +21965,6 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
-        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
@@ -22568,8 +22573,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1249,
-      "titleCount": 12603,
+      "fileCount": 1248,
+      "titleCount": 12600,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23650,7 +23655,6 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
-        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
@@ -23823,8 +23827,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 653,
-      "titleCount": 6893,
+      "fileCount": 652,
+      "titleCount": 6890,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24383,7 +24387,6 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
-        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
@@ -24482,8 +24485,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1249,
-      "titleCount": 12603,
+      "fileCount": 1248,
+      "titleCount": 12600,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25564,7 +25567,6 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
-        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
