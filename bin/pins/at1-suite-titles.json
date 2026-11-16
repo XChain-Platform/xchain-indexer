@@ -7786,6 +7786,18 @@
       "Database.getContractStakeRotationOrigin @regression @tier1 returns null for an unrotated slot",
       "Database.getContractStakeRotationOrigin @regression @tier1 returns the original key and delegation for a single rotation"
     ],
+    "5ea9fd3cee7a612a": [
+      "multipart FILE action data gives an unbatched part bytes and neither batch key",
+      "multipart FILE action data keeps a zero batch position and sibling actions",
+      "multipart FILE action data omits RAW_DATA from a manifest",
+      "multipart FILE documented vectors reproduces the final-slice-rebalanced vector",
+      "multipart FILE documented vectors reproduces the two-part raw vector",
+      "multipart FILE forged wire values preserves every override while computing each digest from bytes",
+      "multipart FILE manifest encoding builds the exact compact command for a named raw file",
+      "multipart FILE manifest encoding keeps inner empty fields in a gated manifest",
+      "multipart FILE protocol flag stub resolves the multipart flag false and every other flag true",
+      "multipart FILE protocol flag stub resolves the multipart flag true and every other flag true"
+    ],
     "5ec5de0135d41cfb": [
       "Execute (EXECUTE) @regression @tier2 processSlashEmission consumes a delimiter-bearing token whole (named-field read, never pipe-split)",
       "Execute (EXECUTE) @regression @tier2 processSlashEmission no-ops silently when the pubkey is not staked here",
@@ -20711,8 +20723,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1647,
-      "titleCount": 16033,
+      "fileCount": 1648,
+      "titleCount": 16043,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -20932,6 +20944,7 @@
         "test/unit/actions/file_multipart_batch.test.js": "d7af709ec3d67e56",
         "test/unit/actions/file_multipart_column_stub.test.js": "ca0d74321fad9e88",
         "test/unit/actions/file_multipart_decision.test.js": "d436c418fcaf9eaf",
+        "test/unit/actions/file_multipart_pieces.test.js": "5ea9fd3cee7a612a",
         "test/unit/actions/file_multipart_route.test.js": "66122e266cb932cc",
         "test/unit/actions/file_multipart_store.test.js": "d4e14977e7e3514b",
         "test/unit/actions/file_multipart_validate.test.js": "53c18091185cb3af",
