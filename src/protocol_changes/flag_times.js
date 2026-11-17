@@ -300,6 +300,13 @@ const FILE_MULTIPART_TESTNET_TIME = 1794787200;
 // judged differently by a replay. A committed write never got that far, since its INSERT failed.
 const STATE_KEY_STORABLE_MAINNET_TIME = UNARMED;
 const STATE_KEY_STORABLE_TESTNET_TIME = 1794873600;
+// A cross-chain ORDER's GET_ADDRESS is checked against GET_COIN's address format, as SWAP's
+// is. Mainnet stays unarmed until the mainnet activation work names an instant. Testnet is
+// armed at 2026-11-17T00:00Z, already past. A past instant is safe only while no testnet
+// cross-chain ORDER lands between it and the roll: the row's 'change' unit is outside the
+// boot gate record, so no boot replay re-judges one, and none had landed when it was set.
+const ORDER_GET_ADDRESS_COIN_MAINNET_TIME = UNARMED;
+const ORDER_GET_ADDRESS_COIN_TESTNET_TIME = 1794873600;
 
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
@@ -356,4 +363,6 @@ module.exports = {
     FILE_MULTIPART_TESTNET_TIME,
     STATE_KEY_STORABLE_MAINNET_TIME,
     STATE_KEY_STORABLE_TESTNET_TIME,
+    ORDER_GET_ADDRESS_COIN_MAINNET_TIME,
+    ORDER_GET_ADDRESS_COIN_TESTNET_TIME,
 };

@@ -29,8 +29,8 @@ describe('protocol_changes FILE_MULTIPART row @regression @tier1', function () {
         else process.env[ENV] = saved;
     });
 
-    it('is the final part 5 row with the specified activation table', function () {
-        const entry = changes[changes.length - 1];
+    it('is registered in part 5 with the specified activation table', function () {
+        const entry = changes.find((row) => row[0] === 'FILE_MULTIPART');
         const table = new ProtocolChanges({ config: {}, util: {} }).changes.FILE_MULTIPART;
 
         assert.strictEqual(entry[0], 'FILE_MULTIPART');

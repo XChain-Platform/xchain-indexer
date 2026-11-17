@@ -66,6 +66,8 @@ const {
     FILE_MULTIPART_TESTNET_TIME,
     STATE_KEY_STORABLE_MAINNET_TIME,
     STATE_KEY_STORABLE_TESTNET_TIME,
+    ORDER_GET_ADDRESS_COIN_MAINNET_TIME,
+    ORDER_GET_ADDRESS_COIN_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -238,6 +240,13 @@ const CHANGES = [
         STATE_KEY_STORABLE_TESTNET_TIME, 0, 0, 0, 0],
     ['FILE_MULTIPART', '0.2.0', UNARMED, FILE_MULTIPART_TESTNET_TIME,
         regtestTimeOverride('FILE_MULTIPART_REGTEST_TIME'), 0, 0, 0],
+    // ORDER_GET_ADDRESS_COIN: a cross-chain ORDER's GET_ADDRESS must be a valid address on
+    // GET_COIN's network, as a SWAP's is. Below the flag it is checked against the local
+    // chain's format, which refuses a foreign payout address. Judged by the ORDER's block.
+    // Unarmed on mainnet until the mainnet activation work names an instant, armed on testnet
+    // at ORDER_GET_ADDRESS_COIN_TESTNET_TIME, and active from genesis on regtest.
+    ['ORDER_GET_ADDRESS_COIN', '0.2.0', ORDER_GET_ADDRESS_COIN_MAINNET_TIME,
+        ORDER_GET_ADDRESS_COIN_TESTNET_TIME, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;

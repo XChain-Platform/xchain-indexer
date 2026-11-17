@@ -132,7 +132,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "b190a989878d47975b445acca45e071e96099768dafab9704367909e4586c63d",
+      "hash": "610c71df9b7bbebf9aef7c4eb73909e0d489d370a1b20010f7ab163a3477f20a",
       "twins": [],
       "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
@@ -2267,6 +2267,13 @@
       "from": "4acc7ba7dcea03d214a1a8cf8da9fcf469f71a9cd5b37302fdeb0b3314d4fb1b",
       "to": "b190a989878d47975b445acca45e071e96099768dafab9704367909e4586c63d",
       "reason": "register STATE_KEY_STORABLE twin",
+      "date": "2026-11-17"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "b190a989878d47975b445acca45e071e96099768dafab9704367909e4586c63d",
+      "to": "610c71df9b7bbebf9aef7c4eb73909e0d489d370a1b20010f7ab163a3477f20a",
+      "reason": "register ORDER_GET_ADDRESS_COIN row",
       "date": "2026-11-17"
     }
   ]
