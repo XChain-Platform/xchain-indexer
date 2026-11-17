@@ -26,6 +26,7 @@
 
 const crypto = require('crypto');
 const { boundedAt, bankUnusedGas } = require('./nested_gas_sum.js');
+const { stateValueTexts } = require('./state_value_text.js');
 
 // Per-root discriminator for the ATTEST request_id / XCALL call_id preimages. One
 // helper for all three root-bearing sites here (top-level EXECUTE, controller guard,
@@ -178,12 +179,13 @@ async function executeContractVm(ctx, snapshot){
 // State writes for a successful run, applied inside the savepoint below.
 async function writeVmStateChanges(ctx, vmResult){
     let data = ctx.data;
-    // Write state changes
-    for(let change of vmResult.stateChanges){
+    // Write state changes (astral characters escaped once STATE_VALUE_ASTRAL_ESCAPE is active)
+    let texts = await stateValueTexts(() => this.actions.protocolChanges, data['BLOCK_INDEX'], vmResult.stateChanges);
+    for(let [i, change] of vmResult.stateChanges.entries()){
         await this.indexerDb.createContractState({
             CONTRACT_INDEX: data['CONTRACT_ACTION_INDEX'],
             STATE_KEY:      change.key,
-            STATE_VALUE:    JSON.stringify(change.value),
+            STATE_VALUE:    texts[i],
             BLOCK_INDEX:    data['BLOCK_INDEX'],
             ACTION_INDEX:   data['ACTION_INDEX']
         });

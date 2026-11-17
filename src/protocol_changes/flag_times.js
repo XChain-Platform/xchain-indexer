@@ -307,6 +307,10 @@ const STATE_KEY_STORABLE_TESTNET_TIME = 1794873600;
 // boot gate record, so no boot replay re-judges one, and none had landed when it was set.
 const ORDER_GET_ADDRESS_COIN_MAINNET_TIME = UNARMED;
 const ORDER_GET_ADDRESS_COIN_TESTNET_TIME = 1794873600;
+// Arm testnet at 2026-11-17T00:00Z. Before it a contract state value holding a character
+// above U+FFFF halts the block (utf8mb3 state_value, errno 1366), so no stored row holds one
+// and the escape changes no committed text; the row is outside the boot gate record.
+const STATE_VALUE_ASTRAL_ESCAPE_TESTNET_TIME = 1794873600;
 
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
@@ -365,4 +369,5 @@ module.exports = {
     STATE_KEY_STORABLE_TESTNET_TIME,
     ORDER_GET_ADDRESS_COIN_MAINNET_TIME,
     ORDER_GET_ADDRESS_COIN_TESTNET_TIME,
+    STATE_VALUE_ASTRAL_ESCAPE_TESTNET_TIME,
 };

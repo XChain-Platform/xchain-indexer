@@ -68,6 +68,7 @@ const {
     STATE_KEY_STORABLE_TESTNET_TIME,
     ORDER_GET_ADDRESS_COIN_MAINNET_TIME,
     ORDER_GET_ADDRESS_COIN_TESTNET_TIME,
+    STATE_VALUE_ASTRAL_ESCAPE_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -247,6 +248,13 @@ const CHANGES = [
     // at ORDER_GET_ADDRESS_COIN_TESTNET_TIME, and active from genesis on regtest.
     ['ORDER_GET_ADDRESS_COIN', '0.2.0', ORDER_GET_ADDRESS_COIN_MAINNET_TIME,
         ORDER_GET_ADDRESS_COIN_TESTNET_TIME, 0, 0, 0, 0],
+    // STATE_VALUE_ASTRAL_ESCAPE: every contract_state writer stores a value's JSON text with
+    // each character above U+FFFF written as its \uXXXX\uXXXX escape pair, so the utf8mb3
+    // state_value column accepts it instead of halting the block (actions/execute/
+    // state_value_text.js). JSON.parse gives the same value either way, and text with no such
+    // character is byte-identical on both sides. Judged by the block that writes the state.
+    // Unarmed on mainnet, armed on testnet at 2026-11-17T00:00Z, active from genesis on regtest.
+    ['STATE_VALUE_ASTRAL_ESCAPE', '0.2.0', UNARMED, STATE_VALUE_ASTRAL_ESCAPE_TESTNET_TIME, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;
