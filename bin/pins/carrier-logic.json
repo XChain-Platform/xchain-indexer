@@ -132,7 +132,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "4acc7ba7dcea03d214a1a8cf8da9fcf469f71a9cd5b37302fdeb0b3314d4fb1b",
+      "hash": "b190a989878d47975b445acca45e071e96099768dafab9704367909e4586c63d",
       "twins": [],
       "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
@@ -2261,6 +2261,13 @@
       "to": "0dbef708b8fa6018bc54801aa23f40bf48ed8b4ac266c4401cfcbce7b6edc29c",
       "reason": "MTF-2 multi-part file caps",
       "date": "2026-11-15"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "4acc7ba7dcea03d214a1a8cf8da9fcf469f71a9cd5b37302fdeb0b3314d4fb1b",
+      "to": "b190a989878d47975b445acca45e071e96099768dafab9704367909e4586c63d",
+      "reason": "register STATE_KEY_STORABLE twin",
+      "date": "2026-11-17"
     }
   ]
 }

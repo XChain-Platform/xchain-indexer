@@ -78,6 +78,8 @@ const {
     STRING_RECEIVER_METER_TESTNET_TIME,
     TOSTRING_SIZE_METER_MAINNET_TIME,
     TOSTRING_SIZE_METER_TESTNET_TIME,
+    STATE_KEY_STORABLE_MAINNET_TIME,
+    STATE_KEY_STORABLE_TESTNET_TIME,
 } = require('./flag_times.js');
 const {
     BATCH_ISSUANCE_LIMITS_MAINNET_TIME,
@@ -145,6 +147,8 @@ addGate('protocol_changes.STRING_RECEIVER_METER_MAINNET_TIME', 'constant', STRIN
 addGate('protocol_changes.STRING_RECEIVER_METER_TESTNET_TIME', 'constant', STRING_RECEIVER_METER_TESTNET_TIME);
 addGate('protocol_changes.TOSTRING_SIZE_METER_MAINNET_TIME', 'constant', TOSTRING_SIZE_METER_MAINNET_TIME);
 addGate('protocol_changes.TOSTRING_SIZE_METER_TESTNET_TIME', 'constant', TOSTRING_SIZE_METER_TESTNET_TIME);
+addGate('protocol_changes.STATE_KEY_STORABLE_MAINNET_TIME', 'constant', STATE_KEY_STORABLE_MAINNET_TIME);
+addGate('protocol_changes.STATE_KEY_STORABLE_TESTNET_TIME', 'constant', STATE_KEY_STORABLE_TESTNET_TIME);
 
 // vm_lint_destructure_heights
 addGate('vm_lint_destructure_heights.VM_LINT_DESTRUCTURE_ACTIVATION', 'height', {

@@ -64,6 +64,8 @@ const {
     TOSTRING_SIZE_METER_MAINNET_TIME,
     TOSTRING_SIZE_METER_TESTNET_TIME,
     FILE_MULTIPART_TESTNET_TIME,
+    STATE_KEY_STORABLE_MAINNET_TIME,
+    STATE_KEY_STORABLE_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -229,6 +231,11 @@ const CHANGES = [
     // of tokens created through a caret TICK; armed on testnet at the instant in its row
     // (2026-10-22T13:00Z, the v0.26.2 cut); active from genesis on regtest.
     ['ISSUE_CARET_TICK_NO_CREATE', '0.2.0', UNARMED, 1792674000, 0, 0, 0, 0],
+    // STATE_KEY_STORABLE: the twin of xchain-vm STATE_KEY_STORABLE_ACTIVATION, under which
+    // StateManager.set() refuses a key contract_state.state_key cannot hold. Regtest is a
+    // fixed 0 because the VM table is, and the coupling tests hold the two equal.
+    ['STATE_KEY_STORABLE', '0.2.0', STATE_KEY_STORABLE_MAINNET_TIME,
+        STATE_KEY_STORABLE_TESTNET_TIME, 0, 0, 0, 0],
     ['FILE_MULTIPART', '0.2.0', UNARMED, FILE_MULTIPART_TESTNET_TIME,
         regtestTimeOverride('FILE_MULTIPART_REGTEST_TIME'), 0, 0, 0],
 ];

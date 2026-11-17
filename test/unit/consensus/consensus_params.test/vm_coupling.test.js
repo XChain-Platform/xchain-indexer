@@ -364,6 +364,23 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
     });
 
+    it('the bundled VM STATE_KEY_STORABLE_ACTIVATION matches the indexer STATE_KEY_STORABLE row per network', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        assert.ok(vm && full,
+            'STATE_KEY_STORABLE coupling requires the full xchain-vm package surface: ' +
+            (pkgErr ? String(pkgErr.message) : 'package not present') +
+            (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+        const gate = vm.STATE_KEY_STORABLE_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export STATE_KEY_STORABLE_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.STATE_KEY_STORABLE');
+        const asRow = (t) => (t === null ? pc.UNARMED : t);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
+    });
+
     it('the bundled VM STRING_RESULT_METER_ACTIVATION matches the indexer STRING_RESULT_METER row per network', function(){
         const { vm, full, pkgErr, refused } = resolveVmConsensus();
         assert.ok(vm && full,

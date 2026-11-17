@@ -293,6 +293,12 @@ const TOSTRING_SIZE_METER_TESTNET_TIME = 1792454400;
 // A past instant is safe only while no testnet FILE of version 1 or 2 lands before the roll:
 // the row's 'change' unit is outside the boot gate record, so no boot replay re-judges one.
 const FILE_MULTIPART_TESTNET_TIME = 1794787200;
+// Mirrors xchain-vm STATE_KEY_STORABLE_ACTIVATION, whose null is UNARMED here: mainnet stays
+// inert, testnet is armed at 2026-11-17T00:00Z, already past, and regtest runs it from genesis.
+// The past instant is safe because a key it refuses never reached an indexer: its INSERT into
+// state_key failed and halted the chain, so no indexed block holds one to re-judge.
+const STATE_KEY_STORABLE_MAINNET_TIME = UNARMED;
+const STATE_KEY_STORABLE_TESTNET_TIME = 1794873600;
 
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
@@ -347,4 +353,6 @@ module.exports = {
     TOSTRING_SIZE_METER_MAINNET_TIME,
     TOSTRING_SIZE_METER_TESTNET_TIME,
     FILE_MULTIPART_TESTNET_TIME,
+    STATE_KEY_STORABLE_MAINNET_TIME,
+    STATE_KEY_STORABLE_TESTNET_TIME,
 };
