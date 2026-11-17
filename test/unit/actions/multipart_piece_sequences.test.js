@@ -66,6 +66,10 @@ describe('multipart piece sequence oracle @regression @tier1', function(){
     it('removes a completion at a cut below its piece', async function(){
         const cut = pieceSequence('cut-sequence', { cutBelowCompletion: true });
         assert.ok(cut.cuts[0].action_index < cut.completingActionIndex);
+        assert.strictEqual((await baselineCompletions({
+            ...cut,
+            events: cut.pieces,
+        })).length, 1);
         assert.deepStrictEqual(await baselineCompletions(cut), []);
     });
 });

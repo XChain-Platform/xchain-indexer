@@ -227,12 +227,11 @@ function pieceSequence(seed, opts={}){
 
 async function baselineCompletions(sequence){
     const db = createMemoryMultipartDb();
-    let completions = [];
+    const manifestActionIndexes = new Set();
 
     for(const piece of sequence.events || sequence.pieces){
         if(piece.type === 'cut'){
             await db.purgeAbove(piece.action_index);
-            completions = completions.filter(row => row.action_index <= piece.action_index);
             continue;
         }
         if(piece.type === 'manifest') await db.createManifest(piece.row);
@@ -246,10 +245,12 @@ async function baselineCompletions(sequence){
             actionIndex: piece.row.action_index,
             blockIndex: 1000 + piece.row.action_index,
         });
-        if(completion) completions.push(completion);
+        if(completion) manifestActionIndexes.add(completion.manifest_action_index);
     }
 
-    return completions;
+    const completions = await Promise.all(Array.from(manifestActionIndexes,
+        manifestActionIndex => db.getCompletion(manifestActionIndex)));
+    return completions.filter(row => row !== null);
 }
 
 module.exports = { baselineCompletions, pieceSequence };
