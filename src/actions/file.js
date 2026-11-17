@@ -125,16 +125,45 @@ class File {
         error = this.validateMultipart(data, error);
         const status = error || 'valid';
         data['STATUS'] = status;
+        const incremental = this.hasIncrementalReads();
+        const fill = status === 'valid' && incremental
+            ? await this.nextPartFill(data)
+            : { ordinal: null, completes: status === 'valid' && !incremental };
         const digest = partDigestOf(data['RAW_DATA']);
         const stored = Object.assign({}, data, sanitizeMultipartRow(data), {
             BYTE_LENGTH: digest.byteLength,
             PART_DIGEST: digest.partDigest,
+            FILL_ORDINAL: fill.ordinal,
         });
         getLogger().info("\t FILE PART : " + stored['FILE_HASH'] + ' : ' + status);
         await this.indexerDb.createPart(stored);
         this.util.addAddressTicker(data['SOURCE']);
-        if(status === 'valid')
+        if(fill.completes)
             await completeMultipart(this.indexerDb, stored);
+    }
+
+    async nextPartFill(data){
+        const manifest = await this.indexerDb.getManifest(data['SOURCE'], data['FILE_HASH']);
+        const position = Number(data['PART_INDEX']);
+        if(!manifest || position >= Number(manifest.total_parts))
+            return { ordinal: null, completes: false };
+        const earlier = await this.indexerDb.earlierPartAt(
+            manifest.source_id, data['FILE_HASH'], position);
+        if(earlier)
+            return { ordinal: null, completes: false };
+        const highest = await this.indexerDb.maxFillOrdinal(
+            manifest.source_id, data['FILE_HASH']);
+        const ordinal = highest + 1;
+        const filled = Number(manifest.filled_at_manifest) || 0;
+        return {
+            ordinal,
+            completes: filled + ordinal === Number(manifest.total_parts),
+        };
+    }
+
+    hasIncrementalReads(){
+        return ['getManifest', 'earlierPartAt', 'maxFillOrdinal', 'countFilledPositions']
+            .every(method => typeof this.indexerDb[method] === 'function');
     }
 
     async parseFile(data, error, isManifest){
@@ -159,17 +188,30 @@ class File {
         await this.mapper.createMappings(data);
         if(isManifest){
             const stored = Object.assign({}, data, sanitizeMultipartRow(data));
+            const incremental = this.hasIncrementalReads();
+            const filled = status === 'valid' && incremental
+                ? await this.countFilledAtManifest(stored)
+                : null;
+            stored['FILLED_AT_MANIFEST'] = filled;
             await this.indexerDb.createManifest(stored);
-            if(status === 'valid')
+            if(status === 'valid' && (!incremental || filled === Number(stored['TOTAL_PARTS'])))
                 await completeMultipart(this.indexerDb, stored);
         }
+    }
+
+    async countFilledAtManifest(data){
+        const sourceId = await this.indexerDb.getAddressId(data['SOURCE']);
+        return this.indexerDb.countFilledPositions(
+            sourceId, data['FILE_HASH'], Number(data['TOTAL_PARTS']));
     }
 
     async validateManifest(data, error){
         error = this.validateMultipart(data, error);
         if(!error){
-            const group = await this.indexerDb.getGroup(data['SOURCE'], data['FILE_HASH']);
-            error = duplicateManifestVerdict(error, group.manifest, data['FILE_HASH']);
+            const manifest = typeof this.indexerDb.getManifest === 'function'
+                ? await this.indexerDb.getManifest(data['SOURCE'], data['FILE_HASH'])
+                : (await this.indexerDb.getGroup(data['SOURCE'], data['FILE_HASH'])).manifest;
+            error = duplicateManifestVerdict(error, manifest, data['FILE_HASH']);
         }
         return error;
     }
