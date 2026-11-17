@@ -111,7 +111,9 @@ describe('FILE multipart refusal integration @regression @tier1', function(){
         const cases = [
             [manifest({ fileHash: 'bad' }), actionData(1), 'invalid: FILE_HASH (format)'],
             [manifest({ totalParts: '1' }), actionData(1), 'invalid: TOTAL_PARTS (range)'],
+            [manifest({ totalParts: '65536' }), actionData(1), 'invalid: TOTAL_PARTS (range)'],
             [manifest({ totalBytes: '0' }), actionData(1), 'invalid: TOTAL_BYTES (range)'],
+            [manifest({ totalBytes: '262140000001' }), actionData(1), 'invalid: TOTAL_BYTES (range)'],
             [manifest(), actionData(1, Buffer.from('x')), 'invalid: RAW_DATA (manifest carries no bytes)'],
         ];
         for(const [params, data, expected] of cases){
@@ -124,7 +126,7 @@ describe('FILE multipart refusal integration @regression @tier1', function(){
     it('stores every part field refusal with its exact verdict', async function(){
         const cases = [
             [part({ fileHash: 'bad' }), actionData(2, Buffer.from('x')), 'invalid: FILE_HASH (format)'],
-            [part({ partIndex: '32' }), actionData(2, Buffer.from('x')), 'invalid: PART_INDEX (range)'],
+            [part({ partIndex: '65535' }), actionData(2, Buffer.from('x')), 'invalid: PART_INDEX (range)'],
             [part(), actionData(2, Buffer.alloc(0)), 'invalid: RAW_DATA (empty part)'],
         ];
         for(const [params, data, expected] of cases){
@@ -183,7 +185,9 @@ describe('FILE multipart storage sanitising @regression @tier1', function(){
         await built.handler.parse(manifest({
             fileHash: 'bad', totalParts: '4294967296', totalBytes: '4294967296',
         }), data, null);
-        assert.deepStrictEqual(strictDb.manifests[0], { file_hash: '', total_parts: 0, total_bytes: 0 });
+        assert.deepStrictEqual(strictDb.manifests[0], {
+            file_hash: '', total_parts: 0, total_bytes: 4294967296,
+        });
     });
 
     it('fits invalid part fields and hashes the raw bytes exactly', async function(){
