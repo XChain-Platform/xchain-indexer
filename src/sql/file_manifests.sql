@@ -18,8 +18,10 @@ CREATE TABLE file_manifests (
     source_id    BIGINT UNSIGNED NOT NULL,
     file_hash    CHAR(64) NOT NULL,
     total_parts  INT UNSIGNED NOT NULL,
-    total_bytes  INT UNSIGNED NOT NULL,
-    status_id    BIGINT UNSIGNED
+    total_bytes  BIGINT UNSIGNED NULL,
+    status_id    BIGINT UNSIGNED,
+    filled_at_manifest INT UNSIGNED NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index ON file_manifests (action_index);
+CREATE        INDEX source_hash  ON file_manifests (source_id, file_hash);

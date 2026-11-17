@@ -21,3 +21,4 @@ CREATE TABLE file_completions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index ON file_completions (action_index);
+CREATE        INDEX manifest_action_index ON file_completions (manifest_action_index);

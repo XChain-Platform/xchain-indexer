@@ -21,8 +21,10 @@ CREATE TABLE file_parts (
     byte_length  INT UNSIGNED NOT NULL,
     part_digest  CHAR(64) NOT NULL,
     block_index  BIGINT UNSIGNED NOT NULL,
-    status_id    BIGINT UNSIGNED
+    status_id    BIGINT UNSIGNED,
+    fill_ordinal INT UNSIGNED NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE UNIQUE INDEX action_index           ON file_parts (action_index);
-CREATE        INDEX source_hash_part_index ON file_parts (source_id, file_hash, part_index);
+CREATE UNIQUE INDEX action_index             ON file_parts (action_index);
+CREATE        INDEX source_hash_part_index   ON file_parts (source_id, file_hash, part_index);
+CREATE        INDEX source_hash_fill_ordinal ON file_parts (source_id, file_hash, fill_ordinal);
