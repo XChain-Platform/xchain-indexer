@@ -289,12 +289,9 @@ const STRING_RECEIVER_METER_TESTNET_TIME = 1792454400;
 // Mirrors xchain-vm TOSTRING_SIZE_METER_ACTIVATION.
 const TOSTRING_SIZE_METER_MAINNET_TIME = UNARMED;
 const TOSTRING_SIZE_METER_TESTNET_TIME = 1792454400;
-// Testnet is armed at 2026-11-16T00:00Z, already past when this ships, so multi-part FILEs
-// work from the first block a testnet indexer on this code applies. A past instant is safe
-// here only because no testnet chain holds a FILE of version 1 or 2 at any time (every
-// FILE on TBTC, TLTC and TDOGE is version 0, read 2026-11-17), so no recorded verdict
-// changes. The row's unit is 'change', which the boot gate record does not cover, so no
-// boot replay or refusal follows from moving it. Mainnet stays unarmed on the row.
+// Arm testnet at 2026-11-16T00:00Z, already past, so multi-part FILEs work from boot.
+// A past instant is safe only while no testnet FILE of version 1 or 2 lands before the roll:
+// the row's 'change' unit is outside the boot gate record, so no boot replay re-judges one.
 const FILE_MULTIPART_TESTNET_TIME = 1794787200;
 
 module.exports = {
