@@ -23,9 +23,10 @@ function enabledAt(network, time) {
 }
 
 describe('protocol_changes/ORDER_GET_ADDRESS_COIN row @regression @tier1', function () {
-    it('is the final part 5 row and has the registry shape', function () {
+    it('is registered in part 5 and has the registry shape', function () {
         const changes = new ProtocolChanges({ config: {}, util: {} }).changes;
-        assert.deepStrictEqual(table[table.length - 1], [
+        const entry = table.find((row) => row[0] === 'ORDER_GET_ADDRESS_COIN');
+        assert.deepStrictEqual(entry, [
             'ORDER_GET_ADDRESS_COIN', '0.2.0', ProtocolChanges.UNARMED, 1794873600, 0, 0, 0, 0,
         ]);
         assert.ok(Object.prototype.hasOwnProperty.call(changes, 'ORDER_GET_ADDRESS_COIN'));
