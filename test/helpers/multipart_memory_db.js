@@ -75,6 +75,22 @@ function createMemoryMultipartDb(){
             });
         },
 
+        async createFile(){
+            calls.push('createFile');
+        },
+
+        async isActionAllowed(){
+            return true;
+        },
+
+        async doQuery(query, args){
+            if(!query.includes('FROM file_completions WHERE manifest_action_index=?'))
+                throw new Error('unexpected query: ' + query);
+            read('getCompletion');
+            const row = completions.find(item => item.manifest_action_index === args[0]);
+            return row ? [{ ...row }] : [];
+        },
+
         async getAddressId(source){
             return source;
         },

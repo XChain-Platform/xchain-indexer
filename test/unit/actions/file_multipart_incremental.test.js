@@ -58,7 +58,7 @@ function templates(seed, random){
     };
     const partRows = parts.map((bytes, position) => ({
         ...common, part_index: position, byte_length: bytes.length,
-        part_digest: file.digests[position].toString('hex'),
+        part_digest: file.digests[position].toString('hex'), raw_data: bytes,
     }));
     return { manifest, partRows, totalParts };
 }
@@ -122,34 +122,55 @@ async function baselineCompletions(sequence){
     return db.completionRows;
 }
 
-async function storeIncremental(handler, db, event){
+function productionData(event){
     const row = event.row;
     if(event.type === 'manifest'){
-        const filled = row.status === 'valid'
-            ? await handler.countFilledAtManifest({
-                SOURCE: row.source, FILE_HASH: row.file_hash, TOTAL_PARTS: row.total_parts,
-            })
-            : null;
-        await db.createManifest({ ...row, filled_at_manifest: filled });
-        if(filled === row.total_parts) await completeGroup(db, pieceInput(row));
-        return;
+        return {
+            VERSION: '1', SOURCE: row.source, FILE_HASH: row.file_hash,
+            TOTAL_PARTS: row.total_parts, TOTAL_BYTES: row.total_bytes,
+            NAME: '', TYPE: '', TITLE: '', MEMO: '', GATE_TICKER: '',
+            ENCRYPTION_METHOD: '', KEY_HASH: '', GATE_MIN_AMOUNT: '', COMPRESSION: '',
+            ACTION_INDEX: row.action_index, BLOCK_INDEX: 1000 + row.action_index,
+        };
     }
-    const fill = row.status === 'valid'
-        ? await handler.nextPartFill({
-            SOURCE: row.source, FILE_HASH: row.file_hash, PART_INDEX: row.part_index,
-        })
-        : { ordinal: null, completes: false };
-    await db.createPart({ ...row, fill_ordinal: fill.ordinal });
-    if(fill.completes) await completeGroup(db, pieceInput(row));
+    return {
+        VERSION: '2', SOURCE: row.source, FILE_HASH: row.file_hash,
+        PART_INDEX: row.part_index, RAW_DATA: row.raw_data,
+        ACTION_INDEX: row.action_index, BLOCK_INDEX: 1000 + row.action_index,
+    };
+}
+
+function productionHandler(db){
+    const handler = Object.create(File.prototype);
+    handler.indexerDb = db;
+    handler.config = {
+        MAX_FILE_NAME_LENGTH: 255,
+        MAX_FILE_TYPE_LENGTH: 255,
+        MAX_FILE_TITLE_LENGTH: 255,
+        MAX_MEMO_LENGTH: 65535,
+    };
+    handler.util = {
+        isNull(value){ return value === null || value === undefined || value === ''; },
+        addAddressTicker(){},
+    };
+    handler.mapper = { async createMappings(){} };
+    return handler;
+}
+
+async function parseProduction(handler, event){
+    const data = productionData(event);
+    const error = event.row.status === 'valid' ? null : event.row.status;
+    if(event.type === 'manifest') await handler.parseFile(data, error, true);
+    else await handler.parsePart(data, error);
+    return data;
 }
 
 async function incrementalRun(sequence){
     const db = createMemoryMultipartDb();
-    const handler = Object.create(File.prototype);
-    handler.indexerDb = db;
+    const handler = productionHandler(db);
     for(const event of sequence.events){
         if(event.type === 'cut') await purgeAt(db, event.action_index);
-        else await storeIncremental(handler, db, event);
+        else await parseProduction(handler, event);
     }
     return db;
 }
@@ -174,13 +195,16 @@ describe('FILE multipart incremental read bound @regression @tier1', function(){
                 total_parts: totalParts, total_bytes: totalParts, status: 'valid',
                 filled_at_manifest: 0,
             });
-            const handler = Object.create(File.prototype);
-            handler.indexerDb = db;
+            const handler = productionHandler(db);
             db.resetReadCount();
-            const fill = await handler.nextPartFill({
-                SOURCE: 'source', FILE_HASH: 'a'.repeat(64), PART_INDEX: 0,
-            });
-            assert.strictEqual(fill.ordinal, 1);
+            const event = { type: 'part', row: {
+                action_index: 2, source: 'source', file_hash: 'a'.repeat(64),
+                part_index: 0, raw_data: Buffer.from('x'), status: 'valid',
+            } };
+            const stored = await parseProduction(handler, event);
+            assert.strictEqual(stored['STATUS'], 'valid');
+            assert.ok(db.calls.includes('createPart'));
+            assert.strictEqual(db.calls.filter(call => call === 'getGroup').length, 0);
             assert.strictEqual(db.readCount, 3);
         });
     }
