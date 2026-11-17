@@ -15,12 +15,18 @@
 const assert = require('assert');
 const { verifyCapabilitySnapshotRow } = require(
     '../../../../src/db/database/stake_weights.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
 
 const CAPABILITIES = ['cross_chain', 'oracle_publish', 'price', 'attestation'];
+// Testnet arms the gate at a past BTC height, so a testnet row is below it only one
+// block under that height; mainnet is unarmed and any height is below it.
+const TESTNET_ARM = ProtocolChanges.get(
+    'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION')['BTC:testnet'];
+const BELOW_GATE = { mainnet: 900000, testnet: TESTNET_ARM - 1 };
 
-function snapshotRow(capability = 'oracle_publish'){
+function snapshotRow(capability = 'oracle_publish', snapshotBlock = 900000){
     return {
-        snapshot_block: 900000,
+        snapshot_block: snapshotBlock,
         capability,
         signing_pubkey: 'a'.repeat(64),
         source: 'src1',
@@ -57,7 +63,8 @@ describe('capability snapshot proof below-gate behavior @regression @tier1', fun
                         isCapabilityConfigured: () => true,
                         getLatestBlockIndex: async () => Number.MAX_SAFE_INTEGER,
                     };
-                    const actual = await verify(subject, snapshotRow(capability), recorder);
+                    const actual = await verify(subject,
+                        snapshotRow(capability, BELOW_GATE[network]), recorder);
 
                     assert.strictEqual(actual.verdict, 'unknown',
                         `${coin} ${network} ${capability}`);

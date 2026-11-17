@@ -91,8 +91,11 @@ addGate('airdrop_native_fee_tally_activation.AIRDROP_NATIVE_FEE_TALLY_ACTIVATION
 
 // capability_snapshot_proof_activation
 // Height on the mirrored row's BTC snapshot_block. From it mirror-resolved capability rows require a checkpoint proof. Below it they apply as before.
+// Both readers (stake_weights.js and the startup pin check) resolve it with coin BTC on every chain, so the BTC:testnet entry arms it on TLTC and TDOGE as well; no LTC or DOGE entry is added because nothing reads one, and the bare testnet entry stays UNARMED so the TLTC and TDOGE boot gate records do not move.
+// Testnet is armed at BTC 161790, already past when this ships. No mirrored capability row had a snapshot_block at or above it when it was chosen (newest 161789, TBTC tip 161791, read 2026-11-17), so no applied row is judged under the new rule. Mainnet stays unarmed.
 addGate('capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION', 'height', {
     mainnet: UNARMED,
+    'BTC:testnet': 161790,
     testnet: UNARMED,
     regtest: 0,
 });

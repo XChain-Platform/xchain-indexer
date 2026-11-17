@@ -30,9 +30,14 @@ const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
 const HubDbSync         = require('../../../../src/hub/hub_db_sync.js');
+const ProtocolChanges   = require('../../../../src/protocol_changes.js');
 
 // The BTC-anchored boundary the hub locked this validator set at.
 const SNAP_BLOCK = 961234;
+// LTC and DOGE testnet judge a mirrored row by checkpoint proof from the BTC height the
+// proof gate is armed at, so their unchecked-mirror behaviour holds one block below it.
+const BELOW_TESTNET_PROOF_GATE = ProtocolChanges.get(
+    'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION')['BTC:testnet'] - 1;
 
 // This node's own authoritative stake rows at SNAP_BLOCK, in the shape
 // stakeWeightsWithCap reads them (weight = the SOURCE aggregate, carried on every
@@ -134,12 +139,13 @@ describe('capability_snapshots re-derivation on testnet @regression @tier2', fun
             const { db, seen }       = dbFor(coin, { network: 'testnet' });
             const { sync, inserted } = syncFor(db);
 
-            await sync.applyRow('capability_snapshots',
-                snapshotRow({ signing_pubkey: 'ffff', source: 'attacker' }));
+            await sync.applyRow('capability_snapshots', snapshotRow({
+                snapshot_block: BELOW_TESTNET_PROOF_GATE, signing_pubkey: 'ffff', source: 'attacker' }));
 
             assert.strictEqual(inserted.length, 1);
             assert.strictEqual(seen.stakeQueries.length, 0, 'no local stake read is attempted off BTC');
-            const v = await db.verifyCapabilitySnapshotRow(snapshotRow({ signing_pubkey: 'ffff' }));
+            const v = await db.verifyCapabilitySnapshotRow(snapshotRow({
+                snapshot_block: BELOW_TESTNET_PROOF_GATE, signing_pubkey: 'ffff' }));
             assert.strictEqual(v.verdict, 'unknown');
         });
     }
