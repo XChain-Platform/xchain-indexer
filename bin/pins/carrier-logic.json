@@ -132,7 +132,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "610c71df9b7bbebf9aef7c4eb73909e0d489d370a1b20010f7ab163a3477f20a",
+      "hash": "7e0d9fc3561df804da3c61fc4c8db6cbac20d0a66d657687dcb7da80b1413eef",
       "twins": [],
       "note": "ACTION_ADMISSION_DISPATCHED_ONLY coverage: dispatched-only ACTION admission @regression @tier1"
     },
@@ -2274,6 +2274,13 @@
       "from": "b190a989878d47975b445acca45e071e96099768dafab9704367909e4586c63d",
       "to": "610c71df9b7bbebf9aef7c4eb73909e0d489d370a1b20010f7ab163a3477f20a",
       "reason": "register ORDER_GET_ADDRESS_COIN row",
+      "date": "2026-11-17"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "610c71df9b7bbebf9aef7c4eb73909e0d489d370a1b20010f7ab163a3477f20a",
+      "to": "7e0d9fc3561df804da3c61fc4c8db6cbac20d0a66d657687dcb7da80b1413eef",
+      "reason": "register the gated regex group-depth activation row and exported flag times",
       "date": "2026-11-17"
     }
   ]

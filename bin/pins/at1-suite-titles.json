@@ -634,6 +634,14 @@
       "Xcall (XCALL) @regression @tier3 v2: expire rejects user-broadcast v2 (must be system-synthesized)",
       "Xcall (XCALL) @regression @tier3 v2: expire the callback runs under the fixed XCALL callback ceiling at depth 0 with the call's hops"
     ],
+    "095d5bf80793c514": [
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 gate off: an emoji value is the raw JSON text, as today",
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 gate on: every astral value is escaped and parses back to the same value",
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 leaves BMP-only text byte-identical, lone-surrogate escapes included",
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 never reads the gate, or the registry handle, when no value holds an astral character",
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 round-trips keys, nesting, a neighbouring backslash and a lone surrogate through JSON.parse",
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 writes the frozen lowercase escape pair for an astral character"
+    ],
     "096c9c09b3863ffb": [
       "list-share block fault classification @regression @tier1 leaves stall state untouched for an unrelated error",
       "list-share block fault classification @regression @tier1 maps a missing snapshot to a mirror barrier with no clear instant",
@@ -3769,22 +3777,6 @@
       "migrate CLI status report @regression reports an applied file whose content changed as CHANGED and still exits 0",
       "migrate CLI status report @regression reports every migration pending when the ledger table does not exist",
       "migrate CLI status report @regression sets exitCode 1 and closes the pool when the ledger query fails"
-    ],
-    "31034e0dac6cfb6a": [
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) LTC and DOGE flip ON at their own ratified heights",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) at the BTC mainnet height (961000): both flags ON",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) below the BTC mainnet height (960999): both flags OFF, contract still accepted",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) does NOT track the Pkg 3 gate (a separate epoch, resolved separately)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is per-coin: LTC and DOGE mainnet at the BTC height stay OFF",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) regtest is genesis-armed (both flags ON from height 0)",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads enforceLintGlobalAlias as its own flag",
-      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads the new flags ALONGSIDE the existing async / lint-hardening flags (no regression)",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) at the flag day: enforceBannedRest ON",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) below the flag day: enforceBannedRest OFF, contract still accepted",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads enforceBannedWith from its own height row",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads enforceLintDestructure from its own height row",
-      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads exactly the eleven enforce* flags validateSyntax reads"
     ],
     "311bc22d541bf998": [
       "Tier 1 - Validation functions @tier1 getFormatVersion(format) never throws for string, number, null, undefined inputs",
@@ -8330,6 +8322,24 @@
       "batch settlement value ledger: oracle fees @regression @tier1 with NO ledger accepts the same output every time, byte-identically",
       "batch settlement value ledger: oracle fees @regression @tier1 with NO ledger still rejects an underpayment with the unchanged error shape"
     ],
+    "61092360653b1902": [
+      "Deploy (DEPLOY) @regression @tier2 LINT_REGEX_GROUP_DEPTH deploy-lint gate threading passes the resolved off state before activation",
+      "Deploy (DEPLOY) @regression @tier2 LINT_REGEX_GROUP_DEPTH deploy-lint gate threading passes the resolved on state at activation",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) LTC and DOGE flip ON at their own ratified heights",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) at the BTC mainnet height (961000): both flags ON",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) below the BTC mainnet height (960999): both flags OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) does NOT track the Pkg 3 gate (a separate epoch, resolved separately)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is ON on mainnet at every height, genesis included (armed by the 2026-09-09 ruling)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) is per-coin: LTC and DOGE mainnet at the BTC height stay OFF",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) regtest is genesis-armed (both flags ON from height 0)",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads enforceLintGlobalAlias as its own flag",
+      "Deploy (DEPLOY) @regression @tier2 Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm) threads the new flags ALONGSIDE the existing async / lint-hardening flags (no regression)",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) at the flag day: enforceBannedRest ON",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) below the flag day: enforceBannedRest OFF, contract still accepted",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads enforceBannedWith from its own height row",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads enforceLintDestructure from its own height row",
+      "Deploy (DEPLOY) @regression @tier2 REST_PATTERN_METER deploy-lint gate threading (banned-rest) threads exactly the twelve enforce* flags validateSyntax reads"
+    ],
     "6125c439d7bdac50": [
       "Deposit (DEPOSIT) @regression @tier2 contract validations rejects a coercible non-canonical CONTRACT_ACTION_INDEX (2.0) as (format)",
       "Deposit (DEPOSIT) @regression @tier2 contract validations rejects a leading-zero CONTRACT_ACTION_INDEX (07) as (format)",
@@ -11541,6 +11551,10 @@
       "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 ships genesis-active on regtest when the variable is unset",
       "protocol_changes/EXACT_INTEGER_WIRE_FIELDS regtest switch @regression @tier1 stays genesis-active on an empty value"
     ],
+    "8ac05ebd675684df": [
+      "DEPLOY and execute regex group-depth parity at the testnet flag day keeps the historical 65-group verdict one second before activation",
+      "DEPLOY and execute regex group-depth parity at the testnet flag day pins the group-depth refusal at activation on both lint paths"
+    ],
     "8ac980aa3b54b80e": [
       "XANCPUB reward canonical: derive copy vs the frozen wire format @regression @tier1 ends on the frozen consensus amount, never a wire value",
       "XANCPUB reward canonical: derive copy vs the frozen wire format @regression @tier1 exercises both flag-day sides (the fixtures straddle the EQUIV header activation)",
@@ -12470,6 +12484,10 @@
       "Recovery-determinism e2e (consensus) @integration (5) chunked-DEPLOY contract is byte-identical A vs B across the recovery boundary",
       "Recovery-determinism e2e (consensus) @integration (6) deploy_chunks carriers are byte-identical A vs B despite different insert order",
       "Recovery-determinism e2e (consensus) @integration sanity: both nodes assigned the stake source the same deterministic id"
+    ],
+    "9408121c6c962d55": [
+      "protocol_changes STATE_VALUE_ASTRAL_ESCAPE row @regression @tier1 is a part 5 time row: unarmed on mainnet, 2026-11-17T00:00Z on testnet, genesis on regtest",
+      "protocol_changes STATE_VALUE_ASTRAL_ESCAPE row @regression @tier1 is dark on mainnet, activates at the testnet instant, and is active at regtest genesis"
     ],
     "9413d336ccb36031": [
       "prefixed integer spellings on valid BET and LINK actions @regression @tier1 refuses a prefixed BET DEADLINE or REFUND_WINDOW on a feed create",
@@ -14554,6 +14572,11 @@
       "AnchorRecovery.run() driver replay determinism @regression @tier1 negative control: a match_batch_seq-only ORDER BY leaves the equal-seq tie unspecified",
       "AnchorRecovery.run() driver replay determinism @regression @tier1 orders the archive-head driver query by match_batch_seq ASC, action_index ASC",
       "AnchorRecovery.run() driver replay determinism @regression @tier1 replays equal-batch_seq heads in a deterministic total order (earliest action_index first)"
+    ],
+    "b00b431bf5253982": [
+      "protocol_changes/LINT_REGEX_GROUP_DEPTH row @regression @tier1 is registered in part 5 and has the registry shape",
+      "protocol_changes/LINT_REGEX_GROUP_DEPTH row @regression @tier1 is unarmed on mainnet, armed on testnet at its instant and active on regtest",
+      "protocol_changes/LINT_REGEX_GROUP_DEPTH row @regression @tier1 matches the bundled VM activation map per network"
     ],
     "b06e6a79b9e81a02": [
       "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) a pre-guard (v1.x) node treats it as not-yet-active; guard stays off",
@@ -18861,6 +18884,20 @@
       "ROLLCALL base-rail regtest resolver matches the running parser @regression @tier1 agrees with regtestHeight on every accepted, refused and garbage input",
       "ROLLCALL base-rail regtest resolver matches the running parser @regression @tier1 lands on the documented values, so agreement is not two copies of one mistake"
     ],
+    "eb8b9afa8687c40b": [
+      "STATE_VALUE_ASTRAL_ESCAPE at each contract_state writer @regression @tier2 DEPLOY constructor stores the escaped emoji at the gate, and it parses back to the value",
+      "STATE_VALUE_ASTRAL_ESCAPE at each contract_state writer @regression @tier2 DEPLOY constructor stores the raw emoji JSON below the gate",
+      "STATE_VALUE_ASTRAL_ESCAPE at each contract_state writer @regression @tier2 EXECUTE (run_vm) stores the escaped emoji at the gate, and it parses back to the value",
+      "STATE_VALUE_ASTRAL_ESCAPE at each contract_state writer @regression @tier2 EXECUTE (run_vm) stores the raw emoji JSON below the gate",
+      "STATE_VALUE_ASTRAL_ESCAPE at each contract_state writer @regression @tier2 controller guard stores the escaped emoji at the gate, and it parses back to the value",
+      "STATE_VALUE_ASTRAL_ESCAPE at each contract_state writer @regression @tier2 controller guard stores the raw emoji JSON below the gate",
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 gate off: an emoji value is the raw JSON text, as today",
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 gate on: every astral value is escaped and parses back to the same value",
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 leaves BMP-only text byte-identical, lone-surrogate escapes included",
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 never reads the gate, or the registry handle, when no value holds an astral character",
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 round-trips keys, nesting, a neighbouring backslash and a lone surrogate through JSON.parse",
+      "STATE_VALUE_ASTRAL_ESCAPE stored text @regression @tier1 writes the frozen lowercase escape pair for an astral character"
+    ],
     "eb9942cb0a8ec157": [
       "bridged policy list leg planning creates a populated list when its pointer is null",
       "bridged policy list leg planning creates an empty list when the empty-string pointer means none exists",
@@ -20857,8 +20894,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1661,
-      "titleCount": 16154,
+      "fileCount": 1665,
+      "titleCount": 16175,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21026,7 +21063,7 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "31034e0dac6cfb6a",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "61092360653b1902",
         "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "8fcbc76f528097f2",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/lint_syntax_depth_flag.test.js": "95d5d3348def2eaa",
@@ -21059,6 +21096,7 @@
         "test/unit/actions/cross_chain_remote_token_accept.test.js": "cd1e44eb5d10c034",
         "test/unit/actions/cross_chain_remote_token_signatures.test.js": "387988e713715415",
         "test/unit/actions/deploy/nesting_depth_parity.test.js": "321baaba9c5cb966",
+        "test/unit/actions/deploy/regex_group_depth_parity.test.js": "8ac05ebd675684df",
         "test/unit/actions/deploy/wire_params.test.js": "0276c82b670c2f09",
         "test/unit/actions/execute.test.js": "7a6b77bff3698035",
         "test/unit/actions/execute.test/cross_contract.test.js": "c1156153bb6a807f",
@@ -21074,6 +21112,7 @@
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/execute/state_value_astral_escape.test.js": "eb8b9afa8687c40b",
         "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
         "test/unit/actions/file_multipart_batch.test.js": "d7af709ec3d67e56",
         "test/unit/actions/file_multipart_column_stub.test.js": "2d64b694650fc5bb",
@@ -22304,6 +22343,7 @@
         "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/send_gated/send_gated_total_tick_id_row.test.js": "847077f2b2d82a7e",
         "test/unit/protocol_changes/stake_delegated_signing_key/stake_delegated_signing_key_row.test.js": "545bf54c62a51ea5",
+        "test/unit/protocol_changes/state_value_astral_escape_row.test.js": "9408121c6c962d55",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_lint/vm_lint_banned_with_row.test.js": "00209c3f22ec4a51",
         "test/unit/protocol_changes/vm_lint/vm_lint_destructure_row.test.js": "a5d6a21bff731e18",
@@ -22321,6 +22361,7 @@
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "cf6d90b5bf31b6c8",
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
+        "test/unit/protocol_changes/vm_twin/regex_group_depth_row.test.js": "b00b431bf5253982",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
         "test/unit/protocol_changes/vm_twin/state_key_storable_row.test.js": "ea9f7bcf575d389c",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
@@ -22901,8 +22942,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1269,
-      "titleCount": 12770,
+      "fileCount": 1272,
+      "titleCount": 12789,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23086,7 +23127,7 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "31034e0dac6cfb6a",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "61092360653b1902",
         "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "8fcbc76f528097f2",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/lint_syntax_depth_flag.test.js": "95d5d3348def2eaa",
@@ -23130,6 +23171,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/execute/state_value_astral_escape.test.js": "eb8b9afa8687c40b",
         "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
         "test/unit/actions/file_multipart_incremental.test.js": "ea10e5540c7ff5a3",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
@@ -24014,6 +24056,7 @@
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/stake_delegated_signing_key/stake_delegated_signing_key_row.test.js": "545bf54c62a51ea5",
+        "test/unit/protocol_changes/state_value_astral_escape_row.test.js": "9408121c6c962d55",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_matches_vm.test.js": "a6abafeb24201686",
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "4b19ce0a35e2bbd5",
@@ -24025,6 +24068,7 @@
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "cf6d90b5bf31b6c8",
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
+        "test/unit/protocol_changes/vm_twin/regex_group_depth_row.test.js": "b00b431bf5253982",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
         "test/unit/protocol_changes/vm_twin/state_key_storable_row.test.js": "ea9f7bcf575d389c",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
@@ -24176,8 +24220,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 670,
-      "titleCount": 7039,
+      "fileCount": 673,
+      "titleCount": 7050,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24245,6 +24289,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/execute/state_value_astral_escape.test.js": "095d5bf80793c514",
         "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
         "test/unit/actions/file_multipart_incremental.test.js": "ea10e5540c7ff5a3",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
@@ -24765,6 +24810,7 @@
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/stake_delegated_signing_key/stake_delegated_signing_key_row.test.js": "545bf54c62a51ea5",
+        "test/unit/protocol_changes/state_value_astral_escape_row.test.js": "9408121c6c962d55",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_matches_vm.test.js": "a6abafeb24201686",
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "4b19ce0a35e2bbd5",
@@ -24776,6 +24822,7 @@
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "cf6d90b5bf31b6c8",
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
+        "test/unit/protocol_changes/vm_twin/regex_group_depth_row.test.js": "b00b431bf5253982",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
         "test/unit/protocol_changes/vm_twin/state_key_storable_row.test.js": "ea9f7bcf575d389c",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
@@ -24852,8 +24899,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1269,
-      "titleCount": 12770,
+      "fileCount": 1272,
+      "titleCount": 12789,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25037,7 +25084,7 @@
         "test/unit/actions/contract/deploy.test/code_encoding.test.js": "367a4c78df954f22",
         "test/unit/actions/contract/deploy.test/constructor_effects.test.js": "e210414f76e3a5c4",
         "test/unit/actions/contract/deploy.test/constructor_run.test.js": "1dba21dcae74ba83",
-        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "31034e0dac6cfb6a",
+        "test/unit/actions/contract/deploy.test/lint_gates.test.js": "61092360653b1902",
         "test/unit/actions/contract/deploy.test/lint_nesting_depth_flag.test.js": "8fcbc76f528097f2",
         "test/unit/actions/contract/deploy.test/lint_optional_chain_gate.test.js": "2275de9cf091b138",
         "test/unit/actions/contract/deploy.test/lint_syntax_depth_flag.test.js": "95d5d3348def2eaa",
@@ -25081,6 +25128,7 @@
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "7706e142727fd883",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
+        "test/unit/actions/execute/state_value_astral_escape.test.js": "eb8b9afa8687c40b",
         "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
         "test/unit/actions/file_multipart_incremental.test.js": "ea10e5540c7ff5a3",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
@@ -25965,6 +26013,7 @@
         "test/unit/protocol_changes/regtest_overlay/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "5d5483ae3700b4b1",
         "test/unit/protocol_changes/stake_delegated_signing_key/stake_delegated_signing_key_row.test.js": "545bf54c62a51ea5",
+        "test/unit/protocol_changes/state_value_astral_escape_row.test.js": "9408121c6c962d55",
         "test/unit/protocol_changes/unarmed_literal_guard.test.js": "7bed9231bd01caf8",
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_matches_vm.test.js": "a6abafeb24201686",
         "test/unit/protocol_changes/vm_twin/gas_ceiling_exhausted_row.test.js": "4b19ce0a35e2bbd5",
@@ -25976,6 +26025,7 @@
         "test/unit/protocol_changes/vm_twin/native_stack_terminal_matches_vm.test.js": "cf6d90b5bf31b6c8",
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
+        "test/unit/protocol_changes/vm_twin/regex_group_depth_row.test.js": "b00b431bf5253982",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
         "test/unit/protocol_changes/vm_twin/state_key_storable_row.test.js": "ea9f7bcf575d389c",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
