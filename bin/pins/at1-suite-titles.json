@@ -7171,21 +7171,6 @@
       "readinessVerdict() tracks one behind episode and re-arms after a later commit",
       "readinessVerdict() treats a stale chain tip as unknown for the behind episode, not as caught up"
     ],
-    "56c77d1cdb0da4c3": [
-      "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
-      "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM GAS_CEILING_SUCCESS_ACTIVATION matches the indexer GAS_CEILING_SUCCESS row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM REST_PATTERN_METER gate flips at the indexer REST_PATTERN_METER row instant per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM STRING_RESULT_METER_ACTIVATION matches the indexer STRING_RESULT_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM TOSTRING_SIZE_METER_ACTIVATION matches the indexer TOSTRING_SIZE_METER row per network",
-      "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
-      "consensus parameters are frozen (track 8 guard) @regression the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp",
-      "consensus parameters are frozen (track 8 guard) @regression vmFailureStatus maps every VM error into the frozen closed token set"
-    ],
     "56d2189dafc1f3bf": [
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 a BATCH does NOT bound EXECUTE, so two of them really do reach the handler",
       "two-EXECUTE BATCH ATTEST request_id collision @regression @tier1 batch.js stamps each subcommand its own 0-based BATCH_POSITION",
@@ -16960,6 +16945,22 @@
       "Dispenser_Close action handler @regression @tier2 ownership dispenser: no action when escrow does not match (already cleared by DISPENSE)",
       "Dispenser_Close action handler @regression @tier2 ownership dispenser: transferTokenOwnership when escrow matches and destination differs from SOURCE"
     ],
+    "d455b480b0ad9954": [
+      "consensus parameters are frozen (track 8 guard) @regression the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)",
+      "consensus parameters are frozen (track 8 guard) @regression the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM GAS_CEILING_SUCCESS_ACTIVATION matches the indexer GAS_CEILING_SUCCESS row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM ITER_SET_METER_ACTIVATION matches the indexer ITER_SET_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM REST_PATTERN_METER gate flips at the indexer REST_PATTERN_METER row instant per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM STATE_KEY_STORABLE_ACTIVATION matches the indexer STATE_KEY_STORABLE row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM STRING_RESULT_METER_ACTIVATION matches the indexer STRING_RESULT_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM TOSTRING_SIZE_METER_ACTIVATION matches the indexer TOSTRING_SIZE_METER row per network",
+      "consensus parameters are frozen (track 8 guard) @regression the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)",
+      "consensus parameters are frozen (track 8 guard) @regression the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp",
+      "consensus parameters are frozen (track 8 guard) @regression vmFailureStatus maps every VM error into the frozen closed token set"
+    ],
     "d4807309ef63e46d": [
       "Airdrop @regression @tier2 recipient allow/block list membership ALLOW_LIST and BLOCK_LIST together: the block list still wins",
       "Airdrop @regression @tier2 recipient allow/block list membership ALLOW_LIST credits only listed recipients",
@@ -18785,6 +18786,11 @@
       "base AT9: the XCHAIN row appearing off BTC moves no verdict @regression @tier1 the shared controller-guard chokepoint, for all three AT9 action classes LTC DISPENSER_CREATE: identical verdict before and after the row exists",
       "base AT9: the XCHAIN row appearing off BTC moves no verdict @regression @tier1 the shared controller-guard chokepoint, for all three AT9 action classes LTC ORDER_CREATE: identical verdict before and after the row exists",
       "base AT9: the XCHAIN row appearing off BTC moves no verdict @regression @tier1 the shared controller-guard chokepoint, for all three AT9 action classes LTC SEND: identical verdict before and after the row exists"
+    ],
+    "ea9f7bcf575d389c": [
+      "protocol_changes/STATE_KEY_STORABLE row @regression @tier1 is registered in part 5 and has the registry shape",
+      "protocol_changes/STATE_KEY_STORABLE row @regression @tier1 is unarmed on mainnet, armed on testnet at its instant and active from regtest genesis",
+      "protocol_changes/STATE_KEY_STORABLE row @regression @tier1 matches the bundled VM activation table on every network"
     ],
     "eae128db10b21f39": [
       "E2E explorer launcher database config is accepted by the explorer checkpoint config loader",
@@ -20837,8 +20843,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1658,
-      "titleCount": 16140,
+      "fileCount": 1659,
+      "titleCount": 16144,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21620,7 +21626,7 @@
         "test/unit/consensus/consensus_identity/pin_shape_compare.test.js": "1e89d0e95cbfdf59",
         "test/unit/consensus/consensus_identity_cli.test.js": "27c2f2b1c95303c8",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "d455b480b0ad9954",
         "test/unit/consensus/consensus_params.test/vm_status_error_prefix_coupling.test.js": "84f7b72687be7722",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "8d0e0a1c8092a010",
         "test/unit/consensus/consensus_rules_digest_twin_bytes.test.js": "c8d4c432d417022a",
@@ -22300,6 +22306,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/state_key_storable_row.test.js": "ea9f7bcf575d389c",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "6bb97e3d469d3a8d",
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
@@ -22878,8 +22885,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1266,
-      "titleCount": 12756,
+      "fileCount": 1267,
+      "titleCount": 12760,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23496,7 +23503,7 @@
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "bc9b899ba93759c7",
         "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "d455b480b0ad9954",
         "test/unit/consensus/consensus_params.test/vm_status_error_prefix_coupling.test.js": "84f7b72687be7722",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "8d0e0a1c8092a010",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
@@ -24001,6 +24008,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/state_key_storable_row.test.js": "ea9f7bcf575d389c",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "6bb97e3d469d3a8d",
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
@@ -24150,8 +24158,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 668,
-      "titleCount": 7033,
+      "fileCount": 669,
+      "titleCount": 7036,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24750,6 +24758,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/state_key_storable_row.test.js": "ea9f7bcf575d389c",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "6bb97e3d469d3a8d",
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
@@ -24824,8 +24833,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1266,
-      "titleCount": 12756,
+      "fileCount": 1267,
+      "titleCount": 12760,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25442,7 +25451,7 @@
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "bc9b899ba93759c7",
         "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
-        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "56c77d1cdb0da4c3",
+        "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "d455b480b0ad9954",
         "test/unit/consensus/consensus_params.test/vm_status_error_prefix_coupling.test.js": "84f7b72687be7722",
         "test/unit/consensus/consensus_primitive_conformance.test.js": "8d0e0a1c8092a010",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
@@ -25947,6 +25956,7 @@
         "test/unit/protocol_changes/vm_twin/per_element_meter_matches_vm.test.js": "49e0a70f3297c5c2",
         "test/unit/protocol_changes/vm_twin/readonly_accessor_own_key_row.test.js": "26345eafc4a50f71",
         "test/unit/protocol_changes/vm_twin/resource_fault_signal_matches_vm.test.js": "1d568bd1407c225a",
+        "test/unit/protocol_changes/vm_twin/state_key_storable_row.test.js": "ea9f7bcf575d389c",
         "test/unit/protocol_changes/vm_twin/string_receiver_meter_matches_vm.test.js": "8631561396ca1ece",
         "test/unit/protocol_changes/vm_twin/string_result_meter_matches_vm.test.js": "6bb97e3d469d3a8d",
         "test/unit/protocol_changes/vm_twin/tostring_size_meter_matches_vm.test.js": "3e92f1e1c8de66f0",
