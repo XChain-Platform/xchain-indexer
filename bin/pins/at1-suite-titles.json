@@ -3022,6 +3022,11 @@
       "bridge policy barrier block ordering @regression @tier1 includes a policy settlement from the block being checked",
       "bridge policy barrier block ordering @regression @tier1 keeps the two-argument lookup unbounded"
     ],
+    "2810fd21a0a8863a": [
+      "protocol_changes FILE_MULTIPART row @regression @tier1 is dark on mainnet, activates at the testnet instant, and is active at regtest genesis",
+      "protocol_changes FILE_MULTIPART row @regression @tier1 is registered in part 5 with the specified activation table",
+      "protocol_changes FILE_MULTIPART row @regression @tier1 publishes both multipart caps through registry copies"
+    ],
     "281c89bed990ea31": [
       "Execute (EXECUTE) @regression @tier2 IS_EMISSION: fee skip skips gas fee debit when IS_EMISSION is true",
       "Execute (EXECUTE) @regression @tier2 buildActionParams BROADCAST \u2192 VERSION|MESSAGE|VALUE",
@@ -9061,6 +9066,15 @@
       "HubClient pushChainTip() candidate fanout pushes to every unpinned candidate",
       "HubClient pushChainTip() candidate fanout waits for every candidate when one push fails"
     ],
+    "69b4c80c0106517d": [
+      "Order action handler @regression @tier2 Format 0 \u2013 GET_ADDRESS coin (ORDER_GET_ADDRESS_COIN) below the flag a cross-chain ORDER paying a GET_COIN-only address keeps its format refusal",
+      "Order action handler @regression @tier2 Format 0 \u2013 GET_ADDRESS coin (ORDER_GET_ADDRESS_COIN) below the flag a cross-chain ORDER paying a local-only address stays valid",
+      "Order action handler @regression @tier2 Format 0 \u2013 GET_ADDRESS coin (ORDER_GET_ADDRESS_COIN) from the flag a cross-chain ORDER paying a GET_COIN address is valid",
+      "Order action handler @regression @tier2 Format 0 \u2013 GET_ADDRESS coin (ORDER_GET_ADDRESS_COIN) from the flag a cross-chain ORDER paying a local-only address is refused on format",
+      "Order action handler @regression @tier2 Format 0 \u2013 GET_ADDRESS coin (ORDER_GET_ADDRESS_COIN) the fixture addresses are each valid only on their own coin",
+      "Order action handler @regression @tier2 Format 0 \u2013 GET_ADDRESS coin (ORDER_GET_ADDRESS_COIN), unchanged verdicts a same-chain ORDER never consults the flag and keeps its verdicts",
+      "Order action handler @regression @tier2 Format 0 \u2013 GET_ADDRESS coin (ORDER_GET_ADDRESS_COIN), unchanged verdicts an address valid on both coins stays valid on either side of the flag"
+    ],
     "69b7814a5ee226de": [
       "Order_Match escrow/credit precision parity @regression @tier1 escrow release is the bit-exact negation of the paired credit on an 18-dp fill",
       "Order_Match escrow/credit precision parity @regression @tier1 negative control: JS unary minus on the same value DOES lose precision"
@@ -10476,11 +10490,6 @@
       "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 below the gate a base pair resolves its snapshot block from the request row",
       "SLASH_ATTEST_MULTIROUND_EXEMPT row and base-leg resolver @regression @tier1 registers a row unarmed on mainnet, armed on testnet, and genesis-active on regtest"
     ],
-    "7afd8ea98fb973cf": [
-      "protocol_changes FILE_MULTIPART row @regression @tier1 is dark on mainnet, activates at the testnet instant, and is active at regtest genesis",
-      "protocol_changes FILE_MULTIPART row @regression @tier1 is the final part 5 row with the specified activation table",
-      "protocol_changes FILE_MULTIPART row @regression @tier1 publishes both multipart caps through registry copies"
-    ],
     "7b26338ac8262f8c": [
       "anchor archive fold-term gate BTC reward derivation does not terminate the bundle family",
       "anchor archive fold-term gate BTC reward derivation keeps a pre-fold archive reward eligible when only the term is active",
@@ -11675,6 +11684,11 @@
       "list-share ticker mirror fixture @regression @tier1 pins each membership hash to listMembershipHash",
       "list-share ticker mirror fixture @regression @tier1 pins the two canonical fixture versions",
       "list-share ticker mirror fixture @regression @tier1 preinterns the case-folded DOGE ticker only"
+    ],
+    "8ce2c12fe2cdb411": [
+      "protocol_changes/ORDER_GET_ADDRESS_COIN row @regression @tier1 is registered in part 5 and has the registry shape",
+      "protocol_changes/ORDER_GET_ADDRESS_COIN row @regression @tier1 is unarmed on mainnet, armed on testnet at its instant and active from regtest genesis",
+      "protocol_changes/ORDER_GET_ADDRESS_COIN row @regression @tier1 publishes both instants as gate constants from the entry"
     ],
     "8cffad06854c547e": [
       "Database.isDistributed holder verdicts returns false for an owner-only holder set",
@@ -20843,8 +20857,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1659,
-      "titleCount": 16144,
+      "fileCount": 1661,
+      "titleCount": 16154,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21122,6 +21136,7 @@
         "test/unit/actions/market/order.test/create_rules.test.js": "6c8830c1a590c64a",
         "test/unit/actions/market/order.test/edit.test.js": "10bc85b221caeab0",
         "test/unit/actions/market/order.test/fields_and_fees.test.js": "7a776f7e267ba1d7",
+        "test/unit/actions/market/order.test/get_address_coin.test.js": "69b4c80c0106517d",
         "test/unit/actions/market/order_expire.test.js": "0c6acb7244ce57e5",
         "test/unit/actions/market/order_match.test.js": "35406a3409593e4a",
         "test/unit/actions/market/order_match.test/debug_mode.test.js": "d8ebfc3a4c58386a",
@@ -22272,11 +22287,12 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
-        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "2810fd21a0a8863a",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
+        "test/unit/protocol_changes/order_get_address_coin_row.test.js": "8ce2c12fe2cdb411",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "4214ea9e6e14509e",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
@@ -22885,8 +22901,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1267,
-      "titleCount": 12760,
+      "fileCount": 1269,
+      "titleCount": 12770,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23161,6 +23177,7 @@
         "test/unit/actions/market/order.test/create_rules.test.js": "6c8830c1a590c64a",
         "test/unit/actions/market/order.test/edit.test.js": "10bc85b221caeab0",
         "test/unit/actions/market/order.test/fields_and_fees.test.js": "7a776f7e267ba1d7",
+        "test/unit/actions/market/order.test/get_address_coin.test.js": "69b4c80c0106517d",
         "test/unit/actions/market/order_expire.test.js": "0c6acb7244ce57e5",
         "test/unit/actions/market/order_match.test.js": "35406a3409593e4a",
         "test/unit/actions/market/order_match.test/debug_mode.test.js": "d8ebfc3a4c58386a",
@@ -23982,10 +23999,11 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
-        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "2810fd21a0a8863a",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
+        "test/unit/protocol_changes/order_get_address_coin_row.test.js": "8ce2c12fe2cdb411",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "4214ea9e6e14509e",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
@@ -24158,8 +24176,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 669,
-      "titleCount": 7036,
+      "fileCount": 670,
+      "titleCount": 7039,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24732,10 +24750,11 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
-        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "2810fd21a0a8863a",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
+        "test/unit/protocol_changes/order_get_address_coin_row.test.js": "8ce2c12fe2cdb411",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "4214ea9e6e14509e",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
@@ -24833,8 +24852,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1267,
-      "titleCount": 12760,
+      "fileCount": 1269,
+      "titleCount": 12770,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25109,6 +25128,7 @@
         "test/unit/actions/market/order.test/create_rules.test.js": "6c8830c1a590c64a",
         "test/unit/actions/market/order.test/edit.test.js": "10bc85b221caeab0",
         "test/unit/actions/market/order.test/fields_and_fees.test.js": "7a776f7e267ba1d7",
+        "test/unit/actions/market/order.test/get_address_coin.test.js": "69b4c80c0106517d",
         "test/unit/actions/market/order_expire.test.js": "0c6acb7244ce57e5",
         "test/unit/actions/market/order_match.test.js": "35406a3409593e4a",
         "test/unit/actions/market/order_match.test/debug_mode.test.js": "d8ebfc3a4c58386a",
@@ -25930,10 +25950,11 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
-        "test/unit/protocol_changes/file_multipart_row.test.js": "7afd8ea98fb973cf",
+        "test/unit/protocol_changes/file_multipart_row.test.js": "2810fd21a0a8863a",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
         "test/unit/protocol_changes/indexer_rows/stake_snapshot_decimal_strings_row.test.js": "dd4520637c14e94b",
+        "test/unit/protocol_changes/order_get_address_coin_row.test.js": "8ce2c12fe2cdb411",
         "test/unit/protocol_changes/owner_withdraw_opt_in_row.test.js": "486cd0d049a716bb",
         "test/unit/protocol_changes/predicate_parity.test.js": "4214ea9e6e14509e",
         "test/unit/protocol_changes/price_v1/price_v1_expected_rows.test.js": "91f64187338f148f",
