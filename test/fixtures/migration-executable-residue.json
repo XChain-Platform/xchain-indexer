@@ -462,5 +462,9 @@
   "2026-11-16-price-snapshots-pair-status-ts-index.sql": {
     "residue": "56a12d4724932fa66b849254f65391ab7ecb27ff893883a57a6297ee6a1d4b91",
     "sha256": "93cf661631ce347c713d2dbadd4d9c6da14dc7fd69c3fcdd4a72cf9bd8b695b4"
+  },
+  "2026-11-17-file-multipart-uncapped.sql": {
+    "residue": "716a8e63d8d26c6000653d468148df582c6a5315cdf6810b23e03cfc3f90692f",
+    "sha256": "f4e671e3893001de14c5b27700872816a340837675a1ca16edc16e6a8b9a09ba"
   }
 }
