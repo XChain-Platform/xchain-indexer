@@ -1743,6 +1743,38 @@
       "reconcileAnchorRewardWinner() @regression @tier1 scopes the collapse to the round_qualifier it is given (archive leg)",
       "reconcileAnchorRewardWinner() @regression @tier1 tolerates a driver result without affectedRows"
     ],
+    "189bb5031ce903e4": [
+      "Security: remediated dependency advisories @regression @tier4 ADV-10: the installed mariadb reports a patched runtime version",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins axios at or above 1.18.0",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins brace-expansion at or above 5.0.9",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins diff at or above 8.0.3",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins fast-uri at or above 3.1.5",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins form-data at or above 4.0.6",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins glob at or above 14.0.6",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins ip-address at or above 10.3.1",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins js-yaml at or above 4.3.1",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins mariadb at or above 3.5.3",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins minimatch at or above 11.0.9",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins serialize-javascript at or above 7.0.5",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins shell-quote at or above 1.9.0",
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins tmp at or above 0.2.6",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every axios entry in package-lock.json is at or above 1.18.0",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every brace-expansion entry in package-lock.json is at or above 5.0.9",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every diff entry in package-lock.json is at or above 8.0.3",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every fast-uri entry in package-lock.json is at or above 3.1.5",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every form-data entry in package-lock.json is at or above 4.0.6",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every glob entry in package-lock.json is at or above 14.0.6",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every ip-address entry in package-lock.json is at or above 10.3.1",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every js-yaml entry in package-lock.json is at or above 4.3.1",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every mariadb entry in package-lock.json is at or above 3.5.3",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every minimatch entry in package-lock.json is at or above 11.0.9",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every serialize-javascript entry in package-lock.json is at or above 7.0.5",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every shell-quote entry in package-lock.json is at or above 1.9.0",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every tmp entry in package-lock.json is at or above 0.2.6",
+      "Security: remediated dependency advisories @regression @tier4 ADV-3: minimatch can still brace-expand through the overridden brace-expansion",
+      "Security: remediated dependency advisories @regression @tier4 ADV-4: brace-expansion survives the CVE-2026-14257 unbounded-length input",
+      "Security: remediated dependency advisories @regression @tier4 ADV-5: the installed axios reports a patched runtime version"
+    ],
     "18a1b7638e0d2052": [
       "Rollback price mirror re-page @regression @tier3 launches nothing on a non-BTC coin",
       "Rollback price mirror re-page @regression @tier3 launches nothing when the purge ran but the commit threw",
@@ -20895,7 +20927,7 @@
   "scripts": {
     "test": {
       "fileCount": 1665,
-      "titleCount": 16175,
+      "titleCount": 16179,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -22462,7 +22494,7 @@
         "test/unit/rollcall/rollcall_regtest_parity.test.js": "eb89e21438d117f3",
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
-        "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
+        "test/unit/security/configuration/dependency_advisories.test.js": "189bb5031ce903e4",
         "test/unit/security/configuration/response_mirror_boot_guard.test.js": "f4990631037844d2",
         "test/unit/security/configuration/response_mirror_boot_guard_networks.test.js": "0854ad12bbb1e5ec",
         "test/unit/security/configuration/startup_validation.test.js": "9b13c5407b7bccf8",
@@ -22943,7 +22975,7 @@
     },
     "test:regression": {
       "fileCount": 1272,
-      "titleCount": 12789,
+      "titleCount": 12793,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24145,7 +24177,7 @@
         "test/unit/rollcall/rollcall_regtest_parity.test.js": "eb89e21438d117f3",
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
-        "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
+        "test/unit/security/configuration/dependency_advisories.test.js": "189bb5031ce903e4",
         "test/unit/security/configuration/response_mirror_boot_guard.test.js": "f4990631037844d2",
         "test/unit/security/configuration/response_mirror_boot_guard_networks.test.js": "0854ad12bbb1e5ec",
         "test/unit/security/configuration/startup_validation.test.js": "9b13c5407b7bccf8",
@@ -24221,7 +24253,7 @@
     },
     "test:regression:fast": {
       "fileCount": 673,
-      "titleCount": 7050,
+      "titleCount": 7054,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24859,7 +24891,7 @@
         "test/unit/rollcall/rollcall_regtest_parity.test.js": "eb89e21438d117f3",
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
-        "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
+        "test/unit/security/configuration/dependency_advisories.test.js": "189bb5031ce903e4",
         "test/unit/security/configuration/response_mirror_boot_guard.test.js": "f4990631037844d2",
         "test/unit/security/configuration/response_mirror_boot_guard_networks.test.js": "0854ad12bbb1e5ec",
         "test/unit/security/configuration/startup_validation.test.js": "9b13c5407b7bccf8",
@@ -24900,7 +24932,7 @@
     },
     "test:regression:full": {
       "fileCount": 1272,
-      "titleCount": 12789,
+      "titleCount": 12793,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -26102,7 +26134,7 @@
         "test/unit/rollcall/rollcall_regtest_parity.test.js": "eb89e21438d117f3",
         "test/unit/security/arithmetic/balance_integrity.test.js": "b62915b19c0b37bc",
         "test/unit/security/configuration/bundled_sibling_snapshot.test.js": "13dfdbaefb6250f2",
-        "test/unit/security/configuration/dependency_advisories.test.js": "5cc2b8143bdd5808",
+        "test/unit/security/configuration/dependency_advisories.test.js": "189bb5031ce903e4",
         "test/unit/security/configuration/response_mirror_boot_guard.test.js": "f4990631037844d2",
         "test/unit/security/configuration/response_mirror_boot_guard_networks.test.js": "0854ad12bbb1e5ec",
         "test/unit/security/configuration/startup_validation.test.js": "9b13c5407b7bccf8",
