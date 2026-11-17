@@ -252,6 +252,10 @@ const STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME = UNARMED;
 const STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME = 1791804379;
 const ITER_SET_METER_MAINNET_TIME = UNARMED;
 const ITER_SET_METER_TESTNET_TIME = 1791804379;
+// Mirrors xchain-vm LINT_REGEX_GROUP_DEPTH_ACTIVATION. Mainnet stays inert,
+// testnet arms at 2026-11-17T00:00:00Z, and the row sets regtest from genesis.
+const LINT_REGEX_GROUP_DEPTH_MAINNET_TIME = UNARMED;
+const LINT_REGEX_GROUP_DEPTH_TESTNET_TIME = 1794873600;
 // DISPENSER_REFILL: a refill that adds escrow to a dispenser consults the token's trade
 // controller (actions/dispenser/controller_guard.js). Mainnet stays UNARMED until the
 // operator arms it; testnet is armed at the instant below.
@@ -340,6 +344,8 @@ module.exports = {
     STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME,
     ITER_SET_METER_MAINNET_TIME,
     ITER_SET_METER_TESTNET_TIME,
+    LINT_REGEX_GROUP_DEPTH_MAINNET_TIME,
+    LINT_REGEX_GROUP_DEPTH_TESTNET_TIME,
     DISPENSER_REFILL_MAINNET_TIME,
     DISPENSER_REFILL_TESTNET_TIME,
     STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,

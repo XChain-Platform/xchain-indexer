@@ -112,12 +112,13 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
     // pattern that execute accepts. The gate table is stubbed here, so these pin the
     // WIRING (flag present, resolved from that change, for this block), not the instant.
     describe('REST_PATTERN_METER deploy-lint gate threading (banned-rest)', function () {
-        it('threads exactly the eleven enforce* flags validateSyntax reads', async function () {
+        it('threads exactly the twelve enforce* flags validateSyntax reads', async function () {
             const { opts } = await optsFor('regtest', 'BTC', 0);
             assert.deepStrictEqual(Object.keys(opts).sort(), [
                 'enforceBannedAsync', 'enforceBannedGenerator', 'enforceBannedRest',
                 'enforceBannedWasm', 'enforceBannedWith', 'enforceLintDestructure', 'enforceLintGlobalAlias',
-                'enforceLintHardening', 'enforceLintNestingDepth', 'enforceLintOptionalChain', 'enforceLintSyntaxDepth',
+                'enforceLintHardening', 'enforceLintNestingDepth', 'enforceLintOptionalChain',
+                'enforceLintRegexGroupDepth', 'enforceLintSyntaxDepth',
             ], 'deploy lint-flag option set drifted; an omitted flag reads as enforced in validateSyntax');
         });
 
@@ -147,6 +148,24 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             actionsCtx.protocolChanges.isEnabled.withArgs('REST_PATTERN_METER', sinon.match.any).resolves(true);
             const { opts } = await optsFor('mainnet', 'BTC', 900000);
             assert.strictEqual(opts.enforceBannedRest, true);
+        });
+    });
+
+    describe('LINT_REGEX_GROUP_DEPTH deploy-lint gate threading', function () {
+        it('passes the resolved off state before activation', async function () {
+            actionsCtx.protocolChanges.isEnabled
+                .withArgs('LINT_REGEX_GROUP_DEPTH', sinon.match.any).resolves(false);
+            const { opts } = await optsFor('testnet', 'BTC', 156908);
+            assert.strictEqual(opts.enforceLintRegexGroupDepth, false);
+            sinon.assert.calledWith(actionsCtx.protocolChanges.isEnabled,
+                'LINT_REGEX_GROUP_DEPTH', 156908);
+        });
+
+        it('passes the resolved on state at activation', async function () {
+            actionsCtx.protocolChanges.isEnabled
+                .withArgs('LINT_REGEX_GROUP_DEPTH', sinon.match.any).resolves(true);
+            const { opts } = await optsFor('testnet', 'BTC', 156909);
+            assert.strictEqual(opts.enforceLintRegexGroupDepth, true);
         });
     });
 });
