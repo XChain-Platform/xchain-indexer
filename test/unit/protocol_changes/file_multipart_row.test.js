@@ -36,10 +36,10 @@ describe('protocol_changes FILE_MULTIPART row @regression @tier1', function () {
         assert.strictEqual(entry[0], 'FILE_MULTIPART');
         assert.strictEqual(entry[1], '0.2.0');
         assert.strictEqual(entry[2], ProtocolChanges.UNARMED);
-        assert.strictEqual(entry[3], 1796083200);
+        assert.strictEqual(entry[3], 1794787200);
         assert.strictEqual(entry[4](), 0);
         assert.deepStrictEqual(entry.slice(5), [0, 0, 0]);
-        assert.strictEqual(FILE_MULTIPART_TESTNET_TIME, 1796083200);
+        assert.strictEqual(FILE_MULTIPART_TESTNET_TIME, 1794787200);
         assert.deepStrictEqual(table, ProtocolChanges.get(KEY));
     });
 
