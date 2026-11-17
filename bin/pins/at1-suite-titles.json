@@ -10423,6 +10423,13 @@
       "Order action handler @regression @tier2 Native coin fee payment native coin fee: valid payment sets PAYMENT_MODE=1",
       "Order action handler @regression @tier2 Non-unified expiration fee path non-unified fee path sets AMOUNT via getExpirationFee when EXPIRATION is provided"
     ],
+    "7ab11904a7bdf754": [
+      "multipart piece sequence oracle @regression @tier1 completes a full sequence once",
+      "multipart piece sequence oracle @regression @tier1 does not complete when one position is withheld",
+      "multipart piece sequence oracle @regression @tier1 generates 500 seeded sequences",
+      "multipart piece sequence oracle @regression @tier1 removes a completion at a cut below its piece",
+      "multipart piece sequence oracle @regression @tier1 repeats a seed with shuffled duplicates and edge rows"
+    ],
     "7ab91094136cac6a": [
       "HubDbSync failover move policy clears the connection failure streak after a successful connection",
       "HubDbSync failover move policy falls back to default reconnect and dwell settings when values are invalid",
@@ -20824,8 +20831,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1656,
-      "titleCount": 16131,
+      "fileCount": 1657,
+      "titleCount": 16136,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21123,6 +21130,7 @@
         "test/unit/actions/market/swap_match.test/list_trigger.test.js": "c81302ed424ed439",
         "test/unit/actions/market/swap_match.test/payout_policy.test.js": "fc068e67f68f4891",
         "test/unit/actions/multipart_memory_db.test.js": "f9e50939fc062462",
+        "test/unit/actions/multipart_piece_sequences.test.js": "7ab11904a7bdf754",
         "test/unit/actions/nodeproof.test.js": "9cb414273879c7d9",
         "test/unit/actions/nodeproof.test/capability_gate.test.js": "abad5f269592bb83",
         "test/unit/actions/nodeproof.test/challenge_and_window.test.js": "0074b3f4e47fb19a",
@@ -22863,8 +22871,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1264,
-      "titleCount": 12748,
+      "fileCount": 1265,
+      "titleCount": 12753,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23158,6 +23166,7 @@
         "test/unit/actions/market/swap_match.test.js": "d9e56256815af359",
         "test/unit/actions/market/swap_match.test/list_trigger.test.js": "c81302ed424ed439",
         "test/unit/actions/market/swap_match.test/payout_policy.test.js": "fc068e67f68f4891",
+        "test/unit/actions/multipart_piece_sequences.test.js": "7ab11904a7bdf754",
         "test/unit/actions/nodeproof.test.js": "9cb414273879c7d9",
         "test/unit/actions/nodeproof.test/capability_gate.test.js": "abad5f269592bb83",
         "test/unit/actions/nodeproof.test/challenge_and_window.test.js": "0074b3f4e47fb19a",
@@ -24133,8 +24142,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 666,
-      "titleCount": 7025,
+      "fileCount": 667,
+      "titleCount": 7030,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24217,6 +24226,7 @@
         "test/unit/actions/market/order_swap_match_invariants.test.js": "32d302f7a5e5b3d8",
         "test/unit/actions/market/same_token_offer_refusal.test/creation.test.js": "533747181d593e25",
         "test/unit/actions/market/same_token_offer_refusal.test/match.test.js": "6ec77729632635c6",
+        "test/unit/actions/multipart_piece_sequences.test.js": "7ab11904a7bdf754",
         "test/unit/actions/quote_request_params.test.js": "57d04e89a493ffe1",
         "test/unit/actions/stake/slash.test/xattest_multiround_gate.test.js": "7ae0e3eb59a78a58",
         "test/unit/actions/stake/vote_invariants.test.js": "5b459280dedaa2eb",
@@ -24805,8 +24815,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1264,
-      "titleCount": 12748,
+      "fileCount": 1265,
+      "titleCount": 12753,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25100,6 +25110,7 @@
         "test/unit/actions/market/swap_match.test.js": "d9e56256815af359",
         "test/unit/actions/market/swap_match.test/list_trigger.test.js": "c81302ed424ed439",
         "test/unit/actions/market/swap_match.test/payout_policy.test.js": "fc068e67f68f4891",
+        "test/unit/actions/multipart_piece_sequences.test.js": "7ab11904a7bdf754",
         "test/unit/actions/nodeproof.test.js": "9cb414273879c7d9",
         "test/unit/actions/nodeproof.test/capability_gate.test.js": "abad5f269592bb83",
         "test/unit/actions/nodeproof.test/challenge_and_window.test.js": "0074b3f4e47fb19a",
