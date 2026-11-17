@@ -23,10 +23,15 @@ function assertUint32(column, value){
         throw new Error(column + ' is not a valid INT UNSIGNED value');
 }
 
+function assertSafeUint(column, value){
+    if(!Number.isSafeInteger(value) || value < 0)
+        throw new Error(column + ' is not a valid BIGINT UNSIGNED value');
+}
+
 function assertManifestRow(row){
     assertChar64('file_hash', row.file_hash, false);
     assertUint32('total_parts', row.total_parts);
-    assertUint32('total_bytes', row.total_bytes);
+    assertSafeUint('total_bytes', row.total_bytes);
     return row;
 }
 

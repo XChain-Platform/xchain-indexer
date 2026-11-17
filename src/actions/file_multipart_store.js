@@ -38,12 +38,19 @@ function storedU32(value) {
     return number <= U32_MAX ? number : 0;
 }
 
+function storedSafe(value) {
+    const text = String(value);
+    if (!DECIMAL_INTEGER.test(text)) return 0;
+    const number = Number(text);
+    return number <= Number.MAX_SAFE_INTEGER ? number : 0;
+}
+
 function sanitizeMultipartRow(data) {
     const fileHash = data['FILE_HASH'];
     return {
         FILE_HASH: LOWERCASE_HASH.test(String(fileHash)) ? fileHash : '',
         TOTAL_PARTS: storedU32(data['TOTAL_PARTS']),
-        TOTAL_BYTES: storedU32(data['TOTAL_BYTES']),
+        TOTAL_BYTES: storedSafe(data['TOTAL_BYTES']),
         PART_INDEX: storedU32(data['PART_INDEX']),
     };
 }

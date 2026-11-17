@@ -73,22 +73,24 @@ describe('FILE multipart storage helpers', function () {
             assert.deepStrictEqual(nonNumeric, leadingZero);
         });
 
-        it('keeps the INT UNSIGNED maximum and replaces the next value', function () {
+        it('keeps each multipart integer through its storage maximum', function () {
             const maximum = sanitizeMultipartRow({
                 TOTAL_PARTS: '4294967295',
-                TOTAL_BYTES: '4294967295',
+                TOTAL_BYTES: '262140000000',
                 PART_INDEX: '4294967295',
             });
             assert.deepStrictEqual(maximum, {
                 FILE_HASH: '',
                 TOTAL_PARTS: 4294967295,
-                TOTAL_BYTES: 4294967295,
+                TOTAL_BYTES: 262140000000,
                 PART_INDEX: 4294967295,
             });
+        });
 
+        it('replaces values above each multipart integer storage width', function () {
             const overflow = sanitizeMultipartRow({
                 TOTAL_PARTS: '4294967296',
-                TOTAL_BYTES: '4294967296',
+                TOTAL_BYTES: '9007199254740992',
                 PART_INDEX: '4294967296',
             });
             assert.deepStrictEqual(overflow, {

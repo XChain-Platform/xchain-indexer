@@ -53,18 +53,29 @@ describe('file multipart column stub', function(){
             rejectsColumn(assertManifestRow, manifest, 'file_hash', [1, 'a'.repeat(65)]);
         });
 
-        for(const column of ['total_parts', 'total_bytes']){
-            it('accepts both INT UNSIGNED edges for ' + column, function(){
-                for(const value of [0, UINT32_MAX]){
-                    const row = manifest({ [column]: value });
-                    assert.strictEqual(assertManifestRow(row), row);
-                }
-            });
+        it('accepts both INT UNSIGNED edges for total_parts', function(){
+            for(const value of [0, UINT32_MAX]){
+                const row = manifest({ total_parts: value });
+                assert.strictEqual(assertManifestRow(row), row);
+            }
+        });
 
-            it('rejects invalid INT UNSIGNED values for ' + column, function(){
-                rejectsColumn(assertManifestRow, manifest, column, INVALID_UINT32);
-            });
-        }
+        it('rejects invalid INT UNSIGNED values for total_parts', function(){
+            rejectsColumn(assertManifestRow, manifest, 'total_parts', INVALID_UINT32);
+        });
+
+        it('accepts safe BIGINT UNSIGNED values for total_bytes', function(){
+            for(const value of [0, 4294967296, Number.MAX_SAFE_INTEGER]){
+                const row = manifest({ total_bytes: value });
+                assert.strictEqual(assertManifestRow(row), row);
+            }
+        });
+
+        it('rejects unsafe BIGINT UNSIGNED values for total_bytes', function(){
+            rejectsColumn(assertManifestRow, manifest, 'total_bytes', [
+                undefined, null, -1, 1.5, '1', Number.MAX_SAFE_INTEGER + 1,
+            ]);
+        });
     });
 
     describe('assertPartRow', function(){
