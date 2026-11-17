@@ -10423,6 +10423,13 @@
       "Order action handler @regression @tier2 Native coin fee payment native coin fee: valid payment sets PAYMENT_MODE=1",
       "Order action handler @regression @tier2 Non-unified expiration fee path non-unified fee path sets AMOUNT via getExpirationFee when EXPIRATION is provided"
     ],
+    "7ab11904a7bdf754": [
+      "multipart piece sequence oracle @regression @tier1 completes a full sequence once",
+      "multipart piece sequence oracle @regression @tier1 does not complete when one position is withheld",
+      "multipart piece sequence oracle @regression @tier1 generates 500 seeded sequences",
+      "multipart piece sequence oracle @regression @tier1 removes a completion at a cut below its piece",
+      "multipart piece sequence oracle @regression @tier1 repeats a seed with shuffled duplicates and edge rows"
+    ],
     "7ab91094136cac6a": [
       "HubDbSync failover move policy clears the connection failure streak after a successful connection",
       "HubDbSync failover move policy falls back to default reconnect and dwell settings when values are invalid",
@@ -18752,6 +18759,12 @@
       "Database.normalizeDataValues() METHOD_NAME clip to the VARCHAR(250) character capacity @regression @tier1 METHOD_NAME: counts a 4-byte character as one and never splits it",
       "Database.normalizeDataValues() METHOD_NAME clip to the VARCHAR(250) character capacity @regression @tier1 METHOD_NAME: keeps a 250-character name, a short name and null unchanged"
     ],
+    "ea10e5540c7ff5a3": [
+      "FILE multipart incremental completion equivalence @regression @tier1 matches the per-piece full verdict across 500 seeded sequences",
+      "FILE multipart incremental read bound @regression @tier1 runs the full group read once when one file fills",
+      "FILE multipart incremental read bound @regression @tier1 uses three counter reads for a part in a 4-part file",
+      "FILE multipart incremental read bound @regression @tier1 uses three counter reads for a part in a 4096-part file"
+    ],
     "ea7e81ed4d08b387": [
       "base AT9: the XCHAIN row appearing off BTC moves no verdict @regression @tier1 the emission fee path, the other branch the row could have moved an emission fee refusal is identical whether the GAS ticker id exists or not",
       "base AT9: the XCHAIN row appearing off BTC moves no verdict @regression @tier1 the real SEND handler on DOGE regtest BTC: the same AFTER state refuses, so the DOGE identity above is the gate and not a dead check",
@@ -20818,8 +20831,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1655,
-      "titleCount": 16127,
+      "fileCount": 1657,
+      "titleCount": 16136,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21040,6 +21053,7 @@
         "test/unit/actions/file_multipart_column_stub.test.js": "ca0d74321fad9e88",
         "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
         "test/unit/actions/file_multipart_decision.test.js": "d436c418fcaf9eaf",
+        "test/unit/actions/file_multipart_incremental.test.js": "ea10e5540c7ff5a3",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
         "test/unit/actions/file_multipart_pieces.test.js": "5ea9fd3cee7a612a",
         "test/unit/actions/file_multipart_route.test.js": "66122e266cb932cc",
@@ -21116,6 +21130,7 @@
         "test/unit/actions/market/swap_match.test/list_trigger.test.js": "c81302ed424ed439",
         "test/unit/actions/market/swap_match.test/payout_policy.test.js": "fc068e67f68f4891",
         "test/unit/actions/multipart_memory_db.test.js": "f9e50939fc062462",
+        "test/unit/actions/multipart_piece_sequences.test.js": "7ab11904a7bdf754",
         "test/unit/actions/nodeproof.test.js": "9cb414273879c7d9",
         "test/unit/actions/nodeproof.test/capability_gate.test.js": "abad5f269592bb83",
         "test/unit/actions/nodeproof.test/challenge_and_window.test.js": "0074b3f4e47fb19a",
@@ -22856,8 +22871,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1263,
-      "titleCount": 12744,
+      "fileCount": 1265,
+      "titleCount": 12753,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23086,6 +23101,7 @@
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
+        "test/unit/actions/file_multipart_incremental.test.js": "ea10e5540c7ff5a3",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
         "test/unit/actions/file_multipart_runner.test.js": "24c9deca9282a392",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
@@ -23150,6 +23166,7 @@
         "test/unit/actions/market/swap_match.test.js": "d9e56256815af359",
         "test/unit/actions/market/swap_match.test/list_trigger.test.js": "c81302ed424ed439",
         "test/unit/actions/market/swap_match.test/payout_policy.test.js": "fc068e67f68f4891",
+        "test/unit/actions/multipart_piece_sequences.test.js": "7ab11904a7bdf754",
         "test/unit/actions/nodeproof.test.js": "9cb414273879c7d9",
         "test/unit/actions/nodeproof.test/capability_gate.test.js": "abad5f269592bb83",
         "test/unit/actions/nodeproof.test/challenge_and_window.test.js": "0074b3f4e47fb19a",
@@ -24125,8 +24142,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 665,
-      "titleCount": 7021,
+      "fileCount": 667,
+      "titleCount": 7030,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24195,6 +24212,7 @@
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
+        "test/unit/actions/file_multipart_incremental.test.js": "ea10e5540c7ff5a3",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
         "test/unit/actions/file_multipart_runner.test.js": "24c9deca9282a392",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
@@ -24208,6 +24226,7 @@
         "test/unit/actions/market/order_swap_match_invariants.test.js": "32d302f7a5e5b3d8",
         "test/unit/actions/market/same_token_offer_refusal.test/creation.test.js": "533747181d593e25",
         "test/unit/actions/market/same_token_offer_refusal.test/match.test.js": "6ec77729632635c6",
+        "test/unit/actions/multipart_piece_sequences.test.js": "7ab11904a7bdf754",
         "test/unit/actions/quote_request_params.test.js": "57d04e89a493ffe1",
         "test/unit/actions/stake/slash.test/xattest_multiround_gate.test.js": "7ae0e3eb59a78a58",
         "test/unit/actions/stake/vote_invariants.test.js": "5b459280dedaa2eb",
@@ -24796,8 +24815,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1263,
-      "titleCount": 12744,
+      "fileCount": 1265,
+      "titleCount": 12753,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25026,6 +25045,7 @@
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
+        "test/unit/actions/file_multipart_incremental.test.js": "ea10e5540c7ff5a3",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
         "test/unit/actions/file_multipart_runner.test.js": "24c9deca9282a392",
         "test/unit/actions/file_multipart_verdict.test.js": "4952d6cf78701508",
@@ -25090,6 +25110,7 @@
         "test/unit/actions/market/swap_match.test.js": "d9e56256815af359",
         "test/unit/actions/market/swap_match.test/list_trigger.test.js": "c81302ed424ed439",
         "test/unit/actions/market/swap_match.test/payout_policy.test.js": "fc068e67f68f4891",
+        "test/unit/actions/multipart_piece_sequences.test.js": "7ab11904a7bdf754",
         "test/unit/actions/nodeproof.test.js": "9cb414273879c7d9",
         "test/unit/actions/nodeproof.test/capability_gate.test.js": "abad5f269592bb83",
         "test/unit/actions/nodeproof.test/challenge_and_window.test.js": "0074b3f4e47fb19a",
