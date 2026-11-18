@@ -26,7 +26,7 @@
  * equality follows the collation src/sql/index_memos.sql DECLARES, so it fails
  * on the folding definition and passes on the binary one. The ledger half
  * proves an aged database converges to the same collation. The DB half runs
- * the same calls against a real MariaDB when TEST_DB_PASS is set.
+ * the same calls against a real MariaDB when TEST_DB_USER and TEST_DB_PASS are set.
  ********************************************************************/
 
 const assert  = require('assert');
@@ -176,7 +176,7 @@ describe('index_memos keeps every distinct memo distinct against MariaDB @regres
     const ctx = {};
 
     before(async function () {
-        if (process.env.TEST_DB_PASS === undefined) this.skip();
+        if (process.env.TEST_DB_PASS === undefined || process.env.TEST_DB_USER === undefined) this.skip();
         this.timeout(30000);
         const mariadb = require('mariadb');
         const base = process.env.TEST_INDEXER_DB || 'xchain_test_indexer';
