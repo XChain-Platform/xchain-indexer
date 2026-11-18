@@ -32,12 +32,18 @@
 // CHECKPOINT_VERSIONS is the checkpoint-bearing version set and CHECKPOINT_SECTION_VERSIONS
 // the bundle-section family inside it; both live beside the tables they name, in
 // src/db/anchor_sql.js, and reach every caller through the entry's re-export.
-const { CHECKPOINT_VERSIONS, CHECKPOINT_SECTION_VERSIONS } = require('../../../db/anchor_sql.js');
+const { CHECKPOINT_VERSIONS, CHECKPOINT_SECTION_VERSIONS, ANCHOR_KEY_MAX_LENGTH } = require('../../../db/anchor_sql.js');
 const { fitsUtf8mb3 } = require('../../../db/utf8mb3.js');
 const rpcParams = require('../../../api/rpc/params.js');
 
 // A DOGE txid as the hub announces it (XANC_V0_DONE.txid / XANC_FINALIZED.txid).
 const TXID_RE = /^[0-9a-fA-F]{64}$/;
+
+// Chain and network must be non-empty strings no wider than the columns they are matched against.
+function anchorKeyTextOk(chain, network) {
+    return !rpcParams.string(chain, { name: 'chain', maxLength: ANCHOR_KEY_MAX_LENGTH.chain, required: true }).error &&
+           !rpcParams.string(network, { name: 'network', maxLength: ANCHOR_KEY_MAX_LENGTH.network, required: true }).error;
+}
 
 // Validate the getanchoraction request shape. Returns
 // {ok:true, block_index, checkpoint_seq, txid, version} on success (txid/version
@@ -55,7 +61,7 @@ const TXID_RE = /^[0-9a-fA-F]{64}$/;
 // which is what closes the forged-anchor gap (a Byzantine ELECTED publisher
 // announcing a real-but-different or never-mined txid).
 function validateAnchorActionParams({ chain, network, block_index, checkpoint_seq, txid, version }) {
-    if (typeof chain !== 'string' || !chain || typeof network !== 'string' || !network)
+    if (!anchorKeyTextOk(chain, network))
         return { ok: false, error: 'chain and network are required strings' };
     let bi = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
     let cs = rpcParams.integer(checkpoint_seq, { name: 'checkpoint_seq', min: 0 });
@@ -169,6 +175,6 @@ function buildAnchorActionResponse(config, latest, row, extra) {
 }
 
 module.exports = {
-    TXID_RE, normalizeVersion,
+    TXID_RE, normalizeVersion, anchorKeyTextOk,
     validateAnchorActionParams, selectAnchorRow, buildAnchorActionResponse
 };

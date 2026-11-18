@@ -177,10 +177,11 @@ function registerSnapshotWriteTests(){
 
         await listShare.writeListSnapshot(db, row);
         assert.strictEqual(queries.length, 3);
-        assert.match(queries[2].sql, /INSERT IGNORE INTO list_snapshots/);
-        assert.strictEqual(queries[2].args.length, 22);
+        assert.match(queries[2].sql, /INSERT INTO list_snapshots/);
+        assert.doesNotMatch(queries[2].sql, /IGNORE|\(\s*id\b/);
+        assert.strictEqual(queries[2].args.length, 21);
         assert.deepStrictEqual(queries[2].args, [
-            7, row.snapshot_id, 100, 'regtest', 'DOGE', 5, 2, 1, 'full', 90,
+            row.snapshot_id, 100, 'regtest', 'DOGE', 5, 2, 1, 'full', 90,
             'a'.repeat(64), JSON.stringify(['addr-a', 'addr-b']), '[]', 104,
             null, null, 0, '[]', 'finalized', null, null, ''
         ]);
@@ -192,7 +193,7 @@ function registerArchiveWriteTests(){
         let inserts = [];
         let db = {
             doQuery: async (sql, args) => {
-                if(/INSERT IGNORE INTO list_snapshots/.test(sql)) inserts.push(args);
+                if(/INSERT INTO list_snapshots/.test(sql)) inserts.push(args);
                 return [];
             }
         };

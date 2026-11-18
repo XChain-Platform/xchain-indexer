@@ -23,6 +23,7 @@
 
 const { stallWedged, waitingOnFutureBlock, stallClassOf, publishedStallClass, atProcessableTip,
         barrierCeilingExceeded } = require('../../XChainIndexer');
+const { stallWindowSince } = require('../../XChainIndexer/stall_health.js');
 
 // Is the counter advancing, is the poll loop alive, and if a stall is set, is it
 // a healthy wait, a barrier defer or a wedge. `now` is the caller's one clock read.
@@ -58,8 +59,8 @@ function advanceFields(indexer, now){
                             && !stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                             indexer.healthStallGraceMs, now, indexer.stallClearsAt,
                                             indexer.priceLandingGraceMs,
-                                            indexer.barrierHold && indexer.barrierHold.since,
-                                            indexer.proofWaitGraceMs),
+                                            stallWindowSince(indexer),
+                                            indexer.proofWaitGraceMs, indexer.rollbackGraceMs),
         // true when the stall is nothing but a wait for wall clock to reach a future-stamped
         // block. Healthy and self-clearing: consensus forbids committing that block yet, so the
         // indexer is already holding everything it is permitted to hold. A testnet4 miner
@@ -78,8 +79,8 @@ function advanceFields(indexer, now){
                               stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
                                            indexer.healthStallGraceMs, now, indexer.stallClearsAt,
                                            indexer.priceLandingGraceMs,
-                                           indexer.barrierHold && indexer.barrierHold.since,
-                                           indexer.proofWaitGraceMs),
+                                           stallWindowSince(indexer),
+                                           indexer.proofWaitGraceMs, indexer.rollbackGraceMs),
                               indexer.stallReason,
                               { decoderReorgHalted: indexer.decoderReorgHalted === true ||
                                                        indexer.decoderReorgHalted === null,

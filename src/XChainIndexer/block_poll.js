@@ -89,6 +89,7 @@ module.exports = {
         // beginPollPass, which would otherwise clear it, so every pass reports it.
         if(await this.replayWitnessHoldsBlocks(indexerReorgView)){
             this.beginPollPass(null);
+            this.releaseBarrierHold();
             this.holdRetroactiveReplayDiverged();
             return;
         }
@@ -104,6 +105,7 @@ module.exports = {
         // never wedged. A probe fault keeps the last known halt state (checkDecoderReorgHalt).
         if(this.decoderReorgHalted === true || this.decoderReorgHalted === null){
             this.beginPollPass(null);
+            this.releaseBarrierHold();
             return;
         }
 
@@ -132,7 +134,10 @@ module.exports = {
 
         // A diverged chunk stopped the catch-up; hold now rather than fold it into the
         // mirror-barrier ceiling, which would ask the mirror to resync over a data fault.
-        if(this.replayWitnessPhase === 'diverged') return;
+        if(this.replayWitnessPhase === 'diverged'){
+            this.releaseBarrierHold();
+            return;
+        }
 
         // The witness pass reproduced its record through replay_to. The new rules apply
         // only from a fresh boot, so this process ends here and the supervisor restarts it.

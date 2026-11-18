@@ -29,6 +29,11 @@ const ROLLCALL_PROOF_REASON = 'rollcall_proof_unavailable';
 const CAPABILITY_PROOF_REASON = 'capability_proof_unavailable';
 const RETROACTIVE_REPLAY_NEEDS_GO = 'retroactive_replay_needs_go';
 const RETROACTIVE_REPLAY_DIVERGED = 'retroactive_replay_diverged';
+// Raised for the whole of a reorg rollback, which is one transaction inside one poll pass.
+const REORG_ROLLBACK_REASON = 'reorg_rollback';
+// The rollback window is this many stall graces: a restart discards the whole transaction,
+// so a slow rollback must outlast the restart that a hung one is owed.
+const ROLLBACK_GRACE_FACTOR = 5;
 // Marks a safety halt raised while evaluating or enforcing train activation.
 const TRAIN_ACTIVATION_HALT_PREFIX = 'train_activation_halt:';
 
@@ -42,11 +47,13 @@ function isOperatorActionHold(stallReason){
     return word === RETROACTIVE_REPLAY_NEEDS_GO || word === RETROACTIVE_REPLAY_DIVERGED;
 }
 
-// Use dedicated price-landing and proof-wait grace windows when valid.
+// Use dedicated price-landing, proof-wait and rollback grace windows when valid.
 // Every other reason falls back to the generic stall grace.
-function graceFor(stallReason, graceMs, priceLandingGraceMs, proofWaitGraceMs){
+function graceFor(stallReason, graceMs, priceLandingGraceMs, proofWaitGraceMs, rollbackGraceMs){
     if(stallReason === PRICE_LANDING_BARRIER && Number.isFinite(priceLandingGraceMs) && priceLandingGraceMs > 0)
         return priceLandingGraceMs;
+    if(stallReason === REORG_ROLLBACK_REASON && Number.isFinite(rollbackGraceMs) && rollbackGraceMs > 0)
+        return rollbackGraceMs;
     if((stallReason === ROLLCALL_PROOF_REASON || stallReason === CAPABILITY_PROOF_REASON)
        && Number.isFinite(proofWaitGraceMs) && proofWaitGraceMs > 0)
         return proofWaitGraceMs;
@@ -61,10 +68,27 @@ function resolveProofWaitGraceMs(graceMs, barrierHoldCeilingMs){
     return Math.max(2 * ceilingMs, graceMs);
 }
 
+// The rollback window: a multiple of the stall grace, so it never falls below it. An
+// unusable stall grace is returned as it came. Operational only, NOT a consensus parameter.
+function resolveRollbackGraceMs(graceMs){
+    if(!Number.isFinite(graceMs) || graceMs <= 0) return graceMs;
+    return ROLLBACK_GRACE_FACTOR * graceMs;
+}
+
+// The instant the current stall's no-progress window opens beyond the last commit: a
+// running rollback's own start, otherwise the held block's barrier hold start. The
+// rollback stamp counts only while its reason is raised, so a stamp that outlives the
+// rollback can never stand in for a later stall's window.
+function stallWindowSince(indexer){
+    if(indexer.stallReason === REORG_ROLLBACK_REASON && Number.isFinite(indexer.rollbackStartedAt))
+        return indexer.rollbackStartedAt;
+    return indexer.barrierHold ? indexer.barrierHold.since : null;
+}
+
 // A stall wedges only after its reason-specific grace, measured from the latest
 // progress boundary: the last commit, hold start, or future-wait clear instant.
 // Future-clearable and non-restartable waits do not wedge.
-function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null, proofWaitGraceMs = null){
+function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null, proofWaitGraceMs = null, rollbackGraceMs = null){
     if(!stallReason) return false;
     if(stallReason === BRIDGE_PROOF_BARRIER) return false;
     if(isTrainActivationHalt(stallReason)) return false;
@@ -73,7 +97,7 @@ function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClear
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
     let windowStart = Number.isFinite(barrierHoldSinceMs) ? Math.max(lastBlockCommittedAt, barrierHoldSinceMs) : lastBlockCommittedAt;
     if(Number.isFinite(stallClearsAtMs)) windowStart = Math.max(windowStart, stallClearsAtMs);
-    return (now - windowStart) > graceFor(stallReason, graceMs, priceLandingGraceMs, proofWaitGraceMs);
+    return (now - windowStart) > graceFor(stallReason, graceMs, priceLandingGraceMs, proofWaitGraceMs, rollbackGraceMs);
 }
 
 // A stall with a finite clear instant still ahead of now is a healthy
@@ -86,14 +110,14 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 
 // Collapse health inputs to one mutually exclusive class for status probes.
 // Future waits, proof waits, safety holds, active defers, and wedges stay distinct.
-function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null, proofWaitGraceMs = null){
+function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null, priceLandingGraceMs = null, barrierHoldSinceMs = null, proofWaitGraceMs = null, rollbackGraceMs = null){
     if(!stallReason) return 'none';
     if(stallReason === BRIDGE_PROOF_BARRIER) return 'bridge_proof_wait';
     if(isTrainActivationHalt(stallReason)) return 'train_activation_halt';
     if(isOperatorActionHold(stallReason)) return 'operator_action_hold';
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
     if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs, priceLandingGraceMs, barrierHoldSinceMs,
-                   proofWaitGraceMs)) return 'wedged';
+                   proofWaitGraceMs, rollbackGraceMs)) return 'wedged';
     if(stallReason === PRICE_LANDING_BARRIER) return 'price_landing_wait';
     return 'barrier_defer';
 }
@@ -156,11 +180,14 @@ module.exports = {
     CAPABILITY_PROOF_REASON,
     RETROACTIVE_REPLAY_NEEDS_GO,
     RETROACTIVE_REPLAY_DIVERGED,
+    REORG_ROLLBACK_REASON,
     TRAIN_ACTIVATION_HALT_PREFIX,
     isTrainActivationHalt,
     isOperatorActionHold,
     stallWedged,
     resolveProofWaitGraceMs,
+    resolveRollbackGraceMs,
+    stallWindowSince,
     waitingOnFutureBlock,
     stallClassOf,
     publishedStallClass,

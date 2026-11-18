@@ -194,7 +194,10 @@ class Dispenser {
                 // replay is preserved.
                 if(gateRegistry.activeAt('dispenser_freshness_activation.DISPENSER_FRESHNESS_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null)){
                     isFresh = !(await this.hasPriorLocalActivity(data));
-                } else if(this.utxoTracker && this.utxoTracker.enabled){
+                } else if(this.utxoTracker){
+                    // An unconfigured client is not a gate to skip: its call() throws the tagged
+                    // unavailable error, so the block halts instead of committing a verdict that
+                    // tracker-backed peers would not reach.
                     isFresh = await this.readLegacyTrackerFreshness(data);
                 }
                 let hasStanding = false;

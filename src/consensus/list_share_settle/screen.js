@@ -37,10 +37,6 @@ function integer(value){
     return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
-function isSet(value){
-    return value !== null && value !== undefined && value !== '';
-}
-
 function admissionColumns(row){
     const map = {};
     for(const coin of HOME_CHAINS){
@@ -107,11 +103,8 @@ function screenSnapshotIdentity(row, ctx){
     if(snapshotId !== deriveListSnapshotId(network, homeChain, homeListIndex, seq, snapshotBlock))
         return halt('snapshot_id');
 
-    const localChainId = ctx.config ? ctx.config['BTC_CHAIN_ID'] : null;
-    if(isSet(row.btc_chain_id) && isSet(localChainId) &&
-       String(row.btc_chain_id) !== String(localChainId))
-        return halt('btc_chain_id');
-
+    // No btc_chain_id compare here: refuseForeignChainRow fences list_snapshots at mirror
+    // apply on a node that knows its chain identity, and this screen reads no per-node identity.
     if(String(row.status || '') !== 'finalized')
         return halt('status');
 

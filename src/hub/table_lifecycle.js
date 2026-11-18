@@ -91,6 +91,8 @@
  *                               the replica's rows wholesale; only for a mirror
  *                               table safe to rebuild whole from the source
  *               absent: no self-repair, the gap is reported only
+ *   infra       root table forwarded to infra-only subscribers; its lookups
+ *               and actions are added by xchain-sync derivation
  *   alsoRecomputed  true when a generically-deleted table is ADDITIONALLY
  *               refreshed by the recompute pass (coverage is a union)
  *   hashed      { classes: [...], note }. classes from:

@@ -27,6 +27,10 @@ module.exports = {
         let status_id         = await this.createStatus(data['STATUS']);
         let source_id         = await this.getAddressId(data['SOURCE']);
         let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
+        // A refused empty key has no index_pubkeys id; keep the row under 0, which names no
+        // pubkey, instead of binding NULL to the NOT NULL column.
+        if(signing_pubkey_id === null && data['STATUS'] !== 'valid')
+            signing_pubkey_id = 0;
         let action_index      = data['ACTION_INDEX'];
         let block_index       = data['BLOCK_INDEX'];
         let activation_block  = data['ACTIVATION_BLOCK'] || 0;

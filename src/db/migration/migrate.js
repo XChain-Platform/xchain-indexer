@@ -176,11 +176,13 @@ async function reportStatus(db, dbName, json){
     const rows = files.map(file => {
         const record = applied.get(file);
         const raw = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
-        if(!record) return { file, applied: false, mode: db.migrationMode(raw), appliedAt: null, changed: false };
+        const fileMode = db.migrationMode(raw);
+        if(!record) return { file, applied: false, mode: fileMode, fileMode, appliedAt: null, changed: false };
         const current = migrationChecksum(raw);
         const verdict = classifyAppliedChecksum(file, record.checksum, current, MIGRATION_CHECKSUM_REBASELINES);
         verdicts.set(file, { verdict, recorded: String(record.checksum || ''), current });
-        return { file, applied: true, mode: record.mode, appliedAt: record.appliedAt, changed: verdict === 'changed' };
+        return { file, applied: true, mode: record.mode, fileMode, appliedAt: record.appliedAt,
+            changed: verdict === 'changed' };
     });
     const pendingCount = rows.filter(r => !r.applied).length;
     const changedCount = rows.filter(r => r.changed).length;
@@ -278,11 +280,15 @@ function statusLine(r, v, backdated){
             ', provably harmless: applies in place)';
     }
     if(!r.applied) return '  [PENDING, mode=' + r.mode + '] ' + r.file;
+    const retag = r.fileMode !== r.mode
+        ? ' (recorded mode=' + r.mode + '; file now tagged ' + r.fileMode + ')'
+        : '';
     if(r.changed){
-        return '  [CHANGED, mode=' + r.mode + '] ' + r.file + ' (recorded ' + v.recorded.slice(0, 12) + ', current ' + v.current.slice(0, 12) + ')';
+        return '  [CHANGED, mode=' + r.mode + '] ' + r.file + ' (recorded ' + v.recorded.slice(0, 12) +
+            ', current ' + v.current.slice(0, 12) + ')' + retag;
     }
     return '  [applied, mode=' + r.mode + '] ' + r.file + (r.appliedAt ? ' (applied_at=' + r.appliedAt + ')' : '') +
-        (v.verdict === 'rebaseline' ? ' (reviewed rebaseline; the next run heals its checksum)' : '');
+        (v.verdict === 'rebaseline' ? ' (reviewed rebaseline; the next run heals its checksum)' : '') + retag;
 }
 
 async function main(){

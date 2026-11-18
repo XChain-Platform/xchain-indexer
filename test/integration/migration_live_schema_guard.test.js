@@ -117,7 +117,7 @@ const CASES = [
     shape('both list share tables present', LISTS, true, LIST_TABLES.map(simpleTable)),
     shape('only one list share table present', LISTS, false, simpleTable('list_snapshots')),
     shape('no list share tables', LISTS, false),
-];
+].concat(require('./migration_live_schema_guard.test/helpers/memo_cases.js'));
 const QUALIFIED = REWARD_TABLE(", round_qualifier VARCHAR(20) NOT NULL DEFAULT '', " +
                                'UNIQUE KEY reward_unique (round_id, validator, round_qualifier)');
 const UTF8 = ' ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci';

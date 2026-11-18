@@ -120,6 +120,14 @@ module.exports = {
         this.stallBlock    = null;
     },
 
+    // End the hold for a pass that attempts no block (a decoder halt, a diverged replay
+    // witness). A hold is the age of one block's barrier wait, so a pass that waits on no
+    // barrier cannot extend it, and leaving it in place would let the next status read count
+    // the whole halt against the ceiling and name a barrier that is not being waited on.
+    releaseBarrierHold(){
+        this.barrierHold = null;
+    },
+
     // Fold one poll-loop pass into the mirror-barrier hold, and act when it crosses the
     // named ceiling. Called once per pass, right after the catch-up loop exits,
     // where `this.stallReason` and `this.stallClearsAt` already carry whatever the defer

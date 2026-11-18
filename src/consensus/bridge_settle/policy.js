@@ -42,7 +42,7 @@ const { applyOrderActive, orderVerdict, lockInLegDecimals } = require('./policy_
  * The refusals that read the ROW and the block alone.
  *
  * TERMINAL versus CARRIED, and the split is the whole error policy of this function
- * for policy snapshots. Only a hash, signature, `network` or `btc_chain_id` failure is
+ * for policy snapshots. Only a hash, signature or `network` failure is
  * terminal: those are properties of the ROW that no later block can change. Everything
  * else - a seq not yet applyable, a copy that does not exist here yet, a capability
  * snapshot still arriving - carries forward, because a later block can change it.
@@ -65,13 +65,6 @@ function screenRow(deps, row, ctx){
         deps.refusalLog.warnOnce('XPOLICY', id, SETTLE_REASON.NETWORK,
                                  SETTLE_REASON.NETWORK + ' : terminal');
         return { reason: SETTLE_REASON.NETWORK, terminal: true };
-    }
-    const localChainId = ctx.config ? ctx.config['BTC_CHAIN_ID'] : null;
-    if(!isNull(row.btc_chain_id) && !isNull(localChainId) &&
-       String(row.btc_chain_id) !== String(localChainId)){
-        deps.refusalLog.warnOnce('XPOLICY', id, SETTLE_REASON.CHAIN_ID,
-                                 SETTLE_REASON.CHAIN_ID + ' : terminal');
-        return { reason: SETTLE_REASON.CHAIN_ID, terminal: true };
     }
     if(String(row.status || '') !== 'finalized')
         return { reason: SETTLE_REASON.NOT_FINALIZED, terminal: false };
@@ -285,8 +278,9 @@ async function recordApplied(deps, ctx, f, target, actionIndexes){
  * log line naming snapshot_id if it differs. It VERIFIES the arrays are already in
  * canonical order and refuses otherwise; it never re-sorts.
  *
- * TERMINAL versus CARRIED. Only a hash, signature, `network` or `btc_chain_id` failure is
- * terminal. Anything else - a seq not yet applyable, a missing earlier seq - carries
+ * TERMINAL versus CARRIED. Only a hash, signature or `network` failure is
+ * terminal. A foreign `btc_chain_id` is not compared here; the mirror apply fence
+ * (refuseForeignChainRow) drops it on a node that knows its chain identity. Anything else - a seq not yet applyable, a missing earlier seq - carries
  * forward with one log line on the first block.
  *
  * NOT INHERITED: controller bindings (a binding names a contract deployed on one chain) and

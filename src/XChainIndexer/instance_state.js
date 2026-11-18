@@ -26,7 +26,7 @@ const { CONFIG_ENV } = require('../config.js');
 const { resolveBarrierHoldCeilingMs } = require('../hub/hub_db_sync.js');
 const { CHAIN_TIP_TTL_DEFAULT_MS, CHAIN_TIP_TIMEOUT_DEFAULT_MS,
         resolvePositiveIntMs, resolveReadyNoCommitMs } = require('./readiness/verdict.js');
-const { resolveProofWaitGraceMs } = require('./stall_health.js');
+const { resolveProofWaitGraceMs, resolveRollbackGraceMs } = require('./stall_health.js');
 
 // Chain identity, stall and loop-liveness fields: what /health reads to tell an
 // advancing, deferring, wedged or silent block loop apart.
@@ -54,6 +54,10 @@ function initChainState(indexer){
     // so that expected, self-clearing wait is not reported as a wedge. Cleared alongside
     // stallReason on every successful commit.
     indexer.stallClearsAt = null;
+    // Wall-clock (epoch ms) the in-progress reorg rollback began, or null when none runs.
+    // It opens that rollback's own no-progress window (see stallWindowSince), because the
+    // rollback is one transaction inside one poll pass and records no barrier hold.
+    indexer.rollbackStartedAt = null;
     // Wall-clock (epoch ms) of the most recent SUCCESSFUL block commit, or null until the
     // first block commits. Stamped at the commit point alongside the stallReason clear, and
     // read by the /status healthcheck to tell an advancing-but-barrier-deferring indexer
@@ -209,6 +213,12 @@ function initBarrierTiming(indexer){
     // barrier hold ceiling, so *_proof_stuck shows before the wedge and its one restart.
     // Purely operational, NOT a consensus parameter.
     indexer.proofWaitGraceMs = resolveProofWaitGraceMs(indexer.healthStallGraceMs, indexer.barrierHoldCeilingMs);
+
+    // Own no-progress window (ms) for a running reorg rollback, measured from its start.
+    // A restart discards the rollback's whole transaction, so the window is several stall
+    // graces: a rollback that merely runs long is not restarted, one that hangs still is.
+    // Purely operational, NOT a consensus parameter.
+    indexer.rollbackGraceMs = resolveRollbackGraceMs(indexer.healthStallGraceMs);
 
     // Window (ms) the block-poll loop may go without completing an ITERATION before
     // isPollSilent() calls it dead. Sized off healthStallGraceMs, which is already at

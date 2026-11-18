@@ -30,7 +30,8 @@
 const { hubConsensusHashFields } = require('./health/hub_fields');
 // Pure verdict modules, required directly rather than through the XChainIndexer class
 // the route is handed, so a stub class in a test still gets the real rule.
-const { barrierHoldMs, barrierCeilingExceeded, publishedStallClass } = require('../XChainIndexer/stall_health.js');
+const { barrierHoldMs, barrierCeilingExceeded, publishedStallClass,
+        stallWindowSince } = require('../XChainIndexer/stall_health.js');
 const { attributedStallReason, trainActivationReport } = require('./health/stall_fields');
 const { episodeBehind, nextBehindSince, readinessVerdict } = require('../XChainIndexer/readiness/verdict.js');
 
@@ -150,16 +151,16 @@ function statusVerdict(XChainIndexer, indexer){
     let wedged    = XChainIndexer.stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                               indexer.healthStallGraceMs, now,
                                               indexer.stallClearsAt, indexer.priceLandingGraceMs,
-                                              indexer.barrierHold && indexer.barrierHold.since,
-                                              indexer.proofWaitGraceMs);
+                                              stallWindowSince(indexer),
+                                              indexer.proofWaitGraceMs, indexer.rollbackGraceMs);
     // Discriminate the healthy future-stamped-block wait from real degradation. One
     // clock read for all three so the fields can never disagree with each other.
     let futureWait  = XChainIndexer.waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now);
     let stallClass  = XChainIndexer.stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
                                                  indexer.healthStallGraceMs, now, indexer.stallClearsAt,
                                                  indexer.priceLandingGraceMs,
-                                                 indexer.barrierHold && indexer.barrierHold.since,
-                                                 indexer.proofWaitGraceMs);
+                                                 stallWindowSince(indexer),
+                                                 indexer.proofWaitGraceMs, indexer.rollbackGraceMs);
     return { now, stalled, wedged, futureWait, stallClass,
              lastHubConfigFetchAt, hubConfigAgeSeconds, hubConfigStale };
 }

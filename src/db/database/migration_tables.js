@@ -196,6 +196,25 @@ const MIGRATION_PRECONDITIONS = {
             return ['list_snapshots', 'list_share_mirrors'].every(t => live.has(t))
                 ? 'list_snapshots and list_share_mirrors are both present, so this migration has no table left to create.' : null;
         } },
+    // Widens index_memos.memo to utf8mb4 with utf8mb4_general_ci, a collation the later
+    // 2026-11-01-index-memos-binary-collation.sql replaces with utf8mb4_nopad_bin. Both are
+    // mode=manual, so a scoped `--file` run of the later one leaves this file pending, and a
+    // blanket run afterwards would apply it second: the column silently reverts to the folding
+    // collation, or the UNIQUE rebuild fails on a memo pair the binary collation had split.
+    // Any column already at utf8mb4 has had its widen, whatever its collation, so baseline it
+    // and this file can never run behind its successor. An absent table, an absent column or an
+    // unreadable charset is not baselined: the file runs and the startup widths speak for it.
+    '2026-08-19-utf8mb4-index-memos-memo.sql': {
+        sql: "SELECT CHARACTER_SET_NAME AS charset_name FROM information_schema.columns " +
+             "WHERE table_schema = ? AND table_name = 'index_memos' AND column_name = 'memo'",
+        skipWhen: (rows) => {
+            if(!Array.isArray(rows) || !rows.length) return null;
+            const charset = String((rows[0] && rows[0].charset_name) || '').toLowerCase();
+            if(charset !== 'utf8mb4') return null;
+            return 'index_memos.memo is already utf8mb4, so there is no narrow column to widen and ' +
+                   'running this file now could only revert a later collation change.';
+        }
+    },
     // Widens oracle_prices.tick to 250. mode=manual, so a database created from the current
     // src/sql/oracle_prices.sql (already 250) would sit PENDING forever; baseline only while the
     // live column is already 250 or wider. An absent or unreadable length never baselines.

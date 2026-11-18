@@ -40,7 +40,7 @@
  *
  * Gated on the BTC-anchored snapshot_block + network so every chain + the hub flip on
  * the same anchor. The cross-service conformance suite
- * (ConsensusPrimitiveConformance.test.js, driven by
+ * (consensus_primitive_conformance.test.js, driven by
  * xchain-documentation/protocol/test-vectors) runs in every repo and asserts BOTH the
  * behavior (canonical vectors) AND byte-identity of the local copy to the
  * xchain-documentation copy, so any unmirrored edit fails CI everywhere (a

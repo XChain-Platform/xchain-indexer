@@ -19,6 +19,11 @@ function decimalInteger(value) {
     return /^(?:0|[1-9]\d*)$/.test(text) ? Number(text) : NaN;
 }
 
+// The refusal a version 2 part draws when it carries no bytes. The read-only dry-runs build a
+// synthetic transaction with no payload, so they name this exact status to tell a part they
+// cannot judge from one the chain refuses.
+const EMPTY_PART_ERROR = 'invalid: RAW_DATA (empty part)';
+
 function validateMultipartFields(data, error, limits) {
     if (!error && !/^[0-9a-f]{64}$/.test(String(data['FILE_HASH'])))
         error = 'invalid: FILE_HASH (format)';
@@ -42,7 +47,7 @@ function validateMultipartFields(data, error, limits) {
         if (!error && (!Number.isInteger(partIndex) || partIndex < 0 || partIndex >= limits.maxParts))
             error = 'invalid: PART_INDEX (range)';
         if (!error && (rawData == null || rawData.length === 0))
-            error = 'invalid: RAW_DATA (empty part)';
+            error = EMPTY_PART_ERROR;
     }
 
     return { error, totalParts, totalBytes, partIndex };
@@ -63,4 +68,4 @@ function checkMultipartBatch(data, error) {
     return error;
 }
 
-module.exports = { validateMultipartFields, checkMultipartBatch };
+module.exports = { validateMultipartFields, checkMultipartBatch, EMPTY_PART_ERROR };

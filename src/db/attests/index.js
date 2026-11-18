@@ -98,7 +98,9 @@ module.exports = {
             if(prev !== undefined && !(cb < prev.block || (cb === prev.block && ca < prev.action)))
                 continue;
             // validatorCount = number of verified federation signatures inlined on the
-            // response row (JSON array); a malformed/absent column reads as 0.
+            // response row (JSON array); a malformed/absent column reads as 0. A response a
+            // relay delivered carries no signatures on this row (the quorum lives on the home
+            // chain's row), so on a chain served by relay a fulfilled request reads 0 here.
             let vc = 0;
             if(row.validator_signatures){
                 try { let arr = JSON.parse(row.validator_signatures); if(Array.isArray(arr)) vc = arr.length; }

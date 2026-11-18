@@ -54,7 +54,12 @@ module.exports = {
         if(type=='string')
             format = format.replace(/\"|\'/g,'');
         // Convert any numeric strings to integers (use parseFloat to detect decimals)
-        if(this.isNumeric(format) && !this.isFloat(parseFloat(format)) && format <= 255)
+        // The fraction test stays a 32-bit truncation on purpose: it fixes which VERSION
+        // strings resolve to a format, so a whole number of 2^31 or more (or Infinity)
+        // keeps reading as fractional here and the wire result does not change.
+        const parsed = parseFloat(format);
+        const fractionalOnWire = parsed === +parsed && parsed !== (parsed|0);
+        if(this.isNumeric(format) && !fractionalOnWire && format <= 255)
             return parseInt(format);
         // Return NULL if not able to identify format version
         return null;

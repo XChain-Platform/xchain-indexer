@@ -215,7 +215,6 @@ function makeListShareConfig(coin){
         MIN_TICK_LENGTH: 1,
         MAX_TICK_LENGTH: 20,
         TICK_CHARACTERS: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-        BTC_CHAIN_ID: null,
     };
 }
 

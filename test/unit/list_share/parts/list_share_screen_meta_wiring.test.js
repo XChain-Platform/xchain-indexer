@@ -29,7 +29,7 @@ const ah = {
         return { BTC: Number(row.admit_block_btc) };
     },
 };
-const ctx = { coin: 'BTC', network: 'regtest', config: { BTC_CHAIN_ID: 'btc-regtest' } };
+const ctx = { coin: 'BTC', network: 'regtest', config: {} };
 
 function fullRow(overrides = {}){
     const row = Object.assign({

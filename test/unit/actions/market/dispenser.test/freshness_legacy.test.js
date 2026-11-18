@@ -250,3 +250,39 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
     });
 });
+
+// An unconfigured tracker client is the same node-local fault as an unreachable one: its
+// call() raises the tagged error, and the handler must let it halt the block.
+describe('Dispenser action handler @regression @tier2', function () {
+    useDispenserHarness(bind);
+
+    describe('legacy freshness path: unconfigured tracker client', function () {
+        const UtxoTracker = require('../../../../../src/chain/utxo_tracker.js');
+
+        function parseWithClient(client) {
+            indexer.indexerDb.getAddressPreferences
+                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+            mainnetBelowGateCtx();
+            actionsCtx.utxoTracker = client;
+            dispenser = new Dispenser(actionsCtx);
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 500 });
+            return { data, run: () => dispenser.parse(params, data, false) };
+        }
+
+        it('halts the block instead of committing not permitted', async function () {
+            const client = new UtxoTracker('', '');
+            assert.strictEqual(client.enabled, false, 'control: the client is unconfigured');
+            const { data, run } = parseWithClient(client);
+            await assert.rejects(run, (e) => e && e.code === 'UTXO_TRACKER_UNAVAILABLE');
+            assert.ok(!String(data['STATUS'] || '').includes('not permitted'));
+        });
+
+        it('control: a configured client that answers still decides the verdict', async function () {
+            const { data, run } = parseWithClient({ enabled: true, getFirstSeen: sinon.stub().resolves({ height: 100 }) });
+            await run();
+            assert.ok(data['STATUS'].includes('not permitted'));
+        });
+    });
+});

@@ -100,13 +100,9 @@ function screenRow(row, ctx){
     if(String(row.network || '') !== String(ctx.network || ''))
         return { reason: SETTLE_REASON.NETWORK };
 
-    // Chain identity, the relic spec's guard: `network` separates environments, `btc_chain_id`
-    // separates RE-GENESES of one environment, which is the case a regtest rail actually hits.
-    // Transport and not signed, so it is compared only when this node knows its own identity.
-    const localChainId = ctx.config ? ctx.config['BTC_CHAIN_ID'] : null;
-    if(!isNull(row.btc_chain_id) && !isNull(localChainId) &&
-       String(row.btc_chain_id) !== String(localChainId))
-        return { reason: SETTLE_REASON.CHAIN_ID };
+    // No btc_chain_id compare here: the chain-identity guard is refuseForeignChainRow in
+    // src/hub/hub_db_sync/chain_identity.js, which drops a foreign row at mirror apply on a
+    // node that knows its chain identity. This pass reads no per-node identity.
 
     if(String(row.status || '') !== 'finalized')
         return { reason: SETTLE_REASON.NOT_FINALIZED };
@@ -293,7 +289,8 @@ async function mintSettleAction(deps, row, ctx, f, amount, gasTick, effects, isI
  * counts only if its pubkey is in the cross_chain set at snapshot_block AND verifies, and a
  * pubkey enters the seen-set only AFTER its signature verifies; stake-weighted
  * source-deduped two-thirds at or above STAKE_WEIGHTED_QUORUM_ACTIVATION, else 2f+1. A
- * foreign `network` or a foreign `btc_chain_id` is refused outright.
+ * foreign `network` is refused outright. A foreign `btc_chain_id` is not compared here; the
+ * mirror apply fence (refuseForeignChainRow) drops it on a node that knows its chain identity.
  *
  * IDEMPOTENCY. A row whose (transfer_id, kind='transfer') is already in bridge_settlements
  * is skipped. The record is local and reorg-rollback-able on purpose: the mirrored row can

@@ -250,8 +250,7 @@ function makeCtx(opts){
         GAS:     'XCHAIN',
         ADDRESS: { GAS: 'nGasOwnerXXXXXXXXXXXXXXXXXXXXXXXXX',
                    BRIDGE_BTC:  ESCROW_BTC_ON_DOGE,
-                   BRIDGE_DOGE: ESCROW_DOGE_ON_BTC },
-        BTC_CHAIN_ID: o.chainId || null
+                   BRIDGE_DOGE: ESCROW_DOGE_ON_BTC }
     };
     const state = {
         credits: [], debits: [], settlements: [], actions: [], mappings: [],

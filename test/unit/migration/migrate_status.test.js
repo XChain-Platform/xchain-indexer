@@ -151,12 +151,12 @@ function registerStatusOutputTests() {
         assert.strictEqual(report.pending, 2);
         assert.strictEqual(cli.logStub.callCount, 1, 'JSON mode must print one report object');
         assert.deepStrictEqual(report.migrations.map(Object.keys),
-            fake.files.map(() => ['file', 'applied', 'mode', 'appliedAt', 'changed']));
+            fake.files.map(() => ['file', 'applied', 'mode', 'fileMode', 'appliedAt', 'changed']));
         const applied = fake.files.slice(0, -2).map((file) => ({
-            file, applied: true, mode: 'auto', appliedAt: '2026-09-27T00:00:00.000Z', changed: false
+            file, applied: true, mode: 'auto', fileMode: 'manual', appliedAt: '2026-09-27T00:00:00.000Z', changed: false
         }));
         const pending = fake.files.slice(-2).map((file) => ({
-            file, applied: false, mode: 'manual', appliedAt: null, changed: false
+            file, applied: false, mode: 'manual', fileMode: 'manual', appliedAt: null, changed: false
         }));
         assert.deepStrictEqual(report.migrations, [...applied, ...pending]);
         assert.deepStrictEqual(fake.queries,
@@ -203,7 +203,10 @@ function registerStatusFailureAndTextTests() {
     });
 
     it('--status prints only the text report and its summary', async function () {
-        const fake = makeFakeDb();
+        const files = migrationFiles();
+        const ledgerRows = files.slice(0, -2).map((name, index) => ({ name, checksum: sumOf(name),
+            mode: index === 0 ? 'manual' : 'auto', applied_at: '2026-09-27T00:00:00.000Z' }));
+        const fake = makeFakeDb({ ledgerRows });
         loadMigrate(fake.FakeDatabase, ['--status']);
         await fake.done;
 
@@ -213,6 +216,9 @@ function registerStatusFailureAndTextTests() {
             (fake.files.length - 2) + ' applied, 2 pending, 0 changed\\.$'
         ));
         assert.strictEqual(output.split('\n').some((line) => line.startsWith('{')), false);
+        assert.match(output, /\(recorded mode=auto; file now tagged manual\)/);
+        assert.ok(output.split('\n').includes('  [applied, mode=manual] ' + files[0] +
+            ' (applied_at=2026-09-27T00:00:00.000Z)'), 'a matching mode keeps the previous line unchanged');
         assert.strictEqual(fake.runMigrations.called, false);
         assert.strictEqual(process.exitCode, undefined);
         assert.strictEqual(fake.poolEnded, true);
@@ -233,7 +239,7 @@ function registerRenameStatusTests() {
         const output = printed(cli.logStub);
         const report = JSON.parse(output.slice(output.indexOf('{')));
         assert.deepStrictEqual(report.migrations.find((row) => row.file === RENAMED_TO),
-            { file: RENAMED_TO, applied: true, mode: 'auto', appliedAt: '2026-09-09T00:00:00.000Z', changed: false });
+            { file: RENAMED_TO, applied: true, mode: 'auto', fileMode: 'manual', appliedAt: '2026-09-09T00:00:00.000Z', changed: false });
         assert.strictEqual(report.migrations.some((row) => row.file === RENAMED_FROM), false);
         assert.strictEqual(report.pending, 0);
         assert.strictEqual(report.applied, files.length);
@@ -255,7 +261,7 @@ function registerRenameStatusTests() {
         const output = printed(cli.logStub);
         const report = JSON.parse(output.slice(output.indexOf('{')));
         assert.deepStrictEqual(report.migrations.find((row) => row.file === RENAMED_TO),
-            { file: RENAMED_TO, applied: true, mode: 'auto', appliedAt: '2026-09-27T00:00:00.000Z', changed: false });
+            { file: RENAMED_TO, applied: true, mode: 'auto', fileMode: 'manual', appliedAt: '2026-09-27T00:00:00.000Z', changed: false });
         assert.strictEqual(report.pending, 0);
     });
 }

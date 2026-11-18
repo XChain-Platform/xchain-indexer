@@ -187,6 +187,7 @@ async function checkAppliedChecksum(conn, file, checksum, appliedByName, include
         // recorded whichever revision it applied first. Normalize to a
         // list so every recorded predecessor heals to the current hash (checksum_verdict.js).
         if(classifyAppliedChecksum(file, appliedByName.get(file), checksum, Database.MIGRATION_CHECKSUM_REBASELINES) === 'rebaseline'){
+            // Keep mode as apply-time history; migrate.js --status also shows the file's current tag.
             await conn.query('UPDATE schema_migrations SET checksum = ? WHERE name = ?', [checksum, file]);
             getLogger().info('runMigrations: rebaselined checksum for ' + file + ' (reviewed retag, executable SQL unchanged).');
             return;

@@ -413,7 +413,7 @@ class AnchorRecovery {
         });
         let checkpoints = archive.state_checkpoints || [];
         for(let row of checkpoints) assertNotSuperseded(row, checkpoints);
-        checkpointPrice.verifyArchive(archive, {
+        let quarantinedPrices = checkpointPrice.verifyArchive(archive, {
             network: v1.network,
             setFor,
             parseSigs: raw => this.parseSigs(raw),
@@ -421,6 +421,9 @@ class AnchorRecovery {
             quorumVerified: (canonical, sigs, set, weighted) =>
                 this.quorumVerified(canonical, sigs, set, weighted)
         });
+        for(let group of quarantinedPrices)
+            this.log('recovery: price batch ' + group.first_round + '-' + group.last_round + ' skipped, ' +
+                     group.rows + ' rows left to chain restore (' + group.reason + ')');
 
         // 4. Shape-check archived anchor-publish rewards (absent pre-rewards
         // archives, treated as empty). Reward rows carry no per-row signatures; they are

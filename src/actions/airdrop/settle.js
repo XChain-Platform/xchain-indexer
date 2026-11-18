@@ -20,6 +20,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
+const { recordProbeLegVerdict } = require('../send/leg_verdicts.js');
 const gateRegistry = require('../../consensus/gate_registry');
 
 const AIRDROP_ZERO_LEGS_OMITTED_KEY = 'airdrop_zero_legs_omitted_activation.AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION';
@@ -64,6 +65,9 @@ module.exports = {
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = airdrop['STATUS'] = status;
+
+        // Read-only pre-flight only: keep this leg's own verdict (see recordProbeLegVerdict)
+        recordProbeLegVerdict(data, airdrop, status);
 
         getLogger().info("\t AIRDROP : " + airdrop['TICK'] + ' : ' + this.util.logAmount(airdrop['AMOUNT']) + ' : '+ airdrop['STATUS']);
 

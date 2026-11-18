@@ -23,6 +23,7 @@
 'use strict';
 
 const { getLogger } = require('../../observability/index.js');
+const { recordProbeLegVerdict } = require('../send/leg_verdicts.js');
 
 // One leg's final STATUS, its destroys row and address bookkeeping, and on the valid
 // path its debits: the burned AMOUNT, plus the guard gas, which also comes off the
@@ -31,6 +32,9 @@ async function recordLeg(data, destroy, error, guardFee, gas, debits){
     // Determine final status
     let status = (error) ? error : 'valid';
     data['STATUS'] = destroy['STATUS'] = status;
+
+    // Read-only pre-flight only: keep this leg's own verdict (see recordProbeLegVerdict)
+    recordProbeLegVerdict(data, destroy, status);
 
     // Print status message
     getLogger().info("\t DESTROY : " + destroy['TICK'] + ' : ' + this.util.logAmount(destroy['AMOUNT']) + ' : ' + destroy['MEMO'] + ' : '+ data['STATUS']);

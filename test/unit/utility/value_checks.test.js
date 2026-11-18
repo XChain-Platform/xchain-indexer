@@ -31,6 +31,20 @@ describe('value checks: type predicates', function(){
             assert.strictEqual(checks.isFloat.call(checks, v), false, String(v));
     });
 
+    it('isFloat is false for whole numbers at and past 2^31', function(){
+        for(const v of [2147483647, 2147483648, 3000000000, -2147483649, 9007199254740991])
+            assert.strictEqual(checks.isFloat.call(checks, v), false, String(v));
+    });
+
+    it('isFloat is false for infinities and non-numbers', function(){
+        for(const v of [Infinity, -Infinity, null, undefined, 10n])
+            assert.strictEqual(checks.isFloat.call(checks, v), false, String(v));
+    });
+
+    it('isFloat is true for a fraction beyond 2^31', function(){
+        assert.strictEqual(checks.isFloat.call(checks, 3000000000.5), true);
+    });
+
     it('isInteger rejects null, fractions and objects without a whole toNumber', function(){
         const frac = { toNumber(){ return 3.5; } };
         for(const v of [null, undefined, 5.5, {}, 'x', frac])
@@ -89,5 +103,29 @@ describe('value checks: hash and ksort', function(){
     it('ksort lists integer-like keys first in numeric order', function(){
         const out = checks.ksort.call(checks, { b: 1, 10: 1, a: 1, 2: 1 });
         assert.deepStrictEqual(Object.keys(out), ['2', '10', 'a', 'b']);
+    });
+});
+
+describe('value checks: getFormatVersion keeps its 32-bit fraction test', function(){
+    let util;
+
+    before(function(){
+        process.env.INDEXER_COIN = 'BTC';
+        process.env.INDEXER_NETWORK = 'regtest';
+        const Utility = require('../../../src/utility.js');
+        util = new Utility();
+    });
+
+    it('resolves in-range strings and rejects fractions as before', function(){
+        assert.strictEqual(util.getFormatVersion('3'), 3);
+        assert.strictEqual(util.getFormatVersion('1.0'), 1);
+        assert.strictEqual(util.getFormatVersion('1.5'), null);
+        assert.strictEqual(util.getFormatVersion('256'), null);
+    });
+
+    it('still reads a numeric string below -2^31 as unresolvable, not as a negative format', function(){
+        assert.strictEqual(util.getFormatVersion('-2147483649'), null);
+        assert.strictEqual(util.getFormatVersion('-3000000000'), null);
+        assert.strictEqual(util.getFormatVersion('-5'), -5);
     });
 });

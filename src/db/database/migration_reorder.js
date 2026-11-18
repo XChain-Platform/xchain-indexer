@@ -102,6 +102,9 @@ function statementTables(rawStmt){
     // Quote-aware, so a '/*' literal and a later '*/' literal cannot hide a table between them.
     const stmt = stripBlockComments(rawStmt).trim();
     if(!stmt) return { tables: [], opaque: null };
+    // SET STATEMENT executes the statement after FOR, whose target cannot be read from
+    // the SET prefix. Keep it opaque rather than risking a quiet misattribution.
+    if(/^SET\s+STATEMENT\b/i.test(stmt)) return { tables: [], opaque: stmt.slice(0, 120) };
     // A session-variable SET (SET NAMES, SET sql_mode) touches no table. A user-variable
     // SET (SET @s = ...) stages dynamic SQL whose target cannot be read, so it falls
     // through to the opaque default below.

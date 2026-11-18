@@ -23,6 +23,27 @@
  *
  ********************************************************************/
 
+const { EMPTY_PART_ERROR } = require('../file_multipart_validate.js');
+
+// A FILE part's bytes ride in the transaction payload, which the synthetic dry-run
+// transaction never carries and no quote RPC accepts. Its only possible refusal for want of
+// them is the empty-part status, the last check the handler runs, so every earlier check
+// (source, hash, index) has already passed when it appears. That status says the dry-run
+// could not see the bytes, not that the chain would refuse the part, so the surfaces answer
+// it as unjudged instead of relaying a refusal no caller can act on.
+const PAYLOAD_UNJUDGED_NOTE = 'FILE part bytes are not sent to a dry-run, so the payload is not judged: ' +
+    'every other check passed.';
+
+function isPayloadUnjudged(action, status){
+    return action === 'FILE' && status === EMPTY_PART_ERROR;
+}
+
+// The fields that replace a surface's verdict when its status is the unjudged one, or null.
+function payloadUnjudgedFields(action, status){
+    if(!isPayloadUnjudged(action, status)) return null;
+    return { valid: null, status: null, error: null, payloadUnjudged: true, note: PAYLOAD_UNJUDGED_NOTE };
+}
+
 // Normalize exactly as processTransaction will before dispatch: trim then uppercase,
 // then resolve ACTION aliases. Otherwise a whitespace-padded or aliased name would
 // classify differently here than at dispatch, letting a caller skip the denylist and
@@ -131,6 +152,10 @@ function dryRunVerdictQuote(actions, base, run, action){
             guardInertReason: actions.util.describeGuardInert(run.status),
             error: 'native fee pre-flight not supported for a controller-bound ' + action + ' ('
                  + actions.util.guardInertDetail(run.status) + '; pay the fee in XCHAIN)' });
+
+    let unjudged = payloadUnjudgedFields(action, run.status);
+    if(unjudged)
+        return Object.assign(base, unjudged, { validated: false, xchainFee: null });
 
     // The handler's verdict is authoritative; its reason (class-A or class-B) verbatim.
     if(run.status !== 'valid')
@@ -280,6 +305,8 @@ function preflightResult(actions, base, run, resolvedMode, feeTick){
         blockTime:  run.blockTime
     });
 
+    Object.assign(result, payloadUnjudgedFields(base.action, run.status));
+
     // BATCH only. `subCommands` is each sub-command's own verdict in list order, which is
     // what a batch pre-flight actually owes a composer: sub-commands are NOT atomic, so
     // "the BATCH is valid" says nothing about which of them will settle.
@@ -317,6 +344,7 @@ module.exports = {
     feeQuoteNoVerdict,
     isIncompleteDryRun,
     dryRunVerdictQuote,
+    payloadUnjudgedFields,
     resolvePreflightFeeMode,
     preflightGateAnswer,
     preflightLockBusy,

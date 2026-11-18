@@ -20,25 +20,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
-
-// Read-only pre-flight only: keep each leg's own verdict. `send` aliases `data`, so the
-// action-level STATUS ends as the LAST leg's, and a dry-run reading only that field answered
-// 'valid' for a multi-send whose earlier legs the chain refuses (or 'invalid' for one whose
-// earlier legs settle). FEE_PROBE is true only on the synthetic transaction the public quote
-// surfaces build (actions_class/transaction.js copies it off tx.fee_probe), so this key never
-// exists on a decoded transaction and no consensus value moves. Inside a BATCH,
-// batch/probe.js folds the legs into the sub-command verdict before the key clear drops them;
-// standalone and BATCH paths share send/leg_verdicts.js.
-function recordProbeLegVerdict(data, send, status){
-    if(data['FEE_PROBE'] !== true) return;
-    if(!Array.isArray(data['PROBE_LEG_VERDICTS'])) data['PROBE_LEG_VERDICTS'] = [];
-    data['PROBE_LEG_VERDICTS'].push({
-        tick:        send['TICK'],
-        amount:      (send['AMOUNT'] === null || send['AMOUNT'] === undefined) ? null : String(send['AMOUNT']),
-        destination: send['DESTINATION'],
-        status:      status
-    });
-}
+const { recordProbeLegVerdict } = require('./leg_verdicts.js');
 
 // Installed onto Send.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.

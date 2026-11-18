@@ -149,6 +149,12 @@ class Airdrop {
         // Update recipients list to only do airdrops to addresses which allow it
         recipients = await this.approveAirdropRecipients(recipients, tokenInfo, data);
 
+        // Where the representability gate is off, the legacy format rule passes text such as
+        // '1.+5' that bcmul cannot parse; refuse it here, after every earlier verdict, so only
+        // a leg that would halt the block changes
+        if(!error && !this.util.bcparses(airdrop['AMOUNT']))
+            error = 'invalid: AMOUNT (format)';
+
         // Determine total DEBIT
         airdrop['DEBIT'] = (!error) ? this.util.bcmul(recipients.size, airdrop['AMOUNT'], tokenInfo['DECIMALS']) : 0;
 

@@ -101,11 +101,12 @@ describe('recovery checkpoint supersede archive columns @regression @tier1', fun
             let db = database([]);
             await writeArchive(db, { state_checkpoints: [row] }, report());
             let select = db.calls.find(call => /^\s*SELECT/i.test(call[0]));
-            let insert = db.calls.find(call => call[0].includes('INSERT IGNORE INTO state_checkpoints'));
+            let insert = db.calls.find(call => call[0].includes('INTO state_checkpoints'));
             assert.ok(select[0].includes('supersedes_from'));
             assert.ok(select[0].includes('rules_digest'));
             let columns = insertColumns(insert[0]);
             assert.strictEqual(columns.length, insert[1].length);
+            assert.ok(!columns.includes('id'), 'the archived hub id is never bound');
             assert.strictEqual(insert[1][columns.indexOf('supersedes_from')], expectedFrom);
             assert.strictEqual(insert[1][columns.indexOf('rules_digest')], expectedDigest);
         }
@@ -114,7 +115,8 @@ describe('recovery checkpoint supersede archive columns @regression @tier1', fun
     it('has the recovery memory database preserve every checkpoint insert column', async function(){
         let db = memDb([], []);
         await writeArchive(db, { state_checkpoints: [superseding] }, report());
-        assert.deepStrictEqual(db.checkpoints, [superseding]);
+        const { id, ...withoutId } = superseding;
+        assert.deepStrictEqual(db.checkpoints, [withoutId]);
     });
 
     it('has writeArchive refuse a rules_digest collision and skip an identical stored row', async function(){

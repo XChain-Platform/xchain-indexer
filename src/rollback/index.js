@@ -28,8 +28,9 @@
 const ProviderRegistry = require('../attestation/provider_registry.js');
 const lifecycle = require('../hub/table_lifecycle.js');
 const { getLogger } = require('../observability/index.js');
+const { REORG_ROLLBACK_REASON } = require('../XChainIndexer/stall_health.js');
 
-const readPhaseMethods          = require('./read_phase.js');
+const readPhaseMethods         = require('./read_phase.js');
 const cooldownMaturityMethods   = require('./cooldown_maturities.js');
 const inPlaceFlipMethods        = require('./in_place_flips.js');
 const batchHeadMethods          = require('./batch_heads.js');
@@ -143,7 +144,7 @@ class Rollback {
         // hung or looping rollback is not misreported as last-known-good (a frozen
         // lastIndexedBlock with stallReason:null). Cleared after commit, and on the
         // failure path below (#1812).
-        if(this.indexer) this.indexer.stallReason = 'reorg_rollback';
+        this.markRollbackStall(rollbackStartedAt);
 
         // Notify user of start of rollback
         getLogger().info('Starting rollback to block ' + block_index + '...');
@@ -199,9 +200,29 @@ class Rollback {
             }
             // Clear the reorg marker on failure too so it can't stick; the next pass after the
             // required restart re-detects the reorg and retries, re-arming it.
-            if(this.indexer) this.indexer.stallReason = null;
+            this.clearRollbackStall();
             throw e;
         }
+    }
+
+    // Raise the rollback's stall marker with its own window. applyPendingReorgs runs before
+    // beginPollPass, so the previous pass's future-wait deadlines are still set here and
+    // would read this rollback as a healthy future-block wait; the rollback owns the window
+    // instead. A retried entry keeps the first start so a looping rollback still ages.
+    markRollbackStall(startedAt){
+        const indexer = this.indexer;
+        if(!indexer) return;
+        if(indexer.stallReason !== REORG_ROLLBACK_REASON || !Number.isFinite(indexer.rollbackStartedAt))
+            indexer.rollbackStartedAt = startedAt;
+        indexer.stallReason        = REORG_ROLLBACK_REASON;
+        indexer.stallClearsAt      = null;
+        indexer.futureWaitClearsAt = null;
+    }
+
+    clearRollbackStall(){
+        if(!this.indexer) return;
+        this.indexer.stallReason       = null;
+        this.indexer.rollbackStartedAt = null;
     }
 
     // The writes of the reorg transaction, in order, ending with the commit. Returns the

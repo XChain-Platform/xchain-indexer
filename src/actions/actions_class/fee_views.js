@@ -22,7 +22,8 @@
 
 const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
 const { isUsableFeeDestination } = require('../../config/fee_destination.js');
-const { normalizeQuoteRequest, batchRequestWire, isIncompleteDryRun } = require('./quote_answers.js');
+const { normalizeQuoteRequest, batchRequestWire, isIncompleteDryRun,
+        payloadUnjudgedFields } = require('./quote_answers.js');
 
 // Which database the fee schedule's price read came out of. Resolved exactly the way
 // util.getFeeOraclePrices resolves it, so the disclosure cannot drift from the
@@ -109,6 +110,8 @@ module.exports = {
             requiredFeeSatsExact: null,
             feeSupported:   false
         };
+
+        Object.assign(result, payloadUnjudgedFields(action, run.status));
 
         // Native-fee sizing for the extracted fee, merged without letting a pricing failure
         // (missing/stale oracle) overwrite the handler's validity verdict: on this raw surface

@@ -27,7 +27,7 @@ const {
 const { util, memDb } = require('../../helpers/recovery_stubs.js');
 
 const LIST_KEYS = [
-    'id', 'snapshot_id', 'snapshot_block', 'network', 'home_chain',
+    'snapshot_id', 'snapshot_block', 'network', 'home_chain',
     'home_list_index', 'list_type', 'seq', 'kind', 'origin_block',
     'members_hash', 'added', 'removed', 'admit_block_btc',
     'admit_block_ltc', 'admit_block_doge', 'finalizing_view',
@@ -118,7 +118,7 @@ function listMemDb(v1s, v2s, initial){
                 Number(row.seq) === Number(params[3]))
                 .map(row => ({ snapshot_id: row.snapshot_id }));
         }
-        if(normalized.startsWith('INSERT IGNORE INTO list_snapshots')){
+        if(normalized.startsWith('INSERT INTO list_snapshots')){
             let incoming = {};
             LIST_KEYS.forEach((key, index) => { incoming[key] = params[index]; });
             let duplicate = db.lists.some(row => row.snapshot_id === incoming.snapshot_id ||
@@ -156,7 +156,8 @@ describe('AnchorRecovery list snapshots @regression @tier2', function () {
 
         assert.strictEqual(report.verified, 1, JSON.stringify(report.failed));
         assert.strictEqual(report.lists, 2);
-        assert.deepStrictEqual(db.lists, expected);
+        // The archived hub id is never bound; the row takes a local surrogate id.
+        assert.deepStrictEqual(db.lists, expected.map(({ id, ...rest }) => rest));
 
         let dryDb = listMemDb([batch.v1], batch.v2s);
         let dryReport = await new AnchorRecovery(

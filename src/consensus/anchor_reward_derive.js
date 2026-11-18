@@ -31,7 +31,7 @@
  * The mirror is transport, not trust: this pass re-verifies each row's XANCPUB signatures
  * against the BTC indexer's own locally-computed oracle_publish set at snapshot_block (the same
  * set + weighting src/actions/anchor/index.js uses on DOGE), rebuilds the reward canonical byte-identically to
- * src/actions/anchor/index.js rewardCanonical / the hub's StateAnchorPublisher, and only then materializes
+ * the hub's StateAnchorPublisher canonicals, and only then materializes
  * validator_rewards at block_index = snapshot_block. A forged or short-quorum row credits
  * nothing. Idempotent and reorg-safe: the reward upserts on (reward_type, round_reference,
  * round_qualifier) - the qualifier being snapshot_block for the archive leg, whose
@@ -75,9 +75,10 @@ const ANCHOR_FOLD = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const ANCHOR_REWARD_COPY_SELECTION =
     'anchor_reward_copy_selection_activation.ANCHOR_REWARD_COPY_SELECTION_ACTIVATION';
 
-// Rebuild the XANCPUB canonical for a mirrored attestation row. MUST byte-match
-// src/actions/anchor/index.js rewardCanonical (DOGE parse side) and the hub's publisher canonical, or the
-// re-verified quorum would never match and the reward would silently never derive.
+// Rebuild the XANCPUB canonical for a mirrored attestation row. This is the only XANCPUB
+// builder in the indexer (the parse handler's rewardCanonical maps onto it). It MUST
+// byte-match the hub's publisher canonical, or the re-verified quorum would never match
+// and the reward would silently never derive.
 function rewardCanonical(row){
     let network        = String(row.network);
     let snapshotBlock  = row.snapshot_block;
@@ -96,8 +97,7 @@ function rewardCanonical(row){
         // Bundle leg (v0): ONE reward per per-network bundle. round_reference IS the
         // snapshot block, so field 2 and field 3 repeat it; the six-field positional
         // layout is kept so slash.js reads snapshot_block at index 3 for every XANCPUB
-        // family. MUST byte-match src/actions/anchor/index.js rewardCanonical's v0 branch and the hub's
-        // bundle attestation canonical.
+        // family. MUST byte-match the hub's bundle attestation canonical.
         let base = ['XANCPUB', 'anchor_bundle', roundReference,
                     String(snapshotBlock), publisher, ar.ANCHOR_REWARD_AMOUNT].join('|');
         if(eq.isEquivHeaderActive(snapshotBlock, network)){

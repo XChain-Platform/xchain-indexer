@@ -346,7 +346,7 @@ module.exports = {
         // Create xchain-utxo-tracker client (used by DISPENSER fresh-address check)
         this.utxoTracker = new UtxoTracker(this.utxoTrackerUrl, this.utxoTrackerPort);
         if(!this.utxoTracker.enabled)
-            getLogger().info('WARNING: UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT not set. DISPENSER fresh-address check will reject all non-owner dispensers');
+            getLogger().info('WARNING: UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT not set. A non-owner DISPENSER create below DISPENSER_FRESHNESS_ACTIVATION will halt the block until the tracker is configured');
 
         // Create instance of the actions class and pass database connection instances to it
         this.actions = new actions(this);
@@ -454,14 +454,18 @@ module.exports = {
 
     // The durable hub-push retry queue and the two state-tree maintenance timers.
     startBackgroundServices(){
-        // Start the durable hub-push retry queue. Both PRICE hub pushes (v0 round and v1
-        // oracle price) are write-ahead: price.js enqueues the pending_hub_pushes row
-        // UNCONDITIONALLY inside the open block transaction, so it commits atomically with
-        // the prices row. Live delivery runs post-commit (deliverStagedHubPushes) and drops
-        // the row only on success, so neither a crash in that window nor a transient hub
-        // outage can permanently drop it; this poller drains whatever survives, with
-        // exponential backoff. No-op when no hub is configured (nothing ever enqueues in
-        // that case).
+        // Start the durable hub-push retry queue. The PRICE pushes (price_batch and v1
+        // oracle_price), the ATTEST batch pushes and the reorg retractions are write-ahead:
+        // each producer enqueues the pending_hub_pushes row inside the open block
+        // transaction, so it commits atomically with the rows it describes. Live delivery
+        // runs post-commit (deliverStagedHubPushes) and drops the row only on success, so
+        // neither a crash in that window nor a transient hub outage can permanently drop
+        // it; this poller drains whatever survives, with exponential backoff.
+        // Every producer gates the enqueue on hubClient.enabled, a snapshot taken at boot
+        // (constructor, then setAddressSource once). A node started with no hub configured
+        // writes no rows and does not backfill them if a hub is added later, so a new push
+        // site must reuse that gate together with enqueueHubPushTx. This poller is a no-op
+        // when no hub is configured (nothing ever enqueues in that case).
         this.hubPushQueue = new HubPushQueue(this);
         this.hubPushQueue.start();
 

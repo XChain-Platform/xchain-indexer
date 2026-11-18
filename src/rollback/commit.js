@@ -220,7 +220,7 @@ module.exports = {
 
         // Destructive rollback is done and committed; clear the in-progress marker so
         // /health reflects a caught-up node again (#1812).
-        if(this.indexer) this.indexer.stallReason = null;
+        this.clearRollbackStall();
     },
 
     // Deliver the write-ahead hub retractions committed above (HUB-RETRACT-2). Each was already

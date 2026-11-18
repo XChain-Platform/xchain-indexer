@@ -35,7 +35,7 @@ const TABLES = [
       hashed: { classes: [], note: 'Carrier of the hash chain itself (ledger/actions/contract/state hash ids per block).' } },
     { table: 'transactions', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
       hashed: { classes: [], note: 'Mirror of decoder-confirmed chain transactions; correctness anchors to the coin chain, and action rows referencing them are hashed.' } },
-    { table: 'validator_rewards', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror',
+    { table: 'validator_rewards', owner: 'indexer', replication: 'stream:block', rollback: 'block', replicaRollback: 'mirror', infra: true,
       hashed: { classes: [],
                 note: 'Oracle/attest rewards derive deterministically during block processing; anchor_* rounds arrive via hub push but are quorum-verified before persistence. Reward credits they mint are ledger-hashed.' },
       note: 'TWO block-scoped rollback keys, not one. block_index is the EARN block; derive_block_index is the MATERIALIZATION block for three writer paths: BTC-side anchor/archive derivation, recovery re-materialization of those archive rewards, and rollcall_publish. The archive paths earn at the checkpoint SNAPSHOT_BLOCK but materialize at the later BTC derive height; rollcall_publish earns at the epoch height but materializes at close_block. rollback() deletes on BOTH, or a reorg into either gap leaves a COLLECT-spendable reward a from-genesis replay has not derived yet.' },

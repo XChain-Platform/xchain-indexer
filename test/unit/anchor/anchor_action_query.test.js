@@ -108,6 +108,15 @@ describe('anchor-action-query: validateAnchorActionParams()', function () {
         assert.strictEqual(validateAnchorActionParams({ chain: 'BTC', network: 'regtest', block_index: 1, checkpoint_seq: -3 }).ok, false);
     });
 
+    it('refuses a chain or network wider than its column and accepts one at the width', function () {
+        const base = { block_index: 1, checkpoint_seq: 1 };
+        assert.strictEqual(validateAnchorActionParams({ ...base, chain: 'C'.repeat(10), network: 'n'.repeat(20) }).ok, true);
+        for (const [chain, network] of [['C'.repeat(11), 'regtest'], ['BTC', 'n'.repeat(21)], ['x'.repeat(100000), 'regtest']]) {
+            assert.deepStrictEqual(validateAnchorActionParams({ ...base, chain, network }),
+                { ok: false, error: 'chain and network are required strings' });
+        }
+    });
+
     it('accepts checkpoint_seq 0 (genesis-adjacent) and block_index 0', function () {
         assert.strictEqual(validateAnchorActionParams({ chain: 'BTC', network: 'regtest', block_index: 0, checkpoint_seq: 0 }).ok, true);
     });

@@ -137,12 +137,12 @@ async function writeBridge(db, row){
     }
     await db.doQuery(
         `INSERT INTO bridge_transfers
-            (id, transfer_id, snapshot_block, network, src_chain, src_action_index,
+            (transfer_id, snapshot_block, network, src_chain, src_action_index,
              src_address, dest_chain, dest_address, tick, decimals, amount, effective_time,
              admit_block_btc, admit_block_ltc, admit_block_doge, finalizing_view,
              validator_signatures, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [Number(row.id), row.transfer_id, Number(row.snapshot_block), row.network,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [row.transfer_id, Number(row.snapshot_block), row.network,
          row.src_chain, Number(row.src_action_index), row.src_address, row.dest_chain,
          row.dest_address, row.tick, Number(row.decimals), row.amount, Number(row.effective_time),
          row.admit_block_btc == null ? null : Number(row.admit_block_btc),
@@ -162,13 +162,13 @@ async function writePolicy(db, row){
     if(bySeq && bySeq.length > 0 && bySeq[0].snapshot_id !== row.snapshot_id)
         fail('policy snapshot', row.snapshot_id, 'collides with an existing policy sequence');
     await db.doQuery(
-        `INSERT IGNORE INTO policy_snapshots
-            (id, snapshot_id, snapshot_block, network, origin_chain, tick, policy_seq,
+        `INSERT INTO policy_snapshots
+            (snapshot_id, snapshot_block, network, origin_chain, tick, policy_seq,
              origin_block, policy_hash, allow_list, block_list, sleeping, effective_time,
              admit_block_btc, admit_block_ltc, admit_block_doge, finalizing_view,
              validator_signatures, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [Number(row.id), row.snapshot_id, Number(row.snapshot_block), row.network,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [row.snapshot_id, Number(row.snapshot_block), row.network,
          row.origin_chain, row.tick, Number(row.policy_seq), Number(row.origin_block),
          row.policy_hash, row.allow_list, row.block_list, Number(row.sleeping),
          Number(row.effective_time),

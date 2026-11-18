@@ -23,7 +23,7 @@
  * recovery verifier and the client/explorer checkpoint verifiers resolve through
  * this predicate so they can never drift; a divergence forks the chain.
  *
- * The cross-service conformance suite (ConsensusPrimitiveConformance.test.js,
+ * The cross-service conformance suite (consensus_primitive_conformance.test.js,
  * driven by xchain-documentation/protocol/test-vectors) runs in every repo and
  * asserts BOTH the behavior (canonical vectors) AND byte-identity of the local
  * copy to the xchain-documentation copy, so any unmirrored edit fails CI

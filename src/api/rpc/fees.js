@@ -132,7 +132,24 @@ function parseOracleFeeQuoteParams(values){
     let blockTime = rpcParams.optionalInteger(values.blockTime, { name: 'blockTime', min: 1 });
     if(blockTime.error) return blockTime;
     parsed.blockTime = blockTime.value;
+    let giveEscrow = parseGiveEscrow(values.giveEscrow);
+    if(giveEscrow.error) return giveEscrow;
+    parsed.giveEscrow = giveEscrow.value;
     return { value: parsed };
+}
+
+// An omitted escrow stays omitted (the quote sizes it as zero). A present one
+// must have the text shape the dispenser create check accepts, minus sign,
+// exponent and hex forms: digits with at most one fractional part, so a
+// zero-padded "007" or "5." is quoted exactly as consensus would accept it
+// while a negative or exponent value is refused.
+const ESCROW_TEXT = /^[0-9]+(\.[0-9]*)?$/;
+function parseGiveEscrow(value){
+    if(value === undefined || value === null) return { value };
+    if((typeof value !== 'string' && typeof value !== 'number') ||
+       !ESCROW_TEXT.test(String(value)) || String(value).length > 80)
+        return { error: 'giveEscrow must be a non-negative decimal' };
+    return { value };
 }
 
 function oracleFeeQuoteRpc({ indexer }){
@@ -141,7 +158,7 @@ function oracleFeeQuoteRpc({ indexer }){
             if(!oracleAddress || !giveTick || !fiatCode)
                 return { error: 'oracleAddress, giveTick and fiatCode are required' };
             let parsedResult = parseOracleFeeQuoteParams({ oracleAddress, giveCoin, giveTick,
-                                                           fiatCode, getCoin, blockTime });
+                                                           fiatCode, getCoin, giveEscrow, blockTime });
             if(parsedResult.error) return parsedResult;
             let parsed = parsedResult.value;
             if(!indexer.indexerDb || !indexer.util)
@@ -167,7 +184,7 @@ function oracleFeeQuoteRpc({ indexer }){
                     GIVE_TICK:      parsed.giveTick,
                     FIAT_CODE:      parsed.fiatCode,
                     GET_COIN:       parsed.getCoin  || indexer.config['COIN'],
-                    GIVE_ESCROW:    giveEscrow,
+                    GIVE_ESCROW:    parsed.giveEscrow,
                 }, db);
                 if(!quote.valid)
                     return { valid: false, error: quote.error };
