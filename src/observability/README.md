@@ -94,8 +94,8 @@ what had happened. Only the endpoint is gated.
 | `LOG_SHIP_MAX_BUFFER` | 5000 | Bounded buffer; oldest dropped and counted |
 | `LOG_SHIP_TIMEOUT_MS` | 5000 | Per-batch POST timeout |
 | `SQL_TIMING_ENABLED` | off | Emit and ship request SQL timing; needs URL, key and project |
-| `SQL_TIMING_URL` | unset | HTTPS Prometheus SQL timing intake endpoint |
-| `SQL_TIMING_KEY` | unset | Intake API key; sent only in `X-Prometheus-Api-Key` |
+| `SQL_TIMING_URL` | unset | HTTPS SQL timing intake endpoint |
+| `SQL_TIMING_KEY` | unset | Intake API key; sent only as an `Authorization: Bearer` header |
 | `SQL_TIMING_PROJECT` | unset | Project slug stamped on each contract line |
 | `SQL_TIMING_REQUEST_RATE` | 1 | Fraction of request timing lines emitted |
 | `SQL_TIMING_STATEMENT_RATE` | 0.05 | Fraction of spans carrying normalized statements |
