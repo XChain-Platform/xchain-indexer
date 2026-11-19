@@ -14,6 +14,8 @@
 
 'use strict';
 
+const DB_CONNECTION_UNAVAILABLE = 'DB_CONNECTION_UNAVAILABLE';
+
 /**
  * Re-throw errors that are infrastructure faults, never contract outcomes.
  *
@@ -44,6 +46,10 @@
  *      anyway, so its read is uncovered on THIS node only. The assertion's
  *      contract is a rollback plus a retry with the barrier enforced, which a
  *      swallowing catch cancels.
+ *
+ *   4. A connection-acquisition outage (code 'DB_CONNECTION_UNAVAILABLE'):
+ *      contract logic never ran, while a healthy peer could acquire its
+ *      connection. Recording a verdict would make the outage part of state.
  *
  * A genuine deterministic contract failure (a reverted emission, an
  * insufficient-balance emit.send) carries no errno and is NOT re-thrown, so
@@ -76,7 +82,9 @@ function rethrowIfInfraFault(e){
     // UTXO tracker gave no answer (unreachable, non-2xx, unreadable, unconfigured): a
     // node-local fault whose healthy peers got an answer, so a verdict here would fork.
     if(e && e.code === 'UTXO_TRACKER_UNAVAILABLE') throw e;
+    // Connection acquisition failed locally, so no deterministic contract verdict exists.
+    if(e && e.code === DB_CONNECTION_UNAVAILABLE) throw e;
     if(e && typeof e.errno === 'number') throw e;
 }
 
-module.exports = { rethrowIfInfraFault };
+module.exports = { DB_CONNECTION_UNAVAILABLE, rethrowIfInfraFault };

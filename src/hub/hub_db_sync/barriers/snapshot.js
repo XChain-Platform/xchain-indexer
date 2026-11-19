@@ -153,8 +153,13 @@ module.exports = {
                 // waiter armed until the timeout. Re-evaluate against the mirror here;
                 // releaseSnapshotWaiters resolves+clears this waiter if satisfied now.
                 try { await this.releaseSnapshotWaiters(); } catch (e) { /* fall through to reject */ }
-                if (await this.snapshotSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
+                let satisfied = false;
+                try { satisfied = await this.snapshotSyncSatisfied(blockTime, blockHeight); } catch (e) {}
                 this._snapshotWaiters = this._snapshotWaiters.filter(w => w !== waiter);
+                if (satisfied){
+                    resolve(true);
+                    return;
+                }
                 reject(new Error('snapshot sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
                                  blockTime + ' (a cross-chain match is missing its capability snapshot)'));
             }, ms);

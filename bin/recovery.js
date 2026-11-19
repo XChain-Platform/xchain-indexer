@@ -81,6 +81,7 @@ const { assertNotSuperseded } = require('../src/consensus/retroactive/checkpoint
 const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
 const srb     = require('../src/consensus/snapshot_reorg_buffer.js');
 const cmsh    = require('../src/consensus/capability_min_stake_history.js');
+const slashAddBack = require('../src/db/stakes/slash_add_back.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks,
         archiveChunkCoverage } = require('../src/actions/anchor/anchor_action_query.js');
@@ -675,11 +676,11 @@ class AnchorRecovery {
     //
     //   2. THE WEIGHTS. The archived per-source `amount` is the quorum denominator S, and it
     //      was taken entirely on trust, because the obvious check - compare it to a
-    //      re-resolution - false-rejects honest archives: slashCapabilityStake rewrites
-    //      `stakes.amount` IN PLACE, so re-resolving a historical block after a slash reports
-    //      the POST-slash weight, not the weight the hub saw. slashRestoresAfter() removes
-    //      that objection by unwinding every capability_slash_debits row recorded AFTER the
-    //      resolve block, so the archived weight is compared to the weight as of the snapshot.
+    //      re-resolution - false-rejects honest archives in the legacy regime:
+    //      slashCapabilityStake rewrites `stakes.amount` IN PLACE, so the legacy resolver
+    //      reports the POST-slash weight. slashRestoresAfter() reconstructs the historical
+    //      amount there. Once slashHistoricalSetActive is armed, the resolver already returns
+    //      the as-of-block weight and recovery must not add the same debits again.
     //      A forged archive can no longer deflate other sources' weights to shrink S.
     //
     // Both reconstructions degrade to the earlier local-floor behaviour rather than failing
@@ -749,10 +750,11 @@ class AnchorRecovery {
     //      is the quorum denominator S, so a deflated `amount` on other sources lowers the
     //      bar a forged signature set has to clear.
     //
-    // Check 2 needs the slash-debit reconstruction; when it is unavailable the check is
-    // skipped and check 1 stands alone, which is exactly the earlier behaviour.
+    // Check 2 needs recovery's slash-debit reconstruction only in the legacy regime. Once
+    // the historical-set gate is armed, the resolver itself returns as-of-block weights.
     //
-    // KNOWN RESIDUAL, deliberately not closed here: a source whose weight the re-resolution
+    // KNOWN LEGACY RESIDUAL, deliberately not closed here: below the historical-set gate, a
+    // source whose weight the re-resolution
     // cannot report AT ALL because a post-snapshot slash took it under the threshold is
     // invisible to check 1, so dropping it from the archive is still undetected. Catching it
     // needs a key-complete candidate set - every source with ANY stake AND an effective key at
@@ -777,7 +779,9 @@ class AnchorRecovery {
                                 ' weights (' + archived.get(src) + ' and ' + amt + ') across its keys');
             if(!archived.has(src)) archived.set(src, amt);
         }
-        let restores = await this.slashRestoresAfter(resolveBlock);
+        let historicalSet = slashAddBack.slashHistoricalSetActive(
+            this.btcDb && this.btcDb.config, resolveBlock);
+        let restores = historicalSet ? new Map() : await this.slashRestoresAfter(resolveBlock);
 
         // 1. Source-level completeness: no qualifying staking source may be absent.
         let resolvedSources = new Map();
@@ -806,11 +810,10 @@ class AnchorRecovery {
         }
     }
 
-    // Per-source stake SLASHED AFTER `atBlock`, so a historical weight can be restored to
+    // Legacy-regime stake SLASHED AFTER `atBlock`, which restores a historical weight to
     // what it was AT that block. slashCapabilityStake rewrites `stakes.amount` in place and
-    // records the exact per-row delta in capability_slash_debits, so a source's as-of-block
-    // aggregate is (the aggregate the resolver reports for that block today) + (every debit
-    // against its stake rows recorded after it).
+    // records the exact per-row delta in capability_slash_debits. Once the historical-set
+    // gate is armed, the resolver performs this reconstruction and this helper is not called.
     //
     // Scoped to `target_table = 'stakes'`: only active stake rows carry capability weight -
     // an `unstakes` row is cooldown-locked tokens, outside the weight sum by construction

@@ -1,0 +1,45 @@
+--********************************************************************
+--
+-- Copyright © 2025-2026 Dankest, LLC
+-- Based on XChain Platform by Dankest, LLC - https://dankest.llc
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+--
+-- This file is part of XChain Platform. Licensed under the GNU Affero
+-- General Public License v3.0 or later; see LICENSE.md. A commercial
+-- license (without AGPL source-disclosure terms) is available -
+-- contact legal@dankest.llc.
+--
+--********************************************************************
+
+-- xchain:migration mode=manual
+--
+-- Migration: pending_hub_pushes.payload TEXT utf8mb3 -> MEDIUMTEXT utf8mb4
+--
+-- WHY
+-- ---
+-- The outbox stores JSON for a complete ATTEST batch inside the same transaction
+-- as its landing block. The supported batch body can exceed TEXT's 65,535-byte
+-- ceiling, and provider payloads may contain four-byte UTF-8. Under the pinned
+-- strict SQL mode either case rejects the insert and rolls back the block.
+--
+-- SAFETY
+-- ------
+-- This column is not indexed. MEDIUMTEXT widens its capacity, utf8mb3 is a strict
+-- subset of utf8mb4, and the collation remains the corresponding general_ci form,
+-- so every stored value is preserved. The outbox is transport state and does not
+-- enter consensus hashes or wire serialization.
+--
+-- This migration is manual because MODIFY restates NOT NULL. The startup scanner
+-- cannot distinguish that restatement from a destructive narrowing, while omitting
+-- NOT NULL would silently loosen the schema. The ALTER may rebuild the table, so run
+-- it during an operator-controlled maintenance window.
+--
+-- IDEMPOTENT: repeating the same MODIFY leaves the target shape unchanged. A fresh
+-- database already has this definition and MIGRATION_PRECONDITIONS baselines the file.
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-11-19-pending-hub-pushes-widen-payload.sql
+
+ALTER TABLE pending_hub_pushes
+  MODIFY payload MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL;

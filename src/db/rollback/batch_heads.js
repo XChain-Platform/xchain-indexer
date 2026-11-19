@@ -42,17 +42,10 @@ module.exports = {
     async resetOrphanedArchiveHeads(db, config, block_index, firstActionIndex){
         let query, args;
         if(firstActionIndex !== null){
-            // Intern 'unverified' FIRST (IDX-1). The UPDATE below resolves its target id via
-            // `JOIN index_statuses us ON us.status = 'unverified'`, but a normally hub-connected
-            // node never writes 'unverified' forward (actions/anchor/quorum.js only stores it when no
-            // oracle_publish snapshot is mirrored), so that row is usually absent and the JOIN
-            // matches nothing, silently no-oping the reset and leaving the parent wedged at
-            // 'invalid_archive'. createStatus interns it (INSERT IGNORE) so the JOIN is
-            // guaranteed non-empty; index_statuses ids are never hashed, so an in-rollback
-            // intern is byte-neutral. The UPDATE's JOIN text is pinned by the cross-repo
-            // drift guard (xchain-sync rollback_coverage); the replica converges via
-            // snapshot catch-up (it cannot intern locally without diverging the replicated
-            // id, and anchor status_id is in no block-hash projection).
+            // Intern 'unverified' FIRST. Legacy heads need its id as their fallback, while
+            // journaled heads already carry the prior status id and do not depend on this
+            // lookup. The LEFT JOIN and non-null guard below preserve that split on the
+            // replica, which cannot safely intern a source-owned lookup id locally.
             //
             // Version predicate: the parent is any head the forward chunk path can pick
             // and stamp, spliced from the same archiveHeadPickPredicate getAnchorV1ByBatchSeq
@@ -79,12 +72,13 @@ module.exports = {
                          AND c.action_index >= ?
                         JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
                         ${authorScope}
-                        JOIN index_statuses us ON us.status = 'unverified'
+                        LEFT JOIN index_statuses us ON us.status = 'unverified'
                         SET p.status_id = COALESCE(p.pre_archive_status_id, us.id),
                             p.pre_archive_status_id = NULL
                         WHERE ${archiveHeadPickPredicate('p')}
                           AND p.action_index < ?
-                          AND ${archiveHeadPredicate('p')}`;
+                          AND ${archiveHeadPredicate('p')}
+                          AND COALESCE(p.pre_archive_status_id, us.id) IS NOT NULL`;
             // Bind in SQL order: the chunk join, the pick predicate's fold floor, then the parent bound.
             args = [firstActionIndex, foldArchiveHeadFloor(config['NETWORK'], 'DOGE'), firstActionIndex];
             await db.doQuery(query, args);

@@ -228,6 +228,21 @@ const MIGRATION_PRECONDITIONS = {
             return 'oracle_prices.tick is already ' + len + ' characters wide, so there is no narrow column to widen.';
         }
     },
+    // A current fresh install already has the outbox payload capacity and charset this
+    // manual migration supplies. Baseline only a type that can hold MEDIUMTEXT and only
+    // utf8mb4; a missing column or either half of the old shape must leave the file pending.
+    '2026-11-19-pending-hub-pushes-widen-payload.sql': {
+        sql: "SELECT DATA_TYPE AS data_type, CHARACTER_SET_NAME AS charset_name " +
+             "FROM information_schema.columns WHERE table_schema = ? " +
+             "AND table_name = 'pending_hub_pushes' AND column_name = 'payload'",
+        skipWhen: (rows) => {
+            if(!Array.isArray(rows) || !rows.length) return null;
+            const type = String((rows[0] && rows[0].data_type) || '').toLowerCase();
+            const charset = String((rows[0] && rows[0].charset_name) || '').toLowerCase();
+            if(!['mediumtext', 'longtext'].includes(type) || charset !== 'utf8mb4') return null;
+            return 'pending_hub_pushes.payload is already ' + type + ' with utf8mb4.';
+        }
+    },
 };
 
 module.exports = {

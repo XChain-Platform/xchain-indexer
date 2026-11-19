@@ -466,5 +466,9 @@
   "2026-11-17-file-multipart-uncapped.sql": {
     "residue": "716a8e63d8d26c6000653d468148df582c6a5315cdf6810b23e03cfc3f90692f",
     "sha256": "f4e671e3893001de14c5b27700872816a340837675a1ca16edc16e6a8b9a09ba"
+  },
+  "2026-11-19-pending-hub-pushes-widen-payload.sql": {
+    "residue": "2c55a72d019255b08a4636df3b9f5701f677b24f0ac6eda4e16aa0976234c17d",
+    "sha256": "a3fbee1967cf769450c5fffff4188f18fac7287583a96efb505ad4564203b75f"
   }
 }

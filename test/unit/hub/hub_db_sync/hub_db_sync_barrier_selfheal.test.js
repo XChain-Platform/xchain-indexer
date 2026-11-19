@@ -111,6 +111,25 @@ describe('HubDbSync barrier timeout self-heal (ITEM 2492) @regression @tier2', f
         assert.strictEqual(sync._snapshotWaiters.length, 0, 'self-healed waiter should be cleared');
     });
 
+    it('snapshot: readiness changing after release still settles its waiter', async function () {
+        let matchQueries = 0;
+        const doQuery = sinon.stub().callsFake(async (sql) => {
+            if (/cross_chain_matches/.test(sql)){
+                matchQueries += 1;
+                return matchQueries < 3 ? [{ '1': 1 }] : [];
+            }
+            return [];
+        });
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'configured', coin: 'BTC' });
+        const pending = sync.waitForSnapshotSync(1000, 50);
+        const guard = new Promise((resolve) => setTimeout(() => resolve('pending'), 500));
+        const got = await Promise.race([pending, guard]);
+
+        assert.strictEqual(got, true, 'barrier promise left pending after readiness changed');
+        assert.strictEqual(sync._snapshotWaiters.length, 0, 'settled waiter should be removed');
+        assert.strictEqual(matchQueries, 3, 'negative control must reach the between-check transition');
+    });
+
     it('snapshot: still REJECTS on timeout when the snapshot stays missing', async function () {
         const doQuery = sinon.stub().callsFake(async (sql) => {
             if (/cross_chain_matches/.test(sql)) return [{ '1': 1 }];   // always missing

@@ -206,11 +206,10 @@ async function dispatchSubCommands(commands, data, error, normalize, collect){
             continue;
         }
 
-        // Probe only: clear the previous sub-command's verdict so a handler that
-        // returns without recording one (a settlement leg that skips, e.g. the coinpay/ handler
-        // on an unmatched payee) reports null rather than inheriting its predecessor's
-        // status. STATUS is a base key, so the field clear above never touches it.
-        if(data['FEE_PROBE'] === true) delete data['STATUS'];
+        // Public probes already clear every sub-command verdict. The authenticated dry-run
+        // additionally clears COINPAY because its intentional skip paths write no status.
+        // Other dry-run handlers keep their existing inherited-status behavior.
+        if(data['FEE_PROBE'] === true || (collect && action === 'COINPAY')) delete data['STATUS'];
 
         // Probe only: give this sub-command its own match snapshot. processAction keeps only the
         // first ORDER_MATCH/SWAP_MATCH capture per transaction, so a filling ORDER read as its

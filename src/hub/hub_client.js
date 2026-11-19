@@ -267,10 +267,14 @@ class HubClient {
         return this.requireHubAccepted(method, result);
     }
 
-    // Throw on a hub rejection a retry could still clear, so the durable outbox keeps the row: call resolves any
-    // error-free envelope, which would read as delivery and destroy the only copy of a price the hub refused
-    // transiently (no validator snapshot, hub DB error, booting aggregator). Returns the result untouched otherwise.
+    // Throw on a missing acknowledgement or a hub rejection a retry could still clear, so
+    // the durable outbox keeps the row. Returns an acknowledged result untouched otherwise.
     requireHubAccepted(method, result){
+        if(result === null || typeof result !== 'object' || Array.isArray(result)){
+            let err = new Error('hub returned no acknowledgement for ' + method);
+            err.hubRejection = 'no acknowledgement';
+            throw err;
+        }
         let reason = hubRejectionReason(result);
         if(reason === null) return result;
         if(TERMINAL_HUB_REJECTIONS.some(rx => rx.test(reason))){
