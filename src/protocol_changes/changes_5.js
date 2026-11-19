@@ -117,6 +117,8 @@ const CHANGES = [
     // STAKE_SNAPSHOT_SLASH_WINDOW: from the flag day the VM stake snapshot caps a (pubkey, tick)'s
     // mid-UNSTAKE contract_stakes rows at what its open contract_unstakes rows still hold, the
     // place SLASH debits during the activation delay (db/contracts/vm_stake_snapshot.js).
+    // This also drops the stake view when a short cooldown refunds before deactivation. Without
+    // the rule, released stake remains visible but unslashable for delay - cooldown - 1 blocks.
     // This rule and DELEGATION_ROTATE_IN_WINDOW below: mainnet is UNARMED, testnet is armed at
     // the instant in each row, and regtest is inert unless a venue sets the row's
     // *_REGTEST_TIME override.

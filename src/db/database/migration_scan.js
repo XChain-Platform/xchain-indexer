@@ -31,6 +31,7 @@
 const { opensBackslashEscape } = require('../shared.js');
 const { retypeLedgerAppliedAt } = require('./ledger_retype.js');
 const { stripBlockComments, alterSpecs, blankLiterals } = require('./migration_live_schema_guard.js');
+const { qualifiedWriteTarget } = require('./migration_guards/column_change_safety.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -268,15 +269,13 @@ module.exports = {
     // TABLE (sequences, triggers, views, events and routines too), TRUNCATE, RENAME TABLE,
     // DELETE (any form), REPLACE INTO (atomic DELETE+INSERT), INSERT IGNORE,
     // INSERT ... ON DUPLICATE KEY UPDATE, CREATE TABLE ... IGNORE/REPLACE SELECT,
-    // LOAD DATA (rows from a file the
-    // scanner cannot read), UPDATE (except the
-    // committed AUTO_INCREMENT id=0 repair), ALTER TABLE ... DROP <column|partition|bare identifier>,
-    // ALTER TABLE ... RENAME (except RENAME INDEX/KEY), ALTER TABLE ... CHANGE
-    // (rename+retype), MODIFY ... NOT NULL (the statically detectable
-    // narrowing; a width reduction cannot be seen without the live schema and
-    // stays covered by the manual-tag convention), MODIFY id without AUTO_INCREMENT, a
-    // MODIFY not opening its alter_spec (WAIT n / NOWAIT belongs to the head), any ALTER TABLE PARTITION,
-    // TABLESPACE or ENGINE clause, ALTER IGNORE TABLE (deletes duplicate-key rows), any other
+    // LOAD DATA (rows from a file the scanner cannot read), UPDATE (except the committed AUTO_INCREMENT
+    // id=0 repair), ALTER TABLE ... DROP <column|partition|bare identifier>, ALTER TABLE ... RENAME
+    // (except RENAME INDEX/KEY), ALTER TABLE ... CHANGE (rename+retype), MODIFY ... NOT NULL (the
+    // statically detectable narrowing; a width reduction cannot be seen without the live schema and stays
+    // covered by the manual-tag convention), MODIFY id without AUTO_INCREMENT, a MODIFY not opening its
+    // alter_spec (WAIT n / NOWAIT belongs to the head), any ALTER TABLE PARTITION, TABLESPACE or ENGINE
+    // clause, a schema-qualified write target, ALTER IGNORE TABLE (deletes duplicate-key rows), any other
     // ALTER than ALTER [ONLINE] TABLE, a CREATE TABLE naming an engine other than InnoDB,
     // any FOREIGN KEY, REFERENCES or CHECK constraint definition (cascades, restricts or
     // rejects later writes and deletes), and any CREATE other than [TEMPORARY] TABLE and
@@ -314,6 +313,7 @@ module.exports = {
             // '/*' literal and a later '*/' literal, which the server still runs.
             const stmt = stripBlockComments(raw).trim();
             if(!stmt) continue;
+            if(qualifiedWriteTarget(stmt))                       return raw;
             // Second layer behind stripSqlLineComments: MariaDB/MySQL honour `#` to
             // end-of-line as a comment, so `# note\nDROP TABLE balances` is a DROP every
             // ^-anchored check below is blind to. The strip removes it upstream; if one

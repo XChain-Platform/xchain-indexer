@@ -99,6 +99,7 @@ class HubPushDeliveryStore {
 
         let deliveredTo = await this.getDeliveredTo(row.id);
         let firstError = null;
+        let rateLimitedError = null;
         for(let address of candidates){
             if(deliveredTo.has(address)) continue;
             try {
@@ -111,7 +112,10 @@ class HubPushDeliveryStore {
                     ' to ' + address);
             } catch (err){
                 if(!firstError) firstError = err;
-                if(err && err.rateLimited) break;
+                if(err && err.rateLimited){
+                    rateLimitedError = err;
+                    break;
+                }
             }
         }
 
@@ -119,9 +123,10 @@ class HubPushDeliveryStore {
             await this.indexerDb.markHubPushDelivered(row.id);
             return true;
         }
-        if(firstError){
+        let failure = rateLimitedError || firstError;
+        if(failure){
             let attemptNo = (Number(row.attempts) || 0) + 1;
-            await this.queue.recordHubPushFailure(row, firstError, attemptNo);
+            await this.queue.recordHubPushFailure(row, failure, attemptNo);
         }
         return false;
     }

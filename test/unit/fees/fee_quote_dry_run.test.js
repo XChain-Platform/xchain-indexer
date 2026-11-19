@@ -29,7 +29,8 @@ const FEE_DEST = 'feeDestinationAddr111111111111111';
 function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
                    processThrows = false, processHangs = false, prices = {},
                    addressId = 7, tickId = 3, addressBalances = { 3: '19898' },
-                   balanceThrows = false, guardGas = null, guardGasSource = null } = {}){
+                   balanceThrows = false, guardGas = null, guardGasSource = null,
+                   settledGasFee } = {}){
     let calls = { order: [], begin: 0, rollback: 0, processed: null, createdAddresses: 0 };
     let util  = new Utility();
     util.config['COIN']                         = 'BTC';
@@ -54,7 +55,9 @@ function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
             if(guardGas !== null)
                 ctx.util.billGuardGas([], 'GAS', guardGas,
                     guardGasSource === null ? tx.source : guardGasSource, { DRY_RUN: true });
-            return { STATUS: status, ACTION_INDEX: actionIndex, SOURCE: tx.source };
+            let result = { STATUS: status, ACTION: tx.data.split('|')[0], ACTION_INDEX: actionIndex, SOURCE: tx.source };
+            if(settledGasFee !== undefined) result['PROBE_SETTLED_GAS_FEE'] = settledGasFee;
+            return result;
         },
         dryRunAction:         Actions.prototype.dryRunAction,
         priceFeeQuote:        Actions.prototype.priceFeeQuote,
@@ -168,6 +171,12 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         let { ctx } = makeCtx({ status: 'valid', feeAmount: null });
         let r = await ctx.dryRunAction.call(ctx, { action: 'MINT', params: ['0', 'TOK'], source: 'src1', timeoutMs: 300000 });
         assert.strictEqual(r.xchainFee, '0');
+        let charged = makeCtx({ status: 'valid', feeAmount: null, settledGasFee: '0.50000000' });
+        r = await charged.ctx.dryRunAction.call(charged.ctx, { action: 'EXECUTE', params: ['0'], source: 'src1', timeoutMs: 300000 });
+        assert.strictEqual(r.xchainFee, '0.50000000', 'settled VM debit overrides the absent fee row');
+        let unknown = makeCtx({ status: 'valid', feeAmount: null });
+        r = await unknown.ctx.dryRunAction.call(unknown.ctx, { action: 'EXECUTE', params: ['0'], source: 'src1', timeoutMs: 300000 });
+        assert.strictEqual(r.xchainFee, null, 'a VM run with no settled figure cannot report free');
     });
 
     it('reports billed guard gas separately without changing xchainFee', async () => {

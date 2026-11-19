@@ -125,6 +125,10 @@ module.exports = {
         this.assertTxNotFenced();
         if(!this.transactionConnection)
             throw new Error('rollbackToSavepoint requires an active transaction');
+        // An address interned inside the savepoint may have materialized staged recovery
+        // rewards; the partial rollback restores those rows while the transaction goes on
+        // to commit, so the in-memory countdown must be re-probed.
+        if(typeof this.invalidateRecoveryPendingProbe === 'function') this.invalidateRecoveryPendingProbe();
         await this.transactionConnection.query('ROLLBACK TO SAVEPOINT ' + name);
     },
 

@@ -69,7 +69,7 @@ function betFeedsRpc({ indexer }){
         },
 
         // One betting feed, including its effective list references, + its
-        // per-outcome open pools.
+        // per-outcome open pools. Pools are null when their secondary read fails.
         // Body: { action_index }
         async getbetfeed({action_index}){
             if(!indexer.indexerDb)
@@ -82,7 +82,13 @@ function betFeedsRpc({ indexer }){
                 let feed = await db.getBetFeedInfo(parsed.value);
                 if(!feed)
                     return { error: 'unknown feed' };
-                let pools = await db.getBetFeedPools(parsed.value);
+                let pools;
+                try {
+                    pools = await db.getBetFeedPools(parsed.value);
+                } catch (err) {
+                    getLogger().error('getbetfeed pool scan failed:', err);
+                    pools = null;
+                }
                 return {
                     network: indexer.config['NETWORK'],
                     feed:    feed,

@@ -157,8 +157,11 @@ async function applyLedgerChanges(ctx){
     // and must NOT record a ledger debit: burning gas the source never had drops
     // ledger supply while getAddressBalances (which only iterates credit ticks)
     // leaves the balances projection unchanged (balance = ledger + 1, SanityError).
-    if(!ctx.error && !ctx.skipFee && ctx.tokenInfo && ctx.feePaymentMode === 2)
+    if(!ctx.error && !ctx.skipFee && ctx.tokenInfo && ctx.feePaymentMode === 2){
         debits.push([ctx.gas, ctx.fee, data['SOURCE']]);
+        if(data['DRY_RUN'] === true)
+            data['PROBE_SETTLED_GAS_FEE'] = String(ctx.fee);
+    }
 
     // Process any transaction ledger changes (credits / debits)
     await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);

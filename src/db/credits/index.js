@@ -69,8 +69,8 @@ module.exports = {
     // unchanged tuple proves no input changed and the tally is byte-identical. action_index (not
     // block_index) is used so the fingerprint moves even for multiple input rows within one block.
     async getPollTallyInputWatermark(pollIndex, tick_id){
-        // Separate MAX probes use the (tick_id, action_index, amount) indexes directly;
-        // aggregating a UNION-derived ledger set materializes the tick's full history.
+        // The vote probes use poll_action and tick_action; the ledger probes use their
+        // (tick_id, action_index, amount) covering indexes. A UNION would materialize history.
         let rows = await this.doQuery(
             `SELECT
                 (SELECT COALESCE(MAX(action_index),0) FROM votes WHERE poll_index=?)            AS v,

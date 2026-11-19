@@ -130,7 +130,7 @@ function bridgeTransferReadsRpc({ indexer }){
         async getbridgetransfer({transfer_id}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            if(!transfer_id || !/^[0-9a-fA-F]{64}$/.test(String(transfer_id)))
+            if(!rpcParams.isHexId(transfer_id))
                 return { error: 'transfer_id must be a 64-hex id' };
             let db = indexer.indexerDb.apiView();
             try {

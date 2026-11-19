@@ -39,6 +39,8 @@ const { planListRematch } = require('../../../src/consensus/list_rematch/plan.js
 /** The ORDER's own identity, and the MATCH's, which overwrites it in place. */
 const ORDER_INDEX = 41;
 const MATCH_INDEX = 77;
+const EXEC_INDEX = 88;
+const EMISSION_INDEX = 99;
 
 /**
  * A dry-run context whose stubbed `processTransaction` reproduces the
@@ -213,6 +215,32 @@ describe('a fee quote answers for the action it was asked about', () => {
             await ctx.processAction.call(ctx, 'ORDER_MATCH', null,
                 { STATUS: 'pending_coinpay', ACTION_INDEX: MATCH_INDEX }, null);
             assert.deepStrictEqual(ctx._primaryVerdict, { status: 'valid', actionIndex: ORDER_INDEX });
+        });
+
+        it('an emitted matcher cannot become the top-level verdict', async () => {
+            for (const action of ['ORDER_MATCH', 'SWAP_MATCH']) {
+                let ctx = makeDispatchCtx();
+                ctx._primaryVerdict = null;
+                await ctx.processAction.call(ctx, action, null,
+                    { IS_EMISSION: true, STATUS: 'valid', ACTION_INDEX: EMISSION_INDEX }, null);
+                assert.strictEqual(ctx._primaryVerdict, null);
+            }
+        });
+
+        it('[REGRESSION] a failed EXECUTE keeps its own status and fee row', async () => {
+            let ctx = makeDispatchCtx();
+            ctx._primaryVerdict = null;
+            await ctx.processAction.call(ctx, 'ORDER_MATCH', null,
+                { IS_EMISSION: true, STATUS: 'valid', ACTION_INDEX: EMISSION_INDEX }, null);
+            let requestedIndex = null;
+            ctx.indexerDb = { getFeeRecord: async (index) => {
+                requestedIndex = index;
+                return { amount: '1.00000000', payment_mode: 1 };
+            } };
+            const verdict = {};
+            await readDryRunVerdict(ctx, { STATUS: 'failed', ACTION_INDEX: EXEC_INDEX }, verdict);
+            assert.strictEqual(verdict.status, 'failed');
+            assert.strictEqual(requestedIndex, EXEC_INDEX);
         });
     });
 });

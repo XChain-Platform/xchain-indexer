@@ -117,6 +117,20 @@ describe('JSON-RPC betting family @regression @tier1', function () {
         assert.deepStrictEqual(await rpc.getbetfeed({ action_index: 'x' }), { error: 'action_index must be a positive integer' });
     });
 
+    it('getbetfeed keeps the feed and answers null pools when only the pool scan fails', async function () {
+        const error = sinon.stub(observability.getLogger(), 'error');
+        const view = recordingView({
+            getBetFeedInfo: { id: 3 },
+            getBetFeedPools: () => { throw new Error('pool scan down'); }
+        });
+        const rpc = buildBetsRpc({ indexer: fakeIndexer({ view }) });
+        assert.deepStrictEqual(await rpc.getbetfeed({ action_index: 3 }), {
+            network: 'regtest', feed: { id: 3 }, pools: null
+        });
+        assert.strictEqual(error.callCount, 1);
+        assert.match(error.firstCall.args[0], /pool scan/);
+    });
+
     it('bet listings reject malformed filters and cursors before reading', async function () {
         const view = recordingView({ getLatestBlockIndex: 30, getBetFeedRows: [], getBetRows: [] });
         const rpc = buildBetsRpc({ indexer: fakeIndexer({ view }) });
@@ -183,6 +197,8 @@ describe('JSON-RPC bridge family @regression @tier1', function () {
         assert.deepStrictEqual(await rpc.getbridgetransfer({ transfer_id: ID.toUpperCase() }), { exists: true, latest_block_index: 100, transfer_id: ID, status: 'pending' });
         assert.deepStrictEqual(await rpc.getbridgetransfer({ transfer_id: 'd'.repeat(64) }), { exists: false, network: 'regtest', latest_block_index: 100 });
         assert.deepStrictEqual(await rpc.getbridgetransfer({ transfer_id: 'zz' }), { error: 'transfer_id must be a 64-hex id' });
+        assert.deepStrictEqual(await rpc.getbridgetransfer({ transfer_id: { toString: null } }), { error: 'transfer_id must be a 64-hex id' });
+        assert.deepStrictEqual(await rpc.getbridgetransfer({ transfer_id: [ID] }), { error: 'transfer_id must be a 64-hex id' });
         assert.deepStrictEqual(await rpc.getbridgebalances({ tick: 'T' }), { supply: '10', escrow: { BTC: '10' } });
         assert.deepStrictEqual(await rpc.getbridgebalances({}), { error: 'tick required' });
         assert.deepStrictEqual(await rpc.getbridgeescrowproof({ address: 'esc', tick: 'T', block_index: 5 }), { proof: true });
@@ -327,6 +343,8 @@ describe('JSON-RPC cross-chain call family @regression @tier1', function () {
             { exists: false, network: 'regtest', latest_block_index: 100, rejection: { reason: 'quorum', detail: '', attempts: 2, first_block: 80, last_block: 99 } });
         assert.deepStrictEqual(await rpc.getcrosschaincallresult({ call_id: 'e'.repeat(64) }), { exists: false, network: 'regtest', latest_block_index: 100 });
         assert.deepStrictEqual(await rpc.getcrosschaincallresult({ call_id: 'nope' }), { error: 'call_id must be a 64-hex id' });
+        assert.deepStrictEqual(await rpc.getcrosschaincallresult({ call_id: { toString: null } }), { error: 'call_id must be a 64-hex id' });
+        assert.deepStrictEqual(await rpc.getcrosschaincallresult({ call_id: [ID] }), { error: 'call_id must be a 64-hex id' });
     });
 
     it('keeps not-executed and retired answers when the advisory rejection read fails', async function () {

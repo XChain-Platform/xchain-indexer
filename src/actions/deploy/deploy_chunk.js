@@ -179,8 +179,11 @@ class DeployChunk {
         // Debit gas fee from SOURCE (XCHAIN deduction mode only); mirrors deploy.js exactly
         // (!error && feePaymentMode === 2) so a rejected chunk never burns gas the source
         // never had (which would trip the per-block supply SanityError).
-        if(!error && tokenInfo && feePaymentMode === 2)
+        if(!error && tokenInfo && feePaymentMode === 2){
             debits.push([gas, fee, data['SOURCE']]);
+            if(data['DRY_RUN'] === true)
+                data['PROBE_SETTLED_GAS_FEE'] = String(fee);
+        }
 
         // A carrier that completes a pending group has its ledger written by the deployment
         // it runs (completePendingGroup below), so it must not write one of its own.

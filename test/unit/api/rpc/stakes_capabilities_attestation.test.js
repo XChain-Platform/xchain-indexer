@@ -57,6 +57,9 @@ describe('JSON-RPC stake family @regression @tier1', function () {
 
     it('getownstake validates the key, refuses without a database and reports a throw', async function () {
         sinon.stub(observability.getLogger(), 'error');
+        const invalid = buildStakesRpc({ indexer: fakeIndexer({ view: recordingView({}) }) });
+        assert.deepStrictEqual(await invalid.getownstake({ pubkey: { toString: null } }), { error: 'pubkey must be a 64-char hex string' });
+        assert.deepStrictEqual(await invalid.getownstake({ pubkey: [PK] }), { error: 'pubkey must be a 64-char hex string' });
         const rpc = buildStakesRpc({ indexer: fakeIndexer({ indexerDb: null }) });
         assert.deepStrictEqual(await rpc.getownstake({ pubkey: 'zz' }), { error: 'pubkey must be a 64-char hex string' });
         assert.deepStrictEqual(await rpc.getownstake({ pubkey: PK }), NOT_READY);

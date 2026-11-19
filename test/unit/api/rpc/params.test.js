@@ -51,6 +51,9 @@ describe('JSON-RPC scalar parameters @regression @tier1', function () {
             { error: 'provider_id must be a string of at most 255 characters' });
         assert.deepStrictEqual(rpcParams.string('', { name: 'tick', maxLength: 255, required: true }),
             { error: 'tick must be a string of at most 255 characters' });
+        assert.strictEqual(rpcParams.isHexId('a'.repeat(64)), true);
+        for(const value of ['a'.repeat(63), 'g'.repeat(64), 7, { toString: null }, ['a'.repeat(64)]])
+            assert.strictEqual(rpcParams.isHexId(value), false, typeof value);
     });
 
     it('throws when a limit omits or mis-sizes its bounds instead of dropping them', function () {

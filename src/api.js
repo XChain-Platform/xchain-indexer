@@ -32,6 +32,7 @@ const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
 const { installMiddleware, rpcErrorHandler } = require('./api/middleware');
 const { buildRpcController } = require('./api/rpc');
+const rpcParams = require('./api/rpc/params.js');
 const { mountStatusRoute } = require('./api/status_endpoint');
 const { createShutdown, createIndexerDrain } = require('./api/shutdown');
 const crypto        = require('crypto');
@@ -226,7 +227,7 @@ function crossChainCallRpc({ indexer }){
         async getcrosschaincall({call_id}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            if(!call_id || !/^[0-9a-fA-F]{64}$/.test(String(call_id)))
+            if(!rpcParams.isHexId(call_id))
                 return { error: 'call_id must be a 64-hex id' };
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();

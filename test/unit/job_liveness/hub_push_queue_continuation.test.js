@@ -151,5 +151,19 @@ describe('HubPushQueue backlog continuation', function () {
         };
         const store = new HubPushDeliveryStore(queue, { status: () => ({ candidates: ['a'] }) });
         assert.strictEqual(await store.attempt(makeRow(), ['a']), true);
+
+        const refusal = Object.assign(new Error('refused'), { code: 'ECONNREFUSED' });
+        const limited = Object.assign(new Error('hold'), { rateLimited: true, retryAfterMs: 30000 });
+        indexerDb.poolQuery.resetHistory();
+        indexerDb.poolQuery.onFirstCall().resolves([{ delivered_to: '[]' }]);
+        queue.deliverHubPush = sinon.stub();
+        queue.deliverHubPush.onFirstCall().rejects(refusal);
+        queue.deliverHubPush.onSecondCall().rejects(limited);
+        queue.recordHubPushFailure = sinon.stub().resolves();
+        const held = new HubPushDeliveryStore(queue, { status: () => ({ candidates: ['a', 'b', 'c'] }) });
+        assert.strictEqual(await held.attempt(makeRow(), ['a', 'b', 'c']), false);
+        assert.strictEqual(queue.deliverHubPush.callCount, 2, 'fan-out stops at the rate-limited hub');
+        assert.strictEqual(queue.recordHubPushFailure.firstCall.args[1], limited,
+            'the rate limit reaches the queue even after an earlier refusal');
     });
 });

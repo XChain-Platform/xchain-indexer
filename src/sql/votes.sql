@@ -50,6 +50,7 @@ CREATE TABLE votes (
 -- (MAX(action_index) per (poll_index, voter_address_id)) in db.getPollTally.
 CREATE UNIQUE INDEX poll_voter_action_choice ON votes (poll_index, voter_address_id, action_index, choice);
 CREATE        INDEX poll_index        ON votes (poll_index);
+CREATE        INDEX poll_action       ON votes (poll_index, action_index);
 CREATE        INDEX voter_address_id  ON votes (voter_address_id);
 CREATE        INDEX action_index      ON votes (action_index);
 CREATE        INDEX block_index       ON votes (block_index);

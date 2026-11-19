@@ -275,7 +275,7 @@ function installObservability(app, opts = {}) {
             const stop = process.hrtime.bigint();
             inFlight.inc({}, 1);
             let done = false;
-            const finish = () => {
+            const finish = (status) => {
                 if (done) return;
                 done = true;
                 inFlight.dec({}, 1);
@@ -284,13 +284,13 @@ function installObservability(app, opts = {}) {
                 const method = (req.method || 'GET').toUpperCase();
                 try {
                     httpDuration.observe({ method, route }, seconds);
-                    httpRequests.inc({ method, route, status: String(res.statusCode) }, 1);
+                    httpRequests.inc({ method, route, status }, 1);
                 } catch { /* instrumentation must never break a response */ }
             };
-            // 'close' covers a client that hangs up before 'finish' fires, which
-            // would otherwise leak the in-flight gauge upward forever.
-            res.on('finish', finish);
-            res.on('close', finish);
+            // 'close' also covers a client hangup. An incomplete response has no
+            // HTTP status, but it must still release the in-flight gauge once.
+            res.on('finish', () => finish(String(res.statusCode)));
+            res.on('close', () => finish(res.writableFinished ? String(res.statusCode) : 'aborted'));
             next();
         };
         app.use(timing);

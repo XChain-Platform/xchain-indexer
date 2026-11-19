@@ -141,8 +141,9 @@ module.exports = {
         // STATUS and ACTION_INDEX so this snapshot still describes the quoted LIST. These two
         // actions are never top-level: the decoder cannot produce them, and the public fee quote
         // classifies them 'exempt' (FEE_QUOTE_EXEMPT in actions/index.js), so it answers without
-        // a dry-run.
-        if((action == 'ORDER_MATCH' || action == 'SWAP_MATCH') && data && this._primaryVerdict == null)
+        // a dry-run. Emitted matcher records belong to an EXECUTE frame, so they cannot answer
+        // for the quoted top-level action even when that frame later commits.
+        if((action == 'ORDER_MATCH' || action == 'SWAP_MATCH') && data && !data['IS_EMISSION'] && this._primaryVerdict == null)
             this._primaryVerdict = { status: data['STATUS'], actionIndex: data['ACTION_INDEX'] };
 
         // Deterministic index-id pre-pass: for the fixed-layout actions setActionParamHandler

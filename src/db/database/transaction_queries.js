@@ -29,6 +29,13 @@
 const { getLogger } = require('../../observability/index.js');
 const statusActionCache = require('../index_tables/status_action_cache.js');
 
+// The recovery reward countdown is lowered inside the block transaction, so an abort
+// leaves it below the rows SQL just restored; forcing a re-probe brings it back. The
+// method lives on the rewards part, which a borrowed-method context may not carry.
+function invalidateSpeculativeRecoveryCount(db){
+    if(typeof db.invalidateRecoveryPendingProbe === 'function') db.invalidateRecoveryPendingProbe();
+}
+
 module.exports = {
 
     // Handle beginning a SQL transaction.
@@ -37,8 +44,12 @@ module.exports = {
     // keeps the unbounded wait.
     async beginTransaction(opts){
         await this.acquireTxLock(opts && opts.acquireTimeoutMs);
-        if(this.transactionConnection != null)
+        if(this.transactionConnection != null){
+            // An abandoned transaction never committed, so its recovery decrements are
+            // void; reset before the release so a release throw cannot skip it.
+            invalidateSpeculativeRecoveryCount(this);
             await this.releaseConnection();
+        }
         try {
             this.transactionConnection = await this.getConnection();
             await this.transactionConnection.beginTransaction();
@@ -63,6 +74,10 @@ module.exports = {
             // ROLLBACK is sent: a write queued behind it on this connection would run in
             // autocommit, so every write from here on must carry a stale epoch.
             this._txEpoch++;
+            // The ROLLBACK restores every pending-reward row this transaction marked
+            // applied, so its in-memory decrements are void. Reset before any await so
+            // neither a rollback() nor a release() throw can skip it.
+            invalidateSpeculativeRecoveryCount(this);
             try {
                 await this.transactionConnection.rollback();
             } finally {
@@ -93,6 +108,8 @@ module.exports = {
                 return true;
             } catch (e){
                 getLogger().error('Error committing transaction:', e)
+                // A failed commit aborts, so its recovery decrements are void too.
+                invalidateSpeculativeRecoveryCount(this);
                 try {
                     await this.transactionConnection.rollback();
                 } finally {

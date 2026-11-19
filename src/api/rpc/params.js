@@ -79,4 +79,8 @@ function decimal(value, { name, maxLength = 80 } = {}) {
     return { value };
 }
 
-module.exports = { integer, optionalInteger, limit, string, decimal };
+function isHexId(value) {
+    return typeof value === 'string' && /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+module.exports = { integer, optionalInteger, limit, string, decimal, isHexId };

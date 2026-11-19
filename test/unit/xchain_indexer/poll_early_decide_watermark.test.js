@@ -32,6 +32,8 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
+const fs     = require('fs');
+const path   = require('path');
 const sinon  = require('sinon');
 
 const { getTestConfig } = require('../../fixtures/config');
@@ -109,8 +111,8 @@ describe('early-decide tally watermark', function () {
         const { db, util } = makeDb();
         const actions = { processAction: sinon.stub().resolves(), actionVote: { processDueCallbacks: sinon.stub().resolves() } };
 
-        sinon.stub(db, 'getDuePolls').resolves([]);
-        sinon.stub(db, 'getArmedPolls').resolves([
+        const getDuePolls = sinon.stub(db, 'getDuePolls').resolves([]);
+        const getArmedPolls = sinon.stub(db, 'getArmedPolls').resolves([
             { action_index: 42, tick_id: 7, weight_mode: 'balance', decide_threshold: '0.5' },
         ]);
         // Crossing tally: leader 60 of supply 100 = 0.6 >= 0.5.
@@ -121,6 +123,14 @@ describe('early-decide tally watermark', function () {
 
         assert.strictEqual(actions.processAction.callCount, 1, 'early-decided');
         assert.ok(!db.pollTallyWatermarkMatches(42, '1:0:2'), 'watermark entry cleared after finalization');
+
+        db.setPollTallyWatermark(43, '4:0:9');
+        db.setPollTallyWatermark(44, '5:0:9');
+        getDuePolls.resolves([{ action_index: 43, end_block: 101 }]);
+        getArmedPolls.resolves([]);
+        await util.processVoteFinalizations(actions, db, 101, 1700000600);
+        assert.ok(!db.pollTallyWatermarkMatches(43, '4:0:9'), 'deadline-close entry evicted');
+        assert.ok(db.pollTallyWatermarkMatches(44, '5:0:9'), 'unrelated entry retained');
     });
 
     it('clearPollTallyWatermark drops all cached fingerprints (reorg invalidation)', function () {
@@ -143,5 +153,15 @@ describe('early-decide tally watermark', function () {
         assert.ok(/GREATEST\(/.test(sql), 'ledger maxima use index-end probes');
         assert.ok(!/UNION/i.test(sql), 'ledger probe does not materialize full histories');
         assert.deepStrictEqual(args, [42, 7, 7, 7]);
+
+        const sqlDir = path.resolve(__dirname, '../../../src/sql');
+        const votes = fs.readFileSync(path.join(sqlDir, 'votes.sql'), 'utf8');
+        const delegations = fs.readFileSync(path.join(sqlDir, 'vote_delegations.sql'), 'utf8');
+        const migration = fs.readFileSync(path.join(sqlDir, 'migrations',
+            '2026-11-19-vote-watermark-action-index-idx.sql'), 'utf8');
+        assert.match(votes, /INDEX\s+poll_action\s+ON votes\s*\(poll_index, action_index\)/i);
+        assert.match(delegations, /INDEX\s+tick_action\s+ON vote_delegations\s*\(tick_id, action_index\)/i);
+        assert.match(migration, /ADD INDEX IF NOT EXISTS poll_action\s*\(poll_index, action_index\)/i);
+        assert.match(migration, /ADD INDEX IF NOT EXISTS tick_action\s*\(tick_id, action_index\)/i);
     });
 });

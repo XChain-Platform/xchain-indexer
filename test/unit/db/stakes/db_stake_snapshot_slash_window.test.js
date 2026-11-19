@@ -222,6 +222,33 @@ function partialUnstake(cooldownStatus = 1, extraStakes = []) {
         [{ action_index: 2, signing_pubkey_id: 5, tick_id: 3, amount: '30',  block_index: 1000, status_id: cooldownStatus }]);
 }
 
+function shortCooldown(statusId) {
+    return modelDb(
+        [{ action_index: 1, signing_pubkey_id: 5, tick_id: 3, amount: '100', activation_block: 1, deactivation_block: 1006 }],
+        [{ action_index: 2, signing_pubkey_id: 5, tick_id: 3, amount: '100', block_index: 1000, status_id: statusId }]);
+}
+
+describe('short cooldown completes before stake deactivation @regression @tier1', function () {
+    it('unarmed: released stake stays visible but a slash takes nothing', async function () {
+        const db = shortCooldown(3);
+        const active = await slashWindowActive('regtest');
+        const snap = await db.getContractStakeDataForVM(1, 1004, active);
+        assert.strictEqual(String(snap.stakeByPubkeyTick['aa|XCHAIN']), '100');
+        const res = await db.slashContractStake(1, 5, 3, '100', 1004, 1, 0);
+        assert.strictEqual(res.total, '0');
+    });
+
+    it('armed: released stake disappears from the snapshot', async function () {
+        assert.strictEqual(await armedStake(shortCooldown(3), 1004), '0');
+    });
+
+    it('an open cooldown remains visible in both modes', async function () {
+        assert.strictEqual(await armedStake(shortCooldown(1), 1004), '100');
+        const snap = await shortCooldown(1).getContractStakeDataForVM(1, 1004, false);
+        assert.strictEqual(String(snap.stakeByPubkeyTick['aa|XCHAIN']), '100');
+    });
+});
+
 describe('slash-window cap scoped to the UNSTAKE that opened the window @regression @tier1', function () {
     it('armed: an older open cooldown does not hide a slash on the newer window', async function () {
         const db = sequentialUnstakes();

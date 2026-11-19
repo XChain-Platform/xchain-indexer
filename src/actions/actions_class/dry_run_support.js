@@ -28,6 +28,9 @@ const { prelaunchAdmits } = require('../../consensus/gates/mainnet_launch_gate.j
 const { prelaunchInput } = require('../../XChainIndexer/block_admission.js');
 const { foldLegVerdicts } = require('../send/leg_verdicts.js');
 
+// Actions that debit VM gas without a fees row (DEPLOY includes its chunk carriers).
+const VM_GAS_ACTIONS = new Set(['EXECUTE', 'DEPLOY']);
+
 // The verdict for a transaction the mainnet launch gate refuses: the chain never processes it.
 const NOT_ADMITTED_BEFORE_LAUNCH = 'invalid: not admitted before mainnet launch ' +
     '(only validator and seed-source transactions are indexed until then)';
@@ -168,6 +171,7 @@ async function readDryRunVerdict(actions, resultData, verdict){
     verdict.status = primary
         ? primary.status
         : ((resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null);
+    verdict.action = resultData && resultData['ACTION'];
     if(!batched && !primary)
         applyLegVerdicts(resultData, verdict, (status) => actions.util.isGuardInertError(status));
     // Extract the handler-computed fee while the transaction is still open (the row
@@ -182,6 +186,8 @@ async function readDryRunVerdict(actions, resultData, verdict){
         verdict.feeWithheld = true;
     else if(actionIndex !== null)
         verdict.feeRecord = await actions.indexerDb.getFeeRecord(actionIndex);
+    if(!batched && resultData && Object.prototype.hasOwnProperty.call(resultData, 'PROBE_SETTLED_GAS_FEE'))
+        verdict.settledGasFee = String(resultData['PROBE_SETTLED_GAS_FEE']);
     if(resultData && Array.isArray(resultData['PROBE_SUB_VERDICTS']))
         verdict.subCommands = resultData['PROBE_SUB_VERDICTS'];
     if(resultData && resultData['PROBE_ORACLE_FEES'] &&
@@ -200,6 +206,17 @@ async function readDryRunVerdict(actions, resultData, verdict){
         verdict.guardGasFee = actions.util.guardGasTotal(resultData['SOURCE']);
 }
 
+// The quoted XCHAIN fee. VM actions debit GAS without a fees row, so their figure is the
+// handler's disclosed settled debit (paid whatever the status); a VM action with neither
+// reads as unknown, because a missing row there does not mean the run was free.
+function dryRunFee(verdict, dryRunError, action){
+    if(dryRunError || verdict.feeWithheld) return null;
+    if(verdict.feeRecord) return String(verdict.feeRecord.amount);
+    if(verdict.settledGasFee !== undefined) return String(verdict.settledGasFee);
+    if(VM_GAS_ACTIONS.has(String(action || '').toUpperCase())) return null;
+    return verdict.status === 'valid' ? '0' : null;
+}
+
 // The dryRunAction result shape.
 function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBalance){
     return {
@@ -209,10 +226,7 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
         error:      dryRunError,
         // null, never '0', when the read-back failed or a batch withheld its fee:
         // '0' would tell a confirm screen it is free without a complete verdict.
-        xchainFee:  dryRunError ? null
-                   : verdict.feeWithheld ? null
-                   : verdict.feeRecord ? String(verdict.feeRecord.amount)
-                   : ((verdict.status === 'valid') ? '0' : null),
+        xchainFee:  dryRunFee(verdict, dryRunError, verdict.action),
         guardGasFee: dryRunError || verdict.feeWithheld || verdict.status !== 'valid'
                    ? null : String(verdict.guardGasFee || '0'),
         sourceFeeBalance: sourceFeeBalance,

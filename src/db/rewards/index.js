@@ -36,19 +36,25 @@ module.exports = {
     // indexing (no recovery in progress) pays a single COUNT(*) and then short-circuits on
     // every later call. The table is auto-created by verifyTables, so it always exists; the
     // guard keeps a partially-migrated DB degrading to "no pending" instead of throwing.
+    // Other failures propagate so the enclosing transaction aborts, and are not cached.
     // Returns true iff staged rows remain. The rollback re-arm clears _recoveryPendingChecked
     // to force a re-probe when it re-arms rows.
     async probeRecoveryPending(){
         if(!this._recoveryPendingChecked){
             try {
-                let probe = await this.doQuery("SELECT COUNT(*) AS c FROM recovery_pending_rewards WHERE applied=0");
+                let probe = await this.doQueryStrict("SELECT COUNT(*) AS c FROM recovery_pending_rewards WHERE applied=0");
                 this._recoveryPendingRemaining = (probe.length > 0) ? Number(probe[0].c) : 0;
             } catch(e){
+                if(!(e && (e.errno === 1146 || e.errno === 1054))) throw e;
                 this._recoveryPendingRemaining = 0;
             }
             this._recoveryPendingChecked = true;
         }
         return this._recoveryPendingRemaining > 0;
+    },
+
+    invalidateRecoveryPendingProbe(){
+        this._recoveryPendingChecked = false;
     },
 
     // Per-block recovery-reward due sweep. Materializes every staged reward whose ORIGINAL
