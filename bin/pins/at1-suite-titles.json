@@ -10983,6 +10983,9 @@
       "smoke status stall-health parity keeps stallWedged identical across reason, grace, commit, and clear boundaries",
       "smoke status stall-health parity keeps waitingOnFutureBlock identical across reason and clear boundaries"
     ],
+    "852f8353921cb5cf": [
+      "SQL timing production wiring emits the RPC route with the wrapped pool query count"
+    ],
     "854ebc44f7fae694": [
       "migration ledger applied_at type creates new ledgers with a DATETIME applied_at",
       "migration ledger applied_at type does not alter an existing DATETIME applied_at",
@@ -21139,8 +21142,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1685,
-      "titleCount": 16371,
+      "fileCount": 1686,
+      "titleCount": 16372,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -22523,6 +22526,7 @@
         "test/unit/migration/sql_schema_parse_coverage.test.js": "f17d696401843c06",
         "test/unit/observability/log_shipper_redaction.test.js": "dd5abc9af04e5cbd",
         "test/unit/observability/patch_console_and_env.test.js": "5b35d1c52a77c442",
+        "test/unit/observability/sql_timing_wiring.test.js": "852f8353921cb5cf",
         "test/unit/oracle_price_age.test.js": "72a0b56687489fbe",
         "test/unit/perf/noise_floor.test.js": "cf3bcc3e4ee7e191",
         "test/unit/price/db_max_batch_block_time.test.js": "3d123bd6ea062c1b",
